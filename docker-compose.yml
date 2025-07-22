@@ -24,6 +24,12 @@ services:
       - NEO4J_USER=${NEO4J_USER}
       - NEO4J_PASSWORD=${NEO4J_PASSWORD}
       - PORT=8000
+    labels:
+      - "homepage.group=Knowledge Management"
+      - "homepage.name=Graphiti API"
+      - "homepage.icon=si-graphql"
+      - "homepage.href=http://192.168.50.90:8000"
+      - "homepage.description=Knowledge graph API service"
   neo4j:
     image: neo4j:5.26.2
     healthcheck:
@@ -43,6 +49,12 @@ services:
       - neo4j_data:/data
     environment:
       - NEO4J_AUTH=${NEO4J_USER}/${NEO4J_PASSWORD}
+    labels:
+      - "homepage.group=Knowledge Management"
+      - "homepage.name=Neo4j Database"
+      - "homepage.icon=si-neo4j"
+      - "homepage.href=http://192.168.50.90:7474"
+      - "homepage.description=Neo4j graph database browser"
 
 volumes:
   neo4j_data:
