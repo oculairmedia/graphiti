@@ -15,7 +15,7 @@ Graphiti
 [![MyPy Check](https://github.com/getzep/Graphiti/actions/workflows/typecheck.yml/badge.svg)](https://github.com/getzep/Graphiti/actions/workflows/typecheck.yml)
 
 ![GitHub Repo stars](https://img.shields.io/github/stars/getzep/graphiti)
-[![Discord](https://dcbadge.vercel.app/api/server/W8Kw6bsgXQ?style=flat)](https://discord.com/invite/W8Kw6bsgXQ)
+[![Discord](https://img.shields.io/badge/Discord-%235865F2.svg?&logo=discord&logoColor=white)](https://discord.com/invite/W8Kw6bsgXQ)
 [![arXiv](https://img.shields.io/badge/arXiv-2501.13956-b31b1b.svg?style=flat)](https://arxiv.org/abs/2501.13956)
 [![Release](https://img.shields.io/github/v/release/getzep/graphiti?style=flat&label=Release&color=limegreen)](https://github.com/getzep/graphiti/releases)
 
@@ -215,23 +215,50 @@ must be set.
 
 ### Database Configuration
 
-`DEFAULT_DATABASE` specifies the database name to use for graph operations. This is particularly important for Neo4j 5+ users:
+Database names are configured directly in the driver constructors:
 
-- **Neo4j 5+**: The default database name is `neo4j` (not `default_db`)
-- **Neo4j 4**: The default database name is `default_db`
-- **FalkorDB**: The default graph name is `default_db`
+- **Neo4j**: Database name defaults to `neo4j` (hardcoded in Neo4jDriver)
+- **FalkorDB**: Database name defaults to `default_db` (hardcoded in FalkorDriver)
 
-If you encounter the error `Graph not found: default_db` when using Neo4j 5, set:
+As of v0.17.0, if you need to customize your database configuration, you can instantiate a database driver and pass it to the Graphiti constructor using the `graph_driver` parameter.
 
-```bash
-export DEFAULT_DATABASE=neo4j
+#### Neo4j with Custom Database Name
+
+```python
+from graphiti_core import Graphiti
+from graphiti_core.driver.neo4j_driver import Neo4jDriver
+
+# Create a Neo4j driver with custom database name
+driver = Neo4jDriver(
+    uri="bolt://localhost:7687",
+    user="neo4j",
+    password="password",
+    database="my_custom_database"  # Custom database name
+)
+
+# Pass the driver to Graphiti
+graphiti = Graphiti(graph_driver=driver)
 ```
 
-Or add to your `.env` file:
+#### FalkorDB with Custom Database Name
 
+```python
+from graphiti_core import Graphiti
+from graphiti_core.driver.falkordb_driver import FalkorDriver
+
+# Create a FalkorDB driver with custom database name
+driver = FalkorDriver(
+    host="localhost",
+    port=6379,
+    username="falkor_user",  # Optional
+    password="falkor_password",  # Optional
+    database="my_custom_graph"  # Custom database name
+)
+
+# Pass the driver to Graphiti
+graphiti = Graphiti(graph_driver=driver)
 ```
-DEFAULT_DATABASE=neo4j
-```
+
 
 ### Performance Configuration
 

@@ -28,7 +28,7 @@ from typing_extensions import LiteralString
 from graphiti_core.driver.driver import GraphDriver
 from graphiti_core.embedder import EmbedderClient
 from graphiti_core.errors import NodeNotFoundError
-from graphiti_core.helpers import DEFAULT_DATABASE, parse_db_date
+from graphiti_core.helpers import parse_db_date
 from graphiti_core.models.nodes.node_db_queries import (
     COMMUNITY_NODE_SAVE,
     ENTITY_NODE_SAVE,
@@ -46,8 +46,7 @@ ENTITY_NODE_RETURN: LiteralString = """
             n.created_at AS created_at, 
             n.summary AS summary,
             labels(n) AS labels,
-            properties(n) AS attributes
-            """
+            properties(n) AS attributes"""
 
 
 class EpisodeType(Enum):
@@ -103,7 +102,6 @@ class Node(BaseModel, ABC):
         DETACH DELETE n
         """,
             uuid=self.uuid,
-            database_=DEFAULT_DATABASE,
         )
 
         logger.debug(f'Deleted Node: {self.uuid}')
@@ -126,7 +124,6 @@ class Node(BaseModel, ABC):
         DETACH DELETE n
         """,
             group_id=group_id,
-            database_=DEFAULT_DATABASE,
         )
 
         return 'SUCCESS'
@@ -162,7 +159,6 @@ class EpisodicNode(Node):
             created_at=self.created_at,
             valid_at=self.valid_at,
             source=self.source.value,
-            database_=DEFAULT_DATABASE,
         )
 
         logger.debug(f'Saved Node to Graph: {self.uuid}')
@@ -185,7 +181,6 @@ class EpisodicNode(Node):
             e.entity_edges AS entity_edges
         """,
             uuid=uuid,
-            database_=DEFAULT_DATABASE,
             routing_='r',
         )
 
@@ -213,7 +208,6 @@ class EpisodicNode(Node):
             e.entity_edges AS entity_edges
         """,
             uuids=uuids,
-            database_=DEFAULT_DATABASE,
             routing_='r',
         )
 
@@ -254,7 +248,6 @@ class EpisodicNode(Node):
             group_ids=group_ids,
             uuid=uuid_cursor,
             limit=limit,
-            database_=DEFAULT_DATABASE,
             routing_='r',
         )
 
@@ -279,7 +272,6 @@ class EpisodicNode(Node):
             e.entity_edges AS entity_edges
         """,
             entity_node_uuid=entity_node_uuid,
-            database_=DEFAULT_DATABASE,
             routing_='r',
         )
 
@@ -309,9 +301,7 @@ class EntityNode(Node):
             MATCH (n:Entity {uuid: $uuid})
             RETURN n.name_embedding AS name_embedding
         """
-        records, _, _ = await driver.execute_query(
-            query, uuid=self.uuid, database_=DEFAULT_DATABASE, routing_='r'
-        )
+        records, _, _ = await driver.execute_query(query, uuid=self.uuid, routing_='r')
 
         if len(records) == 0:
             raise NodeNotFoundError(self.uuid)
@@ -334,7 +324,6 @@ class EntityNode(Node):
             ENTITY_NODE_SAVE,
             labels=self.labels + ['Entity'],
             entity_data=entity_data,
-            database_=DEFAULT_DATABASE,
         )
 
         logger.debug(f'Saved Node to Graph: {self.uuid}')
@@ -345,14 +334,13 @@ class EntityNode(Node):
     async def get_by_uuid(cls, driver: GraphDriver, uuid: str):
         query = (
             """
-                                                                    MATCH (n:Entity {uuid: $uuid})
-                                                                    """
+                                                                                MATCH (n:Entity {uuid: $uuid})
+                                                                                """
             + ENTITY_NODE_RETURN
         )
         records, _, _ = await driver.execute_query(
             query,
             uuid=uuid,
-            database_=DEFAULT_DATABASE,
             routing_='r',
         )
 
@@ -371,7 +359,6 @@ class EntityNode(Node):
         """
             + ENTITY_NODE_RETURN,
             uuids=uuids,
-            database_=DEFAULT_DATABASE,
             routing_='r',
         )
 
@@ -386,9 +373,17 @@ class EntityNode(Node):
         group_ids: list[str],
         limit: int | None = None,
         uuid_cursor: str | None = None,
+        with_embeddings: bool = False,
     ):
         cursor_query: LiteralString = 'AND n.uuid < $uuid' if uuid_cursor else ''
         limit_query: LiteralString = 'LIMIT $limit' if limit is not None else ''
+        with_embeddings_query: LiteralString = (
+            """,
+                n.name_embedding AS name_embedding
+                """
+            if with_embeddings
+            else ''
+        )
 
         records, _, _ = await driver.execute_query(
             """
@@ -396,6 +391,7 @@ class EntityNode(Node):
         """
             + cursor_query
             + ENTITY_NODE_RETURN
+            + with_embeddings_query
             + """
         ORDER BY n.uuid DESC
         """
@@ -403,7 +399,6 @@ class EntityNode(Node):
             group_ids=group_ids,
             uuid=uuid_cursor,
             limit=limit,
-            database_=DEFAULT_DATABASE,
             routing_='r',
         )
 
@@ -425,7 +420,6 @@ class CommunityNode(Node):
             summary=self.summary,
             name_embedding=self.name_embedding,
             created_at=self.created_at,
-            database_=DEFAULT_DATABASE,
         )
 
         logger.debug(f'Saved Node to Graph: {self.uuid}')
@@ -446,9 +440,7 @@ class CommunityNode(Node):
             MATCH (c:Community {uuid: $uuid})
             RETURN c.name_embedding AS name_embedding
         """
-        records, _, _ = await driver.execute_query(
-            query, uuid=self.uuid, database_=DEFAULT_DATABASE, routing_='r'
-        )
+        records, _, _ = await driver.execute_query(query, uuid=self.uuid, routing_='r')
 
         if len(records) == 0:
             raise NodeNotFoundError(self.uuid)
@@ -468,7 +460,6 @@ class CommunityNode(Node):
             n.summary AS summary
         """,
             uuid=uuid,
-            database_=DEFAULT_DATABASE,
             routing_='r',
         )
 
@@ -492,7 +483,6 @@ class CommunityNode(Node):
             n.summary AS summary
         """,
             uuids=uuids,
-            database_=DEFAULT_DATABASE,
             routing_='r',
         )
 
@@ -529,7 +519,6 @@ class CommunityNode(Node):
             group_ids=group_ids,
             uuid=uuid_cursor,
             limit=limit,
-            database_=DEFAULT_DATABASE,
             routing_='r',
         )
 
@@ -565,6 +554,7 @@ def get_entity_node_from_record(record: Any) -> EntityNode:
     entity_node = EntityNode(
         uuid=record['uuid'],
         name=record['name'],
+        name_embedding=record.get('name_embedding'),
         group_id=record['group_id'],
         labels=record['labels'],
         created_at=parse_db_date(record['created_at']),  # type: ignore
