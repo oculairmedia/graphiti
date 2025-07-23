@@ -1,0 +1,29 @@
+# Custom FalkorDB image with browser configured for remote access
+FROM falkordb/falkordb:latest
+
+# Install necessary tools
+RUN apt-get update && apt-get install -y \
+    sed \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create a startup script that will modify the browser files at runtime
+RUN echo '#!/bin/bash' > /startup.sh && \
+    echo 'echo "Configuring FalkorDB browser for remote access..."' >> /startup.sh && \
+    echo 'find /var/lib/falkordb/browser -type f -name "*.js" -exec grep -l "localhost:3000" {} \; 2>/dev/null | while read file; do' >> /startup.sh && \
+    echo '    echo "Updating $file..."' >> /startup.sh && \
+    echo '    sed -i "s|localhost:3000|192.168.50.90:3100|g" "$file"' >> /startup.sh && \
+    echo 'done' >> /startup.sh && \
+    echo 'find /var/lib/falkordb/browser -type f -name "*.js" -exec grep -l "http://localhost" {} \; 2>/dev/null | while read file; do' >> /startup.sh && \
+    echo '    echo "Updating redirects in $file..."' >> /startup.sh && \
+    echo '    sed -i "s|http://localhost:3000|http://192.168.50.90:3100|g" "$file"' >> /startup.sh && \
+    echo '    sed -i "s|https://localhost:3000|https://192.168.50.90:3100|g" "$file"' >> /startup.sh && \
+    echo 'done' >> /startup.sh && \
+    echo 'echo "Browser configuration complete!"' >> /startup.sh && \
+    echo '# Start the browser on port 3000 in background' >> /startup.sh && \
+    echo 'cd /var/lib/falkordb/browser && npm start &' >> /startup.sh && \
+    echo '# Start Redis with FalkorDB module' >> /startup.sh && \
+    echo 'exec redis-server --loadmodule /var/lib/falkordb/bin/falkordb.so --protected-mode no --bind 0.0.0.0' >> /startup.sh && \
+    chmod +x /startup.sh
+
+# Override the default entrypoint
+ENTRYPOINT ["/startup.sh"]

@@ -1,0 +1,2 @@
+import{Config as t}from"../../utils.js";const i={top:5,left:5,bottom:1,right:5};class s extends t{constructor(){super(...arguments),this.padding=i,this.barsCount=50,this.barPadding=.1,this.minBarHeight=2,this.selectionRadius=3,this.selectionPadding=8,this.barCount=30,this.dataStep=void 0,this.barRadius=1,this.barTopMargin=7,this.labelSideMargin=3,this.formatter=void 0,this.allowSelection=!0,this.stickySelection=!0,this.events={onBrush:void 0,onBarHover:void 0}}}export{i as DEFAULT_PADDING,s as HistogramConfig};
+//# sourceMappingURL=config.js.map

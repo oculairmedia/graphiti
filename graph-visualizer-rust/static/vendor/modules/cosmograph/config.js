@@ -1,0 +1,2 @@
+const o={disableSimulation:null,showDynamicLabels:!0,showTopLabels:!1,showTopLabelsLimit:100,showTopLabelsValueKey:void 0,showLabelsFor:void 0,showHoveredNodeLabel:!0,nodeLabelAccessor:o=>o.id,nodeLabelClassName:void 0,nodeLabelColor:void 0,hoveredNodeLabelClassName:void 0,hoveredNodeLabelColor:void 0,onSetData:void 0,onNodesFiltered:void 0,onLinksFiltered:void 0,onLabelClick:void 0};export{o as defaultCosmographConfig};
+//# sourceMappingURL=config.js.map

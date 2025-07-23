@@ -1,0 +1,2 @@
+import{timeFormat as t}from"d3-time-format";import"d3-format";import{timeSecond as o,timeMinute as r,timeHour as m,timeDay as e,timeMonth as d,timeWeek as i,timeYear as p}from"d3-time";const a=t(".%L"),f=t(":%S"),n=t("%I:%M"),b=t("%I %p"),c=t("%a %d"),s=t("%b %d"),I=t("%b"),u=t("%Y"),w=t=>{const w=new Date(t);return(o(w)<w?a:r(w)<w?f:m(w)<w?n:e(w)<w?b:d(w)<w?i(w)<w?c:s:p(w)<w?I:u)(w)};export{w as defaultDateFormat};
+//# sourceMappingURL=format.js.map

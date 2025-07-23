@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  redisinsight:
+    image: redis/redisinsight:latest
+    container_name: graphiti-redisinsight
+    ports:
+      - "8011:5540"  # RedisInsight UI
+    volumes:
+      - redisinsight_data:/data
+    labels:
+      - "homepage.group=Knowledge Management"
+      - "homepage.name=RedisInsight"
+      - "homepage.icon=si-redis"
+      - "homepage.href=http://192.168.50.90:8011"
+      - "homepage.description=Redis GUI for FalkorDB"
+
+volumes:
+  redisinsight_data:

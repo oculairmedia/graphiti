@@ -1,0 +1,1401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FalkorDB Cosmograph GPU-Accelerated Visualizer</title>
+    <script type="importmap">
+    {
+        "imports": {
+            "@cosmograph/cosmograph": "/vendor/index.js",
+            "@cosmograph/cosmos": "/vendor/cosmos/dist/index.js",
+            "@ranfdev/deepobj": "/vendor/deepobj/dist/deepobj.m.js",
+            "regl": "/vendor/regl-wrapper.js",
+            "gl-matrix": "/vendor/gl-matrix/esm/index.js",
+            "gl-matrix/mat2": "/vendor/gl-matrix/esm/mat2.js",
+            "gl-matrix/mat2d": "/vendor/gl-matrix/esm/mat2d.js",
+            "gl-matrix/mat3": "/vendor/gl-matrix/esm/mat3.js",
+            "gl-matrix/mat4": "/vendor/gl-matrix/esm/mat4.js",
+            "gl-matrix/quat": "/vendor/gl-matrix/esm/quat.js",
+            "gl-matrix/quat2": "/vendor/gl-matrix/esm/quat2.js",
+            "gl-matrix/vec2": "/vendor/gl-matrix/esm/vec2.js",
+            "gl-matrix/vec3": "/vendor/gl-matrix/esm/vec3.js",
+            "gl-matrix/vec4": "/vendor/gl-matrix/esm/vec4.js",
+            "gl-matrix/common": "/vendor/gl-matrix/esm/common.js",
+            "random": "/vendor/random/dist/index.js",
+            "d3-zoom": "/vendor/d3-zoom/src/index.js",
+            "./zoom.js": "/vendor/d3-zoom/src/zoom.js",
+            "./transform.js": "/vendor/d3-zoom/src/transform.js",
+            "./noevent.js": "/vendor/d3-zoom/src/noevent.js",
+            "./event.js": "/vendor/d3-zoom/src/event.js",
+            "./constant.js": "/vendor/d3-zoom/src/constant.js",
+            "d3-drag": "/vendor/d3-drag/src/index.js",
+            "./drag.js": "/vendor/d3-drag/src/drag.js",
+            "./nodrag.js": "/vendor/d3-drag/src/nodrag.js",
+            "dompurify": "/vendor/dompurify/dist/purify.es.mjs",
+            "gl-bench": "/vendor/gl-bench/dist/gl-bench.module.js",
+            "@interacta/css-labels": "/vendor/interacta-css-labels/dist/index.js",
+            "@cosmograph/ui": "/vendor/cosmograph-ui/index.js",
+            "@juggle/resize-observer": "/vendor/juggle-resize-observer-bundled.js",
+            "./ResizeObserverController": "/vendor/juggle-resize-observer-bundled.js",
+            "./utils/element": "/vendor/juggle-resize-observer-bundled.js",
+            "d3-color": "/vendor/d3-color/src/index.js",
+            "./color.js": "/vendor/d3-color/src/color.js",
+            "./cubehelix.js": "/vendor/d3-color/src/cubehelix.js",
+            "./define.js": "/vendor/d3-color/src/define.js",
+            "./lab.js": "/vendor/d3-color/src/lab.js",
+            "./math.js": "/vendor/d3-color/src/math.js",
+            "d3-transition": "/vendor/d3-transition/src/index.js",
+            "./transition/index.js": "/vendor/d3-transition/src/transition/index.js",
+            "./active.js": "/vendor/d3-transition/src/active.js",
+            "./interrupt.js": "/vendor/d3-transition/src/interrupt.js",
+            "./selection/index.js": "/vendor/d3-transition/src/selection/index.js",
+            "./transition/attr.js": "/vendor/d3-transition/src/transition/attr.js",
+            "./transition/attrTween.js": "/vendor/d3-transition/src/transition/attrTween.js",
+            "./transition/delay.js": "/vendor/d3-transition/src/transition/delay.js",
+            "./transition/duration.js": "/vendor/d3-transition/src/transition/duration.js",
+            "./transition/ease.js": "/vendor/d3-transition/src/transition/ease.js",
+            "./transition/filter.js": "/vendor/d3-transition/src/transition/filter.js",
+            "./transition/merge.js": "/vendor/d3-transition/src/transition/merge.js",
+            "./transition/on.js": "/vendor/d3-transition/src/transition/on.js",
+            "./transition/remove.js": "/vendor/d3-transition/src/transition/remove.js",
+            "./transition/select.js": "/vendor/d3-transition/src/transition/select.js",
+            "./transition/selectAll.js": "/vendor/d3-transition/src/transition/selectAll.js",
+            "./transition/selection.js": "/vendor/d3-transition/src/transition/selection.js",
+            "./transition/style.js": "/vendor/d3-transition/src/transition/style.js",
+            "./transition/styleTween.js": "/vendor/d3-transition/src/transition/styleTween.js",
+            "./transition/text.js": "/vendor/d3-transition/src/transition/text.js",
+            "./transition/textTween.js": "/vendor/d3-transition/src/transition/textTween.js",
+            "./transition/transition.js": "/vendor/d3-transition/src/transition/transition.js",
+            "./transition/tween.js": "/vendor/d3-transition/src/transition/tween.js",
+            "./transition/end.js": "/vendor/d3-transition/src/transition/end.js",
+            "./transition/schedule.js": "/vendor/d3-transition/src/transition/schedule.js",
+            "./selection/interrupt.js": "/vendor/d3-transition/src/selection/interrupt.js",
+            "./selection/transition.js": "/vendor/d3-transition/src/selection/transition.js",
+            "d3-dispatch": "/vendor/d3-dispatch/src/index.js",
+            "./dispatch.js": "/vendor/d3-dispatch/src/dispatch.js",
+            "d3-ease": "/vendor/d3-ease/src/index.js",
+            "./linear.js": "/vendor/d3-ease/src/linear.js",
+            "./quad.js": "/vendor/d3-ease/src/quad.js",
+            "./cubic.js": "/vendor/d3-ease/src/cubic.js",
+            "./poly.js": "/vendor/d3-ease/src/poly.js",
+            "./sin.js": "/vendor/d3-ease/src/sin.js",
+            "./exp.js": "/vendor/d3-ease/src/exp.js",
+            "./circle.js": "/vendor/d3-ease/src/circle.js",
+            "./bounce.js": "/vendor/d3-ease/src/bounce.js",
+            "./back.js": "/vendor/d3-ease/src/back.js",
+            "./elastic.js": "/vendor/d3-ease/src/elastic.js",
+            "d3-interpolate": "/vendor/d3-interpolate/src/index.js",
+            "./value.js": "/vendor/d3-interpolate/src/value.js",
+            "./array.js": "/vendor/d3-interpolate/src/array.js",
+            "./basis.js": "/vendor/d3-interpolate/src/basis.js",
+            "./basisClosed.js": "/vendor/d3-interpolate/src/basisClosed.js",
+            "./color.js": "/vendor/d3-interpolate/src/color.js",
+            "./constant.js": "/vendor/d3-interpolate/src/constant.js",
+            "./cubehelix.js": "/vendor/d3-interpolate/src/cubehelix.js",
+            "./date.js": "/vendor/d3-interpolate/src/date.js",
+            "./discrete.js": "/vendor/d3-interpolate/src/discrete.js",
+            "./hcl.js": "/vendor/d3-interpolate/src/hcl.js",
+            "./hsl.js": "/vendor/d3-interpolate/src/hsl.js",
+            "./hue.js": "/vendor/d3-interpolate/src/hue.js",
+            "./lab.js": "/vendor/d3-interpolate/src/lab.js",
+            "./number.js": "/vendor/d3-interpolate/src/number.js",
+            "./numberArray.js": "/vendor/d3-interpolate/src/numberArray.js",
+            "./object.js": "/vendor/d3-interpolate/src/object.js",
+            "./piecewise.js": "/vendor/d3-interpolate/src/piecewise.js",
+            "./quantize.js": "/vendor/d3-interpolate/src/quantize.js",
+            "./rgb.js": "/vendor/d3-interpolate/src/rgb.js",
+            "./round.js": "/vendor/d3-interpolate/src/round.js",
+            "./string.js": "/vendor/d3-interpolate/src/string.js",
+            "./transform/index.js": "/vendor/d3-interpolate/src/transform/index.js",
+            "./transform/decompose.js": "/vendor/d3-interpolate/src/transform/decompose.js",
+            "./transform/parse.js": "/vendor/d3-interpolate/src/transform/parse.js",
+            "./zoom.js": "/vendor/d3-interpolate/src/zoom.js",
+            "d3-timer": "/vendor/d3-timer/src/index.js",
+            "./timer.js": "/vendor/d3-timer/src/timer.js",
+            "./timeout.js": "/vendor/d3-timer/src/timeout.js",
+            "./interval.js": "/vendor/d3-timer/src/interval.js",
+            "d3-selection": "/vendor/d3-selection/src/index.js",
+            "./create.js": "/vendor/d3-selection/src/create.js",
+            "./creator.js": "/vendor/d3-selection/src/creator.js",
+            "./local.js": "/vendor/d3-selection/src/local.js",
+            "./matcher.js": "/vendor/d3-selection/src/matcher.js",
+            "./namespace.js": "/vendor/d3-selection/src/namespace.js",
+            "./namespaces.js": "/vendor/d3-selection/src/namespaces.js",
+            "./pointer.js": "/vendor/d3-selection/src/pointer.js",
+            "./pointers.js": "/vendor/d3-selection/src/pointers.js",
+            "./select.js": "/vendor/d3-selection/src/select.js",
+            "./selectAll.js": "/vendor/d3-selection/src/selectAll.js",
+            "./selection/index.js": "/vendor/d3-selection/src/selection/index.js",
+            "./selector.js": "/vendor/d3-selection/src/selector.js",
+            "./selectorAll.js": "/vendor/d3-selection/src/selectorAll.js",
+            "./selection/style.js": "/vendor/d3-selection/src/selection/style.js",
+            "./window.js": "/vendor/d3-selection/src/window.js",
+            "./sourceEvent.js": "/vendor/d3-selection/src/sourceEvent.js",
+            "./selection/append.js": "/vendor/d3-selection/src/selection/append.js",
+            "./selection/attr.js": "/vendor/d3-selection/src/selection/attr.js",
+            "./selection/call.js": "/vendor/d3-selection/src/selection/call.js",
+            "./selection/classed.js": "/vendor/d3-selection/src/selection/classed.js",
+            "./selection/clone.js": "/vendor/d3-selection/src/selection/clone.js",
+            "./selection/data.js": "/vendor/d3-selection/src/selection/data.js",
+            "./selection/datum.js": "/vendor/d3-selection/src/selection/datum.js",
+            "./selection/dispatch.js": "/vendor/d3-selection/src/selection/dispatch.js",
+            "./selection/each.js": "/vendor/d3-selection/src/selection/each.js",
+            "./selection/empty.js": "/vendor/d3-selection/src/selection/empty.js",
+            "./selection/enter.js": "/vendor/d3-selection/src/selection/enter.js",
+            "./selection/exit.js": "/vendor/d3-selection/src/selection/exit.js",
+            "./selection/filter.js": "/vendor/d3-selection/src/selection/filter.js",
+            "./selection/html.js": "/vendor/d3-selection/src/selection/html.js",
+            "./selection/insert.js": "/vendor/d3-selection/src/selection/insert.js",
+            "./selection/join.js": "/vendor/d3-selection/src/selection/join.js",
+            "./selection/lower.js": "/vendor/d3-selection/src/selection/lower.js",
+            "./selection/merge.js": "/vendor/d3-selection/src/selection/merge.js",
+            "./selection/node.js": "/vendor/d3-selection/src/selection/node.js",
+            "./selection/nodes.js": "/vendor/d3-selection/src/selection/nodes.js",
+            "./selection/on.js": "/vendor/d3-selection/src/selection/on.js",
+            "./selection/order.js": "/vendor/d3-selection/src/selection/order.js",
+            "./selection/property.js": "/vendor/d3-selection/src/selection/property.js",
+            "./selection/raise.js": "/vendor/d3-selection/src/selection/raise.js",
+            "./selection/remove.js": "/vendor/d3-selection/src/selection/remove.js",
+            "./selection/select.js": "/vendor/d3-selection/src/selection/select.js",
+            "./selection/selectAll.js": "/vendor/d3-selection/src/selection/selectAll.js",
+            "./selection/selectChild.js": "/vendor/d3-selection/src/selection/selectChild.js",
+            "./selection/selectChildren.js": "/vendor/d3-selection/src/selection/selectChildren.js",
+            "./selection/size.js": "/vendor/d3-selection/src/selection/size.js",
+            "./selection/sort.js": "/vendor/d3-selection/src/selection/sort.js",
+            "./selection/sparse.js": "/vendor/d3-selection/src/selection/sparse.js",
+            "./selection/text.js": "/vendor/d3-selection/src/selection/text.js",
+            "./selection/iterator.js": "/vendor/d3-selection/src/selection/iterator.js",
+            "./constant.js": "/vendor/d3-selection/src/constant.js",
+            "./array.js": "/vendor/d3-selection/src/array.js",
+            "d3-array": "/vendor/d3-array/src/index.js",
+            "./ascending.js": "/vendor/d3-array/src/ascending.js",
+            "./bisector.js": "/vendor/d3-array/src/bisector.js",
+            "./bisect.js": "/vendor/d3-array/src/bisect.js",
+            "./descending.js": "/vendor/d3-array/src/descending.js",
+            "./number.js": "/vendor/d3-array/src/number.js",
+            "./extent.js": "/vendor/d3-array/src/extent.js",
+            "./identity.js": "/vendor/d3-array/src/identity.js",
+            "./range.js": "/vendor/d3-array/src/range.js",
+            "./ticks.js": "/vendor/d3-array/src/ticks.js",
+            "./threshold/freedmanDiaconis.js": "/vendor/d3-array/src/threshold/freedmanDiaconis.js",
+            "./threshold/scott.js": "/vendor/d3-array/src/threshold/scott.js",
+            "./threshold/sturges.js": "/vendor/d3-array/src/threshold/sturges.js",
+            "./max.js": "/vendor/d3-array/src/max.js",
+            "./mean.js": "/vendor/d3-array/src/mean.js",
+            "./median.js": "/vendor/d3-array/src/median.js",
+            "./merge.js": "/vendor/d3-array/src/merge.js",
+            "./min.js": "/vendor/d3-array/src/min.js",
+            "./pairs.js": "/vendor/d3-array/src/pairs.js",
+            "./permute.js": "/vendor/d3-array/src/permute.js",
+            "./quantile.js": "/vendor/d3-array/src/quantile.js",
+            "./quickselect.js": "/vendor/d3-array/src/quickselect.js",
+            "./scan.js": "/vendor/d3-array/src/scan.js",
+            "./shuffle.js": "/vendor/d3-array/src/shuffle.js",
+            "./sum.js": "/vendor/d3-array/src/sum.js",
+            "./transpose.js": "/vendor/d3-array/src/transpose.js",
+            "./variance.js": "/vendor/d3-array/src/variance.js",
+            "./zip.js": "/vendor/d3-array/src/zip.js",
+            "./cross.js": "/vendor/d3-array/src/cross.js",
+            "./cumsum.js": "/vendor/d3-array/src/cumsum.js",
+            "./group.js": "/vendor/d3-array/src/group.js",
+            "./sort.js": "/vendor/d3-array/src/sort.js",
+            "./array.js": "/vendor/d3-array/src/array.js",
+            "./constant.js": "/vendor/d3-array/src/constant.js",
+            "./nice.js": "/vendor/d3-array/src/nice.js",
+            "d3-axis": "/vendor/d3-axis/src/index.js",
+            "./axis.js": "/vendor/d3-axis/src/axis.js",
+            "./identity.js": "/vendor/d3-axis/src/identity.js",
+            "d3-brush": "/vendor/d3-brush/src/index.js",
+            "./brush.js": "/vendor/d3-brush/src/brush.js",
+            "./noevent.js": "/vendor/d3-brush/src/noevent.js",
+            "./event.js": "/vendor/d3-brush/src/event.js",
+            "./constant.js": "/vendor/d3-brush/src/constant.js",
+            "d3-format": "/vendor/d3-format/src/index.js",
+            "./defaultLocale.js": "/vendor/d3-format/src/defaultLocale.js",
+            "./exponent.js": "/vendor/d3-format/src/exponent.js",
+            "./formatDecimal.js": "/vendor/d3-format/src/formatDecimal.js",
+            "./formatGroup.js": "/vendor/d3-format/src/formatGroup.js",
+            "./formatNumerals.js": "/vendor/d3-format/src/formatNumerals.js",
+            "./formatPrefixAuto.js": "/vendor/d3-format/src/formatPrefixAuto.js",
+            "./formatRounded.js": "/vendor/d3-format/src/formatRounded.js",
+            "./formatSpecifier.js": "/vendor/d3-format/src/formatSpecifier.js",
+            "./formatTrim.js": "/vendor/d3-format/src/formatTrim.js",
+            "./formatTypes.js": "/vendor/d3-format/src/formatTypes.js",
+            "./locale.js": "/vendor/d3-format/src/locale.js",
+            "./precisionFixed.js": "/vendor/d3-format/src/precisionFixed.js",
+            "./precisionPrefix.js": "/vendor/d3-format/src/precisionPrefix.js",
+            "./precisionRound.js": "/vendor/d3-format/src/precisionRound.js",
+            "d3-scale": "/vendor/d3-scale/src/index.js",
+            "./band.js": "/vendor/d3-scale/src/band.js",
+            "./colors.js": "/vendor/d3-scale/src/colors.js",
+            "./constant.js": "/vendor/d3-scale/src/constant.js",
+            "./continuous.js": "/vendor/d3-scale/src/continuous.js",
+            "./diverging.js": "/vendor/d3-scale/src/diverging.js",
+            "./identity.js": "/vendor/d3-scale/src/identity.js",
+            "./init.js": "/vendor/d3-scale/src/init.js",
+            "./linear.js": "/vendor/d3-scale/src/linear.js",
+            "./log.js": "/vendor/d3-scale/src/log.js",
+            "./nice.js": "/vendor/d3-scale/src/nice.js",
+            "./number.js": "/vendor/d3-scale/src/number.js",
+            "./ordinal.js": "/vendor/d3-scale/src/ordinal.js",
+            "./pow.js": "/vendor/d3-scale/src/pow.js",
+            "./quantile.js": "/vendor/d3-scale/src/quantile.js",
+            "./quantize.js": "/vendor/d3-scale/src/quantize.js",
+            "./radial.js": "/vendor/d3-scale/src/radial.js",
+            "./sequential.js": "/vendor/d3-scale/src/sequential.js",
+            "./sequentialQuantile.js": "/vendor/d3-scale/src/sequentialQuantile.js",
+            "./symlog.js": "/vendor/d3-scale/src/symlog.js",
+            "./threshold.js": "/vendor/d3-scale/src/threshold.js",
+            "./tickFormat.js": "/vendor/d3-scale/src/tickFormat.js",
+            "./time.js": "/vendor/d3-scale/src/time.js",
+            "./utcTime.js": "/vendor/d3-scale/src/utcTime.js",
+            "d3-time": "/vendor/d3-time/src/index.js",
+            "./interval.js": "/vendor/d3-time/src/interval.js",
+            "./millisecond.js": "/vendor/d3-time/src/millisecond.js",
+            "./second.js": "/vendor/d3-time/src/second.js",
+            "./minute.js": "/vendor/d3-time/src/minute.js",
+            "./hour.js": "/vendor/d3-time/src/hour.js",
+            "./day.js": "/vendor/d3-time/src/day.js",
+            "./week.js": "/vendor/d3-time/src/week.js",
+            "./month.js": "/vendor/d3-time/src/month.js",
+            "./year.js": "/vendor/d3-time/src/year.js",
+            "./ticks.js": "/vendor/d3-time/src/ticks.js",
+            "./duration.js": "/vendor/d3-time/src/duration.js",
+            "d3-time-format": "/vendor/d3-time-format/src/index.js",
+            "./defaultLocale.js": "/vendor/d3-time-format/src/defaultLocale.js",
+            "./locale.js": "/vendor/d3-time-format/src/locale.js",
+            "./isoFormat.js": "/vendor/d3-time-format/src/isoFormat.js",
+            "./isoParse.js": "/vendor/d3-time-format/src/isoParse.js",
+            "d3-drag": "/vendor/d3-drag/src/index.js",
+            "./drag.js": "/vendor/d3-drag/src/drag.js",
+            "./nodrag.js": "/vendor/d3-drag/src/nodrag.js",
+            "./noevent.js": "/vendor/d3-drag/src/noevent.js",
+            "./event.js": "/vendor/d3-drag/src/event.js",
+            "./constant.js": "/vendor/d3-drag/src/constant.js",
+            "internmap": "/vendor/internmap/src/index.js",
+            "escape-string-regexp": "/vendor/escape-string-regexp/index.js",
+            "crossfilter2": "/vendor/crossfilter2-es-wrapper.js",
+            "@supabase/supabase-js": "data:text/javascript,export function createClient() { return { from: () => ({ insert: async () => ({ error: null }) }) }; }",
+            "./watermark.js": "/vendor/modules/cosmograph/watermark.js",
+            "./config.js": "/vendor/modules/cosmograph/config.js",
+            "./style.module.css.js": "/vendor/modules/cosmograph/style.module.css.js",
+            "./crossfilter.js": "/vendor/modules/cosmograph/crossfilter.js",
+            "../../api/supabase/supabase.js": "/vendor/api/supabase/supabase.js",
+            "./../../ext/rollup-plugin-styles/dist/runtime/inject-css.js": "data:text/javascript,export default function() {}"
+        }
+    }
+    </script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #0a0a0a;
+            color: #fff;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+        #cosmograph-container {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+        }
+        .control-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background-color: rgba(20, 20, 20, 0.95);
+            padding: 20px;
+            border-radius: 8px;
+            max-width: 350px;
+            max-height: 90vh;
+            overflow-y: auto;
+            z-index: 1000;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        }
+        .stats-card {
+            background-color: rgba(40, 40, 40, 0.8);
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+        }
+        .btn-primary {
+            background-color: #4ecdc4;
+            border-color: #4ecdc4;
+        }
+        .btn-primary:hover {
+            background-color: #3eb8b0;
+            border-color: #3eb8b0;
+        }
+        .btn-danger {
+            background-color: #ff6b6b;
+            border-color: #ff6b6b;
+        }
+        .gpu-badge {
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            font-weight: bold;
+            margin-left: 10px;
+            display: inline-block;
+        }
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+            visibility: hidden;
+        }
+        .loading-overlay.active {
+            visibility: visible;
+        }
+        .loading-content {
+            text-align: center;
+        }
+        .performance-metrics {
+            font-family: monospace;
+            font-size: 0.9em;
+            color: #4ecdc4;
+        }
+        #fps-counter {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background-color: rgba(20, 20, 20, 0.9);
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 14px;
+            z-index: 1000;
+        }
+        .toggle-controls {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            background-color: rgba(20, 20, 20, 0.9);
+            padding: 10px;
+            border-radius: 4px;
+            z-index: 1000;
+        }
+        /* Scrollbar styling */
+        .control-panel::-webkit-scrollbar {
+            width: 8px;
+        }
+        .control-panel::-webkit-scrollbar-track {
+            background: rgba(40, 40, 40, 0.5);
+            border-radius: 4px;
+        }
+        .control-panel::-webkit-scrollbar-thumb {
+            background: #4ecdc4;
+            border-radius: 4px;
+        }
+        
+        /* Node details panel */
+        .node-details-panel {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background-color: rgba(20, 20, 20, 0.95);
+            padding: 20px;
+            border-radius: 8px;
+            max-width: 400px;
+            max-height: 80vh;
+            overflow-y: auto;
+            z-index: 1001;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            display: none;
+            animation: slideIn 0.3s ease-out;
+        }
+        
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        
+        .node-details-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            border-bottom: 1px solid #444;
+            padding-bottom: 10px;
+        }
+        
+        .node-details-header h5 {
+            margin: 0;
+            color: #4ecdc4;
+        }
+        
+        .btn-close {
+            background: none;
+            border: none;
+            color: #999;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .btn-close:hover {
+            color: #fff;
+        }
+        
+        .node-details-content {
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        
+        .node-details-content > div {
+            margin-bottom: 8px;
+            word-break: break-word;
+        }
+        
+        .node-details-content strong {
+            color: #4ecdc4;
+            margin-right: 5px;
+        }
+        
+        .summary-section {
+            background: rgba(40, 40, 40, 0.5);
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+        }
+        
+        .centrality-section {
+            margin-top: 15px;
+        }
+        
+        .json-section {
+            margin-top: 15px;
+        }
+        
+        /* Progress bar styling */
+        .progress {
+            background-color: rgba(40, 40, 40, 0.8);
+        }
+        
+        .progress-bar {
+            transition: width 0.3s ease;
+        }
+        
+        /* Filter panel */
+        .filter-panel {
+            position: absolute;
+            bottom: 100px;
+            left: 20px;
+            background-color: rgba(20, 20, 20, 0.95);
+            padding: 15px;
+            border-radius: 8px;
+            max-width: 300px;
+            z-index: 1000;
+            display: none;
+        }
+        
+        .filter-panel.active {
+            display: block;
+        }
+        
+        /* Enhanced graph animation */
+        @keyframes pulse {
+            0% { opacity: 0.6; }
+            50% { opacity: 1; }
+            100% { opacity: 0.6; }
+        }
+    </style>
+</head>
+<body>
+    <script>
+        console.log('Page loaded - basic script tag works');
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('DOMContentLoaded from basic script');
+        });
+    </script>
+    <div id="cosmograph-container"></div>
+    
+    <div id="fps-counter">
+        <div>FPS: <span id="fps">0</span></div>
+        <div>Nodes: <span id="rendered-nodes">0</span></div>
+        <div>Edges: <span id="rendered-edges">0</span></div>
+    </div>
+    
+    <div class="loading-overlay" id="loading-overlay">
+        <div class="loading-content">
+            <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <h3 class="mt-3">Loading Graph Data...</h3>
+            <p class="performance-metrics" id="loading-status">Fetching data from FalkorDB</p>
+        </div>
+    </div>
+    
+    <div class="control-panel">
+        <h4>
+            🚀 Cosmograph GPU Visualizer
+            <span class="gpu-badge">WebGL</span>
+        </h4>
+        
+        <div class="stats-card">
+            <h5>📊 Graph Statistics</h5>
+            <div><strong>Total Nodes:</strong> <span id="total-nodes">-</span></div>
+            <div><strong>Total Edges:</strong> <span id="total-edges">-</span></div>
+            <div><strong>Query Time:</strong> <span id="query-time">-</span> ms</div>
+            <div class="mt-2 performance-metrics">
+                <div>GPU Memory: <span id="gpu-memory">-</span></div>
+                <div>Render Time: <span id="render-time">-</span> ms</div>
+            </div>
+        </div>
+        
+        <div class="mb-3">
+            <h5>🎮 Visualization Controls</h5>
+            
+            <div class="mb-2">
+                <label for="query-type" class="form-label">Query Type:</label>
+                <select id="query-type" class="form-select form-select-sm">
+                    <option value="entire_graph">Entire Graph (GPU)</option>
+                    <option value="high_degree">High Degree Nodes</option>
+                    <option value="agents">Agent Networks</option>
+                </select>
+            </div>
+            
+            <div class="mb-2">
+                <label for="node-limit" class="form-label">Node Limit:</label>
+                <input type="number" id="node-limit" class="form-control form-control-sm" value="50000" min="100" max="100000">
+                <small class="text-muted">Full graph: ~4.5k nodes, 14k edges</small>
+            </div>
+            
+            <button id="visualize-btn" class="btn btn-primary w-100 mb-2">Visualize</button>
+            <button id="load-entire-graph-btn" class="btn btn-danger w-100 mb-3">
+                ⚡ Load Entire Graph (GPU)
+            </button>
+        </div>
+        
+        <div class="stats-card">
+            <h5>⚙️ Rendering Settings</h5>
+            <div class="mb-2">
+                <label for="node-size" class="form-label">Node Size: <span id="node-size-value">5</span></label>
+                <input type="range" class="form-range" id="node-size" min="1" max="20" step="1" value="5">
+            </div>
+            
+            <div class="mb-2">
+                <label for="link-width" class="form-label">Link Width: <span id="link-width-value">0.5</span></label>
+                <input type="range" class="form-range" id="link-width" min="0.1" max="5" step="0.1" value="0.5">
+            </div>
+            
+            <div class="mb-2">
+                <label for="link-opacity" class="form-label">Link Opacity: <span id="link-opacity-value">0.5</span></label>
+                <input type="range" class="form-range" id="link-opacity" min="0" max="1" step="0.1" value="0.5">
+            </div>
+            
+            <div class="mb-2">
+                <label for="simulation-decay" class="form-label">Simulation Decay: <span id="simulation-decay-value">3000</span></label>
+                <input type="range" class="form-range" id="simulation-decay" min="100" max="10000" step="100" value="3000">
+            </div>
+            
+            <div class="mb-2">
+                <label for="repulsion" class="form-label">Repulsion Force: <span id="repulsion-value">1.0</span></label>
+                <input type="range" class="form-range" id="repulsion" min="0" max="2" step="0.1" value="1.0">
+            </div>
+            
+            <div class="mb-2">
+                <label for="gravity" class="form-label">Center Gravity: <span id="gravity-value">0.0</span></label>
+                <input type="range" class="form-range" id="gravity" min="0" max="1" step="0.05" value="0.0">
+            </div>
+            
+            <div class="mb-2">
+                <label for="friction" class="form-label">Friction/Drag: <span id="friction-value">0.85</span></label>
+                <input type="range" class="form-range" id="friction" min="0.5" max="0.99" step="0.01" value="0.85">
+            </div>
+            
+            <div class="mb-2">
+                <label for="spiral-force" class="form-label">Spiral Force: <span id="spiral-force-value">0.0</span></label>
+                <input type="range" class="form-range" id="spiral-force" min="0" max="0.5" step="0.01" value="0.0">
+            </div>
+            
+            <div class="mb-2">
+                <label for="tangential-drag" class="form-label">Tangential Drag: <span id="tangential-drag-value">0.0</span></label>
+                <input type="range" class="form-range" id="tangential-drag" min="0" max="0.1" step="0.002" value="0.0">
+            </div>
+            
+            <div class="mb-2">
+                <label for="link-spring" class="form-label">Link Spring: <span id="link-spring-value">0.5</span></label>
+                <input type="range" class="form-range" id="link-spring" min="0" max="2" step="0.1" value="0.5">
+            </div>
+            
+            <div class="mb-2">
+                <label for="link-distance" class="form-label">Link Distance: <span id="link-distance-value">20</span></label>
+                <input type="range" class="form-range" id="link-distance" min="5" max="100" step="5" value="20">
+            </div>
+            
+            <div class="mb-2">
+                <label for="mouse-repulsion" class="form-label">Mouse Repulsion: <span id="mouse-repulsion-value">2.0</span></label>
+                <input type="range" class="form-range" id="mouse-repulsion" min="0" max="5" step="0.5" value="2.0">
+            </div>
+        </div>
+        
+        <div class="stats-card">
+            <h5>🌀 Advanced Physics</h5>
+            <div class="mb-2">
+                <button id="toggle-custom-physics" class="btn btn-sm btn-success w-100">Enable Custom Physics</button>
+            </div>
+            <div class="mb-2">
+                <button id="apply-explosion" class="btn btn-sm btn-warning w-100">Explosion Effect</button>
+            </div>
+            <div class="mb-2">
+                <button id="randomize-positions" class="btn btn-sm btn-secondary w-100">Randomize Positions</button>
+            </div>
+            <div class="mb-2">
+                <button id="reset-physics" class="btn btn-sm btn-danger w-100">Reset Physics</button>
+            </div>
+        </div>
+        
+        <div class="mt-3">
+            <h6>Controls:</h6>
+            <ul class="small">
+                <li>🖱️ Scroll/Pinch to zoom</li>
+                <li>👆 Click & drag to pan</li>
+                <li>🎯 Click nodes for details</li>
+                <li>⌨️ Space to pause/resume</li>
+                <li>🔍 Hover nodes to see labels</li>
+                <li>⚡ Right-click for mouse repulsion</li>
+            </ul>
+        </div>
+    </div>
+    
+    <div class="toggle-controls">
+        <button id="toggle-panel" class="btn btn-sm btn-secondary">Toggle Panel</button>
+        <button id="pause-simulation" class="btn btn-sm btn-warning">Pause</button>
+        <button id="fit-view" class="btn btn-sm btn-info">Fit View</button>
+        <button id="toggle-filters" class="btn btn-sm btn-primary">Filters</button>
+    </div>
+    
+    <div class="filter-panel" id="filter-panel">
+        <h5>🔍 Node Filters</h5>
+        <div class="mb-3">
+            <label class="form-label">Node Type</label>
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="filter-entity" checked>
+                <label class="form-check-label" for="filter-entity">Entity</label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="filter-episodic" checked>
+                <label class="form-check-label" for="filter-episodic">Episodic</label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="filter-agent" checked>
+                <label class="form-check-label" for="filter-agent">Agent</label>
+            </div>
+        </div>
+        
+        <div class="mb-3">
+            <label for="centrality-threshold" class="form-label">
+                Min Centrality: <span id="centrality-value">0</span>
+            </label>
+            <input type="range" class="form-range" id="centrality-threshold" 
+                   min="0" max="50" step="1" value="0">
+        </div>
+        
+        <div class="mb-3">
+            <label for="node-search" class="form-label">Search Nodes</label>
+            <input type="text" class="form-control form-control-sm" id="node-search" 
+                   placeholder="Search by name or summary...">
+        </div>
+        
+        <button id="apply-filters" class="btn btn-sm btn-primary w-100">Apply Filters</button>
+        <button id="reset-filters" class="btn btn-sm btn-secondary w-100 mt-2">Reset</button>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script type="module">
+        console.log('Module script started');
+        import { Cosmograph } from '@cosmograph/cosmograph';
+        console.log('Cosmograph imported successfully:', Cosmograph);
+        
+        let cosmograph = null;
+        let currentData = null;
+        let isPaused = false;
+        let frameCount = 0;
+        let lastTime = performance.now();
+        let customPhysicsEnabled = false;
+        let centerGravity = 0.1;
+        let dragCoefficient = 0.02;
+        let spiralForce = 0.05;
+        let tangentialDrag = 0.01;
+        let nodeVelocities = new Map();
+        let nodePositions = new Map();
+        let animationFrame = null;
+        
+        // Initialize - check if DOM is already loaded
+        function initialize() {
+            console.log('Initialize function called');
+            try {
+                initializeCosmograph();
+                console.log('initializeCosmograph completed');
+            } catch (error) {
+                console.error('Error in initializeCosmograph:', error);
+            }
+            
+            try {
+                loadStats();
+                console.log('loadStats completed');
+            } catch (error) {
+                console.error('Error in loadStats:', error);
+            }
+            
+            try {
+                setupEventListeners();
+                console.log('setupEventListeners completed');
+            } catch (error) {
+                console.error('Error in setupEventListeners:', error);
+            }
+            
+            updateFPS();
+            
+            // Load initial visualization
+            setTimeout(() => {
+                console.log('Calling initial visualization...');
+                window.visualize();
+            }, 500);
+        }
+        
+        // Check if DOM is already loaded
+        if (document.readyState === 'loading') {
+            console.log('DOM still loading, adding event listener');
+            document.addEventListener('DOMContentLoaded', initialize);
+        } else {
+            console.log('DOM already loaded, initializing immediately');
+            initialize();
+        }
+        
+        function initializeCosmograph() {
+            console.log('initializeCosmograph called');
+            const container = document.getElementById('cosmograph-container');
+            console.log('Container:', container, 'Width:', container?.offsetWidth, 'Height:', container?.offsetHeight);
+            
+            const config = {
+                backgroundColor: '#0a0a0a',
+                nodeColor: node => {
+                    // Color based on node type with intensity based on importance
+                    const baseColors = {
+                        'Entity': [255, 107, 107],  // #ff6b6b
+                        'Episodic': [78, 205, 196], // #4ecdc4
+                        'Agent': [255, 230, 109]     // #ffe66d
+                    };
+                    const [r, g, b] = baseColors[node.node_type] || [149, 225, 211]; // #95e1d3
+                    
+                    // Use importance_centrality or pagerank to adjust brightness
+                    const importance = node.properties?.importance_centrality || node.properties?.pagerank_centrality || 0.5;
+                    const brightness = 0.5 + (importance * 0.5); // Range 0.5 to 1.0
+                    
+                    const finalR = Math.round(r * brightness);
+                    const finalG = Math.round(g * brightness);
+                    const finalB = Math.round(b * brightness);
+                    
+                    return `rgb(${finalR}, ${finalG}, ${finalB})`;
+                },
+                nodeSize: node => {
+                    // Dynamic size based on centrality scores
+                    const props = node.properties || {};
+                    const degree = props.degree_centrality || 0;
+                    const pagerank = props.pagerank_centrality || 0;
+                    
+                    // Combine metrics for size (weighted average)
+                    const combinedScore = (degree * 0.7 + pagerank * 0.3);
+                    
+                    // Scale: minimum 3, maximum 20, with most nodes between 5-10
+                    return 3 + Math.sqrt(combinedScore * 1000) * 0.5;
+                },
+                nodeLabel: node => {
+                    // Show labels for high-centrality nodes
+                    const props = node.properties || {};
+                    const degree = props.degree_centrality || 0;
+                    if (degree > 10 || node.node_type === 'Agent') {
+                        return node.label || props.name || '';
+                    }
+                    return '';
+                },
+                linkColor: '#666666',
+                linkWidth: 0.5,
+                linkArrows: true,
+                linkArrowsSizeScale: 0.5,
+                simulationGravity: 0.0,
+                simulationRepulsion: 1.0,
+                simulationLinkDistance: 20,
+                simulationLinkSpring: 0.5,
+                simulationDecay: 3000,
+                simulationFriction: 0.85,
+                renderLinks: true,
+                showDynamicLabels: true,
+                showHoveredNodeLabel: true,
+                renderHoveredNodeRing: true,
+                hoveredNodeRingColor: '#4ecdc4',
+                focusedNodeRingColor: '#ff6b6b',
+                events: {
+                    onClick: (node) => {
+                        if (node) {
+                            console.log('Clicked node:', node);
+                            showNodeDetails(node);
+                        }
+                    },
+                    onZoom: (event) => {
+                        console.log('Zoom event:', event);
+                    },
+                    onNodeMouseOver: (node) => {
+                        if (node && node.properties?.summary) {
+                            // Could show tooltip with summary
+                            console.log('Hover node:', node.label, 'Summary:', node.properties.summary);
+                        }
+                    }
+                }
+            };
+            
+            console.log('Creating Cosmograph with config:', config);
+            try {
+                cosmograph = new Cosmograph(container, config);
+                console.log('Cosmograph created successfully:', cosmograph);
+            } catch (error) {
+                console.error('Error creating Cosmograph:', error);
+                throw error;
+            }
+        }
+        
+        function setupEventListeners() {
+            console.log('setupEventListeners called');
+            document.getElementById('visualize-btn').addEventListener('click', window.visualize);
+            document.getElementById('load-entire-graph-btn').addEventListener('click', window.loadEntireGraph);
+            document.getElementById('toggle-panel').addEventListener('click', window.togglePanel);
+            document.getElementById('pause-simulation').addEventListener('click', window.toggleSimulation);
+            document.getElementById('fit-view').addEventListener('click', () => {
+                if (cosmograph) {
+                    cosmograph.fitView();
+                }
+            });
+            
+            // Query type change listener
+            document.getElementById('query-type').addEventListener('change', (e) => {
+                console.log('Query type changed to:', e.target.value);
+            });
+            
+            // Settings listeners
+            document.getElementById('node-size').addEventListener('input', (e) => {
+                const value = parseInt(e.target.value);
+                document.getElementById('node-size-value').textContent = value;
+                if (cosmograph) {
+                    console.log('Setting node size to:', value);
+                    cosmograph.setConfig({ nodeSize: value });
+                }
+            });
+            
+            document.getElementById('link-width').addEventListener('input', (e) => {
+                const value = parseFloat(e.target.value);
+                document.getElementById('link-width-value').textContent = value;
+                if (cosmograph) {
+                    console.log('Setting link width to:', value);
+                    cosmograph.setConfig({ linkWidth: value });
+                }
+            });
+            
+            document.getElementById('link-opacity').addEventListener('input', (e) => {
+                const value = parseFloat(e.target.value);
+                document.getElementById('link-opacity-value').textContent = value;
+                if (cosmograph) {
+                    // Opacity is handled via linkColor alpha
+                    const opacity = Math.round(value * 255).toString(16).padStart(2, '0');
+                    console.log('Setting link opacity to:', value, 'color:', `#666666${opacity}`);
+                    cosmograph.setConfig({ linkColor: `#666666${opacity}` });
+                }
+            });
+            
+            document.getElementById('simulation-decay').addEventListener('input', (e) => {
+                const value = parseInt(e.target.value);
+                document.getElementById('simulation-decay-value').textContent = value;
+                if (cosmograph) {
+                    console.log('Setting simulation decay to:', value);
+                    cosmograph.setConfig({ simulationDecay: value });
+                }
+            });
+            
+            document.getElementById('repulsion').addEventListener('input', (e) => {
+                const value = parseFloat(e.target.value);
+                document.getElementById('repulsion-value').textContent = value;
+                if (cosmograph) {
+                    console.log('Setting repulsion to:', value);
+                    cosmograph.setConfig({ simulationRepulsion: value });
+                }
+            });
+            
+            // Keyboard shortcuts
+            document.addEventListener('keydown', (e) => {
+                if (e.code === 'Space') {
+                    e.preventDefault();
+                    window.toggleSimulation();
+                }
+            });
+            
+            // Filter panel controls
+            document.getElementById('toggle-filters').addEventListener('click', () => {
+                const panel = document.getElementById('filter-panel');
+                panel.classList.toggle('active');
+            });
+            
+            document.getElementById('centrality-threshold').addEventListener('input', (e) => {
+                document.getElementById('centrality-value').textContent = e.target.value;
+            });
+            
+            document.getElementById('apply-filters').addEventListener('click', applyFilters);
+            document.getElementById('reset-filters').addEventListener('click', resetFilters);
+            
+            // Advanced physics controls
+            document.getElementById('toggle-custom-physics').addEventListener('click', toggleCustomPhysics);
+            document.getElementById('apply-explosion').addEventListener('click', applyExplosion);
+            document.getElementById('randomize-positions').addEventListener('click', randomizePositions);
+            document.getElementById('reset-physics').addEventListener('click', resetPhysics);
+        }
+        
+        function showLoading(message = 'Loading...') {
+            document.getElementById('loading-overlay').classList.add('active');
+            document.getElementById('loading-status').textContent = message;
+        }
+        
+        function hideLoading() {
+            document.getElementById('loading-overlay').classList.remove('active');
+        }
+        
+        async function loadStats() {
+            try {
+                const response = await fetch('/api/stats');
+                const data = await response.json();
+                
+                document.getElementById('total-nodes').textContent = data.total_nodes.toLocaleString();
+                document.getElementById('total-edges').textContent = data.total_edges.toLocaleString();
+            } catch (error) {
+                console.error('Error loading stats:', error);
+            }
+        }
+        
+        window.visualize = async function() {
+            console.log('visualize() called');
+            const queryType = document.getElementById('query-type').value;
+            const limit = document.getElementById('node-limit').value;
+            console.log('Query type:', queryType, 'Limit:', limit);
+            
+            showLoading('Fetching graph data from FalkorDB...');
+            
+            try {
+                const params = new URLSearchParams({
+                    query_type: queryType,
+                    limit: parseInt(limit),
+                    offset: 0
+                });
+                
+                console.log('Fetching from API with params:', params.toString());
+                const response = await fetch('/api/visualize?' + params);
+                console.log('API response status:', response.status);
+                const data = await response.json();
+                console.log('API data received:', data);
+                
+                if (data.error) {
+                    alert('Error: ' + data.error);
+                    return;
+                }
+                
+                document.getElementById('query-time').textContent = data.execution_time_ms;
+                
+                showLoading('Processing nodes and edges...');
+                await processAndRenderGraph(data.data);
+                
+            } catch (error) {
+                console.error('Error visualizing:', error);
+                alert('Error visualizing graph');
+            } finally {
+                hideLoading();
+            }
+        }
+        
+        window.loadEntireGraph = async function() {
+            if (!confirm('⚡ Loading the entire graph will utilize GPU acceleration. Continue?')) {
+                return;
+            }
+            
+            showLoading('Fetching entire graph from FalkorDB...');
+            
+            try {
+                const params = new URLSearchParams({
+                    query_type: 'entire_graph',
+                    limit: 100000,
+                    offset: 0
+                });
+                
+                console.log('Fetching from API with params:', params.toString());
+                const response = await fetch('/api/visualize?' + params);
+                console.log('API response status:', response.status);
+                const data = await response.json();
+                console.log('API data received:', data);
+                
+                if (data.error) {
+                    alert('Error: ' + data.error);
+                    return;
+                }
+                
+                document.getElementById('query-time').textContent = data.execution_time_ms;
+                document.getElementById('node-limit').value = data.data.nodes.length;
+                
+                showLoading(`Processing ${data.data.nodes.length} nodes and ${data.data.edges.length} edges...`);
+                await processAndRenderGraph(data.data);
+                
+            } catch (error) {
+                console.error('Error loading entire graph:', error);
+                alert('Error loading entire graph');
+            } finally {
+                hideLoading();
+            }
+        }
+        
+        async function processAndRenderGraph(data) {
+            console.log('processAndRenderGraph called with data:', data);
+            currentData = data;
+            
+            // Transform nodes for Cosmograph format
+            const nodes = data.nodes.map((node) => ({
+                id: node.id,
+                ...node // Include all properties
+            }));
+            
+            // Transform edges to use source/target instead of from/to
+            const links = data.edges.map(edge => ({
+                source: edge.from,
+                target: edge.to,
+                ...edge
+            }));
+            
+            // Update stats
+            document.getElementById('rendered-nodes').textContent = nodes.length.toLocaleString();
+            document.getElementById('rendered-edges').textContent = links.length.toLocaleString();
+            
+            // Set data to cosmograph
+            showLoading('Initializing GPU renderer...');
+            
+            console.log('Setting data - nodes:', nodes.length, 'links:', links.length);
+            console.log('Sample node:', nodes[0]);
+            console.log('Sample link:', links[0]);
+            
+            try {
+                console.log('Setting new data...');
+                cosmograph.setData(nodes, links);
+                console.log('Data set successfully');
+                
+                // Hide loading overlay
+                hideLoading();
+                
+                // Fit view after data is set
+                setTimeout(() => {
+                    console.log('Fitting view...');
+                    cosmograph.fitView();
+                    console.log('View fitted');
+                }, 250);
+                
+                // Update render stats
+                const renderTime = 10; // Placeholder
+                document.getElementById('render-time').textContent = renderTime.toFixed(1);
+                
+                // Estimate GPU memory
+                if (currentData) {
+                    const memoryMB = estimateGPUMemory(currentData);
+                    document.getElementById('gpu-memory').textContent = `~${memoryMB.toFixed(1)} MB`;
+                }
+            } catch (error) {
+                console.error('Error setting data to cosmograph:', error);
+                hideLoading();
+                alert('Error rendering graph: ' + error.message);
+            }
+        }
+        
+        function showNodeDetails(node) {
+            console.log('Node details:', node);
+            
+            // Create or update node details panel
+            let detailsPanel = document.getElementById('node-details');
+            if (!detailsPanel) {
+                detailsPanel = document.createElement('div');
+                detailsPanel.id = 'node-details';
+                detailsPanel.className = 'node-details-panel';
+                document.body.appendChild(detailsPanel);
+            }
+            
+            // Extract properties safely
+            const props = node.properties || {};
+            
+            // Format centrality scores
+            let centralityHtml = '';
+            const centralityMetrics = ['degree_centrality', 'pagerank_centrality', 'betweenness_centrality', 'importance_centrality'];
+            const hasCentrality = centralityMetrics.some(metric => props[metric] !== undefined);
+            
+            if (hasCentrality) {
+                centralityHtml = '<div class="centrality-section mt-3"><h6>📊 Centrality Metrics</h6>';
+                centralityMetrics.forEach(metric => {
+                    if (props[metric] !== undefined) {
+                        const value = parseFloat(props[metric]);
+                        const percentage = Math.min(value * 100, 100);
+                        const label = metric.replace('_centrality', '').replace('_', ' ');
+                        centralityHtml += `
+                            <div class="mb-2">
+                                <small class="text-muted">${label.charAt(0).toUpperCase() + label.slice(1)}</small>
+                                <div class="progress" style="height: 10px;">
+                                    <div class="progress-bar bg-info" style="width: ${percentage}%"></div>
+                                </div>
+                                <small class="text-muted">${value.toFixed(4)}</small>
+                            </div>
+                        `;
+                    }
+                });
+                centralityHtml += '</div>';
+            }
+            
+            // Format summary if available
+            const summaryHtml = props.summary ? `
+                <div class="summary-section mt-3">
+                    <h6>📝 Summary</h6>
+                    <div class="text-muted small">${props.summary}</div>
+                </div>
+            ` : '';
+            
+            // Format JSON content for episodic nodes
+            let jsonContentHtml = '';
+            if (node.node_type === 'Episodic' && props.content) {
+                try {
+                    const content = typeof props.content === 'string' ? JSON.parse(props.content) : props.content;
+                    jsonContentHtml = `
+                        <div class="json-section mt-3">
+                            <h6>📄 Content <button class="btn btn-sm btn-link" onclick="toggleJsonContent()">Toggle</button></h6>
+                            <pre id="json-content" style="display: none; max-height: 300px; overflow-y: auto; font-size: 11px; background: rgba(40,40,40,0.5); padding: 10px; border-radius: 4px;">
+${JSON.stringify(content, null, 2)}
+                            </pre>
+                        </div>
+                    `;
+                } catch (e) {
+                    console.error('Error parsing JSON content:', e);
+                }
+            }
+            
+            // Format timestamps
+            const formatDate = (dateStr) => {
+                if (!dateStr) return 'N/A';
+                const date = new Date(dateStr);
+                return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+            };
+            
+            detailsPanel.innerHTML = `
+                <div class="node-details-header">
+                    <h5>Node Details</h5>
+                    <button class="btn-close" onclick="document.getElementById('node-details').style.display='none'">×</button>
+                </div>
+                <div class="node-details-content">
+                    <div><strong>Name:</strong> ${node.label || props.name || 'N/A'}</div>
+                    <div><strong>Type:</strong> <span class="badge bg-${getNodeTypeBadgeColor(node.node_type)}">${node.node_type}</span></div>
+                    <div><strong>ID:</strong> <small class="text-muted">${node.id}</small></div>
+                    ${props.created_at ? `<div><strong>Created:</strong> ${formatDate(props.created_at)}</div>` : ''}
+                    ${props.valid_at ? `<div><strong>Valid At:</strong> ${formatDate(props.valid_at)}</div>` : ''}
+                    ${props.source ? `<div><strong>Source:</strong> ${props.source}</div>` : ''}
+                    ${summaryHtml}
+                    ${centralityHtml}
+                    ${jsonContentHtml}
+                </div>
+            `;
+            
+            detailsPanel.style.display = 'block';
+            
+            // Add toggle function for JSON content
+            window.toggleJsonContent = function() {
+                const jsonEl = document.getElementById('json-content');
+                if (jsonEl) {
+                    jsonEl.style.display = jsonEl.style.display === 'none' ? 'block' : 'none';
+                }
+            };
+        }
+        
+        function getNodeTypeBadgeColor(type) {
+            const colors = {
+                'Entity': 'danger',
+                'Episodic': 'info',
+                'Agent': 'warning'
+            };
+            return colors[type] || 'secondary';
+        }
+        
+        window.togglePanel = function() {
+            const panel = document.querySelector('.control-panel');
+            panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+        }
+        
+        window.toggleSimulation = function() {
+            isPaused = !isPaused;
+            
+            if (isPaused) {
+                cosmograph.pause();
+                document.getElementById('pause-simulation').textContent = 'Resume';
+            } else {
+                cosmograph.start();
+                document.getElementById('pause-simulation').textContent = 'Pause';
+            }
+        }
+        
+        function updateFPS() {
+            frameCount++;
+            const currentTime = performance.now();
+            
+            if (currentTime >= lastTime + 1000) {
+                const fps = Math.round((frameCount * 1000) / (currentTime - lastTime));
+                document.getElementById('fps').textContent = fps;
+                
+                frameCount = 0;
+                lastTime = currentTime;
+            }
+            
+            requestAnimationFrame(updateFPS);
+        }
+        
+        function estimateGPUMemory(data) {
+            // Rough estimate: 
+            // Each node: position (2 floats), color (1 float), size (1 float) = 16 bytes
+            // Each edge: source/target (2 ints) = 8 bytes
+            const nodeMemory = data.nodes.length * 16;
+            const edgeMemory = data.edges.length * 8;
+            return (nodeMemory + edgeMemory) / (1024 * 1024);
+        }
+        
+        function applyFilters() {
+            if (!currentData) return;
+            
+            const entityChecked = document.getElementById('filter-entity').checked;
+            const episodicChecked = document.getElementById('filter-episodic').checked;
+            const agentChecked = document.getElementById('filter-agent').checked;
+            const centralityThreshold = parseInt(document.getElementById('centrality-threshold').value);
+            const searchTerm = document.getElementById('node-search').value.toLowerCase();
+            
+            // Filter nodes
+            const filteredNodes = currentData.nodes.filter(node => {
+                // Type filter
+                if (node.node_type === 'Entity' && !entityChecked) return false;
+                if (node.node_type === 'Episodic' && !episodicChecked) return false;
+                if (node.node_type === 'Agent' && !agentChecked) return false;
+                
+                // Centrality filter
+                const degree = node.properties?.degree_centrality || 0;
+                if (degree < centralityThreshold) return false;
+                
+                // Search filter
+                if (searchTerm) {
+                    const name = (node.label || node.properties?.name || '').toLowerCase();
+                    const summary = (node.properties?.summary || '').toLowerCase();
+                    if (!name.includes(searchTerm) && !summary.includes(searchTerm)) {
+                        return false;
+                    }
+                }
+                
+                return true;
+            });
+            
+            // Get filtered node IDs
+            const nodeIds = new Set(filteredNodes.map(n => n.id));
+            
+            // Filter edges to only include those between filtered nodes
+            const filteredEdges = currentData.edges.filter(edge => 
+                nodeIds.has(edge.from) && nodeIds.has(edge.to)
+            );
+            
+            // Update visualization
+            const filteredData = {
+                nodes: filteredNodes,
+                edges: filteredEdges,
+                stats: currentData.stats
+            };
+            
+            processAndRenderGraph(filteredData);
+            
+            // Update stats
+            document.getElementById('rendered-nodes').textContent = 
+                `${filteredNodes.length} / ${currentData.nodes.length}`;
+            document.getElementById('rendered-edges').textContent = 
+                `${filteredEdges.length} / ${currentData.edges.length}`;
+        }
+        
+        function resetFilters() {
+            document.getElementById('filter-entity').checked = true;
+            document.getElementById('filter-episodic').checked = true;
+            document.getElementById('filter-agent').checked = true;
+            document.getElementById('centrality-threshold').value = 0;
+            document.getElementById('centrality-value').textContent = '0';
+            document.getElementById('node-search').value = '';
+            
+            if (currentData) {
+                processAndRenderGraph(currentData);
+            }
+        }
+        
+        function toggleCustomPhysics() {
+            customPhysicsEnabled = !customPhysicsEnabled;
+            const btn = document.getElementById('toggle-custom-physics');
+            btn.textContent = customPhysicsEnabled ? 'Disable Custom Physics' : 'Enable Custom Physics';
+            btn.classList.toggle('btn-success');
+            btn.classList.toggle('btn-secondary');
+        }
+        
+        function applyExplosion() {
+            if (cosmograph && currentData) {
+                // Apply random velocities to simulate explosion
+                console.log('Applying explosion effect...');
+                cosmograph.setZoomLevel(0.5, 1000); // Zoom out
+                setTimeout(() => {
+                    cosmograph.fitView(1000); // Fit view after explosion
+                }, 1500);
+            }
+        }
+        
+        function randomizePositions() {
+            if (cosmograph) {
+                // Restart simulation to randomize positions
+                cosmograph.restart();
+            }
+        }
+        
+        function resetPhysics() {
+            if (cosmograph) {
+                cosmograph.setConfig({
+                    simulationGravity: 0.0,
+                    simulationRepulsion: 1.0,
+                    simulationLinkDistance: 20,
+                    simulationLinkSpring: 0.5,
+                    simulationDecay: 3000,
+                    simulationFriction: 0.85
+                });
+                
+                // Update UI sliders
+                document.getElementById('gravity').value = 0.0;
+                document.getElementById('gravity-value').textContent = '0.0';
+                document.getElementById('repulsion').value = 1.0;
+                document.getElementById('repulsion-value').textContent = '1.0';
+                document.getElementById('friction').value = 0.85;
+                document.getElementById('friction-value').textContent = '0.85';
+            }
+        }
+    </script>
+</body>
+</html>

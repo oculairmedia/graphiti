@@ -1,0 +1,2 @@
+import{createClient as s}from"@supabase/supabase-js";const i=s("https://xovkkfhojasbjinfslpx.supabase.co","eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhvdmtrZmhvamFzYmppbmZzbHB4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE2OTM1ODQ0ODAsImV4cCI6MjAwOTE2MDQ4MH0.L3-X0p_un0oSTNubPwtfGo0D8g2bkPIfz7CaZ-iRYXY");async function I(s){const{error:I}=await i.from("metrics").insert(s);return I}export{I as addMetrics,i as supabase};
+//# sourceMappingURL=supabase.js.map

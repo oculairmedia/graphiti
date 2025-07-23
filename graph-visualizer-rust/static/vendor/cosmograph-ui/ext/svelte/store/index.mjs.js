@@ -1,0 +1,2 @@
+import{noop as n,safe_not_equal as t}from"../internal/index.mjs.js";const e=[];function o(o,s=n){let i;const r=new Set;function c(n){if(t(o,n)&&(o=n,i)){const n=!e.length;for(const n of r)n[1](),e.push(n,o);if(n){for(let n=0;n<e.length;n+=2)e[n][0](e[n+1]);e.length=0}}}return{set:c,update:function(n){c(n(o))},subscribe:function(t,e=n){const f=[t,e];return r.add(f),1===r.size&&(i=s(c)||n),t(o),()=>{r.delete(f),0===r.size&&i&&(i(),i=null)}}}}export{o as writable};
+//# sourceMappingURL=index.mjs.js.map

@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FalkorDB Cosmos GPU-Accelerated Graph Visualizer</title>
+    <script src="https://unpkg.com/@cosmograph/cosmos@2.8.1/dist/index.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #0a0a0a;
+            color: #fff;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+        #cosmos-container {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+        }
+        .control-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background-color: rgba(20, 20, 20, 0.95);
+            padding: 20px;
+            border-radius: 8px;
+            max-width: 350px;
+            max-height: 90vh;
+            overflow-y: auto;
+            z-index: 1000;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        }
+        .stats-card {
+            background-color: rgba(40, 40, 40, 0.8);
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+        }
+        .btn-primary {
+            background-color: #4ecdc4;
+            border-color: #4ecdc4;
+        }
+        .btn-primary:hover {
+            background-color: #3eb8b0;
+            border-color: #3eb8b0;
+        }
+        .btn-danger {
+            background-color: #ff6b6b;
+            border-color: #ff6b6b;
+        }
+        .gpu-badge {
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            font-weight: bold;
+            margin-left: 10px;
+            display: inline-block;
+        }
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+            visibility: hidden;
+        }
+        .loading-overlay.active {
+            visibility: visible;
+        }
+        .loading-content {
+            text-align: center;
+        }
+        .performance-metrics {
+            font-family: monospace;
+            font-size: 0.9em;
+            color: #4ecdc4;
+        }
+        #fps-counter {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background-color: rgba(20, 20, 20, 0.9);
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 14px;
+            z-index: 1000;
+        }
+        .toggle-controls {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            background-color: rgba(20, 20, 20, 0.9);
+            padding: 10px;
+            border-radius: 4px;
+            z-index: 1000;
+        }
+        /* Scrollbar styling */
+        .control-panel::-webkit-scrollbar {
+            width: 8px;
+        }
+        .control-panel::-webkit-scrollbar-track {
+            background: rgba(40, 40, 40, 0.5);
+            border-radius: 4px;
+        }
+        .control-panel::-webkit-scrollbar-thumb {
+            background: #4ecdc4;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div id="cosmos-container"></div>
+    
+    <div id="fps-counter">
+        <div>FPS: <span id="fps">0</span></div>
+        <div>Nodes: <span id="rendered-nodes">0</span></div>
+        <div>Edges: <span id="rendered-edges">0</span></div>
+    </div>
+    
+    <div class="loading-overlay" id="loading-overlay">
+        <div class="loading-content">
+            <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <h3 class="mt-3">Loading Graph Data...</h3>
+            <p class="performance-metrics" id="loading-status">Fetching data from FalkorDB</p>
+        </div>
+    </div>
+    
+    <div class="control-panel">
+        <h4>
+            🚀 Cosmos GPU Visualizer
+            <span class="gpu-badge">WebGL</span>
+        </h4>
+        
+        <div class="stats-card">
+            <h5>📊 Graph Statistics</h5>
+            <div><strong>Total Nodes:</strong> <span id="total-nodes">-</span></div>
+            <div><strong>Total Edges:</strong> <span id="total-edges">-</span></div>
+            <div><strong>Query Time:</strong> <span id="query-time">-</span> ms</div>
+            <div class="mt-2 performance-metrics">
+                <div>GPU Memory: <span id="gpu-memory">-</span></div>
+                <div>Render Time: <span id="render-time">-</span> ms</div>
+            </div>
+        </div>
+        
+        <div class="mb-3">
+            <h5>🎮 Visualization Controls</h5>
+            
+            <div class="mb-2">
+                <label for="query-type" class="form-label">Query Type:</label>
+                <select id="query-type" class="form-select form-select-sm">
+                    <option value="high_degree">High Degree Nodes</option>
+                    <option value="agents">Agent Networks</option>
+                    <option value="entire_graph">Entire Graph (GPU)</option>
+                </select>
+            </div>
+            
+            <div class="mb-2">
+                <label for="node-limit" class="form-label">Node Limit:</label>
+                <input type="number" id="node-limit" class="form-control form-control-sm" value="1000" min="100" max="100000">
+                <small class="text-muted">GPU can handle 100k+ nodes</small>
+            </div>
+            
+            <button id="visualize-btn" class="btn btn-primary w-100 mb-2">Visualize</button>
+            <button id="load-entire-graph-btn" class="btn btn-danger w-100 mb-3">
+                ⚡ Load Entire Graph (GPU)
+            </button>
+        </div>
+        
+        <div class="stats-card">
+            <h5>⚙️ Rendering Settings</h5>
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="curved-links" checked>
+                <label class="form-check-label" for="curved-links">
+                    Curved Links
+                </label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="show-labels" checked>
+                <label class="form-check-label" for="show-labels">
+                    Show Labels
+                </label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="enable-drag" checked>
+                <label class="form-check-label" for="enable-drag">
+                    Enable Node Dragging
+                </label>
+            </div>
+            
+            <div class="mt-2">
+                <label for="link-opacity" class="form-label">Link Opacity: <span id="link-opacity-value">0.5</span></label>
+                <input type="range" class="form-range" id="link-opacity" min="0" max="1" step="0.1" value="0.5">
+            </div>
+            
+            <div class="mt-2">
+                <label for="simulation-speed" class="form-label">Simulation Speed: <span id="simulation-speed-value">1</span></label>
+                <input type="range" class="form-range" id="simulation-speed" min="0" max="2" step="0.1" value="1">
+            </div>
+        </div>
+        
+        <div class="mt-3">
+            <h6>Controls:</h6>
+            <ul class="small">
+                <li>🖱️ Scroll to zoom</li>
+                <li>👆 Click & drag to pan</li>
+                <li>🎯 Click nodes to select</li>
+                <li>⌨️ Space to pause/resume</li>
+            </ul>
+        </div>
+    </div>
+    
+    <div class="toggle-controls">
+        <button id="toggle-panel" class="btn btn-sm btn-secondary">Toggle Panel</button>
+        <button id="pause-simulation" class="btn btn-sm btn-warning">Pause</button>
+        <button id="fit-view" class="btn btn-sm btn-info">Fit View</button>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let graph = null;
+        let currentData = null;
+        let isPaused = false;
+        let frameCount = 0;
+        let lastTime = performance.now();
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeGraph();
+            loadStats();
+            setupEventListeners();
+            updateFPS();
+            
+            // Load initial visualization
+            setTimeout(() => visualize(), 500);
+        });
+        
+        function initializeGraph() {
+            const container = document.getElementById('cosmos-container');
+            
+            // Initialize with default config first
+            graph = new cosmos.Graph(container);
+            
+            // Then set configurations
+            graph.setConfig({
+                backgroundColor: '#0a0a0a',
+                nodeColor: node => {
+                    // Color based on node type
+                    const colors = {
+                        'Entity': '#ff6b6b',
+                        'Episodic': '#4ecdc4',
+                        'Agent': '#ffe66d'
+                    };
+                    return colors[node.node_type] || '#95e1d3';
+                },
+                nodeSize: node => node.size || 4,
+                linkColor: '#666666',
+                linkArrows: false,
+                curvedLinks: true,
+                simulation: {
+                    friction: 0.85,
+                    gravity: 0.1,
+                    repulsion: 0.5,
+                    linkSpring: 0.2,
+                    linkDistance: 30
+                },
+                events: {
+                    onClick: (node) => {
+                        if (node) {
+                            console.log('Clicked node:', node);
+                            showNodeDetails(node);
+                        }
+                    }
+                }
+            });
+        }
+        
+        function setupEventListeners() {
+            document.getElementById('visualize-btn').addEventListener('click', visualize);
+            document.getElementById('load-entire-graph-btn').addEventListener('click', loadEntireGraph);
+            document.getElementById('toggle-panel').addEventListener('click', togglePanel);
+            document.getElementById('pause-simulation').addEventListener('click', toggleSimulation);
+            document.getElementById('fit-view').addEventListener('click', () => graph.fitView());
+            
+            // Settings listeners
+            document.getElementById('curved-links').addEventListener('change', (e) => {
+                graph.setConfig({ curvedLinks: e.target.checked });
+            });
+            
+            document.getElementById('show-labels').addEventListener('change', (e) => {
+                // Labels handling would need custom implementation
+                console.log('Show labels:', e.target.checked);
+            });
+            
+            document.getElementById('enable-drag').addEventListener('change', (e) => {
+                // Drag is enabled by default in Cosmos
+                console.log('Enable drag:', e.target.checked);
+            });
+            
+            document.getElementById('link-opacity').addEventListener('input', (e) => {
+                const value = parseFloat(e.target.value);
+                document.getElementById('link-opacity-value').textContent = value;
+                graph.setConfig({ linkColor: `rgba(102, 102, 102, ${value})` });
+            });
+            
+            document.getElementById('simulation-speed').addEventListener('input', (e) => {
+                const value = parseFloat(e.target.value);
+                document.getElementById('simulation-speed-value').textContent = value;
+                graph.setConfig({ 
+                    simulation: { 
+                        decay: 1000 * (2 - value) 
+                    } 
+                });
+            });
+            
+            // Keyboard shortcuts
+            document.addEventListener('keydown', (e) => {
+                if (e.code === 'Space') {
+                    e.preventDefault();
+                    toggleSimulation();
+                }
+            });
+        }
+        
+        function showLoading(message = 'Loading...') {
+            document.getElementById('loading-overlay').classList.add('active');
+            document.getElementById('loading-status').textContent = message;
+        }
+        
+        function hideLoading() {
+            document.getElementById('loading-overlay').classList.remove('active');
+        }
+        
+        async function loadStats() {
+            try {
+                const response = await fetch('/api/stats');
+                const data = await response.json();
+                
+                document.getElementById('total-nodes').textContent = data.total_nodes.toLocaleString();
+                document.getElementById('total-edges').textContent = data.total_edges.toLocaleString();
+            } catch (error) {
+                console.error('Error loading stats:', error);
+            }
+        }
+        
+        async function visualize() {
+            const queryType = document.getElementById('query-type').value;
+            const limit = document.getElementById('node-limit').value;
+            
+            showLoading('Fetching graph data from FalkorDB...');
+            
+            try {
+                const params = new URLSearchParams({
+                    query_type: queryType,
+                    limit: parseInt(limit),
+                    offset: 0
+                });
+                
+                const response = await fetch('/api/visualize?' + params);
+                const data = await response.json();
+                
+                if (data.error) {
+                    alert('Error: ' + data.error);
+                    return;
+                }
+                
+                document.getElementById('query-time').textContent = data.execution_time_ms;
+                
+                showLoading('Processing nodes and edges...');
+                await processAndRenderGraph(data.data);
+                
+            } catch (error) {
+                console.error('Error visualizing:', error);
+                alert('Error visualizing graph');
+            } finally {
+                hideLoading();
+            }
+        }
+        
+        async function loadEntireGraph() {
+            if (!confirm('⚡ Loading the entire graph will utilize GPU acceleration. Continue?')) {
+                return;
+            }
+            
+            showLoading('Fetching entire graph from FalkorDB...');
+            
+            try {
+                const params = new URLSearchParams({
+                    query_type: 'entire_graph',
+                    limit: 100000,
+                    offset: 0
+                });
+                
+                const response = await fetch('/api/visualize?' + params);
+                const data = await response.json();
+                
+                if (data.error) {
+                    alert('Error: ' + data.error);
+                    return;
+                }
+                
+                document.getElementById('query-time').textContent = data.execution_time_ms;
+                document.getElementById('node-limit').value = data.data.nodes.length;
+                
+                showLoading(`Processing ${data.data.nodes.length} nodes and ${data.data.edges.length} edges...`);
+                await processAndRenderGraph(data.data);
+                
+            } catch (error) {
+                console.error('Error loading entire graph:', error);
+                alert('Error loading entire graph');
+            } finally {
+                hideLoading();
+            }
+        }
+        
+        async function processAndRenderGraph(data) {
+            currentData = data;
+            
+            // Transform nodes for Cosmos format
+            const nodes = data.nodes.map((node, index) => ({
+                id: node.id,
+                label: node.label,
+                node_type: node.node_type,
+                size: node.size / 5, // Scale down for Cosmos
+                x: Math.random() * 1000 - 500, // Random initial positions
+                y: Math.random() * 1000 - 500
+            }));
+            
+            // Create node ID to index mapping
+            const nodeIdToIndex = {};
+            nodes.forEach((node, index) => {
+                nodeIdToIndex[node.id] = index;
+            });
+            
+            // Transform edges to use indices
+            const links = data.edges.map(edge => ({
+                source: nodeIdToIndex[edge.from],
+                target: nodeIdToIndex[edge.to],
+                edge_type: edge.edge_type
+            })).filter(link => 
+                link.source !== undefined && link.target !== undefined
+            );
+            
+            // Update stats
+            document.getElementById('rendered-nodes').textContent = nodes.length.toLocaleString();
+            document.getElementById('rendered-edges').textContent = links.length.toLocaleString();
+            
+            // Set data to graph
+            showLoading('Initializing GPU renderer...');
+            
+            // Use requestAnimationFrame to ensure smooth loading
+            requestAnimationFrame(() => {
+                const startTime = performance.now();
+                
+                graph.setData(nodes, links);
+                
+                const renderTime = performance.now() - startTime;
+                document.getElementById('render-time').textContent = renderTime.toFixed(1);
+                
+                // Fit view after a short delay
+                setTimeout(() => {
+                    graph.fitView();
+                }, 500);
+            });
+        }
+        
+        function showNodeDetails(node) {
+            console.log('Node details:', {
+                id: node.id,
+                label: node.label,
+                type: node.node_type,
+                properties: node.properties
+            });
+        }
+        
+        function togglePanel() {
+            const panel = document.querySelector('.control-panel');
+            panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+        }
+        
+        function toggleSimulation() {
+            isPaused = !isPaused;
+            
+            if (isPaused) {
+                graph.pause();
+                document.getElementById('pause-simulation').textContent = 'Resume';
+            } else {
+                graph.start();
+                document.getElementById('pause-simulation').textContent = 'Pause';
+            }
+        }
+        
+        function updateFPS() {
+            frameCount++;
+            const currentTime = performance.now();
+            
+            if (currentTime >= lastTime + 1000) {
+                const fps = Math.round((frameCount * 1000) / (currentTime - lastTime));
+                document.getElementById('fps').textContent = fps;
+                
+                frameCount = 0;
+                lastTime = currentTime;
+                
+                // Update GPU memory estimate
+                if (currentData) {
+                    const memoryMB = estimateGPUMemory(currentData);
+                    document.getElementById('gpu-memory').textContent = `~${memoryMB.toFixed(1)} MB`;
+                }
+            }
+            
+            requestAnimationFrame(updateFPS);
+        }
+        
+        function estimateGPUMemory(data) {
+            // Rough estimate: 
+            // Each node: position (2 floats), color (1 float), size (1 float) = 16 bytes
+            // Each edge: source/target (2 ints) = 8 bytes
+            const nodeMemory = data.nodes.length * 16;
+            const edgeMemory = data.edges.length * 8;
+            return (nodeMemory + edgeMemory) / (1024 * 1024);
+        }
+    </script>
+</body>
+</html>

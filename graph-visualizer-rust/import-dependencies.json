@@ -1,0 +1,1718 @@
+{
+  "nodes": [
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/api/supabase/supabase.js",
+      "label": "supabase.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/_virtual/_tslib.js",
+      "label": "_tslib.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/@material/base/foundation.js",
+      "label": "foundation.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/@material/dom/events.js",
+      "label": "events.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/@material/dom/keyboard.js",
+      "label": "keyboard.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/@material/dom/ponyfill.js",
+      "label": "ponyfill.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/@material/floating-label/constants.js",
+      "label": "constants.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/@material/floating-label/foundation.js",
+      "label": "foundation.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/@material/line-ripple/constants.js",
+      "label": "constants.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/@material/line-ripple/foundation.js",
+      "label": "foundation.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/@material/list/constants.js",
+      "label": "constants.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/@material/list/events.js",
+      "label": "events.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/@material/list/foundation.js",
+      "label": "foundation.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/@material/list/typeahead.js",
+      "label": "typeahead.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/@material/menu/constants.js",
+      "label": "constants.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/@material/menu/foundation.js",
+      "label": "foundation.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/@material/menu-surface/constants.js",
+      "label": "constants.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/@material/menu-surface/foundation.js",
+      "label": "foundation.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/@material/notched-outline/constants.js",
+      "label": "constants.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/@material/notched-outline/foundation.js",
+      "label": "foundation.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/@material/ripple/constants.js",
+      "label": "constants.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/@material/ripple/foundation.js",
+      "label": "foundation.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/@material/ripple/util.js",
+      "label": "util.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/@material/textfield/constants.js",
+      "label": "constants.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/@material/textfield/foundation.js",
+      "label": "foundation.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/@material/textfield/icon/constants.js",
+      "label": "constants.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/@material/textfield/icon/foundation.js",
+      "label": "foundation.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/@smui/common/dist/ContextFragment.svelte.js",
+      "label": "ContextFragment.svelte.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/@smui/common/dist/SmuiElement.svelte.js",
+      "label": "SmuiElement.svelte.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/@smui/common/dist/classadder/ClassAdder.svelte.js",
+      "label": "ClassAdder.svelte.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/@smui/common/dist/classadder/classAdderBuilder.js",
+      "label": "classAdderBuilder.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/@smui/common/dist/internal/classMap.js",
+      "label": "classMap.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/@smui/common/dist/internal/dispatch.js",
+      "label": "dispatch.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/@smui/common/dist/internal/exclude.js",
+      "label": "exclude.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/@smui/common/dist/internal/forwardEventsBuilder.js",
+      "label": "forwardEventsBuilder.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/@smui/common/dist/internal/prefixFilter.js",
+      "label": "prefixFilter.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/@smui/common/dist/internal/useActions.js",
+      "label": "useActions.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/@smui/floating-label/dist/FloatingLabel.svelte.js",
+      "label": "FloatingLabel.svelte.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/@smui/floating-label/dist/index.js",
+      "label": "index.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/@smui/line-ripple/dist/LineRipple.svelte.js",
+      "label": "LineRipple.svelte.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/@smui/line-ripple/dist/index.js",
+      "label": "index.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/@smui/list/dist/Graphic.svelte.js",
+      "label": "Graphic.svelte.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/@smui/list/dist/Group.js",
+      "label": "Group.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/@smui/list/dist/Item.svelte.js",
+      "label": "Item.svelte.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/@smui/list/dist/List.svelte.js",
+      "label": "List.svelte.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/@smui/list/dist/Meta.js",
+      "label": "Meta.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/@smui/list/dist/PrimaryText.js",
+      "label": "PrimaryText.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/@smui/list/dist/SecondaryText.js",
+      "label": "SecondaryText.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/@smui/list/dist/Subheader.js",
+      "label": "Subheader.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/@smui/list/dist/Text.js",
+      "label": "Text.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/@smui/list/dist/index.js",
+      "label": "index.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/@smui/menu/dist/Menu.svelte.js",
+      "label": "Menu.svelte.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/@smui/menu/dist/SelectionGroupIcon.js",
+      "label": "SelectionGroupIcon.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/@smui/menu/dist/index.js",
+      "label": "index.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/@smui/menu-surface/dist/MenuSurface.svelte.js",
+      "label": "MenuSurface.svelte.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/@smui/menu-surface/dist/index.js",
+      "label": "index.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/@smui/notched-outline/dist/NotchedOutline.svelte.js",
+      "label": "NotchedOutline.svelte.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/@smui/notched-outline/dist/index.js",
+      "label": "index.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/@smui/ripple/dist/Ripple.js",
+      "label": "Ripple.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/@smui/ripple/dist/index.js",
+      "label": "index.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/@smui/textfield/dist/HelperLine.js",
+      "label": "HelperLine.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/@smui/textfield/dist/Input.svelte.js",
+      "label": "Input.svelte.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/@smui/textfield/dist/Prefix.js",
+      "label": "Prefix.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/@smui/textfield/dist/Suffix.js",
+      "label": "Suffix.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/@smui/textfield/dist/Textarea.svelte.js",
+      "label": "Textarea.svelte.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/@smui/textfield/dist/Textfield.svelte.js",
+      "label": "Textfield.svelte.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/@smui/textfield/dist/icon/Icon.svelte.js",
+      "label": "Icon.svelte.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/@smui/textfield/dist/icon/index.js",
+      "label": "index.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/@smui/textfield/dist/index.js",
+      "label": "index.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/rollup-plugin-styles/dist/runtime/inject-css.js",
+      "label": "inject-css.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/svelte/internal/index.mjs.js",
+      "label": "index.mjs.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/ext/svelte/store/index.mjs.js",
+      "label": "index.mjs.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/index.js",
+      "label": "index.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/modules/histogram/config.js",
+      "label": "config.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/modules/histogram/index.js",
+      "label": "index.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/modules/histogram/style.module.css.js",
+      "label": "style.module.css.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/modules/search/config.js",
+      "label": "config.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/modules/search/index.js",
+      "label": "index.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/modules/search/search-svg.svelte.js",
+      "label": "search-svg.svelte.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/modules/search/search.css.js",
+      "label": "search.css.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/modules/search/search.svelte.js",
+      "label": "search.svelte.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/modules/search/smui.css.js",
+      "label": "smui.css.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/modules/search/types.js",
+      "label": "types.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/modules/timeline/assets.js",
+      "label": "assets.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/modules/timeline/config.js",
+      "label": "config.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/modules/timeline/format.js",
+      "label": "format.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/modules/timeline/index.js",
+      "label": "index.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/modules/timeline/style.module.css.js",
+      "label": "style.module.css.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/utils.js",
+      "label": "utils.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph.js",
+      "label": "cosmograph.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmos/dist/index.js",
+      "label": "index.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmos-wrapper.js",
+      "label": "cosmos-wrapper.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/crossfilter2/crossfilter.js",
+      "label": "crossfilter.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/crossfilter2/index.js",
+      "label": "index.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/crossfilter2/main.js",
+      "label": "main.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/crossfilter2-es-wrapper.js",
+      "label": "crossfilter2-es-wrapper.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-array/dist/d3-array.js",
+      "label": "d3-array.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-array/package/dist/d3-array.js",
+      "label": "d3-array.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-axis/dist/d3-axis.js",
+      "label": "d3-axis.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-axis/package/dist/d3-axis.js",
+      "label": "d3-axis.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-brush/dist/d3-brush.js",
+      "label": "d3-brush.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-brush/package/dist/d3-brush.js",
+      "label": "d3-brush.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-color/dist/d3-color.js",
+      "label": "d3-color.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-dispatch/dist/d3-dispatch.js",
+      "label": "d3-dispatch.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-dispatch/package/dist/d3-array.js",
+      "label": "d3-array.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-dispatch/package/dist/d3-axis.js",
+      "label": "d3-axis.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-dispatch/package/dist/d3-brush.js",
+      "label": "d3-brush.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-dispatch/package/dist/d3-dispatch.js",
+      "label": "d3-dispatch.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-drag/browserify/transform.js",
+      "label": "transform.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-drag/cjs/common.js",
+      "label": "common.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-drag/cjs/index.js",
+      "label": "index.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-drag/cjs/mat2.js",
+      "label": "mat2.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-drag/cjs/mat2d.js",
+      "label": "mat2d.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-drag/cjs/mat3.js",
+      "label": "mat3.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-drag/cjs/mat4.js",
+      "label": "mat4.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-drag/cjs/quat.js",
+      "label": "quat.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-drag/cjs/quat2.js",
+      "label": "quat2.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-drag/cjs/vec2.js",
+      "label": "vec2.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-drag/cjs/vec3.js",
+      "label": "vec3.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-drag/cjs/vec4.js",
+      "label": "vec4.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-drag/dist/d3-drag.js",
+      "label": "d3-drag.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-drag/dist/d3-zoom.js",
+      "label": "d3-zoom.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-drag/dist/index.js",
+      "label": "index.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-drag/dist/regl.js",
+      "label": "regl.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-drag/dist/regl.unchecked.js",
+      "label": "regl.unchecked.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-drag/esm/common.js",
+      "label": "common.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-drag/esm/index.js",
+      "label": "index.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-drag/esm/mat2.js",
+      "label": "mat2.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-drag/esm/mat2d.js",
+      "label": "mat2d.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-drag/esm/mat3.js",
+      "label": "mat3.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-drag/esm/mat4.js",
+      "label": "mat4.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-drag/esm/quat.js",
+      "label": "quat.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-drag/esm/quat2.js",
+      "label": "quat2.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-drag/esm/vec2.js",
+      "label": "vec2.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-drag/esm/vec3.js",
+      "label": "vec3.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-drag/esm/vec4.js",
+      "label": "vec4.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-drag/gl-matrix-min.js",
+      "label": "gl-matrix-min.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-drag/gl-matrix.js",
+      "label": "gl-matrix.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-drag/regl.js",
+      "label": "regl.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-ease/dist/d3-ease.js",
+      "label": "d3-ease.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-ease/package/dist/d3-ease.js",
+      "label": "d3-ease.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-format/dist/d3-format.js",
+      "label": "d3-format.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-format/package/dist/d3-format.js",
+      "label": "d3-format.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-interpolate/dist/d3-interpolate.js",
+      "label": "d3-interpolate.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-interpolate/package/dist/d3-format.js",
+      "label": "d3-format.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-interpolate/package/dist/d3-interpolate.js",
+      "label": "d3-interpolate.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-scale/dist/d3-scale.js",
+      "label": "d3-scale.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-scale/package/dist/d3-scale.js",
+      "label": "d3-scale.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-selection/dist/d3-selection.js",
+      "label": "d3-selection.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-selection/package/dist/d3-scale.js",
+      "label": "d3-scale.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-selection/package/dist/d3-selection.js",
+      "label": "d3-selection.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-time/dist/d3-time.js",
+      "label": "d3-time.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-time-format/dist/d3-time-format.js",
+      "label": "d3-time-format.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-time-format/package/dist/d3-time-format.js",
+      "label": "d3-time-format.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-timer/dist/d3-timer.js",
+      "label": "d3-timer.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-timer/package/dist/d3-time-format.js",
+      "label": "d3-time-format.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-timer/package/dist/d3-timer.js",
+      "label": "d3-timer.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-transition/dist/d3-transition.js",
+      "label": "d3-transition.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-zoom/browserify/transform.js",
+      "label": "transform.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-zoom/cjs/common.js",
+      "label": "common.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-zoom/cjs/index.js",
+      "label": "index.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-zoom/cjs/mat2.js",
+      "label": "mat2.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-zoom/cjs/mat2d.js",
+      "label": "mat2d.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-zoom/cjs/mat3.js",
+      "label": "mat3.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-zoom/cjs/mat4.js",
+      "label": "mat4.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-zoom/cjs/quat.js",
+      "label": "quat.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-zoom/cjs/quat2.js",
+      "label": "quat2.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-zoom/cjs/vec2.js",
+      "label": "vec2.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-zoom/cjs/vec3.js",
+      "label": "vec3.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-zoom/cjs/vec4.js",
+      "label": "vec4.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-zoom/dist/d3-zoom.js",
+      "label": "d3-zoom.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-zoom/dist/index.js",
+      "label": "index.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-zoom/dist/regl.js",
+      "label": "regl.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-zoom/dist/regl.unchecked.js",
+      "label": "regl.unchecked.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-zoom/esm/common.js",
+      "label": "common.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-zoom/esm/index.js",
+      "label": "index.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-zoom/esm/mat2.js",
+      "label": "mat2.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-zoom/esm/mat2d.js",
+      "label": "mat2d.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-zoom/esm/mat3.js",
+      "label": "mat3.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-zoom/esm/mat4.js",
+      "label": "mat4.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-zoom/esm/quat.js",
+      "label": "quat.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-zoom/esm/quat2.js",
+      "label": "quat2.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-zoom/esm/vec2.js",
+      "label": "vec2.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-zoom/esm/vec3.js",
+      "label": "vec3.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-zoom/esm/vec4.js",
+      "label": "vec4.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-zoom/gl-matrix-min.js",
+      "label": "gl-matrix-min.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-zoom/gl-matrix.js",
+      "label": "gl-matrix.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-zoom/regl.js",
+      "label": "regl.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/dompurify/browserify/transform.js",
+      "label": "transform.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/dompurify/cjs/common.js",
+      "label": "common.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/dompurify/cjs/index.js",
+      "label": "index.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/dompurify/cjs/mat2.js",
+      "label": "mat2.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/dompurify/cjs/mat2d.js",
+      "label": "mat2d.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/dompurify/cjs/mat3.js",
+      "label": "mat3.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/dompurify/cjs/mat4.js",
+      "label": "mat4.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/dompurify/cjs/quat.js",
+      "label": "quat.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/dompurify/cjs/quat2.js",
+      "label": "quat2.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/dompurify/cjs/vec2.js",
+      "label": "vec2.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/dompurify/cjs/vec3.js",
+      "label": "vec3.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/dompurify/cjs/vec4.js",
+      "label": "vec4.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/dompurify/dist/d3-drag.js",
+      "label": "d3-drag.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/dompurify/dist/d3-zoom.js",
+      "label": "d3-zoom.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/dompurify/dist/index.js",
+      "label": "index.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/dompurify/dist/purify.cjs.js",
+      "label": "purify.cjs.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/dompurify/dist/purify.js",
+      "label": "purify.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/dompurify/dist/regl.js",
+      "label": "regl.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/dompurify/dist/regl.unchecked.js",
+      "label": "regl.unchecked.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/dompurify/esm/common.js",
+      "label": "common.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/dompurify/esm/index.js",
+      "label": "index.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/dompurify/esm/mat2.js",
+      "label": "mat2.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/dompurify/esm/mat2d.js",
+      "label": "mat2d.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/dompurify/esm/mat3.js",
+      "label": "mat3.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/dompurify/esm/mat4.js",
+      "label": "mat4.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/dompurify/esm/quat.js",
+      "label": "quat.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/dompurify/esm/quat2.js",
+      "label": "quat2.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/dompurify/esm/vec2.js",
+      "label": "vec2.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/dompurify/esm/vec3.js",
+      "label": "vec3.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/dompurify/esm/vec4.js",
+      "label": "vec4.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/dompurify/gl-matrix-min.js",
+      "label": "gl-matrix-min.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/dompurify/gl-matrix.js",
+      "label": "gl-matrix.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/dompurify/regl.js",
+      "label": "regl.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/escape-string-regexp/index.js",
+      "label": "index.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/escape-string-regexp/package/index.js",
+      "label": "index.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/ext/rollup-plugin-styles/dist/runtime/inject-css.js",
+      "label": "inject-css.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-bench/browserify/transform.js",
+      "label": "transform.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-bench/cjs/common.js",
+      "label": "common.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-bench/cjs/index.js",
+      "label": "index.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-bench/cjs/mat2.js",
+      "label": "mat2.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-bench/cjs/mat2d.js",
+      "label": "mat2d.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-bench/cjs/mat3.js",
+      "label": "mat3.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-bench/cjs/mat4.js",
+      "label": "mat4.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-bench/cjs/quat.js",
+      "label": "quat.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-bench/cjs/quat2.js",
+      "label": "quat2.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-bench/cjs/vec2.js",
+      "label": "vec2.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-bench/cjs/vec3.js",
+      "label": "vec3.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-bench/cjs/vec4.js",
+      "label": "vec4.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-bench/dist/d3-drag.js",
+      "label": "d3-drag.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-bench/dist/d3-zoom.js",
+      "label": "d3-zoom.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-bench/dist/gl-bench.js",
+      "label": "gl-bench.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-bench/dist/gl-bench.module.js",
+      "label": "gl-bench.module.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-bench/dist/index.js",
+      "label": "index.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-bench/dist/purify.cjs.js",
+      "label": "purify.cjs.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-bench/dist/purify.js",
+      "label": "purify.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-bench/dist/regl.js",
+      "label": "regl.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-bench/dist/regl.unchecked.js",
+      "label": "regl.unchecked.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-bench/esm/common.js",
+      "label": "common.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-bench/esm/index.js",
+      "label": "index.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-bench/esm/mat2.js",
+      "label": "mat2.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-bench/esm/mat2d.js",
+      "label": "mat2d.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-bench/esm/mat3.js",
+      "label": "mat3.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-bench/esm/mat4.js",
+      "label": "mat4.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-bench/esm/quat.js",
+      "label": "quat.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-bench/esm/quat2.js",
+      "label": "quat2.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-bench/esm/vec2.js",
+      "label": "vec2.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-bench/esm/vec3.js",
+      "label": "vec3.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-bench/esm/vec4.js",
+      "label": "vec4.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-bench/gl-matrix-min.js",
+      "label": "gl-matrix-min.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-bench/gl-matrix.js",
+      "label": "gl-matrix.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-bench/regl.js",
+      "label": "regl.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-matrix/browserify/transform.js",
+      "label": "transform.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-matrix/cjs/common.js",
+      "label": "common.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-matrix/cjs/index.js",
+      "label": "index.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-matrix/cjs/mat2.js",
+      "label": "mat2.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-matrix/cjs/mat2d.js",
+      "label": "mat2d.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-matrix/cjs/mat3.js",
+      "label": "mat3.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-matrix/cjs/mat4.js",
+      "label": "mat4.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-matrix/cjs/quat.js",
+      "label": "quat.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-matrix/cjs/quat2.js",
+      "label": "quat2.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-matrix/cjs/vec2.js",
+      "label": "vec2.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-matrix/cjs/vec3.js",
+      "label": "vec3.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-matrix/cjs/vec4.js",
+      "label": "vec4.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-matrix/dist/index.js",
+      "label": "index.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-matrix/dist/regl.js",
+      "label": "regl.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-matrix/dist/regl.unchecked.js",
+      "label": "regl.unchecked.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-matrix/esm/common.js",
+      "label": "common.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-matrix/esm/index.js",
+      "label": "index.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-matrix/esm/mat2.js",
+      "label": "mat2.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-matrix/esm/mat2d.js",
+      "label": "mat2d.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-matrix/esm/mat3.js",
+      "label": "mat3.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-matrix/esm/mat4.js",
+      "label": "mat4.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-matrix/esm/quat.js",
+      "label": "quat.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-matrix/esm/quat2.js",
+      "label": "quat2.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-matrix/esm/vec2.js",
+      "label": "vec2.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-matrix/esm/vec3.js",
+      "label": "vec3.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-matrix/esm/vec4.js",
+      "label": "vec4.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-matrix/gl-matrix-min.js",
+      "label": "gl-matrix-min.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-matrix/gl-matrix.js",
+      "label": "gl-matrix.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-matrix/regl.js",
+      "label": "regl.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/index.js",
+      "label": "index.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/interacta-css-labels/dist/css-label-styles.js",
+      "label": "css-label-styles.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/interacta-css-labels/dist/css-label.js",
+      "label": "css-label.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/interacta-css-labels/dist/helper.js",
+      "label": "helper.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/interacta-css-labels/dist/index.js",
+      "label": "index.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/interacta-css-labels/dist/styles.js",
+      "label": "styles.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/interacta-css-labels/dist/types.js",
+      "label": "types.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/interacta-css-labels/dist/variables.js",
+      "label": "variables.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/internmap/dist/internmap.js",
+      "label": "internmap.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/internmap/index.js",
+      "label": "index.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/juggle-resize-observer-bundled.js",
+      "label": "juggle-resize-observer-bundled.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/juggle-resize-observer-wrapper.js",
+      "label": "juggle-resize-observer-wrapper.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/modules/cosmograph/config.js",
+      "label": "config.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/modules/cosmograph/crossfilter.js",
+      "label": "crossfilter.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/modules/cosmograph/index.js",
+      "label": "index.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/modules/cosmograph/style.module.css.js",
+      "label": "style.module.css.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/modules/cosmograph/types.js",
+      "label": "types.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/modules/cosmograph/watermark.js",
+      "label": "watermark.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/modules/histogram/config.js",
+      "label": "config.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/modules/histogram/index.js",
+      "label": "index.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/modules/search/config.js",
+      "label": "config.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/modules/search/index.js",
+      "label": "index.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/modules/timeline/config.js",
+      "label": "config.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/modules/timeline/index.js",
+      "label": "index.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/random/browserify/transform.js",
+      "label": "transform.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/random/cjs/common.js",
+      "label": "common.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/random/cjs/index.js",
+      "label": "index.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/random/cjs/mat2.js",
+      "label": "mat2.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/random/cjs/mat2d.js",
+      "label": "mat2d.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/random/cjs/mat3.js",
+      "label": "mat3.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/random/cjs/mat4.js",
+      "label": "mat4.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/random/cjs/quat.js",
+      "label": "quat.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/random/cjs/quat2.js",
+      "label": "quat2.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/random/cjs/vec2.js",
+      "label": "vec2.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/random/cjs/vec3.js",
+      "label": "vec3.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/random/cjs/vec4.js",
+      "label": "vec4.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/random/dist/index.js",
+      "label": "index.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/random/dist/regl.js",
+      "label": "regl.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/random/dist/regl.unchecked.js",
+      "label": "regl.unchecked.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/random/esm/common.js",
+      "label": "common.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/random/esm/index.js",
+      "label": "index.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/random/esm/mat2.js",
+      "label": "mat2.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/random/esm/mat2d.js",
+      "label": "mat2d.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/random/esm/mat3.js",
+      "label": "mat3.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/random/esm/mat4.js",
+      "label": "mat4.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/random/esm/quat.js",
+      "label": "quat.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/random/esm/quat2.js",
+      "label": "quat2.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/random/esm/vec2.js",
+      "label": "vec2.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/random/esm/vec3.js",
+      "label": "vec3.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/random/esm/vec4.js",
+      "label": "vec4.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/random/gl-matrix-min.js",
+      "label": "gl-matrix-min.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/random/gl-matrix.js",
+      "label": "gl-matrix.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/random/regl.js",
+      "label": "regl.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/regl/browserify/transform.js",
+      "label": "transform.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/regl/dist/index.js",
+      "label": "index.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/regl/dist/regl.js",
+      "label": "regl.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/regl/dist/regl.unchecked.js",
+      "label": "regl.unchecked.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/regl/regl.js",
+      "label": "regl.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/regl-wrapper.js",
+      "label": "regl-wrapper.js"
+    },
+    {
+      "id": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/test-broken-import.js",
+      "label": "test-broken-import.js"
+    }
+  ],
+  "edges": [
+    {
+      "source": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/api/supabase/supabase.js",
+      "target": "@supabase/supabase-js",
+      "label": "@supabase/supabase-js"
+    },
+    {
+      "source": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/modules/histogram/index.js",
+      "target": "d3-axis",
+      "label": "d3-axis"
+    },
+    {
+      "source": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/modules/histogram/index.js",
+      "target": "@juggle/resize-observer",
+      "label": "@juggle/resize-observer"
+    },
+    {
+      "source": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/modules/histogram/index.js",
+      "target": "d3-brush",
+      "label": "d3-brush"
+    },
+    {
+      "source": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/modules/histogram/index.js",
+      "target": "d3-scale",
+      "label": "d3-scale"
+    },
+    {
+      "source": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/modules/histogram/index.js",
+      "target": "d3-selection",
+      "label": "d3-selection"
+    },
+    {
+      "source": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/modules/histogram/index.js",
+      "target": "d3-array",
+      "label": "d3-array"
+    },
+    {
+      "source": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/modules/search/search.svelte.js",
+      "target": "@juggle/resize-observer",
+      "label": "@juggle/resize-observer"
+    },
+    {
+      "source": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/modules/search/search.svelte.js",
+      "target": "escape-string-regexp",
+      "label": "escape-string-regexp"
+    },
+    {
+      "source": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/modules/timeline/format.js",
+      "target": "d3-time-format",
+      "label": "d3-time-format"
+    },
+    {
+      "source": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/modules/timeline/format.js",
+      "target": "d3-time",
+      "label": "d3-time"
+    },
+    {
+      "source": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/modules/timeline/format.js",
+      "target": "d3-format",
+      "label": "d3-format"
+    },
+    {
+      "source": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/modules/timeline/index.js",
+      "target": "@juggle/resize-observer",
+      "label": "@juggle/resize-observer"
+    },
+    {
+      "source": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/modules/timeline/index.js",
+      "target": "d3-axis",
+      "label": "d3-axis"
+    },
+    {
+      "source": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/modules/timeline/index.js",
+      "target": "d3-brush",
+      "label": "d3-brush"
+    },
+    {
+      "source": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/modules/timeline/index.js",
+      "target": "d3-scale",
+      "label": "d3-scale"
+    },
+    {
+      "source": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/modules/timeline/index.js",
+      "target": "d3-selection",
+      "label": "d3-selection"
+    },
+    {
+      "source": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/modules/timeline/index.js",
+      "target": "d3-array",
+      "label": "d3-array"
+    },
+    {
+      "source": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmograph-ui/modules/timeline/index.js",
+      "target": "d3-transition",
+      "label": "d3-transition"
+    },
+    {
+      "source": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmos/dist/index.js",
+      "target": "d3-selection",
+      "label": "d3-selection"
+    },
+    {
+      "source": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmos/dist/index.js",
+      "target": "d3-ease",
+      "label": "d3-ease"
+    },
+    {
+      "source": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmos/dist/index.js",
+      "target": "d3-color",
+      "label": "d3-color"
+    },
+    {
+      "source": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmos/dist/index.js",
+      "target": "d3-scale",
+      "label": "d3-scale"
+    },
+    {
+      "source": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmos/dist/index.js",
+      "target": "d3-array",
+      "label": "d3-array"
+    },
+    {
+      "source": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmos/dist/index.js",
+      "target": "gl-matrix",
+      "label": "gl-matrix"
+    },
+    {
+      "source": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmos/dist/index.js",
+      "target": "random",
+      "label": "random"
+    },
+    {
+      "source": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmos/dist/index.js",
+      "target": "d3-zoom",
+      "label": "d3-zoom"
+    },
+    {
+      "source": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmos/dist/index.js",
+      "target": "regl",
+      "label": "regl"
+    },
+    {
+      "source": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/cosmos/dist/index.js",
+      "target": "d3-transition",
+      "label": "d3-transition"
+    },
+    {
+      "source": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-drag/dist/index.js",
+      "target": "random",
+      "label": "random"
+    },
+    {
+      "source": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/d3-zoom/dist/index.js",
+      "target": "random",
+      "label": "random"
+    },
+    {
+      "source": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/dompurify/dist/index.js",
+      "target": "random",
+      "label": "random"
+    },
+    {
+      "source": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-bench/dist/index.js",
+      "target": "random",
+      "label": "random"
+    },
+    {
+      "source": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-matrix/dist/index.js",
+      "target": "d3-selection",
+      "label": "d3-selection"
+    },
+    {
+      "source": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-matrix/dist/index.js",
+      "target": "d3-ease",
+      "label": "d3-ease"
+    },
+    {
+      "source": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-matrix/dist/index.js",
+      "target": "d3-color",
+      "label": "d3-color"
+    },
+    {
+      "source": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-matrix/dist/index.js",
+      "target": "d3-scale",
+      "label": "d3-scale"
+    },
+    {
+      "source": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-matrix/dist/index.js",
+      "target": "d3-array",
+      "label": "d3-array"
+    },
+    {
+      "source": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-matrix/dist/index.js",
+      "target": "gl-matrix",
+      "label": "gl-matrix"
+    },
+    {
+      "source": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-matrix/dist/index.js",
+      "target": "random",
+      "label": "random"
+    },
+    {
+      "source": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-matrix/dist/index.js",
+      "target": "d3-zoom",
+      "label": "d3-zoom"
+    },
+    {
+      "source": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-matrix/dist/index.js",
+      "target": "regl",
+      "label": "regl"
+    },
+    {
+      "source": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/gl-matrix/dist/index.js",
+      "target": "d3-transition",
+      "label": "d3-transition"
+    },
+    {
+      "source": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/modules/cosmograph/crossfilter.js",
+      "target": "crossfilter2",
+      "label": "crossfilter2"
+    },
+    {
+      "source": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/modules/cosmograph/index.js",
+      "target": "@cosmograph/cosmos",
+      "label": "@cosmograph/cosmos"
+    },
+    {
+      "source": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/modules/cosmograph/index.js",
+      "target": "@interacta/css-labels",
+      "label": "@interacta/css-labels"
+    },
+    {
+      "source": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/modules/cosmograph/index.js",
+      "target": "@cosmograph/ui",
+      "label": "@cosmograph/ui"
+    },
+    {
+      "source": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/modules/cosmograph/index.js",
+      "target": "d3-color",
+      "label": "d3-color"
+    },
+    {
+      "source": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/modules/histogram/index.js",
+      "target": "@cosmograph/ui",
+      "label": "@cosmograph/ui"
+    },
+    {
+      "source": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/modules/search/index.js",
+      "target": "@cosmograph/ui",
+      "label": "@cosmograph/ui"
+    },
+    {
+      "source": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/modules/timeline/index.js",
+      "target": "@cosmograph/ui",
+      "label": "@cosmograph/ui"
+    },
+    {
+      "source": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/random/dist/index.js",
+      "target": "random",
+      "label": "random"
+    },
+    {
+      "source": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/regl/dist/index.js",
+      "target": "d3-selection",
+      "label": "d3-selection"
+    },
+    {
+      "source": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/regl/dist/index.js",
+      "target": "d3-ease",
+      "label": "d3-ease"
+    },
+    {
+      "source": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/regl/dist/index.js",
+      "target": "d3-color",
+      "label": "d3-color"
+    },
+    {
+      "source": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/regl/dist/index.js",
+      "target": "d3-scale",
+      "label": "d3-scale"
+    },
+    {
+      "source": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/regl/dist/index.js",
+      "target": "d3-array",
+      "label": "d3-array"
+    },
+    {
+      "source": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/regl/dist/index.js",
+      "target": "gl-matrix",
+      "label": "gl-matrix"
+    },
+    {
+      "source": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/regl/dist/index.js",
+      "target": "random",
+      "label": "random"
+    },
+    {
+      "source": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/regl/dist/index.js",
+      "target": "d3-zoom",
+      "label": "d3-zoom"
+    },
+    {
+      "source": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/regl/dist/index.js",
+      "target": "regl",
+      "label": "regl"
+    },
+    {
+      "source": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/regl/dist/index.js",
+      "target": "d3-transition",
+      "label": "d3-transition"
+    },
+    {
+      "source": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/test-broken-import.js",
+      "target": "d3-selection",
+      "label": "d3-selection"
+    },
+    {
+      "source": "/opt/stacks/graphiti/graph-visualizer-rust/static/vendor/test-broken-import.js",
+      "target": "regl",
+      "label": "regl"
+    }
+  ]
+}
