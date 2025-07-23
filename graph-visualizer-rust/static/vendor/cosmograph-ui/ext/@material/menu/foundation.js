@@ -1,0 +1,24 @@
+import{__extends as e,__assign as t}from"../../../_virtual/_tslib.js";import{MDCFoundation as n}from"../base/foundation.js";import{cssClasses as r}from"../list/constants.js";import{MDCMenuSurfaceFoundation as o}from"../menu-surface/foundation.js";import{strings as a,DefaultFocusState as i,cssClasses as d,numbers as s}from"./constants.js";
+/**
+ * @license
+ * Copyright 2018 Google Inc.
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */var u=function(n){function u(e){var r=n.call(this,t(t({},u.defaultAdapter),e))||this;return r.closeAnimationEndTimerId=0,r.defaultFocusState=i.LIST_ROOT,r.selectedIndex=-1,r}return e(u,n),Object.defineProperty(u,"cssClasses",{get:function(){return d},enumerable:!1,configurable:!0}),Object.defineProperty(u,"strings",{get:function(){return a},enumerable:!1,configurable:!0}),Object.defineProperty(u,"numbers",{get:function(){return s},enumerable:!1,configurable:!0}),Object.defineProperty(u,"defaultAdapter",{get:function(){return{addClassToElementAtIndex:function(){},removeClassFromElementAtIndex:function(){},addAttributeToElementAtIndex:function(){},removeAttributeFromElementAtIndex:function(){},getAttributeFromElementAtIndex:function(){return null},elementContainsClass:function(){return!1},closeSurface:function(){},getElementIndex:function(){return-1},notifySelected:function(){},getMenuItemCount:function(){return 0},focusItemAtIndex:function(){},focusListRoot:function(){},getSelectedSiblingOfItemAtIndex:function(){return-1},isSelectableItemAtIndex:function(){return!1}}},enumerable:!1,configurable:!0}),u.prototype.destroy=function(){this.closeAnimationEndTimerId&&clearTimeout(this.closeAnimationEndTimerId),this.adapter.closeSurface()},u.prototype.handleKeydown=function(e){var t=e.key,n=e.keyCode;("Tab"===t||9===n)&&this.adapter.closeSurface(!0)},u.prototype.handleItemAction=function(e){var t=this,n=this.adapter.getElementIndex(e);if(!(n<0)){this.adapter.notifySelected({index:n});var r="true"===this.adapter.getAttributeFromElementAtIndex(n,a.SKIP_RESTORE_FOCUS);this.adapter.closeSurface(r),this.closeAnimationEndTimerId=setTimeout((function(){var n=t.adapter.getElementIndex(e);n>=0&&t.adapter.isSelectableItemAtIndex(n)&&t.setSelectedIndex(n)}),o.numbers.TRANSITION_CLOSE_DURATION)}},u.prototype.handleMenuSurfaceOpened=function(){switch(this.defaultFocusState){case i.FIRST_ITEM:this.adapter.focusItemAtIndex(0);break;case i.LAST_ITEM:this.adapter.focusItemAtIndex(this.adapter.getMenuItemCount()-1);break;case i.NONE:break;default:this.adapter.focusListRoot()}},u.prototype.setDefaultFocusState=function(e){this.defaultFocusState=e},u.prototype.getSelectedIndex=function(){return this.selectedIndex},u.prototype.setSelectedIndex=function(e){if(this.validatedIndex(e),!this.adapter.isSelectableItemAtIndex(e))throw new Error("MDCMenuFoundation: No selection group at specified index.");var t=this.adapter.getSelectedSiblingOfItemAtIndex(e);t>=0&&(this.adapter.removeAttributeFromElementAtIndex(t,a.ARIA_CHECKED_ATTR),this.adapter.removeClassFromElementAtIndex(t,d.MENU_SELECTED_LIST_ITEM)),this.adapter.addClassToElementAtIndex(e,d.MENU_SELECTED_LIST_ITEM),this.adapter.addAttributeToElementAtIndex(e,a.ARIA_CHECKED_ATTR,"true"),this.selectedIndex=e},u.prototype.setEnabled=function(e,t){this.validatedIndex(e),t?(this.adapter.removeClassFromElementAtIndex(e,r.LIST_ITEM_DISABLED_CLASS),this.adapter.addAttributeToElementAtIndex(e,a.ARIA_DISABLED_ATTR,"false")):(this.adapter.addClassToElementAtIndex(e,r.LIST_ITEM_DISABLED_CLASS),this.adapter.addAttributeToElementAtIndex(e,a.ARIA_DISABLED_ATTR,"true"))},u.prototype.validatedIndex=function(e){var t=this.adapter.getMenuItemCount();if(!(e>=0&&e<t))throw new Error("MDCMenuFoundation: No list item at specified index.")},u}(n);export{u as MDCMenuFoundation,u as default};
+//# sourceMappingURL=foundation.js.map

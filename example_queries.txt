@@ -1,0 +1,16 @@
+# Copy these queries EXACTLY as single lines into RedisInsight CLI:
+
+# 1. Count all nodes (simple test):
+GRAPH.QUERY graphiti_migration "MATCH (n) RETURN count(n)"
+
+# 2. Get top 10 PageRank nodes:
+GRAPH.QUERY graphiti_migration "MATCH (n) WHERE n.pagerank_centrality IS NOT NULL RETURN n.name, n.pagerank_centrality ORDER BY n.pagerank_centrality DESC LIMIT 10"
+
+# 3. Show first 5 nodes:
+GRAPH.QUERY graphiti_migration "MATCH (n) RETURN n.name LIMIT 5"
+
+# 4. Count by type:
+GRAPH.QUERY graphiti_migration "MATCH (n) RETURN labels(n), count(n)"
+
+# 5. Find error nodes:
+GRAPH.QUERY graphiti_migration "MATCH (n) WHERE n.name CONTAINS 'error' RETURN n.name LIMIT 10"

@@ -78,6 +78,7 @@ Traditional RAG approaches often rely on batch processing and static data summar
 - **Efficient Hybrid Retrieval:** Combines semantic embeddings, keyword (BM25), and graph traversal to achieve low-latency queries without reliance on LLM summarization.
 - **Custom Entity Definitions:** Flexible ontology creation and support for developer-defined entities through straightforward Pydantic models.
 - **Scalability:** Efficiently manages large datasets with parallel processing, suitable for enterprise environments.
+- **Graph Centrality Analysis:** Built-in algorithms for identifying influential nodes through PageRank, degree centrality, and betweenness centrality metrics.
 
 <p align="center">
     <img src="/images/graphiti-intro-slides-stock-2.gif" alt="Graphiti structured + unstructured demo" width="700px">   
@@ -206,6 +207,21 @@ For detailed setup instructions and usage examples, see the [MCP server README](
 The `server` directory contains an API service for interacting with the Graphiti API. It is built using FastAPI.
 
 Please see the [server README](./server/README.md) for more information.
+
+### Centrality Analysis API
+
+Graphiti includes powerful graph centrality analysis capabilities to identify the most important or influential nodes in your knowledge graph. The REST API provides endpoints for:
+
+- **PageRank:** Measure node influence based on the link structure of the graph
+- **Degree Centrality:** Identify highly connected nodes normalized by total possible connections
+- **Betweenness Centrality:** Find nodes that act as bridges between different parts of the graph
+
+These metrics help answer critical questions about your data:
+- Which entities are most influential in the knowledge network?
+- Which concepts serve as key connectors between different domains?
+- How does information flow through your graph structure?
+
+For detailed API documentation and usage examples, see the [Centrality API Documentation](./docs/api/centrality.md).
 
 ## Optional Environment Variables
 

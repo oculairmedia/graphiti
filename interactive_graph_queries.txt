@@ -1,0 +1,33 @@
+# Interactive Graph Queries for RedisInsight
+
+## Copy these queries into RedisInsight Workbench:
+
+# 1. Visualize Agent Meridian's Network (Highly Connected)
+GRAPH.QUERY graphiti_migration "MATCH (n) WHERE n.name = 'Agent Meridian' WITH n LIMIT 1 MATCH (n)-[r]-(m) RETURN n, r, m LIMIT 50"
+
+# 2. Show Top Agents and Their Interactions
+GRAPH.QUERY graphiti_migration "MATCH (n) WHERE n.name CONTAINS 'Agent' WITH n ORDER BY n.degree_centrality DESC LIMIT 10 MATCH (n)-[r]-(m) WHERE m.name CONTAINS 'Agent' OR m.degree_centrality > 20 RETURN n, r, m"
+
+# 3. Explore Code File Relationships
+GRAPH.QUERY graphiti_migration "MATCH (n) WHERE n.name CONTAINS '.py' OR n.name CONTAINS '.js' WITH n LIMIT 20 MATCH (n)-[r]-(m) RETURN n, r, m"
+
+# 4. Show Emmanuel's Profile Network
+GRAPH.QUERY graphiti_migration "MATCH (n) WHERE n.name CONTAINS 'Emmanuel' WITH n MATCH (n)-[r*1..2]-(m) RETURN n, r, m LIMIT 100"
+
+# 5. High-Level Overview (Most Connected Nodes)
+GRAPH.QUERY graphiti_migration "MATCH (n) WHERE n.degree_centrality > 50 WITH n MATCH (n)-[r]-(m) WHERE m.degree_centrality > 30 RETURN n, r, m LIMIT 200"
+
+# 6. Entity Relationships Only
+GRAPH.QUERY graphiti_migration "MATCH (n:Entity)-[r]-(m:Entity) RETURN n, r, m LIMIT 100"
+
+# 7. Episodic Memory Connections
+GRAPH.QUERY graphiti_migration "MATCH (e:Episodic)-[r]-(n) WHERE n.degree_centrality > 20 RETURN e, r, n LIMIT 100"
+
+# 8. Find Clusters Around Specific Topics
+GRAPH.QUERY graphiti_migration "MATCH (n) WHERE n.name CONTAINS 'tool' OR n.name CONTAINS 'memory' WITH n MATCH (n)-[r]-(m) RETURN n, r, m LIMIT 150"
+
+# TIPS:
+# - Start with smaller LIMIT values (50-100) for better performance
+# - The Workbench will show results in table format
+# - Look for any graph visualization options in the result viewer
+# - You can export results as JSON or CSV for external visualization tools

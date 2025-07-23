@@ -1,4 +1,5 @@
 import logging
+import os
 from typing import Annotated
 
 from fastapi import Depends, HTTPException
@@ -72,17 +73,48 @@ class ZepGraphiti(Graphiti):
 
 
 async def get_graphiti(settings: ZepEnvDep):
+    # Check if we should use Ollama
+    llm_client = None
+    if os.getenv('USE_OLLAMA', '').lower() == 'true':
+        from openai import AsyncOpenAI
+        from graphiti_core.llm_client import OpenAIGenericClient, LLMConfig
+        
+        ollama_base_url = os.getenv('OLLAMA_BASE_URL', 'http://localhost:11434/v1')
+        ollama_model = os.getenv('OLLAMA_MODEL', 'mistral:latest')
+        
+        logger.info(f"Using Ollama at {ollama_base_url} with model {ollama_model}")
+        
+        # Create Ollama client
+        client = AsyncOpenAI(
+            base_url=ollama_base_url,
+            api_key="ollama"
+        )
+        
+        # Configure LLM
+        config = LLMConfig(
+            model=ollama_model,
+            small_model=ollama_model,
+            temperature=0.7,
+            max_tokens=2000
+        )
+        
+        llm_client = OpenAIGenericClient(config=config, client=client)
+    
     client = ZepGraphiti(
         uri=settings.neo4j_uri,
         user=settings.neo4j_user,
         password=settings.neo4j_password,
+        llm_client=llm_client  # Will be None if not using Ollama
     )
-    if settings.openai_base_url is not None:
-        client.llm_client.config.base_url = settings.openai_base_url
-    if settings.openai_api_key is not None:
-        client.llm_client.config.api_key = settings.openai_api_key
-    if settings.model_name is not None:
-        client.llm_client.model = settings.model_name
+    
+    # Only configure OpenAI settings if not using Ollama
+    if not llm_client:
+        if settings.openai_base_url is not None:
+            client.llm_client.config.base_url = settings.openai_base_url
+        if settings.openai_api_key is not None:
+            client.llm_client.config.api_key = settings.openai_api_key
+        if settings.model_name is not None:
+            client.llm_client.model = settings.model_name
 
     try:
         yield client
@@ -91,10 +123,38 @@ async def get_graphiti(settings: ZepEnvDep):
 
 
 async def initialize_graphiti(settings: ZepEnvDep):
+    # Check if we should use Ollama
+    llm_client = None
+    if os.getenv('USE_OLLAMA', '').lower() == 'true':
+        from openai import AsyncOpenAI
+        from graphiti_core.llm_client import OpenAIGenericClient, LLMConfig
+        
+        ollama_base_url = os.getenv('OLLAMA_BASE_URL', 'http://localhost:11434/v1')
+        ollama_model = os.getenv('OLLAMA_MODEL', 'mistral:latest')
+        
+        logger.info(f"Using Ollama at {ollama_base_url} with model {ollama_model}")
+        
+        # Create Ollama client
+        client = AsyncOpenAI(
+            base_url=ollama_base_url,
+            api_key="ollama"
+        )
+        
+        # Configure LLM
+        config = LLMConfig(
+            model=ollama_model,
+            small_model=ollama_model,
+            temperature=0.7,
+            max_tokens=2000
+        )
+        
+        llm_client = OpenAIGenericClient(config=config, client=client)
+    
     client = ZepGraphiti(
         uri=settings.neo4j_uri,
         user=settings.neo4j_user,
         password=settings.neo4j_password,
+        llm_client=llm_client  # Will be None if not using Ollama
     )
     await client.build_indices_and_constraints()
 

@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cosmos Test</title>
+    <script src="https://unpkg.com/@cosmograph/cosmos@2.8.1/dist/index.min.js"></script>
+    <style>
+        body { margin: 0; padding: 0; }
+        #graph { width: 100vw; height: 100vh; }
+        #controls { position: absolute; top: 10px; left: 10px; background: white; padding: 10px; }
+    </style>
+</head>
+<body>
+    <div id="graph"></div>
+    <div id="controls">
+        <button onclick="loadData()">Load Test Data</button>
+        <button onclick="loadFromAPI()">Load From API</button>
+        <div id="status"></div>
+    </div>
+    
+    <script>
+        const container = document.getElementById('graph');
+        const graph = new cosmos.Graph(container);
+        
+        function loadData() {
+            // Simple test data
+            const nodes = [
+                { id: '1', label: 'Node 1' },
+                { id: '2', label: 'Node 2' },
+                { id: '3', label: 'Node 3' },
+                { id: '4', label: 'Node 4' },
+                { id: '5', label: 'Node 5' }
+            ];
+            
+            const links = [
+                { source: 0, target: 1 },
+                { source: 0, target: 2 },
+                { source: 1, target: 3 },
+                { source: 2, target: 4 },
+                { source: 3, target: 4 }
+            ];
+            
+            graph.setData(nodes, links);
+            document.getElementById('status').textContent = 'Test data loaded';
+        }
+        
+        async function loadFromAPI() {
+            try {
+                document.getElementById('status').textContent = 'Loading...';
+                
+                const response = await fetch('/api/visualize?query_type=high_degree&limit=500');
+                const result = await response.json();
+                
+                if (result.error) {
+                    throw new Error(result.error);
+                }
+                
+                // Transform data
+                const nodeMap = {};
+                const nodes = result.data.nodes.map((node, index) => {
+                    nodeMap[node.id] = index;
+                    return {
+                        id: node.id,
+                        label: node.label,
+                        x: Math.random() * 1000 - 500,
+                        y: Math.random() * 1000 - 500
+                    };
+                });
+                
+                const links = result.data.edges.map(edge => ({
+                    source: nodeMap[edge.from],
+                    target: nodeMap[edge.to]
+                })).filter(link => 
+                    link.source !== undefined && link.target !== undefined
+                );
+                
+                graph.setData(nodes, links);
+                document.getElementById('status').textContent = 
+                    `Loaded ${nodes.length} nodes, ${links.length} edges`;
+                    
+            } catch (error) {
+                document.getElementById('status').textContent = 'Error: ' + error.message;
+                console.error('Error:', error);
+            }
+        }
+    </script>
+</body>
+</html>

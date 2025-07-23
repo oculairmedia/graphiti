@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>FalkorDB Connection Instructions</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; line-height: 1.6; }
+        .container { max-width: 800px; margin: 0 auto; }
+        h1 { color: #333; }
+        .info { background: #f4f4f4; padding: 20px; border-radius: 5px; margin: 20px 0; }
+        code { background: #e8e8e8; padding: 2px 5px; border-radius: 3px; font-family: monospace; }
+        .warning { background: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; border-radius: 5px; margin: 20px 0; }
+        .success { background: #d4edda; border: 1px solid #c3e6cb; padding: 15px; border-radius: 5px; margin: 20px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>FalkorDB Connection Information</h1>
+        
+        <div class="success">
+            <h3>✓ FalkorDB is Running Successfully!</h3>
+            <p>Your FalkorDB instance is running on the following ports:</p>
+            <ul>
+                <li><strong>Redis/FalkorDB Port:</strong> <code>6389</code> (internal: 6379)</li>
+                <li><strong>Web UI Port:</strong> <code>3100</code> (internal: 3000)</li>
+            </ul>
+        </div>
+
+        <div class="warning">
+            <h3>⚠️ About the Authentication Error</h3>
+            <p>The FalkorDB Browser UI at <code>http://localhost:3100</code> expects to connect to a Redis instance. 
+            Since we're running FalkorDB in a Docker container with mapped ports, the UI might have trouble connecting to the backend.</p>
+        </div>
+
+        <div class="info">
+            <h3>How to Access FalkorDB:</h3>
+            
+            <h4>Option 1: Use Redis CLI (Recommended)</h4>
+            <pre>
+# Connect to FalkorDB
+docker exec -it graphiti-falkordb-1 redis-cli
+
+# Select your graph
+GRAPH.QUERY graphiti_migration "MATCH (n) RETURN count(n)"
+
+# Example queries:
+GRAPH.QUERY graphiti_migration "MATCH (n) RETURN n.name, labels(n) LIMIT 10"
+GRAPH.QUERY graphiti_migration "MATCH (a)-[r]->(b) RETURN a.name, type(r), b.name LIMIT 10"
+            </pre>
+
+            <h4>Option 2: Use Python Scripts</h4>
+            <pre>
+# Run the migration
+python3 migrate_working.py
+
+# Test the connection
+python3 test_new_port.py
+            </pre>
+
+            <h4>Option 3: Use RedisInsight</h4>
+            <p>For a better GUI experience, you can use RedisInsight:</p>
+            <ol>
+                <li>Download RedisInsight from <a href="https://redis.com/redis-enterprise/redis-insight/">redis.com</a></li>
+                <li>Connect to <code>localhost:6389</code></li>
+                <li>Use the Graph module to query your FalkorDB graphs</li>
+            </ol>
+        </div>
+
+        <div class="info">
+            <h3>Current Migration Status:</h3>
+            <ul>
+                <li><strong>Graph Name:</strong> <code>graphiti_migration</code></li>
+                <li><strong>Migrated Nodes:</strong> 500</li>
+                <li><strong>Migrated Relationships:</strong> 27</li>
+            </ul>
+        </div>
+
+        <div class="info">
+            <h3>Quick Test Commands:</h3>
+            <pre>
+# Count all nodes
+docker exec graphiti-falkordb-1 redis-cli GRAPH.QUERY graphiti_migration "MATCH (n) RETURN count(n)"
+
+# Show first 5 nodes
+docker exec graphiti-falkordb-1 redis-cli GRAPH.QUERY graphiti_migration "MATCH (n) RETURN n.name LIMIT 5"
+
+# Show node types
+docker exec graphiti-falkordb-1 redis-cli GRAPH.QUERY graphiti_migration "MATCH (n) RETURN DISTINCT labels(n)"
+            </pre>
+        </div>
+    </div>
+</body>
+</html>

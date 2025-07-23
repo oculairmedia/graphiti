@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Cosmograph Test</title>
+    <style>
+        body { margin: 0; padding: 20px; font-family: Arial; }
+        #result { margin-top: 20px; padding: 10px; background: #f0f0f0; }
+        pre { background: #333; color: #0f0; padding: 10px; overflow: auto; }
+    </style>
+</head>
+<body>
+    <h1>Cosmograph Visualization Test</h1>
+    <button onclick="testVisualization()">Test Visualization</button>
+    <button onclick="loadEntireGraph()">Load Entire Graph</button>
+    <div id="result"></div>
+    
+    <script>
+        async function testVisualization() {
+            const result = document.getElementById('result');
+            result.innerHTML = '<p>Testing visualization...</p>';
+            
+            try {
+                // Test API endpoint
+                const response = await fetch('/api/visualize?query_type=high_degree&limit=100');
+                const data = await response.json();
+                
+                result.innerHTML = `
+                    <h3>API Response:</h3>
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                    <p>Nodes: ${data.data?.nodes?.length || 0}</p>
+                    <p>Edges: ${data.data?.edges?.length || 0}</p>
+                    <p>Execution Time: ${data.execution_time_ms}ms</p>
+                    <p><a href="/cosmograph" target="_blank">Open Cosmograph Visualization</a></p>
+                `;
+            } catch (error) {
+                result.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+            }
+        }
+        
+        async function loadEntireGraph() {
+            const result = document.getElementById('result');
+            result.innerHTML = '<p>Loading entire graph...</p>';
+            
+            try {
+                const response = await fetch('/api/visualize?query_type=entire_graph&limit=100000');
+                const data = await response.json();
+                
+                result.innerHTML = `
+                    <h3>Entire Graph Loaded:</h3>
+                    <p>Nodes: ${data.data?.nodes?.length || 0}</p>
+                    <p>Edges: ${data.data?.edges?.length || 0}</p>
+                    <p>Execution Time: ${data.execution_time_ms}ms</p>
+                    <p><a href="/cosmograph" target="_blank">Open Cosmograph Visualization</a></p>
+                `;
+            } catch (error) {
+                result.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+            }
+        }
+    </script>
+</body>
+</html>

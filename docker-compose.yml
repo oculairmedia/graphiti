@@ -3,7 +3,7 @@ services:
     build:
       context: .
     ports:
-      - "8000:8000"
+      - "8003:8000"
     healthcheck:
       test:
         [
@@ -24,6 +24,12 @@ services:
       - NEO4J_USER=${NEO4J_USER}
       - NEO4J_PASSWORD=${NEO4J_PASSWORD}
       - PORT=8000
+      # Ollama configuration (optional)
+      - USE_OLLAMA=${USE_OLLAMA:-false}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://localhost:11434/v1}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-mistral:latest}
+    networks:
+      - graphiti_network
     labels:
       - "homepage.group=Knowledge Management"
       - "homepage.name=Graphiti API"
@@ -49,6 +55,8 @@ services:
       - neo4j_data:/data
     environment:
       - NEO4J_AUTH=${NEO4J_USER}/${NEO4J_PASSWORD}
+    networks:
+      - graphiti_network
     labels:
       - "homepage.group=Knowledge Management"
       - "homepage.name=Neo4j Database"
@@ -56,5 +64,105 @@ services:
       - "homepage.href=http://192.168.50.90:7474"
       - "homepage.description=Neo4j graph database browser"
 
+  falkordb:
+    build:
+      context: .
+      dockerfile: Dockerfile.falkordb-custom
+    # command removed as it's handled in the custom entrypoint
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 1s
+      timeout: 3s
+      retries: 10
+      start_period: 3s
+    ports:
+      - "6389:6379"  # Redis/FalkorDB port (changed from 6379)
+      - "3100:3000"  # FalkorDB UI
+    volumes:
+      - falkordb_data:/data
+    environment:
+      - REDIS_ARGS=--protected-mode no
+      - REDIS_URL=redis://192.168.50.90:6389
+      - NEXT_PUBLIC_REDIS_URL=redis://192.168.50.90:6389
+      - NEXT_PUBLIC_API_URL=http://192.168.50.90:6389
+    networks:
+      - graphiti_network
+    labels:
+      - "homepage.group=Knowledge Management"
+      - "homepage.name=FalkorDB"
+      - "homepage.icon=si-redis"
+      - "homepage.href=http://192.168.50.90:3100"
+      - "homepage.description=FalkorDB graph database"
+  
+  redisinsight:
+    image: redis/redisinsight:latest
+    container_name: graphiti-redisinsight
+    restart: unless-stopped
+    ports:
+      - "5540:5540"
+    volumes:
+      - redisinsight_data:/data
+    networks:
+      - graphiti_network
+    labels:
+      - "homepage.group=Knowledge Management"
+      - "homepage.name=RedisInsight"
+      - "homepage.icon=si-redis"
+      - "homepage.href=http://192.168.50.90:5540"
+      - "homepage.description=GUI for FalkorDB graph database"
+  
+  graph-visualizer:
+    build:
+      context: ./graph-visualizer
+      dockerfile: Dockerfile
+    container_name: graphiti-visualizer
+    restart: unless-stopped
+    ports:
+      - "5555:5000"
+    environment:
+      - FALKORDB_HOST=falkordb
+      - FALKORDB_PORT=6379
+      - GRAPH_NAME=graphiti_migration
+    depends_on:
+      - falkordb
+    networks:
+      - graphiti_network
+    labels:
+      - "homepage.group=Knowledge Management"
+      - "homepage.name=Graph Visualizer"
+      - "homepage.icon=mdi-graph"
+      - "homepage.href=http://192.168.50.90:5555"
+      - "homepage.description=Interactive graph visualization for FalkorDB"
+  
+  graph-visualizer-rust:
+    build:
+      context: ./graph-visualizer-rust
+      dockerfile: Dockerfile
+    container_name: graphiti-visualizer-rust
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - FALKORDB_HOST=falkordb
+      - FALKORDB_PORT=6379
+      - GRAPH_NAME=graphiti_migration
+      - RUST_LOG=graph_visualizer=debug,tower_http=debug
+    depends_on:
+      - falkordb
+    networks:
+      - graphiti_network
+    labels:
+      - "homepage.group=Knowledge Management"
+      - "homepage.name=Graph Visualizer (Rust)"
+      - "homepage.icon=si-rust"
+      - "homepage.href=http://192.168.50.90:3000"
+      - "homepage.description=High-performance Rust-based graph visualization"
+
+networks:
+  graphiti_network:
+    driver: bridge
+
 volumes:
   neo4j_data:
+  falkordb_data:
+  redisinsight_data:

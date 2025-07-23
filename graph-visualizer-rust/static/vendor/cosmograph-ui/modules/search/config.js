@@ -1,0 +1,2 @@
+const e={isDisabled:!1,minMatch:1,limitSuggestions:50,truncateValues:100,maxVisibleItems:10,openListUpwards:!1,placeholder:"Search...",activeAccessorIndex:void 0,accessors:[{label:"id",accessor:e=>e.id}],matchPalette:["#fbb4ae80","#b3cde380","#ccebc580","#decbe480","#fed9a680","#ffffcc80","#e5d8bd80","#fddaec80"],ordering:void 0,events:{onSelect:void 0,onSearch:void 0,onEnter:void 0,onAccessorSelect:void 0}};export{e as defaultSearchConfig};
+//# sourceMappingURL=config.js.map
