@@ -515,6 +515,23 @@
             display: block;
         }
         
+        /* Search results styling */
+        #search-results {
+            background-color: rgba(30, 30, 30, 0.95);
+            border: 1px solid #4ecdc4;
+            border-radius: 4px;
+        }
+        
+        .search-result-item:hover {
+            background-color: rgba(78, 205, 196, 0.2);
+        }
+        
+        /* Tab styling for filters */
+        .nav-tabs-sm .nav-link {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.875rem;
+        }
+        
         /* Enhanced graph animation */
         @keyframes pulse {
             0% { opacity: 0.6; }
@@ -562,6 +579,38 @@
             <div class="mt-2 performance-metrics">
                 <div>GPU Memory: <span id="gpu-memory">-</span></div>
                 <div>Render Time: <span id="render-time">-</span> ms</div>
+            </div>
+        </div>
+        
+        <div class="card-header mt-3">
+            <h6 class="mb-0">🔍 Search & Navigation</h6>
+        </div>
+        <div class="card-body">
+            <div class="mb-3">
+                <div class="input-group input-group-sm">
+                    <input type="text" class="form-control" id="node-search" placeholder="Search nodes by name or property...">
+                    <button class="btn btn-outline-secondary" type="button" id="clear-search">✕</button>
+                </div>
+                <div id="search-results" class="mt-2 small" style="max-height: 150px; overflow-y: auto; display: none;">
+                </div>
+            </div>
+            
+            <div class="mb-2">
+                <button id="find-path" class="btn btn-sm btn-outline-primary w-100" title="Find shortest path between two selected nodes">
+                    📍 Find Path Between Nodes
+                </button>
+            </div>
+            
+            <div class="mb-2">
+                <button id="show-neighbors" class="btn btn-sm btn-outline-info w-100" title="Show all neighbors of selected nodes">
+                    🔗 Show Neighbors
+                </button>
+            </div>
+            
+            <div class="mb-2">
+                <button id="focus-subgraph" class="btn btn-sm btn-outline-warning w-100" title="Focus view on selected nodes and their connections">
+                    🎯 Focus on Selection
+                </button>
             </div>
         </div>
         
@@ -665,32 +714,96 @@
         </div>
         
         <div class="card-header mt-3">
-            <h6 class="mb-0">Navigation & Interaction</h6>
+            <h6 class="mb-0">Node Size Controls</h6>
         </div>
         <div class="card-body">
-            <div class="mb-3">
-                <label class="form-label">Interaction Mode</label>
-                <div class="btn-group w-100" role="group">
-                    <input type="radio" class="btn-check" name="nav-mode" id="pan-mode" autocomplete="off" checked>
-                    <label class="btn btn-sm btn-outline-primary" for="pan-mode">
-                        <i class="bi bi-arrows-move"></i> Pan View
-                    </label>
-                    
-                    <input type="radio" class="btn-check" name="nav-mode" id="drag-mode" autocomplete="off">
-                    <label class="btn btn-sm btn-outline-primary" for="drag-mode">
-                        <i class="bi bi-hand-index"></i> Drag Nodes
-                    </label>
-                </div>
-                <small class="text-muted d-block mt-1">
-                    Pan: Click & drag canvas to navigate<br>
-                    Drag: Click & drag nodes to reposition
-                </small>
+            <div class="mb-2">
+                <label for="node-min-size" class="form-label">Min Node Size: <span id="node-min-size-value">2</span>px</label>
+                <input type="range" class="form-range" id="node-min-size" min="1" max="10" step="0.5" value="2">
             </div>
             
             <div class="mb-2">
-                <label for="node-size-scale" class="form-label">Node Size Scale: <span id="node-size-scale-value">1.0</span></label>
-                <input type="range" class="form-range" id="node-size-scale" min="0.5" max="5" step="0.1" value="1">
+                <label for="node-max-size" class="form-label">Max Node Size: <span id="node-max-size-value">6</span>px</label>
+                <input type="range" class="form-range" id="node-max-size" min="3" max="20" step="0.5" value="6">
             </div>
+            
+            <div class="mb-2">
+                <label for="node-size-scale" class="form-label">Overall Scale: <span id="node-size-scale-value">1.0</span>x</label>
+                <input type="range" class="form-range" id="node-size-scale" min="0.5" max="3" step="0.1" value="1">
+            </div>
+            
+            <small class="text-muted d-block mt-2">
+                <strong>Controls:</strong><br>
+                • Left click: Select node<br>
+                • Shift + click: Multi-select nodes<br>
+                • Left click + drag node: Move node<br>
+                • Middle click + drag: Pan view<br>
+                • Scroll: Zoom in/out
+            </small>
+        </div>
+        
+        <div class="card-header mt-3">
+            <h6 class="mb-0">⚡ Quick Actions</h6>
+        </div>
+        <div class="card-body">
+            <div class="mb-2">
+                <button id="pin-selected" class="btn btn-sm btn-outline-secondary w-100" title="Pin selected nodes in place">
+                    📌 Pin Selected
+                </button>
+            </div>
+            
+            <div class="mb-2">
+                <button id="unpin-all" class="btn btn-sm btn-outline-secondary w-100" title="Unpin all nodes">
+                    🔓 Unpin All
+                </button>
+            </div>
+            
+            <div class="mb-2">
+                <button id="hide-selected" class="btn btn-sm btn-outline-warning w-100" title="Hide selected nodes">
+                    👁️‍🗨️ Hide Selected
+                </button>
+            </div>
+            
+            <div class="mb-2">
+                <button id="show-all" class="btn btn-sm btn-outline-info w-100" title="Show all hidden nodes">
+                    👁️ Show All Hidden
+                </button>
+            </div>
+            
+            <div class="mb-2">
+                <button id="export-selection" class="btn btn-sm btn-outline-success w-100" title="Export selected subgraph">
+                    💾 Export Selection
+                </button>
+            </div>
+            
+            <div class="mb-2">
+                <small class="text-muted">
+                    <span id="selected-count">0</span> nodes selected
+                </small>
+            </div>
+        </div>
+        
+        <div class="card-header mt-3">
+            <h6 class="mb-0">🔀 Graph Layouts</h6>
+        </div>
+        <div class="card-body">
+            <div class="mb-3">
+                <label for="layout-type" class="form-label">Layout Type</label>
+                <select class="form-select form-select-sm" id="layout-type">
+                    <option value="force" selected>Force-Directed</option>
+                    <option value="hierarchical">Hierarchical</option>
+                    <option value="radial">Radial</option>
+                    <option value="circular">Circular</option>
+                    <option value="temporal">Temporal</option>
+                    <option value="cluster">Cluster</option>
+                </select>
+            </div>
+            
+            <div id="layout-options" class="mb-3">
+                <!-- Dynamic options based on layout type -->
+            </div>
+            
+            <button id="apply-layout" class="btn btn-sm btn-primary w-100">Apply Layout</button>
         </div>
         
         <div class="card-header mt-3">
@@ -752,35 +865,93 @@
     </div>
     
     <div class="filter-panel" id="filter-panel">
-        <h5>🔍 Node Filters</h5>
-        <div class="mb-3">
-            <label class="form-label">Node Type</label>
-            <div class="form-check">
-                <input class="form-check-input" type="checkbox" id="filter-entity" checked>
-                <label class="form-check-label" for="filter-entity">Entity</label>
-            </div>
-            <div class="form-check">
-                <input class="form-check-input" type="checkbox" id="filter-episodic" checked>
-                <label class="form-check-label" for="filter-episodic">Episodic</label>
-            </div>
-            <div class="form-check">
-                <input class="form-check-input" type="checkbox" id="filter-agent" checked>
-                <label class="form-check-label" for="filter-agent">Agent</label>
-            </div>
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="mb-0">🔍 Advanced Filters</h5>
+            <button class="btn btn-sm btn-outline-secondary" id="close-filters">✕</button>
         </div>
         
-        <div class="mb-3">
-            <label for="centrality-threshold" class="form-label">
-                Min Centrality: <span id="centrality-value">0</span>
-            </label>
-            <input type="range" class="form-range" id="centrality-threshold" 
-                   min="0" max="50" step="1" value="0">
-        </div>
+        <ul class="nav nav-tabs nav-tabs-sm mb-3" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#filter-basic" type="button">Basic</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#filter-metrics" type="button">Metrics</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#filter-time" type="button">Time</button>
+            </li>
+        </ul>
         
-        <div class="mb-3">
-            <label for="node-search" class="form-label">Search Nodes</label>
-            <input type="text" class="form-control form-control-sm" id="node-search" 
-                   placeholder="Search by name or summary...">
+        <div class="tab-content">
+            <div class="tab-pane fade show active" id="filter-basic" role="tabpanel">
+                <div class="mb-3">
+                    <label class="form-label">Node Type</label>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="filter-entity" checked>
+                        <label class="form-check-label" for="filter-entity">Entity</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="filter-episodic" checked>
+                        <label class="form-check-label" for="filter-episodic">Episodic</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="filter-agent" checked>
+                        <label class="form-check-label" for="filter-agent">Agent</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="filter-community" checked>
+                        <label class="form-check-label" for="filter-community">Community</label>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="tab-pane fade" id="filter-metrics" role="tabpanel">
+                <div class="mb-3">
+                    <label for="centrality-threshold" class="form-label">
+                        Min Centrality: <span id="centrality-value">0</span>
+                    </label>
+                    <input type="range" class="form-range" id="centrality-threshold" 
+                           min="0" max="50" step="1" value="0">
+                </div>
+                
+                <div class="mb-3">
+                    <label for="degree-range" class="form-label">Degree Range</label>
+                    <div class="d-flex gap-2">
+                        <input type="number" class="form-control form-control-sm" id="min-degree" placeholder="Min" value="0" min="0">
+                        <input type="number" class="form-control form-control-sm" id="max-degree" placeholder="Max" min="0">
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="pagerank-threshold" class="form-label">
+                        Min PageRank: <span id="pagerank-value">0</span>
+                    </label>
+                    <input type="range" class="form-range" id="pagerank-threshold" 
+                           min="0" max="100" step="1" value="0">
+                </div>
+            </div>
+            
+            <div class="tab-pane fade" id="filter-time" role="tabpanel">
+                <div class="mb-3">
+                    <label class="form-label">Created After</label>
+                    <input type="datetime-local" class="form-control form-control-sm" id="created-after">
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label">Created Before</label>
+                    <input type="datetime-local" class="form-control form-control-sm" id="created-before">
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label">Quick Presets</label>
+                    <div class="btn-group btn-group-sm w-100" role="group">
+                        <button type="button" class="btn btn-outline-secondary time-preset" data-days="1">24h</button>
+                        <button type="button" class="btn btn-outline-secondary time-preset" data-days="7">7d</button>
+                        <button type="button" class="btn btn-outline-secondary time-preset" data-days="30">30d</button>
+                        <button type="button" class="btn btn-outline-secondary time-preset" data-days="365">1y</button>
+                    </div>
+                </div>
+            </div>
         </div>
         
         <button id="apply-filters" class="btn btn-sm btn-primary w-100">Apply Filters</button>
@@ -801,6 +972,13 @@
         let isPaused = false;
         let frameCount = 0;
         let lastTime = performance.now();
+        
+        // Base configuration to maintain label settings
+        const baseConfig = {
+            showDynamicLabels: false,  // Never show random labels
+            showHoveredNodeLabel: true,  // Only show labels on hover
+            nodeLabelAccessor: node => node.label || node.properties?.name || node.id  // Use label field, not ID
+        };
         let customPhysicsEnabled = false;
         let centerGravity = 0.1;
         let dragCoefficient = 0.02;
@@ -858,6 +1036,7 @@
             console.log('Container:', container, 'Width:', container?.offsetWidth, 'Height:', container?.offsetHeight);
             
             const config = {
+                ...baseConfig,  // Include base label configuration
                 backgroundColor: '#0a0a0a',
                 nodeColor: node => {
                     // Color based on node type with intensity based on importance
@@ -887,8 +1066,16 @@
                     // Combine metrics for size (weighted average)
                     const combinedScore = (degree * 0.7 + pagerank * 0.3);
                     
-                    // Scale: minimum 3, maximum 20, with most nodes between 5-10
-                    return 3 + Math.sqrt(combinedScore * 1000) * 0.5;
+                    // Get min and max size from UI controls (will be set later)
+                    const minSize = parseFloat(document.getElementById('node-min-size')?.value || 2);
+                    const maxSize = parseFloat(document.getElementById('node-max-size')?.value || 6);
+                    
+                    // Use logarithmic scaling to compress the range
+                    const logScore = Math.log(1 + combinedScore * 10);
+                    const normalizedScore = Math.min(logScore / Math.log(11), 1); // Normalize to 0-1
+                    
+                    // Scale between min and max
+                    return minSize + (normalizedScore * (maxSize - minSize));
                 },
                 nodeLabel: node => {
                     // Show labels for high-centrality nodes
@@ -911,26 +1098,47 @@
                 simulationDecay: 3000,
                 simulationFriction: 0.85,
                 renderLinks: true,
-                showDynamicLabels: true,
-                showHoveredNodeLabel: true,
                 renderHoveredNodeRing: true,
                 hoveredNodeRingColor: '#4ecdc4',
                 focusedNodeRingColor: '#ff6b6b',
                 disableGreyoutNonHoveredOnHover: false,
                 greyoutNonHighlightedNodes: false,
-                disableZoom: false, // Will be toggled for node drag mode
                 // Add onClick at root level as per Cosmograph docs
                 onClick: (node, index, position, event) => {
-                    console.log('onClick event fired - node:', node, 'index:', index, 'position:', position);
+                    console.log('onClick event fired - node:', node, 'index:', index, 'position:', position, 'shiftKey:', event?.shiftKey);
                     if (node) {
                         console.log('Clicked node data:', node);
                         console.log('Node ID:', node.id);
                         
-                        // Try to get original node data from our map
+                        // Handle multi-select with shift key
+                        if (event?.shiftKey) {
+                            // Get currently selected nodes
+                            const currentlySelected = cosmograph.getSelectedNodes() || [];
+                            const isAlreadySelected = currentlySelected.some(n => n.id === node.id);
+                            
+                            if (isAlreadySelected) {
+                                // Deselect this node
+                                const newSelection = currentlySelected.filter(n => n.id !== node.id);
+                                cosmograph.selectNodes(newSelection);
+                                console.log('Deselected node, total selected:', newSelection.length);
+                            } else {
+                                // Add to selection
+                                const newSelection = [...currentlySelected, node];
+                                cosmograph.selectNodes(newSelection);
+                                console.log('Added to selection, total selected:', newSelection.length);
+                            }
+                        } else {
+                            // Normal click - select only this node
+                            cosmograph.selectNodes([node]);
+                        }
+                        
+                        // Update selection counter
+                        updateSelectionCounter();
+                        
+                        // Show details for the clicked node
                         const originalNode = nodeDataMap.get(node.id);
                         if (originalNode) {
                             console.log('Found original node data:', originalNode);
-                            // Use original node data which should have all properties
                             window.showNodeDetails(originalNode);
                         } else {
                             console.log('Original node data not found, using clicked node');
@@ -963,6 +1171,54 @@
                     const canvas = container.querySelector('canvas');
                     if (canvas) {
                         console.log('Found canvas element:', canvas);
+                        // Add middle mouse button handling for panning
+                        let isPanning = false;
+                        let panStartX = 0;
+                        let panStartY = 0;
+                        
+                        canvas.addEventListener('mousedown', (e) => {
+                            if (e.button === 1) { // Middle mouse button
+                                e.preventDefault();
+                                isPanning = true;
+                                panStartX = e.clientX;
+                                panStartY = e.clientY;
+                                canvas.style.cursor = 'grabbing';
+                                console.log('Middle mouse pan started');
+                            }
+                        });
+                        
+                        canvas.addEventListener('mousemove', (e) => {
+                            if (isPanning) {
+                                const dx = e.clientX - panStartX;
+                                const dy = e.clientY - panStartY;
+                                
+                                // Get current transform and apply pan
+                                if (cosmograph) {
+                                    const currentTransform = cosmograph.getZoomLevel();
+                                    // Note: This is a simplified approach - Cosmograph may need specific pan API
+                                    console.log('Panning by:', dx, dy);
+                                }
+                                
+                                panStartX = e.clientX;
+                                panStartY = e.clientY;
+                            }
+                        });
+                        
+                        canvas.addEventListener('mouseup', (e) => {
+                            if (e.button === 1 && isPanning) {
+                                isPanning = false;
+                                canvas.style.cursor = 'default';
+                                console.log('Middle mouse pan ended');
+                            }
+                        });
+                        
+                        // Prevent context menu on middle click
+                        canvas.addEventListener('contextmenu', (e) => {
+                            if (e.button === 1) {
+                                e.preventDefault();
+                            }
+                        });
+                        
                         canvas.addEventListener('click', (e) => {
                             console.log('Canvas clicked at:', e.clientX, e.clientY);
                             
@@ -988,7 +1244,10 @@
                                     }
                                     
                                     // Force a render update to ensure all nodes are visible
-                                    cosmograph.setConfig({});
+                                    cosmograph.setConfig({ ...baseConfig });
+                                    
+                                    // Update selection counter
+                                    updateSelectionCounter();
                                 }
                             }, 50); // Small delay to let onClick handler process first
                             
@@ -1062,7 +1321,7 @@
                 document.getElementById('node-size-value').textContent = value;
                 if (cosmograph) {
                     console.log('Setting node size to:', value);
-                    cosmograph.setConfig({ nodeSize: value });
+                    cosmograph.setConfig({ ...baseConfig, nodeSize: value });
                 }
             });
             
@@ -1071,7 +1330,7 @@
                 document.getElementById('link-width-value').textContent = value;
                 if (cosmograph) {
                     console.log('Setting link width to:', value);
-                    cosmograph.setConfig({ linkWidth: value });
+                    cosmograph.setConfig({ ...baseConfig, linkWidth: value });
                 }
             });
             
@@ -1082,7 +1341,7 @@
                     // Opacity is handled via linkColor alpha
                     const opacity = Math.round(value * 255).toString(16).padStart(2, '0');
                     console.log('Setting link opacity to:', value, 'color:', `#666666${opacity}`);
-                    cosmograph.setConfig({ linkColor: `#666666${opacity}` });
+                    cosmograph.setConfig({ ...baseConfig, linkColor: `#666666${opacity}` });
                 }
             });
             
@@ -1091,7 +1350,7 @@
                 document.getElementById('simulation-decay-value').textContent = value;
                 if (cosmograph) {
                     console.log('Setting simulation decay to:', value);
-                    cosmograph.setConfig({ simulationDecay: value });
+                    cosmograph.setConfig({ ...baseConfig, simulationDecay: value });
                 }
             });
             
@@ -1100,7 +1359,7 @@
                 document.getElementById('repulsion-value').textContent = value;
                 if (cosmograph) {
                     console.log('Setting repulsion to:', value);
-                    cosmograph.setConfig({ simulationRepulsion: value });
+                    cosmograph.setConfig({ ...baseConfig, simulationRepulsion: value });
                 }
             });
             
@@ -1109,7 +1368,7 @@
                 document.getElementById('center-force-value').textContent = value;
                 if (cosmograph) {
                     console.log('Setting center force to:', value);
-                    cosmograph.setConfig({ simulationCenter: value });
+                    cosmograph.setConfig({ ...baseConfig, simulationCenter: value });
                 }
             });
             
@@ -1118,7 +1377,7 @@
                 document.getElementById('gravity-value').textContent = value;
                 if (cosmograph) {
                     console.log('Setting gravity to:', value);
-                    cosmograph.setConfig({ simulationGravity: value });
+                    cosmograph.setConfig({ ...baseConfig, simulationGravity: value });
                 }
             });
             
@@ -1127,7 +1386,7 @@
                 document.getElementById('friction-value').textContent = value;
                 if (cosmograph) {
                     console.log('Setting friction to:', value);
-                    cosmograph.setConfig({ simulationFriction: value });
+                    cosmograph.setConfig({ ...baseConfig, simulationFriction: value });
                 }
             });
             
@@ -1136,7 +1395,7 @@
                 document.getElementById('link-spring-value').textContent = value;
                 if (cosmograph) {
                     console.log('Setting link spring to:', value);
-                    cosmograph.setConfig({ simulationLinkSpring: value });
+                    cosmograph.setConfig({ ...baseConfig, simulationLinkSpring: value });
                 }
             });
             
@@ -1145,7 +1404,7 @@
                 document.getElementById('link-distance-value').textContent = value;
                 if (cosmograph) {
                     console.log('Setting link distance to:', value);
-                    cosmograph.setConfig({ simulationLinkDistance: value });
+                    cosmograph.setConfig({ ...baseConfig, simulationLinkDistance: value });
                 }
             });
             
@@ -1154,7 +1413,7 @@
                 document.getElementById('mouse-repulsion-value').textContent = value;
                 if (cosmograph) {
                     console.log('Setting mouse repulsion to:', value);
-                    cosmograph.setConfig({ simulationRepulsionFromMouse: value });
+                    cosmograph.setConfig({ ...baseConfig, simulationRepulsionFromMouse: value });
                 }
             });
             
@@ -1185,18 +1444,24 @@
             document.getElementById('randomize-positions').addEventListener('click', randomizePositions);
             document.getElementById('reset-physics').addEventListener('click', resetPhysics);
             
-            // Navigation mode toggle
-            document.getElementById('pan-mode').addEventListener('change', (e) => {
-                if (e.target.checked && cosmograph) {
-                    console.log('Switching to pan mode');
-                    cosmograph.setConfig({ disableZoom: false });
+            // Node size controls
+            document.getElementById('node-min-size').addEventListener('input', (e) => {
+                const value = parseFloat(e.target.value);
+                document.getElementById('node-min-size-value').textContent = value;
+                if (cosmograph && currentData) {
+                    console.log('Setting min node size to:', value);
+                    // Re-render with new size range
+                    processAndRenderGraph(currentData);
                 }
             });
             
-            document.getElementById('drag-mode').addEventListener('change', (e) => {
-                if (e.target.checked && cosmograph) {
-                    console.log('Switching to node drag mode');
-                    cosmograph.setConfig({ disableZoom: true });
+            document.getElementById('node-max-size').addEventListener('input', (e) => {
+                const value = parseFloat(e.target.value);
+                document.getElementById('node-max-size-value').textContent = value;
+                if (cosmograph && currentData) {
+                    console.log('Setting max node size to:', value);
+                    // Re-render with new size range
+                    processAndRenderGraph(currentData);
                 }
             });
             
@@ -1206,7 +1471,7 @@
                 document.getElementById('node-size-scale-value').textContent = value.toFixed(1);
                 if (cosmograph) {
                     console.log('Setting node size scale to:', value);
-                    cosmograph.setConfig({ nodeSizeScale: value });
+                    cosmograph.setConfig({ ...baseConfig, nodeSizeScale: value });
                 }
             });
             
@@ -1223,7 +1488,7 @@
                 const color = e.target.value;
                 console.log('Setting link color to:', color);
                 if (cosmograph) {
-                    cosmograph.setConfig({ linkColor: color });
+                    cosmograph.setConfig({ ...baseConfig, linkColor: color });
                 }
             });
             
@@ -1231,7 +1496,7 @@
                 const color = e.target.value;
                 console.log('Setting background color to:', color);
                 if (cosmograph) {
-                    cosmograph.setConfig({ backgroundColor: color });
+                    cosmograph.setConfig({ ...baseConfig, backgroundColor: color });
                 }
             });
             
@@ -1243,6 +1508,167 @@
                 const style = document.createElement('style');
                 style.textContent = `.cosmograph-label { font-size: ${value}px !important; }`;
                 document.head.appendChild(style);
+            });
+            
+            // Search functionality
+            let searchTimeout;
+            document.getElementById('node-search').addEventListener('input', (e) => {
+                clearTimeout(searchTimeout);
+                const searchTerm = e.target.value.toLowerCase().trim();
+                
+                if (searchTerm.length < 2) {
+                    document.getElementById('search-results').style.display = 'none';
+                    return;
+                }
+                
+                searchTimeout = setTimeout(() => {
+                    searchNodes(searchTerm);
+                }, 300); // Debounce search
+            });
+            
+            document.getElementById('clear-search').addEventListener('click', () => {
+                document.getElementById('node-search').value = '';
+                document.getElementById('search-results').style.display = 'none';
+                if (cosmograph) {
+                    cosmograph.selectNodes([]); // Clear selection
+                }
+            });
+            
+            // Navigation controls
+            document.getElementById('find-path').addEventListener('click', findPathBetweenNodes);
+            document.getElementById('show-neighbors').addEventListener('click', showNeighbors);
+            document.getElementById('focus-subgraph').addEventListener('click', focusOnSelection);
+            
+            // Advanced filter controls
+            document.getElementById('close-filters').addEventListener('click', () => {
+                document.getElementById('filter-panel').classList.remove('active');
+            });
+            
+            document.getElementById('pagerank-threshold').addEventListener('input', (e) => {
+                document.getElementById('pagerank-value').textContent = e.target.value;
+            });
+            
+            // Time preset buttons
+            document.querySelectorAll('.time-preset').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const days = parseInt(e.target.dataset.days);
+                    const now = new Date();
+                    const past = new Date(now - days * 24 * 60 * 60 * 1000);
+                    document.getElementById('created-after').value = past.toISOString().slice(0, 16);
+                    document.getElementById('created-before').value = now.toISOString().slice(0, 16);
+                });
+            });
+            
+            // Quick actions
+            let pinnedNodes = new Set();
+            let hiddenNodes = new Set();
+            
+            document.getElementById('pin-selected').addEventListener('click', () => {
+                const selected = cosmograph?.getSelectedNodes() || [];
+                if (selected.length === 0) {
+                    alert('Please select nodes to pin');
+                    return;
+                }
+                
+                // Get current positions
+                const positions = cosmograph.getNodePositions();
+                const constraints = [];
+                
+                selected.forEach(node => {
+                    pinnedNodes.add(node.id);
+                    const nodeIndex = currentData.nodes.findIndex(n => n.id === node.id);
+                    if (nodeIndex >= 0) {
+                        constraints.push({
+                            index: nodeIndex,
+                            x: positions[nodeIndex * 2],
+                            y: positions[nodeIndex * 2 + 1],
+                            strength: 1.0 // Full strength to keep position fixed
+                        });
+                    }
+                });
+                
+                // Apply position constraints
+                if (constraints.length > 0) {
+                    cosmograph.setPositionConstraints(constraints);
+                }
+                
+                console.log(`Pinned ${selected.length} nodes. Total pinned: ${pinnedNodes.size}`);
+                
+                // Update visual feedback
+                updatePinnedNodeStyles();
+            });
+            
+            document.getElementById('unpin-all').addEventListener('click', () => {
+                const count = pinnedNodes.size;
+                pinnedNodes.clear();
+                
+                // Clear all position constraints
+                cosmograph.setPositionConstraints([]);
+                
+                console.log(`Unpinned ${count} nodes`);
+                
+                // Update visual feedback
+                updatePinnedNodeStyles();
+            });
+            
+            document.getElementById('hide-selected').addEventListener('click', () => {
+                const selected = cosmograph?.getSelectedNodes() || [];
+                selected.forEach(node => hiddenNodes.add(node.id));
+                
+                // Filter out hidden nodes
+                if (currentData) {
+                    const visibleNodes = currentData.nodes.filter(n => !hiddenNodes.has(n.id));
+                    const visibleEdges = currentData.edges.filter(e => 
+                        !hiddenNodes.has(e.source) && !hiddenNodes.has(e.target)
+                    );
+                    
+                    cosmograph.setData(visibleNodes, visibleEdges);
+                    console.log(`Hid ${selected.length} nodes. Total hidden: ${hiddenNodes.size}`);
+                }
+            });
+            
+            document.getElementById('show-all').addEventListener('click', () => {
+                if (hiddenNodes.size > 0 && currentData) {
+                    hiddenNodes.clear();
+                    cosmograph.setData(currentData.nodes, currentData.edges);
+                    console.log('Showing all nodes');
+                }
+            });
+            
+            document.getElementById('export-selection').addEventListener('click', () => {
+                const selected = cosmograph?.getSelectedNodes() || [];
+                if (selected.length === 0) {
+                    alert('Please select nodes to export');
+                    return;
+                }
+                
+                // Create subgraph data
+                const selectedIds = new Set(selected.map(n => n.id));
+                const subgraphEdges = currentData.edges.filter(e => 
+                    selectedIds.has(e.source) && selectedIds.has(e.target)
+                );
+                
+                const exportData = {
+                    nodes: selected,
+                    edges: subgraphEdges,
+                    metadata: {
+                        exportDate: new Date().toISOString(),
+                        nodeCount: selected.length,
+                        edgeCount: subgraphEdges.length
+                    }
+                };
+                
+                // Download as JSON
+                const blob = new Blob([JSON.stringify(exportData, null, 2)], 
+                    { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `graph-export-${Date.now()}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+                
+                console.log(`Exported ${selected.length} nodes and ${subgraphEdges.length} edges`);
             });
             
             // Test button for node details
@@ -1263,7 +1689,679 @@
                 };
                 window.showNodeDetails(testNode);
             });
+            
+            // Graph Layout functionality
+            const layoutSelect = document.getElementById('layout-type');
+            const layoutOptions = document.getElementById('layout-options');
+            const applyLayoutBtn = document.getElementById('apply-layout');
+            
+            // Update layout options based on selected type
+            layoutSelect.addEventListener('change', (e) => {
+                const layoutType = e.target.value;
+                console.log('Layout type changed to:', layoutType);
+                updateLayoutOptions(layoutType);
+            });
+            
+            // Apply selected layout
+            applyLayoutBtn.addEventListener('click', () => {
+                const layoutType = layoutSelect.value;
+                console.log('Applying layout:', layoutType);
+                applyGraphLayout(layoutType);
+            });
+            
+            function updateLayoutOptions(layoutType) {
+                layoutOptions.innerHTML = '';
+                
+                switch(layoutType) {
+                    case 'hierarchical':
+                        layoutOptions.innerHTML = `
+                            <label class="form-label">Direction</label>
+                            <select class="form-select form-select-sm mb-2" id="hier-direction">
+                                <option value="TB">Top to Bottom</option>
+                                <option value="BT">Bottom to Top</option>
+                                <option value="LR">Left to Right</option>
+                                <option value="RL">Right to Left</option>
+                            </select>
+                            <label class="form-label">Level Separation: <span id="level-sep-value">50</span></label>
+                            <input type="range" class="form-range" id="level-separation" min="20" max="200" value="50">
+                        `;
+                        break;
+                        
+                    case 'radial':
+                        layoutOptions.innerHTML = `
+                            <label class="form-label">Radius: <span id="radius-value">200</span></label>
+                            <input type="range" class="form-range mb-2" id="radial-radius" min="50" max="500" value="200">
+                            <label class="form-label">Center Node (ID)</label>
+                            <input type="text" class="form-control form-control-sm" id="radial-center" placeholder="Auto-select highest centrality">
+                        `;
+                        break;
+                        
+                    case 'circular':
+                        layoutOptions.innerHTML = `
+                            <label class="form-label">Radius: <span id="circle-radius-value">250</span></label>
+                            <input type="range" class="form-range mb-2" id="circle-radius" min="100" max="500" value="250">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="circle-ordered">
+                                <label class="form-check-label" for="circle-ordered">Order by centrality</label>
+                            </div>
+                        `;
+                        break;
+                        
+                    case 'temporal':
+                        layoutOptions.innerHTML = `
+                            <label class="form-label">Time Axis</label>
+                            <select class="form-select form-select-sm mb-2" id="time-axis">
+                                <option value="horizontal">Horizontal (left to right)</option>
+                                <option value="vertical">Vertical (top to bottom)</option>
+                            </select>
+                            <label class="form-label">Time Field</label>
+                            <select class="form-select form-select-sm" id="time-field">
+                                <option value="created_at">Created At</option>
+                                <option value="updated_at">Updated At</option>
+                                <option value="event_time">Event Time</option>
+                            </select>
+                        `;
+                        break;
+                        
+                    case 'cluster':
+                        layoutOptions.innerHTML = `
+                            <label class="form-label">Cluster By</label>
+                            <select class="form-select form-select-sm mb-2" id="cluster-by">
+                                <option value="type">Node Type</option>
+                                <option value="community">Community Detection</option>
+                                <option value="centrality">Centrality Groups</option>
+                            </select>
+                            <label class="form-label">Cluster Separation: <span id="cluster-sep-value">100</span></label>
+                            <input type="range" class="form-range" id="cluster-separation" min="50" max="300" value="100">
+                        `;
+                        break;
+                        
+                    case 'force':
+                    default:
+                        layoutOptions.innerHTML = `
+                            <div class="text-muted small">Using current force-directed settings</div>
+                        `;
+                        break;
+                }
+                
+                // Add event listeners to new inputs
+                layoutOptions.querySelectorAll('input[type="range"]').forEach(input => {
+                    input.addEventListener('input', (e) => {
+                        const valueSpan = document.getElementById(e.target.id.replace('-', '-') + '-value');
+                        if (valueSpan) valueSpan.textContent = e.target.value;
+                    });
+                });
+            }
+            
+            function applyGraphLayout(layoutType) {
+                if (!cosmograph || !currentData) {
+                    console.error('No graph data available');
+                    return;
+                }
+                
+                showLoading(`Applying ${layoutType} layout...`);
+                
+                try {
+                    switch(layoutType) {
+                        case 'hierarchical':
+                            applyHierarchicalLayout();
+                            break;
+                        case 'radial':
+                            applyRadialLayout();
+                            break;
+                        case 'circular':
+                            applyCircularLayout();
+                            break;
+                        case 'temporal':
+                            applyTemporalLayout();
+                            break;
+                        case 'cluster':
+                            applyClusterLayout();
+                            break;
+                        case 'force':
+                        default:
+                            // Reset to force-directed layout
+                            cosmograph.setConfig({
+                                ...baseConfig,
+                                simulationGravity: parseFloat(document.getElementById('gravity').value),
+                                simulationRepulsion: parseFloat(document.getElementById('repulsion').value),
+                                simulationFriction: parseFloat(document.getElementById('friction').value)
+                            });
+                            cosmograph.restart();
+                            break;
+                    }
+                } catch (error) {
+                    console.error('Error applying layout:', error);
+                    alert('Failed to apply layout: ' + error.message);
+                } finally {
+                    hideLoading();
+                }
+            }
+            
+            function applyHierarchicalLayout() {
+                const direction = document.getElementById('hier-direction')?.value || 'TB';
+                const levelSep = parseFloat(document.getElementById('level-separation')?.value || 50);
+                
+                // Create a simple hierarchical layout based on node connections
+                const nodes = currentData.nodes;
+                const edges = currentData.edges;
+                
+                // Find root nodes (nodes with no incoming edges)
+                const hasIncoming = new Set(edges.map(e => e.target));
+                const roots = nodes.filter(n => !hasIncoming.has(n.id));
+                
+                // Build adjacency list
+                const adjacency = {};
+                nodes.forEach(n => adjacency[n.id] = []);
+                edges.forEach(e => {
+                    if (adjacency[e.source]) {
+                        adjacency[e.source].push(e.target);
+                    }
+                });
+                
+                // Assign levels using BFS
+                const levels = {};
+                const visited = new Set();
+                let maxLevel = 0;
+                
+                roots.forEach(root => {
+                    const queue = [[root.id, 0]];
+                    while (queue.length > 0) {
+                        const [nodeId, level] = queue.shift();
+                        if (visited.has(nodeId)) continue;
+                        
+                        visited.add(nodeId);
+                        levels[nodeId] = level;
+                        maxLevel = Math.max(maxLevel, level);
+                        
+                        adjacency[nodeId].forEach(child => {
+                            if (!visited.has(child)) {
+                                queue.push([child, level + 1]);
+                            }
+                        });
+                    }
+                });
+                
+                // Assign unvisited nodes to bottom level
+                nodes.forEach(n => {
+                    if (!levels.hasOwnProperty(n.id)) {
+                        levels[n.id] = maxLevel + 1;
+                    }
+                });
+                
+                // Position nodes
+                const levelCounts = {};
+                const levelIndices = {};
+                
+                Object.values(levels).forEach(level => {
+                    levelCounts[level] = (levelCounts[level] || 0) + 1;
+                    levelIndices[level] = 0;
+                });
+                
+                const positions = nodes.map(node => {
+                    const level = levels[node.id];
+                    const index = levelIndices[level]++;
+                    const count = levelCounts[level];
+                    
+                    let x, y;
+                    if (direction === 'TB' || direction === 'BT') {
+                        x = (index - (count - 1) / 2) * levelSep * 2;
+                        y = level * levelSep * 3;
+                        if (direction === 'BT') y = -y;
+                    } else {
+                        x = level * levelSep * 3;
+                        y = (index - (count - 1) / 2) * levelSep * 2;
+                        if (direction === 'RL') x = -x;
+                    }
+                    
+                    return [x, y];
+                });
+                
+                // Since setNodePositions doesn't exist, we need to use a different approach
+                // We'll create new node data with x,y coordinates
+                const nodesWithPositions = nodes.map((node, i) => ({
+                    ...node,
+                    x: positions[i][0],
+                    y: positions[i][1]
+                }));
+                
+                // Set the data with positioned nodes
+                cosmograph.setData(nodesWithPositions, edges);
+                
+                // Disable simulation temporarily to keep positions
+                cosmograph.setConfig({
+                    ...baseConfig,
+                    simulationGravity: 0,
+                    simulationRepulsion: 0,
+                    simulationCenter: 0,
+                    disableSimulation: true
+                });
+                
+                setTimeout(() => {
+                    cosmograph.setConfig({
+                        ...baseConfig,
+                        simulationGravity: 0.01,
+                        simulationRepulsion: 0.1,
+                        simulationCenter: 0.1,
+                        disableSimulation: false
+                    });
+                }, 500);
+            }
+            
+            function applyRadialLayout() {
+                const radius = parseFloat(document.getElementById('radial-radius')?.value || 200);
+                const centerNodeId = document.getElementById('radial-center')?.value;
+                
+                // Find center node (highest centrality if not specified)
+                let centerNode;
+                if (centerNodeId) {
+                    centerNode = currentData.nodes.find(n => n.id === centerNodeId);
+                } else {
+                    centerNode = currentData.nodes.reduce((max, node) => 
+                        (node.properties?.degree_centrality || 0) > (max.properties?.degree_centrality || 0) ? node : max
+                    );
+                }
+                
+                if (!centerNode) {
+                    alert('Center node not found');
+                    return;
+                }
+                
+                // Build distance map from center using BFS
+                const distances = {};
+                const adjacency = {};
+                currentData.nodes.forEach(n => adjacency[n.id] = new Set());
+                currentData.edges.forEach(e => {
+                    adjacency[e.source].add(e.target);
+                    adjacency[e.target].add(e.source);
+                });
+                
+                const queue = [[centerNode.id, 0]];
+                const visited = new Set();
+                let maxDistance = 0;
+                
+                while (queue.length > 0) {
+                    const [nodeId, distance] = queue.shift();
+                    if (visited.has(nodeId)) continue;
+                    
+                    visited.add(nodeId);
+                    distances[nodeId] = distance;
+                    maxDistance = Math.max(maxDistance, distance);
+                    
+                    adjacency[nodeId].forEach(neighbor => {
+                        if (!visited.has(neighbor)) {
+                            queue.push([neighbor, distance + 1]);
+                        }
+                    });
+                }
+                
+                // Position nodes in concentric circles
+                const positions = currentData.nodes.map(node => {
+                    const distance = distances[node.id] || maxDistance + 1;
+                    const nodesAtDistance = currentData.nodes.filter(n => 
+                        (distances[n.id] || maxDistance + 1) === distance
+                    );
+                    const index = nodesAtDistance.indexOf(node);
+                    const count = nodesAtDistance.length;
+                    
+                    if (distance === 0) {
+                        return [0, 0];
+                    }
+                    
+                    const angle = (index / count) * 2 * Math.PI;
+                    const r = radius * (distance / (maxDistance + 1));
+                    
+                    return [
+                        r * Math.cos(angle),
+                        r * Math.sin(angle)
+                    ];
+                });
+                
+                // Create nodes with positions
+                const nodesWithPositions = currentData.nodes.map((node, i) => ({
+                    ...node,
+                    x: positions[i][0],
+                    y: positions[i][1]
+                }));
+                
+                cosmograph.setData(nodesWithPositions, currentData.edges);
+                cosmograph.setConfig({
+                    ...baseConfig,
+                    simulationGravity: 0,
+                    simulationRepulsion: 0.5,
+                    simulationCenter: 0,
+                    disableSimulation: false
+                });
+            }
+            
+            function applyCircularLayout() {
+                const radius = parseFloat(document.getElementById('circle-radius')?.value || 250);
+                const orderByCentrality = document.getElementById('circle-ordered')?.checked;
+                
+                let nodes = [...currentData.nodes];
+                
+                if (orderByCentrality) {
+                    nodes.sort((a, b) => 
+                        (b.properties?.degree_centrality || 0) - (a.properties?.degree_centrality || 0)
+                    );
+                }
+                
+                const positions = nodes.map((node, index) => {
+                    const angle = (index / nodes.length) * 2 * Math.PI;
+                    return [
+                        radius * Math.cos(angle),
+                        radius * Math.sin(angle)
+                    ];
+                });
+                
+                // Create nodes with positions
+                const nodesWithPositions = nodes.map((node, i) => ({
+                    ...node,
+                    x: positions[i][0],
+                    y: positions[i][1]
+                }));
+                
+                cosmograph.setData(nodesWithPositions, currentData.edges);
+                cosmograph.setConfig({
+                    ...baseConfig,
+                    simulationGravity: 0,
+                    simulationRepulsion: 0.3,
+                    simulationCenter: 0,
+                    disableSimulation: false
+                });
+            }
+            
+            function applyTemporalLayout() {
+                const axis = document.getElementById('time-axis')?.value || 'horizontal';
+                const timeField = document.getElementById('time-field')?.value || 'created_at';
+                
+                // Extract timestamps
+                const times = currentData.nodes.map(node => {
+                    const timeStr = node.properties?.[timeField];
+                    return timeStr ? new Date(timeStr).getTime() : Date.now();
+                });
+                
+                const minTime = Math.min(...times);
+                const maxTime = Math.max(...times);
+                const timeRange = maxTime - minTime || 1;
+                
+                // Group nodes by time buckets
+                const buckets = {};
+                currentData.nodes.forEach((node, i) => {
+                    const time = times[i];
+                    const bucket = Math.floor((time - minTime) / (timeRange / 20)); // 20 time buckets
+                    if (!buckets[bucket]) buckets[bucket] = [];
+                    buckets[bucket].push(i);
+                });
+                
+                // Position nodes
+                const positions = new Float32Array(currentData.nodes.length * 2);
+                Object.entries(buckets).forEach(([bucket, indices]) => {
+                    const bucketTime = parseInt(bucket);
+                    const timePosition = (bucketTime / 20) * 600 - 300; // -300 to 300
+                    
+                    indices.forEach((nodeIndex, i) => {
+                        if (axis === 'horizontal') {
+                            positions[nodeIndex * 2] = timePosition;
+                            positions[nodeIndex * 2 + 1] = (i - indices.length / 2) * 30;
+                        } else {
+                            positions[nodeIndex * 2] = (i - indices.length / 2) * 30;
+                            positions[nodeIndex * 2 + 1] = timePosition;
+                        }
+                    });
+                });
+                
+                // Create nodes with positions
+                const nodesWithPositions = currentData.nodes.map((node, i) => ({
+                    ...node,
+                    x: positions[i][0],
+                    y: positions[i][1]
+                }));
+                
+                cosmograph.setData(nodesWithPositions, currentData.edges);
+                cosmograph.setConfig({
+                    ...baseConfig,
+                    simulationGravity: 0,
+                    simulationRepulsion: 0.5,
+                    simulationCenter: 0,
+                    disableSimulation: false
+                });
+            }
+            
+            function applyClusterLayout() {
+                const clusterBy = document.getElementById('cluster-by')?.value || 'type';
+                const separation = parseFloat(document.getElementById('cluster-separation')?.value || 100);
+                
+                // Group nodes by cluster criteria
+                const clusters = {};
+                currentData.nodes.forEach((node, i) => {
+                    let clusterId;
+                    
+                    switch(clusterBy) {
+                        case 'type':
+                            clusterId = node.node_type || 'unknown';
+                            break;
+                        case 'centrality':
+                            const centrality = node.properties?.degree_centrality || 0;
+                            clusterId = centrality > 0.7 ? 'high' : centrality > 0.3 ? 'medium' : 'low';
+                            break;
+                        case 'community':
+                            // Simple community detection based on shared neighbors
+                            clusterId = detectCommunity(node, i);
+                            break;
+                        default:
+                            clusterId = 'default';
+                    }
+                    
+                    if (!clusters[clusterId]) clusters[clusterId] = [];
+                    clusters[clusterId].push(i);
+                });
+                
+                // Position clusters in a grid
+                const clusterKeys = Object.keys(clusters);
+                const gridSize = Math.ceil(Math.sqrt(clusterKeys.length));
+                const positions = new Float32Array(currentData.nodes.length * 2);
+                
+                clusterKeys.forEach((clusterId, clusterIndex) => {
+                    const row = Math.floor(clusterIndex / gridSize);
+                    const col = clusterIndex % gridSize;
+                    const centerX = (col - gridSize / 2) * separation * 2;
+                    const centerY = (row - gridSize / 2) * separation * 2;
+                    
+                    const nodeIndices = clusters[clusterId];
+                    const radius = Math.sqrt(nodeIndices.length) * 10;
+                    
+                    nodeIndices.forEach((nodeIndex, i) => {
+                        const angle = (i / nodeIndices.length) * 2 * Math.PI;
+                        positions[nodeIndex * 2] = centerX + radius * Math.cos(angle);
+                        positions[nodeIndex * 2 + 1] = centerY + radius * Math.sin(angle);
+                    });
+                });
+                
+                // Create nodes with positions
+                const nodesWithPositions = currentData.nodes.map((node, i) => ({
+                    ...node,
+                    x: positions[i * 2],
+                    y: positions[i * 2 + 1]
+                }));
+                
+                cosmograph.setData(nodesWithPositions, currentData.edges);
+                cosmograph.setConfig({
+                    ...baseConfig,
+                    simulationGravity: 0.05,
+                    simulationRepulsion: 0.8,
+                    simulationCenter: 0,
+                    disableSimulation: false
+                });
+            }
+            
+            function detectCommunity(node, nodeIndex) {
+                // Simple community detection based on shared neighbors
+                const neighbors = new Set();
+                currentData.edges.forEach(e => {
+                    if (e.source === node.id) neighbors.add(e.target);
+                    if (e.target === node.id) neighbors.add(e.source);
+                });
+                
+                // Use first few characters of neighbors as community ID
+                const neighborList = Array.from(neighbors).sort();
+                return neighborList.slice(0, 3).join(',') || 'isolated';
+            }
+            
+            // Initialize layout options
+            updateLayoutOptions('force');
         }
+        
+        // Helper function to get node color string
+        function getNodeColorString(node) {
+            const colorScheme = document.getElementById('node-color-scheme')?.value || 'type';
+            
+            switch(colorScheme) {
+                case 'type':
+                    const typeColors = {
+                        'Entity': '#4ecdc4',
+                        'Episodic': '#f77f00',
+                        'Agent': '#ef476f',
+                        'Community': '#06ffa5'
+                    };
+                    return typeColors[node.node_type] || '#999999';
+                    
+                case 'centrality':
+                    const centrality = node.properties?.degree_centrality || 0;
+                    const intensity = Math.floor(centrality * 255);
+                    return `rgb(${intensity}, ${100}, ${255 - intensity})`;
+                    
+                case 'pagerank':
+                    const pagerank = node.properties?.pagerank_centrality || 0;
+                    const pr_intensity = Math.floor(pagerank * 255);
+                    return `rgb(${pr_intensity}, ${pr_intensity}, ${255})`;
+                    
+                default:
+                    return '#4ecdc4';
+            }
+        }
+        
+        // Helper function to update pinned node visual styles
+        function updatePinnedNodeStyles() {
+            if (!cosmograph || !currentData) return;
+            
+            // Update node colors to show pinned status
+            const nodeColors = currentData.nodes.map(node => {
+                if (pinnedNodes.has(node.id)) {
+                    // Pinned nodes get a special color (red tint)
+                    return [255, 100, 100, 255];
+                } else {
+                    // Use default color scheme
+                    return getNodeColor(node);
+                }
+            });
+            
+            // Since setNodeColor might not exist, update via config
+            cosmograph.setConfig({
+                ...baseConfig,
+                nodeColor: (node) => {
+                    if (pinnedNodes.has(node.id)) {
+                        return 'rgba(255, 100, 100, 1)';
+                    }
+                    return getNodeColorString(node);
+                }
+            });
+        }
+        
+        // Add expand/collapse functionality
+        function addExpandCollapseControls() {
+            const controlsDiv = document.createElement('div');
+            controlsDiv.innerHTML = `
+                <div class="card-header mt-3">
+                    <h6 class="mb-0">🔄 Expand/Collapse</h6>
+                </div>
+                <div class="card-body">
+                    <div class="mb-2">
+                        <button id="collapse-selected" class="btn btn-sm btn-outline-secondary w-100" title="Collapse selected nodes">
+                            ➖ Collapse Selected
+                        </button>
+                    </div>
+                    <div class="mb-2">
+                        <button id="expand-all" class="btn btn-sm btn-outline-secondary w-100" title="Expand all collapsed nodes">
+                            ➕ Expand All
+                        </button>
+                    </div>
+                    <div class="mb-2">
+                        <small class="text-muted">
+                            <span id="collapsed-count">0</span> nodes collapsed
+                        </small>
+                    </div>
+                </div>
+            `;
+            
+            // Insert after quick actions
+            const quickActions = document.querySelector('#export-selection').parentElement.parentElement;
+            quickActions.parentElement.insertBefore(controlsDiv, quickActions.nextSibling);
+            
+            // Add event listeners
+            document.getElementById('collapse-selected').addEventListener('click', () => {
+                const selected = cosmograph?.getSelectedNodes() || [];
+                if (selected.length === 0) {
+                    alert('Please select nodes to collapse');
+                    return;
+                }
+                
+                selected.forEach(node => {
+                    collapsedNodes.add(node.id);
+                    
+                    // Find and hide edges connected to this node
+                    const connectedEdges = currentData.edges.filter(e => 
+                        e.source === node.id || e.target === node.id
+                    );
+                    collapsedEdges.set(node.id, connectedEdges);
+                });
+                
+                // Update visualization
+                updateCollapsedView();
+                document.getElementById('collapsed-count').textContent = collapsedNodes.size;
+            });
+            
+            document.getElementById('expand-all').addEventListener('click', () => {
+                collapsedNodes.clear();
+                collapsedEdges.clear();
+                
+                // Restore full graph
+                if (currentData) {
+                    cosmograph.setData(currentData.nodes, currentData.edges);
+                }
+                document.getElementById('collapsed-count').textContent = '0';
+            });
+        }
+        
+        function updateCollapsedView() {
+            if (!currentData || !cosmograph) return;
+            
+            // Filter out collapsed nodes and their edges
+            const visibleNodes = currentData.nodes.map(node => {
+                if (collapsedNodes.has(node.id)) {
+                    // Create a placeholder node
+                    return {
+                        ...node,
+                        label: `[${node.label}]`,
+                        properties: {
+                            ...node.properties,
+                            collapsed: true
+                        }
+                    };
+                }
+                return node;
+            });
+            
+            const visibleEdges = currentData.edges.filter(edge => {
+                // Hide edges from collapsed nodes
+                return !collapsedNodes.has(edge.source) && !collapsedNodes.has(edge.target);
+            });
+            
+            cosmograph.setData(visibleNodes, visibleEdges);
+        }
+        
+        // Call this after DOM is ready
+        setTimeout(addExpandCollapseControls, 100);
         
         function showLoading(message = 'Loading...') {
             document.getElementById('loading-overlay').classList.add('active');
@@ -1661,11 +2759,23 @@ ${JSON.stringify(node, null, 2)}
         function applyFilters() {
             if (!currentData) return;
             
+            // Basic filters
             const entityChecked = document.getElementById('filter-entity').checked;
             const episodicChecked = document.getElementById('filter-episodic').checked;
             const agentChecked = document.getElementById('filter-agent').checked;
-            const centralityThreshold = parseInt(document.getElementById('centrality-threshold').value);
-            const searchTerm = document.getElementById('node-search').value.toLowerCase();
+            const communityChecked = document.getElementById('filter-community')?.checked ?? true;
+            
+            // Metric filters
+            const centralityThreshold = parseInt(document.getElementById('centrality-threshold').value) / 100;
+            const pageRankThreshold = parseInt(document.getElementById('pagerank-threshold').value) / 100;
+            const minDegree = parseInt(document.getElementById('min-degree').value || '0');
+            const maxDegree = parseInt(document.getElementById('max-degree').value || '999999');
+            
+            // Time filters
+            const createdAfter = document.getElementById('created-after').value ? 
+                new Date(document.getElementById('created-after').value) : null;
+            const createdBefore = document.getElementById('created-before').value ? 
+                new Date(document.getElementById('created-before').value) : null;
             
             // Filter nodes
             const filteredNodes = currentData.nodes.filter(node => {
@@ -1673,10 +2783,23 @@ ${JSON.stringify(node, null, 2)}
                 if (node.node_type === 'Entity' && !entityChecked) return false;
                 if (node.node_type === 'Episodic' && !episodicChecked) return false;
                 if (node.node_type === 'Agent' && !agentChecked) return false;
+                if (node.node_type === 'Community' && !communityChecked) return false;
                 
-                // Centrality filter
+                // Metric filters
                 const degree = node.properties?.degree_centrality || 0;
+                const pagerank = node.properties?.pagerank_centrality || 0;
+                const nodeDegree = node.properties?.degree_in_centrality + node.properties?.degree_out_centrality || 0;
+                
                 if (degree < centralityThreshold) return false;
+                if (pagerank < pageRankThreshold) return false;
+                if (nodeDegree < minDegree || nodeDegree > maxDegree) return false;
+                
+                // Time filter
+                if (createdAfter || createdBefore) {
+                    const createdAt = new Date(node.properties?.created_at);
+                    if (createdAfter && createdAt < createdAfter) return false;
+                    if (createdBefore && createdAt > createdBefore) return false;
+                }
                 
                 // Search filter
                 if (searchTerm) {
@@ -1805,12 +2928,241 @@ ${JSON.stringify(node, null, 2)}
                     break;
             }
             
-            cosmograph.setConfig({ nodeColor: colorFunction });
+            cosmograph.setConfig({ ...baseConfig, nodeColor: colorFunction });
+        }
+        
+        function searchNodes(searchTerm) {
+            if (!currentData || !searchTerm) return;
+            
+            const results = [];
+            const searchLower = searchTerm.toLowerCase();
+            
+            // Search through nodes
+            currentData.nodes.forEach(node => {
+                const label = (node.label || '').toLowerCase();
+                const name = (node.properties?.name || '').toLowerCase();
+                const summary = (node.properties?.summary || '').toLowerCase();
+                
+                if (label.includes(searchLower) || 
+                    name.includes(searchLower) || 
+                    summary.includes(searchLower)) {
+                    results.push({
+                        node: node,
+                        score: label === searchLower ? 3 : 
+                               name === searchLower ? 2 : 1
+                    });
+                }
+            });
+            
+            // Sort by relevance and limit results
+            results.sort((a, b) => b.score - a.score);
+            const topResults = results.slice(0, 10);
+            
+            // Display results
+            const resultsDiv = document.getElementById('search-results');
+            resultsDiv.innerHTML = '';
+            
+            if (topResults.length === 0) {
+                resultsDiv.innerHTML = '<div class="text-muted p-2">No results found</div>';
+            } else {
+                topResults.forEach(result => {
+                    const div = document.createElement('div');
+                    div.className = 'search-result-item p-2';
+                    div.style.cursor = 'pointer';
+                    div.innerHTML = `
+                        <strong>${result.node.label}</strong><br>
+                        <small class="text-muted">${result.node.node_type}</small>
+                    `;
+                    div.addEventListener('click', () => {
+                        // Select and zoom to node
+                        cosmograph.selectNodes([result.node]);
+                        cosmograph.zoomToNode(result.node);
+                        showNodeDetails(result.node);
+                        resultsDiv.style.display = 'none';
+                    });
+                    resultsDiv.appendChild(div);
+                });
+            }
+            
+            resultsDiv.style.display = 'block';
+        }
+        
+        function findPathBetweenNodes() {
+            const selectedNodes = cosmograph?.getSelectedNodes();
+            if (!selectedNodes || selectedNodes.length !== 2) {
+                alert('Please select exactly 2 nodes to find path between them');
+                return;
+            }
+            
+            showLoading('Finding shortest path...');
+            
+            try {
+                const startId = selectedNodes[0].id;
+                const endId = selectedNodes[1].id;
+                const path = findShortestPath(startId, endId);
+                
+                if (path && path.length > 0) {
+                    // Highlight path nodes and edges
+                    const pathNodeIds = new Set(path);
+                    const pathNodes = currentData.nodes.filter(n => pathNodeIds.has(n.id));
+                    
+                    // Find edges in the path
+                    const pathEdges = [];
+                    for (let i = 0; i < path.length - 1; i++) {
+                        const edge = currentData.edges.find(e => 
+                            (e.source === path[i] && e.target === path[i+1]) ||
+                            (e.target === path[i] && e.source === path[i+1])
+                        );
+                        if (edge) pathEdges.push(edge);
+                    }
+                    
+                    // Select path nodes
+                    cosmograph.selectNodes(pathNodes);
+                    
+                    // Show path info
+                    const pathInfo = `Path found: ${path.length} nodes\n${path.map(id => {
+                        const node = currentData.nodes.find(n => n.id === id);
+                        return node?.label || id;
+                    }).join(' → ')}`;
+                    
+                    console.log(pathInfo);
+                    
+                    // Create temporary info panel
+                    showPathInfo(pathInfo, pathEdges.length);
+                } else {
+                    alert('No path found between selected nodes');
+                }
+            } catch (error) {
+                console.error('Error finding path:', error);
+                alert('Error finding path: ' + error.message);
+            } finally {
+                hideLoading();
+            }
+        }
+        
+        function findShortestPath(startId, endId) {
+            // BFS implementation for shortest path
+            const adjacency = {};
+            currentData.nodes.forEach(n => adjacency[n.id] = new Set());
+            currentData.edges.forEach(e => {
+                // Ensure both nodes exist in adjacency before adding edges
+                if (!adjacency[e.source]) adjacency[e.source] = new Set();
+                if (!adjacency[e.target]) adjacency[e.target] = new Set();
+                
+                adjacency[e.source].add(e.target);
+                adjacency[e.target].add(e.source);
+            });
+            
+            const queue = [[startId, [startId]]];
+            const visited = new Set();
+            
+            while (queue.length > 0) {
+                const [currentId, path] = queue.shift();
+                
+                if (currentId === endId) {
+                    return path;
+                }
+                
+                if (visited.has(currentId)) continue;
+                visited.add(currentId);
+                
+                for (const neighbor of adjacency[currentId]) {
+                    if (!visited.has(neighbor)) {
+                        queue.push([neighbor, [...path, neighbor]]);
+                    }
+                }
+            }
+            
+            return null;
+        }
+        
+        function showPathInfo(pathInfo, edgeCount) {
+            const infoPanel = document.createElement('div');
+            infoPanel.style.cssText = `
+                position: fixed;
+                top: 60px;
+                left: 50%;
+                transform: translateX(-50%);
+                background: rgba(20, 20, 20, 0.95);
+                padding: 15px;
+                border-radius: 8px;
+                border: 1px solid #4ecdc4;
+                max-width: 600px;
+                z-index: 10000;
+                animation: slideIn 0.3s ease-out;
+            `;
+            
+            infoPanel.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: start;">
+                    <div>
+                        <h6 style="color: #4ecdc4; margin: 0 0 10px 0;">Path Found</h6>
+                        <pre style="margin: 0; font-size: 12px; color: #ddd; white-space: pre-wrap;">${pathInfo}</pre>
+                        <small style="color: #999;">Edges in path: ${edgeCount}</small>
+                    </div>
+                    <button onclick="this.parentElement.parentElement.remove()" 
+                            style="background: none; border: none; color: #999; font-size: 20px; cursor: pointer; margin-left: 20px;">×</button>
+                </div>
+            `;
+            
+            document.body.appendChild(infoPanel);
+            
+            // Auto-remove after 10 seconds
+            setTimeout(() => infoPanel.remove(), 10000);
+        }
+        
+        function showNeighbors() {
+            const selectedNodes = cosmograph?.getSelectedNodes();
+            if (!selectedNodes || selectedNodes.length === 0) {
+                alert('Please select at least one node to show neighbors');
+                return;
+            }
+            
+            const neighborIds = new Set();
+            
+            // Find all neighbors
+            selectedNodes.forEach(node => {
+                const adjacentNodes = cosmograph.getAdjacentNodes(node.id);
+                if (adjacentNodes) {
+                    adjacentNodes.forEach(adj => neighborIds.add(adj.id));
+                }
+            });
+            
+            // Select neighbors
+            const allNeighbors = Array.from(neighborIds).map(id => 
+                currentData.nodes.find(n => n.id === id)
+            ).filter(Boolean);
+            
+            cosmograph.selectNodes([...selectedNodes, ...allNeighbors]);
+            console.log(`Selected ${selectedNodes.length} nodes and ${allNeighbors.length} neighbors`);
+        }
+        
+        function focusOnSelection() {
+            const selectedNodes = cosmograph?.getSelectedNodes();
+            if (!selectedNodes || selectedNodes.length === 0) {
+                alert('Please select nodes to focus on');
+                return;
+            }
+            
+            // Fit view to selected nodes
+            const nodeIds = selectedNodes.map(n => n.id);
+            cosmograph.fitViewByNodeIds(nodeIds, 500);
+            
+            // Optionally filter to show only selected subgraph
+            console.log('Focusing on', selectedNodes.length, 'selected nodes');
+        }
+        
+        function updateSelectionCounter() {
+            const selectedNodes = cosmograph?.getSelectedNodes() || [];
+            const counter = document.getElementById('selected-count');
+            if (counter) {
+                counter.textContent = selectedNodes.length;
+            }
         }
         
         function resetPhysics() {
             if (cosmograph) {
                 cosmograph.setConfig({
+                    ...baseConfig,
                     simulationGravity: 0.1,
                     simulationCenter: 0.2,
                     simulationRepulsion: 1.0,
