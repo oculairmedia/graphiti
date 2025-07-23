@@ -400,19 +400,20 @@
         
         /* Node details panel */
         .node-details-panel {
-            position: absolute;
+            position: fixed;  /* Changed from absolute to fixed */
             top: 20px;
             right: 20px;
-            background-color: rgba(20, 20, 20, 0.95);
+            background-color: rgba(20, 20, 20, 0.98);  /* Slightly more opaque */
             padding: 20px;
             border-radius: 8px;
             max-width: 400px;
             max-height: 80vh;
             overflow-y: auto;
-            z-index: 1001;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            z-index: 10000;  /* Much higher z-index */
+            box-shadow: 0 4px 20px rgba(0,0,0,0.8);
             display: none;
             animation: slideIn 0.3s ease-out;
+            border: 1px solid #4ecdc4;  /* Add border for visibility */
         }
         
         @keyframes slideIn {
@@ -660,6 +661,13 @@
             </div>
             <div class="mb-2">
                 <button id="reset-physics" class="btn btn-sm btn-danger w-100">Reset Physics</button>
+            </div>
+        </div>
+        
+        <div class="stats-card">
+            <h5>🐛 Debug Tools</h5>
+            <div class="mb-2">
+                <button id="test-node-details" class="btn btn-sm btn-info w-100">Test Node Details Panel</button>
             </div>
         </div>
         
@@ -1023,6 +1031,25 @@
             document.getElementById('apply-explosion').addEventListener('click', applyExplosion);
             document.getElementById('randomize-positions').addEventListener('click', randomizePositions);
             document.getElementById('reset-physics').addEventListener('click', resetPhysics);
+            
+            // Test button for node details
+            document.getElementById('test-node-details').addEventListener('click', () => {
+                console.log('Testing node details panel...');
+                const testNode = {
+                    id: 'test-node-123',
+                    label: 'Test Node',
+                    node_type: 'Entity',
+                    properties: {
+                        name: 'Test Entity Node',
+                        summary: 'This is a test node to verify the details panel is working correctly.',
+                        degree_centrality: 0.75,
+                        pagerank_centrality: 0.5,
+                        created_at: new Date().toISOString(),
+                        source: 'Test Source'
+                    }
+                };
+                window.showNodeDetails(testNode);
+            });
         }
         
         function showLoading(message = 'Loading...') {
@@ -1185,18 +1212,26 @@
         
         window.showNodeDetails = function(node) {
             console.log('showNodeDetails called with node:', node);
+            console.log('Node keys:', Object.keys(node));
+            console.log('Node type:', node.node_type);
+            console.log('Node properties:', node.properties);
             
             // Create or update node details panel
             let detailsPanel = document.getElementById('node-details');
             if (!detailsPanel) {
+                console.log('Creating new node details panel');
                 detailsPanel = document.createElement('div');
                 detailsPanel.id = 'node-details';
                 detailsPanel.className = 'node-details-panel';
                 document.body.appendChild(detailsPanel);
+                console.log('Panel created and appended to body');
+            } else {
+                console.log('Using existing node details panel');
             }
             
             // Extract properties safely
             const props = node.properties || {};
+            console.log('Extracted properties:', props);
             
             // Format centrality scores
             let centralityHtml = '';
@@ -1257,31 +1292,56 @@ ${JSON.stringify(content, null, 2)}
                 return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
             };
             
+            // Build HTML with fallbacks
+            const nodeName = node.label || props.name || node.name || 'Unnamed Node';
+            const nodeType = node.node_type || node.type || 'Unknown';
+            const nodeId = node.id || 'no-id';
+            
             detailsPanel.innerHTML = `
                 <div class="node-details-header">
                     <h5>Node Details</h5>
-                    <button class="btn-close" onclick="document.getElementById('node-details').style.display='none'">×</button>
+                    <button class="btn-close" onclick="window.closeNodeDetails()">×</button>
                 </div>
                 <div class="node-details-content">
-                    <div><strong>Name:</strong> ${node.label || props.name || 'N/A'}</div>
-                    <div><strong>Type:</strong> <span class="badge bg-${getNodeTypeBadgeColor(node.node_type)}">${node.node_type}</span></div>
-                    <div><strong>ID:</strong> <small class="text-muted">${node.id}</small></div>
+                    <div><strong>Name:</strong> ${nodeName}</div>
+                    <div><strong>Type:</strong> <span class="badge bg-${getNodeTypeBadgeColor(nodeType)}">${nodeType}</span></div>
+                    <div><strong>ID:</strong> <small class="text-muted">${nodeId}</small></div>
                     ${props.created_at ? `<div><strong>Created:</strong> ${formatDate(props.created_at)}</div>` : ''}
                     ${props.valid_at ? `<div><strong>Valid At:</strong> ${formatDate(props.valid_at)}</div>` : ''}
                     ${props.source ? `<div><strong>Source:</strong> ${props.source}</div>` : ''}
                     ${summaryHtml}
                     ${centralityHtml}
                     ${jsonContentHtml}
+                    
+                    <!-- Debug info -->
+                    <div class="mt-3 text-muted small">
+                        <details>
+                            <summary>Debug Info</summary>
+                            <pre style="font-size: 10px; max-height: 200px; overflow-y: auto;">
+${JSON.stringify(node, null, 2)}
+                            </pre>
+                        </details>
+                    </div>
                 </div>
             `;
             
+            // Make the panel visible
             detailsPanel.style.display = 'block';
+            console.log('Node details panel should now be visible');
             
             // Add toggle function for JSON content
             window.toggleJsonContent = function() {
                 const jsonEl = document.getElementById('json-content');
                 if (jsonEl) {
                     jsonEl.style.display = jsonEl.style.display === 'none' ? 'block' : 'none';
+                }
+            };
+            
+            // Add close handler
+            window.closeNodeDetails = function() {
+                const panel = document.getElementById('node-details');
+                if (panel) {
+                    panel.style.display = 'none';
                 }
             };
         }
