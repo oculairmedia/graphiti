@@ -621,19 +621,15 @@
             </div>
             
             <div class="mb-2">
+                <label for="center-force" class="form-label">Center Force: <span id="center-force-value">0.1</span></label>
+                <input type="range" class="form-range" id="center-force" min="0" max="0.5" step="0.05" value="0.1">
+            </div>
+            
+            <div class="mb-2">
                 <label for="friction" class="form-label">Friction/Drag: <span id="friction-value">0.85</span></label>
                 <input type="range" class="form-range" id="friction" min="0.5" max="0.99" step="0.01" value="0.85">
             </div>
             
-            <div class="mb-2">
-                <label for="spiral-force" class="form-label">Spiral Force: <span id="spiral-force-value">0.0</span></label>
-                <input type="range" class="form-range" id="spiral-force" min="0" max="0.5" step="0.01" value="0.0">
-            </div>
-            
-            <div class="mb-2">
-                <label for="tangential-drag" class="form-label">Tangential Drag: <span id="tangential-drag-value">0.0</span></label>
-                <input type="range" class="form-range" id="tangential-drag" min="0" max="0.1" step="0.002" value="0.0">
-            </div>
             
             <div class="mb-2">
                 <label for="link-spring" class="form-label">Link Spring: <span id="link-spring-value">0.5</span></label>
@@ -837,6 +833,7 @@
                 linkArrows: true,
                 linkArrowsSizeScale: 0.5,
                 simulationGravity: 0.0,
+                simulationCenter: 0.1,  // Enable center force to prevent drift
                 simulationRepulsion: 1.0,
                 simulationLinkDistance: 20,
                 simulationLinkSpring: 0.5,
@@ -849,14 +846,18 @@
                 hoveredNodeRingColor: '#4ecdc4',
                 focusedNodeRingColor: '#ff6b6b',
                 events: {
-                    onClick: (node) => {
+                    onClick: (node, index, position, event) => {
+                        console.log('onClick event fired - node:', node, 'index:', index, 'position:', position);
                         if (node) {
-                            console.log('Clicked node:', node);
-                            showNodeDetails(node);
+                            console.log('Node data:', node);
+                            console.log('Node properties:', node.properties);
+                            window.showNodeDetails(node);  // Use window.showNodeDetails to ensure it's accessible
+                        } else {
+                            console.log('Clicked on empty space');
                         }
                     },
                     onZoom: (event) => {
-                        console.log('Zoom event:', event);
+                        // console.log('Zoom event:', event);  // Reduce console noise
                     },
                     onNodeMouseOver: (node) => {
                         if (node && node.properties?.summary) {
@@ -939,6 +940,60 @@
                 if (cosmograph) {
                     console.log('Setting repulsion to:', value);
                     cosmograph.setConfig({ simulationRepulsion: value });
+                }
+            });
+            
+            document.getElementById('center-force').addEventListener('input', (e) => {
+                const value = parseFloat(e.target.value);
+                document.getElementById('center-force-value').textContent = value;
+                if (cosmograph) {
+                    console.log('Setting center force to:', value);
+                    cosmograph.setConfig({ simulationCenter: value });
+                }
+            });
+            
+            document.getElementById('gravity').addEventListener('input', (e) => {
+                const value = parseFloat(e.target.value);
+                document.getElementById('gravity-value').textContent = value;
+                if (cosmograph) {
+                    console.log('Setting gravity to:', value);
+                    cosmograph.setConfig({ simulationGravity: value });
+                }
+            });
+            
+            document.getElementById('friction').addEventListener('input', (e) => {
+                const value = parseFloat(e.target.value);
+                document.getElementById('friction-value').textContent = value;
+                if (cosmograph) {
+                    console.log('Setting friction to:', value);
+                    cosmograph.setConfig({ simulationFriction: value });
+                }
+            });
+            
+            document.getElementById('link-spring').addEventListener('input', (e) => {
+                const value = parseFloat(e.target.value);
+                document.getElementById('link-spring-value').textContent = value;
+                if (cosmograph) {
+                    console.log('Setting link spring to:', value);
+                    cosmograph.setConfig({ simulationLinkSpring: value });
+                }
+            });
+            
+            document.getElementById('link-distance').addEventListener('input', (e) => {
+                const value = parseFloat(e.target.value);
+                document.getElementById('link-distance-value').textContent = value;
+                if (cosmograph) {
+                    console.log('Setting link distance to:', value);
+                    cosmograph.setConfig({ simulationLinkDistance: value });
+                }
+            });
+            
+            document.getElementById('mouse-repulsion').addEventListener('input', (e) => {
+                const value = parseFloat(e.target.value);
+                document.getElementById('mouse-repulsion-value').textContent = value;
+                if (cosmograph) {
+                    console.log('Setting mouse repulsion to:', value);
+                    cosmograph.setConfig({ simulationRepulsionFromMouse: value });
                 }
             });
             
@@ -1128,8 +1183,8 @@
             }
         }
         
-        function showNodeDetails(node) {
-            console.log('Node details:', node);
+        window.showNodeDetails = function(node) {
+            console.log('showNodeDetails called with node:', node);
             
             // Create or update node details panel
             let detailsPanel = document.getElementById('node-details');
@@ -1380,6 +1435,7 @@ ${JSON.stringify(content, null, 2)}
             if (cosmograph) {
                 cosmograph.setConfig({
                     simulationGravity: 0.0,
+                    simulationCenter: 0.1,
                     simulationRepulsion: 1.0,
                     simulationLinkDistance: 20,
                     simulationLinkSpring: 0.5,
@@ -1390,6 +1446,8 @@ ${JSON.stringify(content, null, 2)}
                 // Update UI sliders
                 document.getElementById('gravity').value = 0.0;
                 document.getElementById('gravity-value').textContent = '0.0';
+                document.getElementById('center-force').value = 0.1;
+                document.getElementById('center-force-value').textContent = '0.1';
                 document.getElementById('repulsion').value = 1.0;
                 document.getElementById('repulsion-value').textContent = '1.0';
                 document.getElementById('friction').value = 0.85;
