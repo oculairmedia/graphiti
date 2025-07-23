@@ -14,6 +14,7 @@ Key features:
 - Integration with Neo4j and FalkorDB as graph storage backends
 - Advanced graph visualization with WebGL-based Cosmograph library
 - Rust-based high-performance visualization server
+- React frontend with GPU-accelerated rendering via Cosmograph
 
 ## Development Commands
 
@@ -63,6 +64,39 @@ uv sync
 docker-compose up
 ```
 
+### Frontend Development (run from frontend/ directory)
+
+```bash
+cd frontend/
+# Install dependencies
+npm install
+
+# Run development server (port 8080)
+npm run dev
+
+# Build for production
+npm run build
+
+# Run linter
+npm run lint
+```
+
+### Full Stack Development
+
+```bash
+# Terminal 1: Run Rust visualization server
+cd graph-visualizer-rust/
+cargo run --release
+
+# Terminal 2: Run React frontend
+cd frontend/
+npm run dev
+
+# Terminal 3 (Optional): Run Python server for data ingestion
+cd server/
+uvicorn graph_service.main:app --reload
+```
+
 ## Code Architecture
 
 ### Core Library (`graphiti_core/`)
@@ -93,6 +127,14 @@ docker-compose up
 - **WebGL Frontend**: `static/cosmograph.html` - Interactive graph visualization using Cosmograph
 - **FalkorDB Integration**: Direct connection to FalkorDB for graph data
 - **Features**: Force-directed layouts, custom layout algorithms, interactive node management
+
+### React Frontend (`frontend/`)
+
+- **Modern UI**: React + TypeScript + Vite + shadcn-ui
+- **Cosmograph Integration**: GPU-accelerated graph rendering
+- **Direct Rust Connection**: Bypasses Python backend for visualization performance
+- **API Client**: TypeScript client for Rust server endpoints
+- **Real-time Updates**: WebSocket support for live graph changes
 
 ## Testing
 
@@ -154,9 +196,10 @@ When working with the MCP server, follow the patterns established in `mcp_server
 
 This repository is tracked in Huly under project **GRAPH** (Graphiti Knowledge Graph Platform).
 
-### Graph Visualization Component
+### Components
 
-Component: **Graph Visualization** - WebGL-based interactive graph visualization system using Cosmograph library, Rust server, and FalkorDB backend.
+1. **Graph Visualization** - WebGL-based interactive graph visualization system using Cosmograph library, Rust server, and FalkorDB backend.
+2. **Frontend Bridge** - React frontend integration with Rust graph server - connects graph-sight UI to existing Rust visualization endpoints.
 
 ### Recent Issues (Graph Visualization Module)
 
@@ -190,3 +233,32 @@ Component: **Graph Visualization** - WebGL-based interactive graph visualization
 - **Tools**: Path finding, neighbor exploration, subgraph focus
 - **Management**: Pin nodes, hide/show, collapse/expand, export
 - **Physics**: Customizable forces, gravity, repulsion, friction
+### Frontend Integration (React-Rust Bridge)
+
+#### Milestone: React-Rust Frontend Integration
+- **Status**: In Progress
+- **Target Date**: Feb 3, 2025
+
+#### Issues Created:
+1. **GRAPH-43**: Move graph-sight into graphiti repository (Done)
+2. **GRAPH-44**: Connect data flow from Rust to React (In Progress)
+3. **GRAPH-45**: Set up API proxy and TypeScript client (Done)
+4. **GRAPH-46**: Integrate Cosmograph React library (Done)
+5. **GRAPH-47**: Add CORS support to Rust server (Done)
+6. **GRAPH-48**: Implement search functionality (Backlog)
+7. **GRAPH-49**: Add node details endpoints (Backlog)
+8. **GRAPH-50**: Implement real-time updates via WebSocket (Backlog)
+9. **GRAPH-51**: Add layout algorithm support (Backlog)
+10. **GRAPH-52**: Optimize for large graphs (Backlog)
+
+### Integration Architecture
+
+```
+React Frontend (port 8080)
+    ↓ API calls via proxy
+Rust Server (port 3000) ← Direct connection to FalkorDB
+    ↑
+Python Server (port 8000) - For data ingestion only
+```
+
+The frontend connects directly to the Rust server for visualization, bypassing the Python backend for optimal performance while maintaining compatibility with Graphiti's data ingestion capabilities.
