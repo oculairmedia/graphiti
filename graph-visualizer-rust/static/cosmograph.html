@@ -664,6 +664,66 @@
             </div>
         </div>
         
+        <div class="card-header mt-3">
+            <h6 class="mb-0">Navigation & Interaction</h6>
+        </div>
+        <div class="card-body">
+            <div class="mb-3">
+                <label class="form-label">Interaction Mode</label>
+                <div class="btn-group w-100" role="group">
+                    <input type="radio" class="btn-check" name="nav-mode" id="pan-mode" autocomplete="off" checked>
+                    <label class="btn btn-sm btn-outline-primary" for="pan-mode">
+                        <i class="bi bi-arrows-move"></i> Pan View
+                    </label>
+                    
+                    <input type="radio" class="btn-check" name="nav-mode" id="drag-mode" autocomplete="off">
+                    <label class="btn btn-sm btn-outline-primary" for="drag-mode">
+                        <i class="bi bi-hand-index"></i> Drag Nodes
+                    </label>
+                </div>
+                <small class="text-muted d-block mt-1">
+                    Pan: Click & drag canvas to navigate<br>
+                    Drag: Click & drag nodes to reposition
+                </small>
+            </div>
+            
+            <div class="mb-2">
+                <label for="node-size-scale" class="form-label">Node Size Scale: <span id="node-size-scale-value">1.0</span></label>
+                <input type="range" class="form-range" id="node-size-scale" min="0.5" max="5" step="0.1" value="1">
+            </div>
+        </div>
+        
+        <div class="card-header mt-3">
+            <h6 class="mb-0">Styling Options</h6>
+        </div>
+        <div class="card-body">
+            <div class="mb-3">
+                <label for="node-color-scheme" class="form-label">Node Color Scheme</label>
+                <select class="form-select form-select-sm" id="node-color-scheme">
+                    <option value="type" selected>By Type</option>
+                    <option value="centrality">By Centrality</option>
+                    <option value="degree">By Degree</option>
+                    <option value="pagerank">By PageRank</option>
+                    <option value="custom">Custom</option>
+                </select>
+            </div>
+            
+            <div class="mb-3">
+                <label for="link-color" class="form-label">Link Color</label>
+                <input type="color" class="form-control form-control-sm" id="link-color" value="#666666">
+            </div>
+            
+            <div class="mb-3">
+                <label for="background-color" class="form-label">Background Color</label>
+                <input type="color" class="form-control form-control-sm" id="background-color" value="#0a0a0a">
+            </div>
+            
+            <div class="mb-2">
+                <label for="label-size" class="form-label">Label Size: <span id="label-size-value">12</span>px</label>
+                <input type="range" class="form-range" id="label-size" min="8" max="24" step="1" value="12">
+            </div>
+        </div>
+        
         <div class="stats-card">
             <h5>🐛 Debug Tools</h5>
             <div class="mb-2">
@@ -858,6 +918,7 @@
                 focusedNodeRingColor: '#ff6b6b',
                 disableGreyoutNonHoveredOnHover: false,
                 greyoutNonHighlightedNodes: false,
+                disableZoom: false, // Will be toggled for node drag mode
                 // Add onClick at root level as per Cosmograph docs
                 onClick: (node, index, position, event) => {
                     console.log('onClick event fired - node:', node, 'index:', index, 'position:', position);
@@ -1124,6 +1185,66 @@
             document.getElementById('randomize-positions').addEventListener('click', randomizePositions);
             document.getElementById('reset-physics').addEventListener('click', resetPhysics);
             
+            // Navigation mode toggle
+            document.getElementById('pan-mode').addEventListener('change', (e) => {
+                if (e.target.checked && cosmograph) {
+                    console.log('Switching to pan mode');
+                    cosmograph.setConfig({ disableZoom: false });
+                }
+            });
+            
+            document.getElementById('drag-mode').addEventListener('change', (e) => {
+                if (e.target.checked && cosmograph) {
+                    console.log('Switching to node drag mode');
+                    cosmograph.setConfig({ disableZoom: true });
+                }
+            });
+            
+            // Node size scale slider
+            document.getElementById('node-size-scale').addEventListener('input', (e) => {
+                const value = parseFloat(e.target.value);
+                document.getElementById('node-size-scale-value').textContent = value.toFixed(1);
+                if (cosmograph) {
+                    console.log('Setting node size scale to:', value);
+                    cosmograph.setConfig({ nodeSizeScale: value });
+                }
+            });
+            
+            // Styling options
+            document.getElementById('node-color-scheme').addEventListener('change', (e) => {
+                const scheme = e.target.value;
+                console.log('Changing node color scheme to:', scheme);
+                if (cosmograph && currentData) {
+                    updateNodeColors(scheme);
+                }
+            });
+            
+            document.getElementById('link-color').addEventListener('input', (e) => {
+                const color = e.target.value;
+                console.log('Setting link color to:', color);
+                if (cosmograph) {
+                    cosmograph.setConfig({ linkColor: color });
+                }
+            });
+            
+            document.getElementById('background-color').addEventListener('input', (e) => {
+                const color = e.target.value;
+                console.log('Setting background color to:', color);
+                if (cosmograph) {
+                    cosmograph.setConfig({ backgroundColor: color });
+                }
+            });
+            
+            document.getElementById('label-size').addEventListener('input', (e) => {
+                const value = parseInt(e.target.value);
+                document.getElementById('label-size-value').textContent = value;
+                console.log('Setting label size to:', value);
+                // Note: Cosmograph doesn't directly support label size, but we can update CSS
+                const style = document.createElement('style');
+                style.textContent = `.cosmograph-label { font-size: ${value}px !important; }`;
+                document.head.appendChild(style);
+            });
+            
             // Test button for node details
             document.getElementById('test-node-details').addEventListener('click', () => {
                 console.log('Testing node details panel...');
@@ -1166,10 +1287,17 @@
         }
         
         window.visualize = async function() {
-            console.log('visualize() called');
+            console.log('=== VISUALIZE BUTTON CLICKED ===');
+            console.log('visualize() called at', new Date().toISOString());
             const queryType = document.getElementById('query-type').value;
             const limit = document.getElementById('node-limit').value;
             console.log('Query type:', queryType, 'Limit:', limit);
+            
+            // Disable button during loading
+            const visualizeBtn = document.getElementById('visualize-btn');
+            const originalText = visualizeBtn.textContent;
+            visualizeBtn.disabled = true;
+            visualizeBtn.textContent = 'Loading...';
             
             showLoading('Fetching graph data from FalkorDB...');
             
@@ -1201,13 +1329,27 @@
                 alert('Error visualizing graph');
             } finally {
                 hideLoading();
+                // Re-enable button
+                visualizeBtn.disabled = false;
+                visualizeBtn.textContent = originalText;
+                console.log('=== VISUALIZE COMPLETE ===');
             }
         }
         
         window.loadEntireGraph = async function() {
+            console.log('=== LOAD ENTIRE GRAPH BUTTON CLICKED ===');
+            console.log('loadEntireGraph() called at', new Date().toISOString());
+            
             if (!confirm('⚡ Loading the entire graph will utilize GPU acceleration. Continue?')) {
+                console.log('User cancelled entire graph load');
                 return;
             }
+            
+            // Disable button during loading
+            const loadBtn = document.getElementById('load-entire-graph-btn');
+            const originalText = loadBtn.textContent;
+            loadBtn.disabled = true;
+            loadBtn.textContent = 'Loading...';
             
             showLoading('Fetching entire graph from FalkorDB...');
             
@@ -1240,6 +1382,10 @@
                 alert('Error loading entire graph');
             } finally {
                 hideLoading();
+                // Re-enable button
+                loadBtn.disabled = false;
+                loadBtn.textContent = originalText;
+                console.log('=== LOAD ENTIRE GRAPH COMPLETE ===');
             }
         }
         
@@ -1605,6 +1751,61 @@ ${JSON.stringify(node, null, 2)}
                 // Restart simulation to randomize positions
                 cosmograph.restart();
             }
+        }
+        
+        function updateNodeColors(scheme) {
+            if (!cosmograph || !currentData) return;
+            
+            console.log('Updating node colors with scheme:', scheme);
+            
+            let colorFunction;
+            
+            switch(scheme) {
+                case 'centrality':
+                    colorFunction = (node) => {
+                        const centrality = node.properties?.degree_centrality || 0;
+                        const hue = 240 - (centrality * 240); // Blue to red
+                        return `hsl(${hue}, 70%, 50%)`;
+                    };
+                    break;
+                    
+                case 'degree':
+                    colorFunction = (node) => {
+                        const degree = node.degree || 0;
+                        const maxDegree = Math.max(...currentData.nodes.map(n => n.degree || 0));
+                        const intensity = degree / maxDegree;
+                        return `hsl(${120 - intensity * 120}, 70%, 50%)`; // Green to red
+                    };
+                    break;
+                    
+                case 'pagerank':
+                    colorFunction = (node) => {
+                        const pagerank = node.properties?.pagerank_centrality || 0;
+                        const hue = 60 + (pagerank * 300); // Yellow to purple
+                        return `hsl(${hue}, 70%, 50%)`;
+                    };
+                    break;
+                    
+                case 'custom':
+                    colorFunction = () => '#4ecdc4'; // Default teal
+                    break;
+                    
+                case 'type':
+                default:
+                    // Original color by type function
+                    colorFunction = (node) => {
+                        const typeColors = {
+                            'Entity': '#ff6b6b',
+                            'Episodic': '#4ecdc4',
+                            'Community': '#45b7d1',
+                            'default': '#b3b3b3'
+                        };
+                        return typeColors[node.node_type] || typeColors.default;
+                    };
+                    break;
+            }
+            
+            cosmograph.setConfig({ nodeColor: colorFunction });
         }
         
         function resetPhysics() {
