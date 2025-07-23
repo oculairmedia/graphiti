@@ -735,6 +735,7 @@
         
         let cosmograph = null;
         let currentData = null;
+        let nodeDataMap = new Map(); // Store original node data by ID
         let isPaused = false;
         let frameCount = 0;
         let lastTime = performance.now();
@@ -857,9 +858,19 @@
                     onClick: (node, index, position, event) => {
                         console.log('onClick event fired - node:', node, 'index:', index, 'position:', position);
                         if (node) {
-                            console.log('Node data:', node);
-                            console.log('Node properties:', node.properties);
-                            window.showNodeDetails(node);  // Use window.showNodeDetails to ensure it's accessible
+                            console.log('Clicked node data:', node);
+                            console.log('Node ID:', node.id);
+                            
+                            // Try to get original node data from our map
+                            const originalNode = nodeDataMap.get(node.id);
+                            if (originalNode) {
+                                console.log('Found original node data:', originalNode);
+                                // Use original node data which should have all properties
+                                window.showNodeDetails(originalNode);
+                            } else {
+                                console.log('Original node data not found, using clicked node');
+                                window.showNodeDetails(node);
+                            }
                         } else {
                             console.log('Clicked on empty space');
                         }
@@ -1155,11 +1166,21 @@
             console.log('processAndRenderGraph called with data:', data);
             currentData = data;
             
+            // Clear and rebuild node data map
+            nodeDataMap.clear();
+            
             // Transform nodes for Cosmograph format
-            const nodes = data.nodes.map((node) => ({
-                id: node.id,
-                ...node // Include all properties
-            }));
+            const nodes = data.nodes.map((node) => {
+                // Store original node data in our map
+                nodeDataMap.set(node.id, node);
+                
+                return {
+                    id: node.id,
+                    ...node // Include all properties
+                };
+            });
+            
+            console.log('Node data map created with', nodeDataMap.size, 'nodes');
             
             // Transform edges to use source/target instead of from/to
             const links = data.edges.map(edge => ({
@@ -1229,21 +1250,28 @@
                 console.log('Using existing node details panel');
             }
             
-            // Extract properties safely
-            const props = node.properties || {};
-            console.log('Extracted properties:', props);
+            // Properties might be at root level or nested under 'properties'
+            // Check if properties are nested or at root level
+            const hasNestedProperties = node.properties && typeof node.properties === 'object';
+            const props = hasNestedProperties ? node.properties : node;
+            console.log('Has nested properties:', hasNestedProperties);
+            console.log('Using props:', props);
             
-            // Format centrality scores
+            // Format centrality scores - check both nested and root level
             let centralityHtml = '';
             const centralityMetrics = ['degree_centrality', 'pagerank_centrality', 'betweenness_centrality', 'importance_centrality'];
-            const hasCentrality = centralityMetrics.some(metric => props[metric] !== undefined);
+            const hasCentrality = centralityMetrics.some(metric => 
+                props[metric] !== undefined || node[metric] !== undefined
+            );
             
             if (hasCentrality) {
                 centralityHtml = '<div class="centrality-section mt-3"><h6>📊 Centrality Metrics</h6>';
                 centralityMetrics.forEach(metric => {
-                    if (props[metric] !== undefined) {
-                        const value = parseFloat(props[metric]);
-                        const percentage = Math.min(value * 100, 100);
+                    // Check both locations for the metric
+                    const value = props[metric] !== undefined ? props[metric] : node[metric];
+                    if (value !== undefined) {
+                        const numValue = parseFloat(value);
+                        const percentage = Math.min(numValue * 100, 100);
                         const label = metric.replace('_centrality', '').replace('_', ' ');
                         centralityHtml += `
                             <div class="mb-2">
@@ -1251,7 +1279,7 @@
                                 <div class="progress" style="height: 10px;">
                                     <div class="progress-bar bg-info" style="width: ${percentage}%"></div>
                                 </div>
-                                <small class="text-muted">${value.toFixed(4)}</small>
+                                <small class="text-muted">${numValue.toFixed(4)}</small>
                             </div>
                         `;
                     }
@@ -1259,24 +1287,26 @@
                 centralityHtml += '</div>';
             }
             
-            // Format summary if available
-            const summaryHtml = props.summary ? `
+            // Format summary if available - check both locations
+            const summary = props.summary || node.summary;
+            const summaryHtml = summary ? `
                 <div class="summary-section mt-3">
                     <h6>📝 Summary</h6>
-                    <div class="text-muted small">${props.summary}</div>
+                    <div class="text-muted small">${summary}</div>
                 </div>
             ` : '';
             
             // Format JSON content for episodic nodes
             let jsonContentHtml = '';
-            if (node.node_type === 'Episodic' && props.content) {
+            const content = props.content || node.content;
+            if (node.node_type === 'Episodic' && content) {
                 try {
-                    const content = typeof props.content === 'string' ? JSON.parse(props.content) : props.content;
+                    const parsedContent = typeof content === 'string' ? JSON.parse(content) : content;
                     jsonContentHtml = `
                         <div class="json-section mt-3">
                             <h6>📄 Content <button class="btn btn-sm btn-link" onclick="toggleJsonContent()">Toggle</button></h6>
                             <pre id="json-content" style="display: none; max-height: 300px; overflow-y: auto; font-size: 11px; background: rgba(40,40,40,0.5); padding: 10px; border-radius: 4px;">
-${JSON.stringify(content, null, 2)}
+${JSON.stringify(parsedContent, null, 2)}
                             </pre>
                         </div>
                     `;
@@ -1292,10 +1322,15 @@ ${JSON.stringify(content, null, 2)}
                 return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
             };
             
-            // Build HTML with fallbacks
-            const nodeName = node.label || props.name || node.name || 'Unnamed Node';
-            const nodeType = node.node_type || node.type || 'Unknown';
-            const nodeId = node.id || 'no-id';
+            // Build HTML with fallbacks - check all possible locations
+            const nodeName = node.label || props.name || node.name || props.label || 'Unnamed Node';
+            const nodeType = node.node_type || node.type || props.node_type || props.type || 'Unknown';
+            const nodeId = node.id || props.id || 'no-id';
+            
+            // Check both locations for timestamps
+            const created_at = props.created_at || node.created_at;
+            const valid_at = props.valid_at || node.valid_at;
+            const source = props.source || node.source;
             
             detailsPanel.innerHTML = `
                 <div class="node-details-header">
@@ -1306,9 +1341,9 @@ ${JSON.stringify(content, null, 2)}
                     <div><strong>Name:</strong> ${nodeName}</div>
                     <div><strong>Type:</strong> <span class="badge bg-${getNodeTypeBadgeColor(nodeType)}">${nodeType}</span></div>
                     <div><strong>ID:</strong> <small class="text-muted">${nodeId}</small></div>
-                    ${props.created_at ? `<div><strong>Created:</strong> ${formatDate(props.created_at)}</div>` : ''}
-                    ${props.valid_at ? `<div><strong>Valid At:</strong> ${formatDate(props.valid_at)}</div>` : ''}
-                    ${props.source ? `<div><strong>Source:</strong> ${props.source}</div>` : ''}
+                    ${created_at ? `<div><strong>Created:</strong> ${formatDate(created_at)}</div>` : ''}
+                    ${valid_at ? `<div><strong>Valid At:</strong> ${formatDate(valid_at)}</div>` : ''}
+                    ${source ? `<div><strong>Source:</strong> ${source}</div>` : ''}
                     ${summaryHtml}
                     ${centralityHtml}
                     ${jsonContentHtml}
@@ -1316,7 +1351,7 @@ ${JSON.stringify(content, null, 2)}
                     <!-- Debug info -->
                     <div class="mt-3 text-muted small">
                         <details>
-                            <summary>Debug Info</summary>
+                            <summary>Debug Info (click to expand)</summary>
                             <pre style="font-size: 10px; max-height: 200px; overflow-y: auto;">
 ${JSON.stringify(node, null, 2)}
                             </pre>
