@@ -19,7 +19,8 @@ if os.path.exists('.env.ollama'):
     load_dotenv('.env.ollama', override=True)
 
 from graphiti_core import Graphiti as BaseGraphiti
-from graphiti_core.llm_client import OpenAIGenericClient, LLMConfig
+from graphiti_core.llm_client import LLMConfig
+from graphiti_core.llm_client.openai_generic_client import OpenAIGenericClient
 
 
 class Graphiti(BaseGraphiti):
@@ -57,7 +58,8 @@ class Graphiti(BaseGraphiti):
 
 
 # Re-export other commonly used classes so this can be a drop-in replacement
-from graphiti_core import EntityNode, EntityEdge, EpisodicNode
-from graphiti_core.search import SearchConfig
+from graphiti_core.nodes import EntityNode, EpisodicNode
+from graphiti_core.edges import EntityEdge
+from graphiti_core.search.search_config import SearchConfig
 
 __all__ = ['Graphiti', 'EntityNode', 'EntityEdge', 'EpisodicNode', 'SearchConfig']

@@ -12,6 +12,8 @@ Key features:
 - Hybrid retrieval combining semantic embeddings, keyword search (BM25), and graph traversal
 - Support for custom entity definitions via Pydantic models
 - Integration with Neo4j and FalkorDB as graph storage backends
+- Advanced graph visualization with WebGL-based Cosmograph library
+- Rust-based high-performance visualization server
 
 ## Development Commands
 
@@ -85,6 +87,13 @@ docker-compose up
 - **MCP Implementation**: `graphiti_mcp_server.py` - Model Context Protocol server for AI assistants
 - **Docker Support**: Containerized deployment with Neo4j
 
+### Graph Visualization (`graph-visualizer-rust/`)
+
+- **Rust Server**: High-performance Actix-web server for graph queries
+- **WebGL Frontend**: `static/cosmograph.html` - Interactive graph visualization using Cosmograph
+- **FalkorDB Integration**: Direct connection to FalkorDB for graph data
+- **Features**: Force-directed layouts, custom layout algorithms, interactive node management
+
 ## Testing
 
 - **Unit Tests**: `tests/` - Comprehensive test suite using pytest
@@ -140,3 +149,44 @@ When working with the MCP server, follow the patterns established in `mcp_server
 - Use specific entity type filters (`Preference`, `Procedure`, `Requirement`)
 - Store new information immediately using `add_memory`
 - Follow discovered procedures and respect established preferences
+
+## Huly Project Integration
+
+This repository is tracked in Huly under project **GRAPH** (Graphiti Knowledge Graph Platform).
+
+### Graph Visualization Component
+
+Component: **Graph Visualization** - WebGL-based interactive graph visualization system using Cosmograph library, Rust server, and FalkorDB backend.
+
+### Recent Issues (Graph Visualization Module)
+
+1. **GRAPH-32**: Implement Neo4j to FalkorDB Migration Script (High Priority)
+2. **GRAPH-28**: Setup FalkorDB Infrastructure with Docker (High Priority)
+3. **GRAPH-25**: Create Rust-based Graph Visualization Server (High Priority)
+4. **GRAPH-24**: Implement Cosmograph WebGL Visualization (High Priority)
+5. **GRAPH-26**: Add Interactive Node Selection and Details Panel (Medium Priority)
+6. **GRAPH-23**: Implement Mouse-based Navigation Controls (Medium Priority)
+7. **GRAPH-29**: Add Node Size and Visual Controls (Medium Priority)
+8. **GRAPH-27**: Build Advanced Search and Filter System (Medium Priority)
+9. **GRAPH-30**: Create Custom Graph Layout Algorithms (Medium Priority)
+10. **GRAPH-31**: Add Graph Navigation Tools (Medium Priority)
+11. **GRAPH-34**: Implement Interactive Node Management (Medium Priority)
+12. **GRAPH-36**: Add Force Physics Customization (Low Priority)
+13. **GRAPH-33**: Fix Label Display and Persistence (Medium Priority)
+14. **GRAPH-37**: Create Debug Tools and Testing Utilities (Low Priority)
+15. **GRAPH-35**: Document Graph Visualization Module (Medium Priority)
+
+### Graph Visualization Features Implemented
+
+- **Migration**: Neo4j to FalkorDB data migration with centrality metrics
+- **Infrastructure**: Docker-based FalkorDB setup with custom UI
+- **Server**: Rust Actix-web server with graph query endpoints
+- **Visualization**: Cosmograph WebGL rendering for 4000+ nodes
+- **Interaction**: Node selection, multi-select, details panel
+- **Navigation**: Pan, zoom, drag nodes, middle-mouse navigation
+- **Customization**: Node size, colors by type/centrality, link styling
+- **Search**: Real-time search with filters (type, metrics, time)
+- **Layouts**: Force-directed, hierarchical, radial, circular, temporal, cluster
+- **Tools**: Path finding, neighbor exploration, subgraph focus
+- **Management**: Pin nodes, hide/show, collapse/expand, export
+- **Physics**: Customizable forces, gravity, repulsion, friction
