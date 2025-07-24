@@ -6,9 +6,22 @@ import { Badge } from '@/components/ui/badge';
 import { CosmographProvider } from '@cosmograph/react';
 import { useQuery } from '@tanstack/react-query';
 import { graphClient } from '../api/graphClient';
+import { GraphNode } from '../api/types';
+import type { GraphData } from '../types/graph';
+import { logger } from '../utils/logger';
+import GraphErrorBoundary from './GraphErrorBoundary';
+
+// Import the handle interface from GraphCanvas
+interface GraphCanvasHandle {
+  clearSelection: () => void;
+  selectNode: (node: GraphNode) => void;
+  selectNodes: (nodes: GraphNode[]) => void;
+  zoomIn: () => void;
+  zoomOut: () => void;
+  fitView: () => void;
+}
 import { useGraphConfig } from '../contexts/GraphConfigContext';
 import { ControlPanel } from './ControlPanel';
-import { SearchBar } from './SearchBar';
 import { GraphSearch } from './GraphSearch';
 import { GraphCanvas } from './GraphCanvas';
 import { NodeDetailsPanel } from './NodeDetailsPanel';
@@ -22,18 +35,19 @@ interface GraphVizProps {
 }
 
 export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
-  const { config } = useGraphConfig();
+  const { config, applyLayout } = useGraphConfig();
   const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);
   const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
   const [selectedNodes, setSelectedNodes] = useState<string[]>([]);
-  const [selectedNode, setSelectedNode] = useState<any>(null);
+  const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
   const [highlightedNodes, setHighlightedNodes] = useState<string[]>([]);
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const [showStatsPanel, setShowStatsPanel] = useState(false);
+  const [showLayoutPanel, setShowLayoutPanel] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isFullscreen, setIsFullscreen] = useState(false);
 
-  const graphCanvasRef = useRef<HTMLDivElement>(null);
+  const graphCanvasRef = useRef<GraphCanvasHandle>(null);
 
   // Fetch graph data from Rust server
   const { data, isLoading, error } = useQuery({
@@ -45,22 +59,95 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
     refetchInterval: 30000, // Refresh every 30 seconds
   });
 
-  // Separate filtering and transformation to prevent infinite re-renders (Issue #006)
+  // Enhanced filtering logic with virtualization for large graphs
   const filteredData = React.useMemo(() => {
     if (!data) return { nodes: [], edges: [] };
     
     const visibleNodes = data.nodes.filter(node => {
+      // Basic node type visibility check
       const nodeType = node.node_type as keyof typeof config.nodeTypeVisibility;
-      return config.nodeTypeVisibility[nodeType] !== false;
+      if (config.nodeTypeVisibility[nodeType] === false) return false;
+      
+      // Advanced filter checks from FilterPanel
+      
+      // Node type filter
+      if (!config.filteredNodeTypes.includes(node.node_type)) return false;
+      
+      // Degree centrality filter
+      const degree = node.properties?.degree_centrality || 0;
+      const degreePercent = Math.min((degree / 100) * 100, 100); // Normalize to 0-100
+      if (degreePercent < config.minDegree || degreePercent > config.maxDegree) return false;
+      
+      // PageRank filter
+      const pagerank = node.properties?.pagerank_centrality || node.properties?.pagerank || 0;
+      const pagerankPercent = Math.min((pagerank / 0.1) * 100, 100); // Normalize to 0-100
+      if (pagerankPercent < config.minPagerank || pagerankPercent > config.maxPagerank) return false;
+      
+      // Connection count filter
+      const connections = node.properties?.degree || node.properties?.connections || 0;
+      if (connections < config.minConnections || connections > config.maxConnections) return false;
+      
+      // Date range filter
+      if (config.startDate || config.endDate) {
+        const nodeDate = node.created_at || node.properties?.created || node.properties?.date;
+        if (nodeDate) {
+          const date = new Date(nodeDate);
+          if (config.startDate && date < new Date(config.startDate)) return false;
+          if (config.endDate && date > new Date(config.endDate)) return false;
+        }
+      }
+      
+      return true;
     });
+
+    // Virtualization: For very large graphs (>10k nodes), prioritize most important nodes
+    let finalNodes = visibleNodes;
+    const LARGE_GRAPH_THRESHOLD = 10000;
+    const MAX_RENDERED_NODES = 5000;
+
+    if (visibleNodes.length > LARGE_GRAPH_THRESHOLD) {
+      logger.log(`Large graph detected: ${visibleNodes.length} nodes. Applying virtualization.`);
+      
+      // Calculate importance score for each node
+      const nodesWithScore = visibleNodes.map(node => {
+        const degree = node.properties?.degree_centrality || 0;
+        const pagerank = node.properties?.pagerank_centrality || node.properties?.pagerank || 0;
+        const betweenness = node.properties?.betweenness_centrality || 0;
+        
+        // Composite importance score (weighted combination)
+        const importanceScore = (degree * 0.4) + (pagerank * 1000 * 0.4) + (betweenness * 0.2);
+        
+        return { node, importanceScore };
+      });
+
+      // Sort by importance and take top N nodes
+      nodesWithScore.sort((a, b) => b.importanceScore - a.importanceScore);
+      finalNodes = nodesWithScore
+        .slice(0, MAX_RENDERED_NODES)
+        .map(item => item.node);
+        
+      logger.log(`Virtualization applied: reduced from ${visibleNodes.length} to ${finalNodes.length} nodes`);
+    }
     
-    const visibleNodeIds = new Set(visibleNodes.map(n => n.id));
+    const visibleNodeIds = new Set(finalNodes.map(n => n.id));
     const filteredEdges = data.edges.filter(edge => 
       visibleNodeIds.has(edge.from) && visibleNodeIds.has(edge.to)
     );
     
-    return { nodes: visibleNodes, edges: filteredEdges };
-  }, [data, config.nodeTypeVisibility]);
+    return { nodes: finalNodes, edges: filteredEdges };
+  }, [
+    data, 
+    config.nodeTypeVisibility, 
+    config.filteredNodeTypes,
+    config.minDegree,
+    config.maxDegree,
+    config.minPagerank,
+    config.maxPagerank,
+    config.minConnections,
+    config.maxConnections,
+    config.startDate,
+    config.endDate
+  ]);
 
   const transformedData = React.useMemo(() => {
     return {
@@ -81,11 +168,11 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
     }
   };
 
-  const handleNodeClick = (node: any) => {
+  const handleNodeClick = (node: GraphNode) => {
     setSelectedNode(node);
   };
 
-  const handleNodeSelectWithCosmograph = (node: any) => {
+  const handleNodeSelectWithCosmograph = (node: GraphNode) => {
     // Set React state
     setSelectedNode(node);
     handleNodeSelect(node.id);
@@ -96,12 +183,12 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
     }
   };
 
-  const handleHighlightNodes = (nodes: any[]) => {
+  const handleHighlightNodes = (nodes: GraphNode[]) => {
     const nodeIds = nodes.map(node => node.id);
     setHighlightedNodes(nodeIds);
   };
 
-  const handleSelectNodes = (nodes: any[]) => {
+  const handleSelectNodes = (nodes: GraphNode[]) => {
     // Select multiple nodes with Cosmograph visual effects
     if (graphCanvasRef.current && typeof graphCanvasRef.current.selectNodes === 'function') {
       graphCanvasRef.current.selectNodes(nodes);
@@ -116,20 +203,76 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
     }
   };
 
+  const handleShowNeighbors = (nodeId: string) => {
+    // Start with nodes to explore - if we have highlighted nodes, use all of them
+    // Otherwise, just use the clicked node
+    const nodesToExplore = highlightedNodes.length > 0 ? highlightedNodes : [nodeId];
+    const newNeighborIds = new Set<string>();
+    
+    // Find neighbors for all nodes we're exploring
+    nodesToExplore.forEach(currentNodeId => {
+      transformedData.links.forEach(edge => {
+        if (edge.source === currentNodeId) {
+          newNeighborIds.add(edge.target);
+        } else if (edge.target === currentNodeId) {
+          newNeighborIds.add(edge.source);
+        }
+      });
+    });
+    
+    // Remove nodes we're already exploring to get only NEW neighbors
+    nodesToExplore.forEach(id => newNeighborIds.delete(id));
+    
+    // Find the actual neighbor nodes from our data
+    const newNeighborNodes = transformedData.nodes.filter(node => 
+      newNeighborIds.has(node.id)
+    );
+    
+    if (newNeighborNodes.length > 0) {
+      // Combine existing highlighted nodes with new neighbors
+      const allHighlightedIds = [...new Set([...nodesToExplore, ...Array.from(newNeighborIds)])];
+      setHighlightedNodes(allHighlightedIds);
+      
+      // Select all highlighted nodes with visual effects
+      const allHighlightedNodes = transformedData.nodes.filter(node => 
+        allHighlightedIds.includes(node.id)
+      );
+      
+      if (graphCanvasRef.current && typeof graphCanvasRef.current.selectNodes === 'function') {
+        graphCanvasRef.current.selectNodes(allHighlightedNodes);
+      }
+      
+      const isExpanding = highlightedNodes.length > 0;
+      logger.log(
+        isExpanding 
+          ? `Expanded network: found ${newNeighborNodes.length} new neighbors. Total nodes: ${allHighlightedIds.length}`
+          : `Found ${newNeighborNodes.length} neighbors for node ${nodeId}:`, 
+        newNeighborNodes.map(n => n.label || n.id)
+      );
+    } else {
+      const isExpanding = highlightedNodes.length > 0;
+      logger.log(
+        isExpanding 
+          ? `No new neighbors found. Network expansion complete with ${nodesToExplore.length} nodes.`
+          : `No neighbors found for node ${nodeId}`
+      );
+    }
+  };
+
   // Centralized navigation handler to eliminate imperative ref abuse
   const navigationActions = useCallback({
     zoomIn: () => {
-      if (graphCanvasRef.current && typeof graphCanvasRef.current.zoomIn === 'function') {
+      if (graphCanvasRef.current) {
         graphCanvasRef.current.zoomIn();
       }
     },
     zoomOut: () => {
-      if (graphCanvasRef.current && typeof graphCanvasRef.current.zoomOut === 'function') {
+      if (graphCanvasRef.current) {
         graphCanvasRef.current.zoomOut();
       }
     },
     fitView: () => {
-      if (graphCanvasRef.current && typeof graphCanvasRef.current.fitView === 'function') {
+      if (graphCanvasRef.current) {
         graphCanvasRef.current.fitView();
       }
     },
@@ -158,6 +301,12 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
     navigationActions.clearSelection();
   }, [selectedNodes.length, selectedNode?.id, highlightedNodes.length, navigationActions]);
 
+  const handleLayoutChange = useCallback((layoutType: string) => {
+    if (filteredData && filteredData.nodes.length > 0) {
+      applyLayout(layoutType, {}, { nodes: filteredData.nodes, edges: filteredData.edges });
+    }
+  }, [applyLayout, filteredData]);
+
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
       document.documentElement.requestFullscreen();
@@ -165,6 +314,64 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
     } else {
       document.exitFullscreen();
       setIsFullscreen(false);
+    }
+  };
+
+  const handleDownloadGraph = () => {
+    if (!data) return;
+    
+    const graphData = {
+      nodes: data.nodes,
+      edges: data.edges,
+      metadata: {
+        exportedAt: new Date().toISOString(),
+        totalNodes: data.nodes.length,
+        totalEdges: data.edges.length
+      }
+    };
+    
+    const blob = new Blob([JSON.stringify(graphData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `graphiti-export-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleCaptureScreenshot = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+      const video = document.createElement('video');
+      video.srcObject = stream;
+      video.play();
+      
+      video.addEventListener('loadedmetadata', () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(video, 0, 0);
+        
+        canvas.toBlob((blob) => {
+          if (blob) {
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `graphiti-screenshot-${new Date().toISOString().split('T')[0]}.png`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+          }
+        }, 'image/png');
+        
+        stream.getTracks().forEach(track => track.stop());
+      });
+    } catch (error) {
+      logger.warn('Screenshot capture failed:', error);
     }
   };
 
@@ -218,6 +425,11 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
           <Badge variant="secondary" className="text-xs">
             Knowledge Graph
           </Badge>
+          {data && data.nodes.length > 10000 && (
+            <Badge variant="outline" className="text-xs border-warning text-warning">
+              Virtualized ({filteredData.nodes.length.toLocaleString()}/{data.nodes.length.toLocaleString()})
+            </Badge>
+          )}
         </div>
 
         <div className="flex-1 max-w-2xl mx-8">
@@ -235,7 +447,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => {/* TODO: Implement download */}}
+            onClick={handleDownloadGraph}
             className="hover:bg-primary/10"
             title="Download Graph"
           >
@@ -244,7 +456,8 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => {/* TODO: Implement upload */}}
+            onClick={() => {/* Upload functionality would require file input */}}
+            disabled
             className="hover:bg-primary/10"
             title="Upload Graph"
           >
@@ -253,7 +466,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => {/* TODO: Implement camera */}}
+            onClick={handleCaptureScreenshot}
             className="hover:bg-primary/10"
             title="Take Screenshot"
           >
@@ -280,7 +493,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => {/* TODO: Implement layout */}}
+            onClick={() => setShowLayoutPanel(true)}
             className="hover:bg-primary/10"
             title="Change Layout"
           >
@@ -323,21 +536,24 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
           <ControlPanel 
             collapsed={leftPanelCollapsed}
             onToggleCollapse={() => setLeftPanelCollapsed(!leftPanelCollapsed)}
+            onLayoutChange={handleLayoutChange}
           />
         </div>
 
         {/* Main Graph Viewport */}
         <div className="flex-1 relative">
-          <GraphCanvas 
-            ref={graphCanvasRef}
-            onNodeClick={handleNodeClick}
-            onNodeSelect={handleNodeSelect}
-            onClearSelection={clearAllSelections}
-            selectedNodes={selectedNodes}
-            highlightedNodes={highlightedNodes}
-            stats={data?.stats}
-            className="h-full w-full"
-          />
+          <GraphErrorBoundary>
+            <GraphCanvas 
+              ref={graphCanvasRef}
+              onNodeClick={handleNodeClick}
+              onNodeSelect={handleNodeSelect}
+              onClearSelection={clearAllSelections}
+              selectedNodes={selectedNodes}
+              highlightedNodes={highlightedNodes}
+              stats={data?.stats}
+              className="h-full w-full"
+            />
+          </GraphErrorBoundary>
           
           {/* Node Details Panel Overlay */}
           {selectedNode && (
@@ -345,6 +561,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
               <NodeDetailsPanel 
                 node={selectedNode}
                 onClose={clearAllSelections}
+                onShowNeighbors={handleShowNeighbors}
               />
             </div>
           )}
@@ -378,6 +595,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
         <FilterPanel 
           isOpen={showFilterPanel}
           onClose={() => setShowFilterPanel(false)}
+          data={data}
         />
       )}
 
@@ -385,6 +603,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
         <StatsPanel 
           isOpen={showStatsPanel}
           onClose={() => setShowStatsPanel(false)}
+          data={data}
         />
       )}
       </div>

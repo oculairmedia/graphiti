@@ -6,6 +6,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { useGraphConfig } from '../contexts/GraphConfigContext';
+import { useQuery } from '@tanstack/react-query';
+import { graphClient } from '@/api/graphClient';
 
 interface LayoutPanelProps {
   collapsed: boolean;
@@ -16,11 +19,84 @@ export const LayoutPanel: React.FC<LayoutPanelProps> = ({
   collapsed, 
   onToggleCollapse 
 }) => {
-  const [selectedLayout, setSelectedLayout] = useState('force-directed');
-  const [hierarchyDirection, setHierarchyDirection] = useState('top-down');
-  const [radialCenter, setRadialCenter] = useState('');
-  const [circularOrdering, setCircularOrdering] = useState('degree');
-  const [clusterBy, setClusterBy] = useState('type');
+  const { config, updateConfig, applyLayout, isApplyingLayout } = useGraphConfig();
+  
+  // Get current graph data for layout operations
+  const { data: graphData } = useQuery({
+    queryKey: ['graphData', config.queryType, config.nodeLimit],
+    queryFn: () => graphClient.getGraphData({
+      query_type: config.queryType,
+      limit: config.nodeLimit
+    }),
+    staleTime: 30000,
+    refetchOnWindowFocus: false
+  });
+  
+  const nodes = graphData?.nodes || [];
+  const edges = graphData?.edges || [];
+  
+  // Use config values instead of local state
+  const selectedLayout = config.layout;
+  const hierarchyDirection = config.hierarchyDirection;
+  const radialCenter = config.radialCenter;
+  const circularOrdering = config.circularOrdering;
+  const clusterBy = config.clusterBy;
+  
+  const handleLayoutChange = (layoutId: string) => {
+    updateConfig({ layout: layoutId });
+  };
+  
+  const handleApplyLayout = () => {
+    console.log('LayoutPanel: Applying layout', selectedLayout, 'with data:', nodes.length, 'nodes', edges.length, 'edges');
+    
+    if (!nodes.length || !edges.length) {
+      console.warn('LayoutPanel: No graph data available for layout');
+      return;
+    }
+
+    applyLayout(selectedLayout, {
+      hierarchyDirection,
+      radialCenter,
+      circularOrdering,
+      clusterBy
+    }, { nodes, edges });
+  };
+  
+  const handlePresetApply = (presetType: string) => {
+    console.log('LayoutPanel: Applying preset', presetType, 'with data:', nodes.length, 'nodes', edges.length, 'edges');
+    
+    if (!nodes.length || !edges.length) {
+      console.warn('LayoutPanel: No graph data available for preset layout');
+      return;
+    }
+
+    switch (presetType) {
+      case 'exploration':
+        applyLayout('force-directed', {
+          gravity: 0.03,
+          repulsion: 0.08,
+          linkDistance: 1.5,
+          showLabels: false
+        }, { nodes, edges });
+        break;
+      case 'analysis':
+        applyLayout('cluster', {
+          gravity: 0.1,
+          repulsion: 0.15,
+          linkDistance: 3,
+          showLabels: true
+        }, { nodes, edges });
+        break;
+      case 'presentation':
+        applyLayout('radial', {
+          gravity: 0,
+          centerForce: 0.8,
+          showLabels: true,
+          labelSize: 14
+        }, { nodes, edges });
+        break;
+    }
+  };
 
   const layouts = [
     {
@@ -76,10 +152,20 @@ export const LayoutPanel: React.FC<LayoutPanelProps> = ({
           {layouts.slice(0, 4).map((layout) => (
             <Button 
               key={layout.id}
-              variant="ghost" 
+              variant={selectedLayout === layout.id ? "default" : "ghost"}
               size="sm" 
               className="p-2 hover:bg-primary/10"
               title={layout.name}
+              onClick={() => {
+                handleLayoutChange(layout.id);
+                console.log('LayoutPanel: Quick applying layout', layout.id, 'with data:', nodes.length, 'nodes', edges.length, 'edges');
+                
+                if (nodes.length && edges.length) {
+                  applyLayout(layout.id, {}, { nodes, edges });
+                } else {
+                  console.warn('LayoutPanel: No graph data available for quick layout');
+                }
+              }}
             >
               <layout.icon className="h-4 w-4" />
             </Button>
@@ -119,7 +205,7 @@ export const LayoutPanel: React.FC<LayoutPanelProps> = ({
                     ? 'ring-2 ring-primary bg-primary/5' 
                     : 'glass border-border/30 hover:border-primary/30'
                 }`}
-                onClick={() => setSelectedLayout(layout.id)}
+                onClick={() => handleLayoutChange(layout.id)}
               >
                 <CardContent className="p-3">
                   <div className="flex items-center space-x-3">
@@ -153,7 +239,7 @@ export const LayoutPanel: React.FC<LayoutPanelProps> = ({
             <CardContent className="space-y-3">
               <div>
                 <Label className="text-xs text-muted-foreground">Direction</Label>
-                <Select value={hierarchyDirection} onValueChange={setHierarchyDirection}>
+                <Select value={hierarchyDirection} onValueChange={(value) => updateConfig({ hierarchyDirection: value })}>
                   <SelectTrigger className="h-8 bg-secondary/30">
                     <SelectValue />
                   </SelectTrigger>
@@ -179,7 +265,7 @@ export const LayoutPanel: React.FC<LayoutPanelProps> = ({
                 <Label className="text-xs text-muted-foreground">Center Node ID</Label>
                 <Input
                   value={radialCenter}
-                  onChange={(e) => setRadialCenter(e.target.value)}
+                  onChange={(e) => updateConfig({ radialCenter: e.target.value })}
                   placeholder="Enter node ID or leave empty for auto"
                   className="h-8 bg-secondary/30"
                 />
@@ -196,7 +282,7 @@ export const LayoutPanel: React.FC<LayoutPanelProps> = ({
             <CardContent className="space-y-3">
               <div>
                 <Label className="text-xs text-muted-foreground">Node Ordering</Label>
-                <Select value={circularOrdering} onValueChange={setCircularOrdering}>
+                <Select value={circularOrdering} onValueChange={(value) => updateConfig({ circularOrdering: value })}>
                   <SelectTrigger className="h-8 bg-secondary/30">
                     <SelectValue />
                   </SelectTrigger>
@@ -220,7 +306,7 @@ export const LayoutPanel: React.FC<LayoutPanelProps> = ({
             <CardContent className="space-y-3">
               <div>
                 <Label className="text-xs text-muted-foreground">Cluster By</Label>
-                <Select value={clusterBy} onValueChange={setClusterBy}>
+                <Select value={clusterBy} onValueChange={(value) => updateConfig({ clusterBy: value })}>
                   <SelectTrigger className="h-8 bg-secondary/30">
                     <SelectValue />
                   </SelectTrigger>
@@ -242,9 +328,11 @@ export const LayoutPanel: React.FC<LayoutPanelProps> = ({
             <Button 
               className="w-full bg-primary hover:bg-primary/90"
               size="sm"
+              onClick={handleApplyLayout}
+              disabled={isApplyingLayout || !nodes.length || !edges.length}
             >
               <Layout className="h-3 w-3 mr-2" />
-              Apply Layout
+              {isApplyingLayout ? 'Applying...' : (!nodes.length || !edges.length) ? 'No Data' : 'Apply Layout'}
             </Button>
           </CardContent>
         </Card>
@@ -255,13 +343,28 @@ export const LayoutPanel: React.FC<LayoutPanelProps> = ({
             <CardTitle className="text-sm">Quick Presets</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            <Button variant="outline" size="sm" className="w-full h-8 justify-start">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="w-full h-8 justify-start"
+              onClick={() => handlePresetApply('exploration')}
+            >
               Exploration Mode
             </Button>
-            <Button variant="outline" size="sm" className="w-full h-8 justify-start">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="w-full h-8 justify-start"
+              onClick={() => handlePresetApply('analysis')}
+            >
               Analysis Mode
             </Button>
-            <Button variant="outline" size="sm" className="w-full h-8 justify-start">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="w-full h-8 justify-start"
+              onClick={() => handlePresetApply('presentation')}
+            >
               Presentation Mode
             </Button>
           </CardContent>

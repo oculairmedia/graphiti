@@ -1,12 +1,31 @@
 // Types matching the Rust server API responses
 
+// Graph node property types
+export interface NodeProperties {
+  degree_centrality?: number;
+  betweenness_centrality?: number;
+  pagerank_centrality?: number;
+  pagerank?: number;
+  degree?: number;
+  connections?: number;
+  importance_centrality?: number;
+  importance?: number;
+  custom_score?: number;
+  created?: string;
+  date?: string;
+  // Allow for additional dynamic properties
+  [key: string]: unknown;
+}
+
 export interface GraphNode {
   id: string;
   label: string;
   node_type: string;
   size: number;
   color: string;
-  properties: Record<string, any>;
+  properties: NodeProperties;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface GraphEdge {

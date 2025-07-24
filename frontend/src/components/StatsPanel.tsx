@@ -4,48 +4,179 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
+import type { GraphData, GraphStats } from '../types/graph';
+
+// Performance monitoring hook
+const usePerformanceMonitoring = () => {
+  const [performanceData, setPerformanceData] = React.useState({
+    fps: 0,
+    memory: 0,
+    queryTime: 0,
+    renderTime: 0
+  });
+
+  React.useEffect(() => {
+    let frameCount = 0;
+    let lastTime = performance.now();
+    let animationId: number;
+
+    const measureFPS = () => {
+      frameCount++;
+      const now = performance.now();
+      
+      if (now - lastTime >= 1000) {
+        const fps = Math.round((frameCount * 1000) / (now - lastTime));
+        
+        setPerformanceData(prev => ({
+          ...prev,
+          fps,
+          memory: (performance as any).memory ? 
+            Math.round((performance as any).memory.usedJSHeapSize / 1024 / 1024) : 0
+        }));
+        
+        frameCount = 0;
+        lastTime = now;
+      }
+      
+      animationId = requestAnimationFrame(measureFPS);
+    };
+
+    animationId = requestAnimationFrame(measureFPS);
+
+    return () => {
+      if (animationId) {
+        cancelAnimationFrame(animationId);
+      }
+    };
+  }, []);
+
+  return performanceData;
+};
 
 interface StatsPanelProps {
   isOpen: boolean;
   onClose: () => void;
+  data?: GraphData;
 }
 
-// Memoized mock data to prevent re-creation on every render
-const MOCK_STATS = {
-  overview: {
-    totalNodes: 4247,
-    totalEdges: 18392,
-    avgDegree: 8.66,
-    density: 0.002
-  },
-  nodeTypes: [
-    { type: 'Entity', count: 2847, percentage: 67, color: 'bg-node-entity' },
-    { type: 'Episodic', count: 1024, percentage: 24, color: 'bg-node-episodic' },
-    { type: 'Agent', count: 892, percentage: 21, color: 'bg-node-agent' },
-    { type: 'Community', count: 156, percentage: 4, color: 'bg-node-community' }
-  ],
-  topNodes: [
-    { name: 'Neural Network Research', degree: 247, type: 'Entity' },
-    { name: 'Dr. Sarah Chen', degree: 189, type: 'Agent' },
-    { name: 'MIT AI Lab', degree: 156, type: 'Community' },
-    { name: 'Deep Learning Conference 2024', degree: 134, type: 'Episodic' },
-    { name: 'Machine Learning Framework', degree: 128, type: 'Entity' }
-  ],
-  performance: {
-    queryTime: 247,
-    renderTime: 1340,
-    fps: 60,
-    memory: 156
+// Compute real statistics from graph data
+const computeGraphStats = (data?: GraphData): GraphStats | null => {
+  if (!data || !data.nodes || !data.edges) {
+    return null;
   }
-} as const;
+
+  const { nodes, edges } = data;
+  const totalNodes = nodes.length;
+  const totalEdges = edges.length;
+  const avgDegree = totalNodes > 0 ? (totalEdges * 2) / totalNodes : 0;
+  const maxPossibleEdges = totalNodes * (totalNodes - 1) / 2;
+  const density = maxPossibleEdges > 0 ? totalEdges / maxPossibleEdges : 0;
+
+  // Calculate node type distribution
+  const typeCount: Record<string, number> = {};
+  nodes.forEach(node => {
+    const type = node.node_type || 'Unknown';
+    typeCount[type] = (typeCount[type] || 0) + 1;
+  });
+
+  const nodeTypes = Object.entries(typeCount).map(([type, count]) => ({
+    type,
+    count,
+    percentage: Math.round((count / totalNodes) * 100),
+    color: {
+      'Entity': 'bg-node-entity',
+      'Episodic': 'bg-node-episodic', 
+      'Agent': 'bg-node-agent',
+      'Community': 'bg-node-community'
+    }[type] || 'bg-primary'
+  }));
+
+  // Calculate degree for each node and find top connected
+  const degreeMap: Record<string, number> = {};
+  edges.forEach(edge => {
+    degreeMap[edge.from] = (degreeMap[edge.from] || 0) + 1;
+    degreeMap[edge.to] = (degreeMap[edge.to] || 0) + 1;
+  });
+
+  const topNodes = nodes
+    .map(node => ({
+      name: node.label || node.id,
+      degree: degreeMap[node.id] || 0,
+      type: node.node_type || 'Unknown'
+    }))
+    .sort((a, b) => b.degree - a.degree)
+    .slice(0, 5);
+
+  return {
+    overview: {
+      totalNodes,
+      totalEdges,
+      avgDegree: Math.round(avgDegree * 100) / 100,
+      density: Math.round(density * 10000) / 10000
+    },
+    nodeTypes,
+    topNodes,
+    performance: {
+      queryTime: data.stats?.query_time || 0,
+      renderTime: data.stats?.render_time || 0,
+      fps: 0, // Will be filled with real data
+      memory: data.stats?.memory_usage || 0
+    }
+  };
+};
 
 export const StatsPanel: React.FC<StatsPanelProps> = React.memo(({ 
   isOpen, 
-  onClose 
+  onClose,
+  data
 }) => {
-  const stats = MOCK_STATS;
+  // Get real performance metrics
+  const realPerformance = usePerformanceMonitoring();
+
+  // Memoize expensive statistics computation with proper dependencies
+  const nodeTypeHash = React.useMemo(() => 
+    data?.nodes?.reduce((hash, node) => hash + (node.node_type || ''), '') || '', 
+    [data?.nodes]
+  );
+  
+  const edgeTypeHash = React.useMemo(() => 
+    data?.edges?.reduce((hash, edge) => hash + (edge.edge_type || ''), '') || '', 
+    [data?.edges]
+  );
+
+  const stats = React.useMemo(() => {
+    const baseStats = computeGraphStats(data);
+    if (baseStats) {
+      // Replace fake performance metrics with real ones
+      return {
+        ...baseStats,
+        performance: {
+          queryTime: data?.stats?.query_time || baseStats.performance.queryTime,
+          renderTime: data?.stats?.render_time || baseStats.performance.renderTime,
+          fps: realPerformance.fps,
+          memory: realPerformance.memory
+        }
+      };
+    }
+    return baseStats;
+  }, [data, nodeTypeHash, edgeTypeHash, realPerformance]);
 
   if (!isOpen) return null;
+
+  // Show loading state if no data available
+  if (!stats) {
+    return (
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <Card className="glass-panel w-full max-w-md">
+          <CardContent className="p-6 text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mb-4 mx-auto"></div>
+            <p className="text-muted-foreground">Loading graph statistics...</p>
+            <Button onClick={onClose} className="mt-4">Close</Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -147,7 +278,7 @@ export const StatsPanel: React.FC<StatsPanelProps> = React.memo(({
               </CardHeader>
               <CardContent className="space-y-3">
                 {stats.topNodes.map((node, index) => (
-                  <div key={node.name} className="flex items-center justify-between p-2 rounded-lg hover:bg-secondary/20">
+                  <div key={`${node.name}-${index}-${node.degree}`} className="flex items-center justify-between p-2 rounded-lg hover:bg-secondary/20">
                     <div className="flex items-center space-x-3">
                       <Badge variant="outline" className="w-6 h-6 p-0 flex items-center justify-center text-xs">
                         {index + 1}
@@ -201,36 +332,33 @@ export const StatsPanel: React.FC<StatsPanelProps> = React.memo(({
               </CardContent>
             </Card>
 
-            {/* Activity Timeline */}
+            {/* Graph Summary */}
             <Card className="glass border-border/30 lg:col-span-2">
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm flex items-center space-x-2">
                   <Clock className="h-4 w-4 text-primary" />
-                  <span>Recent Activity</span>
+                  <span>Graph Summary</span>
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-secondary/20">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-                      <span className="text-sm">Query executed: High Degree Nodes</span>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="text-center p-4 rounded-lg bg-secondary/20">
+                    <div className="text-lg font-bold text-primary">
+                      {stats.nodeTypes.length}
                     </div>
-                    <span className="text-xs text-muted-foreground">2 minutes ago</span>
+                    <div className="text-xs text-muted-foreground">Node Types</div>
                   </div>
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-secondary/20">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-2 h-2 rounded-full bg-accent" />
-                      <span className="text-sm">Layout changed: Force-Directed</span>
+                  <div className="text-center p-4 rounded-lg bg-secondary/20">
+                    <div className="text-lg font-bold text-accent">
+                      {stats.topNodes.length > 0 ? stats.topNodes[0].degree : 0}
                     </div>
-                    <span className="text-xs text-muted-foreground">5 minutes ago</span>
+                    <div className="text-xs text-muted-foreground">Max Connections</div>
                   </div>
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-secondary/20">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-2 h-2 rounded-full bg-warning" />
-                      <span className="text-sm">Filters applied: Entity nodes only</span>
+                  <div className="text-center p-4 rounded-lg bg-secondary/20">
+                    <div className="text-lg font-bold text-warning">
+                      {stats.nodeTypes.find(t => t.count === Math.max(...stats.nodeTypes.map(n => n.count)))?.type || 'N/A'}
                     </div>
-                    <span className="text-xs text-muted-foreground">8 minutes ago</span>
+                    <div className="text-xs text-muted-foreground">Dominant Type</div>
                   </div>
                 </div>
               </CardContent>

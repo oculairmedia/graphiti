@@ -5,15 +5,18 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
+import { GraphNode } from '../api/types';
 
 interface NodeDetailsPanelProps {
-  node: any;
+  node: GraphNode;
   onClose: () => void;
+  onShowNeighbors?: (nodeId: string) => void;
 }
 
 export const NodeDetailsPanel: React.FC<NodeDetailsPanelProps> = ({ 
   node, 
-  onClose 
+  onClose,
+  onShowNeighbors
 }) => {
   const getNodeTypeColor = (type: string) => {
     const colors = {
@@ -35,34 +38,25 @@ export const NodeDetailsPanel: React.FC<NodeDetailsPanelProps> = ({
     });
   };
 
-  // Mock data for demonstration
-  const mockData = {
-    id: 'node_12345',
-    name: 'Neural Network Research',
-    type: 'Entity',
-    summary: 'Comprehensive research on neural network architectures and their applications in modern AI systems. This work explores deep learning methodologies and their practical implementations.',
-    properties: {
-      field: 'Artificial Intelligence',
-      author: 'Dr. Sarah Chen',
-      citations: 342,
-      year: 2024,
-      institution: 'MIT AI Lab',
-      keywords: ['Neural Networks', 'Deep Learning', 'AI']
-    },
+  // Use real node data
+  const data = {
+    id: node.id,
+    name: node.label || node.id,
+    type: node.node_type || 'Unknown',
+    summary: node.summary || node.description || '',
+    properties: node.properties || {},
     centrality: {
-      degree: 0.85,
-      betweenness: 0.72,
-      pagerank: 0.91,
-      eigenvector: 0.78
+      degree: node.properties?.degree_centrality || 0,
+      betweenness: node.properties?.betweenness_centrality || 0,
+      pagerank: node.properties?.pagerank_centrality || node.properties?.pagerank || 0,
+      eigenvector: node.properties?.eigenvector_centrality || 0
     },
     timestamps: {
-      created: '2024-01-15T10:30:00Z',
-      updated: '2024-01-20T14:45:00Z'
+      created: node.created_at || node.properties?.created || new Date().toISOString(),
+      updated: node.updated_at || node.properties?.updated || new Date().toISOString()
     },
-    connections: 23
+    connections: node.properties?.degree || node.properties?.connections || 0
   };
-
-  const data = { ...mockData, ...node };
 
   return (
     <Card className="glass-panel w-96 max-h-[80vh] overflow-hidden animate-fade-in flex flex-col">
@@ -198,7 +192,13 @@ export const NodeDetailsPanel: React.FC<NodeDetailsPanelProps> = ({
           </Button>
         </div>
 
-        <Button variant="secondary" className="w-full h-8" size="sm">
+        <Button 
+          variant="secondary" 
+          className="w-full h-8" 
+          size="sm"
+          onClick={() => onShowNeighbors?.(data.id)}
+          disabled={!onShowNeighbors}
+        >
           <ExternalLink className="h-3 w-3 mr-2" />
           Show Neighbors
         </Button>
