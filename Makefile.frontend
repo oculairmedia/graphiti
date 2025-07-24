@@ -1,0 +1,152 @@
+# Makefile for Graphiti Frontend Docker Operations
+
+# Variables
+COMPOSE_FILE = docker-compose.frontend.yml
+PROJECT_NAME = graphiti-frontend
+FRONTEND_IMAGE = graphiti-frontend:latest
+RUST_SERVER_IMAGE = graphiti-rust-server:latest
+
+# Colors for output
+RED = \033[0;31m
+GREEN = \033[0;32m
+YELLOW = \033[1;33m
+BLUE = \033[0;34m
+NC = \033[0m # No Color
+
+.PHONY: help build up down logs restart clean dev prod scale health status
+
+help: ## Show this help message
+	@echo "$(BLUE)Graphiti Frontend Docker Operations$(NC)"
+	@echo ""
+	@echo "$(GREEN)Available commands:$(NC)"
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  $(YELLOW)%-15s$(NC) %s\n", $$1, $$2}'
+
+build: ## Build all Docker images
+	@echo "$(BLUE)Building Docker images...$(NC)"
+	docker-compose -f $(COMPOSE_FILE) build --no-cache
+	@echo "$(GREEN)Build completed!$(NC)"
+
+build-frontend: ## Build only frontend image
+	@echo "$(BLUE)Building frontend image...$(NC)"
+	docker-compose -f $(COMPOSE_FILE) build frontend
+	@echo "$(GREEN)Frontend build completed!$(NC)"
+
+build-rust: ## Build only Rust server image  
+	@echo "$(BLUE)Building Rust server image...$(NC)"
+	docker-compose -f $(COMPOSE_FILE) build rust-server
+	@echo "$(GREEN)Rust server build completed!$(NC)"
+
+up: ## Start all services
+	@echo "$(BLUE)Starting Graphiti Frontend stack...$(NC)"
+	docker-compose -f $(COMPOSE_FILE) up -d
+	@echo "$(GREEN)Services started!$(NC)"
+	@echo "$(YELLOW)Frontend available at: http://localhost:8080$(NC)"
+	@echo "$(YELLOW)Rust API available at: http://localhost:3000$(NC)"
+	@echo "$(YELLOW)FalkorDB available at: localhost:6379$(NC)"
+
+up-with-tools: ## Start all services including management tools
+	@echo "$(BLUE)Starting Graphiti Frontend stack with tools...$(NC)"
+	docker-compose -f $(COMPOSE_FILE) --profile tools up -d
+	@echo "$(GREEN)Services started with tools!$(NC)"
+	@echo "$(YELLOW)Frontend: http://localhost:8080$(NC)"
+	@echo "$(YELLOW)Redis Insight: http://localhost:8001$(NC)"
+
+up-production: ## Start production setup with load balancer
+	@echo "$(BLUE)Starting production Graphiti Frontend stack...$(NC)"
+	docker-compose -f $(COMPOSE_FILE) --profile production up -d
+	@echo "$(GREEN)Production services started!$(NC)"
+	@echo "$(YELLOW)Load Balancer: http://localhost:80$(NC)"
+
+down: ## Stop all services
+	@echo "$(BLUE)Stopping Graphiti Frontend stack...$(NC)"
+	docker-compose -f $(COMPOSE_FILE) down
+	@echo "$(GREEN)Services stopped!$(NC)"
+
+down-volumes: ## Stop services and remove volumes
+	@echo "$(BLUE)Stopping services and removing volumes...$(NC)"
+	docker-compose -f $(COMPOSE_FILE) down -v
+	@echo "$(GREEN)Services stopped and volumes removed!$(NC)"
+
+logs: ## Show logs for all services
+	docker-compose -f $(COMPOSE_FILE) logs -f
+
+logs-frontend: ## Show frontend logs
+	docker-compose -f $(COMPOSE_FILE) logs -f frontend
+
+logs-rust: ## Show Rust server logs
+	docker-compose -f $(COMPOSE_FILE) logs -f rust-server
+
+logs-db: ## Show database logs
+	docker-compose -f $(COMPOSE_FILE) logs -f falkordb
+
+restart: ## Restart all services
+	@echo "$(BLUE)Restarting Graphiti Frontend stack...$(NC)"
+	docker-compose -f $(COMPOSE_FILE) restart
+	@echo "$(GREEN)Services restarted!$(NC)"
+
+restart-frontend: ## Restart only frontend
+	@echo "$(BLUE)Restarting frontend...$(NC)"
+	docker-compose -f $(COMPOSE_FILE) restart frontend
+	@echo "$(GREEN)Frontend restarted!$(NC)"
+
+clean: ## Clean up images and containers
+	@echo "$(BLUE)Cleaning up Docker resources...$(NC)"
+	docker-compose -f $(COMPOSE_FILE) down -v --rmi all --remove-orphans
+	docker system prune -f
+	@echo "$(GREEN)Cleanup completed!$(NC)"
+
+dev: ## Start development environment
+	@echo "$(BLUE)Starting development environment...$(NC)"
+	docker-compose -f $(COMPOSE_FILE) up -d falkordb rust-server
+	@echo "$(GREEN)Backend services started for development!$(NC)"
+	@echo "$(YELLOW)Run 'cd frontend && npm run dev' to start frontend development server$(NC)"
+
+prod: up-production ## Alias for production startup
+
+scale-frontend: ## Scale frontend to multiple instances
+	@read -p "Number of frontend instances: " instances; \
+	docker-compose -f $(COMPOSE_FILE) up -d --scale frontend=$$instances frontend
+
+health: ## Check health of all services
+	@echo "$(BLUE)Checking service health...$(NC)"
+	@echo "$(YELLOW)Frontend Health:$(NC)"
+	@curl -s http://localhost:8080/health || echo "$(RED)Frontend unhealthy$(NC)"
+	@echo "$(YELLOW)Rust Server Health:$(NC)"
+	@curl -s http://localhost:3000/health || echo "$(RED)Rust server unhealthy$(NC)"
+	@echo "$(YELLOW)FalkorDB Health:$(NC)"
+	@docker exec graphiti-falkordb redis-cli ping || echo "$(RED)FalkorDB unhealthy$(NC)"
+
+status: ## Show status of all services
+	@echo "$(BLUE)Service Status:$(NC)"
+	docker-compose -f $(COMPOSE_FILE) ps
+
+exec-frontend: ## Execute bash in frontend container
+	docker exec -it graphiti-frontend /bin/sh
+
+exec-rust: ## Execute bash in rust server container
+	docker exec -it graphiti-rust-server /bin/bash
+
+exec-db: ## Execute redis-cli in database container
+	docker exec -it graphiti-falkordb redis-cli
+
+backup-db: ## Backup FalkorDB data
+	@echo "$(BLUE)Creating FalkorDB backup...$(NC)"
+	docker exec graphiti-falkordb redis-cli --rdb /data/backup-$(shell date +%Y%m%d-%H%M%S).rdb
+	@echo "$(GREEN)Backup created!$(NC)"
+
+update: ## Pull latest images and restart
+	@echo "$(BLUE)Updating services...$(NC)"
+	docker-compose -f $(COMPOSE_FILE) pull
+	docker-compose -f $(COMPOSE_FILE) up -d
+	@echo "$(GREEN)Services updated!$(NC)"
+
+test: ## Run health checks and basic tests
+	@echo "$(BLUE)Running tests...$(NC)"
+	@$(MAKE) health
+	@echo "$(GREEN)Tests completed!$(NC)"
+
+install: ## Initial setup - build and start services
+	@echo "$(BLUE)Setting up Graphiti Frontend for the first time...$(NC)"
+	@$(MAKE) build
+	@$(MAKE) up
+	@echo "$(GREEN)Setup completed! Check http://localhost:8080$(NC)"
