@@ -4,6 +4,11 @@ import { Filter, Route, Focus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { GraphNode } from '../api/types';
 
+interface SearchAccessor {
+  label: string;
+  [key: string]: unknown;
+}
+
 interface GraphSearchProps {
   className?: string;
   onNodeSelect?: (node: GraphNode) => void;
@@ -21,7 +26,7 @@ export const GraphSearch: React.FC<GraphSearchProps> = React.memo(({
   onClearSelection,
   onFilterClick
 }) => {
-  const searchRef = useRef<any>(null);
+  const searchRef = useRef<HTMLDivElement>(null);
   const lastSearchResults = useRef<GraphNode[]>([]);
 
   // Memoized content accessor function
@@ -64,7 +69,7 @@ export const GraphSearch: React.FC<GraphSearchProps> = React.memo(({
     console.log(`Search found ${nodes?.length || 0} results`);
   };
 
-  const handleEnter = (input: string | any, accessor?: any) => {
+  const handleEnter = (input: string | unknown, accessor?: SearchAccessor) => {
     // Handle case where input might be an object instead of string
     const inputString = typeof input === 'string' ? input : String(input);
     console.log(`Search enter: "${inputString}" using ${accessor?.label || 'default'} accessor`);
@@ -78,7 +83,7 @@ export const GraphSearch: React.FC<GraphSearchProps> = React.memo(({
     }
   };
 
-  const handleAccessorSelect = (accessor: any, index: number) => {
+  const handleAccessorSelect = (accessor: SearchAccessor, index: number) => {
     console.log(`Search accessor changed to: ${accessor.label}`);
   };
 

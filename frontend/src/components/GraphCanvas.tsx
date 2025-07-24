@@ -1,22 +1,31 @@
 import React, { useEffect, useRef, forwardRef, useState, useCallback } from 'react';
 import { Cosmograph, useCosmograph } from '@cosmograph/react';
 import { GraphNode } from '../api/types';
+import type { GraphData } from '../types/graph';
 import { useGraphConfig } from '../contexts/GraphConfigContext';
 import { logger } from '../utils/logger';
+import { hexToRgba, generateHSLColor } from '../utils/colorCache';
 
 interface GraphLink {
   source: string;
   target: string;
   from: string;
   to: string;
-  [key: string]: any;
+  weight?: number;
+  edge_type?: string;
+  [key: string]: unknown;
+}
+
+interface GraphNodeWithPosition extends GraphNode {
+  x?: number;
+  y?: number;
 }
 
 interface GraphStats {
   total_nodes: number;
   total_edges: number;
   density?: number;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 interface CosmographRef {
@@ -42,7 +51,18 @@ interface GraphCanvasProps {
   stats?: GraphStats;
 }
 
-const GraphCanvasComponent = forwardRef<HTMLDivElement, GraphCanvasProps>(
+interface GraphCanvasHandle {
+  clearSelection: () => void;
+  selectNode: (node: GraphNode) => void;
+  selectNodes: (nodes: GraphNode[]) => void;
+  zoomIn: () => void;
+  zoomOut: () => void;
+  fitView: () => void;
+  setData: (nodes: GraphNode[], links: GraphLink[], runSimulation?: boolean) => void;
+  restart: () => void;
+}
+
+const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasProps>(
   ({ onNodeClick, onNodeSelect, onClearSelection, selectedNodes, highlightedNodes, className, stats }, ref) => {
     const cosmographRef = useRef<CosmographRef | null>(null);
     const { nodes, links } = useCosmograph();
@@ -58,6 +78,7 @@ const GraphCanvasComponent = forwardRef<HTMLDivElement, GraphCanvasProps>(
     const criticalOperationRef = useRef(false);
     const [prevSizeMapping, setPrevSizeMapping] = useState(config.sizeMapping);
     const tweenTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const animationFrameRef = useRef<number | null>(null);
     const zoomCooldownRef = useRef<NodeJS.Timeout | null>(null);
     // Simplified tweening state for size mapping transitions
     const [tweenState, setTweenState] = useState<{
@@ -77,51 +98,64 @@ const GraphCanvasComponent = forwardRef<HTMLDivElement, GraphCanvasProps>(
     });
 
 
-    // Set the cosmograph ref in context when it's available
+    // Canvas readiness tracking with single polling mechanism
+    const intervalRef = useRef<NodeJS.Timeout | null>(null);
+    
     useEffect(() => {
-      if (cosmographRef.current) {
-        setCosmographRef(cosmographRef);
-        setIsReady(true);
-        
-        // Aggressive canvas readiness check for initial load
-        let checkCount = 0;
-        const checkCanvas = () => {
-          if (cosmographRef.current?._canvasElement) {
-            setIsCanvasReady(true);
-            logger.log('Canvas ready after', checkCount * 50, 'ms');
-          } else {
+      // Set up continuous polling to check for cosmographRef availability
+      let checkCount = 0;
+      const pollCosmographRef = () => {
+        if (cosmographRef.current) {
+          console.log('GraphCanvas: Setting cosmographRef in context');
+          setCosmographRef(cosmographRef);
+          setIsReady(true);
+          
+          // Start canvas polling
+          const pollCanvas = () => {
+            const hasCanvas = !!cosmographRef.current?._canvasElement;
+            
+            setIsCanvasReady(prevReady => {
+              if (hasCanvas !== prevReady) {
+                console.log('GraphCanvas: Canvas ready state changed to', hasCanvas);
+              }
+              return hasCanvas;
+            });
+            
+            if (!hasCanvas && checkCount < 100) { // Max 5 seconds of polling
+              checkCount++;
+              // Aggressive polling for first 2 seconds, then slower
+              const delay = checkCount < 40 ? 50 : 200;
+              intervalRef.current = setTimeout(pollCanvas, delay);
+            }
+          };
+          
+          // Start canvas polling immediately
+          pollCanvas();
+        } else {
+          // Keep polling for cosmographRef every 100ms for up to 10 seconds
+          if (checkCount < 100) {
             checkCount++;
-            // Aggressive polling for first 2 seconds, then slower
-            const delay = checkCount < 40 ? 50 : 200;
-            setTimeout(checkCanvas, delay);
+            setTimeout(pollCosmographRef, 100);
+          } else {
+            console.warn('GraphCanvas: cosmographRef never became available after 10 seconds');
           }
-        };
-        
-        // Start checking immediately
-        setTimeout(checkCanvas, 0);
-      }
-    }, [])
-
-    // Monitor canvas state changes - removed circular dependency
-    useEffect(() => {
-      if (!cosmographRef.current) return;
+        }
+      };
       
-      const interval = setInterval(() => {
-        const hasCanvas = !!cosmographRef.current?._canvasElement;
-        setIsCanvasReady(prevReady => {
-          if (hasCanvas !== prevReady) {
-            logger.log('Canvas state changed:', hasCanvas);
-          }
-          return hasCanvas;
-        });
-      }, 100); // Faster polling for better responsiveness
+      // Start polling immediately
+      pollCosmographRef();
       
-      return () => clearInterval(interval);
-    }, []); // Remove isCanvasReady dependency to prevent recreation
+      return () => {
+        if (intervalRef.current) {
+          clearTimeout(intervalRef.current);
+          intervalRef.current = null;
+        }
+      };
+    }, [setCosmographRef]);
 
 
     // Helper function to calculate size values for a given mapping
-    const calculateSizeValues = useCallback((nodes: any[], mapping: string) => {
+    const calculateSizeValues = useCallback((nodes: GraphNode[], mapping: string) => {
       return nodes.map(node => {
         switch (mapping) {
           case 'uniform':
@@ -144,6 +178,48 @@ const GraphCanvasComponent = forwardRef<HTMLDivElement, GraphCanvasProps>(
       });
     }, []);
 
+
+    // Calculate average link distance for dynamic curve adjustment
+    const averageDistance = React.useMemo(() => {
+      if (links.length === 0) return 200; // Default distance
+      
+      let totalDistance = 0;
+      let validDistances = 0;
+      
+      links.forEach(link => {
+        const sourceNode = nodes.find(n => n.id === link.source);
+        const targetNode = nodes.find(n => n.id === link.target);
+        
+        if (sourceNode && targetNode) {
+          // Try to get positions from node properties or use defaults
+          const sourceWithPos = sourceNode as GraphNodeWithPosition;
+          const targetWithPos = targetNode as GraphNodeWithPosition;
+          const sx = sourceWithPos.x || sourceNode.properties?.x || 0;
+          const sy = sourceWithPos.y || sourceNode.properties?.y || 0;
+          const tx = targetWithPos.x || targetNode.properties?.x || 0;
+          const ty = targetWithPos.y || targetNode.properties?.y || 0;
+          
+          const distance = Math.sqrt((sx - tx) ** 2 + (sy - ty) ** 2);
+          if (distance > 0) {
+            totalDistance += distance;
+            validDistances++;
+          }
+        }
+      });
+      
+      return validDistances > 0 ? totalDistance / validDistances : 200;
+    }, [nodes, links]);
+
+    // Calculate dynamic curve properties based on average distance
+    const dynamicCurveWeight = React.useMemo(() => {
+      const normalizedDistance = Math.min(averageDistance / 300, 2.0);
+      return Math.max(0.1, config.curvedLinkWeight * (0.4 + normalizedDistance * 0.6));
+    }, [averageDistance, config.curvedLinkWeight]);
+    
+    const dynamicControlPointDistance = React.useMemo(() => {
+      const normalizedDistance = Math.min(averageDistance / 300, 2.0);
+      return Math.max(0.1, config.curvedLinkControlPointDistance * (0.3 + normalizedDistance * 0.7));
+    }, [averageDistance, config.curvedLinkControlPointDistance]);
 
     // Use provided data directly
     const transformedData = React.useMemo(() => {
@@ -176,9 +252,14 @@ const GraphCanvasComponent = forwardRef<HTMLDivElement, GraphCanvasProps>(
     // Handle size mapping changes with simple tweening
     useEffect(() => {
       if (config.sizeMapping !== prevSizeMapping && transformedData.nodes.length > 0) {
-        // Clear any existing animation
+        // Clear any existing animations
         if (tweenTimeoutRef.current) {
           clearTimeout(tweenTimeoutRef.current);
+          tweenTimeoutRef.current = null;
+        }
+        if (animationFrameRef.current) {
+          cancelAnimationFrame(animationFrameRef.current);
+          animationFrameRef.current = null;
         }
         
         // Calculate old and new values on-demand
@@ -218,29 +299,28 @@ const GraphCanvasComponent = forwardRef<HTMLDivElement, GraphCanvasProps>(
           setTweenProgress(easedProgress);
           
           if (progress < 1) {
-            animationId = requestAnimationFrame(animate);
+            animationFrameRef.current = requestAnimationFrame(animate);
           } else {
             // Animation complete
             setTweenState(prev => ({ ...prev, isActive: false }));
             setPrevSizeMapping(config.sizeMapping);
+            animationFrameRef.current = null;
           }
         };
         
-        animationId = requestAnimationFrame(animate);
-        
-        // Store animation ID for cleanup
-        tweenTimeoutRef.current = animationId as any;
+        animationFrameRef.current = requestAnimationFrame(animate);
       }
       
       return () => {
+        // Clean up timeouts
         if (tweenTimeoutRef.current) {
-          // Handle both timeout and animation frame cleanup
-          if (typeof tweenTimeoutRef.current === 'number') {
-            cancelAnimationFrame(tweenTimeoutRef.current);
-          } else {
-            clearTimeout(tweenTimeoutRef.current);
-          }
+          clearTimeout(tweenTimeoutRef.current);
           tweenTimeoutRef.current = null;
+        }
+        // Clean up animation frames
+        if (animationFrameRef.current) {
+          cancelAnimationFrame(animationFrameRef.current);
+          animationFrameRef.current = null;
         }
         if (doubleClickTimeoutRef.current) {
           clearTimeout(doubleClickTimeoutRef.current);
@@ -313,15 +393,9 @@ const GraphCanvasComponent = forwardRef<HTMLDivElement, GraphCanvasProps>(
       if (!cosmographRef.current?.setZoomLevel) return;
       
       try {
-        requestAnimationFrame(() => {
-          // Immediate canvas check - don't rely on state
-          const hasCanvas = !!cosmographRef.current?._canvasElement;
-          if (cosmographRef.current?.setZoomLevel && hasCanvas) {
-            const currentZoom = cosmographRef.current.getZoomLevel();
-            const newZoom = Math.min(currentZoom * 1.5, 10);
-            cosmographRef.current.setZoomLevel(newZoom, 300);
-          }
-        });
+        const currentZoom = cosmographRef.current.getZoomLevel();
+        const newZoom = Math.min(currentZoom * 1.5, 10);
+        cosmographRef.current.setZoomLevel(newZoom, 300);
       } catch (error) {
         logger.warn('Zoom in failed:', error);
       }
@@ -331,15 +405,9 @@ const GraphCanvasComponent = forwardRef<HTMLDivElement, GraphCanvasProps>(
       if (!cosmographRef.current?.setZoomLevel) return;
       
       try {
-        requestAnimationFrame(() => {
-          // Immediate canvas check - don't rely on state
-          const hasCanvas = !!cosmographRef.current?._canvasElement;
-          if (cosmographRef.current?.setZoomLevel && hasCanvas) {
-            const currentZoom = cosmographRef.current.getZoomLevel();
-            const newZoom = Math.max(currentZoom * 0.67, 0.1);
-            cosmographRef.current.setZoomLevel(newZoom, 300);
-          }
-        });
+        const currentZoom = cosmographRef.current.getZoomLevel();
+        const newZoom = Math.max(currentZoom * 0.67, 0.1);
+        cosmographRef.current.setZoomLevel(newZoom, 300);
       } catch (error) {
         logger.warn('Zoom out failed:', error);
       }
@@ -349,13 +417,7 @@ const GraphCanvasComponent = forwardRef<HTMLDivElement, GraphCanvasProps>(
       if (!cosmographRef.current?.fitView) return;
       
       try {
-        requestAnimationFrame(() => {
-          // Immediate canvas check - don't rely on state
-          const hasCanvas = !!cosmographRef.current?._canvasElement;
-          if (cosmographRef.current?.fitView && hasCanvas) {
-            cosmographRef.current.fitView(500);
-          }
-        });
+        cosmographRef.current.fitView(500);
       } catch (error) {
         logger.warn('Fit view failed:', error);
       }
@@ -368,7 +430,17 @@ const GraphCanvasComponent = forwardRef<HTMLDivElement, GraphCanvasProps>(
       selectNodes: selectCosmographNodes,
       zoomIn,
       zoomOut,
-      fitView
+      fitView,
+      setData: (nodes: GraphNode[], links: GraphLink[], runSimulation = true) => {
+        if (cosmographRef.current && typeof cosmographRef.current.setData === 'function') {
+          cosmographRef.current.setData(nodes, links, runSimulation);
+        }
+      },
+      restart: () => {
+        if (cosmographRef.current && typeof cosmographRef.current.restart === 'function') {
+          cosmographRef.current.restart();
+        }
+      }
     }), [clearCosmographSelection, selectCosmographNode, selectCosmographNodes, zoomIn, zoomOut, fitView]);
 
     // Handle Cosmograph events with double-click detection
@@ -390,12 +462,13 @@ const GraphCanvasComponent = forwardRef<HTMLDivElement, GraphCanvasProps>(
           onNodeClick(node);
           onNodeSelect(node.id);
         } else {
-          // Single click - immediate execution, show modal only (no visual selection)
+          // Single click - show modal and maintain visual selection
           doubleClickTimeoutRef.current = setTimeout(() => {
-            // Single click confirmed - show modal but keep graph in default state
+            // Single click confirmed - show modal and keep node visually selected
             logger.log('Single-click detected on node:', node.id);
-            onNodeClick(node); // Show modal only
-            // Do NOT call selectCosmographNode() or onNodeSelect() to keep graph in default state
+            selectCosmographNode(node); // Keep visual selection circle
+            onNodeClick(node); // Show modal
+            onNodeSelect(node.id); // Update selection state
           }, 300);
         }
         
@@ -416,7 +489,8 @@ const GraphCanvasComponent = forwardRef<HTMLDivElement, GraphCanvasProps>(
           <Cosmograph
             ref={cosmographRef}
             // Zoom and initialization
-            fitViewOnInit={false}
+            fitViewOnInit={true}
+            initialZoomLevel={1.5}
             disableZoom={false}
             // Appearance
             backgroundColor={config.backgroundColor}
@@ -428,32 +502,74 @@ const GraphCanvasComponent = forwardRef<HTMLDivElement, GraphCanvasProps>(
                 // Use a bright highlight color for search results
                 return 'rgba(255, 215, 0, 0.9)'; // Gold color with high opacity
               }
-              
-              // Always use context color mapping based on node type (ignore API colors)
-              const nodeType = node.node_type as keyof typeof config.nodeTypeColors;
-              const color = config.nodeTypeColors[nodeType] || '#b3b3b3';
-              const opacity = config.nodeOpacity / 100; // Convert percentage to decimal
-              
-              // Convert hex to rgba with opacity
-              if (color.startsWith('#')) {
-                const hex = color.substring(1);
-                // Handle both 3-char and 6-char hex codes
-                let r, g, b;
-                if (hex.length === 3) {
-                  r = parseInt(hex.substring(0, 1).repeat(2), 16);
-                  g = parseInt(hex.substring(1, 2).repeat(2), 16);
-                  b = parseInt(hex.substring(2, 3).repeat(2), 16);
-                } else if (hex.length === 6) {
-                  r = parseInt(hex.substring(0, 2), 16);
-                  g = parseInt(hex.substring(2, 4), 16);
-                  b = parseInt(hex.substring(4, 6), 16);
-                } else {
-                  // Invalid hex, fallback to default
-                  return color;
+
+              // Use cached color utilities for performance
+
+              const opacity = config.nodeOpacity / 100;
+
+              // Apply color scheme
+              switch (config.colorScheme) {
+                case 'by-type': {
+                  // Use individual type colors (original behavior)
+                  const nodeType = node.node_type as keyof typeof config.nodeTypeColors;
+                  const typeColor = config.nodeTypeColors[nodeType] || '#b3b3b3';
+                  return hexToRgba(typeColor, opacity);
                 }
-                return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+
+                case 'by-centrality': {
+                  // Color by degree centrality using cached calculation
+                  const centrality = node.properties?.degree_centrality || 0;
+                  const maxCentrality = 100;
+                  const centralityFactor = Math.min(centrality / maxCentrality, 1);
+                  return generateHSLColor('centrality', centralityFactor, opacity);
+                }
+
+                case 'by-pagerank': {
+                  // Color by PageRank score using cached calculation
+                  const pagerank = node.properties?.pagerank_centrality || node.properties?.pagerank || 0;
+                  const maxPagerank = 0.1;
+                  const pagerankFactor = Math.min(pagerank / maxPagerank, 1);
+                  return generateHSLColor('pagerank', pagerankFactor, opacity);
+                }
+
+                case 'by-degree': {
+                  // Color by connection count using cached calculation
+                  const degree = node.properties?.degree || node.properties?.degree_centrality || 0;
+                  const maxDegree = 50;
+                  const degreeFactor = Math.min(degree / maxDegree, 1);
+                  return generateHSLColor('degree', degreeFactor, opacity);
+                }
+
+                case 'by-community': {
+                  // Color by detected community (using node type as proxy)
+                  const communityColors = [
+                    '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', 
+                    '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F',
+                    '#BB8FCE', '#85C1E9', '#F8C471', '#82E0AA'
+                  ];
+                  const communityType = node.node_type;
+                  const communityIndex = ['Entity', 'Episodic', 'Agent', 'Community'].indexOf(communityType);
+                  const communityColor = communityColors[communityIndex] || communityColors[0];
+                  return hexToRgba(communityColor, opacity);
+                }
+
+                case 'custom': {
+                  // Use custom property-based coloring
+                  const customValue = node.properties?.importance_centrality || node.properties?.custom_score || 0;
+                  const customFactor = Math.min(customValue / 10, 1);
+                  return hexToRgba(
+                    customFactor > 0.5 ? config.gradientHighColor : config.gradientLowColor, 
+                    opacity
+                  );
+                }
+
+                default: {
+                  // Fallback to type-based coloring
+                  const fallbackType = node.node_type as keyof typeof config.nodeTypeColors;
+                  const fallbackColor = config.nodeTypeColors[fallbackType] || '#b3b3b3';
+                  return hexToRgba(fallbackColor, opacity);
+                }
               }
-              return color; // Fallback for non-hex colors
             }}
             nodeSize={(node: GraphNode) => {
               let rawSize: number;
@@ -515,17 +631,102 @@ const GraphCanvasComponent = forwardRef<HTMLDivElement, GraphCanvasProps>(
               return isHighlighted ? finalSize * 1.2 : finalSize;
             }}
             nodeLabelAccessor={(node: GraphNode) => node.label || node.id}
-            linkColor={config.linkColor}
+            linkColor={(link: GraphLink) => {
+              switch (config.linkColorScheme) {
+                case 'uniform':
+                  return config.linkColor;
+                
+                case 'by-weight': {
+                  // Color intensity based on weight (darker = stronger)
+                  const weight = link.weight || 1;
+                  const intensity = Math.min(weight / 5, 1); // Normalize to 0-1
+                  return `rgba(102, 102, 102, ${0.3 + intensity * 0.7})`;
+                }
+                
+                case 'by-type': {
+                  // Different colors for different edge types
+                  const typeColors: Record<string, string> = {
+                    'RELATES_TO': '#4ECDC4',
+                    'MENTIONS': '#45B7D1', 
+                    'CONTAINS': '#96CEB4',
+                    'CONNECTED': '#FFEAA7',
+                    'SIMILAR': '#DDA0DD',
+                    'default': config.linkColor
+                  };
+                  return typeColors[link.edge_type] || typeColors.default;
+                }
+                
+                case 'by-distance': {
+                  // Color based on link length (shorter = warmer)
+                  const sourceNode = transformedData.nodes.find(n => n.id === link.source);
+                  const targetNode = transformedData.nodes.find(n => n.id === link.target);
+                  if (sourceNode && targetNode) {
+                    // Simple distance approximation based on degree difference
+                    const sourceDegree = sourceNode.properties?.degree_centrality || 0;
+                    const targetDegree = targetNode.properties?.degree_centrality || 0;
+                    const distance = Math.abs(sourceDegree - targetDegree);
+                    const hue = Math.max(0, 240 - distance * 40); // Blue to red gradient
+                    return `hsl(${hue}, 70%, 50%)`;
+                  }
+                  return config.linkColor;
+                }
+                
+                case 'gradient': {
+                  // Gradient between connected node colors
+                  const srcNode = transformedData.nodes.find(n => n.id === link.source);
+                  const tgtNode = transformedData.nodes.find(n => n.id === link.target);
+                  if (srcNode && tgtNode) {
+                    const srcType = srcNode.node_type as keyof typeof config.nodeTypeColors;
+                    const tgtType = tgtNode.node_type as keyof typeof config.nodeTypeColors;
+                    const srcColor = config.nodeTypeColors[srcType] || '#b3b3b3';
+                    const tgtColor = config.nodeTypeColors[tgtType] || '#b3b3b3';
+                    
+                    // If same type, use that color; otherwise blend
+                    if (srcType === tgtType) {
+                      return srcColor;
+                    } else {
+                      // Simple blend by making it semi-transparent
+                      return `${srcColor}80`; // Add alpha
+                    }
+                  }
+                  return config.linkColor;
+                }
+                
+                case 'community': {
+                  // Highlight inter-community connections
+                  const srcCommunityNode = transformedData.nodes.find(n => n.id === link.source);
+                  const tgtCommunityNode = transformedData.nodes.find(n => n.id === link.target);
+                  if (srcCommunityNode && tgtCommunityNode) {
+                    const srcCommunity = srcCommunityNode.node_type;
+                    const tgtCommunity = tgtCommunityNode.node_type;
+                    
+                    if (srcCommunity !== tgtCommunity) {
+                      // Inter-community link - make it bright
+                      return '#FFD700'; // Gold for bridges
+                    } else {
+                      // Intra-community link - make it subtle
+                      return '#666666';
+                    }
+                  }
+                  return config.linkColor;
+                }
+                
+                default:
+                  return config.linkColor;
+              }
+            }}
             linkWidth={config.linkWidth}
-            linkArrows={true}
-            linkArrowsSizeScale={0.5}
+            linkArrows={config.linkArrows}
+            linkArrowsSizeScale={config.linkArrowsSizeScale}
             linkGreyoutOpacity={1 - config.linkOpacity}
+            linkVisibilityDistance={config.linkVisibilityDistance}
+            linkVisibilityMinTransparency={config.linkVisibilityMinTransparency}
             
             // Curved Links
             curvedLinks={config.curvedLinks}
             curvedLinkSegments={config.curvedLinkSegments}
-            curvedLinkWeight={config.curvedLinkWeight}
-            curvedLinkControlPointDistance={config.curvedLinkControlPointDistance}
+            curvedLinkWeight={dynamicCurveWeight}
+            curvedLinkControlPointDistance={dynamicControlPointDistance}
             
             // Labels
             showDynamicLabels={config.showLabels}
@@ -574,8 +775,9 @@ const GraphCanvasComponent = forwardRef<HTMLDivElement, GraphCanvasProps>(
             simulationRepulsionFromMouse={config.mouseRepulsion}
             simulationDecay={config.simulationDecay}
             
-            // Quadtree optimization (disabled due to performance issues)
-            useQuadtree={false}
+            // Quadtree optimization  
+            useQuadtree={config.useQuadtree}
+            quadtreeLevels={config.quadtreeLevels}
             
             // Interaction
             onClick={handleClick}
@@ -585,7 +787,7 @@ const GraphCanvasComponent = forwardRef<HTMLDivElement, GraphCanvasProps>(
             nodeGreyoutOpacity={selectedNodes.length > 0 || highlightedNodes.length > 0 ? 0.1 : 1} // Only grey out when something is actually selected
             
             // Performance
-            pixelRatio={1} // Higher values break zoom functionality
+            pixelRatio={2.5} // 250% resolution
             showFPSMonitor={false}
             
             // Selection
@@ -611,23 +813,27 @@ const GraphCanvasComponent = forwardRef<HTMLDivElement, GraphCanvasProps>(
 export const GraphCanvas = React.memo(GraphCanvasComponent, (prevProps, nextProps) => {
   // Ultra-restrictive comparison - only re-render for essential changes
   
-  // Only re-render if data references actually changed (not just array contents)
-  const dataChanged = prevProps.nodes !== nextProps.nodes || 
-                     prevProps.links !== nextProps.links;
+  // Check callback functions by reference (they should be stable with useCallback)
+  const callbacksChanged = prevProps.onNodeClick !== nextProps.onNodeClick ||
+                           prevProps.onNodeSelect !== nextProps.onNodeSelect ||
+                           prevProps.onClearSelection !== nextProps.onClearSelection;
   
   // Proper deep comparison for selection arrays
-  const selectedNodesChanged = prevProps.selectedNodes !== nextProps.selectedNodes &&
-                              (prevProps.selectedNodes.length !== nextProps.selectedNodes.length ||
-                               !prevProps.selectedNodes.every((id, index) => id === nextProps.selectedNodes[index]));
+  const selectedNodesChanged = prevProps.selectedNodes !== nextProps.selectedNodes ||
+                              prevProps.selectedNodes.length !== nextProps.selectedNodes.length ||
+                              !prevProps.selectedNodes.every((id, index) => id === nextProps.selectedNodes[index]);
                                
-  const highlightedNodesChanged = prevProps.highlightedNodes !== nextProps.highlightedNodes &&
-                                 (prevProps.highlightedNodes.length !== nextProps.highlightedNodes.length ||
-                                  !prevProps.highlightedNodes.every((id, index) => id === nextProps.highlightedNodes[index]));
+  const highlightedNodesChanged = prevProps.highlightedNodes !== nextProps.highlightedNodes ||
+                                 prevProps.highlightedNodes.length !== nextProps.highlightedNodes.length ||
+                                 !prevProps.highlightedNodes.every((id, index) => id === nextProps.highlightedNodes[index]);
   
   // Only re-render if stats actually changed
   const statsChanged = prevProps.stats !== nextProps.stats;
   
-  const shouldRerender = dataChanged || selectedNodesChanged || highlightedNodesChanged || statsChanged;
+  // ClassName changes
+  const classNameChanged = prevProps.className !== nextProps.className;
+  
+  const shouldRerender = callbacksChanged || selectedNodesChanged || highlightedNodesChanged || statsChanged || classNameChanged;
   
   // Return true to skip re-render, false to re-render
   return !shouldRerender;

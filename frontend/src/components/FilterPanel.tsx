@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { X, Filter, Calendar, TrendingUp, Tag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,45 +9,119 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useGraphConfig } from '../contexts/GraphConfigContext';
+import type { GraphData } from '../types/graph';
 
 interface FilterPanelProps {
   isOpen: boolean;
   onClose: () => void;
+  data?: GraphData;
 }
 
 export const FilterPanel: React.FC<FilterPanelProps> = ({ 
   isOpen, 
-  onClose 
+  onClose,
+  data
 }) => {
-  const [selectedTypes, setSelectedTypes] = useState<string[]>(['Entity', 'Agent']);
-  const [degreeRange, setDegreeRange] = useState([0, 100]);
-  const [pagerankRange, setPagerankRange] = useState([0, 100]);
-  const [dateRange, setDateRange] = useState({ start: '', end: '' });
-  const [minConnections, setMinConnections] = useState('');
-  const [maxConnections, setMaxConnections] = useState('');
+  const { config, updateConfig } = useGraphConfig();
+  
+  // Compute real node type statistics from actual data
+  const nodeTypeStats = useMemo(() => {
+    if (!data?.nodes) return [];
+    
+    const typeCount: Record<string, number> = {};
+    data.nodes.forEach(node => {
+      const type = node.node_type || 'Unknown';
+      typeCount[type] = (typeCount[type] || 0) + 1;
+    });
 
-  const nodeTypes = [
-    { id: 'Entity', label: 'Entity', color: 'bg-node-entity', count: 2847 },
-    { id: 'Episodic', label: 'Episodic', color: 'bg-node-episodic', count: 1024 },
-    { id: 'Agent', label: 'Agent', color: 'bg-node-agent', count: 892 },
-    { id: 'Community', label: 'Community', color: 'bg-node-community', count: 156 }
-  ];
+    return Object.entries(typeCount).map(([type, count]) => ({
+      id: type,
+      label: type,
+      color: {
+        'Entity': 'bg-node-entity',
+        'Episodic': 'bg-node-episodic',
+        'Agent': 'bg-node-agent',
+        'Community': 'bg-node-community'
+      }[type] || 'bg-primary',
+      count
+    }));
+  }, [data?.nodes]);
+  
+  // Local state for temporary filter values before applying
+  const [tempFilters, setTempFilters] = useState({
+    selectedTypes: config.filteredNodeTypes,
+    degreeRange: [config.minDegree, config.maxDegree],
+    pagerankRange: [config.minPagerank, config.maxPagerank],
+    minConnections: config.minConnections.toString(),
+    maxConnections: config.maxConnections.toString(),
+    dateRange: { start: config.startDate, end: config.endDate }
+  });
+  
+  // Sync tempFilters with config changes when modal opens
+  React.useEffect(() => {
+    if (isOpen) {
+      setTempFilters({
+        selectedTypes: config.filteredNodeTypes,
+        degreeRange: [config.minDegree, config.maxDegree],
+        pagerankRange: [config.minPagerank, config.maxPagerank],
+        minConnections: config.minConnections.toString(),
+        maxConnections: config.maxConnections.toString(),
+        dateRange: { start: config.startDate, end: config.endDate }
+      });
+    }
+  }, [isOpen, config.filteredNodeTypes, config.minDegree, config.maxDegree, 
+      config.minPagerank, config.maxPagerank, config.minConnections, 
+      config.maxConnections, config.startDate, config.endDate]);
 
   const handleTypeToggle = (typeId: string) => {
-    setSelectedTypes(prev => 
-      prev.includes(typeId) 
-        ? prev.filter(id => id !== typeId)
-        : [...prev, typeId]
-    );
+    setTempFilters(prev => ({
+      ...prev,
+      selectedTypes: prev.selectedTypes.includes(typeId)
+        ? prev.selectedTypes.filter(id => id !== typeId)
+        : [...prev.selectedTypes, typeId]
+    }));
   };
 
   const clearAllFilters = () => {
-    setSelectedTypes(['Entity', 'Episodic', 'Agent', 'Community']);
-    setDegreeRange([0, 100]);
-    setPagerankRange([0, 100]);
-    setDateRange({ start: '', end: '' });
-    setMinConnections('');
-    setMaxConnections('');
+    const allTypes = nodeTypeStats.map(type => type.id);
+    setTempFilters({
+      selectedTypes: allTypes,
+      degreeRange: [0, 100],
+      pagerankRange: [0, 100],
+      minConnections: '0',
+      maxConnections: '1000',
+      dateRange: { start: '', end: '' }
+    });
+  };
+  
+  const applyFilters = () => {
+    updateConfig({
+      filteredNodeTypes: tempFilters.selectedTypes,
+      minDegree: tempFilters.degreeRange[0],
+      maxDegree: tempFilters.degreeRange[1],
+      minPagerank: tempFilters.pagerankRange[0],
+      maxPagerank: tempFilters.pagerankRange[1],
+      minConnections: parseInt(tempFilters.minConnections) || 0,
+      maxConnections: parseInt(tempFilters.maxConnections) || 1000,
+      startDate: tempFilters.dateRange.start,
+      endDate: tempFilters.dateRange.end
+    });
+    onClose();
+  };
+  
+  const handleDatePreset = (days: number) => {
+    const end = new Date();
+    const start = new Date();
+    start.setDate(start.getDate() - days);
+    
+    setTempFilters(prev => ({
+      ...prev,
+      dateRange: {
+        start: start.toISOString().split('T')[0],
+        end: end.toISOString().split('T')[0]
+      }
+    }));
   };
 
   if (!isOpen) return null;
@@ -95,14 +169,14 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
                 <div>
                   <h3 className="text-sm font-medium mb-4">Node Types</h3>
                   <div className="grid grid-cols-2 gap-3">
-                    {nodeTypes.map((type) => (
+                    {nodeTypeStats.map((type) => (
                       <div 
                         key={type.id}
                         className="flex items-center justify-between p-3 rounded-lg border border-border/30 hover:border-primary/30 transition-colors"
                       >
                         <div className="flex items-center space-x-3">
                           <Checkbox
-                            checked={selectedTypes.includes(type.id)}
+                            checked={tempFilters.selectedTypes.includes(type.id)}
                             onCheckedChange={() => handleTypeToggle(type.id)}
                           />
                           <div className={`w-3 h-3 rounded-full ${type.color}`} />
@@ -137,12 +211,12 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
                   <div className="flex justify-between items-center mb-3">
                     <Label className="text-sm font-medium">Degree Centrality</Label>
                     <Badge variant="outline" className="text-xs">
-                      {degreeRange[0]}% - {degreeRange[1]}%
+                      {tempFilters.degreeRange[0]}% - {tempFilters.degreeRange[1]}%
                     </Badge>
                   </div>
                   <Slider
-                    value={degreeRange}
-                    onValueChange={setDegreeRange}
+                    value={tempFilters.degreeRange}
+                    onValueChange={(value) => setTempFilters(prev => ({ ...prev, degreeRange: value }))}
                     max={100}
                     min={0}
                     step={1}
@@ -154,12 +228,12 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
                   <div className="flex justify-between items-center mb-3">
                     <Label className="text-sm font-medium">PageRank Score</Label>
                     <Badge variant="outline" className="text-xs">
-                      {pagerankRange[0]}% - {pagerankRange[1]}%
+                      {tempFilters.pagerankRange[0]}% - {tempFilters.pagerankRange[1]}%
                     </Badge>
                   </div>
                   <Slider
-                    value={pagerankRange}
-                    onValueChange={setPagerankRange}
+                    value={tempFilters.pagerankRange}
+                    onValueChange={(value) => setTempFilters(prev => ({ ...prev, pagerankRange: value }))}
                     max={100}
                     min={0}
                     step={1}
@@ -174,8 +248,8 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
                       <Label className="text-xs text-muted-foreground">Minimum</Label>
                       <Input
                         type="number"
-                        value={minConnections}
-                        onChange={(e) => setMinConnections(e.target.value)}
+                        value={tempFilters.minConnections}
+                        onChange={(e) => setTempFilters(prev => ({ ...prev, minConnections: e.target.value }))}
                         placeholder="0"
                         className="bg-secondary/30"
                       />
@@ -184,8 +258,8 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
                       <Label className="text-xs text-muted-foreground">Maximum</Label>
                       <Input
                         type="number"
-                        value={maxConnections}
-                        onChange={(e) => setMaxConnections(e.target.value)}
+                        value={tempFilters.maxConnections}
+                        onChange={(e) => setTempFilters(prev => ({ ...prev, maxConnections: e.target.value }))}
                         placeholder="1000"
                         className="bg-secondary/30"
                       />
@@ -202,8 +276,11 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
                       <Label className="text-xs text-muted-foreground">Start Date</Label>
                       <Input
                         type="date"
-                        value={dateRange.start}
-                        onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
+                        value={tempFilters.dateRange.start}
+                        onChange={(e) => setTempFilters(prev => ({ 
+                          ...prev, 
+                          dateRange: { ...prev.dateRange, start: e.target.value }
+                        }))}
                         className="bg-secondary/30"
                       />
                     </div>
@@ -211,8 +288,11 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
                       <Label className="text-xs text-muted-foreground">End Date</Label>
                       <Input
                         type="date"
-                        value={dateRange.end}
-                        onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
+                        value={tempFilters.dateRange.end}
+                        onChange={(e) => setTempFilters(prev => ({ 
+                          ...prev, 
+                          dateRange: { ...prev.dateRange, end: e.target.value }
+                        }))}
                         className="bg-secondary/30"
                       />
                     </div>
@@ -222,16 +302,36 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
                 <div>
                   <h3 className="text-sm font-medium mb-3">Quick Presets</h3>
                   <div className="grid grid-cols-2 gap-2">
-                    <Button variant="outline" size="sm" className="h-8">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="h-8"
+                      onClick={() => handleDatePreset(1)}
+                    >
                       Last 24h
                     </Button>
-                    <Button variant="outline" size="sm" className="h-8">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="h-8"
+                      onClick={() => handleDatePreset(7)}
+                    >
                       Last 7 days
                     </Button>
-                    <Button variant="outline" size="sm" className="h-8">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="h-8"
+                      onClick={() => handleDatePreset(30)}
+                    >
                       Last 30 days
                     </Button>
-                    <Button variant="outline" size="sm" className="h-8">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="h-8"
+                      onClick={() => handleDatePreset(90)}
+                    >
                       Last 90 days
                     </Button>
                   </div>
@@ -245,7 +345,7 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
         <div className="p-4 border-t border-border/20 flex items-center justify-between bg-secondary/20">
           <div className="flex items-center space-x-2">
             <Badge variant="secondary" className="text-xs">
-              {selectedTypes.length} types selected
+              {tempFilters.selectedTypes.length} types selected
             </Badge>
             <Button 
               variant="ghost" 
@@ -260,7 +360,10 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
             <Button variant="outline" onClick={onClose}>
               Cancel
             </Button>
-            <Button className="bg-primary hover:bg-primary/90">
+            <Button 
+              className="bg-primary hover:bg-primary/90"
+              onClick={applyFilters}
+            >
               Apply Filters
             </Button>
           </div>
