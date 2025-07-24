@@ -98,20 +98,57 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasProps>(
     });
 
 
-    // Canvas readiness tracking with single polling mechanism
+    // Canvas readiness tracking with single polling mechanism and WebGL context loss recovery
     const intervalRef = useRef<NodeJS.Timeout | null>(null);
+    const [webglContextLost, setWebglContextLost] = useState(false);
+    
+    // WebGL context loss recovery
+    const setupWebGLContextRecovery = useCallback(() => {
+      const canvas = cosmographRef.current?._canvasElement;
+      if (!canvas) return;
+
+      const handleContextLost = (event: Event) => {
+        event.preventDefault();
+        console.warn('GraphCanvas: WebGL context lost, attempting recovery...');
+        setWebglContextLost(true);
+      };
+
+      const handleContextRestored = () => {
+        console.log('GraphCanvas: WebGL context restored');
+        setWebglContextLost(false);
+        
+        // Trigger re-render by restarting the simulation
+        try {
+          cosmographRef.current?.restart();
+        } catch (error) {
+          console.error('GraphCanvas: Error restarting after context restore:', error);
+        }
+      };
+
+      canvas.addEventListener('webglcontextlost', handleContextLost);
+      canvas.addEventListener('webglcontextrestored', handleContextRestored);
+
+      return () => {
+        canvas.removeEventListener('webglcontextlost', handleContextLost);
+        canvas.removeEventListener('webglcontextrestored', handleContextRestored);
+      };
+    }, []);
     
     useEffect(() => {
       // Set up continuous polling to check for cosmographRef availability
       let checkCount = 0;
       const pollCosmographRef = () => {
         if (cosmographRef.current) {
-          console.log('GraphCanvas: Setting cosmographRef in context');
-          setCosmographRef(cosmographRef);
-          setIsReady(true);
-          
-          // Start canvas polling
-          const pollCanvas = () => {
+          try {
+            console.log('GraphCanvas: Setting cosmographRef in context');
+            setCosmographRef(cosmographRef);
+            setIsReady(true);
+            
+            // Set up WebGL context loss recovery
+            const cleanupWebGL = setupWebGLContextRecovery();
+            
+            // Start canvas polling
+            const pollCanvas = () => {
             const hasCanvas = !!cosmographRef.current?._canvasElement;
             
             setIsCanvasReady(prevReady => {

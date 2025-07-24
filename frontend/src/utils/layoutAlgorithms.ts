@@ -61,7 +61,8 @@ export function calculateCircularLayout(
   const radius = Math.min(canvasWidth, canvasHeight) * 0.35; // 35% of smaller dimension
   
   const positions: LayoutPosition[] = [];
-  const angleStep = (2 * Math.PI) / nodes.length;
+  // Protect against division by zero
+  const angleStep = nodes.length > 0 ? (2 * Math.PI) / nodes.length : 0;
   
   // Create position lookup for original node order
   const nodeIndexMap = new Map(nodes.map((node, index) => [node.id, index]));
@@ -279,7 +280,7 @@ export function calculateClusterLayout(
   
   clusterArray.forEach(([clusterKey, clusterNodes], clusterIndex) => {
     // Position cluster center
-    const angle = (clusterIndex / clusterCount) * 2 * Math.PI;
+    const angle = clusterCount > 0 ? (clusterIndex / clusterCount) * 2 * Math.PI : 0;
     const clusterCenterX = canvasWidth / 2 + arrangementRadius * Math.cos(angle);
     const clusterCenterY = canvasHeight / 2 + arrangementRadius * Math.sin(angle);
     
@@ -291,8 +292,8 @@ export function calculateClusterLayout(
         x = clusterCenterX;
         y = clusterCenterY;
       } else {
-        const nodeAngle = (nodeIndex / clusterNodes.length) * 2 * Math.PI;
-        const nodeRadius = clusterRadius * Math.sqrt(nodeIndex / clusterNodes.length);
+        const nodeAngle = clusterNodes.length > 0 ? (nodeIndex / clusterNodes.length) * 2 * Math.PI : 0;
+        const nodeRadius = clusterNodes.length > 0 ? clusterRadius * Math.sqrt(nodeIndex / clusterNodes.length) : 0;
         x = clusterCenterX + nodeRadius * Math.cos(nodeAngle);
         y = clusterCenterY + nodeRadius * Math.sin(nodeAngle);
       }
