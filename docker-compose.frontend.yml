@@ -1,0 +1,148 @@
+version: '3.8'
+
+services:
+  # Graphiti Frontend - Production React App
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: production
+    container_name: graphiti-frontend
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    environment:
+      - NODE_ENV=production
+      - VITE_API_BASE_URL=http://rust-server:3000
+      - VITE_WS_URL=ws://rust-server:3000/ws
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - graphiti-network
+    depends_on:
+      - rust-server
+    volumes:
+      - frontend-logs:/var/log/nginx
+    labels:
+      - "com.docker.compose.service=frontend"
+      - "description=Graphiti React Frontend with Nginx"
+
+  # Rust Graph Visualization Server
+  rust-server:
+    build:
+      context: ./graph-visualizer-rust
+      dockerfile: Dockerfile
+    container_name: graphiti-rust-server  
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - RUST_LOG=info
+      - FALKORDB_HOST=falkordb
+      - FALKORDB_PORT=6379
+      - FALKORDB_DB=0
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - graphiti-network
+    depends_on:
+      - falkordb
+    labels:
+      - "com.docker.compose.service=rust-server"
+      - "description=Rust Graph Visualization Server"
+
+  # FalkorDB Graph Database
+  falkordb:
+    image: falkordb/falkordb:latest
+    container_name: graphiti-falkordb
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - falkordb-data:/data
+    command: falkordb-server --save 60 1 --loglevel warning --maxmemory 2gb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - graphiti-network
+    labels:
+      - "com.docker.compose.service=falkordb"
+      - "description=FalkorDB Graph Database"
+
+  # Redis Insight for FalkorDB Management (Optional)
+  redisinsight:
+    image: redislabs/redisinsight:latest
+    container_name: graphiti-redisinsight
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    volumes:
+      - redisinsight-data:/db
+    networks:
+      - graphiti-network
+    depends_on:
+      - falkordb
+    profiles:
+      - tools
+    labels:
+      - "com.docker.compose.service=redisinsight"
+      - "description=Redis Insight for FalkorDB Management"
+
+  # Nginx Load Balancer (for scaling)
+  nginx-lb:
+    image: nginx:alpine
+    container_name: graphiti-nginx-lb
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx-lb.conf:/etc/nginx/nginx.conf:ro
+      - nginx-logs:/var/log/nginx
+    networks:
+      - graphiti-network
+    depends_on:
+      - frontend
+    profiles:
+      - production
+    labels:
+      - "com.docker.compose.service=nginx-lb"
+      - "description=Nginx Load Balancer"
+
+volumes:
+  falkordb-data:
+    driver: local
+    labels:
+      - "description=FalkorDB persistent data"
+  
+  redisinsight-data:
+    driver: local
+    labels:
+      - "description=Redis Insight configuration data"
+  
+  frontend-logs:
+    driver: local
+    labels:
+      - "description=Frontend Nginx access logs"
+  
+  nginx-logs:
+    driver: local
+    labels:
+      - "description=Load balancer logs"
+
+networks:
+  graphiti-network:
+    driver: bridge
+    labels:
+      - "description=Graphiti application network"
