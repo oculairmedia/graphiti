@@ -1,87 +1,49 @@
-# syntax=docker/dockerfile:1.9
-FROM python:3.12-slim as builder
+# Simple single-stage build using development mode
+FROM python:3.12-slim
 
 WORKDIR /app
 
-# Install system dependencies for building
+# Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     curl \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Install uv using the installer script
+# Install uv
 ADD https://astral.sh/uv/install.sh /uv-installer.sh
 RUN sh /uv-installer.sh && rm /uv-installer.sh
 ENV PATH="/root/.local/bin:$PATH"
 
-# Configure uv for optimal Docker usage
+# Configure uv
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
     UV_PYTHON_DOWNLOADS=never
 
-# Copy and build main graphiti-core project
+# Copy entire project source
 COPY ./pyproject.toml ./README.md ./
 COPY ./graphiti_core ./graphiti_core
+COPY ./server ./server
 
-# Build graphiti-core wheel
+# Install graphiti-core in development mode (uses source directly)
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv build
+    uv pip install --system -e .
 
-# Install the built wheel to make it available for server
-RUN --mount=type=cache,target=/root/.cache/uv \
-    pip install dist/*.whl
-
-# Runtime stage - build the server here
-FROM python:3.12-slim
-
-# Install uv using the installer script
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
-    ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
-
-ADD https://astral.sh/uv/install.sh /uv-installer.sh
-RUN sh /uv-installer.sh && rm /uv-installer.sh
-ENV PATH="/root/.local/bin:$PATH"
-
-# Configure uv for runtime
-ENV UV_COMPILE_BYTECODE=1 \
-    UV_LINK_MODE=copy \
-    UV_PYTHON_DOWNLOADS=never
-
-# Create non-root user
-RUN groupadd -r app && useradd -r -d /app -g app app
-
-# Copy graphiti-core wheel from builder
-COPY --from=builder /app/dist/*.whl /tmp/
-
-# Install graphiti-core wheel first
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install --system /tmp/*.whl
-
-# Set up the server application
-WORKDIR /app
-COPY ./server/pyproject.toml ./server/README.md ./server/uv.lock ./
-COPY ./server/graph_service ./graph_service
-
-# Install server dependencies and application
+# Install server dependencies and ensure it uses our development graphiti-core
+WORKDIR /app/server
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev
-
-# Change ownership to app user
-RUN chown -R app:app /app
+# Install our development graphiti-core into server venv to override PyPI version
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --python .venv/bin/python -e /app
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \
-    PATH="/app/.venv/bin:$PATH"
-
-# Switch to non-root user
-USER app
+    PATH="/root/.local/bin:/app/server/.venv/bin:$PATH"
 
 # Set port
 ENV PORT=8000
 EXPOSE $PORT
 
-# Use uv run for execution
-CMD ["uv", "run", "uvicorn", "graph_service.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Use server venv python with proper path setup
+CMD ["/app/server/.venv/bin/python", "-c", "import sys; sys.path.insert(0, '/app'); import uvicorn; uvicorn.run('graph_service.main:app', host='0.0.0.0', port=8000)"]
