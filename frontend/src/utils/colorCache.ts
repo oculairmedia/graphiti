@@ -4,6 +4,7 @@
 interface ColorCacheEntry {
   color: string;
   timestamp: number;
+  lastAccessed: number;
 }
 
 class ColorCalculationCache {
@@ -27,6 +28,9 @@ class ColorCalculationCache {
       return null;
     }
     
+    // Update last accessed time for LRU tracking
+    entry.lastAccessed = Date.now();
+    
     return entry.color;
   }
 
@@ -37,9 +41,11 @@ class ColorCalculationCache {
     }
 
     const key = this.generateCacheKey(scheme, value, opacity);
+    const now = Date.now();
     this.cache.set(key, {
       color,
-      timestamp: Date.now()
+      timestamp: now,
+      lastAccessed: now
     });
   }
 
@@ -55,10 +61,10 @@ class ColorCalculationCache {
 
     toDelete.forEach(key => this.cache.delete(key));
 
-    // If still too large, remove oldest entries
+    // If still too large, remove least recently used entries (proper LRU)
     if (this.cache.size >= this.maxSize) {
       const entries = Array.from(this.cache.entries());
-      entries.sort((a, b) => a[1].timestamp - b[1].timestamp);
+      entries.sort((a, b) => a[1].lastAccessed - b[1].lastAccessed);
       
       const toRemove = entries.slice(0, Math.floor(this.maxSize * 0.2));
       toRemove.forEach(([key]) => this.cache.delete(key));
@@ -82,7 +88,6 @@ export const colorCache = new ColorCalculationCache();
 
 // Fast hex to rgba conversion with caching
 export const hexToRgba = (hex: string, opacity: number): string => {
-  const cacheKey = `hex:${hex}:${opacity}`;
   const cached = colorCache.get('hex', hash(hex), opacity);
   if (cached) return cached;
 

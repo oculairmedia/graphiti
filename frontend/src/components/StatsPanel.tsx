@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import type { GraphData, GraphStats } from '../types/graph';
 
-// Performance monitoring hook
+// Performance monitoring hook with proper unmount detection
 const usePerformanceMonitoring = () => {
   const [performanceData, setPerformanceData] = React.useState({
     fps: 0,
@@ -19,31 +19,49 @@ const usePerformanceMonitoring = () => {
     let frameCount = 0;
     let lastTime = performance.now();
     let animationId: number;
+    let isMounted = true;
 
     const measureFPS = () => {
+      // Check if component is still mounted before updating state
+      if (!isMounted) return;
+      
       frameCount++;
       const now = performance.now();
       
       if (now - lastTime >= 1000) {
         const fps = Math.round((frameCount * 1000) / (now - lastTime));
         
-        setPerformanceData(prev => ({
-          ...prev,
-          fps,
-          memory: (performance as any).memory ? 
-            Math.round((performance as any).memory.usedJSHeapSize / 1024 / 1024) : 0
-        }));
+        // Only update state if component is still mounted
+        if (isMounted) {
+          // Safe memory monitoring with proper type checking
+          const memoryUsage = typeof performance !== 'undefined' && 
+            'memory' in performance && 
+            typeof (performance as { memory?: { usedJSHeapSize?: number } }).memory === 'object' &&
+            (performance as { memory: { usedJSHeapSize?: number } }).memory?.usedJSHeapSize
+            ? Math.round((performance as { memory: { usedJSHeapSize: number } }).memory.usedJSHeapSize / 1024 / 1024)
+            : 0;
+
+          setPerformanceData(prev => ({
+            ...prev,
+            fps,
+            memory: memoryUsage
+          }));
+        }
         
         frameCount = 0;
         lastTime = now;
       }
       
-      animationId = requestAnimationFrame(measureFPS);
+      // Only continue animation loop if component is still mounted
+      if (isMounted) {
+        animationId = requestAnimationFrame(measureFPS);
+      }
     };
 
     animationId = requestAnimationFrame(measureFPS);
 
     return () => {
+      isMounted = false;
       if (animationId) {
         cancelAnimationFrame(animationId);
       }

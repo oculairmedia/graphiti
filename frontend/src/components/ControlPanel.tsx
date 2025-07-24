@@ -15,6 +15,7 @@ import { useGraphConfig } from '@/contexts/GraphConfigContext';
 import { useQuery } from '@tanstack/react-query';
 import { graphClient } from '@/api/graphClient';
 import { ColorPicker } from '@/components/ui/ColorPicker';
+import type { GraphData, GraphNode } from '@/types/graph';
 
 interface ControlPanelProps {
   collapsed: boolean;
@@ -22,13 +23,33 @@ interface ControlPanelProps {
   onLayoutChange?: (layout: string) => void;
 }
 
-// Memoized node type definitions to prevent re-creation on every render
-const NODE_TYPES = [
-  { id: 'Entity', name: 'Entity', count: 2847 },
-  { id: 'Episodic', name: 'Episodic', count: 1024 },
-  { id: 'Agent', name: 'Agent', count: 892 },
-  { id: 'Community', name: 'Community', count: 156 }
-] as const;
+// Compute node types from real graph data instead of hardcoded values
+const computeNodeTypes = (graphData?: GraphData): Array<{ id: string; name: string; count: number }> => {
+  if (!graphData?.nodes) {
+    // Fallback to default types if no data available
+    return [
+      { id: 'Entity', name: 'Entity', count: 0 },
+      { id: 'Episodic', name: 'Episodic', count: 0 },
+      { id: 'Agent', name: 'Agent', count: 0 },
+      { id: 'Community', name: 'Community', count: 0 }
+    ];
+  }
+
+  // Count actual node types from graph data
+  const typeCount: Record<string, number> = {};
+  graphData.nodes.forEach((node: GraphNode) => {
+    const type = node.node_type || 'Unknown';
+    typeCount[type] = (typeCount[type] || 0) + 1;
+  });
+
+  // Convert to expected format, ensuring we have all known types
+  const knownTypes = ['Entity', 'Episodic', 'Agent', 'Community'];
+  return knownTypes.map(type => ({
+    id: type,
+    name: type,
+    count: typeCount[type] || 0
+  }));
+};
 
 export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({ 
   collapsed, 
@@ -50,7 +71,8 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
   const queryClient = useQueryClient();
   const [isRefreshing, setIsRefreshing] = useState(false);
   
-  const nodeTypes = NODE_TYPES;
+  // Compute real node types from graph data with memoization
+  const nodeTypes = React.useMemo(() => computeNodeTypes(graphData), [graphData]);
 
   const handleNodeTypeColorChange = (type: string, color: string) => {
     updateConfig({ 
@@ -70,7 +92,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
     });
   };
 
-  const handleRefreshGraph = async () => {
+  const handleRefreshGraph = async (): Promise<void> => {
     setIsRefreshing(true);
     try {
       // Invalidate the graph data query to force a refresh
@@ -79,17 +101,25 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
       });
     } catch (error) {
       console.error('Error refreshing graph:', error);
+      // In production, you might want to show a user-friendly error message
+      // toast.error('Failed to refresh graph data. Please try again.');
     } finally {
       setIsRefreshing(false);
     }
   };
 
-  const handleQuickQuery = async (queryType: string, limit: number) => {
-    updateConfig({ queryType, nodeLimit: limit });
-    // Small delay to let config update, then refresh
-    setTimeout(() => {
-      handleRefreshGraph();
-    }, 100);
+  const handleQuickQuery = async (queryType: string, limit: number): Promise<void> => {
+    try {
+      updateConfig({ queryType, nodeLimit: limit });
+      // Small delay to let config update, then refresh
+      setTimeout(() => {
+        handleRefreshGraph().catch(error => {
+          console.error('Error in handleQuickQuery refresh:', error);
+        });
+      }, 100);
+    } catch (error) {
+      console.error('Error in handleQuickQuery:', error);
+    }
   };
 
   if (collapsed) {
