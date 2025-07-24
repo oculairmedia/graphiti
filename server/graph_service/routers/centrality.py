@@ -20,11 +20,12 @@ from fastapi import APIRouter, status
 from pydantic import BaseModel, Field
 
 from graph_service.zep_graphiti import ZepGraphitiDep
-from graphiti_core.utils.maintenance.centrality_operations import (
+from graphiti_core.utils.maintenance import (
     calculate_all_centralities,
     calculate_betweenness_centrality,
     calculate_degree_centrality,
     calculate_pagerank,
+    store_centrality_scores,
 )
 
 router = APIRouter(prefix="/centrality", tags=["centrality"])
@@ -86,7 +87,6 @@ async def calculate_pagerank_endpoint(
     )
     
     if request.store_results:
-        from graphiti_core.utils.maintenance.centrality_operations import store_centrality_scores
         formatted_scores = {uuid: {"pagerank": score} for uuid, score in scores.items()}
         await store_centrality_scores(graphiti.driver, formatted_scores)
     
@@ -123,7 +123,6 @@ async def calculate_degree_endpoint(
             scores[uuid] = float(degree_dict.get("out", 0))
     
     if request.store_results:
-        from graphiti_core.utils.maintenance.centrality_operations import store_centrality_scores
         formatted_scores = {uuid: {"degree": score} for uuid, score in scores.items()}
         await store_centrality_scores(graphiti.driver, formatted_scores)
     
@@ -150,7 +149,6 @@ async def calculate_betweenness_endpoint(
     )
     
     if request.store_results:
-        from graphiti_core.utils.maintenance.centrality_operations import store_centrality_scores
         formatted_scores = {uuid: {"betweenness": score} for uuid, score in scores.items()}
         await store_centrality_scores(graphiti.driver, formatted_scores)
     
