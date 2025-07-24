@@ -19,14 +19,14 @@ import logging
 import math
 from typing import Dict, List, Optional, Tuple
 
-from graphiti_core.driver.driver import GraphDatabaseDriver
+from graphiti_core.driver.driver import GraphDriver
 from graphiti_core.nodes import EntityNode
 
 logger = logging.getLogger(__name__)
 
 
 async def calculate_pagerank(
-    driver: GraphDatabaseDriver,
+    driver: GraphDriver,
     damping_factor: float = 0.85,
     iterations: int = 20,
     group_id: Optional[str] = None,
@@ -52,15 +52,15 @@ async def calculate_pagerank(
         WHERE n.group_id = $group_id
         RETURN n.uuid AS uuid
         """
-        result = await driver.query(nodes_query, {"group_id": group_id})
+        records, _, _ = await driver.execute_query(nodes_query, params={"group_id": group_id})
     else:
         nodes_query = """
         MATCH (n)
         RETURN n.uuid AS uuid
         """
-        result = await driver.query(nodes_query)
+        records, _, _ = await driver.execute_query(nodes_query)
     
-    node_ids = [record["uuid"] for record in result]
+    node_ids = [record["uuid"] for record in records]
     num_nodes = len(node_ids)
     
     if num_nodes == 0:
@@ -81,7 +81,7 @@ async def calculate_pagerank(
             WHERE target.uuid = $node_id
             RETURN source.uuid AS source_id
             """
-            in_edges = await driver.query(in_edges_query, {"node_id": node_id})
+            in_edges, _, _ = await driver.execute_query(in_edges_query, params={"node_id": node_id})
             
             # Calculate new PageRank score
             rank_sum = 0.0
@@ -93,8 +93,8 @@ async def calculate_pagerank(
                 WHERE n.uuid = $node_id
                 RETURN count(e) AS out_count
                 """
-                out_result = await driver.query(out_count_query, {"node_id": source_id})
-                out_count = out_result[0]["out_count"] if out_result else 1
+                out_records, _, _ = await driver.execute_query(out_count_query, params={"node_id": source_id})
+                out_count = out_records[0]["out_count"] if out_records else 1
                 
                 rank_sum += pagerank.get(source_id, initial_score) / max(out_count, 1)
             
@@ -110,7 +110,7 @@ async def calculate_pagerank(
 
 
 async def calculate_degree_centrality(
-    driver: GraphDatabaseDriver,
+    driver: GraphDriver,
     direction: str = "both",
     group_id: Optional[str] = None,
 ) -> Dict[str, Dict[str, int]]:
@@ -157,21 +157,21 @@ async def calculate_degree_centrality(
     else:
         raise ValueError(f"Invalid direction: {direction}. Must be 'in', 'out', or 'both'")
     
-    result = await driver.query(query, params)
+    records, _, _ = await driver.execute_query(query, params=params)
     
     if direction == "both":
-        degrees = {record["uuid"]: {"total": record["total_degree"]} for record in result}
+        degrees = {record["uuid"]: {"total": record["total_degree"]} for record in records}
     elif direction == "in":
-        degrees = {record["uuid"]: {"in": record["in_degree"]} for record in result}
+        degrees = {record["uuid"]: {"in": record["in_degree"]} for record in records}
     else:
-        degrees = {record["uuid"]: {"out": record["out_degree"]} for record in result}
+        degrees = {record["uuid"]: {"out": record["out_degree"]} for record in records}
     
     logger.info(f"Degree centrality calculation complete for {len(degrees)} nodes")
     return degrees
 
 
 async def calculate_betweenness_centrality(
-    driver: GraphDatabaseDriver,
+    driver: GraphDriver,
     sample_size: Optional[int] = None,
     group_id: Optional[str] = None,
 ) -> Dict[str, float]:
@@ -204,8 +204,8 @@ async def calculate_betweenness_centrality(
     RETURN n.uuid AS uuid
     """
     
-    result = await driver.query(nodes_query, params)
-    node_ids = [record["uuid"] for record in result]
+    records, _, _ = await driver.execute_query(nodes_query, params=params)
+    node_ids = [record["uuid"] for record in records]
     
     if sample_size and sample_size < len(node_ids):
         import random
@@ -230,12 +230,12 @@ async def calculate_betweenness_centrality(
             LIMIT 3
             """
             
-            paths_result = await driver.query(
+            paths_records, _, _ = await driver.execute_query(
                 paths_query, 
-                {"source": source, "target": target}
+                params={"source": source, "target": target}
             )
             
-            for path_record in paths_result:
+            for path_record in paths_records:
                 path_nodes = path_record["path_nodes"]
                 # Increment betweenness for intermediate nodes
                 for node in path_nodes[1:-1]:  # Exclude source and target
@@ -252,7 +252,7 @@ async def calculate_betweenness_centrality(
 
 
 async def store_centrality_scores(
-    driver: GraphDatabaseDriver,
+    driver: GraphDriver,
     scores: Dict[str, Dict[str, float]],
 ) -> None:
     """
@@ -278,13 +278,13 @@ async def store_centrality_scores(
             MATCH (n {{uuid: $uuid}})
             SET {', '.join(set_clauses)}
             """
-            await driver.query(query, params)
+            await driver.execute_query(query, params=params)
     
     logger.info("Centrality scores stored successfully")
 
 
 async def calculate_all_centralities(
-    driver: GraphDatabaseDriver,
+    driver: GraphDriver,
     group_id: Optional[str] = None,
     store_results: bool = True,
 ) -> Dict[str, Dict[str, float]]:
@@ -307,8 +307,8 @@ async def calculate_all_centralities(
     
     # For large graphs, betweenness is expensive - sample
     node_count_query = "MATCH (n) RETURN count(n) AS count"
-    count_result = await driver.query(node_count_query)
-    node_count = count_result[0]["count"] if count_result else 0
+    count_records, _, _ = await driver.execute_query(node_count_query)
+    node_count = count_records[0]["count"] if count_records else 0
     
     sample_size = min(50, node_count) if node_count > 100 else None
     betweenness = await calculate_betweenness_centrality(

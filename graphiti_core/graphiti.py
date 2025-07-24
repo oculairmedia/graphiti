@@ -22,6 +22,7 @@ from dotenv import load_dotenv
 from pydantic import BaseModel
 from typing_extensions import LiteralString
 
+from graphiti_core.client_factory import GraphitiClientFactory
 from graphiti_core.cross_encoder.client import CrossEncoderClient
 from graphiti_core.cross_encoder.openai_reranker_client import OpenAIRerankerClient
 from graphiti_core.driver.driver import GraphDriver
@@ -173,15 +174,15 @@ class Graphiti:
         if llm_client:
             self.llm_client = llm_client
         else:
-            self.llm_client = OpenAIClient()
+            self.llm_client = GraphitiClientFactory.create_llm_client()
         if embedder:
             self.embedder = embedder
         else:
-            self.embedder = OpenAIEmbedder()
+            self.embedder = GraphitiClientFactory.create_embedder()
         if cross_encoder:
             self.cross_encoder = cross_encoder
         else:
-            self.cross_encoder = OpenAIRerankerClient()
+            self.cross_encoder = GraphitiClientFactory.create_cross_encoder()
 
         self.clients = GraphitiClients(
             driver=self.driver,

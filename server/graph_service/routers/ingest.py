@@ -21,8 +21,13 @@ class AsyncWorker:
                 print(f'Got a job: (size of remaining queue: {self.queue.qsize()})')
                 job = await self.queue.get()
                 await job()
+                print('Job completed successfully')
             except asyncio.CancelledError:
                 break
+            except Exception as e:
+                print(f'Error processing job: {e}')
+                import traceback
+                traceback.print_exc()
 
     async def start(self):
         self.task = asyncio.create_task(self.worker())
