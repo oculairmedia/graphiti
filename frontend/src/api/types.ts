@@ -20,9 +20,10 @@ export interface GraphStats {
   total_nodes: number;
   total_edges: number;
   node_types: Record<string, number>;
-  edge_types: Record<string, number>;
+  edge_types?: Record<string, number>;
   avg_degree: number;
-  density: number;
+  density?: number;
+  max_degree?: number;
 }
 
 export interface GraphData {

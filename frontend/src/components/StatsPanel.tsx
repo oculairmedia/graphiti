@@ -10,38 +10,40 @@ interface StatsPanelProps {
   onClose: () => void;
 }
 
-export const StatsPanel: React.FC<StatsPanelProps> = ({ 
+// Memoized mock data to prevent re-creation on every render
+const MOCK_STATS = {
+  overview: {
+    totalNodes: 4247,
+    totalEdges: 18392,
+    avgDegree: 8.66,
+    density: 0.002
+  },
+  nodeTypes: [
+    { type: 'Entity', count: 2847, percentage: 67, color: 'bg-node-entity' },
+    { type: 'Episodic', count: 1024, percentage: 24, color: 'bg-node-episodic' },
+    { type: 'Agent', count: 892, percentage: 21, color: 'bg-node-agent' },
+    { type: 'Community', count: 156, percentage: 4, color: 'bg-node-community' }
+  ],
+  topNodes: [
+    { name: 'Neural Network Research', degree: 247, type: 'Entity' },
+    { name: 'Dr. Sarah Chen', degree: 189, type: 'Agent' },
+    { name: 'MIT AI Lab', degree: 156, type: 'Community' },
+    { name: 'Deep Learning Conference 2024', degree: 134, type: 'Episodic' },
+    { name: 'Machine Learning Framework', degree: 128, type: 'Entity' }
+  ],
+  performance: {
+    queryTime: 247,
+    renderTime: 1340,
+    fps: 60,
+    memory: 156
+  }
+} as const;
+
+export const StatsPanel: React.FC<StatsPanelProps> = React.memo(({ 
   isOpen, 
   onClose 
 }) => {
-  // Mock statistics data
-  const stats = {
-    overview: {
-      totalNodes: 4247,
-      totalEdges: 18392,
-      avgDegree: 8.66,
-      density: 0.002
-    },
-    nodeTypes: [
-      { type: 'Entity', count: 2847, percentage: 67, color: 'bg-node-entity' },
-      { type: 'Episodic', count: 1024, percentage: 24, color: 'bg-node-episodic' },
-      { type: 'Agent', count: 892, percentage: 21, color: 'bg-node-agent' },
-      { type: 'Community', count: 156, percentage: 4, color: 'bg-node-community' }
-    ],
-    topNodes: [
-      { name: 'Neural Network Research', degree: 247, type: 'Entity' },
-      { name: 'Dr. Sarah Chen', degree: 189, type: 'Agent' },
-      { name: 'MIT AI Lab', degree: 156, type: 'Community' },
-      { name: 'Deep Learning Conference 2024', degree: 134, type: 'Episodic' },
-      { name: 'Machine Learning Framework', degree: 128, type: 'Entity' }
-    ],
-    performance: {
-      queryTime: 247,
-      renderTime: 1340,
-      fps: 60,
-      memory: 156
-    }
-  };
+  const stats = MOCK_STATS;
 
   if (!isOpen) return null;
 
@@ -245,4 +247,7 @@ export const StatsPanel: React.FC<StatsPanelProps> = ({
       </Card>
     </div>
   );
-};
+}, (prevProps, nextProps) => {
+  // Only re-render if panel visibility changes
+  return prevProps.isOpen === nextProps.isOpen;
+});
