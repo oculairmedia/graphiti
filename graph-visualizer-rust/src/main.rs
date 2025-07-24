@@ -291,7 +291,8 @@ fn build_query(query_type: &str, limit: usize, offset: usize, search: Option<&st
     match query_type {
         "entire_graph" => format!(
             r#"
-            MATCH (n)-[r]-(m)
+            MATCH (n)
+            OPTIONAL MATCH (n)-[r]->(m)
             RETURN DISTINCT 
                 n.uuid as source_id, n.name as source_name, 
                 type(r) as rel_type, 
@@ -387,7 +388,7 @@ async fn execute_graph_query(client: &FalkorAsyncClient, graph_name: &str, query
     // Process results
     while let Some(row) = result_set.data.next() {
         if row.len() >= 9 {
-            // Process source node
+            // Process source node (always present)
             let source_id = value_to_string(&row[0]);
             let source_name = value_to_string(&row[1]);
             let source_label = value_to_string(&row[5]);
@@ -411,38 +412,43 @@ async fn execute_graph_query(client: &FalkorAsyncClient, graph_name: &str, query
                 });
             }
             
-            // Process target node
+            // Check if there's a relationship (OPTIONAL MATCH may return null)
+            let rel_type = value_to_string(&row[2]);
             let target_id = value_to_string(&row[3]);
-            let target_name = value_to_string(&row[4]);
-            let target_label = value_to_string(&row[6]);
-            let target_degree = value_to_f64(&row[8]);
-            let target_props = if row.len() > 10 { value_to_properties(&row[10]) } else { HashMap::new() };
             
-            if !nodes_map.contains_key(&target_id) {
-                let mut node_props = target_props.clone();
-                // Ensure name is in properties
-                node_props.insert("name".to_string(), serde_json::Value::String(target_name.clone()));
+            // Only process relationship if it exists (not null/empty)
+            if !rel_type.is_empty() && !target_id.is_empty() {
+                // Process target node
+                let target_name = value_to_string(&row[4]);
+                let target_label = value_to_string(&row[6]);
+                let target_degree = value_to_f64(&row[8]);
+                let target_props = if row.len() > 10 { value_to_properties(&row[10]) } else { HashMap::new() };
                 
-                nodes_map.insert(target_id.clone(), Node {
-                    id: target_id.clone(),
-                    label: truncate_string(&target_name, 50),
-                    node_type: target_label.clone(),
-                    size: calculate_node_size(target_degree),
-                    color: color_map.get(target_label.as_str())
-                        .unwrap_or(&"#95e1d3")
-                        .to_string(),
-                    properties: node_props,
+                if !nodes_map.contains_key(&target_id) {
+                    let mut node_props = target_props.clone();
+                    // Ensure name is in properties
+                    node_props.insert("name".to_string(), serde_json::Value::String(target_name.clone()));
+                    
+                    nodes_map.insert(target_id.clone(), Node {
+                        id: target_id.clone(),
+                        label: truncate_string(&target_name, 50),
+                        node_type: target_label.clone(),
+                        size: calculate_node_size(target_degree),
+                        color: color_map.get(target_label.as_str())
+                            .unwrap_or(&"#95e1d3")
+                            .to_string(),
+                        properties: node_props,
+                    });
+                }
+                
+                // Add edge
+                edges.push(Edge {
+                    from: source_id,
+                    to: target_id,
+                    edge_type: rel_type,
+                    weight: 1.0,
                 });
             }
-            
-            // Add edge
-            let rel_type = value_to_string(&row[2]);
-            edges.push(Edge {
-                from: source_id,
-                to: target_id,
-                edge_type: rel_type,
-                weight: 1.0,
-            });
         }
     }
     
