@@ -65,8 +65,8 @@ export const NodeDetailsPanel: React.FC<NodeDetailsPanelProps> = ({
   const data = { ...mockData, ...node };
 
   return (
-    <Card className="glass-panel w-96 max-h-[80vh] overflow-hidden animate-fade-in">
-      <CardHeader className="pb-3">
+    <Card className="glass-panel w-96 max-h-[80vh] overflow-hidden animate-fade-in flex flex-col">
+      <CardHeader className="pb-3 flex-shrink-0">
         <div className="flex items-start justify-between">
           <div className="flex-1 pr-2">
             <CardTitle className="text-lg leading-tight mb-2">
@@ -94,7 +94,7 @@ export const NodeDetailsPanel: React.FC<NodeDetailsPanelProps> = ({
         </div>
       </CardHeader>
 
-      <CardContent className="overflow-y-auto custom-scrollbar space-y-4">
+      <CardContent className="flex-1 overflow-y-auto custom-scrollbar space-y-4 min-h-0">
         
         {/* Summary */}
         {data.summary && (

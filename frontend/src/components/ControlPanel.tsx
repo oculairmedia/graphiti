@@ -10,78 +10,45 @@ import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
+import { useGraphConfig } from '@/contexts/GraphConfigContext';
 
 interface ControlPanelProps {
   collapsed: boolean;
   onToggleCollapse: () => void;
 }
 
-export const ControlPanel: React.FC<ControlPanelProps> = ({ 
+// Memoized node type definitions to prevent re-creation on every render
+const NODE_TYPES = [
+  { id: 'Entity', name: 'Entity', count: 2847 },
+  { id: 'Episodic', name: 'Episodic', count: 1024 },
+  { id: 'Agent', name: 'Agent', count: 892 },
+  { id: 'Community', name: 'Community', count: 156 }
+] as const;
+
+export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({ 
   collapsed, 
   onToggleCollapse 
 }) => {
-  const [queryType, setQueryType] = useState('entire');
-  const [nodeLimit, setNodeLimit] = useState('1000');
+  const { config, updateConfig } = useGraphConfig();
   
-  // Basic rendering controls
-  const [linkWidth, setLinkWidth] = useState([1.5]);
-  const [linkOpacity, setLinkOpacity] = useState([80]);
-  const [linkColor, setLinkColor] = useState('#4a5568');
-  const [backgroundColor, setBackgroundColor] = useState('#1a202c');
-  
-  // Physics controls
-  const [gravity, setGravity] = useState([0.3]);
-  const [repulsion, setRepulsion] = useState([1.2]);
-  const [centerForce, setCenterForce] = useState([0.1]);
-  const [friction, setFriction] = useState([0.85]);
-  const [linkSpring, setLinkSpring] = useState([1.0]);
-  const [linkDistance, setLinkDistance] = useState([30]);
-  const [mouseRepulsion, setMouseRepulsion] = useState([20]);
-  const [simulationDecay, setSimulationDecay] = useState([3000]);
-  
-  // Node sizing and scaling
-  const [sizeMapping, setSizeMapping] = useState('degree');
-  const [minNodeSize, setMinNodeSize] = useState([3]);
-  const [maxNodeSize, setMaxNodeSize] = useState([12]);
-  const [sizeMultiplier, setSizeMultiplier] = useState([1.0]);
-  const [nodeOpacity, setNodeOpacity] = useState([90]);
-  const [borderWidth, setBorderWidth] = useState([0]);
-  
-  // Color scheme and node type colors
-  const [colorScheme, setColorScheme] = useState('by-type');
-  const [nodeTypeColors, setNodeTypeColors] = useState({
-    Entity: '#4ECDC4',
-    Episodic: '#B794F6', 
-    Agent: '#F6AD55',
-    Community: '#90CDF4'
-  });
-  const [nodeTypeVisibility, setNodeTypeVisibility] = useState({
-    Entity: true,
-    Episodic: true,
-    Agent: true,
-    Community: true
-  });
-  
-  // Label controls
-  const [showLabels, setShowLabels] = useState(true);
-  const [labelSize, setLabelSize] = useState([12]);
-  const [labelOpacity, setLabelOpacity] = useState([80]);
-  const [labelColor, setLabelColor] = useState('#ffffff');
-
-  // Node type definitions
-  const nodeTypes = [
-    { id: 'Entity', name: 'Entity', count: 2847 },
-    { id: 'Episodic', name: 'Episodic', count: 1024 },
-    { id: 'Agent', name: 'Agent', count: 892 },
-    { id: 'Community', name: 'Community', count: 156 }
-  ];
+  const nodeTypes = NODE_TYPES;
 
   const handleNodeTypeColorChange = (type: string, color: string) => {
-    setNodeTypeColors(prev => ({ ...prev, [type]: color }));
+    updateConfig({ 
+      nodeTypeColors: { 
+        ...config.nodeTypeColors, 
+        [type]: color 
+      } 
+    });
   };
 
   const handleNodeTypeVisibilityChange = (type: string, visible: boolean) => {
-    setNodeTypeVisibility(prev => ({ ...prev, [type]: visible }));
+    updateConfig({ 
+      nodeTypeVisibility: { 
+        ...config.nodeTypeVisibility, 
+        [type]: visible 
+      } 
+    });
   };
 
   if (collapsed) {
@@ -160,12 +127,12 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                 <CardContent className="space-y-4">
                   <div>
                     <Label className="text-xs text-muted-foreground">Query Type</Label>
-                    <Select value={queryType} onValueChange={setQueryType}>
+                    <Select value={config.queryType} onValueChange={(value) => updateConfig({ queryType: value })}>
                       <SelectTrigger className="h-8 bg-secondary/30">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent className="glass">
-                        <SelectItem value="entire">Entire Graph</SelectItem>
+                        <SelectItem value="entire_graph">Entire Graph</SelectItem>
                         <SelectItem value="high-degree">High Degree Nodes</SelectItem>
                         <SelectItem value="agent-networks">Agent Networks</SelectItem>
                         <SelectItem value="communities">Communities</SelectItem>
@@ -177,8 +144,8 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                     <Label className="text-xs text-muted-foreground">Node Limit</Label>
                     <Input
                       type="number"
-                      value={nodeLimit}
-                      onChange={(e) => setNodeLimit(e.target.value)}
+                      value={config.nodeLimit}
+                      onChange={(e) => updateConfig({ nodeLimit: parseInt(e.target.value) || 1000 })}
                       className="h-8 bg-secondary/30"
                       placeholder="1000"
                     />
@@ -212,7 +179,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                     <div key={type.id} className="flex items-center justify-between space-x-3 p-3 rounded-lg border border-border/30">
                       <div className="flex items-center space-x-3 flex-1">
                         <Checkbox
-                          checked={nodeTypeVisibility[type.id as keyof typeof nodeTypeVisibility]}
+                          checked={config.nodeTypeVisibility[type.id as keyof typeof config.nodeTypeVisibility]}
                           onCheckedChange={(checked) => 
                             handleNodeTypeVisibilityChange(type.id, !!checked)
                           }
@@ -220,7 +187,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                         <div className="flex items-center space-x-2 flex-1">
                           <div 
                             className="w-4 h-4 rounded-full border border-border/30"
-                            style={{ backgroundColor: nodeTypeColors[type.id as keyof typeof nodeTypeColors] }}
+                            style={{ backgroundColor: config.nodeTypeColors[type.id as keyof typeof config.nodeTypeColors] }}
                           />
                           <span className="text-sm font-medium">{type.name}</span>
                         </div>
@@ -231,7 +198,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                         </Badge>
                         <Input
                           type="color"
-                          value={nodeTypeColors[type.id as keyof typeof nodeTypeColors]}
+                          value={config.nodeTypeColors[type.id as keyof typeof config.nodeTypeColors]}
                           onChange={(e) => handleNodeTypeColorChange(type.id, e.target.value)}
                           className="w-8 h-8 p-0 border-0 bg-transparent cursor-pointer"
                         />
@@ -252,7 +219,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                 <CardContent className="space-y-4">
                   <div>
                     <Label className="text-xs text-muted-foreground">Size Mapped to</Label>
-                    <Select value={sizeMapping} onValueChange={setSizeMapping}>
+                    <Select value={config.sizeMapping} onValueChange={(value) => updateConfig({ sizeMapping: value })}>
                       <SelectTrigger className="h-8 bg-secondary/30">
                         <SelectValue />
                       </SelectTrigger>
@@ -261,7 +228,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                         <SelectItem value="degree">Degree Centrality</SelectItem>
                         <SelectItem value="betweenness">Betweenness Centrality</SelectItem>
                         <SelectItem value="pagerank">PageRank Score</SelectItem>
-                        <SelectItem value="eigenvector">Eigenvector Centrality</SelectItem>
+                        <SelectItem value="importance">Importance Centrality</SelectItem>
                         <SelectItem value="connections">Connection Count</SelectItem>
                         <SelectItem value="custom">Custom Property</SelectItem>
                       </SelectContent>
@@ -272,11 +239,11 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                     <div>
                       <div className="flex justify-between items-center mb-2">
                         <Label className="text-xs text-muted-foreground">Min Size</Label>
-                        <Badge variant="outline" className="text-xs">{minNodeSize[0]}px</Badge>
+                        <Badge variant="outline" className="text-xs">{config.minNodeSize}px</Badge>
                       </div>
                       <Slider
-                        value={minNodeSize}
-                        onValueChange={setMinNodeSize}
+                        value={[config.minNodeSize]}
+                        onValueChange={([value]) => updateConfig({ minNodeSize: value })}
                         max={10}
                         min={1}
                         step={1}
@@ -286,11 +253,11 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                     <div>
                       <div className="flex justify-between items-center mb-2">
                         <Label className="text-xs text-muted-foreground">Max Size</Label>
-                        <Badge variant="outline" className="text-xs">{maxNodeSize[0]}px</Badge>
+                        <Badge variant="outline" className="text-xs">{config.maxNodeSize}px</Badge>
                       </div>
                       <Slider
-                        value={maxNodeSize}
-                        onValueChange={setMaxNodeSize}
+                        value={[config.maxNodeSize]}
+                        onValueChange={([value]) => updateConfig({ maxNodeSize: value })}
                         max={30}
                         min={5}
                         step={1}
@@ -302,11 +269,11 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                   <div>
                     <div className="flex justify-between items-center mb-2">
                       <Label className="text-xs text-muted-foreground">Size Multiplier</Label>
-                      <Badge variant="outline" className="text-xs">{sizeMultiplier[0]}x</Badge>
+                      <Badge variant="outline" className="text-xs">{config.sizeMultiplier.toFixed(1)}x</Badge>
                     </div>
                     <Slider
-                      value={sizeMultiplier}
-                      onValueChange={setSizeMultiplier}
+                      value={[config.sizeMultiplier]}
+                      onValueChange={([value]) => updateConfig({ sizeMultiplier: value })}
                       max={3}
                       min={0.1}
                       step={0.1}
@@ -328,11 +295,11 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                   <div>
                     <div className="flex justify-between items-center mb-2">
                       <Label className="text-xs text-muted-foreground">Node Opacity</Label>
-                      <Badge variant="outline" className="text-xs">{nodeOpacity[0]}%</Badge>
+                      <Badge variant="outline" className="text-xs">{config.nodeOpacity}%</Badge>
                     </div>
                     <Slider
-                      value={nodeOpacity}
-                      onValueChange={setNodeOpacity}
+                      value={[config.nodeOpacity]}
+                      onValueChange={([value]) => updateConfig({ nodeOpacity: value })}
                       max={100}
                       min={10}
                       step={5}
@@ -343,11 +310,11 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                   <div>
                     <div className="flex justify-between items-center mb-2">
                       <Label className="text-xs text-muted-foreground">Border Width</Label>
-                      <Badge variant="outline" className="text-xs">{borderWidth[0]}px</Badge>
+                      <Badge variant="outline" className="text-xs">{config.borderWidth}px</Badge>
                     </div>
                     <Slider
-                      value={borderWidth}
-                      onValueChange={setBorderWidth}
+                      value={[config.borderWidth]}
+                      onValueChange={([value]) => updateConfig({ borderWidth: value })}
                       max={5}
                       min={0}
                       step={0.5}
@@ -359,21 +326,21 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                     <div className="flex items-center justify-between">
                       <Label className="text-xs text-muted-foreground">Show Labels</Label>
                       <Checkbox
-                        checked={showLabels}
-                        onCheckedChange={(checked) => setShowLabels(!!checked)}
+                        checked={config.showLabels}
+                        onCheckedChange={(checked) => updateConfig({ showLabels: !!checked })}
                       />
                     </div>
                     
-                    {showLabels && (
+                    {config.showLabels && (
                       <>
                         <div>
                           <div className="flex justify-between items-center mb-2">
                             <Label className="text-xs text-muted-foreground">Label Size</Label>
-                            <Badge variant="outline" className="text-xs">{labelSize[0]}px</Badge>
+                            <Badge variant="outline" className="text-xs">{config.labelSize}px</Badge>
                           </div>
                           <Slider
-                            value={labelSize}
-                            onValueChange={setLabelSize}
+                            value={[config.labelSize]}
+                            onValueChange={([value]) => updateConfig({ labelSize: value })}
                             max={24}
                             min={8}
                             step={1}
@@ -384,11 +351,11 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                         <div>
                           <div className="flex justify-between items-center mb-2">
                             <Label className="text-xs text-muted-foreground">Label Opacity</Label>
-                            <Badge variant="outline" className="text-xs">{labelOpacity[0]}%</Badge>
+                            <Badge variant="outline" className="text-xs">{config.labelOpacity}%</Badge>
                           </div>
                           <Slider
-                            value={labelOpacity}
-                            onValueChange={setLabelOpacity}
+                            value={[config.labelOpacity]}
+                            onValueChange={([value]) => updateConfig({ labelOpacity: value })}
                             max={100}
                             min={0}
                             step={5}
@@ -400,8 +367,8 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                           <Label className="text-xs text-muted-foreground">Label Color</Label>
                           <Input
                             type="color"
-                            value={labelColor}
-                            onChange={(e) => setLabelColor(e.target.value)}
+                            value={config.labelColor}
+                            onChange={(e) => updateConfig({ labelColor: e.target.value })}
                             className="w-8 h-8 p-0 border-0 bg-transparent cursor-pointer"
                           />
                         </div>
@@ -425,11 +392,11 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                   <div>
                     <div className="flex justify-between items-center mb-2">
                       <Label className="text-xs text-muted-foreground">Gravity</Label>
-                      <Badge variant="outline" className="text-xs">{gravity[0]}</Badge>
+                      <Badge variant="outline" className="text-xs">{config.gravity.toFixed(1)}</Badge>
                     </div>
                     <Slider
-                      value={gravity}
-                      onValueChange={setGravity}
+                      value={[config.gravity]}
+                      onValueChange={([value]) => updateConfig({ gravity: value })}
                       max={1}
                       min={0}
                       step={0.1}
@@ -440,11 +407,11 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                   <div>
                     <div className="flex justify-between items-center mb-2">
                       <Label className="text-xs text-muted-foreground">Repulsion Force</Label>
-                      <Badge variant="outline" className="text-xs">{repulsion[0]}</Badge>
+                      <Badge variant="outline" className="text-xs">{config.repulsion.toFixed(1)}</Badge>
                     </div>
                     <Slider
-                      value={repulsion}
-                      onValueChange={setRepulsion}
+                      value={[config.repulsion]}
+                      onValueChange={([value]) => updateConfig({ repulsion: value })}
                       max={2}
                       min={0}
                       step={0.1}
@@ -455,11 +422,11 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                   <div>
                     <div className="flex justify-between items-center mb-2">
                       <Label className="text-xs text-muted-foreground">Center Force</Label>
-                      <Badge variant="outline" className="text-xs">{centerForce[0]}</Badge>
+                      <Badge variant="outline" className="text-xs">{config.centerForce.toFixed(2)}</Badge>
                     </div>
                     <Slider
-                      value={centerForce}
-                      onValueChange={setCenterForce}
+                      value={[config.centerForce]}
+                      onValueChange={([value]) => updateConfig({ centerForce: value })}
                       max={0.5}
                       min={0}
                       step={0.01}
@@ -470,11 +437,11 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                   <div>
                     <div className="flex justify-between items-center mb-2">
                       <Label className="text-xs text-muted-foreground">Friction/Drag</Label>
-                      <Badge variant="outline" className="text-xs">{friction[0]}</Badge>
+                      <Badge variant="outline" className="text-xs">{config.friction.toFixed(2)}</Badge>
                     </div>
                     <Slider
-                      value={friction}
-                      onValueChange={setFriction}
+                      value={[config.friction]}
+                      onValueChange={([value]) => updateConfig({ friction: value })}
                       max={0.99}
                       min={0.5}
                       step={0.01}
@@ -485,11 +452,11 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                   <div>
                     <div className="flex justify-between items-center mb-2">
                       <Label className="text-xs text-muted-foreground">Link Spring</Label>
-                      <Badge variant="outline" className="text-xs">{linkSpring[0]}</Badge>
+                      <Badge variant="outline" className="text-xs">{config.linkSpring.toFixed(1)}</Badge>
                     </div>
                     <Slider
-                      value={linkSpring}
-                      onValueChange={setLinkSpring}
+                      value={[config.linkSpring]}
+                      onValueChange={([value]) => updateConfig({ linkSpring: value })}
                       max={2}
                       min={0}
                       step={0.1}
@@ -500,11 +467,11 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                   <div>
                     <div className="flex justify-between items-center mb-2">
                       <Label className="text-xs text-muted-foreground">Link Distance</Label>
-                      <Badge variant="outline" className="text-xs">{linkDistance[0]}px</Badge>
+                      <Badge variant="outline" className="text-xs">{config.linkDistance}px</Badge>
                     </div>
                     <Slider
-                      value={linkDistance}
-                      onValueChange={setLinkDistance}
+                      value={[config.linkDistance]}
+                      onValueChange={([value]) => updateConfig({ linkDistance: value })}
                       max={100}
                       min={5}
                       step={5}
@@ -515,11 +482,11 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                   <div>
                     <div className="flex justify-between items-center mb-2">
                       <Label className="text-xs text-muted-foreground">Mouse Repulsion</Label>
-                      <Badge variant="outline" className="text-xs">{mouseRepulsion[0]}px</Badge>
+                      <Badge variant="outline" className="text-xs">{config.mouseRepulsion}px</Badge>
                     </div>
                     <Slider
-                      value={mouseRepulsion}
-                      onValueChange={setMouseRepulsion}
+                      value={[config.mouseRepulsion]}
+                      onValueChange={([value]) => updateConfig({ mouseRepulsion: value })}
                       max={40}
                       min={1}
                       step={1}
@@ -530,11 +497,11 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                   <div>
                     <div className="flex justify-between items-center mb-2">
                       <Label className="text-xs text-muted-foreground">Simulation Decay</Label>
-                      <Badge variant="outline" className="text-xs">{simulationDecay[0]}ms</Badge>
+                      <Badge variant="outline" className="text-xs">{config.simulationDecay}ms</Badge>
                     </div>
                     <Slider
-                      value={simulationDecay}
-                      onValueChange={setSimulationDecay}
+                      value={[config.simulationDecay]}
+                      onValueChange={([value]) => updateConfig({ simulationDecay: value })}
                       max={10000}
                       min={100}
                       step={100}
@@ -563,11 +530,11 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                   <div>
                     <div className="flex justify-between items-center mb-2">
                       <Label className="text-xs text-muted-foreground">Link Width</Label>
-                      <Badge variant="outline" className="text-xs">{linkWidth[0]}</Badge>
+                      <Badge variant="outline" className="text-xs">{config.linkWidth.toFixed(1)}</Badge>
                     </div>
                     <Slider
-                      value={linkWidth}
-                      onValueChange={setLinkWidth}
+                      value={[config.linkWidth]}
+                      onValueChange={([value]) => updateConfig({ linkWidth: value })}
                       max={5}
                       min={0.1}
                       step={0.1}
@@ -578,11 +545,11 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                   <div>
                     <div className="flex justify-between items-center mb-2">
                       <Label className="text-xs text-muted-foreground">Link Opacity</Label>
-                      <Badge variant="outline" className="text-xs">{linkOpacity[0]}%</Badge>
+                      <Badge variant="outline" className="text-xs">{Math.round(config.linkOpacity * 100)}%</Badge>
                     </div>
                     <Slider
-                      value={linkOpacity}
-                      onValueChange={setLinkOpacity}
+                      value={[config.linkOpacity * 100]}
+                      onValueChange={([value]) => updateConfig({ linkOpacity: value / 100 })}
                       max={100}
                       min={0}
                       step={5}
@@ -594,8 +561,8 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                     <Label className="text-xs text-muted-foreground">Link Color</Label>
                     <Input
                       type="color"
-                      value={linkColor}
-                      onChange={(e) => setLinkColor(e.target.value)}
+                      value={config.linkColor}
+                      onChange={(e) => updateConfig({ linkColor: e.target.value })}
                       className="w-8 h-8 p-0 border-0 bg-transparent cursor-pointer"
                     />
                   </div>
@@ -604,15 +571,15 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                     <Label className="text-xs text-muted-foreground">Background</Label>
                     <Input
                       type="color"
-                      value={backgroundColor}
-                      onChange={(e) => setBackgroundColor(e.target.value)}
+                      value={config.backgroundColor}
+                      onChange={(e) => updateConfig({ backgroundColor: e.target.value })}
                       className="w-8 h-8 p-0 border-0 bg-transparent cursor-pointer"
                     />
                   </div>
 
                   <div>
                     <Label className="text-xs text-muted-foreground">Color Scheme</Label>
-                    <Select value={colorScheme} onValueChange={setColorScheme}>
+                    <Select value={config.colorScheme} onValueChange={(value) => updateConfig({ colorScheme: value })}>
                       <SelectTrigger className="h-8 bg-secondary/30">
                         <SelectValue />
                       </SelectTrigger>
@@ -628,6 +595,74 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
                   </div>
                 </CardContent>
               </Card>
+
+              {/* Curved Links */}
+              <Card className="glass border-border/30">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm flex items-center space-x-2">
+                    <Zap className="h-4 w-4 text-primary" />
+                    <span>Curved Links</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs text-muted-foreground">Enable Curved Links</Label>
+                    <Checkbox
+                      checked={config.curvedLinks}
+                      onCheckedChange={(checked) => updateConfig({ curvedLinks: !!checked })}
+                    />
+                  </div>
+
+                  {config.curvedLinks && (
+                    <>
+                      <div>
+                        <div className="flex justify-between items-center mb-2">
+                          <Label className="text-xs text-muted-foreground">Curve Weight</Label>
+                          <Badge variant="outline" className="text-xs">{config.curvedLinkWeight.toFixed(2)}</Badge>
+                        </div>
+                        <Slider
+                          value={[config.curvedLinkWeight]}
+                          onValueChange={([value]) => updateConfig({ curvedLinkWeight: value })}
+                          max={1}
+                          min={0}
+                          step={0.05}
+                          className="w-full"
+                        />
+                      </div>
+
+                      <div>
+                        <div className="flex justify-between items-center mb-2">
+                          <Label className="text-xs text-muted-foreground">Curve Segments</Label>
+                          <Badge variant="outline" className="text-xs">{config.curvedLinkSegments}</Badge>
+                        </div>
+                        <Slider
+                          value={[config.curvedLinkSegments]}
+                          onValueChange={([value]) => updateConfig({ curvedLinkSegments: Math.round(value) })}
+                          max={30}
+                          min={5}
+                          step={1}
+                          className="w-full"
+                        />
+                      </div>
+
+                      <div>
+                        <div className="flex justify-between items-center mb-2">
+                          <Label className="text-xs text-muted-foreground">Control Point Distance</Label>
+                          <Badge variant="outline" className="text-xs">{config.curvedLinkControlPointDistance.toFixed(2)}</Badge>
+                        </div>
+                        <Slider
+                          value={[config.curvedLinkControlPointDistance]}
+                          onValueChange={([value]) => updateConfig({ curvedLinkControlPointDistance: value })}
+                          max={1}
+                          min={0}
+                          step={0.05}
+                          className="w-full"
+                        />
+                      </div>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
             </TabsContent>
 
           </div>
@@ -635,4 +670,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({
       </div>
     </div>
   );
-};
+}, (prevProps, nextProps) => {
+  // Only re-render if collapsed state changes
+  return prevProps.collapsed === nextProps.collapsed;
+});

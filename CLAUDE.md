@@ -251,6 +251,38 @@ This repository is tracked in Huly under project **GRAPH** (Graphiti Knowledge G
 9. **GRAPH-51**: Add layout algorithm support (Backlog)
 10. **GRAPH-52**: Optimize for large graphs (Backlog)
 
+#### Critical Bug Fixes Completed:
+
+##### Zoom Functionality Fix (RESOLVED)
+**Issue**: Zoom controls failed intermittently and completely broke after page refresh
+**Root Cause**: useImperativeHandle ref was being overwritten by div element assignment
+**Technical Details**:
+```typescript
+// BROKEN: Ref forwarding overwrote imperative handle
+<div ref={(node) => { ref.current = node; }}>
+  // useImperativeHandle created { zoomIn, zoomOut, fitView }
+  // But div ref overwrote it with DOM element
+
+// FIXED: Separate div from imperative handle
+<div className={...}> // No ref assignment
+  // useImperativeHandle now properly exposes methods
+```
+**Solution**: Removed div ref assignment, allowing useImperativeHandle to properly expose zoom methods
+**Impact**: Zoom controls now work reliably on initial load and after page refresh
+
+##### Canvas Readiness Detection (RESOLVED)
+**Issue**: Canvas readiness state caused circular dependencies and slow initialization
+**Solution**: 
+- Fixed useEffect dependency arrays to prevent recreation loops
+- Implemented immediate canvas checking in zoom functions
+- Added aggressive 50ms polling during initial 2-second startup period
+**Result**: Canvas detection is now fast and reliable across all scenarios
+
+##### Double-click Node Highlighting (RESOLVED)
+**Issue**: Double-clicking nodes to highlight them broke zoom functionality
+**Solution**: Implemented proper event sequencing with requestAnimationFrame to prevent React re-renders during critical Cosmograph operations
+**Result**: Node highlighting and zoom functionality now work independently without conflicts
+
 ### Integration Architecture
 
 ```
