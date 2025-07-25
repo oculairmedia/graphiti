@@ -2,7 +2,7 @@ use axum::{
     extract::{Query, State, WebSocketUpgrade},
     http::{StatusCode, header, HeaderMap, HeaderValue},
     response::{Html, IntoResponse, Json},
-    routing::get,
+    routing::{get, post},
     Router,
 };
 use dashmap::DashMap;
@@ -86,6 +86,18 @@ struct ErrorResponse {
     error: String,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+struct CacheStats {
+    total_entries: usize,
+    cache_keys: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct CacheResponse {
+    message: String,
+    cleared_entries: usize,
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // Initialize tracing
@@ -127,6 +139,8 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/stats", get(get_stats))
         .route("/api/visualize", get(visualize))
         .route("/api/search", get(search))
+        .route("/api/cache/clear", post(clear_cache))
+        .route("/api/cache/stats", get(get_cache_stats))
         .route("/ws", get(websocket_handler))
         .nest_service("/vendor", ServeDir::new("/static/vendor"))
         .layer(CorsLayer::permissive())
@@ -285,6 +299,29 @@ async fn websocket_handler(
 async fn handle_socket(_socket: axum::extract::ws::WebSocket, _state: AppState) {
     // TODO: Implement WebSocket streaming for large graph updates
     info!("WebSocket connection established");
+}
+
+// Cache management endpoints
+async fn clear_cache(State(state): State<AppState>) -> Result<Json<CacheResponse>, StatusCode> {
+    let cleared_entries = state.graph_cache.len();
+    state.graph_cache.clear();
+    
+    info!("Cache cleared: {} entries removed", cleared_entries);
+    
+    Ok(Json(CacheResponse {
+        message: "Cache cleared successfully".to_string(),
+        cleared_entries,
+    }))
+}
+
+async fn get_cache_stats(State(state): State<AppState>) -> Result<Json<CacheStats>, StatusCode> {
+    let total_entries = state.graph_cache.len();
+    let cache_keys: Vec<String> = state.graph_cache.iter().map(|entry| entry.key().clone()).collect();
+    
+    Ok(Json(CacheStats {
+        total_entries,
+        cache_keys,
+    }))
 }
 
 fn build_query(query_type: &str, limit: usize, offset: usize, search: Option<&str>) -> String {

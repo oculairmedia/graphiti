@@ -347,14 +347,33 @@ async def node_fulltext_search(
         return []
     filter_query, filter_params = node_search_filter_query_constructor(search_filter)
 
-    query = (
-        get_nodes_query(driver.provider, 'node_name_and_summary', '$query')
-        + """
+    base_query = get_nodes_query(driver.provider, 'node_name_and_summary', '$query')
+    
+    if driver.provider == 'falkordb':
+        # FalkorDB requires YIELD to be part of the CALL statement
+        yield_clause = " YIELD node AS n, score"
+        query = (
+            base_query + yield_clause
+            + """
+            WITH n, score
+            LIMIT $limit
+            WHERE n:Entity AND n.group_id IN $group_ids
+        """
+        )
+    else:
+        # Neo4j adds YIELD separately
+        query = (
+            base_query
+            + """
         YIELD node AS n, score
             WITH n, score
             LIMIT $limit
             WHERE n:Entity AND n.group_id IN $group_ids
         """
+        )
+    
+    query = (
+        query
         + filter_query
         + ENTITY_NODE_RETURN
         + """

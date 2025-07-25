@@ -1,0 +1,35 @@
+# Ignore frontend-specific files for FalkorDB builds
+frontend/
+# Ignore documentation except README.md files
+docs/
+*.md
+!README.md
+!*/README.md
+.git/
+.github/
+tests/
+docs/
+
+# Ignore development files
+.env*
+*.log
+__pycache__/
+*.pyc
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Ignore editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Ignore OS files
+.DS_Store
+Thumbs.db
+
+# Ignore temporary files
+tmp/
+temp/
+*.tmp

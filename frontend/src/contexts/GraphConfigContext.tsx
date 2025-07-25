@@ -239,22 +239,65 @@ export const GraphConfigProvider: React.FC<{ children: ReactNode }> = ({ childre
   };
 
   const zoomIn = () => {
-    if (cosmographRef?.current) {
-      const currentZoom = cosmographRef.current.getZoomLevel();
-      cosmographRef.current.setZoomLevel(currentZoom * 1.5, 250);
+    if (!cosmographRef?.current) {
+      console.warn('GraphConfigContext: Zoom in failed - cosmographRef not available');
+      return;
+    }
+
+    try {
+      const beforeZoom = cosmographRef.current.getZoomLevel();
+      const newZoom = Math.min(beforeZoom * 1.5, 10); // Cap at 10x zoom
+      cosmographRef.current.setZoomLevel(newZoom, 250);
+      
+      // Verify zoom operation worked
+      setTimeout(() => {
+        if (cosmographRef.current) {
+          const afterZoom = cosmographRef.current.getZoomLevel();
+          if (Math.abs(afterZoom - beforeZoom) < 0.01) {
+            console.warn('GraphConfigContext: Zoom in operation may have failed - zoom level unchanged');
+          }
+        }
+      }, 300);
+    } catch (error) {
+      console.error('GraphConfigContext: Zoom in failed:', error);
     }
   };
 
   const zoomOut = () => {
-    if (cosmographRef?.current) {
-      const currentZoom = cosmographRef.current.getZoomLevel();
-      cosmographRef.current.setZoomLevel(currentZoom * 0.7, 250);
+    if (!cosmographRef?.current) {
+      console.warn('GraphConfigContext: Zoom out failed - cosmographRef not available');
+      return;
+    }
+
+    try {
+      const beforeZoom = cosmographRef.current.getZoomLevel();
+      const newZoom = Math.max(beforeZoom * 0.7, 0.1); // Floor at 0.1x zoom
+      cosmographRef.current.setZoomLevel(newZoom, 250);
+      
+      // Verify zoom operation worked
+      setTimeout(() => {
+        if (cosmographRef.current) {
+          const afterZoom = cosmographRef.current.getZoomLevel();
+          if (Math.abs(afterZoom - beforeZoom) < 0.01) {
+            console.warn('GraphConfigContext: Zoom out operation may have failed - zoom level unchanged');
+          }
+        }
+      }, 300);
+    } catch (error) {
+      console.error('GraphConfigContext: Zoom out failed:', error);
     }
   };
 
   const fitView = () => {
-    if (cosmographRef?.current) {
+    if (!cosmographRef?.current) {
+      console.warn('GraphConfigContext: Fit view failed - cosmographRef not available');
+      return;
+    }
+
+    try {
       cosmographRef.current.fitView();
+    } catch (error) {
+      console.error('GraphConfigContext: Fit view failed:', error);
     }
   };
 

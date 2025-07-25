@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FalkorDB Backup Monitor</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            text-align: center;
+        }
+        
+        .header h1 {
+            color: #2c3e50;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            color: #7f8c8d;
+            font-size: 1.1em;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            text-align: center;
+        }
+        
+        .stat-card h3 {
+            color: #2c3e50;
+            font-size: 1.8em;
+            margin-bottom: 10px;
+        }
+        
+        .stat-card p {
+            color: #7f8c8d;
+            font-size: 1.1em;
+        }
+        
+        .stat-card .number {
+            color: #3498db;
+            font-size: 2.5em;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        
+        .backup-sections {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .backup-section {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+        }
+        
+        .backup-section h3 {
+            color: #2c3e50;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+        }
+        
+        .backup-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .backup-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            margin: 5px 0;
+            background: rgba(52, 152, 219, 0.1);
+            border-radius: 8px;
+            border-left: 3px solid #3498db;
+        }
+        
+        .backup-item:hover {
+            background: rgba(52, 152, 219, 0.2);
+            transform: translateX(5px);
+            transition: all 0.3s ease;
+        }
+        
+        .backup-name {
+            font-weight: 500;
+            color: #2c3e50;
+        }
+        
+        .backup-size {
+            color: #7f8c8d;
+            font-size: 0.9em;
+        }
+        
+        .backup-date {
+            color: #95a5a6;
+            font-size: 0.8em;
+        }
+        
+        .logs-section {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+        }
+        
+        .logs-section h3 {
+            color: #2c3e50;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+        }
+        
+        .log-viewer {
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 20px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            height: 300px;
+            overflow-y: auto;
+            font-size: 0.9em;
+            line-height: 1.4;
+        }
+        
+        .refresh-btn {
+            background: linear-gradient(45deg, #3498db, #2980b9);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 1em;
+            margin: 10px 0;
+            transition: all 0.3s ease;
+        }
+        
+        .refresh-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(52, 152, 219, 0.4);
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        
+        .status-success { background-color: #27ae60; }
+        .status-warning { background-color: #f39c12; }
+        .status-error { background-color: #e74c3c; }
+        
+        @media (max-width: 768px) {
+            .stats-grid,
+            .backup-sections {
+                grid-template-columns: 1fr;
+            }
+            
+            .header h1 {
+                font-size: 2em;
+            }
+            
+            .container {
+                padding: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🗄️ FalkorDB Backup Monitor</h1>
+            <p>Real-time monitoring and management of automated backups</p>
+            <button class="refresh-btn" onclick="refreshAll()">🔄 Refresh All</button>
+        </div>
+        
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h3>Total Backups</h3>
+                <div class="number" id="totalBackups">-</div>
+                <p>Across all categories</p>
+            </div>
+            <div class="stat-card">
+                <h3>Latest Backup</h3>
+                <div class="number" id="latestBackup">-</div>
+                <p>Hours ago</p>
+            </div>
+            <div class="stat-card">
+                <h3>Storage Used</h3>
+                <div class="number" id="storageUsed">-</div>
+                <p>Total backup size</p>
+            </div>
+            <div class="stat-card">
+                <h3>Backup Status</h3>
+                <div class="number">
+                    <span class="status-indicator status-success" id="statusIndicator"></span>
+                    <span id="backupStatus">Online</span>
+                </div>
+                <p>System health</p>
+            </div>
+        </div>
+        
+        <div class="backup-sections">
+            <div class="backup-section">
+                <h3>📅 Daily Backups</h3>
+                <div class="backup-list" id="dailyBackups">
+                    <p>Loading...</p>
+                </div>
+            </div>
+            
+            <div class="backup-section">
+                <h3>📊 Weekly Backups</h3>
+                <div class="backup-list" id="weeklyBackups">
+                    <p>Loading...</p>
+                </div>
+            </div>
+            
+            <div class="backup-section">
+                <h3>📈 Monthly Backups</h3>
+                <div class="backup-list" id="monthlyBackups">
+                    <p>Loading...</p>
+                </div>
+            </div>
+            
+            <div class="backup-section">
+                <h3>⚡ Snapshots</h3>
+                <div class="backup-list" id="snapshotBackups">
+                    <p>Loading...</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="logs-section">
+            <h3>📋 Recent Backup Logs</h3>
+            <button class="refresh-btn" onclick="refreshLogs()">🔄 Refresh Logs</button>
+            <div class="log-viewer" id="logViewer">
+                <p>Loading logs...</p>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Mock data for demonstration
+        // In a real implementation, this would fetch from actual backup directory
+        function loadBackupData() {
+            // Simulate backup files
+            const mockBackups = {
+                daily: [
+                    { name: 'falkordb_daily_20250124_023000.rdb', size: '45.2 MB', date: '2025-01-24 02:30' },
+                    { name: 'falkordb_daily_20250123_023000.rdb', size: '44.8 MB', date: '2025-01-23 02:30' },
+                    { name: 'falkordb_daily_20250122_023000.rdb', size: '44.1 MB', date: '2025-01-22 02:30' }
+                ],
+                weekly: [
+                    { name: 'falkordb_weekly_20250119_030000.rdb', size: '44.5 MB', date: '2025-01-19 03:00' },
+                    { name: 'falkordb_weekly_20250112_030000.rdb', size: '43.2 MB', date: '2025-01-12 03:00' }
+                ],
+                monthly: [
+                    { name: 'falkordb_monthly_20250101_040000.rdb', size: '42.1 MB', date: '2025-01-01 04:00' }
+                ],
+                snapshots: [
+                    { name: 'falkordb_snapshots_20250124_120000.rdb', size: '45.3 MB', date: '2025-01-24 12:00' },
+                    { name: 'falkordb_snapshots_20250124_080000.rdb', size: '45.1 MB', date: '2025-01-24 08:00' }
+                ]
+            };
+            
+            return mockBackups;
+        }
+        
+        function renderBackupList(containerId, backups) {
+            const container = document.getElementById(containerId);
+            if (backups.length === 0) {
+                container.innerHTML = '<p>No backups found</p>';
+                return;
+            }
+            
+            const html = backups.map(backup => `
+                <div class="backup-item">
+                    <div>
+                        <div class="backup-name">${backup.name}</div>
+                        <div class="backup-date">${backup.date}</div>
+                    </div>
+                    <div class="backup-size">${backup.size}</div>
+                </div>
+            `).join('');
+            
+            container.innerHTML = html;
+        }
+        
+        function updateStats() {
+            const backups = loadBackupData();
+            const totalCount = Object.values(backups).reduce((sum, arr) => sum + arr.length, 0);
+            const totalSize = '178.3 MB'; // Mock total
+            
+            document.getElementById('totalBackups').textContent = totalCount;
+            document.getElementById('latestBackup').textContent = '14'; // Mock hours
+            document.getElementById('storageUsed').textContent = totalSize;
+            document.getElementById('backupStatus').textContent = 'Healthy';
+        }
+        
+        function loadLogs() {
+            const mockLogs = `[2025-01-24 02:30:15] === FalkorDB Backup Started (daily) ===
+[2025-01-24 02:30:15] Container graphiti-falkordb is running
+[2025-01-24 02:30:15] Backup directories created/verified
+[2025-01-24 02:30:15] FalkorDB connectivity verified
+[2025-01-24 02:30:15] Database stats: 15234 keys, 45.2M memory used
+[2025-01-24 02:30:16] Starting daily backup: falkordb_daily_20250124_023000.rdb
+[2025-01-24 02:30:18] ✅ daily backup completed: falkordb_daily_20250124_023000.rdb (45.2M)
+[2025-01-24 02:30:18] Cleanup completed: 30 daily backups remaining
+[2025-01-24 02:30:18] 📢 Notification: success - daily backup completed successfully
+[2025-01-24 02:30:18] === FalkorDB Backup Completed (daily) ===`;
+            
+            document.getElementById('logViewer').textContent = mockLogs;
+        }
+        
+        function refreshAll() {
+            updateStats();
+            const backups = loadBackupData();
+            renderBackupList('dailyBackups', backups.daily);
+            renderBackupList('weeklyBackups', backups.weekly);
+            renderBackupList('monthlyBackups', backups.monthly);
+            renderBackupList('snapshotBackups', backups.snapshots);
+            loadLogs();
+        }
+        
+        function refreshLogs() {
+            loadLogs();
+        }
+        
+        // Initial load
+        refreshAll();
+        
+        // Auto-refresh every 5 minutes
+        setInterval(refreshAll, 5 * 60 * 1000);
+    </script>
+</body>
+</html>
