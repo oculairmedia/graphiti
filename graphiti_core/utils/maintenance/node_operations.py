@@ -126,8 +126,8 @@ async def extract_nodes(
             )
 
         extracted_entities: list[ExtractedEntity] = [
-            ExtractedEntity(**entity_types_context)
-            for entity_types_context in llm_response.get('extracted_entities', [])
+            ExtractedEntity(**entity_data)
+            for entity_data in llm_response.get('extracted_entities', [])
         ]
 
         reflexion_iterations += 1
