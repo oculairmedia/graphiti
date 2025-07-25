@@ -137,6 +137,8 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasProps>(
     useEffect(() => {
       // Set up continuous polling to check for cosmographRef availability
       let checkCount = 0;
+      let webglCleanup: (() => void) | undefined;
+      
       const pollCosmographRef = () => {
         if (cosmographRef.current) {
           try {
@@ -145,29 +147,32 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasProps>(
             setIsReady(true);
             
             // Set up WebGL context loss recovery
-            const cleanupWebGL = setupWebGLContextRecovery();
+            webglCleanup = setupWebGLContextRecovery();
             
             // Start canvas polling
             const pollCanvas = () => {
-            const hasCanvas = !!cosmographRef.current?._canvasElement;
-            
-            setIsCanvasReady(prevReady => {
-              if (hasCanvas !== prevReady) {
-                console.log('GraphCanvas: Canvas ready state changed to', hasCanvas);
+              const hasCanvas = !!cosmographRef.current?._canvasElement;
+              
+              setIsCanvasReady(prevReady => {
+                if (hasCanvas !== prevReady) {
+                  console.log('GraphCanvas: Canvas ready state changed to', hasCanvas);
+                }
+                return hasCanvas;
+              });
+              
+              if (!hasCanvas && checkCount < 100) { // Max 5 seconds of polling
+                checkCount++;
+                // Aggressive polling for first 2 seconds, then slower
+                const delay = checkCount < 40 ? 50 : 200;
+                intervalRef.current = setTimeout(pollCanvas, delay);
               }
-              return hasCanvas;
-            });
+            };
             
-            if (!hasCanvas && checkCount < 100) { // Max 5 seconds of polling
-              checkCount++;
-              // Aggressive polling for first 2 seconds, then slower
-              const delay = checkCount < 40 ? 50 : 200;
-              intervalRef.current = setTimeout(pollCanvas, delay);
-            }
-          };
-          
-          // Start canvas polling immediately
-          pollCanvas();
+            // Start canvas polling immediately
+            pollCanvas();
+          } catch (error) {
+            console.error('GraphCanvas: Error setting up cosmographRef:', error);
+          }
         } else {
           // Keep polling for cosmographRef every 100ms for up to 10 seconds
           if (checkCount < 100) {
@@ -187,8 +192,11 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasProps>(
           clearTimeout(intervalRef.current);
           intervalRef.current = null;
         }
+        if (webglCleanup) {
+          webglCleanup();
+        }
       };
-    }, [setCosmographRef]);
+    }, [setCosmographRef, setupWebGLContextRecovery]);
 
 
     // Helper function to calculate size values for a given mapping

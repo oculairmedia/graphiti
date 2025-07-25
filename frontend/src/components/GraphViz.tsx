@@ -35,7 +35,7 @@ interface GraphVizProps {
 }
 
 export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
-  const { config, applyLayout } = useGraphConfig();
+  const { config, applyLayout, zoomIn, zoomOut, fitView } = useGraphConfig();
   const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);
   const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
   const [selectedNodes, setSelectedNodes] = useState<string[]>([]);
@@ -259,29 +259,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
     }
   };
 
-  // Centralized navigation handler to eliminate imperative ref abuse
-  const navigationActions = useCallback({
-    zoomIn: () => {
-      if (graphCanvasRef.current) {
-        graphCanvasRef.current.zoomIn();
-      }
-    },
-    zoomOut: () => {
-      if (graphCanvasRef.current) {
-        graphCanvasRef.current.zoomOut();
-      }
-    },
-    fitView: () => {
-      if (graphCanvasRef.current) {
-        graphCanvasRef.current.fitView();
-      }
-    },
-    clearSelection: () => {
-      if (graphCanvasRef.current && typeof graphCanvasRef.current.clearSelection === 'function') {
-        graphCanvasRef.current.clearSelection();
-      }
-    }
-  }, []);
+  // Navigation actions now use GraphConfigContext directly (no ref chains)
 
   // Unified function to clear all selection states and return to default
   const clearAllSelections = useCallback(() => {
@@ -297,9 +275,11 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
       });
     }
     
-    // Use centralized navigation handler
-    navigationActions.clearSelection();
-  }, [selectedNodes.length, selectedNode?.id, highlightedNodes.length, navigationActions]);
+    // Clear GraphCanvas selection using direct ref (only for clearing)
+    if (graphCanvasRef.current && typeof graphCanvasRef.current.clearSelection === 'function') {
+      graphCanvasRef.current.clearSelection();
+    }
+  }, [selectedNodes.length, selectedNode?.id, highlightedNodes.length]);
 
   const handleLayoutChange = useCallback((layoutType: string) => {
     if (filteredData && filteredData.nodes.length > 0) {
@@ -475,7 +455,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
           <Button
             variant="ghost"
             size="sm"
-            onClick={navigationActions.zoomOut}
+            onClick={zoomOut}
             className="hover:bg-primary/10"
             title="Zoom Out"
           >
@@ -484,7 +464,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
           <Button
             variant="ghost"
             size="sm"
-            onClick={navigationActions.zoomIn}
+            onClick={zoomIn}
             className="hover:bg-primary/10"
             title="Zoom In"
           >
@@ -571,9 +551,9 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
             <QuickActions 
               selectedCount={selectedNodes.length}
               onClearSelection={clearAllSelections}
-              onFitToScreen={navigationActions.fitView}
-              onZoomIn={navigationActions.zoomIn}
-              onZoomOut={navigationActions.zoomOut}
+              onFitToScreen={fitView}
+              onZoomIn={zoomIn}
+              onZoomOut={zoomOut}
               onScreenshot={() => {
                 // TODO: Implement screenshot functionality
               }}

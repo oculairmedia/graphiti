@@ -21,8 +21,8 @@ RUN echo '#!/bin/bash' > /startup.sh && \
     echo 'echo "Browser configuration complete!"' >> /startup.sh && \
     echo '# Start the browser on port 3000 in background' >> /startup.sh && \
     echo 'cd /var/lib/falkordb/browser && npm start &' >> /startup.sh && \
-    echo '# Start Redis with FalkorDB module' >> /startup.sh && \
-    echo 'exec redis-server --loadmodule /var/lib/falkordb/bin/falkordb.so --protected-mode no --bind 0.0.0.0' >> /startup.sh && \
+    echo '# Start Redis with FalkorDB module and persistence' >> /startup.sh && \
+    echo 'exec redis-server --loadmodule /var/lib/falkordb/bin/falkordb.so --protected-mode no --bind 0.0.0.0 --save 60 1 --dir /data --dbfilename falkordb.rdb --loglevel warning' >> /startup.sh && \
     chmod +x /startup.sh
 
 # Override the default entrypoint

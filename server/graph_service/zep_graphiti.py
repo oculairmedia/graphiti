@@ -1,6 +1,12 @@
 import logging
 import os
+import sys
 from typing import Annotated
+from urllib.parse import urlparse
+
+# Ensure /app is in Python path for development mode imports
+if '/app' not in sys.path:
+    sys.path.insert(0, '/app')
 
 from fastapi import Depends, HTTPException
 from graphiti_core import Graphiti  # type: ignore
@@ -15,10 +21,50 @@ from graph_service.dto import FactResult
 
 logger = logging.getLogger(__name__)
 
+# Import drivers with error handling and debugging
+try:
+    import sys
+    logger.info(f"Attempting FalkorDB import. Python path: {sys.path[:3]}")
+    logger.info(f"Current working directory: {os.getcwd()}")
+    
+    from graphiti_core.driver.falkordb_driver import FalkorDriver  # type: ignore
+    FALKORDB_AVAILABLE = True
+    logger.info("✅ Successfully imported FalkorDriver")
+except ImportError as e:
+    FALKORDB_AVAILABLE = False
+    FalkorDriver = None
+    logger.error(f"❌ Failed to import FalkorDriver: {e}")
+    import traceback
+    logger.error(f"Full traceback: {traceback.format_exc()}")
+
+try:
+    from graphiti_core.driver.neo4j_driver import Neo4jDriver  # type: ignore
+    NEO4J_AVAILABLE = True
+except ImportError:
+    NEO4J_AVAILABLE = False
+    Neo4jDriver = None
+
 
 class ZepGraphiti(Graphiti):
-    def __init__(self, uri: str, user: str, password: str, llm_client: LLMClient | None = None, embedder: EmbedderClient | None = None):
-        super().__init__(uri, user, password, llm_client, embedder)
+    def __init__(self, uri: str, user: str, password: str, llm_client: LLMClient | None = None, embedder: EmbedderClient | None = None, use_falkordb: bool = False):
+        # Create appropriate driver based on URI or use_falkordb flag
+        if use_falkordb or uri.startswith('redis://'):
+            if not FALKORDB_AVAILABLE:
+                raise ImportError("FalkorDB driver not available. Install falkordb package.")
+            # Parse redis URI for FalkorDriver - follow examples pattern
+            parsed = urlparse(uri)
+            host = parsed.hostname or 'localhost'
+            port = parsed.port or 6379
+            database = "graphiti_migration"  # Use same database as migration scripts
+            driver = FalkorDriver(host=host, port=port, database=database)
+            logger.info(f"Using FalkorDB driver with host: {host}:{port}, database: {database}")
+        else:
+            if not NEO4J_AVAILABLE:
+                raise ImportError("Neo4j driver not available. Install neo4j package.")
+            driver = Neo4jDriver(uri, user, password)
+            logger.info(f"Using Neo4j driver with URI: {uri}")
+        
+        super().__init__(uri, user, password, llm_client, embedder, graph_driver=driver)
 
     async def save_entity_node(self, name: str, uuid: str, group_id: str, summary: str = ''):
         new_node = EntityNode(
@@ -84,7 +130,7 @@ async def get_graphiti(settings: ZepEnvDep):
         
         ollama_base_url = os.getenv('OLLAMA_BASE_URL', 'http://localhost:11434/v1')
         ollama_model = os.getenv('OLLAMA_MODEL', 'mistral:latest')
-        ollama_embed_model = os.getenv('OLLAMA_EMBED_MODEL', 'mxbai-embed-large:latest')
+        ollama_embed_model = os.getenv('OLLAMA_EMBEDDING_MODEL', 'mxbai-embed-large:latest')
         
         logger.info(f"Using Ollama at {ollama_base_url} with LLM model {ollama_model} and embedding model {ollama_embed_model}")
         
@@ -112,11 +158,12 @@ async def get_graphiti(settings: ZepEnvDep):
         logger.info(f"Created Ollama embedder with model: {embed_config.embedding_model}")
     
     client = ZepGraphiti(
-        uri=settings.neo4j_uri,
-        user=settings.neo4j_user,
-        password=settings.neo4j_password,
+        uri=settings.database_uri,
+        user=settings.database_user,
+        password=settings.database_password,
         llm_client=llm_client,  # Will be None if not using Ollama
-        embedder=embedder  # Will be None if not using Ollama
+        embedder=embedder,  # Will be None if not using Ollama
+        use_falkordb=settings.use_falkordb or bool(settings.falkordb_uri or settings.falkordb_host)
     )
     
     logger.info(f"ZepGraphiti embedder model: {client.embedder.config.embedding_model if client.embedder else 'None'}")
@@ -147,7 +194,7 @@ async def initialize_graphiti(settings: ZepEnvDep):
         
         ollama_base_url = os.getenv('OLLAMA_BASE_URL', 'http://localhost:11434/v1')
         ollama_model = os.getenv('OLLAMA_MODEL', 'mistral:latest')
-        ollama_embed_model = os.getenv('OLLAMA_EMBED_MODEL', 'mxbai-embed-large:latest')
+        ollama_embed_model = os.getenv('OLLAMA_EMBEDDING_MODEL', 'mxbai-embed-large:latest')
         
         logger.info(f"Using Ollama at {ollama_base_url} with LLM model {ollama_model} and embedding model {ollama_embed_model}")
         
@@ -174,11 +221,12 @@ async def initialize_graphiti(settings: ZepEnvDep):
         embedder = OpenAIEmbedder(config=embed_config, client=client)
     
     client = ZepGraphiti(
-        uri=settings.neo4j_uri,
-        user=settings.neo4j_user,
-        password=settings.neo4j_password,
+        uri=settings.database_uri,
+        user=settings.database_user,
+        password=settings.database_password,
         llm_client=llm_client,  # Will be None if not using Ollama
-        embedder=embedder  # Will be None if not using Ollama
+        embedder=embedder,  # Will be None if not using Ollama
+        use_falkordb=settings.use_falkordb or bool(settings.falkordb_uri or settings.falkordb_host)
     )
     await client.build_indices_and_constraints()
 

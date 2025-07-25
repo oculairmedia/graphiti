@@ -1,0 +1,92 @@
+# Docker Compose extension for FalkorDB backup services
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.backup.yml up -d
+
+services:
+  # Automated backup service
+  falkordb-backup:
+    image: alpine:latest
+    container_name: graphiti-backup-service
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./scripts:/scripts:ro
+      - falkordb_backups:/backups/falkordb
+      - /var/log:/var/log
+    environment:
+      - BACKUP_CONTAINER_NAME=graphiti-falkordb
+      - BACKUP_RETENTION_DAYS=30
+      - BACKUP_RETENTION_WEEKLY=12
+      - BACKUP_RETENTION_MONTHLY=12
+      - BACKUP_WEBHOOK_URL=${BACKUP_WEBHOOK_URL:-}
+    command: >
+      sh -c "
+        apk add --no-cache docker-cli curl dcron bash &&
+        echo '# FalkorDB Automated Backups' > /etc/crontabs/root &&
+        echo '30 2 * * * /scripts/backup_falkordb.sh daily' >> /etc/crontabs/root &&
+        echo '0 3 * * 0 /scripts/backup_falkordb.sh weekly' >> /etc/crontabs/root &&
+        echo '0 4 1 * * /scripts/backup_falkordb.sh monthly' >> /etc/crontabs/root &&
+        echo '0 */4 * * * /scripts/backup_falkordb.sh snapshot' >> /etc/crontabs/root &&
+        chmod +x /scripts/*.sh &&
+        crond -f -l 2
+      "
+    depends_on:
+      - falkordb
+    networks:
+      - graphiti_network
+    labels:
+      - "homepage.group=Knowledge Management"
+      - "homepage.name=Backup Service"
+      - "homepage.icon=mdi-backup-restore"
+      - "homepage.description=Automated FalkorDB backup service"
+
+  # Backup monitoring service
+  backup-monitor:
+    image: nginx:alpine
+    container_name: graphiti-backup-monitor
+    restart: unless-stopped
+    ports:
+      - "8090:80"
+    volumes:
+      - falkordb_backups:/usr/share/nginx/html/backups:ro
+      - ./scripts/backup_monitor.html:/usr/share/nginx/html/index.html:ro
+      - /var/log:/var/log:ro
+    networks:
+      - graphiti_network
+    labels:
+      - "homepage.group=Knowledge Management"
+      - "homepage.name=Backup Monitor"
+      - "homepage.icon=mdi-monitor-dashboard"
+      - "homepage.href=http://192.168.50.90:8090"
+      - "homepage.description=Backup status and file browser"
+
+  # S3/MinIO backup sync (optional)
+  backup-sync:
+    image: minio/mc:latest
+    container_name: graphiti-backup-sync
+    restart: "no" # Only run when needed
+    volumes:
+      - falkordb_backups:/backups:ro
+    environment:
+      - S3_ENDPOINT=${S3_ENDPOINT:-}
+      - S3_ACCESS_KEY=${S3_ACCESS_KEY:-}
+      - S3_SECRET_KEY=${S3_SECRET_KEY:-}
+      - S3_BUCKET=${S3_BUCKET:-graphiti-backups}
+    command: |
+      sh -c '
+        if [ -n "$S3_ENDPOINT" ]; then
+          mc alias set s3 $S3_ENDPOINT $S3_ACCESS_KEY $S3_SECRET_KEY
+          mc mirror /backups s3/$S3_BUCKET/falkordb/
+          echo "Backup sync to S3 completed"
+        else
+          echo "S3 not configured, skipping sync"
+        fi
+      '
+    profiles:
+      - s3-sync
+    networks:
+      - graphiti_network
+
+volumes:
+  falkordb_backups:
+    name: falkordb_backups
+    driver: local
