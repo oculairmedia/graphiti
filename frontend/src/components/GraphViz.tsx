@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { useQuery } from '@tanstack/react-query';
+import { CosmographProvider } from '@cosmograph/react';
 import { graphClient } from '../api/graphClient';
 import { GraphNode } from '../api/types';
 import type { GraphData, GraphLink } from '../types/graph';
@@ -220,6 +221,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
     
     if (!sourceData) return { nodes: [], edges: [] };
     
+    
     const visibleNodes = sourceData.nodes.filter(node => {
       // Basic node type visibility check
       const nodeType = node.node_type as keyof typeof filterConfig.nodeTypeVisibility;
@@ -227,8 +229,8 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
       
       // Advanced filter checks from FilterPanel
       
-      // Node type filter
-      if (!filterConfig.filteredNodeTypes.includes(node.node_type)) return false;
+      // Node type filter - only apply if we have filtered types configured
+      if (filterConfig.filteredNodeTypes.length > 0 && !filterConfig.filteredNodeTypes.includes(node.node_type)) return false;
       
       // Degree centrality filter
       const degree = node.properties?.degree_centrality || 0;
@@ -561,6 +563,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
   }
 
   return (
+    <CosmographProvider>
       <div className={`h-screen w-full flex flex-col bg-background overflow-hidden ${className}`}>
       {/* Top Navigation Bar */}
       <div className="h-16 glass-panel border-b border-border/20 flex items-center justify-between px-6 z-50">
@@ -585,6 +588,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
             onSelectNodes={handleSelectNodes}
             onClearSelection={clearAllSelections}
             onFilterClick={() => setShowFilterPanel(true)}
+            nodes={data?.nodes || []}
             className="w-full"
           />
         </div>
@@ -781,6 +785,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
         />
       )}
       </div>
+    </CosmographProvider>
   );
 };
 
