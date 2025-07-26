@@ -84,11 +84,12 @@ export const useGraphDataDiff = (currentData: GraphData | null): GraphDataDiff =
         addedNodes.push(currentNode);
       } else {
         // Check if node was updated by comparing key properties
+        const currentPropertiesHash = JSON.stringify(currentNode.properties);
         const hasChanges = (
           previousNode.label !== currentNode.label ||
           previousNode.node_type !== currentNode.node_type ||
           previousNode.size !== currentNode.size ||
-          JSON.stringify(previousNode.properties) !== JSON.stringify(currentNode.properties)
+          (previousNode as any).propertiesHash !== currentPropertiesHash
         );
         
         if (hasChanges) {
@@ -142,30 +143,12 @@ export const useGraphDataDiff = (currentData: GraphData | null): GraphDataDiff =
     
     const hasChanges = changeCount > 0;
 
-    console.log('🔍 useGraphDataDiff: Diff calculation complete', {
-      hasChanges,
-      changeCount,
-      addedNodes: addedNodes.length,
-      updatedNodes: updatedNodes.length,
-      removedNodes: removedNodeIds.length,
-      addedLinks: addedLinks.length,
-      updatedLinks: updatedLinks.length,
-      removedLinks: removedLinkIds.length,
-      currentNodeCount: currentData.nodes.length,
-      currentEdgeCount: currentData.edges.length,
-      previousNodeCount: previousData?.nodes.length || 0,
-      previousEdgeCount: previousData?.edges.length || 0
-    });
-
+    // Only log when there are actual changes to reduce console noise
     if (hasChanges) {
       logger.log('useGraphDataDiff: Changes detected', {
-        addedNodes: addedNodes.length,
-        updatedNodes: updatedNodes.length,
-        removedNodes: removedNodeIds.length,
-        addedLinks: addedLinks.length,
-        updatedLinks: updatedLinks.length,
-        removedLinks: removedLinkIds.length,
-        totalChanges: changeCount
+        totalChanges: changeCount,
+        nodes: `+${addedNodes.length} ~${updatedNodes.length} -${removedNodeIds.length}`,
+        links: `+${addedLinks.length} ~${updatedLinks.length} -${removedLinkIds.length}`
       });
     }
 
@@ -181,23 +164,37 @@ export const useGraphDataDiff = (currentData: GraphData | null): GraphDataDiff =
     };
   }, [currentData]);
 
-  // Update refs after diff calculation
+  // Update refs after diff calculation - store minimal data for comparison
   if (currentData) {
-    previousDataRef.current = {
-      nodes: [...currentData.nodes],  // Create shallow copy
-      edges: [...currentData.edges]   // Create shallow copy
-    };
+    previousDataRef.current = currentData; // Store reference, not copy
     
-    // Update node map
+    // Update node map with only essential properties for comparison
     previousNodeMapRef.current = new Map(
-      currentData.nodes.map(node => [node.id, { ...node }]) // Create shallow copy of each node
+      currentData.nodes.map(node => [
+        node.id, 
+        {
+          id: node.id,
+          label: node.label,
+          node_type: node.node_type,
+          size: node.size,
+          // Store properties hash instead of full object to save memory
+          propertiesHash: JSON.stringify(node.properties)
+        } as any
+      ])
     );
     
-    // Update link map
+    // Update link map with minimal data
     previousLinkMapRef.current = new Map(
       currentData.edges.map(link => [
         `${link.source || link.from}-${link.target || link.to}`, 
-        { ...link } // Create shallow copy of each link
+        {
+          from: link.from,
+          to: link.to,
+          source: link.source,
+          target: link.target,
+          edge_type: link.edge_type,
+          weight: link.weight
+        } as any
       ])
     );
   }

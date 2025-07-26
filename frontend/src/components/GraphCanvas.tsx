@@ -1111,29 +1111,26 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
 
 // Export with React.memo to prevent unnecessary re-renders
 export const GraphCanvas = React.memo(GraphCanvasComponent, (prevProps, nextProps) => {
-  // Ultra-restrictive comparison - only re-render for essential changes
+  // Optimized comparison - only re-render for essential changes
+  
+  // Most important: check if data references changed (should be stable during incremental updates)
+  const dataChanged = prevProps.nodes !== nextProps.nodes || prevProps.links !== nextProps.links;
   
   // Check callback functions by reference (they should be stable with useCallback)
   const callbacksChanged = prevProps.onNodeClick !== nextProps.onNodeClick ||
                            prevProps.onNodeSelect !== nextProps.onNodeSelect ||
                            prevProps.onClearSelection !== nextProps.onClearSelection;
   
-  // Proper deep comparison for selection arrays
-  const selectedNodesChanged = prevProps.selectedNodes !== nextProps.selectedNodes ||
-                              prevProps.selectedNodes.length !== nextProps.selectedNodes.length ||
-                              !prevProps.selectedNodes.every((id, index) => id === nextProps.selectedNodes[index]);
-                               
-  const highlightedNodesChanged = prevProps.highlightedNodes !== nextProps.highlightedNodes ||
-                                 prevProps.highlightedNodes.length !== nextProps.highlightedNodes.length ||
-                                 !prevProps.highlightedNodes.every((id, index) => id === nextProps.highlightedNodes[index]);
+  // Simple reference comparison for selection arrays (should be stable)
+  const selectedNodesChanged = prevProps.selectedNodes !== nextProps.selectedNodes;
+  const highlightedNodesChanged = prevProps.highlightedNodes !== nextProps.highlightedNodes;
   
-  // Only re-render if stats actually changed
+  // Stats and className changes
   const statsChanged = prevProps.stats !== nextProps.stats;
-  
-  // ClassName changes
   const classNameChanged = prevProps.className !== nextProps.className;
   
-  const shouldRerender = callbacksChanged || selectedNodesChanged || highlightedNodesChanged || statsChanged || classNameChanged;
+  const shouldRerender = dataChanged || callbacksChanged || selectedNodesChanged || 
+                        highlightedNodesChanged || statsChanged || classNameChanged;
   
   // Return true to skip re-render, false to re-render
   return !shouldRerender;
