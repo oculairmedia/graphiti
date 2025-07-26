@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { ChevronLeft, ChevronRight, Database, Settings2, Palette, Zap, RotateCcw, Paintbrush, Layers, Eye, RefreshCw, Cpu, Play, Pause, Square, Shuffle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Database, Settings2, Palette, Zap, RotateCcw, Paintbrush, Layers, Eye, RefreshCw, Cpu, Play, Pause, Square, Shuffle, ZoomIn } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
@@ -985,6 +985,53 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
                       checked={config.renderLinks}
                       onCheckedChange={(checked) => updateConfig({ renderLinks: checked })}
                     />
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Fit View Configuration */}
+              <Card className="glass border-border/30">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm flex items-center space-x-2">
+                    <ZoomIn className="h-4 w-4 text-primary" />
+                    <span>Fit View Settings</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Animation Duration */}
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Animation Duration (ms)</Label>
+                    <div className="flex items-center space-x-2 mt-1">
+                      <Slider
+                        value={[config.fitViewDuration]}
+                        onValueChange={([value]) => updateConfig({ fitViewDuration: value })}
+                        min={0}
+                        max={2000}
+                        step={50}
+                        className="flex-1"
+                      />
+                      <span className="text-xs text-muted-foreground w-12 text-right">
+                        {config.fitViewDuration}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Padding */}
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Viewport Padding</Label>
+                    <div className="flex items-center space-x-2 mt-1">
+                      <Slider
+                        value={[config.fitViewPadding * 100]}
+                        onValueChange={([value]) => updateConfig({ fitViewPadding: value / 100 })}
+                        min={0}
+                        max={50}
+                        step={1}
+                        className="flex-1"
+                      />
+                      <span className="text-xs text-muted-foreground w-12 text-right">
+                        {Math.round(config.fitViewPadding * 100)}%
+                      </span>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
