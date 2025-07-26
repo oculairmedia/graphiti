@@ -60,6 +60,17 @@ interface GraphCanvasHandle {
   fitView: () => void;
   setData: (nodes: GraphNode[], links: GraphLink[], runSimulation?: boolean) => void;
   restart: () => void;
+  // Incremental update methods
+  addIncrementalData: (newNodes: GraphNode[], newLinks: GraphLink[], runSimulation?: boolean) => void;
+  updateNodes: (updatedNodes: GraphNode[]) => void;
+  updateLinks: (updatedLinks: GraphLink[]) => void;
+  removeNodes: (nodeIds: string[]) => void;
+  removeLinks: (linkIds: string[]) => void;
+  // Simulation control methods
+  startSimulation: (alpha?: number) => void;
+  pauseSimulation: () => void;
+  resumeSimulation: () => void;
+  keepSimulationRunning: (enable: boolean) => void;
 }
 
 interface GraphCanvasComponentProps extends GraphCanvasProps {
@@ -76,6 +87,24 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     const [dataKitError, setDataKitError] = useState<string | null>(null);
     const [isDataPreparing, setIsDataPreparing] = useState(false);
     const { config, setCosmographRef } = useGraphConfig();
+    
+    // Track current data for incremental updates
+    const [currentNodes, setCurrentNodes] = useState<GraphNode[]>([]);
+    const [currentLinks, setCurrentLinks] = useState<GraphLink[]>([]);
+    
+    // Simulation control state
+    const [keepRunning, setKeepRunning] = useState(false);
+    const simulationTimerRef = useRef<NodeJS.Timeout | null>(null);
+    
+    // Flag to prevent Data Kit reprocessing during incremental updates
+    const isIncrementalUpdateRef = useRef(false);
+    
+    // Update current data tracking when props change
+    useEffect(() => {
+      setCurrentNodes(nodes);
+      setCurrentLinks(links);
+    }, [nodes, links]);
+    
     // Double-click detection using refs to avoid re-renders
     const lastClickTimeRef = useRef<number>(0);
     const lastClickedNodeRef = useRef<GraphNode | null>(null);
@@ -101,6 +130,11 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
 
     // Data Kit preparation effect
     useEffect(() => {
+      // Skip reprocessing if we're in the middle of an incremental update
+      if (isIncrementalUpdateRef.current) {
+        return;
+      }
+      
       if (!nodes || !links || nodes.length === 0) {
         setCosmographData(null);
         setDataKitError(null);
@@ -454,6 +488,303 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       }
     }, []);
 
+    // Incremental update methods
+    const addIncrementalData = useCallback(async (newNodes: GraphNode[], newLinks: GraphLink[], runSimulation = false) => {
+      if (!cosmographRef.current) return;
+      
+      try {
+        // Set flag to prevent main Data Kit effect from running
+        isIncrementalUpdateRef.current = true;
+        
+        // Merge new data with existing data
+        const updatedNodes = [...currentNodes, ...newNodes];
+        const updatedLinks = [...currentLinks, ...newLinks];
+        
+        // Update internal state
+        setCurrentNodes(updatedNodes);
+        setCurrentLinks(updatedLinks);
+        
+        // Transform and use Cosmograph's setData directly for efficiency
+        if (cosmographRef.current.setData && updatedNodes.length > 0) {
+          const transformedNodes = updatedNodes.map(node => ({
+            id: String(node.id),
+            label: String(node.label || node.id),
+            node_type: String(node.node_type || 'Unknown'),
+            centrality: Number(node.properties?.degree_centrality || node.properties?.pagerank_centrality || node.size || 1),
+            degree_centrality: Number(node.properties?.degree_centrality || 0),
+            pagerank_centrality: Number(node.properties?.pagerank_centrality || 0),
+            betweenness_centrality: Number(node.properties?.betweenness_centrality || 0)
+          }));
+          
+          const transformedLinks = updatedLinks.map(link => ({
+            source: String(link.source),
+            target: String(link.target),
+            edge_type: String(link.edge_type || 'default'),
+            weight: Number(link.weight || 1)
+          }));
+          
+          // Use direct setData without Data Kit reprocessing for better performance
+          cosmographRef.current.setData(transformedNodes, transformedLinks, runSimulation);
+          logger.log(`Incremental update: added ${newNodes.length} nodes, ${newLinks.length} links`);
+        }
+      } catch (error) {
+        logger.error('Incremental data update failed:', error);
+      } finally {
+        // Reset flag after a brief delay
+        setTimeout(() => {
+          isIncrementalUpdateRef.current = false;
+        }, 100);
+      }
+    }, [currentNodes, currentLinks]);
+    
+    const updateNodes = useCallback(async (updatedNodes: GraphNode[]) => {
+      if (!cosmographRef.current?.setData) return;
+      
+      try {
+        isIncrementalUpdateRef.current = true;
+        
+        // Create a map for quick lookup
+        const updateMap = new Map(updatedNodes.map(node => [node.id, node]));
+        
+        // Update existing nodes
+        const newCurrentNodes = currentNodes.map(node => 
+          updateMap.has(node.id) ? updateMap.get(node.id)! : node
+        );
+        
+        setCurrentNodes(newCurrentNodes);
+        
+        // Transform and update directly
+        const transformedNodes = newCurrentNodes.map(node => ({
+          id: String(node.id),
+          label: String(node.label || node.id),
+          node_type: String(node.node_type || 'Unknown'),
+          centrality: Number(node.properties?.degree_centrality || node.properties?.pagerank_centrality || node.size || 1),
+          degree_centrality: Number(node.properties?.degree_centrality || 0),
+          pagerank_centrality: Number(node.properties?.pagerank_centrality || 0),
+          betweenness_centrality: Number(node.properties?.betweenness_centrality || 0)
+        }));
+        
+        const transformedLinks = currentLinks.map(link => ({
+          source: String(link.source),
+          target: String(link.target),
+          edge_type: String(link.edge_type || 'default'),
+          weight: Number(link.weight || 1)
+        }));
+        
+        cosmographRef.current.setData(transformedNodes, transformedLinks, false);
+        logger.log(`Updated ${updatedNodes.length} nodes`);
+      } catch (error) {
+        logger.error('Node update failed:', error);
+      } finally {
+        setTimeout(() => {
+          isIncrementalUpdateRef.current = false;
+        }, 100);
+      }
+    }, [currentNodes, currentLinks]);
+    
+    const updateLinks = useCallback(async (updatedLinks: GraphLink[]) => {
+      if (!cosmographRef.current?.setData) return;
+      
+      try {
+        isIncrementalUpdateRef.current = true;
+        
+        // Create a map for quick lookup by source-target pair
+        const updateMap = new Map(updatedLinks.map(link => [`${link.source}-${link.target}`, link]));
+        
+        // Update existing links
+        const newCurrentLinks = currentLinks.map(link => {
+          const key = `${link.source}-${link.target}`;
+          return updateMap.has(key) ? updateMap.get(key)! : link;
+        });
+        
+        setCurrentLinks(newCurrentLinks);
+        
+        // Transform and update directly
+        const transformedNodes = currentNodes.map(node => ({
+          id: String(node.id),
+          label: String(node.label || node.id),
+          node_type: String(node.node_type || 'Unknown'),
+          centrality: Number(node.properties?.degree_centrality || node.properties?.pagerank_centrality || node.size || 1),
+          degree_centrality: Number(node.properties?.degree_centrality || 0),
+          pagerank_centrality: Number(node.properties?.pagerank_centrality || 0),
+          betweenness_centrality: Number(node.properties?.betweenness_centrality || 0)
+        }));
+        
+        const transformedLinks = newCurrentLinks.map(link => ({
+          source: String(link.source),
+          target: String(link.target),
+          edge_type: String(link.edge_type || 'default'),
+          weight: Number(link.weight || 1)
+        }));
+        
+        cosmographRef.current.setData(transformedNodes, transformedLinks, false);
+        logger.log(`Updated ${updatedLinks.length} links`);
+      } catch (error) {
+        logger.error('Link update failed:', error);
+      } finally {
+        setTimeout(() => {
+          isIncrementalUpdateRef.current = false;
+        }, 100);
+      }
+    }, [currentLinks, currentNodes]);
+    
+    const removeNodes = useCallback(async (nodeIds: string[]) => {
+      if (!cosmographRef.current?.setData) return;
+      
+      try {
+        isIncrementalUpdateRef.current = true;
+        
+        const nodeIdSet = new Set(nodeIds);
+        
+        // Remove nodes
+        const filteredNodes = currentNodes.filter(node => !nodeIdSet.has(node.id));
+        
+        // Remove links connected to removed nodes
+        const filteredLinks = currentLinks.filter(link => 
+          !nodeIdSet.has(link.source) && !nodeIdSet.has(link.target)
+        );
+        
+        setCurrentNodes(filteredNodes);
+        setCurrentLinks(filteredLinks);
+        
+        // Transform and update directly
+        const transformedNodes = filteredNodes.map(node => ({
+          id: String(node.id),
+          label: String(node.label || node.id),
+          node_type: String(node.node_type || 'Unknown'),
+          centrality: Number(node.properties?.degree_centrality || node.properties?.pagerank_centrality || node.size || 1),
+          degree_centrality: Number(node.properties?.degree_centrality || 0),
+          pagerank_centrality: Number(node.properties?.pagerank_centrality || 0),
+          betweenness_centrality: Number(node.properties?.betweenness_centrality || 0)
+        }));
+        
+        const transformedLinks = filteredLinks.map(link => ({
+          source: String(link.source),
+          target: String(link.target),
+          edge_type: String(link.edge_type || 'default'),
+          weight: Number(link.weight || 1)
+        }));
+        
+        cosmographRef.current.setData(transformedNodes, transformedLinks, false);
+        logger.log(`Removed ${nodeIds.length} nodes and their connected links`);
+      } catch (error) {
+        logger.error('Node removal failed:', error);
+      } finally {
+        setTimeout(() => {
+          isIncrementalUpdateRef.current = false;
+        }, 100);
+      }
+    }, [currentNodes, currentLinks]);
+    
+    const removeLinks = useCallback(async (linkIds: string[]) => {
+      if (!cosmographRef.current?.setData) return;
+      
+      try {
+        isIncrementalUpdateRef.current = true;
+        
+        const linkIdSet = new Set(linkIds);
+        
+        // Remove links (assuming linkIds are in "source-target" format)
+        const filteredLinks = currentLinks.filter(link => {
+          const linkId = `${link.source}-${link.target}`;
+          return !linkIdSet.has(linkId);
+        });
+        
+        setCurrentLinks(filteredLinks);
+        
+        // Transform and update directly
+        const transformedNodes = currentNodes.map(node => ({
+          id: String(node.id),
+          label: String(node.label || node.id),
+          node_type: String(node.node_type || 'Unknown'),
+          centrality: Number(node.properties?.degree_centrality || node.properties?.pagerank_centrality || node.size || 1),
+          degree_centrality: Number(node.properties?.degree_centrality || 0),
+          pagerank_centrality: Number(node.properties?.pagerank_centrality || 0),
+          betweenness_centrality: Number(node.properties?.betweenness_centrality || 0)
+        }));
+        
+        const transformedLinks = filteredLinks.map(link => ({
+          source: String(link.source),
+          target: String(link.target),
+          edge_type: String(link.edge_type || 'default'),
+          weight: Number(link.weight || 1)
+        }));
+        
+        cosmographRef.current.setData(transformedNodes, transformedLinks, false);
+        logger.log(`Removed ${linkIds.length} links`);
+      } catch (error) {
+        logger.error('Link removal failed:', error);
+      } finally {
+        setTimeout(() => {
+          isIncrementalUpdateRef.current = false;
+        }, 100);
+      }
+    }, [currentLinks, currentNodes]);
+
+    // Simulation control methods
+    const startSimulation = useCallback((alpha = 1.0) => {
+      if (cosmographRef.current && typeof cosmographRef.current.start === 'function') {
+        cosmographRef.current.start(alpha);
+        logger.log(`Simulation started with alpha: ${alpha}`);
+      }
+    }, []);
+    
+    const pauseSimulation = useCallback(() => {
+      if (cosmographRef.current && typeof cosmographRef.current.pause === 'function') {
+        cosmographRef.current.pause();
+        logger.log('Simulation paused');
+      }
+      
+      // Clear the keep-running timer
+      if (simulationTimerRef.current) {
+        clearInterval(simulationTimerRef.current);
+        simulationTimerRef.current = null;
+      }
+    }, []);
+    
+    const resumeSimulation = useCallback(() => {
+      if (cosmographRef.current && typeof cosmographRef.current.start === 'function') {
+        cosmographRef.current.start(0.3); // Resume with moderate energy
+        logger.log('Simulation resumed');
+      }
+    }, []);
+    
+    const keepSimulationRunning = useCallback((enable: boolean) => {
+      setKeepRunning(enable);
+      
+      if (enable) {
+        // Start periodic simulation restarts to keep it alive
+        if (simulationTimerRef.current) {
+          clearInterval(simulationTimerRef.current);
+        }
+        
+        simulationTimerRef.current = setInterval(() => {
+          if (cosmographRef.current && typeof cosmographRef.current.start === 'function') {
+            // Restart with low energy to keep nodes moving gently
+            cosmographRef.current.start(0.1);
+          }
+        }, 5000); // Restart every 5 seconds
+        
+        logger.log('Continuous simulation enabled');
+      } else {
+        // Stop the periodic restarts
+        if (simulationTimerRef.current) {
+          clearInterval(simulationTimerRef.current);
+          simulationTimerRef.current = null;
+        }
+        logger.log('Continuous simulation disabled');
+      }
+    }, []);
+    
+    // Cleanup simulation timer on unmount
+    useEffect(() => {
+      return () => {
+        if (simulationTimerRef.current) {
+          clearInterval(simulationTimerRef.current);
+        }
+      };
+    }, []);
+
     // Expose methods to parent via ref
     React.useImperativeHandle(ref, () => ({
       clearSelection: clearCosmographSelection,
@@ -471,8 +802,19 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         if (cosmographRef.current && typeof cosmographRef.current.restart === 'function') {
           cosmographRef.current.restart();
         }
-      }
-    }), [clearCosmographSelection, selectCosmographNode, selectCosmographNodes, zoomIn, zoomOut, fitView]);
+      },
+      // Incremental update methods
+      addIncrementalData,
+      updateNodes,
+      updateLinks,
+      removeNodes,
+      removeLinks,
+      // Simulation control methods
+      startSimulation,
+      pauseSimulation,
+      resumeSimulation,
+      keepSimulationRunning
+    }), [clearCosmographSelection, selectCosmographNode, selectCosmographNodes, zoomIn, zoomOut, fitView, addIncrementalData, updateNodes, updateLinks, removeNodes, removeLinks, startSimulation, pauseSimulation, resumeSimulation, keepSimulationRunning]);
 
     // Handle Cosmograph events with double-click detection
     // Cosmograph v2.0 onClick signature: (index: number | undefined, pointPosition: [number, number] | undefined, event: MouseEvent) => void

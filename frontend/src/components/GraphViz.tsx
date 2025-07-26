@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { useQuery } from '@tanstack/react-query';
 import { graphClient } from '../api/graphClient';
 import { GraphNode } from '../api/types';
-import type { GraphData } from '../types/graph';
+import type { GraphData, GraphLink } from '../types/graph';
 import { logger } from '../utils/logger';
 import GraphErrorBoundary from './GraphErrorBoundary';
 
@@ -18,6 +18,19 @@ interface GraphCanvasHandle {
   zoomIn: () => void;
   zoomOut: () => void;
   fitView: () => void;
+  setData: (nodes: GraphNode[], links: GraphLink[], runSimulation?: boolean) => void;
+  restart: () => void;
+  // Incremental update methods
+  addIncrementalData: (newNodes: GraphNode[], newLinks: GraphLink[], runSimulation?: boolean) => void;
+  updateNodes: (updatedNodes: GraphNode[]) => void;
+  updateLinks: (updatedLinks: GraphLink[]) => void;
+  removeNodes: (nodeIds: string[]) => void;
+  removeLinks: (linkIds: string[]) => void;
+  // Simulation control methods
+  startSimulation: (alpha?: number) => void;
+  pauseSimulation: () => void;
+  resumeSimulation: () => void;
+  keepSimulationRunning: (enable: boolean) => void;
 }
 import { useGraphConfig } from '../contexts/GraphConfigContext';
 import { ControlPanel } from './ControlPanel';
