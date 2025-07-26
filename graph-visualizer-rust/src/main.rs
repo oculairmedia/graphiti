@@ -1,7 +1,7 @@
 use axum::{
     extract::{Query, State, WebSocketUpgrade},
-    http::{StatusCode, header, HeaderMap, HeaderValue},
-    response::{Html, IntoResponse, Json},
+    http::StatusCode,
+    response::{IntoResponse, Json},
     routing::{get, post},
     Router,
 };
@@ -10,7 +10,6 @@ use falkordb::{FalkorClientBuilder, FalkorConnectionInfo, FalkorValue, FalkorAsy
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, sync::Arc};
 use tower_http::cors::CorsLayer;
-use tower_http::services::ServeDir;
 use tracing::{error, info};
 
 #[derive(Clone)]
@@ -32,8 +31,7 @@ struct Node {
     id: String,
     label: String,
     node_type: String,
-    size: f64,
-    color: String,
+    // Remove frontend-calculated fields - let Cosmograph v2.0 handle transformations
     properties: HashMap<String, serde_json::Value>,
 }
 
@@ -130,19 +128,14 @@ async fn main() -> anyhow::Result<()> {
         graph_cache: Arc::new(DashMap::new()),
     };
 
-    // Build router
+    // Build router - cleaned up for React frontend only
     let app = Router::new()
-        .route("/", get(index))
-        .route("/cosmos", get(cosmos))
-        .route("/cosmos-test", get(cosmos_test))
-        .route("/cosmograph", get(cosmograph))
         .route("/api/stats", get(get_stats))
         .route("/api/visualize", get(visualize))
         .route("/api/search", get(search))
         .route("/api/cache/clear", post(clear_cache))
         .route("/api/cache/stats", get(get_cache_stats))
         .route("/ws", get(websocket_handler))
-        .nest_service("/vendor", ServeDir::new("/static/vendor"))
         .layer(CorsLayer::permissive())
         .with_state(state);
 
@@ -153,58 +146,6 @@ async fn main() -> anyhow::Result<()> {
     axum::serve(listener, app).await?;
     
     Ok(())
-}
-
-async fn index() -> Result<impl IntoResponse, StatusCode> {
-    match tokio::fs::read_to_string("/static/index.html").await {
-        Ok(content) => {
-            let mut headers = HeaderMap::new();
-            headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-cache, no-store, must-revalidate"));
-            headers.insert(header::PRAGMA, HeaderValue::from_static("no-cache"));
-            headers.insert(header::EXPIRES, HeaderValue::from_static("0"));
-            Ok((headers, Html(content)))
-        },
-        Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
-    }
-}
-
-async fn cosmos() -> Result<impl IntoResponse, StatusCode> {
-    match tokio::fs::read_to_string("/static/cosmos.html").await {
-        Ok(content) => {
-            let mut headers = HeaderMap::new();
-            headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-cache, no-store, must-revalidate"));
-            headers.insert(header::PRAGMA, HeaderValue::from_static("no-cache"));
-            headers.insert(header::EXPIRES, HeaderValue::from_static("0"));
-            Ok((headers, Html(content)))
-        },
-        Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
-    }
-}
-
-async fn cosmos_test() -> Result<impl IntoResponse, StatusCode> {
-    match tokio::fs::read_to_string("/static/cosmos-test.html").await {
-        Ok(content) => {
-            let mut headers = HeaderMap::new();
-            headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-cache, no-store, must-revalidate"));
-            headers.insert(header::PRAGMA, HeaderValue::from_static("no-cache"));
-            headers.insert(header::EXPIRES, HeaderValue::from_static("0"));
-            Ok((headers, Html(content)))
-        },
-        Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
-    }
-}
-
-async fn cosmograph() -> Result<impl IntoResponse, StatusCode> {
-    match tokio::fs::read_to_string("/static/cosmograph.html").await {
-        Ok(content) => {
-            let mut headers = HeaderMap::new();
-            headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-cache, no-store, must-revalidate"));
-            headers.insert(header::PRAGMA, HeaderValue::from_static("no-cache"));
-            headers.insert(header::EXPIRES, HeaderValue::from_static("0"));
-            Ok((headers, Html(content)))
-        },
-        Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
-    }
 }
 
 
@@ -415,13 +356,6 @@ async fn execute_graph_query(client: &FalkorAsyncClient, graph_name: &str, query
     let mut nodes_map: HashMap<String, Node> = HashMap::new();
     let mut edges = Vec::new();
     
-    // Color mapping
-    let color_map: HashMap<&str, &str> = [
-        ("Entity", "#ff6b6b"),
-        ("Episodic", "#4ecdc4"),
-        ("Agent", "#ffe66d"),
-    ].iter().cloned().collect();
-    
     // Process results
     while let Some(row) = result_set.data.next() {
         if row.len() >= 9 {
@@ -434,17 +368,17 @@ async fn execute_graph_query(client: &FalkorAsyncClient, graph_name: &str, query
             
             if !nodes_map.contains_key(&source_id) {
                 let mut node_props = source_props.clone();
-                // Ensure name is in properties
+                // Ensure name is in properties for Cosmograph
                 node_props.insert("name".to_string(), serde_json::Value::String(source_name.clone()));
+                // Add centrality metrics for frontend to use
+                node_props.insert("degree_centrality".to_string(), serde_json::json!(source_degree));
+                // Add node type for color mapping
+                node_props.insert("type".to_string(), serde_json::Value::String(source_label.clone()));
                 
                 nodes_map.insert(source_id.clone(), Node {
                     id: source_id.clone(),
                     label: truncate_string(&source_name, 50),
                     node_type: source_label.clone(),
-                    size: calculate_node_size(source_degree),
-                    color: color_map.get(source_label.as_str())
-                        .unwrap_or(&"#95e1d3")
-                        .to_string(),
                     properties: node_props,
                 });
             }
@@ -463,17 +397,17 @@ async fn execute_graph_query(client: &FalkorAsyncClient, graph_name: &str, query
                 
                 if !nodes_map.contains_key(&target_id) {
                     let mut node_props = target_props.clone();
-                    // Ensure name is in properties
+                    // Ensure name is in properties for Cosmograph
                     node_props.insert("name".to_string(), serde_json::Value::String(target_name.clone()));
+                    // Add centrality metrics for frontend to use
+                    node_props.insert("degree_centrality".to_string(), serde_json::json!(target_degree));
+                    // Add node type for color mapping
+                    node_props.insert("type".to_string(), serde_json::Value::String(target_label.clone()));
                     
                     nodes_map.insert(target_id.clone(), Node {
                         id: target_id.clone(),
                         label: truncate_string(&target_name, 50),
                         node_type: target_label.clone(),
-                        size: calculate_node_size(target_degree),
-                        color: color_map.get(target_label.as_str())
-                            .unwrap_or(&"#95e1d3")
-                            .to_string(),
                         properties: node_props,
                     });
                 }
@@ -502,7 +436,7 @@ async fn execute_graph_query(client: &FalkorAsyncClient, graph_name: &str, query
             }),
         avg_degree: edges.len() as f64 * 2.0 / nodes.len().max(1) as f64,
         max_degree: nodes.iter()
-            .map(|n| n.size)
+            .map(|n| n.properties.get("degree_centrality").and_then(|v| v.as_f64()).unwrap_or(0.0))
             .fold(0.0, f64::max),
     };
     
@@ -587,9 +521,6 @@ fn value_to_usize(value: &FalkorValue) -> usize {
     }
 }
 
-fn calculate_node_size(degree: f64) -> f64 {
-    (15.0 + degree * 0.3).min(50.0)
-}
 
 fn truncate_string(s: &str, max_len: usize) -> String {
     if s.len() <= max_len {
