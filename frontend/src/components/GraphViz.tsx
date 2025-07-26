@@ -35,6 +35,25 @@ interface GraphVizProps {
 
 export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
   const { config, applyLayout, zoomIn, zoomOut, fitView, updateNodeTypeConfigurations } = useGraphConfig();
+  
+  // Add debug logging for button clicks
+  const handleZoomIn = useCallback(() => {
+    console.log('🔵 GraphViz: Zoom In button clicked');
+    console.log('🔵 zoomIn function exists:', typeof zoomIn === 'function');
+    zoomIn();
+  }, [zoomIn]);
+  
+  const handleZoomOut = useCallback(() => {
+    console.log('🔵 GraphViz: Zoom Out button clicked');
+    console.log('🔵 zoomOut function exists:', typeof zoomOut === 'function');
+    zoomOut();
+  }, [zoomOut]);
+  
+  const handleFitView = useCallback(() => {
+    console.log('🔵 GraphViz: Fit View button clicked');
+    console.log('🔵 fitView function exists:', typeof fitView === 'function');
+    fitView();
+  }, [fitView]);
   const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);
   const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
   const [selectedNodes, setSelectedNodes] = useState<string[]>([]);
@@ -460,7 +479,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
           <Button
             variant="ghost"
             size="sm"
-            onClick={zoomOut}
+            onClick={handleZoomOut}
             className="hover:bg-primary/10"
             title="Zoom Out"
           >
@@ -469,7 +488,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
           <Button
             variant="ghost"
             size="sm"
-            onClick={zoomIn}
+            onClick={handleZoomIn}
             className="hover:bg-primary/10"
             title="Zoom In"
           >
@@ -558,9 +577,9 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
             <QuickActions 
               selectedCount={selectedNodes.length}
               onClearSelection={clearAllSelections}
-              onFitToScreen={fitView}
-              onZoomIn={zoomIn}
-              onZoomOut={zoomOut}
+              onFitToScreen={handleFitView}
+              onZoomIn={handleZoomIn}
+              onZoomOut={handleZoomOut}
               onScreenshot={() => {
                 // TODO: Implement screenshot functionality
               }}

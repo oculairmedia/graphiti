@@ -263,8 +263,11 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       const pollCosmographRef = () => {
         if (cosmographRef.current) {
           try {
-            console.log('GraphCanvas: Setting cosmographRef in context');
+            console.log('🟢 GraphCanvas: cosmographRef.current is available');
+            console.log('🟢 cosmographRef.current methods:', Object.getOwnPropertyNames(cosmographRef.current));
+            console.log('🟢 About to call setCosmographRef...');
             setCosmographRef(cosmographRef);
+            console.log('🟢 setCosmographRef called successfully');
             setIsReady(true);
             
             // Set up WebGL context loss recovery
