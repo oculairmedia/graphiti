@@ -71,6 +71,8 @@ interface GraphCanvasHandle {
   pauseSimulation: () => void;
   resumeSimulation: () => void;
   keepSimulationRunning: (enable: boolean) => void;
+  // External incremental flag control
+  setIncrementalUpdateFlag: (enabled: boolean) => void;
 }
 
 interface GraphCanvasComponentProps extends GraphCanvasProps {
@@ -132,6 +134,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     useEffect(() => {
       // Skip reprocessing if we're in the middle of an incremental update
       if (isIncrementalUpdateRef.current) {
+        console.log('⏭️ GraphCanvas: Skipping Data Kit preparation - incremental update in progress');
         return;
       }
       
@@ -813,7 +816,12 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       startSimulation,
       pauseSimulation,
       resumeSimulation,
-      keepSimulationRunning
+      keepSimulationRunning,
+      // External incremental flag control
+      setIncrementalUpdateFlag: (enabled: boolean) => {
+        console.log('🚩 GraphCanvas: External flag control - setting to', enabled);
+        isIncrementalUpdateRef.current = enabled;
+      }
     }), [clearCosmographSelection, selectCosmographNode, selectCosmographNodes, zoomIn, zoomOut, fitView, addIncrementalData, updateNodes, updateLinks, removeNodes, removeLinks, startSimulation, pauseSimulation, resumeSimulation, keepSimulationRunning]);
 
     // Handle Cosmograph events with double-click detection
