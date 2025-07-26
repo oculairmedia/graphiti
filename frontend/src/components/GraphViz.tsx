@@ -3,7 +3,6 @@ import { Search, Settings, BarChart3, Download, Upload, Maximize2, ZoomIn, ZoomO
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { CosmographProvider } from '@cosmograph/react';
 import { useQuery } from '@tanstack/react-query';
 import { graphClient } from '../api/graphClient';
 import { GraphNode } from '../api/types';
@@ -391,10 +390,6 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
   }
 
   return (
-    <CosmographProvider
-      nodes={transformedData.nodes}
-      links={transformedData.links}
-    >
       <div className={`h-screen w-full flex flex-col bg-background overflow-hidden ${className}`}>
       {/* Top Navigation Bar */}
       <div className="h-16 glass-panel border-b border-border/20 flex items-center justify-between px-6 z-50">
@@ -525,6 +520,8 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
           <GraphErrorBoundary>
             <GraphCanvas 
               ref={graphCanvasRef}
+              nodes={transformedData.nodes}
+              links={transformedData.links}
               onNodeClick={handleNodeClick}
               onNodeSelect={handleNodeSelect}
               onClearSelection={clearAllSelections}
@@ -587,7 +584,6 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
         />
       )}
       </div>
-    </CosmographProvider>
   );
 };
 

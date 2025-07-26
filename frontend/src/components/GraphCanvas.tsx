@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, forwardRef, useState, useCallback } from 'react';
-import { Cosmograph, useCosmograph } from '@cosmograph/react';
+import { Cosmograph, prepareCosmographData } from '@cosmograph/react';
 import { GraphNode } from '../api/types';
 import type { GraphData } from '../types/graph';
 import { useGraphConfig } from '../contexts/GraphConfigContext';
@@ -62,41 +62,127 @@ interface GraphCanvasHandle {
   restart: () => void;
 }
 
-const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasProps>(
-  ({ onNodeClick, onNodeSelect, onClearSelection, selectedNodes, highlightedNodes, className, stats }, ref) => {
+interface GraphCanvasComponentProps extends GraphCanvasProps {
+  nodes: GraphNode[];
+  links: GraphLink[];
+}
+
+const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
+  ({ onNodeClick, onNodeSelect, onClearSelection, selectedNodes, highlightedNodes, className, stats, nodes, links }, ref) => {
     const cosmographRef = useRef<CosmographRef | null>(null);
-    const { nodes, links } = useCosmograph();
     const [isReady, setIsReady] = useState(false);
     const [isCanvasReady, setIsCanvasReady] = useState(false);
+    const [cosmographData, setCosmographData] = useState<any>(null);
+    const [dataKitError, setDataKitError] = useState<string | null>(null);
+    const [isDataPreparing, setIsDataPreparing] = useState(false);
     const { config, setCosmographRef } = useGraphConfig();
-    const [tweenProgress, setTweenProgress] = useState(1);
-    
     // Double-click detection using refs to avoid re-renders
     const lastClickTimeRef = useRef<number>(0);
     const lastClickedNodeRef = useRef<GraphNode | null>(null);
     const doubleClickTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-    const criticalOperationRef = useRef(false);
-    const [prevSizeMapping, setPrevSizeMapping] = useState(config.sizeMapping);
-    const tweenTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-    const animationFrameRef = useRef<number | null>(null);
-    const zoomCooldownRef = useRef<NodeJS.Timeout | null>(null);
-    // Simplified tweening state for size mapping transitions
-    const [tweenState, setTweenState] = useState<{
-      isActive: boolean,
-      oldMapping: string,
-      oldValues: number[],
-      newValues: number[],
-      oldRange: { min: number, max: number, range: number },
-      newRange: { min: number, max: number, range: number }
-    }>({
-      isActive: false,
-      oldMapping: config.sizeMapping,
-      oldValues: [],
-      newValues: [],
-      oldRange: { min: 0, max: 1, range: 1 },
-      newRange: { min: 0, max: 1, range: 1 }
-    });
 
+
+    // Data Kit configuration for Cosmograph v2.0
+    const dataKitConfig = React.useMemo(() => ({
+      points: {
+        pointIdBy: 'id',              // Required: unique identifier field
+        pointLabelBy: 'label',        // Node display labels
+        pointColorBy: 'node_type',    // Color by entity type
+        pointSizeBy: 'centrality',    // Size by centrality metrics
+        pointIncludeColumns: ['degree_centrality', 'pagerank_centrality', 'betweenness_centrality'] // Include additional columns
+      },
+      links: {
+        linkSourceBy: 'source',       // Source node ID field
+        linkTargetsBy: ['target'],    // Target node ID field (note: array format as per docs)
+        linkColorBy: 'edge_type',     // Link color by type
+        linkWidthBy: 'weight'         // Link width by weight
+      }
+    }), []);
+
+    // Data Kit preparation effect
+    useEffect(() => {
+      if (!nodes || !links || nodes.length === 0) {
+        setCosmographData(null);
+        setDataKitError(null);
+        return;
+      }
+
+      let cancelled = false;
+      
+      const prepareData = async () => {
+        try {
+          setIsDataPreparing(true);
+          setDataKitError(null);
+          
+          logger.log('GraphCanvas: Preparing data with Cosmograph Data Kit...');
+          
+          // Transform data to match Data Kit expectations with consistent types
+          const transformedNodes = nodes.map(node => ({
+            id: String(node.id), // Ensure string type
+            label: String(node.label || node.id), // Ensure string type
+            node_type: String(node.node_type || 'Unknown'), // Ensure string type
+            centrality: Number(node.properties?.degree_centrality || node.properties?.pagerank_centrality || node.size || 1), // Ensure number type
+            // Add other commonly used properties with type safety
+            degree_centrality: Number(node.properties?.degree_centrality || 0),
+            pagerank_centrality: Number(node.properties?.pagerank_centrality || 0),
+            betweenness_centrality: Number(node.properties?.betweenness_centrality || 0)
+          }));
+
+          const transformedLinks = links.map(link => ({
+            source: String(link.source), // Ensure string type
+            target: String(link.target), // Ensure string type
+            edge_type: String(link.edge_type || 'default'), // Ensure string type
+            weight: Number(link.weight || 1) // Ensure number type
+          }));
+
+          logger.log(`GraphCanvas: Data Kit processing ${transformedNodes.length} nodes, ${transformedLinks.length} links`);
+          logger.log('Sample node:', transformedNodes[0]);
+          logger.log('Sample link:', transformedLinks[0]);
+          logger.log('Data Kit config:', dataKitConfig);
+          
+          const result = await prepareCosmographData(
+            dataKitConfig,
+            transformedNodes,
+            transformedLinks
+          );
+          
+          if (!cancelled && result) {
+            // Extract the correct structure from Data Kit result
+            const { points, links, cosmographConfig } = result;
+            setCosmographData({
+              points,
+              links,
+              cosmographConfig
+            });
+            logger.log('GraphCanvas: Data Kit preparation completed successfully');
+          }
+        } catch (error) {
+          if (!cancelled) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+            logger.error('GraphCanvas: Data Kit preparation failed:', errorMessage);
+            setDataKitError(errorMessage);
+            
+            // Fallback to direct data passing
+            logger.log('GraphCanvas: Falling back to direct data passing');
+            setCosmographData({
+              points: transformedNodes,
+              links: transformedLinks,
+              cosmographConfig: {}
+            });
+          }
+        } finally {
+          if (!cancelled) {
+            setIsDataPreparing(false);
+          }
+        }
+      };
+
+      prepareData();
+      
+      return () => {
+        cancelled = true;
+      };
+    }, [nodes, links, dataKitConfig]);
 
     // Canvas readiness tracking with single polling mechanism and WebGL context loss recovery
     const intervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -199,180 +285,10 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasProps>(
     }, [setCosmographRef, setupWebGLContextRecovery]);
 
 
-    // Helper function to calculate size values for a given mapping
-    const calculateSizeValues = useCallback((nodes: GraphNode[], mapping: string) => {
-      return nodes.map(node => {
-        switch (mapping) {
-          case 'uniform':
-            return 1;
-          case 'degree':
-            return node.properties?.degree_centrality || node.properties?.degree || node.size || 1;
-          case 'betweenness':
-            return node.properties?.betweenness_centrality || node.properties?.betweenness || node.size || 1;
-          case 'pagerank':
-            return node.properties?.pagerank_centrality || node.properties?.pagerank || node.size || 1;
-          case 'importance':
-            return node.properties?.importance_centrality || node.properties?.importance || node.size || 1;
-          case 'connections':
-            return node.properties?.degree_centrality || node.properties?.connections || node.size || 1;
-          case 'custom':
-            return node.size || 1;
-          default:
-            return node.size || 1;
-        }
-      });
-    }, []);
-
-
-    // Calculate average link distance for dynamic curve adjustment
-    const averageDistance = React.useMemo(() => {
-      if (links.length === 0) return 200; // Default distance
-      
-      let totalDistance = 0;
-      let validDistances = 0;
-      
-      links.forEach(link => {
-        const sourceNode = nodes.find(n => n.id === link.source);
-        const targetNode = nodes.find(n => n.id === link.target);
-        
-        if (sourceNode && targetNode) {
-          // Try to get positions from node properties or use defaults
-          const sourceWithPos = sourceNode as GraphNodeWithPosition;
-          const targetWithPos = targetNode as GraphNodeWithPosition;
-          const sx = sourceWithPos.x || sourceNode.properties?.x || 0;
-          const sy = sourceWithPos.y || sourceNode.properties?.y || 0;
-          const tx = targetWithPos.x || targetNode.properties?.x || 0;
-          const ty = targetWithPos.y || targetNode.properties?.y || 0;
-          
-          const distance = Math.sqrt((sx - tx) ** 2 + (sy - ty) ** 2);
-          if (distance > 0) {
-            totalDistance += distance;
-            validDistances++;
-          }
-        }
-      });
-      
-      return validDistances > 0 ? totalDistance / validDistances : 200;
-    }, [nodes, links]);
-
-    // Calculate dynamic curve properties based on average distance
-    const dynamicCurveWeight = React.useMemo(() => {
-      const normalizedDistance = Math.min(averageDistance / 300, 2.0);
-      return Math.max(0.1, config.curvedLinkWeight * (0.4 + normalizedDistance * 0.6));
-    }, [averageDistance, config.curvedLinkWeight]);
-    
-    const dynamicControlPointDistance = React.useMemo(() => {
-      const normalizedDistance = Math.min(averageDistance / 300, 2.0);
-      return Math.max(0.1, config.curvedLinkControlPointDistance * (0.3 + normalizedDistance * 0.7));
-    }, [averageDistance, config.curvedLinkControlPointDistance]);
-
-    // Use provided data directly
+    // Simplified data transformation for legacy compatibility
     const transformedData = React.useMemo(() => {
       return { nodes, links };
     }, [nodes, links]);
-
-    // Memoized node index map for O(1) lookups
-    const nodeIndexMap = React.useMemo(() => {
-      const map = new Map<string, number>();
-      transformedData.nodes.forEach((node, index) => {
-        map.set(node.id, index);
-      });
-      return map;
-    }, [transformedData.nodes]);
-
-    // Memoized calculation of current mapping's values and range for performance
-    const currentMappingData = React.useMemo(() => {
-      if (transformedData.nodes.length === 0) {
-        return { values: [], min: 1, max: 1, range: 1, nodeIndexMap };
-      }
-      
-      const values = calculateSizeValues(transformedData.nodes, config.sizeMapping);
-      const min = Math.min(...values);
-      const max = Math.max(...values);
-      const range = max - min || 1;
-      
-      return { values, min, max, range, nodeIndexMap };
-    }, [transformedData.nodes, config.sizeMapping, calculateSizeValues, nodeIndexMap]);
-
-    // Handle size mapping changes with simple tweening
-    useEffect(() => {
-      if (config.sizeMapping !== prevSizeMapping && transformedData.nodes.length > 0) {
-        // Clear any existing animations
-        if (tweenTimeoutRef.current) {
-          clearTimeout(tweenTimeoutRef.current);
-          tweenTimeoutRef.current = null;
-        }
-        if (animationFrameRef.current) {
-          cancelAnimationFrame(animationFrameRef.current);
-          animationFrameRef.current = null;
-        }
-        
-        // Calculate old and new values on-demand
-        const oldValues = calculateSizeValues(transformedData.nodes, prevSizeMapping);
-        const newValues = calculateSizeValues(transformedData.nodes, config.sizeMapping);
-        
-        const oldMin = Math.min(...oldValues);
-        const oldMax = Math.max(...oldValues);
-        const newMin = Math.min(...newValues);
-        const newMax = Math.max(...newValues);
-        
-        // Set up tween state
-        setTweenState({
-          isActive: true,
-          oldMapping: prevSizeMapping,
-          oldValues,
-          newValues,
-          oldRange: { min: oldMin, max: oldMax, range: oldMax - oldMin || 1 },
-          newRange: { min: newMin, max: newMax, range: newMax - newMin || 1 }
-        });
-        
-        logger.log(`Switching from ${prevSizeMapping} to ${config.sizeMapping}`);
-        
-        // Start animation
-        setTweenProgress(0);
-        
-        const duration = 2000; // ms
-        const startTime = performance.now();
-        let animationId: number;
-        
-        const animate = (currentTime: number) => {
-          const elapsed = currentTime - startTime;
-          const progress = Math.min(elapsed / duration, 1);
-          
-          // Ease-out function for smooth animation
-          const easedProgress = 1 - Math.pow(1 - progress, 3);
-          setTweenProgress(easedProgress);
-          
-          if (progress < 1) {
-            animationFrameRef.current = requestAnimationFrame(animate);
-          } else {
-            // Animation complete
-            setTweenState(prev => ({ ...prev, isActive: false }));
-            setPrevSizeMapping(config.sizeMapping);
-            animationFrameRef.current = null;
-          }
-        };
-        
-        animationFrameRef.current = requestAnimationFrame(animate);
-      }
-      
-      return () => {
-        // Clean up timeouts
-        if (tweenTimeoutRef.current) {
-          clearTimeout(tweenTimeoutRef.current);
-          tweenTimeoutRef.current = null;
-        }
-        // Clean up animation frames
-        if (animationFrameRef.current) {
-          cancelAnimationFrame(animationFrameRef.current);
-          animationFrameRef.current = null;
-        }
-        if (doubleClickTimeoutRef.current) {
-          clearTimeout(doubleClickTimeoutRef.current);
-          doubleClickTimeoutRef.current = null;
-        }
-      };
-    }, [config.sizeMapping, prevSizeMapping, transformedData.nodes, calculateSizeValues]);
 
     // Method to select a single node in Cosmograph
     const selectCosmographNode = useCallback((node: GraphNode) => {
@@ -527,312 +443,100 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasProps>(
       }
     };
 
+    // Show loading state while data is being prepared
+    if (isDataPreparing) {
+      return (
+        <div className={`relative overflow-hidden ${className} flex items-center justify-center`}>
+          <div className="text-muted-foreground text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mb-2 mx-auto"></div>
+            <p className="text-sm">Preparing graph data...</p>
+          </div>
+        </div>
+      );
+    }
+
+    // Show error state if Data Kit failed (with fallback)
+    if (dataKitError && !cosmographData) {
+      return (
+        <div className={`relative overflow-hidden ${className} flex items-center justify-center`}>
+          <div className="text-destructive text-center">
+            <p className="text-sm">Data preparation failed: {dataKitError}</p>
+            <p className="text-xs text-muted-foreground mt-1">Using fallback rendering</p>
+          </div>
+        </div>
+      );
+    }
+
+    // Don't render if no data is available
+    if (!cosmographData) {
+      return (
+        <div className={`relative overflow-hidden ${className} flex items-center justify-center`}>
+          <div className="text-muted-foreground text-center">
+            <p className="text-sm">No graph data available</p>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div 
         className={`relative overflow-hidden ${className}`}
       >
           <Cosmograph
             ref={cosmographRef}
-            // Zoom and initialization
+            // Use Data Kit prepared data and configuration
+            points={cosmographData.points}
+            links={cosmographData.links}
+            {...cosmographData.cosmographConfig}
+            // Override with UI-specific configurations
             fitViewOnInit={true}
             initialZoomLevel={1.5}
             disableZoom={false}
-            // Appearance
             backgroundColor={config.backgroundColor}
-            nodeColor={(node: GraphNode) => {
-              // Check if node is highlighted from search
+            
+            // Highlighted nodes styling
+            nodeColor={(node: any) => {
               const isHighlighted = highlightedNodes.includes(node.id);
-              
               if (isHighlighted) {
-                // Use a bright highlight color for search results
-                return 'rgba(255, 215, 0, 0.9)'; // Gold color with high opacity
+                return 'rgba(255, 215, 0, 0.9)'; // Gold highlight
               }
-
-              // Use cached color utilities for performance
-
-              const opacity = config.nodeOpacity / 100;
-
-              // Apply color scheme
-              switch (config.colorScheme) {
-                case 'by-type': {
-                  // Use individual type colors (original behavior)
-                  const nodeType = node.node_type as keyof typeof config.nodeTypeColors;
-                  const typeColor = config.nodeTypeColors[nodeType] || '#b3b3b3';
-                  return hexToRgba(typeColor, opacity);
-                }
-
-                case 'by-centrality': {
-                  // Color by degree centrality using cached calculation
-                  const centrality = node.properties?.degree_centrality || 0;
-                  const maxCentrality = 100;
-                  const centralityFactor = Math.min(centrality / maxCentrality, 1);
-                  return generateHSLColor('centrality', centralityFactor, opacity);
-                }
-
-                case 'by-pagerank': {
-                  // Color by PageRank score using cached calculation
-                  const pagerank = node.properties?.pagerank_centrality || node.properties?.pagerank || 0;
-                  const maxPagerank = 0.1;
-                  const pagerankFactor = Math.min(pagerank / maxPagerank, 1);
-                  return generateHSLColor('pagerank', pagerankFactor, opacity);
-                }
-
-                case 'by-degree': {
-                  // Color by connection count using cached calculation
-                  const degree = node.properties?.degree || node.properties?.degree_centrality || 0;
-                  const maxDegree = 50;
-                  const degreeFactor = Math.min(degree / maxDegree, 1);
-                  return generateHSLColor('degree', degreeFactor, opacity);
-                }
-
-                case 'by-community': {
-                  // Color by detected community (using node type as proxy)
-                  const communityColors = [
-                    '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', 
-                    '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F',
-                    '#BB8FCE', '#85C1E9', '#F8C471', '#82E0AA'
-                  ];
-                  const communityType = node.node_type;
-                  const communityIndex = ['Entity', 'Episodic', 'Agent', 'Community'].indexOf(communityType);
-                  const communityColor = communityColors[communityIndex] || communityColors[0];
-                  return hexToRgba(communityColor, opacity);
-                }
-
-                case 'custom': {
-                  // Use custom property-based coloring
-                  const customValue = node.properties?.importance_centrality || node.properties?.custom_score || 0;
-                  const customFactor = Math.min(customValue / 10, 1);
-                  return hexToRgba(
-                    customFactor > 0.5 ? config.gradientHighColor : config.gradientLowColor, 
-                    opacity
-                  );
-                }
-
-                default: {
-                  // Fallback to type-based coloring
-                  const fallbackType = node.node_type as keyof typeof config.nodeTypeColors;
-                  const fallbackColor = config.nodeTypeColors[fallbackType] || '#b3b3b3';
-                  return hexToRgba(fallbackColor, opacity);
-                }
+              
+              // Fallback to Data Kit color or type-based color
+              if (cosmographData.cosmographConfig.nodeColor) {
+                return typeof cosmographData.cosmographConfig.nodeColor === 'function' 
+                  ? cosmographData.cosmographConfig.nodeColor(node)
+                  : cosmographData.cosmographConfig.nodeColor;
               }
+              
+              // Type-based fallback
+              const nodeType = node.node_type as keyof typeof config.nodeTypeColors;
+              const typeColor = config.nodeTypeColors[nodeType] || '#b3b3b3';
+              return hexToRgba(typeColor, config.nodeOpacity / 100);
             }}
-            nodeSize={(node: GraphNode) => {
-              let rawSize: number;
-              let min: number;
-              let max: number;
-              let range: number;
-              
-              if (tweenState.isActive && tweenProgress < 1) {
-                // During tweening, interpolate between old and new values
-                const nodeIndex = currentMappingData.nodeIndexMap.get(node.id);
-                
-                if (nodeIndex !== undefined && 
-                    nodeIndex < tweenState.oldValues.length && 
-                    nodeIndex < tweenState.newValues.length) {
-                  
-                  const oldRawSize = tweenState.oldValues[nodeIndex];
-                  const newRawSize = tweenState.newValues[nodeIndex];
-                  
-                  // Interpolate raw size values
-                  rawSize = oldRawSize + (newRawSize - oldRawSize) * tweenProgress;
-                  
-                  // Interpolate range values
-                  min = tweenState.oldRange.min + (tweenState.newRange.min - tweenState.oldRange.min) * tweenProgress;
-                  max = tweenState.oldRange.max + (tweenState.newRange.max - tweenState.oldRange.max) * tweenProgress;
-                  range = max - min || 1;
-                } else {
-                  // Fallback if index is invalid - use memoized data
-                  rawSize = calculateSizeValues([node], config.sizeMapping)[0] || 1;
-                  min = currentMappingData.min;
-                  max = currentMappingData.max;
-                  range = currentMappingData.range;
-                }
-              } else {
-                // Normal operation - use memoized data for performance
-                const nodeIndex = currentMappingData.nodeIndexMap.get(node.id);
-                
-                if (nodeIndex !== undefined && nodeIndex < currentMappingData.values.length) {
-                  // Use pre-calculated value from memoized data
-                  rawSize = currentMappingData.values[nodeIndex];
-                } else {
-                  // Fallback calculation
-                  rawSize = calculateSizeValues([node], config.sizeMapping)[0] || 1;
-                }
-                
-                min = currentMappingData.min;
-                max = currentMappingData.max;
-                range = currentMappingData.range;
+            
+            nodeSize={(node: any) => {
+              // Data Kit should handle sizing, but add highlight effect
+              let baseSize = 1;
+              if (cosmographData.cosmographConfig.nodeSize) {
+                baseSize = typeof cosmographData.cosmographConfig.nodeSize === 'function'
+                  ? cosmographData.cosmographConfig.nodeSize(node)
+                  : cosmographData.cosmographConfig.nodeSize;
               }
-              
-              // Normalize to config range
-              const normalizedSize = min === max 
-                ? config.minNodeSize 
-                : config.minNodeSize + ((rawSize - min) / range) * (config.maxNodeSize - config.minNodeSize);
-              
-              const finalSize = normalizedSize * config.sizeMultiplier;
               
               // Make highlighted nodes 20% larger
               const isHighlighted = highlightedNodes.includes(node.id);
-              return isHighlighted ? finalSize * 1.2 : finalSize;
+              return isHighlighted ? baseSize * 1.2 : baseSize;
             }}
-            nodeLabelAccessor={(node: GraphNode) => node.label || node.id}
-            linkColor={(link: GraphLink) => {
-              switch (config.linkColorScheme) {
-                case 'uniform':
-                  return config.linkColor;
-                
-                case 'by-weight': {
-                  // Color intensity based on weight (darker = stronger)
-                  const weight = link.weight || 1;
-                  const intensity = Math.min(weight / 5, 1); // Normalize to 0-1
-                  return `rgba(102, 102, 102, ${0.3 + intensity * 0.7})`;
-                }
-                
-                case 'by-type': {
-                  // Different colors for different edge types
-                  const typeColors: Record<string, string> = {
-                    'RELATES_TO': '#4ECDC4',
-                    'MENTIONS': '#45B7D1', 
-                    'CONTAINS': '#96CEB4',
-                    'CONNECTED': '#FFEAA7',
-                    'SIMILAR': '#DDA0DD',
-                    'default': config.linkColor
-                  };
-                  return typeColors[link.edge_type] || typeColors.default;
-                }
-                
-                case 'by-distance': {
-                  // Color based on link length (shorter = warmer)
-                  const sourceNode = transformedData.nodes.find(n => n.id === link.source);
-                  const targetNode = transformedData.nodes.find(n => n.id === link.target);
-                  if (sourceNode && targetNode) {
-                    // Simple distance approximation based on degree difference
-                    const sourceDegree = sourceNode.properties?.degree_centrality || 0;
-                    const targetDegree = targetNode.properties?.degree_centrality || 0;
-                    const distance = Math.abs(sourceDegree - targetDegree);
-                    const hue = Math.max(0, 240 - distance * 40); // Blue to red gradient
-                    return `hsl(${hue}, 70%, 50%)`;
-                  }
-                  return config.linkColor;
-                }
-                
-                case 'gradient': {
-                  // Gradient between connected node colors
-                  const srcNode = transformedData.nodes.find(n => n.id === link.source);
-                  const tgtNode = transformedData.nodes.find(n => n.id === link.target);
-                  if (srcNode && tgtNode) {
-                    const srcType = srcNode.node_type as keyof typeof config.nodeTypeColors;
-                    const tgtType = tgtNode.node_type as keyof typeof config.nodeTypeColors;
-                    const srcColor = config.nodeTypeColors[srcType] || '#b3b3b3';
-                    const tgtColor = config.nodeTypeColors[tgtType] || '#b3b3b3';
-                    
-                    // If same type, use that color; otherwise blend
-                    if (srcType === tgtType) {
-                      return srcColor;
-                    } else {
-                      // Simple blend by making it semi-transparent
-                      return `${srcColor}80`; // Add alpha
-                    }
-                  }
-                  return config.linkColor;
-                }
-                
-                case 'community': {
-                  // Highlight inter-community connections
-                  const srcCommunityNode = transformedData.nodes.find(n => n.id === link.source);
-                  const tgtCommunityNode = transformedData.nodes.find(n => n.id === link.target);
-                  if (srcCommunityNode && tgtCommunityNode) {
-                    const srcCommunity = srcCommunityNode.node_type;
-                    const tgtCommunity = tgtCommunityNode.node_type;
-                    
-                    if (srcCommunity !== tgtCommunity) {
-                      // Inter-community link - make it bright
-                      return '#FFD700'; // Gold for bridges
-                    } else {
-                      // Intra-community link - make it subtle
-                      return '#666666';
-                    }
-                  }
-                  return config.linkColor;
-                }
-                
-                default:
-                  return config.linkColor;
-              }
-            }}
-            linkWidth={config.linkWidth}
-            linkArrows={config.linkArrows}
-            linkArrowsSizeScale={config.linkArrowsSizeScale}
-            linkGreyoutOpacity={1 - config.linkOpacity}
-            linkVisibilityDistance={config.linkVisibilityDistance}
-            linkVisibilityMinTransparency={config.linkVisibilityMinTransparency}
-            
-            // Curved Links
-            curvedLinks={config.curvedLinks}
-            curvedLinkSegments={config.curvedLinkSegments}
-            curvedLinkWeight={dynamicCurveWeight}
-            curvedLinkControlPointDistance={dynamicControlPointDistance}
-            
-            // Labels
-            showDynamicLabels={config.showLabels}
-            showHoveredNodeLabel={config.showHoveredNodeLabel}
-            nodeLabelColor={(node: GraphNode) => {
-              // Apply label opacity by modifying the alpha channel
-              const color = config.labelColor;
-              const opacity = config.labelOpacity / 100; // Convert percentage to decimal
-              
-              // Convert hex to rgba with opacity
-              if (color.startsWith('#')) {
-                const hex = color.substring(1);
-                // Handle both 3-char and 6-char hex codes
-                let r, g, b;
-                if (hex.length === 3) {
-                  r = parseInt(hex.substring(0, 1).repeat(2), 16);
-                  g = parseInt(hex.substring(1, 2).repeat(2), 16);
-                  b = parseInt(hex.substring(2, 3).repeat(2), 16);
-                } else if (hex.length === 6) {
-                  r = parseInt(hex.substring(0, 2), 16);
-                  g = parseInt(hex.substring(2, 4), 16);
-                  b = parseInt(hex.substring(4, 6), 16);
-                } else {
-                  // Invalid hex, fallback to default
-                  return color;
-                }
-                return `rgba(${r}, ${g}, ${b}, ${opacity})`;
-              }
-              return color; // Fallback for non-hex colors
-            }}
-            hoveredNodeLabelColor={config.hoveredLabelColor}
-            nodeLabelClassName={(node: GraphNode) => {
-              // Dynamic CSS classes based on label size and border width
-              const sizeClass = `cosmograph-label-size-${config.labelSize}`;
-              const borderClass = `cosmograph-border-${config.borderWidth.toString().replace('.', '-')}`;
-              return `${sizeClass} ${borderClass}`;
-            }}
-            
-            // Physics
-            simulationFriction={config.friction}
-            simulationLinkSpring={config.linkSpring}
-            simulationLinkDistance={config.linkDistance}
-            simulationRepulsion={config.repulsion}
-            simulationGravity={config.gravity}
-            simulationCenter={config.centerForce}
-            simulationRepulsionFromMouse={config.mouseRepulsion}
-            simulationDecay={config.simulationDecay}
-            
-            // Quadtree optimization  
-            useQuadtree={config.useQuadtree}
-            quadtreeLevels={config.quadtreeLevels}
             
             // Interaction
             onClick={handleClick}
             renderHoveredNodeRing={true}
             hoveredNodeRingColor="#22d3ee"
             focusedNodeRingColor="#fbbf24"
-            nodeGreyoutOpacity={selectedNodes.length > 0 || highlightedNodes.length > 0 ? 0.1 : 1} // Only grey out when something is actually selected
+            nodeGreyoutOpacity={selectedNodes.length > 0 || highlightedNodes.length > 0 ? 0.1 : 1}
             
             // Performance
-            pixelRatio={2.5} // 250% resolution
+            pixelRatio={2.5}
             showFPSMonitor={false}
             
             // Selection
