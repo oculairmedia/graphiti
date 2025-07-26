@@ -1,0 +1,46 @@
+[package]
+name = "graphiti-centrality-rs"
+version = "0.1.0"
+edition = "2021"
+authors = ["Graphiti Team"]
+description = "High-performance centrality calculations for Graphiti using FalkorDB"
+
+[dependencies]
+# FalkorDB native driver
+falkordb = { version = "0.1.11", features = ["tokio"] }
+
+# Async runtime
+tokio = { version = "1.0", features = ["full"] }
+
+# HTTP server
+axum = { version = "0.7", features = ["macros"] }
+tower = "0.4"
+tower-http = { version = "0.5", features = ["cors", "trace"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Error handling
+anyhow = "1.0"
+thiserror = "1.0"
+
+# Logging and tracing
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Utilities
+uuid = { version = "1.0", features = ["v4"] }
+dashmap = "5.5"
+
+[dev-dependencies]
+# Testing
+tokio-test = "0.4"
+
+[[bin]]
+name = "graphiti-centrality"
+path = "src/main.rs"
+
+[lib]
+name = "graphiti_centrality"
+path = "src/lib.rs"
