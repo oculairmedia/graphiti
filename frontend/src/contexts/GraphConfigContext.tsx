@@ -192,7 +192,7 @@ const defaultConfig: GraphConfig = {
   
   // New Cosmograph v2.0 simulation properties
   simulationRepulsionTheta: 1.70,
-  disableSimulation: null, // Auto-detect based on links
+  disableSimulation: false, // Force simulation always on by default
   spaceSize: 4096,
   randomSeed: undefined,
   
