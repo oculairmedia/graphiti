@@ -1,4 +1,5 @@
-use graphiti_centrality::{server, DatabaseConfig};
+use graphiti_centrality::server;
+use graphiti_centrality::models::DatabaseConfig;
 use std::env;
 use tracing::info;
 use tracing_subscriber::{filter::EnvFilter, FmtSubscriber};
@@ -16,7 +17,8 @@ async fn main() -> anyhow::Result<()> {
         .with_line_number(true)
         .finish();
 
-    tracing::subscriber::set_global_default(subscriber)?;
+    tracing::subscriber::set_global_default(subscriber)
+        .map_err(|e| anyhow::anyhow!("Failed to set tracing subscriber: {}", e))?;
 
     info!("Starting Graphiti Centrality Service");
 
@@ -39,17 +41,41 @@ async fn main() -> anyhow::Result<()> {
     );
 
     // Create application state
-    let state = server::AppState::new(config).await?;
+    info!("Creating application state with database connection...");
+    let state = match server::AppState::new(config).await {
+        Ok(state) => {
+            info!("✅ Database connection successful");
+            state
+        },
+        Err(e) => {
+            info!("❌ Database connection failed: {}", e);
+            return Err(anyhow::anyhow!("Database connection failed: {}", e));
+        }
+    };
 
     // Create router
+    info!("Creating HTTP router...");
     let app = server::create_router(state);
 
     // Start server
-    let bind_addr = env::var("BIND_ADDR").unwrap_or_else(|_| "0.0.0.0:3001".to_string());
-    info!("Server starting on {}", bind_addr);
+    let bind_addr = env::var("BIND_ADDR").unwrap_or_else(|_| "0.0.0.0:3003".to_string());
+    info!("🚀 Server starting on {}", bind_addr);
 
-    let listener = tokio::net::TcpListener::bind(&bind_addr).await?;
-    axum::serve(listener, app).await?;
+    let listener = match tokio::net::TcpListener::bind(&bind_addr).await {
+        Ok(listener) => {
+            info!("✅ TCP listener bound successfully");
+            listener
+        },
+        Err(e) => {
+            info!("❌ Failed to bind TCP listener: {}", e);
+            return Err(anyhow::anyhow!("Failed to bind TCP listener: {}", e));
+        }
+    };
+    
+    info!("🌐 Starting HTTP server...");
+    axum::serve(listener, app).await
+        .map_err(|e| anyhow::anyhow!("HTTP server error: {}", e))?;
+    info!("Server stopped");
 
     Ok(())
 }

@@ -152,6 +152,8 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
   }, [updateConfig]);
 
   const handleNodeTypeColorChange = (type: string, color: string) => {
+    console.log('ControlPanel: User changing color for type:', type, 'to:', color);
+    
     updateConfig({ 
       nodeTypeColors: { 
         ...config.nodeTypeColors, 
@@ -161,6 +163,8 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
   };
 
   const handleNodeTypeVisibilityChange = (type: string, visible: boolean) => {
+    console.log('ControlPanel: User changing visibility for type:', type, 'to:', visible);
+    
     updateConfig({ 
       nodeTypeVisibility: { 
         ...config.nodeTypeVisibility, 

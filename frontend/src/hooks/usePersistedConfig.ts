@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   saveConfigToStorage, 
   loadConfigFromStorage, 
@@ -147,14 +147,23 @@ export const usePersistedGraphConfig = <T extends Record<string, any>>(defaultCo
       const existing = loadConfigFromStorage() || { version: 1, timestamp: Date.now() };
       
       // Only store differences from defaults
+      // Note: createDifferentialConfig now handles nodeTypeColors/nodeTypeVisibility specially
       const diff = createDifferentialConfig(config, defaultConfig);
+      console.log('usePersistedGraphConfig: Saving config diff:', diff);
       
       const updated: PersistedConfig = {
         ...existing,
-        graphConfig: diff as PersistedGraphConfig
+        graphConfig: {
+          ...(existing.graphConfig || {}),
+          ...diff
+        } as PersistedGraphConfig
       };
       
       saveConfigToStorage(updated);
+      console.log('usePersistedGraphConfig: Config saved successfully with node types:', {
+        nodeTypeColors: Object.keys(config.nodeTypeColors || {}).length,
+        nodeTypeVisibility: Object.keys(config.nodeTypeVisibility || {}).length
+      });
     } catch (error) {
       console.error('usePersistedGraphConfig: Failed to save config:', error);
     }
@@ -243,46 +252,52 @@ export const usePersistedNodeTypes = (
   const [isLoaded, setIsLoaded] = useState(false);
   
   // Load persisted node type settings and merge with current types
-  const mergeWithPersisted = useCallback(() => {
-    if (isLoaded) return { colors: currentNodeTypeColors, visibility: currentNodeTypeVisibility };
-    
+  const mergeWithPersisted = useCallback((
+    providedColors?: Record<string, string>,
+    providedVisibility?: Record<string, boolean>
+  ) => {
+    // Always load from storage to get the latest persisted values
     const stored = loadConfigFromStorage();
-    if (!stored?.graphConfig?.nodeTypeColors && !stored?.graphConfig?.nodeTypeVisibility) {
-      setIsLoaded(true);
-      return { colors: currentNodeTypeColors, visibility: currentNodeTypeVisibility };
-    }
+    const storedColors = stored?.graphConfig?.nodeTypeColors || {};
+    const storedVisibility = stored?.graphConfig?.nodeTypeVisibility || {};
+    
+    // Use provided values as base, or empty objects if not provided
+    const baseColors = providedColors || {};
+    const baseVisibility = providedVisibility || {};
     
     try {
-      const mergedColors = { ...currentNodeTypeColors };
-      const mergedVisibility = { ...currentNodeTypeVisibility };
+      // Start with base values, then overlay ALL stored values
+      // This ensures we never lose persisted colors for types not in current graph
+      const mergedColors = { ...baseColors };
+      const mergedVisibility = { ...baseVisibility };
       
-      // Apply stored colors for existing types, keep defaults for new types
-      if (stored.graphConfig.nodeTypeColors) {
-        Object.entries(stored.graphConfig.nodeTypeColors).forEach(([type, color]) => {
-          if (type in currentNodeTypeColors) {
-            mergedColors[type] = color;
-          }
-        });
-      }
+      // Apply ALL stored colors (not just for types in baseColors)
+      Object.entries(storedColors).forEach(([type, color]) => {
+        mergedColors[type] = color;
+      });
       
-      // Apply stored visibility for existing types, keep defaults for new types
-      if (stored.graphConfig.nodeTypeVisibility) {
-        Object.entries(stored.graphConfig.nodeTypeVisibility).forEach(([type, visible]) => {
-          if (type in currentNodeTypeVisibility) {
-            mergedVisibility[type] = visible;
-          }
-        });
-      }
+      // Apply ALL stored visibility (not just for types in baseVisibility)
+      Object.entries(storedVisibility).forEach(([type, visible]) => {
+        mergedVisibility[type] = visible;
+      });
       
-      setIsLoaded(true);
-      console.log('usePersistedNodeTypes: Merged node type configurations');
+      console.log('usePersistedNodeTypes: Merged node type configurations', {
+        storedColors: Object.keys(storedColors).length,
+        baseColors: Object.keys(baseColors).length,
+        mergedColors: Object.keys(mergedColors).length
+      });
       return { colors: mergedColors, visibility: mergedVisibility };
     } catch (error) {
       console.error('usePersistedNodeTypes: Failed to merge node type configs:', error);
-      setIsLoaded(true);
-      return { colors: currentNodeTypeColors, visibility: currentNodeTypeVisibility };
+      // Fallback to at least returning stored values
+      return { colors: { ...baseColors, ...storedColors }, visibility: { ...baseVisibility, ...storedVisibility } };
     }
-  }, [currentNodeTypeColors, currentNodeTypeVisibility, isLoaded]);
+  }, []); // Remove dependencies to make it stable
+  
+  // Set isLoaded on mount
+  React.useEffect(() => {
+    setIsLoaded(true);
+  }, []);
   
   return { mergeWithPersisted, isLoaded };
 };
