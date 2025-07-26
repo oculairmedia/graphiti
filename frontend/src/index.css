@@ -195,15 +195,17 @@
   }
 
   /* Details panel badge styling with CSS custom properties for dynamic colors */
-  .details-badge {
-    background-color: hsl(var(--badge-color));
-    color: white;
+  .details-badge.details-badge {
+    background-color: hsl(var(--badge-color)) !important;
+    color: white !important;
+    border-color: transparent !important;
   }
 
   /* Default details badge for unknown types */
-  .details-badge-default {
-    background-color: hsl(220 13% 60%);
-    color: white;
+  .details-badge-default.details-badge-default {
+    background-color: hsl(220 13% 60%) !important;
+    color: white !important;
+    border-color: transparent !important;
   }
 
   /* Control panel color indicator with CSS custom properties */
@@ -233,5 +235,11 @@
 
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
     background: hsl(var(--primary) / 0.7);
+  }
+
+  /* Text overflow utilities for preventing horizontal scroll */
+  .overflow-wrap-anywhere {
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
 }

@@ -88,11 +88,11 @@ export const NodeDetailsPanel: React.FC<NodeDetailsPanelProps> = ({
   };
 
   return (
-    <Card className="glass-panel w-96 max-h-[80vh] overflow-hidden animate-fade-in flex flex-col">
+    <Card className="glass-panel w-96 max-h-[80vh] overflow-hidden animate-fade-in flex flex-col min-w-0">
       <CardHeader className="pb-3 flex-shrink-0">
         <div className="flex items-start justify-between">
-          <div className="flex-1 pr-2">
-            <CardTitle className="text-lg leading-tight mb-2">
+          <div className="flex-1 pr-2 min-w-0">
+            <CardTitle className="text-lg leading-tight mb-2 break-words overflow-wrap-anywhere">
               {data.name}
             </CardTitle>
             <div className="flex items-center space-x-2 mb-2">
@@ -122,28 +122,28 @@ export const NodeDetailsPanel: React.FC<NodeDetailsPanelProps> = ({
         </div>
       </CardHeader>
 
-      <CardContent className="flex-1 overflow-y-auto custom-scrollbar space-y-4 min-h-0">
+      <CardContent className="flex-1 overflow-y-auto custom-scrollbar space-y-4 min-h-0 min-w-0">
         
         {/* Summary */}
         {data.summary && (
           <div>
             <h4 className="text-sm font-medium mb-2 text-muted-foreground">Summary</h4>
-            <p className="text-sm leading-relaxed">{data.summary}</p>
+            <p className="text-sm leading-relaxed break-words overflow-wrap-anywhere">{data.summary}</p>
           </div>
         )}
 
         <Separator />
 
         {/* Properties */}
-        <div>
+        <div className="min-w-0">
           <h4 className="text-sm font-medium mb-3 text-muted-foreground">Properties</h4>
-          <div className="space-y-2">
+          <div className="space-y-2 min-w-0">
             {Object.entries(data.properties).map(([key, value]) => (
-              <div key={key} className="flex justify-between items-start">
-                <span className="text-xs text-muted-foreground capitalize">
+              <div key={key} className="flex justify-between items-start gap-2 min-w-0">
+                <span className="text-xs text-muted-foreground capitalize flex-shrink-0">
                   {key.replace(/([A-Z])/g, ' $1')}:
                 </span>
-                <span className="text-xs text-right flex-1 ml-2">
+                <span className="text-xs text-right flex-1 min-w-0 break-words overflow-wrap-anywhere">
                   {Array.isArray(value) ? value.join(', ') : String(value)}
                 </span>
               </div>
