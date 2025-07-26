@@ -116,6 +116,14 @@ interface GraphConfig {
   gradientHighColor: string;
   gradientLowColor: string;
   
+  // Hover and focus styling
+  hoveredPointCursor: string;
+  renderHoveredPointRing: boolean;
+  hoveredPointRingColor: string;
+  focusedPointRingColor: string;
+  focusedPointIndex?: number;
+  renderLinks: boolean;
+  
   // Query
   queryType: string;
   nodeLimit: number;
@@ -236,6 +244,14 @@ const defaultConfig: GraphConfig = {
   colorScheme: 'by-type',
   gradientHighColor: '#FF6B6B',
   gradientLowColor: '#4ECDC4',
+  
+  // Hover and focus styling
+  hoveredPointCursor: 'pointer',
+  renderHoveredPointRing: true,
+  hoveredPointRingColor: '#22d3ee', // Cyan
+  focusedPointRingColor: '#fbbf24', // Amber  
+  focusedPointIndex: undefined,
+  renderLinks: true,
   
   // Query
   queryType: 'entire_graph',

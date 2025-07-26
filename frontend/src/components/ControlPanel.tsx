@@ -912,6 +912,83 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
                 </CardContent>
               </Card>
 
+              {/* Hover & Focus Effects */}
+              <Card className="glass border-border/30">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm flex items-center space-x-2">
+                    <Eye className="h-4 w-4 text-primary" />
+                    <span>Hover & Focus Effects</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Hover Cursor */}
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Hover Cursor</Label>
+                    <Select value={config.hoveredPointCursor} onValueChange={(value) => updateConfig({ hoveredPointCursor: value })}>
+                      <SelectTrigger className="h-8 bg-secondary/30">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="glass">
+                        <SelectItem value="auto">↗️ Auto</SelectItem>
+                        <SelectItem value="pointer">👆 Pointer</SelectItem>
+                        <SelectItem value="crosshair">✛ Crosshair</SelectItem>
+                        <SelectItem value="grab">✋ Grab</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Hover Ring Toggle */}
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs text-muted-foreground">Show Hover Ring</Label>
+                    <Checkbox
+                      checked={config.renderHoveredPointRing}
+                      onCheckedChange={(checked) => updateConfig({ renderHoveredPointRing: checked })}
+                    />
+                  </div>
+
+                  {/* Hover Ring Color */}
+                  {config.renderHoveredPointRing && (
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Hover Ring Color</Label>
+                      <ColorPicker
+                        color={config.hoveredPointRingColor}
+                        onChange={(color) => updateConfig({ hoveredPointRingColor: color })}
+                        swatches={[
+                          '#22d3ee', '#06b6d4', '#0891b2', '#0e7490',
+                          '#fbbf24', '#f59e0b', '#d97706', '#b45309',
+                          '#ef4444', '#dc2626', '#b91c1c', '#991b1b',
+                          '#10b981', '#059669', '#047857', '#065f46'
+                        ]}
+                      />
+                    </div>
+                  )}
+
+                  {/* Focus Ring Color */}
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Focus Ring Color</Label>
+                    <ColorPicker
+                      color={config.focusedPointRingColor}
+                      onChange={(color) => updateConfig({ focusedPointRingColor: color })}
+                      swatches={[
+                        '#fbbf24', '#f59e0b', '#d97706', '#b45309',
+                        '#22d3ee', '#06b6d4', '#0891b2', '#0e7490',
+                        '#ef4444', '#dc2626', '#b91c1c', '#991b1b',
+                        '#10b981', '#059669', '#047857', '#065f46'
+                      ]}
+                    />
+                  </div>
+
+                  {/* Render Links Toggle */}
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs text-muted-foreground">Show Links</Label>
+                    <Checkbox
+                      checked={config.renderLinks}
+                      onCheckedChange={(checked) => updateConfig({ renderLinks: checked })}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+
               {/* Link Visibility & Effects */}
               <Card className="glass border-border/30">
                 <CardHeader className="pb-3">

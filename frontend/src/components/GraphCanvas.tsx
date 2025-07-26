@@ -1023,9 +1023,15 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             enableDrag={true}
             enableRightClickRepulsion={true}
             onClick={handleClick}
-            renderHoveredNodeRing={true}
-            hoveredNodeRingColor="#22d3ee"
-            focusedNodeRingColor="#fbbf24"
+            
+            // Hover and focus styling from config
+            hoveredPointCursor={config.hoveredPointCursor}
+            renderHoveredPointRing={config.renderHoveredPointRing}
+            hoveredPointRingColor={config.hoveredPointRingColor}
+            focusedPointRingColor={config.focusedPointRingColor}
+            focusedPointIndex={config.focusedPointIndex}
+            renderLinks={config.renderLinks}
+            
             nodeGreyoutOpacity={selectedNodes.length > 0 || highlightedNodes.length > 0 ? 0.1 : 1}
             
             // Performance
