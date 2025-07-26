@@ -1,6 +1,7 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useCallback } from 'react';
 import { calculateLayoutPositions, type LayoutOptions } from '../utils/layoutAlgorithms';
 import type { GraphNode, GraphEdge } from '../types/graph';
+import { usePersistedGraphConfig, usePersistedNodeTypes } from '@/hooks/usePersistedConfig';
 
 // Generate default colors for dynamic node types
 const generateNodeTypeColor = (nodeType: string, index: number): string => {
@@ -287,12 +288,16 @@ const defaultConfig: GraphConfig = {
 const GraphConfigContext = createContext<GraphConfigContextType | undefined>(undefined);
 
 export const GraphConfigProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [config, setConfig] = useState<GraphConfig>(defaultConfig);
+  const [config, setConfig, isConfigLoaded] = usePersistedGraphConfig(defaultConfig);
   const [cosmographRef, setCosmographRef] = useState<React.MutableRefObject<CosmographRefType> | null>(null);
   const [isApplyingLayout, setIsApplyingLayout] = useState(false);
+  const { mergeWithPersisted: mergeNodeTypes, isLoaded: isNodeTypesLoaded } = usePersistedNodeTypes(
+    config.nodeTypeColors,
+    config.nodeTypeVisibility
+  );
 
   // Function to update node type configurations based on actual graph data
-  const updateNodeTypeConfigurations = (nodeTypes: string[]) => {
+  const updateNodeTypeConfigurations = useCallback((nodeTypes: string[]) => {
     if (nodeTypes.length === 0) return;
     
     // Only update if the node types have actually changed
@@ -317,6 +322,20 @@ export const GraphConfigProvider: React.FC<{ children: ReactNode }> = ({ childre
         : true;
     });
     
+    // Merge with persisted node type configurations if available
+    const merged = mergeNodeTypes();
+    if (merged && isNodeTypesLoaded) {
+      // Apply persisted settings to existing types
+      nodeTypes.forEach((nodeType) => {
+        if (merged.colors[nodeType]) {
+          newNodeTypeColors[nodeType] = merged.colors[nodeType];
+        }
+        if (merged.visibility[nodeType] !== undefined) {
+          newNodeTypeVisibility[nodeType] = merged.visibility[nodeType];
+        }
+      });
+    }
+    
     // Update filtered node types to include all visible types
     const newFilteredNodeTypes = nodeTypes.filter(type => newNodeTypeVisibility[type]);
     
@@ -326,16 +345,18 @@ export const GraphConfigProvider: React.FC<{ children: ReactNode }> = ({ childre
       nodeTypeVisibility: newNodeTypeVisibility,
       filteredNodeTypes: newFilteredNodeTypes
     }));
-  };
+  }, [config.nodeTypeColors, config.nodeTypeVisibility, mergeNodeTypes, isNodeTypesLoaded, setConfig]);
 
-  const updateConfig = (updates: Partial<GraphConfig>) => {
+  const updateConfig = useCallback((updates: Partial<GraphConfig>) => {
+    console.log('GraphConfigContext: updateConfig called with:', updates);
     setConfig(prev => {
       const newConfig = { ...prev, ...updates };
+      console.log('GraphConfigContext: New config after update:', newConfig);
       // Note: Updates will be applied through React props in GraphCanvas
       // Cosmograph React component handles updates automatically through props
       return newConfig;
     });
-  };
+  }, [setConfig]);
 
   const zoomIn = () => {
     console.log('🔍 GraphConfigContext: zoomIn() called');

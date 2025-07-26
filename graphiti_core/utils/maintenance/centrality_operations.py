@@ -17,12 +17,39 @@ limitations under the License.
 import asyncio
 import logging
 import math
+import os
 from typing import Dict, List, Optional, Tuple
 
 from graphiti_core.driver.driver import GraphDriver
 from graphiti_core.nodes import EntityNode
 
 logger = logging.getLogger(__name__)
+
+# Import Rust client if available
+try:
+    from .rust_centrality_client import RustCentralityClient
+    _rust_client = None
+    
+    def _get_rust_client() -> RustCentralityClient:
+        global _rust_client
+        if _rust_client is None:
+            _rust_client = RustCentralityClient()
+        return _rust_client
+        
+    RUST_AVAILABLE = True
+except ImportError:
+    logger.warning("Rust centrality client not available, falling back to Python implementation")
+    RUST_AVAILABLE = False
+    
+    def _get_rust_client():
+        raise ImportError("Rust centrality client not available")
+
+def _should_use_rust() -> bool:
+    """Check if we should use the Rust centrality service."""
+    return (
+        RUST_AVAILABLE and 
+        os.getenv("USE_RUST_CENTRALITY", "false").lower() in ("true", "1", "yes")
+    )
 
 
 async def calculate_pagerank(
@@ -43,6 +70,21 @@ async def calculate_pagerank(
     Returns:
         Dictionary mapping node UUIDs to PageRank scores
     """
+    # Route to Rust service if enabled
+    if _should_use_rust():
+        try:
+            logger.info("Using Rust centrality service for PageRank calculation")
+            client = _get_rust_client()
+            return await client.calculate_pagerank(
+                damping_factor=damping_factor,
+                iterations=iterations,
+                group_id=group_id,
+                store_results=False,  # Don't store from proxy layer
+            )
+        except Exception as e:
+            logger.error(f"Rust centrality service failed, falling back to Python: {e}")
+            # Fall through to Python implementation
+    
     logger.info(f"Calculating PageRank with damping={damping_factor}, iterations={iterations}")
     
     # Get all nodes
@@ -125,6 +167,20 @@ async def calculate_degree_centrality(
     Returns:
         Dictionary mapping node UUIDs to degree counts
     """
+    # Route to Rust service if enabled
+    if _should_use_rust():
+        try:
+            logger.info("Using Rust centrality service for degree centrality calculation")
+            client = _get_rust_client()
+            return await client.calculate_degree_centrality(
+                direction=direction,
+                group_id=group_id,
+                store_results=False,  # Don't store from proxy layer
+            )
+        except Exception as e:
+            logger.error(f"Rust centrality service failed, falling back to Python: {e}")
+            # Fall through to Python implementation
+    
     logger.info(f"Calculating degree centrality with direction={direction}")
     
     where_clause = "WHERE n.group_id = $group_id" if group_id else ""
@@ -189,6 +245,20 @@ async def calculate_betweenness_centrality(
     Returns:
         Dictionary mapping node UUIDs to betweenness scores
     """
+    # Route to Rust service if enabled
+    if _should_use_rust():
+        try:
+            logger.info("Using Rust centrality service for betweenness centrality calculation")
+            client = _get_rust_client()
+            return await client.calculate_betweenness_centrality(
+                sample_size=sample_size,
+                group_id=group_id,
+                store_results=False,  # Don't store from proxy layer
+            )
+        except Exception as e:
+            logger.error(f"Rust centrality service failed, falling back to Python: {e}")
+            # Fall through to Python implementation
+    
     logger.info(f"Calculating betweenness centrality with sample_size={sample_size}")
     
     # Note: Full betweenness calculation is computationally expensive
@@ -299,6 +369,19 @@ async def calculate_all_centralities(
     Returns:
         Dictionary mapping node UUIDs to all centrality scores
     """
+    # Route to Rust service if enabled
+    if _should_use_rust():
+        try:
+            logger.info("Using Rust centrality service for all centrality calculations")
+            client = _get_rust_client()
+            return await client.calculate_all_centralities(
+                group_id=group_id,
+                store_results=store_results,
+            )
+        except Exception as e:
+            logger.error(f"Rust centrality service failed, falling back to Python: {e}")
+            # Fall through to Python implementation
+    
     logger.info("Calculating all centrality metrics")
     
     # Calculate individual metrics
