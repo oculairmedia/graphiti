@@ -787,21 +787,6 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
                     <p className="text-xs text-muted-foreground mt-1">Repulsion force from mouse cursor</p>
                   </div>
 
-                  <div>
-                    <div className="flex justify-between items-center mb-2">
-                      <Label className="text-xs text-muted-foreground">Space Size</Label>
-                      <Badge variant="outline" className="text-xs">{config.spaceSize}</Badge>
-                    </div>
-                    <Slider
-                      value={[config.spaceSize]}
-                      onValueChange={([value]) => updateConfig({ spaceSize: value })}
-                      max={8192}
-                      min={1024}
-                      step={256}
-                      className="w-full"
-                    />
-                    <p className="text-xs text-muted-foreground mt-1">Simulation space dimensions (max: 8192)</p>
-                  </div>
 
                   <div>
                     <Label className="text-xs text-muted-foreground">Random Seed</Label>
