@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { ChevronLeft, ChevronRight, Database, Settings2, Palette, Zap, RotateCcw, Paintbrush, Layers, Eye, RefreshCw, Cpu, Play, Pause, Square, Shuffle, ZoomIn } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Database, Settings2, Palette, Zap, RotateCcw, Paintbrush, Layers, Eye, RefreshCw, Cpu, Play, Pause, Square, Shuffle, ZoomIn, Download } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
@@ -16,6 +16,7 @@ import { useQuery } from '@tanstack/react-query';
 import { graphClient } from '@/api/graphClient';
 import { ColorPicker } from '@/components/ui/ColorPicker';
 import type { GraphData, GraphNode } from '@/types/graph';
+import { useConfigPersistence } from '@/hooks/usePersistedConfig';
 
 interface ControlPanelProps {
   collapsed: boolean;
@@ -83,6 +84,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
   onLayoutChange
 }) => {
   const { config, updateConfig, updateNodeTypeConfigurations, applyLayout, cosmographRef } = useGraphConfig();
+  const { resetAllConfig, exportConfig, importConfig, getStorageInfo } = useConfigPersistence();
   
   // Get current graph data for layout operations
   const { data: graphData } = useQuery({
@@ -244,7 +246,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
       {/* Scrollable Content with Tabs */}
       <div className="flex-1 flex flex-col min-h-0">
         <Tabs defaultValue="query" className="flex-1 flex flex-col min-h-0">
-          <TabsList className="grid grid-cols-4 m-4 mb-2 glass">
+          <TabsList className="grid grid-cols-5 m-4 mb-2 glass">
             <TabsTrigger value="query" className="text-xs">
               <Database className="h-3 w-3" />
             </TabsTrigger>
@@ -255,6 +257,9 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
               <Zap className="h-3 w-3" />
             </TabsTrigger>
             <TabsTrigger value="render" className="text-xs">
+              <Layers className="h-3 w-3" />
+            </TabsTrigger>
+            <TabsTrigger value="settings" className="text-xs">
               <Settings2 className="h-3 w-3" />
             </TabsTrigger>
           </TabsList>
@@ -1429,6 +1434,112 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
                       step={1}
                       className="w-full"
                     />
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* Settings Tab */}
+            <TabsContent value="settings" className="mt-0 space-y-4">
+              <Card className="glass border-border/30">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm flex items-center space-x-2">
+                    <Settings2 className="h-4 w-4 text-primary" />
+                    <span>Configuration Management</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div>
+                    <Label className="text-xs text-muted-foreground mb-2 block">
+                      Save and restore your customizations
+                    </Label>
+                    
+                    <div className="grid grid-cols-2 gap-2 mb-4">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={exportConfig}
+                        className="h-8 text-xs"
+                      >
+                        <Download className="h-3 w-3 mr-1" />
+                        Export
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const input = document.createElement('input');
+                          input.type = 'file';
+                          input.accept = '.json';
+                          input.onchange = async (e) => {
+                            const file = (e.target as HTMLInputElement).files?.[0];
+                            if (file) {
+                              const success = await importConfig(file);
+                              if (!success) {
+                                alert('Failed to import configuration. Please check the file format.');
+                              }
+                            }
+                          };
+                          input.click();
+                        }}
+                        className="h-8 text-xs"
+                      >
+                        <RefreshCw className="h-3 w-3 mr-1" />
+                        Import
+                      </Button>
+                    </div>
+                    
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => {
+                        if (confirm('Are you sure you want to reset all settings to defaults? This action cannot be undone.')) {
+                          resetAllConfig();
+                        }
+                      }}
+                      className="w-full h-8 text-xs"
+                    >
+                      <RotateCcw className="h-3 w-3 mr-1" />
+                      Reset to Defaults
+                    </Button>
+                  </div>
+                  
+                  <div>
+                    <Label className="text-xs text-muted-foreground mb-2 block">
+                      Storage Information
+                    </Label>
+                    <div className="text-xs text-muted-foreground space-y-1">
+                      {(() => {
+                        const storage = getStorageInfo();
+                        const usedMB = (storage.used / (1024 * 1024)).toFixed(2);
+                        const availableMB = (storage.available / (1024 * 1024)).toFixed(0);
+                        return (
+                          <>
+                            <div>Used: {usedMB} MB</div>
+                            <div>Available: {availableMB} MB</div>
+                          </>
+                        );
+                      })()}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+              
+              <Card className="glass border-border/30">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm flex items-center space-x-2">
+                    <Eye className="h-4 w-4 text-primary" />
+                    <span>Saved Preferences</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <div className="text-xs text-muted-foreground space-y-1">
+                    <div>✓ Graph physics settings</div>
+                    <div>✓ Visual appearance</div>
+                    <div>✓ Node type colors & visibility</div>
+                    <div>✓ Layout preferences</div>
+                    <div>✓ Filter settings</div>
+                    <div>✓ Panel section order & collapse</div>
                   </div>
                 </CardContent>
               </Card>

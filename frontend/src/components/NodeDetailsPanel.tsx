@@ -11,6 +11,7 @@ import { CollapsibleSection, type SectionConfig } from '@/components/ui/Collapsi
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { arrayMove, SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { restrictToVerticalAxis } from '@dnd-kit/modifiers';
+import { usePersistedSections } from '@/hooks/usePersistedConfig';
 
 interface NodeDetailsPanelProps {
   node: GraphNode;
@@ -35,8 +36,8 @@ export const NodeDetailsPanel: React.FC<NodeDetailsPanelProps> = ({
     { id: 'actions', title: 'Actions', isCollapsed: false, order: 5, isVisible: true },
   ];
 
-  // Section state management
-  const [sections, setSections] = useState<SectionConfig[]>(defaultSections);
+  // Section state management with persistence
+  const [sections, setSections, isSectionsLoaded] = usePersistedSections(defaultSections);
 
   // Drag and drop sensors
   const sensors = useSensors(

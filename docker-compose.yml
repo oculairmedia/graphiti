@@ -18,6 +18,8 @@ services:
     depends_on:
       falkordb:
         condition: service_healthy
+      graphiti-centrality-rs:
+        condition: service_healthy
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY:-sk-dummy}
       - FALKORDB_HOST=falkordb
@@ -31,6 +33,9 @@ services:
       - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen3:32b}
       - OLLAMA_EMBEDDING_MODEL=${OLLAMA_EMBEDDING_MODEL:-mxbai-embed-large:latest}
       - USE_OLLAMA_EMBEDDINGS=${USE_OLLAMA_EMBEDDINGS:-true}
+      # Centrality service configuration
+      - USE_RUST_CENTRALITY=${USE_RUST_CENTRALITY:-false}
+      - RUST_CENTRALITY_URL=${RUST_CENTRALITY_URL:-http://graphiti-centrality-rs:3001}
     networks:
       - graphiti_network
     labels:
@@ -211,6 +216,37 @@ services:
       - "homepage.href=http://192.168.50.90:8001"
       - "homepage.description=Model Context Protocol server for AI assistants"
     command: ["uv", "run", "graphiti_mcp_server.py", "--transport", "sse"]
+
+  graphiti-centrality-rs:
+    build:
+      context: ./graphiti-centrality-rs
+      dockerfile: Dockerfile
+    container_name: graphiti-centrality-rs
+    restart: unless-stopped
+    ports:
+      - "3001:3001" # Rust centrality service
+    environment:
+      - FALKORDB_HOST=falkordb
+      - FALKORDB_PORT=6379
+      - GRAPH_NAME=graphiti_migration
+      - BIND_ADDR=0.0.0.0:3001
+      - RUST_LOG=graphiti_centrality=info,debug
+    depends_on:
+      falkordb:
+        condition: service_healthy
+    networks:
+      - graphiti_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    labels:
+      - "homepage.group=Knowledge Management"
+      - "homepage.name=Centrality Service (Rust)"
+      - "homepage.icon=si-rust"
+      - "homepage.href=http://192.168.50.90:3001"
+      - "homepage.description=High-performance centrality calculations with native FalkorDB algorithms"
 
 networks:
   graphiti_network:
