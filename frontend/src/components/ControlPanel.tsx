@@ -47,6 +47,36 @@ const computeNodeTypes = (graphData?: GraphData): Array<{ id: string; name: stri
     .sort((a, b) => b.count - a.count); // Sort by count descending
 };
 
+// Convert hex color to HSL for CSS custom properties
+const hexToHsl = (hex: string): string => {
+  // Remove # if present
+  hex = hex.replace('#', '');
+  
+  // Parse hex values
+  const r = parseInt(hex.substr(0, 2), 16) / 255;
+  const g = parseInt(hex.substr(2, 2), 16) / 255;
+  const b = parseInt(hex.substr(4, 2), 16) / 255;
+
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  let h = 0;
+  let s = 0;
+  const l = (max + min) / 2;
+
+  if (max !== min) {
+    const d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+      case g: h = (b - r) / d + 2; break;
+      case b: h = (r - g) / d + 4; break;
+    }
+    h /= 6;
+  }
+
+  return `${Math.round(h * 360)} ${Math.round(s * 100)}% ${Math.round(l * 100)}%`;
+};
+
 export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({ 
   collapsed, 
   onToggleCollapse,
@@ -394,8 +424,10 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
                           />
                           <div className="flex items-center space-x-2">
                             <div 
-                              className="w-4 h-4 rounded-full border border-border/30"
-                              style={{ backgroundColor: config.nodeTypeColors[type.id as keyof typeof config.nodeTypeColors] }}
+                              className="w-4 h-4 rounded-full border border-border/30 control-color-indicator"
+                              style={{
+                                '--indicator-color': hexToHsl(config.nodeTypeColors[type.id as keyof typeof config.nodeTypeColors] || '#9CA3AF')
+                              } as React.CSSProperties}
                             />
                             <span className="text-sm font-medium">{type.name}</span>
                           </div>
