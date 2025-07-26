@@ -183,15 +183,15 @@ const defaultConfig: GraphConfig = {
   // Physics - Cosmograph v2.0 simulation defaults
   gravity: 0.05,
   repulsion: 3.0,
-  centerForce: 0.1,
-  friction: 0.85,
-  linkSpring: 1.0,
-  linkDistance: 2,
+  centerForce: 0.10,
+  friction: 0.86,
+  linkSpring: 0.12,
+  linkDistance: 3.1,
   mouseRepulsion: 10.0,
   simulationDecay: 2000,
   
   // New Cosmograph v2.0 simulation properties
-  simulationRepulsionTheta: 1.7,
+  simulationRepulsionTheta: 1.70,
   disableSimulation: null, // Auto-detect based on links
   spaceSize: 4096,
   randomSeed: undefined,
