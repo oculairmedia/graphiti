@@ -246,6 +246,15 @@ export const createDifferentialConfig = <T extends Record<string, any>>(
   const diff: Partial<T> = {};
   
   for (const key in current) {
+    // Special handling for nodeTypeColors and nodeTypeVisibility
+    // Always include them if they have any content, even if default is empty object
+    if (key === 'nodeTypeColors' || key === 'nodeTypeVisibility') {
+      if (current[key] && typeof current[key] === 'object' && Object.keys(current[key]).length > 0) {
+        diff[key] = current[key];
+      }
+      continue;
+    }
+    
     if (current[key] !== defaults[key]) {
       // Handle nested objects
       if (typeof current[key] === 'object' && current[key] !== null && !Array.isArray(current[key])) {

@@ -34,8 +34,8 @@ services:
       - OLLAMA_EMBEDDING_MODEL=${OLLAMA_EMBEDDING_MODEL:-mxbai-embed-large:latest}
       - USE_OLLAMA_EMBEDDINGS=${USE_OLLAMA_EMBEDDINGS:-true}
       # Centrality service configuration
-      - USE_RUST_CENTRALITY=${USE_RUST_CENTRALITY:-false}
-      - RUST_CENTRALITY_URL=${RUST_CENTRALITY_URL:-http://graphiti-centrality-rs:3001}
+      - USE_RUST_CENTRALITY=${USE_RUST_CENTRALITY:-true}
+      - RUST_CENTRALITY_URL=${RUST_CENTRALITY_URL:-http://graphiti-centrality-rs:3003}
     networks:
       - graphiti_network
     labels:
@@ -224,12 +224,12 @@ services:
     container_name: graphiti-centrality-rs
     restart: unless-stopped
     ports:
-      - "3001:3001" # Rust centrality service
+      - "3003:3003" # Rust centrality service
     environment:
       - FALKORDB_HOST=falkordb
       - FALKORDB_PORT=6379
       - GRAPH_NAME=graphiti_migration
-      - BIND_ADDR=0.0.0.0:3001
+      - BIND_ADDR=0.0.0.0:3003
       - RUST_LOG=graphiti_centrality=info,debug
     depends_on:
       falkordb:

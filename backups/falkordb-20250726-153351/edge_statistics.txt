@@ -1,0 +1,8 @@
+type(r)
+count(r)
+MENTIONS
+953
+RELATES_TO
+309
+Cached execution: 0
+Query internal execution time: 2.468190 milliseconds

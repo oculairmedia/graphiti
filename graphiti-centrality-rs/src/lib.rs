@@ -22,3 +22,4 @@ pub use algorithms::*;
 pub use client::FalkorClient;
 pub use error::{CentralityError, Result};
 pub use models::*;
+pub use server::AppState;
