@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
 import { GraphNode } from '../api/types';
+import { useGraphConfig } from '../contexts/GraphConfigContext';
 
 interface NodeDetailsPanelProps {
   node: GraphNode;
@@ -18,14 +19,26 @@ export const NodeDetailsPanel: React.FC<NodeDetailsPanelProps> = ({
   onClose,
   onShowNeighbors
 }) => {
-  const getNodeTypeColor = (type: string) => {
-    const colors = {
-      Entity: 'bg-node-entity',
-      Episodic: 'bg-node-episodic', 
-      Agent: 'bg-node-agent',
-      Community: 'bg-node-community'
-    };
-    return colors[type as keyof typeof colors] || 'bg-primary';
+  const { config } = useGraphConfig();
+  
+  const getNodeTypeColor = (type: string): string => {
+    // Use the actual color from the dynamic configuration
+    return config.nodeTypeColors[type] || '#9CA3AF'; // Fallback to gray if not found
+  };
+
+  // Determine the best text color for contrast
+  const getContrastColor = (backgroundColor: string): string => {
+    // Convert hex to RGB
+    const hex = backgroundColor.replace('#', '');
+    const r = parseInt(hex.substr(0, 2), 16);
+    const g = parseInt(hex.substr(2, 2), 16);
+    const b = parseInt(hex.substr(4, 2), 16);
+    
+    // Calculate luminance
+    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    
+    // Return white for dark backgrounds, black for light backgrounds
+    return luminance > 0.5 ? '#000000' : '#ffffff';
   };
 
   const formatDate = (dateString: string) => {
@@ -68,7 +81,11 @@ export const NodeDetailsPanel: React.FC<NodeDetailsPanelProps> = ({
             </CardTitle>
             <div className="flex items-center space-x-2 mb-2">
               <Badge 
-                className={`${getNodeTypeColor(data.type)} text-black text-xs`}
+                className="text-xs border-0"
+                style={{ 
+                  backgroundColor: getNodeTypeColor(data.type),
+                  color: getContrastColor(getNodeTypeColor(data.type))
+                }}
               >
                 {data.type}
               </Badge>
