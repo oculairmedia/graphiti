@@ -7,10 +7,10 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Palette, Check } from 'lucide-react';
 
 interface ColorPickerProps {
-  value: string;
+  color: string;
   onChange: (color: string) => void;
   label?: string;
-  presets?: string[];
+  swatches?: string[];
   className?: string;
 }
 
@@ -24,14 +24,14 @@ const DEFAULT_PRESETS = [
 ];
 
 export const ColorPicker: React.FC<ColorPickerProps> = ({
-  value,
+  color,
   onChange,
   label,
-  presets = DEFAULT_PRESETS,
+  swatches = DEFAULT_PRESETS,
   className = ""
 }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [customColor, setCustomColor] = useState(value);
+  const [customColor, setCustomColor] = useState(color || '#000000');
 
   const handlePresetClick = (color: string) => {
     onChange(color);
@@ -58,10 +58,10 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
           >
             <div
               className="w-5 h-5 rounded-full border-2 border-border/50 shadow-sm"
-              style={{ backgroundColor: value }}
+              style={{ backgroundColor: color || '#000000' }}
             />
             <span className="flex-1 text-left text-sm font-mono">
-              {value.toUpperCase()}
+              {(color || '#000000').toUpperCase()}
             </span>
             <Palette className="h-4 w-4 text-muted-foreground" />
           </Button>
@@ -99,7 +99,7 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
             <div className="space-y-2">
               <Label className="text-xs font-medium">Preset Colors</Label>
               <div className="grid grid-cols-8 gap-2">
-                {presets.map((color, i) => (
+                {swatches.map((color, i) => (
                   <button
                     key={i}
                     onClick={() => handlePresetClick(color)}
