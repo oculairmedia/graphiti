@@ -2,6 +2,41 @@ import React, { createContext, useContext, useState, ReactNode } from 'react';
 import { calculateLayoutPositions, type LayoutOptions } from '../utils/layoutAlgorithms';
 import type { GraphNode, GraphEdge } from '../types/graph';
 
+// Generate default colors for dynamic node types
+const generateNodeTypeColor = (nodeType: string, index: number): string => {
+  // Predefined color palette for common node types
+  const colorPalette = [
+    '#4ECDC4', // Teal
+    '#B794F6', // Purple  
+    '#F6AD55', // Orange
+    '#90CDF4', // Blue
+    '#FF6B6B', // Red
+    '#4ADE80', // Green
+    '#FBBF24', // Yellow
+    '#EC4899', // Pink
+    '#8B5CF6', // Violet
+    '#06B6D4', // Cyan
+    '#F59E0B', // Amber
+    '#EF4444'  // Red variant
+  ];
+  
+  // Use specific colors for known node types
+  const knownTypeColors: Record<string, string> = {
+    'Entity': '#4ECDC4',
+    'Episodic': '#B794F6',
+    'Agent': '#F6AD55', 
+    'Community': '#90CDF4',
+    'Unknown': '#9CA3AF'
+  };
+  
+  if (knownTypeColors[nodeType]) {
+    return knownTypeColors[nodeType];
+  }
+  
+  // For unknown types, use the color palette cyclically
+  return colorPalette[index % colorPalette.length];
+};
+
 interface CosmographLink {
   source: string;
   target: string;
@@ -53,19 +88,9 @@ interface GraphConfig {
   sizeMapping: string;
   borderWidth: number;
   
-  // Node colors by type
-  nodeTypeColors: {
-    Entity: string;
-    Episodic: string;
-    Agent: string;
-    Community: string;
-  };
-  nodeTypeVisibility: {
-    Entity: boolean;
-    Episodic: boolean;
-    Agent: boolean;
-    Community: boolean;
-  };
+  // Node colors by type - now dynamic
+  nodeTypeColors: Record<string, string>;
+  nodeTypeVisibility: Record<string, boolean>;
   
   // Labels
   showLabels: boolean;
@@ -120,6 +145,7 @@ interface CosmographRefType {
 interface GraphConfigContextType {
   config: GraphConfig;
   updateConfig: (updates: Partial<GraphConfig>) => void;
+  updateNodeTypeConfigurations: (nodeTypes: string[]) => void;
   cosmographRef: React.MutableRefObject<CosmographRefType> | null;
   setCosmographRef: (ref: React.MutableRefObject<CosmographRefType>) => void;
   // Graph control methods
@@ -172,19 +198,9 @@ const defaultConfig: GraphConfig = {
   sizeMapping: 'degree',
   borderWidth: 0,
   
-  // Node colors by type
-  nodeTypeColors: {
-    Entity: '#4ECDC4',
-    Episodic: '#B794F6', 
-    Agent: '#F6AD55',
-    Community: '#90CDF4'
-  },
-  nodeTypeVisibility: {
-    Entity: true,
-    Episodic: true,
-    Agent: true,
-    Community: true
-  },
+  // Node colors by type - now dynamic, empty by default
+  nodeTypeColors: {},
+  nodeTypeVisibility: {},
   
   // Labels
   showLabels: true,
@@ -210,8 +226,8 @@ const defaultConfig: GraphConfig = {
   circularOrdering: 'degree',
   clusterBy: 'type',
   
-  // Filters
-  filteredNodeTypes: ['Entity', 'Episodic', 'Agent', 'Community'],
+  // Filters - now dynamic, empty by default
+  filteredNodeTypes: [],
   minDegree: 0,
   maxDegree: 100,
   minPagerank: 0,
@@ -228,6 +244,43 @@ export const GraphConfigProvider: React.FC<{ children: ReactNode }> = ({ childre
   const [config, setConfig] = useState<GraphConfig>(defaultConfig);
   const [cosmographRef, setCosmographRef] = useState<React.MutableRefObject<CosmographRefType> | null>(null);
   const [isApplyingLayout, setIsApplyingLayout] = useState(false);
+
+  // Function to update node type configurations based on actual graph data
+  const updateNodeTypeConfigurations = (nodeTypes: string[]) => {
+    if (nodeTypes.length === 0) return;
+    
+    // Only update if the node types have actually changed
+    const currentTypes = Object.keys(config.nodeTypeColors);
+    const typesChanged = nodeTypes.length !== currentTypes.length || 
+                        !nodeTypes.every(type => currentTypes.includes(type));
+    
+    if (!typesChanged) return;
+    
+    console.log('GraphConfigContext: Updating node type configurations for types:', nodeTypes);
+    
+    // Generate colors and visibility for the actual node types
+    const newNodeTypeColors: Record<string, string> = {};
+    const newNodeTypeVisibility: Record<string, boolean> = {};
+    
+    nodeTypes.forEach((nodeType, index) => {
+      // Preserve existing color if already configured, otherwise generate new
+      newNodeTypeColors[nodeType] = config.nodeTypeColors[nodeType] || generateNodeTypeColor(nodeType, index);
+      // Preserve existing visibility if already configured, otherwise default to true
+      newNodeTypeVisibility[nodeType] = config.nodeTypeVisibility[nodeType] !== undefined 
+        ? config.nodeTypeVisibility[nodeType] 
+        : true;
+    });
+    
+    // Update filtered node types to include all visible types
+    const newFilteredNodeTypes = nodeTypes.filter(type => newNodeTypeVisibility[type]);
+    
+    setConfig(prev => ({
+      ...prev,
+      nodeTypeColors: newNodeTypeColors,
+      nodeTypeVisibility: newNodeTypeVisibility,
+      filteredNodeTypes: newFilteredNodeTypes
+    }));
+  };
 
   const updateConfig = (updates: Partial<GraphConfig>) => {
     setConfig(prev => {
@@ -441,7 +494,8 @@ export const GraphConfigProvider: React.FC<{ children: ReactNode }> = ({ childre
   return (
     <GraphConfigContext.Provider value={{ 
       config, 
-      updateConfig, 
+      updateConfig,
+      updateNodeTypeConfigurations,
       cosmographRef, 
       setCosmographRef: setCosmographRefCallback,
       zoomIn,

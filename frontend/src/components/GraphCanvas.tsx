@@ -158,6 +158,13 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           logger.log('Sample link:', transformedLinks[0]);
           logger.log('Data Kit config:', dataKitConfig);
           
+          // Log node type distribution for color mapping debugging
+          const nodeTypeDistribution = transformedNodes.reduce((acc, node) => {
+            acc[node.node_type] = (acc[node.node_type] || 0) + 1;
+            return acc;
+          }, {} as Record<string, number>);
+          logger.log('Node type distribution:', nodeTypeDistribution);
+          
           // Validate we have valid data before proceeding
           if (transformedNodes.length === 0) {
             throw new Error('No valid nodes found after transformation');
@@ -607,12 +614,15 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
                 case 'by-pagerank': return ['#7c2d12', '#ea580c', '#f97316', '#fb923c', '#fed7aa']; // Orange gradient  
                 case 'by-degree': return ['#166534', '#16a34a', '#22c55e', '#4ade80', '#bbf7d0']; // Green gradient
                 case 'by-community': return ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD'];
-                default: return [
-                  config.nodeTypeColors.Entity || '#FF6B6B',
-                  config.nodeTypeColors.Episodic || '#4ECDC4', 
-                  config.nodeTypeColors.Agent || '#45B7D1',
-                  config.nodeTypeColors.Community || '#96CEB4'
-                ];
+                default: {
+                  // Use dynamic node type colors from the actual data
+                  const nodeTypeColors = Object.values(config.nodeTypeColors);
+                  if (nodeTypeColors.length > 0) {
+                    return nodeTypeColors;
+                  }
+                  // Fallback colors if no types configured yet
+                  return ['#4ECDC4', '#B794F6', '#F6AD55', '#90CDF4', '#FF6B6B', '#4ADE80'];
+                }
               }
             })()}
             

@@ -23,16 +23,11 @@ interface ControlPanelProps {
   onLayoutChange?: (layout: string) => void;
 }
 
-// Compute node types from real graph data instead of hardcoded values
+// Compute node types from real graph data dynamically
 const computeNodeTypes = (graphData?: GraphData): Array<{ id: string; name: string; count: number }> => {
   if (!graphData?.nodes) {
-    // Fallback to default types if no data available
-    return [
-      { id: 'Entity', name: 'Entity', count: 0 },
-      { id: 'Episodic', name: 'Episodic', count: 0 },
-      { id: 'Agent', name: 'Agent', count: 0 },
-      { id: 'Community', name: 'Community', count: 0 }
-    ];
+    // Return empty array if no data available - no hardcoded types
+    return [];
   }
 
   // Count actual node types from graph data
@@ -42,13 +37,14 @@ const computeNodeTypes = (graphData?: GraphData): Array<{ id: string; name: stri
     typeCount[type] = (typeCount[type] || 0) + 1;
   });
 
-  // Convert to expected format, ensuring we have all known types
-  const knownTypes = ['Entity', 'Episodic', 'Agent', 'Community'];
-  return knownTypes.map(type => ({
-    id: type,
-    name: type,
-    count: typeCount[type] || 0
-  }));
+  // Convert to expected format using only the actual types from the data
+  return Object.entries(typeCount)
+    .map(([type, count]) => ({
+      id: type,
+      name: type,
+      count
+    }))
+    .sort((a, b) => b.count - a.count); // Sort by count descending
 };
 
 export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({ 
@@ -56,7 +52,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
   onToggleCollapse,
   onLayoutChange
 }) => {
-  const { config, updateConfig, applyLayout } = useGraphConfig();
+  const { config, updateConfig, updateNodeTypeConfigurations, applyLayout } = useGraphConfig();
   
   // Get current graph data for layout operations
   const { data: graphData } = useQuery({
@@ -73,6 +69,14 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
   
   // Compute real node types from graph data with memoization
   const nodeTypes = React.useMemo(() => computeNodeTypes(graphData), [graphData]);
+  
+  // Update node type configurations when graph data changes
+  React.useEffect(() => {
+    if (nodeTypes.length > 0) {
+      const nodeTypeIds = nodeTypes.map(type => type.id);
+      updateNodeTypeConfigurations(nodeTypeIds);
+    }
+  }, [nodeTypes, updateNodeTypeConfigurations]);
 
   const handleNodeTypeColorChange = (type: string, color: string) => {
     updateConfig({ 

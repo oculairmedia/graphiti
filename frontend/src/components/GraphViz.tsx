@@ -34,7 +34,7 @@ interface GraphVizProps {
 }
 
 export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
-  const { config, applyLayout, zoomIn, zoomOut, fitView } = useGraphConfig();
+  const { config, applyLayout, zoomIn, zoomOut, fitView, updateNodeTypeConfigurations } = useGraphConfig();
   const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);
   const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
   const [selectedNodes, setSelectedNodes] = useState<string[]>([]);
@@ -158,6 +158,16 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
       })),
     };
   }, [filteredData]);
+
+  // Update node type configurations when data changes
+  React.useEffect(() => {
+    if (data?.nodes && data.nodes.length > 0) {
+      const nodeTypes = [...new Set(data.nodes.map(node => node.node_type).filter(Boolean))];
+      if (nodeTypes.length > 0) {
+        updateNodeTypeConfigurations(nodeTypes);
+      }
+    }
+  }, [data, updateNodeTypeConfigurations]);
 
   const handleNodeSelect = (nodeId: string) => {
     if (selectedNodes.includes(nodeId)) {
