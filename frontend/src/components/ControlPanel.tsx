@@ -405,7 +405,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
                         </Badge>
                       </div>
                       <ColorPicker
-                        value={config.nodeTypeColors[type.id as keyof typeof config.nodeTypeColors]}
+                        color={config.nodeTypeColors[type.id as keyof typeof config.nodeTypeColors]}
                         onChange={(color) => handleNodeTypeColorChange(type.id, color)}
                         className="w-full"
                       />
@@ -463,18 +463,18 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
                       {(config.colorScheme === 'by-centrality' || config.colorScheme === 'by-pagerank' || config.colorScheme === 'by-degree') && (
                         <div className="grid grid-cols-2 gap-3">
                           <ColorPicker
-                            value={config.gradientHighColor}
+                            color={config.gradientHighColor}
                             onChange={(color) => updateConfig({ gradientHighColor: color })}
                             label="High Value Color"
                             className="w-full"
-                            presets={['#FF6B6B', '#FF4757', '#FF3838', '#FF6348', '#FF9F43', '#F39C12', '#E74C3C', '#C0392B']}
+                            swatches={['#FF6B6B', '#FF4757', '#FF3838', '#FF6348', '#FF9F43', '#F39C12', '#E74C3C', '#C0392B']}
                           />
                           <ColorPicker
-                            value={config.gradientLowColor}
+                            color={config.gradientLowColor}
                             onChange={(color) => updateConfig({ gradientLowColor: color })}
                             label="Low Value Color"
                             className="w-full"
-                            presets={['#4ECDC4', '#00D2D3', '#17A2B8', '#3498DB', '#2980B9', '#5DADE2', '#AED6F1', '#EBF5FB']}
+                            swatches={['#4ECDC4', '#00D2D3', '#17A2B8', '#3498DB', '#2980B9', '#5DADE2', '#AED6F1', '#EBF5FB']}
                           />
                         </div>
                       )}
@@ -633,114 +633,184 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div>
-                    <div className="flex justify-between items-center mb-2">
-                      <Label className="text-xs text-muted-foreground">Repulsion Force</Label>
-                      <Badge variant="outline" className="text-xs">{config.repulsion.toFixed(2)}</Badge>
+                    <Label className="text-xs text-muted-foreground mb-2 block">Repulsion Force</Label>
+                    <div className="flex items-center space-x-2 mb-2">
+                      <Slider
+                        value={[config.repulsion]}
+                        onValueChange={([value]) => updateConfig({ repulsion: value })}
+                        max={10}
+                        min={0}
+                        step={0.01}
+                        className="flex-1"
+                      />
+                      <Input
+                        type="text"
+                        value={config.repulsion.toFixed(2)}
+                        onChange={(e) => {
+                          const value = parseFloat(e.target.value);
+                          if (!isNaN(value)) {
+                            updateConfig({ repulsion: value });
+                          }
+                        }}
+                        className="w-16 h-6 bg-secondary/30 text-xs text-center"
+                      />
                     </div>
-                    <Slider
-                      value={[config.repulsion]}
-                      onValueChange={([value]) => updateConfig({ repulsion: value })}
-                      max={2}
-                      min={0}
-                      step={0.01}
-                      className="w-full"
-                    />
                     <p className="text-xs text-muted-foreground mt-1">Controls node repulsion strength</p>
                   </div>
 
                   <div>
-                    <div className="flex justify-between items-center mb-2">
-                      <Label className="text-xs text-muted-foreground">Repulsion Theta</Label>
-                      <Badge variant="outline" className="text-xs">{config.simulationRepulsionTheta.toFixed(2)}</Badge>
+                    <Label className="text-xs text-muted-foreground mb-2 block">Repulsion Theta</Label>
+                    <div className="flex items-center space-x-2 mb-2">
+                      <Slider
+                        value={[config.simulationRepulsionTheta]}
+                        onValueChange={([value]) => updateConfig({ simulationRepulsionTheta: value })}
+                        max={2}
+                        min={0.3}
+                        step={0.1}
+                        className="flex-1"
+                      />
+                      <Input
+                        type="text"
+                        value={config.simulationRepulsionTheta.toFixed(2)}
+                        onChange={(e) => {
+                          const value = parseFloat(e.target.value);
+                          if (!isNaN(value)) {
+                            updateConfig({ simulationRepulsionTheta: value });
+                          }
+                        }}
+                        className="w-16 h-6 bg-secondary/30 text-xs text-center"
+                      />
                     </div>
-                    <Slider
-                      value={[config.simulationRepulsionTheta]}
-                      onValueChange={([value]) => updateConfig({ simulationRepulsionTheta: value })}
-                      max={2}
-                      min={0.3}
-                      step={0.1}
-                      className="w-full"
-                    />
                     <p className="text-xs text-muted-foreground mt-1">Barnes-Hut approximation level (higher = more accurate)</p>
                   </div>
 
                   <div>
-                    <div className="flex justify-between items-center mb-2">
-                      <Label className="text-xs text-muted-foreground">Link Spring Force</Label>
-                      <Badge variant="outline" className="text-xs">{config.linkSpring.toFixed(2)}</Badge>
+                    <Label className="text-xs text-muted-foreground mb-2 block">Link Spring Force</Label>
+                    <div className="flex items-center space-x-2 mb-2">
+                      <Slider
+                        value={[config.linkSpring]}
+                        onValueChange={([value]) => updateConfig({ linkSpring: value })}
+                        max={5}
+                        min={0}
+                        step={0.01}
+                        className="flex-1"
+                      />
+                      <Input
+                        type="text"
+                        value={config.linkSpring.toFixed(2)}
+                        onChange={(e) => {
+                          const value = parseFloat(e.target.value);
+                          if (!isNaN(value)) {
+                            updateConfig({ linkSpring: value });
+                          }
+                        }}
+                        className="w-16 h-6 bg-secondary/30 text-xs text-center"
+                      />
                     </div>
-                    <Slider
-                      value={[config.linkSpring]}
-                      onValueChange={([value]) => updateConfig({ linkSpring: value })}
-                      max={2}
-                      min={0}
-                      step={0.01}
-                      className="w-full"
-                    />
                     <p className="text-xs text-muted-foreground mt-1">Attraction strength between connected nodes</p>
                   </div>
 
                   <div>
-                    <div className="flex justify-between items-center mb-2">
-                      <Label className="text-xs text-muted-foreground">Link Distance</Label>
-                      <Badge variant="outline" className="text-xs">{config.linkDistance.toFixed(1)}</Badge>
+                    <Label className="text-xs text-muted-foreground mb-2 block">Link Distance</Label>
+                    <div className="flex items-center space-x-2 mb-2">
+                      <Slider
+                        value={[config.linkDistance]}
+                        onValueChange={([value]) => updateConfig({ linkDistance: value })}
+                        max={20}
+                        min={0.1}
+                        step={0.1}
+                        className="flex-1"
+                      />
+                      <Input
+                        type="text"
+                        value={config.linkDistance.toFixed(1)}
+                        onChange={(e) => {
+                          const value = parseFloat(e.target.value);
+                          if (!isNaN(value)) {
+                            updateConfig({ linkDistance: value });
+                          }
+                        }}
+                        className="w-16 h-6 bg-secondary/30 text-xs text-center"
+                      />
                     </div>
-                    <Slider
-                      value={[config.linkDistance]}
-                      onValueChange={([value]) => updateConfig({ linkDistance: value })}
-                      max={20}
-                      min={1}
-                      step={0.1}
-                      className="w-full"
-                    />
                     <p className="text-xs text-muted-foreground mt-1">Minimum distance between linked nodes</p>
                   </div>
 
                   <div>
-                    <div className="flex justify-between items-center mb-2">
-                      <Label className="text-xs text-muted-foreground">Gravity Force</Label>
-                      <Badge variant="outline" className="text-xs">{config.gravity.toFixed(2)}</Badge>
+                    <Label className="text-xs text-muted-foreground mb-2 block">Gravity Force</Label>
+                    <div className="flex items-center space-x-2 mb-2">
+                      <Slider
+                        value={[config.gravity]}
+                        onValueChange={([value]) => updateConfig({ gravity: value })}
+                        max={2}
+                        min={0}
+                        step={0.01}
+                        className="flex-1"
+                      />
+                      <Input
+                        type="text"
+                        value={config.gravity.toFixed(2)}
+                        onChange={(e) => {
+                          const value = parseFloat(e.target.value);
+                          if (!isNaN(value)) {
+                            updateConfig({ gravity: value });
+                          }
+                        }}
+                        className="w-16 h-6 bg-secondary/30 text-xs text-center"
+                      />
                     </div>
-                    <Slider
-                      value={[config.gravity]}
-                      onValueChange={([value]) => updateConfig({ gravity: value })}
-                      max={1}
-                      min={0}
-                      step={0.01}
-                      className="w-full"
-                    />
                     <p className="text-xs text-muted-foreground mt-1">Attraction towards graph center</p>
                   </div>
 
                   <div>
-                    <div className="flex justify-between items-center mb-2">
-                      <Label className="text-xs text-muted-foreground">Center Force</Label>
-                      <Badge variant="outline" className="text-xs">{config.centerForce.toFixed(2)}</Badge>
+                    <Label className="text-xs text-muted-foreground mb-2 block">Center Force</Label>
+                    <div className="flex items-center space-x-2 mb-2">
+                      <Slider
+                        value={[config.centerForce]}
+                        onValueChange={([value]) => updateConfig({ centerForce: value })}
+                        max={2}
+                        min={0}
+                        step={0.01}
+                        className="flex-1"
+                      />
+                      <Input
+                        type="text"
+                        value={config.centerForce.toFixed(2)}
+                        onChange={(e) => {
+                          const value = parseFloat(e.target.value);
+                          if (!isNaN(value)) {
+                            updateConfig({ centerForce: value });
+                          }
+                        }}
+                        className="w-16 h-6 bg-secondary/30 text-xs text-center"
+                      />
                     </div>
-                    <Slider
-                      value={[config.centerForce]}
-                      onValueChange={([value]) => updateConfig({ centerForce: value })}
-                      max={1}
-                      min={0}
-                      step={0.01}
-                      className="w-full"
-                    />
                     <p className="text-xs text-muted-foreground mt-1">Centering force pulling nodes together</p>
                   </div>
 
                   <div>
-                    <div className="flex justify-between items-center mb-2">
-                      <Label className="text-xs text-muted-foreground">Friction</Label>
-                      <Badge variant="outline" className="text-xs">{config.friction.toFixed(2)}</Badge>
+                    <Label className="text-xs text-muted-foreground mb-2 block">Friction</Label>
+                    <div className="flex items-center space-x-2 mb-2">
+                      <Slider
+                        value={[config.friction]}
+                        onValueChange={([value]) => updateConfig({ friction: value })}
+                        max={1}
+                        min={0}
+                        step={0.01}
+                        className="flex-1"
+                      />
+                      <Input
+                        type="text"
+                        value={config.friction.toFixed(2)}
+                        onChange={(e) => {
+                          const value = parseFloat(e.target.value);
+                          if (!isNaN(value)) {
+                            updateConfig({ friction: value });
+                          }
+                        }}
+                        className="w-16 h-6 bg-secondary/30 text-xs text-center"
+                      />
                     </div>
-                    <Slider
-                      value={[config.friction]}
-                      onValueChange={([value]) => updateConfig({ friction: value })}
-                      max={1}
-                      min={0.8}
-                      step={0.01}
-                      className="w-full"
-                    />
                     <p className="text-xs text-muted-foreground mt-1">Node movement damping (higher = slower)</p>
                   </div>
                 </CardContent>
@@ -756,34 +826,54 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div>
-                    <div className="flex justify-between items-center mb-2">
-                      <Label className="text-xs text-muted-foreground">Simulation Decay</Label>
-                      <Badge variant="outline" className="text-xs">{config.simulationDecay}</Badge>
+                    <Label className="text-xs text-muted-foreground mb-2 block">Simulation Decay</Label>
+                    <div className="flex items-center space-x-2 mb-2">
+                      <Slider
+                        value={[config.simulationDecay]}
+                        onValueChange={([value]) => updateConfig({ simulationDecay: value })}
+                        max={10000}
+                        min={100}
+                        step={100}
+                        className="flex-1"
+                      />
+                      <Input
+                        type="text"
+                        value={config.simulationDecay.toString()}
+                        onChange={(e) => {
+                          const value = parseInt(e.target.value);
+                          if (!isNaN(value)) {
+                            updateConfig({ simulationDecay: value });
+                          }
+                        }}
+                        className="w-16 h-6 bg-secondary/30 text-xs text-center"
+                      />
                     </div>
-                    <Slider
-                      value={[config.simulationDecay]}
-                      onValueChange={([value]) => updateConfig({ simulationDecay: value })}
-                      max={10000}
-                      min={100}
-                      step={100}
-                      className="w-full"
-                    />
                     <p className="text-xs text-muted-foreground mt-1">Simulation cooldown time</p>
                   </div>
 
                   <div>
-                    <div className="flex justify-between items-center mb-2">
-                      <Label className="text-xs text-muted-foreground">Mouse Repulsion</Label>
-                      <Badge variant="outline" className="text-xs">{config.mouseRepulsion.toFixed(1)}</Badge>
+                    <Label className="text-xs text-muted-foreground mb-2 block">Mouse Repulsion</Label>
+                    <div className="flex items-center space-x-2 mb-2">
+                      <Slider
+                        value={[config.mouseRepulsion]}
+                        onValueChange={([value]) => updateConfig({ mouseRepulsion: value })}
+                        max={20}
+                        min={0}
+                        step={0.1}
+                        className="flex-1"
+                      />
+                      <Input
+                        type="text"
+                        value={config.mouseRepulsion.toFixed(1)}
+                        onChange={(e) => {
+                          const value = parseFloat(e.target.value);
+                          if (!isNaN(value)) {
+                            updateConfig({ mouseRepulsion: value });
+                          }
+                        }}
+                        className="w-16 h-6 bg-secondary/30 text-xs text-center"
+                      />
                     </div>
-                    <Slider
-                      value={[config.mouseRepulsion]}
-                      onValueChange={([value]) => updateConfig({ mouseRepulsion: value })}
-                      max={5}
-                      min={0}
-                      step={0.1}
-                      className="w-full"
-                    />
                     <p className="text-xs text-muted-foreground mt-1">Repulsion force from mouse cursor</p>
                   </div>
 
@@ -866,10 +956,10 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
                   </div>
 
                   <ColorPicker
-                    value={config.linkColor}
+                    color={config.linkColor}
                     onChange={(color) => updateConfig({ linkColor: color })}
                     label="Link Color"
-                    presets={[
+                    swatches={[
                       '#666666', '#ffffff', '#ff6b6b', '#4ecdc4', '#45b7d1',
                       '#96ceb4', '#ffeaa7', '#dda0dd', '#98d8c8', '#f7dc6f',
                       '#bb8fce', '#85c1e9', '#f8c471', '#82e0aa', '#adb5bd',
@@ -878,10 +968,10 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
                   />
 
                   <ColorPicker
-                    value={config.backgroundColor}
+                    color={config.backgroundColor}
                     onChange={(color) => updateConfig({ backgroundColor: color })}
                     label="Background Color"
-                    presets={[
+                    swatches={[
                       '#000000', '#0a0a0a', '#1a1a1a', '#2d3748', '#1a202c',
                       '#2a2a2a', '#0f172a', '#111827', '#1f2937', '#374151',
                       '#ffffff', '#f8f9fa', '#e9ecef', '#dee2e6'
