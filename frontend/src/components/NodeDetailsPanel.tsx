@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import { X, Pin, Eye, EyeOff, Copy, Download, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -7,6 +7,10 @@ import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
 import { GraphNode } from '../api/types';
 import { useGraphConfig } from '../contexts/GraphConfigContext';
+import { CollapsibleSection, type SectionConfig } from '@/components/ui/CollapsibleSection';
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { arrayMove, SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { restrictToVerticalAxis } from '@dnd-kit/modifiers';
 
 interface NodeDetailsPanelProps {
   node: GraphNode;
@@ -20,6 +24,58 @@ export const NodeDetailsPanel: React.FC<NodeDetailsPanelProps> = ({
   onShowNeighbors
 }) => {
   const { config } = useGraphConfig();
+
+  // Default section configuration
+  const defaultSections: SectionConfig[] = [
+    { id: 'summary', title: 'Summary', isCollapsed: false, order: 0, isVisible: true },
+    { id: 'properties', title: 'Properties', isCollapsed: false, order: 1, isVisible: true },
+    { id: 'centrality', title: 'Centrality Metrics', isCollapsed: false, order: 2, isVisible: true },
+    { id: 'connections', title: 'Connections', isCollapsed: false, order: 3, isVisible: true },
+    { id: 'timestamps', title: 'Timeline', isCollapsed: false, order: 4, isVisible: true },
+    { id: 'actions', title: 'Actions', isCollapsed: false, order: 5, isVisible: true },
+  ];
+
+  // Section state management
+  const [sections, setSections] = useState<SectionConfig[]>(defaultSections);
+
+  // Drag and drop sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor)
+  );
+
+  // Handle section reordering
+  const handleDragEnd = (event: any) => {
+    const { active, over } = event;
+
+    if (active.id !== over.id) {
+      setSections((sections) => {
+        const oldIndex = sections.findIndex((section) => section.id === active.id);
+        const newIndex = sections.findIndex((section) => section.id === over.id);
+
+        const newSections = arrayMove(sections, oldIndex, newIndex);
+        // Update order values
+        return newSections.map((section, index) => ({
+          ...section,
+          order: index
+        }));
+      });
+    }
+  };
+
+  // Handle section collapse toggle
+  const handleToggleCollapse = (sectionId: string) => {
+    setSections((sections) =>
+      sections.map((section) =>
+        section.id === sectionId
+          ? { ...section, isCollapsed: !section.isCollapsed }
+          : section
+      )
+    );
+  };
+
+  // Get section by id
+  const getSection = (id: string) => sections.find(s => s.id === id) || defaultSections.find(s => s.id === id)!;
   
   // Convert hex color to HSL for CSS custom properties
   const hexToHsl = useCallback((hex: string) => {
@@ -122,121 +178,142 @@ export const NodeDetailsPanel: React.FC<NodeDetailsPanelProps> = ({
         </div>
       </CardHeader>
 
-      <CardContent className="flex-1 overflow-y-auto custom-scrollbar space-y-4 min-h-0 min-w-0">
-        
-        {/* Summary */}
-        {data.summary && (
-          <div>
-            <h4 className="text-sm font-medium mb-2 text-muted-foreground">Summary</h4>
-            <p className="text-sm leading-relaxed break-words overflow-wrap-anywhere">{data.summary}</p>
-          </div>
-        )}
-
-        <Separator />
-
-        {/* Properties */}
-        <div className="min-w-0">
-          <h4 className="text-sm font-medium mb-3 text-muted-foreground">Properties</h4>
-          <div className="space-y-2 min-w-0">
-            {Object.entries(data.properties).map(([key, value]) => (
-              <div key={key} className="flex justify-between items-start gap-2 min-w-0">
-                <span className="text-xs text-muted-foreground capitalize flex-shrink-0">
-                  {key.replace(/([A-Z])/g, ' $1')}:
-                </span>
-                <span className="text-xs text-right flex-1 min-w-0 break-words overflow-wrap-anywhere">
-                  {Array.isArray(value) ? value.join(', ') : String(value)}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <Separator />
-
-        {/* Centrality Metrics */}
-        <div>
-          <h4 className="text-sm font-medium mb-3 text-muted-foreground">Centrality Metrics</h4>
-          <div className="space-y-3">
-            {Object.entries(data.centrality).map(([metric, value]) => (
-              <div key={metric}>
-                <div className="flex justify-between items-center mb-1">
-                  <span className="text-xs capitalize">
-                    {metric.replace(/([A-Z])/g, ' $1')}
-                  </span>
-                  <span className="text-xs text-primary font-medium">
-                    {(Number(value) * 100).toFixed(1)}%
-                  </span>
-                </div>
-                <Progress 
-                  value={Number(value) * 100} 
-                  className="h-1.5"
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <Separator />
-
-        {/* Connection Info */}
-        <div>
-          <h4 className="text-sm font-medium mb-2 text-muted-foreground">Connections</h4>
-          <div className="flex items-center justify-between">
-            <span className="text-xs">Related Nodes:</span>
-            <Badge variant="secondary" className="text-xs">
-              {data.connections}
-            </Badge>
-          </div>
-        </div>
-
-        {/* Timestamps */}
-        <div>
-          <h4 className="text-sm font-medium mb-2 text-muted-foreground">Timeline</h4>
-          <div className="space-y-1">
-            <div className="flex justify-between items-center">
-              <span className="text-xs text-muted-foreground">Created:</span>
-              <span className="text-xs">{formatDate(data.timestamps.created)}</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-xs text-muted-foreground">Updated:</span>
-              <span className="text-xs">{formatDate(data.timestamps.updated)}</span>
-            </div>
-          </div>
-        </div>
-
-        <Separator />
-
-        {/* Action Buttons */}
-        <div className="grid grid-cols-2 gap-2">
-          <Button variant="outline" size="sm" className="h-8">
-            <Pin className="h-3 w-3 mr-1" />
-            Pin
-          </Button>
-          <Button variant="outline" size="sm" className="h-8">
-            <Eye className="h-3 w-3 mr-1" />
-            Focus
-          </Button>
-          <Button variant="outline" size="sm" className="h-8">
-            <Copy className="h-3 w-3 mr-1" />
-            Copy ID
-          </Button>
-          <Button variant="outline" size="sm" className="h-8">
-            <Download className="h-3 w-3 mr-1" />
-            Export
-          </Button>
-        </div>
-
-        <Button 
-          variant="secondary" 
-          className="w-full h-8" 
-          size="sm"
-          onClick={() => onShowNeighbors?.(data.id)}
-          disabled={!onShowNeighbors}
+      <CardContent className="flex-1 overflow-y-auto custom-scrollbar space-y-3 min-h-0 min-w-0">
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+          modifiers={[restrictToVerticalAxis]}
         >
-          <ExternalLink className="h-3 w-3 mr-2" />
-          Show Neighbors
-        </Button>
+          <SortableContext items={sections.map(s => s.id)} strategy={verticalListSortingStrategy}>
+            {sections
+              .sort((a, b) => a.order - b.order)
+              .map((section) => {
+                const sectionProps = { section, onToggleCollapse: handleToggleCollapse };
+                
+                switch (section.id) {
+                  case 'summary':
+                    return data.summary ? (
+                      <CollapsibleSection key={section.id} {...sectionProps}>
+                        <p className="text-sm leading-relaxed break-words overflow-wrap-anywhere">
+                          {data.summary}
+                        </p>
+                      </CollapsibleSection>
+                    ) : null;
 
+                  case 'properties':
+                    return (
+                      <CollapsibleSection key={section.id} {...sectionProps}>
+                        <div className="space-y-2 min-w-0">
+                          {Object.entries(data.properties).map(([key, value]) => (
+                            <div key={key} className="flex justify-between items-start gap-2 min-w-0">
+                              <span className="text-xs text-muted-foreground capitalize flex-shrink-0">
+                                {key.replace(/([A-Z])/g, ' $1')}:
+                              </span>
+                              <span className="text-xs text-right flex-1 min-w-0 break-words overflow-wrap-anywhere">
+                                {Array.isArray(value) ? value.join(', ') : String(value)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </CollapsibleSection>
+                    );
+
+                  case 'centrality':
+                    return (
+                      <CollapsibleSection key={section.id} {...sectionProps}>
+                        <div className="space-y-3">
+                          {Object.entries(data.centrality).map(([metric, value]) => (
+                            <div key={metric}>
+                              <div className="flex justify-between items-center mb-1">
+                                <span className="text-xs capitalize">
+                                  {metric.replace(/([A-Z])/g, ' $1')}
+                                </span>
+                                <span className="text-xs text-primary font-medium">
+                                  {(Number(value) * 100).toFixed(1)}%
+                                </span>
+                              </div>
+                              <Progress 
+                                value={Number(value) * 100} 
+                                className="h-1.5"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </CollapsibleSection>
+                    );
+
+                  case 'connections':
+                    return (
+                      <CollapsibleSection key={section.id} {...sectionProps}>
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs">Related Nodes:</span>
+                          <Badge variant="secondary" className="text-xs">
+                            {data.connections}
+                          </Badge>
+                        </div>
+                      </CollapsibleSection>
+                    );
+
+                  case 'timestamps':
+                    return (
+                      <CollapsibleSection key={section.id} {...sectionProps}>
+                        <div className="space-y-1">
+                          <div className="flex justify-between items-center">
+                            <span className="text-xs text-muted-foreground">Created:</span>
+                            <span className="text-xs">{formatDate(data.timestamps.created)}</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-xs text-muted-foreground">Updated:</span>
+                            <span className="text-xs">{formatDate(data.timestamps.updated)}</span>
+                          </div>
+                        </div>
+                      </CollapsibleSection>
+                    );
+
+                  case 'actions':
+                    return (
+                      <CollapsibleSection key={section.id} {...sectionProps}>
+                        <div className="space-y-2">
+                          <div className="grid grid-cols-2 gap-2">
+                            <Button variant="outline" size="sm" className="h-8">
+                              <Pin className="h-3 w-3 mr-1" />
+                              Pin
+                            </Button>
+                            <Button variant="outline" size="sm" className="h-8">
+                              <Eye className="h-3 w-3 mr-1" />
+                              Focus
+                            </Button>
+                            <Button variant="outline" size="sm" className="h-8">
+                              <Copy className="h-3 w-3 mr-1" />
+                              Copy ID
+                            </Button>
+                            <Button variant="outline" size="sm" className="h-8">
+                              <Download className="h-3 w-3 mr-1" />
+                              Export
+                            </Button>
+                          </div>
+
+                          <Button 
+                            variant="secondary" 
+                            className="w-full h-8" 
+                            size="sm"
+                            onClick={() => onShowNeighbors?.(data.id)}
+                            disabled={!onShowNeighbors}
+                          >
+                            <ExternalLink className="h-3 w-3 mr-2" />
+                            Show Neighbors
+                          </Button>
+                        </div>
+                      </CollapsibleSection>
+                    );
+
+                  default:
+                    return null;
+                }
+              })}
+          </SortableContext>
+        </DndContext>
       </CardContent>
     </Card>
   );
