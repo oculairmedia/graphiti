@@ -142,6 +142,21 @@ export const useGraphDataDiff = (currentData: GraphData | null): GraphDataDiff =
     
     const hasChanges = changeCount > 0;
 
+    console.log('🔍 useGraphDataDiff: Diff calculation complete', {
+      hasChanges,
+      changeCount,
+      addedNodes: addedNodes.length,
+      updatedNodes: updatedNodes.length,
+      removedNodes: removedNodeIds.length,
+      addedLinks: addedLinks.length,
+      updatedLinks: updatedLinks.length,
+      removedLinks: removedLinkIds.length,
+      currentNodeCount: currentData.nodes.length,
+      currentEdgeCount: currentData.edges.length,
+      previousNodeCount: previousData?.nodes.length || 0,
+      previousEdgeCount: previousData?.edges.length || 0
+    });
+
     if (hasChanges) {
       logger.log('useGraphDataDiff: Changes detected', {
         addedNodes: addedNodes.length,

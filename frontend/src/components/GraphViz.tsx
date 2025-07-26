@@ -97,6 +97,18 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
 
   // Use data diffing to detect changes
   const dataDiff = useGraphDataDiff(data || null);
+  
+  // Debug logging for data changes
+  useEffect(() => {
+    console.log('🔍 GraphViz: Data changed', {
+      hasData: !!data,
+      nodeCount: data?.nodes?.length || 0,
+      edgeCount: data?.edges?.length || 0,
+      hasChanges: dataDiff.hasChanges,
+      changeCount: dataDiff.changeCount,
+      stableDataExists: !!stableDataRef.current
+    });
+  }, [data, dataDiff]);
 
   // Handle incremental updates when changes are detected
   useEffect(() => {
@@ -273,8 +285,16 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
   ]);
 
   const transformedData = React.useMemo(() => {
+    console.log('🔄 GraphViz: transformedData memo recalculating', {
+      isIncrementalUpdate,
+      hasStableData: !!stableDataRef.current,
+      filteredNodeCount: filteredData.nodes.length,
+      filteredEdgeCount: filteredData.edges.length
+    });
+    
     // During incremental updates, return stable data to prevent prop changes
     if (isIncrementalUpdate && stableDataRef.current) {
+      console.log('🔒 GraphViz: Using stable data during incremental update');
       return {
         nodes: stableDataRef.current.nodes,
         links: stableDataRef.current.edges.map(edge => ({
@@ -285,6 +305,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
       };
     }
     
+    console.log('🔄 GraphViz: Using new filtered data');
     return {
       nodes: filteredData.nodes, // No unnecessary transformation
       links: filteredData.edges.map(edge => ({
@@ -664,6 +685,16 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
         {/* Main Graph Viewport */}
         <div className="flex-1 relative">
           <GraphErrorBoundary>
+            {(() => {
+              console.log('📊 GraphViz: Rendering GraphCanvas with props', {
+                nodeCount: transformedData.nodes.length,
+                linkCount: transformedData.links.length,
+                isIncrementalUpdate,
+                selectedNodesCount: selectedNodes.length,
+                highlightedNodesCount: highlightedNodes.length
+              });
+              return null;
+            })()}
             <GraphCanvas 
               ref={graphCanvasRef}
               nodes={transformedData.nodes}
