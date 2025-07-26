@@ -414,7 +414,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         const currentZoom = cosmographRef.current.getZoomLevel();
         if (currentZoom !== undefined) {
           const newZoom = Math.min(currentZoom * 1.5, 10);
-          cosmographRef.current.setZoomLevel(newZoom, 300);
+          cosmographRef.current.setZoomLevel(newZoom);
           logger.log(`Zoom in: ${currentZoom.toFixed(2)} → ${newZoom.toFixed(2)}`);
         } else {
           logger.warn('Could not get current zoom level for zoom in');
@@ -432,7 +432,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         const currentZoom = cosmographRef.current.getZoomLevel();
         if (currentZoom !== undefined) {
           const newZoom = Math.max(currentZoom * 0.67, 0.05); // Lower minimum zoom
-          cosmographRef.current.setZoomLevel(newZoom, 300);
+          cosmographRef.current.setZoomLevel(newZoom);
           logger.log(`Zoom out: ${currentZoom.toFixed(2)} → ${newZoom.toFixed(2)}`);
         } else {
           logger.warn('Could not get current zoom level for zoom out');
@@ -611,6 +611,8 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             
             // Override with UI-specific configurations
             fitViewOnInit={true}
+            fitViewDelay={1500} // Let nodes settle before fitting view
+            fitViewDuration={1000} // Smooth animation duration for initial fit
             initialZoomLevel={1.5}
             disableZoom={false}
             backgroundColor={config.backgroundColor}
@@ -668,6 +670,8 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             }}
             
             // Interaction
+            enableDrag={true}
+            enableRightClickRepulsion={true}
             onClick={handleClick}
             renderHoveredNodeRing={true}
             hoveredNodeRingColor="#22d3ee"
@@ -677,6 +681,9 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             // Performance
             pixelRatio={2.5}
             showFPSMonitor={false}
+            
+            // Zoom behavior
+            enableSimulationDuringZoom={true}
             
             // Simulation - Cosmograph v2.0 API
             disableSimulation={config.disableSimulation}
