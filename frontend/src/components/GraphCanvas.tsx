@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, forwardRef, useState, useCallback } from 'react';
-import { Cosmograph, prepareCosmographData, CosmographProvider } from '@cosmograph/react';
+import { Cosmograph, prepareCosmographData } from '@cosmograph/react';
 import { GraphNode } from '../api/types';
 import type { GraphData } from '../types/graph';
 import { useGraphConfig } from '../contexts/GraphConfigContext';
@@ -966,7 +966,6 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       <div 
         className={`relative overflow-hidden ${className}`}
       >
-        <CosmographProvider>
           <Cosmograph
             ref={cosmographRef}
             // Use Data Kit prepared data and configuration
@@ -1092,7 +1091,6 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             // Selection
             showLabelsFor={selectedNodes.map(id => ({ id }))}
           />
-        </CosmographProvider>
         
         {/* Performance Overlay */}
         {stats && (
