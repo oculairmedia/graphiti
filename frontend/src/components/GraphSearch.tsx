@@ -24,8 +24,8 @@ export const GraphSearch: React.FC<GraphSearchProps> = React.memo(({
   onFilterClick,
   nodes = []
 }) => {
-  // Get cosmographRef from context
-  const { cosmographRef } = useGraphConfig();
+  // Get cosmographRef and node type colors from context
+  const { cosmographRef, config } = useGraphConfig();
   
   // Search state management
   const [searchValue, setSearchValue] = useState('');
@@ -200,6 +200,11 @@ export const GraphSearch: React.FC<GraphSearchProps> = React.memo(({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
   
+  // Get node type color from global configuration
+  const getNodeTypeColor = useCallback((nodeType: string) => {
+    return config.nodeTypeColors[nodeType] || '#9CA3AF'; // Default to gray if not configured
+  }, [config.nodeTypeColors]);
+
   // Log when nodes data changes
   useEffect(() => {
     console.log('🔍 GraphSearch received nodes:', {
@@ -290,10 +295,17 @@ export const GraphSearch: React.FC<GraphSearchProps> = React.memo(({
                       </div>
                     </div>
                     
-                    {/* Node type badge */}
+                    {/* Node type badge with dynamic color */}
                     {node.node_type && (
                       <div className="flex-shrink-0">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-secondary/50 text-secondary-foreground">
+                        <span 
+                          className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium"
+                          style={{
+                            backgroundColor: `${getNodeTypeColor(node.node_type)}20`, // 20% opacity background
+                            color: getNodeTypeColor(node.node_type),
+                            border: `1px solid ${getNodeTypeColor(node.node_type)}40` // 40% opacity border
+                          }}
+                        >
                           {node.node_type}
                         </span>
                       </div>
