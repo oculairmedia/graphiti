@@ -700,8 +700,18 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             simulationRepulsionFromMouse={config.mouseRepulsion}
             
             // Link Properties
+            linkColor={config.linkColor}
+            linkOpacity={config.linkOpacity}
             linkWidth={config.linkWidth}
             linkWidthBy={config.linkWidthBy}
+            linkArrows={config.linkArrows}
+            linkArrowsSizeScale={config.linkArrowsSizeScale}
+            curvedLinks={config.curvedLinks}
+            curvedLinkSegments={config.curvedLinkSegments}
+            curvedLinkWeight={config.curvedLinkWeight}
+            curvedLinkControlPointDistance={config.curvedLinkControlPointDistance}
+            linkVisibilityDistanceRange={config.linkVisibilityDistance}
+            linkVisibilityMinTransparency={config.linkVisibilityMinTransparency}
             
             // Selection
             showLabelsFor={selectedNodes.map(id => ({ id }))}
