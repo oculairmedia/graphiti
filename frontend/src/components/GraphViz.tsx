@@ -103,59 +103,30 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
   // Use data diffing to detect changes
   const dataDiff = useGraphDataDiff(data || null);
   
-  // Debug logging for data changes and reset incremental flag when appropriate
+  // Reset incremental update flag when appropriate
   useEffect(() => {
-    console.log('🔍 GraphViz: Data changed', {
-      hasData: !!data,
-      nodeCount: data?.nodes?.length || 0,
-      edgeCount: data?.edges?.length || 0,
-      hasChanges: dataDiff.hasChanges,
-      changeCount: dataDiff.changeCount,
-      stableDataExists: !!stableDataRef.current,
-      isIncrementalUpdate
-    });
-    
     // Reset incremental update flag when we get a completely new dataset
-    // (not just changes detected by the diff)
     if (data && !dataDiff.hasChanges && isIncrementalUpdate) {
-      console.log('🔄 GraphViz: Resetting incremental flag - no changes detected');
       setIsIncrementalUpdate(false);
     }
-  }, [data, dataDiff, isIncrementalUpdate]);
+  }, [data, dataDiff.hasChanges, isIncrementalUpdate]);
 
   // Handle incremental updates when changes are detected
   useEffect(() => {
-    console.log('🚀 GraphViz: Incremental update effect triggered', {
-      hasChanges: dataDiff.hasChanges,
-      changeCount: dataDiff.changeCount,
-      hasGraphCanvasRef: !!graphCanvasRef.current,
-      stableDataExists: !!stableDataRef.current
-    });
-    
     if (!dataDiff.hasChanges || !graphCanvasRef.current) {
-      console.log('❌ GraphViz: Skipping incremental update', {
-        reason: !dataDiff.hasChanges ? 'no changes' : 'no graphCanvasRef'
-      });
       return;
     }
 
     // Skip incremental updates for initial data load (everything would be "added")
     if (!stableDataRef.current && data) {
-      logger.log('GraphViz: Initial data load, skipping incremental update');
       stableDataRef.current = { nodes: [...data.nodes], edges: [...data.edges] };
       return;
     }
-
-    logger.log('GraphViz: Applying incremental updates', {
-      changeCount: dataDiff.changeCount,
-      hasCanvas: !!graphCanvasRef.current
-    });
 
     const applyIncrementalUpdates = async () => {
       // Set flags BEFORE triggering React re-render to prevent Data Kit processing
       if (graphCanvasRef.current?.setIncrementalUpdateFlag) {
         graphCanvasRef.current.setIncrementalUpdateFlag(true);
-        console.log('🔄 GraphViz: Set GraphCanvas incremental flag to TRUE');
       }
       
       setIsIncrementalUpdate(true);
@@ -164,22 +135,18 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
         // Apply changes in order: removals first, then updates, then additions
         if (dataDiff.removedNodeIds.length > 0) {
           await graphCanvasRef.current!.removeNodes(dataDiff.removedNodeIds);
-          logger.log(`Applied node removals: ${dataDiff.removedNodeIds.length}`);
         }
 
         if (dataDiff.removedLinkIds.length > 0) {
           await graphCanvasRef.current!.removeLinks(dataDiff.removedLinkIds);
-          logger.log(`Applied link removals: ${dataDiff.removedLinkIds.length}`);
         }
 
         if (dataDiff.updatedNodes.length > 0) {
           await graphCanvasRef.current!.updateNodes(dataDiff.updatedNodes);
-          logger.log(`Applied node updates: ${dataDiff.updatedNodes.length}`);
         }
 
         if (dataDiff.updatedLinks.length > 0) {
           await graphCanvasRef.current!.updateLinks(dataDiff.updatedLinks);
-          logger.log(`Applied link updates: ${dataDiff.updatedLinks.length}`);
         }
 
         if (dataDiff.addedNodes.length > 0 || dataDiff.addedLinks.length > 0) {
@@ -195,12 +162,10 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
             transformedAddedLinks, 
             false // Don't restart simulation for small additions
           );
-          logger.log(`Applied additions: ${dataDiff.addedNodes.length} nodes, ${dataDiff.addedLinks.length} links`);
           
           // Resume simulation immediately to maintain smooth animation
           if (graphCanvasRef.current?.resumeSimulation) {
             graphCanvasRef.current.resumeSimulation();
-            logger.log('🔄 Resumed simulation after incremental update');
           }
         }
 
@@ -224,6 +189,31 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
   }, [dataDiff.hasChanges, dataDiff.changeCount, data]);
 
   // Enhanced filtering logic with virtualization for large graphs
+  // Create stable filter config to prevent unnecessary recalculations
+  const filterConfig = React.useMemo(() => ({
+    nodeTypeVisibility: config.nodeTypeVisibility,
+    filteredNodeTypes: config.filteredNodeTypes,
+    minDegree: config.minDegree,
+    maxDegree: config.maxDegree,
+    minPagerank: config.minPagerank,
+    maxPagerank: config.maxPagerank,
+    minConnections: config.minConnections,
+    maxConnections: config.maxConnections,
+    startDate: config.startDate,
+    endDate: config.endDate
+  }), [
+    config.nodeTypeVisibility,
+    config.filteredNodeTypes,
+    config.minDegree,
+    config.maxDegree,
+    config.minPagerank,
+    config.maxPagerank,
+    config.minConnections,
+    config.maxConnections,
+    config.startDate,
+    config.endDate
+  ]);
+
   const filteredData = React.useMemo(() => {
     // During incremental updates, use stable data to prevent cascade re-renders
     const sourceData = isIncrementalUpdate ? stableDataRef.current : data;
@@ -232,35 +222,35 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
     
     const visibleNodes = sourceData.nodes.filter(node => {
       // Basic node type visibility check
-      const nodeType = node.node_type as keyof typeof config.nodeTypeVisibility;
-      if (config.nodeTypeVisibility[nodeType] === false) return false;
+      const nodeType = node.node_type as keyof typeof filterConfig.nodeTypeVisibility;
+      if (filterConfig.nodeTypeVisibility[nodeType] === false) return false;
       
       // Advanced filter checks from FilterPanel
       
       // Node type filter
-      if (!config.filteredNodeTypes.includes(node.node_type)) return false;
+      if (!filterConfig.filteredNodeTypes.includes(node.node_type)) return false;
       
       // Degree centrality filter
       const degree = node.properties?.degree_centrality || 0;
       const degreePercent = Math.min((degree / 100) * 100, 100); // Normalize to 0-100
-      if (degreePercent < config.minDegree || degreePercent > config.maxDegree) return false;
+      if (degreePercent < filterConfig.minDegree || degreePercent > filterConfig.maxDegree) return false;
       
       // PageRank filter
       const pagerank = node.properties?.pagerank_centrality || node.properties?.pagerank || 0;
       const pagerankPercent = Math.min((pagerank / 0.1) * 100, 100); // Normalize to 0-100
-      if (pagerankPercent < config.minPagerank || pagerankPercent > config.maxPagerank) return false;
+      if (pagerankPercent < filterConfig.minPagerank || pagerankPercent > filterConfig.maxPagerank) return false;
       
       // Connection count filter
       const connections = node.properties?.degree || node.properties?.connections || 0;
-      if (connections < config.minConnections || connections > config.maxConnections) return false;
+      if (connections < filterConfig.minConnections || connections > filterConfig.maxConnections) return false;
       
       // Date range filter
-      if (config.startDate || config.endDate) {
+      if (filterConfig.startDate || filterConfig.endDate) {
         const nodeDate = node.created_at || node.properties?.created || node.properties?.date;
         if (nodeDate) {
           const date = new Date(nodeDate);
-          if (config.startDate && date < new Date(config.startDate)) return false;
-          if (config.endDate && date > new Date(config.endDate)) return false;
+          if (filterConfig.startDate && date < new Date(filterConfig.startDate)) return false;
+          if (filterConfig.endDate && date > new Date(filterConfig.endDate)) return false;
         }
       }
       
@@ -302,40 +292,17 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
     );
     
     return { nodes: finalNodes, edges: filteredEdges };
-  }, [
-    data, 
-    isIncrementalUpdate,
-    config.nodeTypeVisibility, 
-    config.filteredNodeTypes,
-    config.minDegree,
-    config.maxDegree,
-    config.minPagerank,
-    config.maxPagerank,
-    config.minConnections,
-    config.maxConnections,
-    config.startDate,
-    config.endDate
-  ]);
+  }, [data, isIncrementalUpdate, filterConfig]);
 
   // Create a stable reference that never changes during incremental updates
   const stableTransformedDataRef = useRef<{ nodes: GraphNode[], links: GraphLink[] } | null>(null);
   
   const transformedData = React.useMemo(() => {
-    console.log('🔄 GraphViz: transformedData memo recalculating', {
-      isIncrementalUpdate,
-      hasStableData: !!stableDataRef.current,
-      hasStableTransformed: !!stableTransformedDataRef.current,
-      filteredNodeCount: filteredData.nodes.length,
-      filteredEdgeCount: filteredData.edges.length
-    });
-    
     // During incremental updates, return the exact same object reference
     if (isIncrementalUpdate && stableTransformedDataRef.current) {
-      console.log('🔒 GraphViz: Using stable transformed data (same object reference)');
       return stableTransformedDataRef.current;
     }
     
-    console.log('🔄 GraphViz: Creating new transformed data');
     const newTransformedData = {
       nodes: filteredData.nodes,
       links: filteredData.edges.map(edge => ({
