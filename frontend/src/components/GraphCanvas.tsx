@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, forwardRef, useState, useCallback } from 'react';
-import { Cosmograph, prepareCosmographData } from '@cosmograph/react';
+import { Cosmograph, prepareCosmographData, CosmographButtonFitView, CosmographButtonZoomInOut } from '@cosmograph/react';
 import { GraphNode } from '../api/types';
 import type { GraphData } from '../types/graph';
 import { useGraphConfig } from '../contexts/GraphConfigContext';
@@ -38,7 +38,9 @@ interface CosmographRef {
   unfocusNode: () => void;
   restart: () => void;
   start: () => void;
+  pause: () => void;
   _canvasElement?: HTMLCanvasElement;
+  _cosmographInstance?: any; // Access to raw cosmograph instance for built-in controls
 }
 
 interface GraphCanvasProps {
@@ -75,6 +77,10 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     const [cosmographData, setCosmographData] = useState<any>(null);
     const [dataKitError, setDataKitError] = useState<string | null>(null);
     const [isDataPreparing, setIsDataPreparing] = useState(false);
+    const [builtInControls, setBuiltInControls] = useState<{
+      fitView?: any;
+      zoomInOut?: any;
+    }>({});
     const { config, setCosmographRef } = useGraphConfig();
     // Double-click detection using refs to avoid re-renders
     const lastClickTimeRef = useRef<number>(0);
@@ -270,6 +276,44 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             // Set up WebGL context loss recovery
             webglCleanup = setupWebGLContextRecovery();
             
+            // Initialize built-in controls when cosmograph instance is ready
+            const initializeBuiltInControls = () => {
+              if (cosmographRef.current?._canvasElement && cosmographRef.current?._cosmographInstance) {
+                try {
+                  // Create invisible container elements for built-in controls
+                  const controlsContainer = document.createElement('div');
+                  controlsContainer.style.position = 'absolute';
+                  controlsContainer.style.visibility = 'hidden';
+                  controlsContainer.style.pointerEvents = 'none';
+                  document.body.appendChild(controlsContainer);
+                  
+                  // Initialize fit view button
+                  const fitViewButton = new CosmographButtonFitView(
+                    cosmographRef.current._cosmographInstance,
+                    controlsContainer,
+                    { duration: 500 }
+                  );
+                  
+                  // Initialize zoom in/out buttons
+                  const zoomInOutButton = new CosmographButtonZoomInOut(
+                    cosmographRef.current._cosmographInstance,
+                    controlsContainer,
+                    { 
+                      zoomInMultiplier: 1.5,
+                      zoomOutMultiplier: 0.67,
+                      duration: 300
+                    }
+                  );
+                  
+                  setBuiltInControls({ fitView: fitViewButton, zoomInOut: zoomInOutButton });
+                  
+                  logger.log('GraphCanvas: Built-in controls initialized');
+                } catch (error) {
+                  logger.error('GraphCanvas: Failed to initialize built-in controls:', error);
+                }
+              }
+            };
+            
             // Start canvas polling
             const pollCanvas = () => {
               const hasCanvas = !!cosmographRef.current?._canvasElement;
@@ -277,6 +321,10 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
               setIsCanvasReady(prevReady => {
                 if (hasCanvas !== prevReady) {
                   console.log('GraphCanvas: Canvas ready state changed to', hasCanvas);
+                  if (hasCanvas) {
+                    // Try to initialize controls when canvas becomes ready
+                    setTimeout(initializeBuiltInControls, 1000); // Give time for cosmograph instance to be ready
+                  }
                 }
                 return hasCanvas;
               });
@@ -316,8 +364,23 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         if (webglCleanup) {
           webglCleanup();
         }
+        // Clean up built-in controls
+        if (builtInControls.fitView) {
+          try {
+            builtInControls.fitView.remove();
+          } catch (error) {
+            logger.warn('Error removing fit view control:', error);
+          }
+        }
+        if (builtInControls.zoomInOut) {
+          try {
+            builtInControls.zoomInOut.remove();
+          } catch (error) {
+            logger.warn('Error removing zoom control:', error);
+          }
+        }
       };
-    }, [setCosmographRef, setupWebGLContextRecovery]);
+    }, [setCosmographRef, setupWebGLContextRecovery, builtInControls]);
 
 
     // Simplified data transformation for legacy compatibility
@@ -404,6 +467,16 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     }, []);
 
     const zoomIn = useCallback(() => {
+      // Try built-in controls first, fallback to direct API
+      if (builtInControls.zoomInOut && typeof builtInControls.zoomInOut.zoomIn === 'function') {
+        try {
+          builtInControls.zoomInOut.zoomIn();
+          return;
+        } catch (error) {
+          logger.warn('Built-in zoom in failed, falling back to direct API:', error);
+        }
+      }
+      
       if (!cosmographRef.current?.setZoomLevel) return;
       
       try {
@@ -413,9 +486,19 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       } catch (error) {
         logger.warn('Zoom in failed:', error);
       }
-    }, []);
+    }, [builtInControls]);
 
     const zoomOut = useCallback(() => {
+      // Try built-in controls first, fallback to direct API
+      if (builtInControls.zoomInOut && typeof builtInControls.zoomInOut.zoomOut === 'function') {
+        try {
+          builtInControls.zoomInOut.zoomOut();
+          return;
+        } catch (error) {
+          logger.warn('Built-in zoom out failed, falling back to direct API:', error);
+        }
+      }
+      
       if (!cosmographRef.current?.setZoomLevel) return;
       
       try {
@@ -425,9 +508,19 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       } catch (error) {
         logger.warn('Zoom out failed:', error);
       }
-    }, []);
+    }, [builtInControls]);
 
     const fitView = useCallback(() => {
+      // Try built-in controls first, fallback to direct API
+      if (builtInControls.fitView && typeof builtInControls.fitView.fitView === 'function') {
+        try {
+          builtInControls.fitView.fitView();
+          return;
+        } catch (error) {
+          logger.warn('Built-in fit view failed, falling back to direct API:', error);
+        }
+      }
+      
       if (!cosmographRef.current?.fitView) return;
       
       try {
@@ -435,7 +528,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       } catch (error) {
         logger.warn('Fit view failed:', error);
       }
-    }, []);
+    }, [builtInControls]);
 
     // Expose methods to parent via ref
     React.useImperativeHandle(ref, () => ({
@@ -659,6 +752,20 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             // Performance
             pixelRatio={2.5}
             showFPSMonitor={false}
+            
+            // Simulation - Cosmograph v2.0 API
+            disableSimulation={config.disableSimulation}
+            spaceSize={config.spaceSize}
+            randomSeed={config.randomSeed}
+            simulationRepulsion={config.repulsion}
+            simulationRepulsionTheta={config.simulationRepulsionTheta}
+            simulationLinkSpring={config.linkSpring}
+            simulationLinkDistance={config.linkDistance}
+            simulationGravity={config.gravity}
+            simulationCenter={config.centerForce}
+            simulationFriction={config.friction}
+            simulationDecay={config.simulationDecay}
+            simulationRepulsionFromMouse={config.mouseRepulsion}
             
             // Selection
             showLabelsFor={selectedNodes.map(id => ({ id }))}
