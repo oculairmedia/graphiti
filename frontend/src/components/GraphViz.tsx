@@ -32,6 +32,8 @@ interface GraphCanvasHandle {
   pauseSimulation: () => void;
   resumeSimulation: () => void;
   keepSimulationRunning: (enable: boolean) => void;
+  // External incremental flag control
+  setIncrementalUpdateFlag: (enabled: boolean) => void;
 }
 import { useGraphConfig } from '../contexts/GraphConfigContext';
 import { ControlPanel } from './ControlPanel';
@@ -84,6 +86,9 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
   // Stable data references to prevent cascade re-renders during incremental updates
   const stableDataRef = useRef<{ nodes: GraphNode[], edges: GraphLink[] } | null>(null);
   const [isIncrementalUpdate, setIsIncrementalUpdate] = useState(false);
+  
+  // Stable props for GraphCanvas to prevent re-renders during incremental updates
+  const stableGraphPropsRef = useRef<{ nodes: GraphNode[], links: GraphLink[] } | null>(null);
 
   // Fetch graph data from Rust server
   const { data, isLoading, error } = useQuery({
@@ -98,7 +103,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
   // Use data diffing to detect changes
   const dataDiff = useGraphDataDiff(data || null);
   
-  // Debug logging for data changes
+  // Debug logging for data changes and reset incremental flag when appropriate
   useEffect(() => {
     console.log('🔍 GraphViz: Data changed', {
       hasData: !!data,
@@ -106,13 +111,31 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
       edgeCount: data?.edges?.length || 0,
       hasChanges: dataDiff.hasChanges,
       changeCount: dataDiff.changeCount,
-      stableDataExists: !!stableDataRef.current
+      stableDataExists: !!stableDataRef.current,
+      isIncrementalUpdate
     });
-  }, [data, dataDiff]);
+    
+    // Reset incremental update flag when we get a completely new dataset
+    // (not just changes detected by the diff)
+    if (data && !dataDiff.hasChanges && isIncrementalUpdate) {
+      console.log('🔄 GraphViz: Resetting incremental flag - no changes detected');
+      setIsIncrementalUpdate(false);
+    }
+  }, [data, dataDiff, isIncrementalUpdate]);
 
   // Handle incremental updates when changes are detected
   useEffect(() => {
+    console.log('🚀 GraphViz: Incremental update effect triggered', {
+      hasChanges: dataDiff.hasChanges,
+      changeCount: dataDiff.changeCount,
+      hasGraphCanvasRef: !!graphCanvasRef.current,
+      stableDataExists: !!stableDataRef.current
+    });
+    
     if (!dataDiff.hasChanges || !graphCanvasRef.current) {
+      console.log('❌ GraphViz: Skipping incremental update', {
+        reason: !dataDiff.hasChanges ? 'no changes' : 'no graphCanvasRef'
+      });
       return;
     }
 
@@ -129,6 +152,12 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
     });
 
     const applyIncrementalUpdates = async () => {
+      // Set flags BEFORE triggering React re-render to prevent Data Kit processing
+      if (graphCanvasRef.current?.setIncrementalUpdateFlag) {
+        graphCanvasRef.current.setIncrementalUpdateFlag(true);
+        console.log('🔄 GraphViz: Set GraphCanvas incremental flag to TRUE');
+      }
+      
       setIsIncrementalUpdate(true);
 
       try {
@@ -180,15 +209,13 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
         // Fallback to full reload on error
         setIsIncrementalUpdate(false);
       } finally {
-        // Reset incremental update flag after a brief delay
-        setTimeout(() => {
-          setIsIncrementalUpdate(false);
-        }, 100);
+        // Flag will be reset when the next real data change occurs
+        console.log('🔄 GraphViz: Incremental update completed, keeping flag active');
       }
     };
 
     applyIncrementalUpdates();
-  }, [dataDiff, data]);
+  }, [dataDiff.hasChanges, dataDiff.changeCount, data]);
 
   // Enhanced filtering logic with virtualization for large graphs
   const filteredData = React.useMemo(() => {
@@ -284,36 +311,40 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
     config.endDate
   ]);
 
+  // Create a stable reference that never changes during incremental updates
+  const stableTransformedDataRef = useRef<{ nodes: GraphNode[], links: GraphLink[] } | null>(null);
+  
   const transformedData = React.useMemo(() => {
     console.log('🔄 GraphViz: transformedData memo recalculating', {
       isIncrementalUpdate,
       hasStableData: !!stableDataRef.current,
+      hasStableTransformed: !!stableTransformedDataRef.current,
       filteredNodeCount: filteredData.nodes.length,
       filteredEdgeCount: filteredData.edges.length
     });
     
-    // During incremental updates, return stable data to prevent prop changes
-    if (isIncrementalUpdate && stableDataRef.current) {
-      console.log('🔒 GraphViz: Using stable data during incremental update');
-      return {
-        nodes: stableDataRef.current.nodes,
-        links: stableDataRef.current.edges.map(edge => ({
-          ...edge,
-          source: edge.from,
-          target: edge.to,
-        })),
-      };
+    // During incremental updates, return the exact same object reference
+    if (isIncrementalUpdate && stableTransformedDataRef.current) {
+      console.log('🔒 GraphViz: Using stable transformed data (same object reference)');
+      return stableTransformedDataRef.current;
     }
     
-    console.log('🔄 GraphViz: Using new filtered data');
-    return {
-      nodes: filteredData.nodes, // No unnecessary transformation
+    console.log('🔄 GraphViz: Creating new transformed data');
+    const newTransformedData = {
+      nodes: filteredData.nodes,
       links: filteredData.edges.map(edge => ({
         ...edge,
         source: edge.from,
         target: edge.to,
       })),
     };
+    
+    // Update stable reference when not in incremental mode
+    if (!isIncrementalUpdate) {
+      stableTransformedDataRef.current = newTransformedData;
+    }
+    
+    return newTransformedData;
   }, [filteredData, isIncrementalUpdate]);
 
   // Update node type configurations when data changes
@@ -686,27 +717,43 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
         <div className="flex-1 relative">
           <GraphErrorBoundary>
             {(() => {
+              // Use stable props during incremental updates to prevent GraphCanvas re-render
+              const propsToUse = isIncrementalUpdate && stableGraphPropsRef.current 
+                ? stableGraphPropsRef.current 
+                : transformedData;
+              
               console.log('📊 GraphViz: Rendering GraphCanvas with props', {
-                nodeCount: transformedData.nodes.length,
-                linkCount: transformedData.links.length,
+                nodeCount: propsToUse.nodes.length,
+                linkCount: propsToUse.links.length,
                 isIncrementalUpdate,
+                usingStableProps: isIncrementalUpdate && !!stableGraphPropsRef.current,
                 selectedNodesCount: selectedNodes.length,
                 highlightedNodesCount: highlightedNodes.length
               });
-              return null;
+              
+              // Update stable props when not in incremental update mode
+              if (!isIncrementalUpdate) {
+                stableGraphPropsRef.current = {
+                  nodes: transformedData.nodes,
+                  links: transformedData.links
+                };
+              }
+              
+              return (
+                <GraphCanvas 
+                  ref={graphCanvasRef}
+                  nodes={propsToUse.nodes}
+                  links={propsToUse.links}
+                  onNodeClick={handleNodeClick}
+                  onNodeSelect={handleNodeSelect}
+                  onClearSelection={clearAllSelections}
+                  selectedNodes={selectedNodes}
+                  highlightedNodes={highlightedNodes}
+                  stats={data?.stats}
+                  className="h-full w-full"
+                />
+              );
             })()}
-            <GraphCanvas 
-              ref={graphCanvasRef}
-              nodes={transformedData.nodes}
-              links={transformedData.links}
-              onNodeClick={handleNodeClick}
-              onNodeSelect={handleNodeSelect}
-              onClearSelection={clearAllSelections}
-              selectedNodes={selectedNodes}
-              highlightedNodes={highlightedNodes}
-              stats={data?.stats}
-              className="h-full w-full"
-            />
           </GraphErrorBoundary>
           
           {/* Node Details Panel Overlay */}
