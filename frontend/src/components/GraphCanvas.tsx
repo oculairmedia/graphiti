@@ -93,7 +93,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       },
       links: {
         linkSourceBy: 'source',       // Source node ID field
-        linkTargetsBy: ['target'],    // Target node ID field (note: array format as per docs)
+        linkTargetBy: 'target',       // Target node ID field (singular for v2.0)
         linkColorBy: 'edge_type',     // Link color by type
         linkWidthBy: 'weight'         // Link width by weight
       }
@@ -581,10 +581,10 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     }
 
     return (
-      <div 
-        className={`relative overflow-hidden ${className}`}
-      >
-        <CosmographProvider>
+      <CosmographProvider>
+        <div 
+          className={`relative overflow-hidden ${className}`}
+        >
           <Cosmograph
             ref={cosmographRef}
             // Use Data Kit prepared data and configuration
@@ -678,19 +678,19 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             // Selection
             showLabelsFor={selectedNodes.map(id => ({ id }))}
           />
-        </CosmographProvider>
-        
-        {/* Performance Overlay */}
-        {stats && (
-          <div className="absolute top-4 left-4 glass text-xs text-muted-foreground p-2 rounded">
-            <div>Nodes: {stats.total_nodes.toLocaleString()}</div>
-            <div>Edges: {stats.total_edges.toLocaleString()}</div>
-            {stats.density !== undefined && (
-              <div>Density: {stats.density.toFixed(4)}</div>
-            )}
-          </div>
-        )}
-      </div>
+          
+          {/* Performance Overlay */}
+          {stats && (
+            <div className="absolute top-4 left-4 glass text-xs text-muted-foreground p-2 rounded">
+              <div>Nodes: {stats.total_nodes.toLocaleString()}</div>
+              <div>Edges: {stats.total_edges.toLocaleString()}</div>
+              {stats.density !== undefined && (
+                <div>Density: {stats.density.toFixed(4)}</div>
+              )}
+            </div>
+          )}
+        </div>
+      </CosmographProvider>
     );
   }
 );
