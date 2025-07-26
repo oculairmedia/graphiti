@@ -182,13 +182,13 @@ interface GraphConfigContextType {
 const defaultConfig: GraphConfig = {
   // Physics - Cosmograph v2.0 simulation defaults
   gravity: 0.05,
-  repulsion: 0.1,
+  repulsion: 3.0,
   centerForce: 0.1,
   friction: 0.85,
   linkSpring: 1.0,
   linkDistance: 2,
-  mouseRepulsion: 2.0,
-  simulationDecay: 1000,
+  mouseRepulsion: 10.0,
+  simulationDecay: 2000,
   
   // New Cosmograph v2.0 simulation properties
   simulationRepulsionTheta: 1.7,
