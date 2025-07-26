@@ -95,9 +95,9 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         linkSourceBy: 'source',       // Source node ID field
         linkTargetsBy: ['target'],    // Target node ID field (note: array format as per docs)
         linkColorBy: 'edge_type',     // Link color by type
-        linkWidthBy: 'weight'         // Link width by weight
+        linkWidthBy: config.linkWidthBy         // Link width by configured column
       }
-    }), []);
+    }), [config.linkWidthBy]);
 
     // Data Kit preparation effect
     useEffect(() => {
@@ -698,6 +698,10 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             simulationFriction={config.friction}
             simulationDecay={config.simulationDecay}
             simulationRepulsionFromMouse={config.mouseRepulsion}
+            
+            // Link Properties
+            linkWidth={config.linkWidth}
+            linkWidthBy={config.linkWidthBy}
             
             // Selection
             showLabelsFor={selectedNodes.map(id => ({ id }))}

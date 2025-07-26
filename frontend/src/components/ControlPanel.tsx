@@ -855,6 +855,17 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
                   </div>
 
                   <div>
+                    <Label className="text-xs text-muted-foreground">Link Width Column</Label>
+                    <Input
+                      value={config.linkWidthBy}
+                      onChange={(e) => updateConfig({ linkWidthBy: e.target.value })}
+                      className="h-8 bg-secondary/30 mt-1"
+                      placeholder="weight"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">Column name for link width values</p>
+                  </div>
+
+                  <div>
                     <div className="flex justify-between items-center mb-2">
                       <Label className="text-xs text-muted-foreground">Link Opacity</Label>
                       <Badge variant="outline" className="text-xs">{Math.round(config.linkOpacity * 100)}%</Badge>

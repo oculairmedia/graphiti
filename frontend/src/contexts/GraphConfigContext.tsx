@@ -69,6 +69,7 @@ interface GraphConfig {
   
   // Appearance
   linkWidth: number;
+  linkWidthBy: string;
   linkOpacity: number;
   linkColor: string;
   linkColorScheme: string;
@@ -185,6 +186,7 @@ const defaultConfig: GraphConfig = {
   
   // Appearance
   linkWidth: 1,
+  linkWidthBy: 'weight',
   linkOpacity: 0.8,
   linkColor: '#666666',
   linkColorScheme: 'uniform',
