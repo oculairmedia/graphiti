@@ -99,15 +99,15 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
             <div className="space-y-2">
               <Label className="text-xs font-medium">Preset Colors</Label>
               <div className="grid grid-cols-8 gap-2">
-                {swatches.map((color, i) => (
+                {swatches.map((swatchColor, i) => (
                   <button
                     key={i}
-                    onClick={() => handlePresetClick(color)}
+                    onClick={() => handlePresetClick(swatchColor)}
                     className="group relative w-8 h-8 rounded-lg border-2 border-border/30 hover:border-primary/50 hover:scale-110 transition-all duration-200 shadow-sm hover:shadow-md"
-                    style={{ backgroundColor: color }}
-                    title={color}
+                    style={{ backgroundColor: swatchColor }}
+                    title={swatchColor}
                   >
-                    {value.toLowerCase() === color.toLowerCase() && (
+                    {(color || '#000000').toLowerCase() === swatchColor.toLowerCase() && (
                       <Check className="h-3 w-3 text-white absolute inset-0 m-auto drop-shadow-lg" />
                     )}
                   </button>
@@ -120,7 +120,7 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
               <div className="flex items-center justify-between">
                 <Label className="text-xs text-muted-foreground">Selected</Label>
                 <Badge variant="secondary" className="font-mono text-xs">
-                  {value.toUpperCase()}
+                  {(color || '#000000').toUpperCase()}
                 </Badge>
               </div>
             </div>

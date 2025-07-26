@@ -436,6 +436,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           // Additional step: clear focused point
           if (typeof cosmographRef.current.setFocusedPoint === 'function') {
             cosmographRef.current.setFocusedPoint();
+            logger.log('🚫 Cleared focused point');
           }
         } catch (error) {
           logger.error('Error clearing Cosmograph selection:', error);
@@ -483,13 +484,12 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       if (!cosmographRef.current) return;
       
       try {
-        // Use the official Cosmograph v2.0 API method with padding
-        cosmographRef.current.fitView(500, 0.1); // 500ms duration, 10% padding
-        logger.log('Fit view executed with padding');
+        // fitView method only accepts duration parameter, padding is set during initialization
+        cosmographRef.current.fitView(config.fitViewDuration);
       } catch (error) {
         logger.warn('Fit view failed:', error);
       }
-    }, []);
+    }, [config.fitViewDuration]);
 
     // Incremental update methods
     const addIncrementalData = useCallback(async (newNodes: GraphNode[], newLinks: GraphLink[], runSimulation = false) => {
@@ -827,8 +827,10 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     // Handle Cosmograph events with double-click detection
     // Cosmograph v2.0 onClick signature: (index: number | undefined, pointPosition: [number, number] | undefined, event: MouseEvent) => void
     const handleClick = async (index?: number, pointPosition?: [number, number], event?: MouseEvent) => {
+      logger.log('🖱️ handleClick called with index:', index, 'pointPosition:', pointPosition, 'event:', event);
+      
       if (typeof index === 'number') {
-        logger.log('Point clicked at index:', index, 'position:', pointPosition);
+        logger.log('✅ Point clicked at index:', index, 'position:', pointPosition);
         
         // Get the original node data using the index
         let originalNode: GraphNode | undefined;
@@ -888,6 +890,12 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             selectCosmographNode(originalNode);
             onNodeClick(originalNode);
             onNodeSelect(originalNode.id);
+            
+            // Set focus on the clicked node to show focused ring color
+            if (cosmographRef.current && typeof cosmographRef.current.setFocusedPoint === 'function') {
+              cosmographRef.current.setFocusedPoint(index);
+              logger.log('🎯 Set focused point to index:', index);
+            }
           } else {
             // Single click - show modal and maintain visual selection
             doubleClickTimeoutRef.current = setTimeout(() => {
@@ -896,6 +904,12 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
               selectCosmographNode(originalNode!); // Keep visual selection circle
               onNodeClick(originalNode!); // Show modal
               onNodeSelect(originalNode!.id); // Update selection state
+              
+              // Set focus on the clicked node to show focused ring color
+              if (cosmographRef.current && typeof cosmographRef.current.setFocusedPoint === 'function') {
+                cosmographRef.current.setFocusedPoint(index);
+                logger.log('🎯 Set focused point to index:', index);
+              }
             }, 300);
           }
           
@@ -907,6 +921,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         }
       } else {
         // Empty space was clicked - clear all selections and return to default state
+        logger.log('❌ Empty space clicked - clearing selection and focus');
         clearCosmographSelection();
         onClearSelection?.();
       }
@@ -962,7 +977,8 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             // Override with UI-specific configurations
             fitViewOnInit={true}
             fitViewDelay={1500} // Let nodes settle before fitting view
-            fitViewDuration={1000} // Smooth animation duration for initial fit
+            fitViewDuration={config.fitViewDuration} // Use configurable duration
+            fitViewPadding={config.fitViewPadding} // Use configurable padding
             initialZoomLevel={1.5}
             disableZoom={false}
             backgroundColor={config.backgroundColor}

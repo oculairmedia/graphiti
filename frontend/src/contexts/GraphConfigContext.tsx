@@ -124,6 +124,10 @@ interface GraphConfig {
   focusedPointIndex?: number;
   renderLinks: boolean;
   
+  // Fit view configuration
+  fitViewDuration: number;
+  fitViewPadding: number;
+  
   // Query
   queryType: string;
   nodeLimit: number;
@@ -249,9 +253,13 @@ const defaultConfig: GraphConfig = {
   hoveredPointCursor: 'pointer',
   renderHoveredPointRing: true,
   hoveredPointRingColor: '#22d3ee', // Cyan
-  focusedPointRingColor: '#fbbf24', // Amber  
+  focusedPointRingColor: '#ef4444', // Bright Red  
   focusedPointIndex: undefined,
   renderLinks: true,
+  
+  // Fit view configuration
+  fitViewDuration: 250, // Default from Cosmograph interface
+  fitViewPadding: 0.1, // Default from Cosmograph interface
   
   // Query
   queryType: 'entire_graph',
@@ -404,31 +412,16 @@ export const GraphConfigProvider: React.FC<{ children: ReactNode }> = ({ childre
   };
 
   const fitView = () => {
-    console.log('🔍 GraphConfigContext: fitView() called');
-    console.log('🔍 cosmographRef exists:', !!cosmographRef);
-    console.log('🔍 cosmographRef.current exists:', !!cosmographRef?.current);
-    
-    if (cosmographRef?.current) {
-      console.log('🔍 fitView method exists:', typeof cosmographRef.current.fitView === 'function');
-    }
-    
     if (!cosmographRef?.current) {
-      console.warn('❌ GraphConfigContext: Fit view failed - cosmographRef not available');
-      console.log('🔍 cosmographRef state:', cosmographRef);
+      console.warn('GraphConfigContext: fitView failed - cosmographRef not available');
       return;
     }
 
     try {
-      console.log('🔍 Attempting to call fitView with duration 500ms and padding 0.1...');
-      cosmographRef.current.fitView(500, 0.1); // Duration and padding like GraphCanvas
-      console.log('✅ GraphConfigContext: Fit view executed with padding');
+      // fitView method only accepts duration parameter, padding is set during initialization
+      cosmographRef.current.fitView(config.fitViewDuration);
     } catch (error) {
-      console.error('❌ GraphConfigContext: Fit view failed with error:', error);
-      console.log('🔍 Error details:', {
-        name: error.name,
-        message: error.message,
-        stack: error.stack
-      });
+      console.error('GraphConfigContext: fitView failed:', error);
     }
   };
 
@@ -565,19 +558,7 @@ export const GraphConfigProvider: React.FC<{ children: ReactNode }> = ({ childre
   };
 
   const setCosmographRefCallback = (ref: React.MutableRefObject<CosmographRefType>) => {
-    console.log('📍 GraphConfigContext: setCosmographRef called');
-    console.log('📍 Received ref object:', !!ref);
-    console.log('📍 Ref.current exists:', !!ref?.current);
-    
-    if (ref?.current) {
-      console.log('📍 Available methods on ref.current:', Object.getOwnPropertyNames(ref.current));
-      console.log('📍 getZoomLevel available:', typeof ref.current.getZoomLevel === 'function');
-      console.log('📍 setZoomLevel available:', typeof ref.current.setZoomLevel === 'function');
-      console.log('📍 fitView available:', typeof ref.current.fitView === 'function');
-    }
-    
     setCosmographRef(ref);
-    console.log('📍 cosmographRef state updated in context');
   };
 
   return (

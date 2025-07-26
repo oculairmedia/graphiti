@@ -196,6 +196,12 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
             false // Don't restart simulation for small additions
           );
           logger.log(`Applied additions: ${dataDiff.addedNodes.length} nodes, ${dataDiff.addedLinks.length} links`);
+          
+          // Resume simulation immediately to maintain smooth animation
+          if (graphCanvasRef.current?.resumeSimulation) {
+            graphCanvasRef.current.resumeSimulation();
+            logger.log('🔄 Resumed simulation after incremental update');
+          }
         }
 
         // Update stable data reference
