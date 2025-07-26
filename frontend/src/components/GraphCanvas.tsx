@@ -322,55 +322,73 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     const selectCosmographNode = useCallback((node: GraphNode) => {
       if (cosmographRef.current) {
         try {
-          if (typeof cosmographRef.current.selectNode === 'function') {
-            cosmographRef.current.selectNode(node);
-          } else if (typeof cosmographRef.current.selectNodes === 'function') {
-            cosmographRef.current.selectNodes([node]);
+          // For Cosmograph v2.0 with Data Kit, we need to use point indices
+          if (typeof cosmographRef.current.selectPoint === 'function') {
+            // Try to find the node index from the transformed data
+            const nodeIndex = transformedData.nodes.findIndex(n => n.id === node.id);
+            if (nodeIndex >= 0) {
+              cosmographRef.current.selectPoint(nodeIndex);
+              logger.log('Selected node by index:', nodeIndex, node.id);
+            } else {
+              logger.warn('Could not find node index for selection:', node.id);
+            }
+          } else if (typeof cosmographRef.current.selectPoints === 'function') {
+            const nodeIndex = transformedData.nodes.findIndex(n => n.id === node.id);
+            if (nodeIndex >= 0) {
+              cosmographRef.current.selectPoints([nodeIndex]);
+              logger.log('Selected node by index array:', nodeIndex, node.id);
+            }
           }
         } catch (error) {
           logger.error('Error selecting Cosmograph node:', error);
         }
       }
-    }, []);
+    }, [transformedData.nodes]);
 
     // Method to select multiple nodes in Cosmograph
     const selectCosmographNodes = useCallback((nodes: GraphNode[]) => {
       if (cosmographRef.current) {
         try {
-          if (typeof cosmographRef.current.selectNodes === 'function') {
-            cosmographRef.current.selectNodes(nodes);
-            logger.log('Selected Cosmograph nodes:', nodes.map(n => n.id));
+          if (typeof cosmographRef.current.selectPoints === 'function') {
+            // Convert node IDs to indices
+            const nodeIndices = nodes.map(node => {
+              return transformedData.nodes.findIndex(n => n.id === node.id);
+            }).filter(index => index >= 0); // Remove invalid indices
+            
+            if (nodeIndices.length > 0) {
+              cosmographRef.current.selectPoints(nodeIndices);
+              logger.log('Selected Cosmograph nodes by indices:', nodeIndices, nodes.map(n => n.id));
+            } else {
+              logger.warn('No valid node indices found for selection');
+            }
           } else {
-            logger.warn('No selectNodes method found on Cosmograph instance');
+            logger.warn('No selectPoints method found on Cosmograph instance');
           }
         } catch (error) {
           logger.error('Error selecting Cosmograph nodes:', error);
         }
       }
-    }, []);
+    }, [transformedData.nodes]);
 
     // Method to clear Cosmograph selection and return to default state
     const clearCosmographSelection = useCallback(() => {
       if (cosmographRef.current) {
         try {
-          // Try multiple approaches to clear selection and return to default state
-          if (typeof cosmographRef.current.unselectAll === 'function') {
-            cosmographRef.current.unselectAll();
-            logger.log('Cleared Cosmograph selection with unselectAll()');
-          } else if (typeof cosmographRef.current.selectNodes === 'function') {
-            cosmographRef.current.selectNodes([]);
-            logger.log('Cleared Cosmograph selection with selectNodes([])');
-          } else if (typeof cosmographRef.current.setSelectedNodes === 'function') {
-            cosmographRef.current.setSelectedNodes([]);
-            logger.log('Cleared Cosmograph selection with setSelectedNodes([])');
+          // For Cosmograph v2.0, use the proper methods
+          if (typeof cosmographRef.current.unselectAllPoints === 'function') {
+            cosmographRef.current.unselectAllPoints();
+            logger.log('Cleared Cosmograph selection with unselectAllPoints()');
+          } else if (typeof cosmographRef.current.selectPoints === 'function') {
+            cosmographRef.current.selectPoints([]);
+            logger.log('Cleared Cosmograph selection with selectPoints([])');
           } else {
             logger.warn('No clear selection method found on Cosmograph instance');
             logger.log('Available methods:', Object.getOwnPropertyNames(cosmographRef.current));
           }
           
-          // Additional step: ensure we're in default state by calling unfocusNode if available
-          if (typeof cosmographRef.current.unfocusNode === 'function') {
-            cosmographRef.current.unfocusNode();
+          // Additional step: clear focused point
+          if (typeof cosmographRef.current.setFocusedPoint === 'function') {
+            cosmographRef.current.setFocusedPoint();
           }
         } catch (error) {
           logger.error('Error clearing Cosmograph selection:', error);
@@ -433,37 +451,66 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     }), [clearCosmographSelection, selectCosmographNode, selectCosmographNodes, zoomIn, zoomOut, fitView]);
 
     // Handle Cosmograph events with double-click detection
-    const handleClick = (node?: GraphNode) => {
+    const handleClick = async (node?: any) => {
       if (node) {
-        const currentTime = Date.now();
-        const timeDiff = currentTime - lastClickTimeRef.current;
-        const isDoubleClick = timeDiff < 300 && lastClickedNodeRef.current?.id === node.id;
+        logger.log('Node clicked:', node);
         
-        // Clear any existing timeout
-        if (doubleClickTimeoutRef.current) {
-          clearTimeout(doubleClickTimeoutRef.current);
-          doubleClickTimeoutRef.current = null;
+        // For Data Kit prepared data, we need to find the original node data
+        let originalNode: GraphNode | undefined;
+        
+        // Try to find the original node by ID
+        if (node.id) {
+          originalNode = transformedData.nodes.find(n => n.id === String(node.id));
         }
         
-        if (isDoubleClick) {
-          // Double-click detected - select node with Cosmograph visual effects
-          selectCosmographNode(node);
-          onNodeClick(node);
-          onNodeSelect(node.id);
+        // If we can't find the original node, create a basic one from the click data
+        if (!originalNode && node.id) {
+          originalNode = {
+            id: String(node.id),
+            label: String(node.label || node.id),
+            node_type: String(node.node_type || 'Unknown'),
+            properties: {
+              degree_centrality: Number(node.degree_centrality || 0),
+              pagerank_centrality: Number(node.pagerank_centrality || 0),
+              betweenness_centrality: Number(node.betweenness_centrality || 0),
+              ...node // Include any other properties from the clicked node
+            }
+          } as GraphNode;
+        }
+        
+        if (originalNode) {
+          const currentTime = Date.now();
+          const timeDiff = currentTime - lastClickTimeRef.current;
+          const isDoubleClick = timeDiff < 300 && lastClickedNodeRef.current?.id === originalNode.id;
+          
+          // Clear any existing timeout
+          if (doubleClickTimeoutRef.current) {
+            clearTimeout(doubleClickTimeoutRef.current);
+            doubleClickTimeoutRef.current = null;
+          }
+          
+          if (isDoubleClick) {
+            // Double-click detected - select node with Cosmograph visual effects
+            selectCosmographNode(originalNode);
+            onNodeClick(originalNode);
+            onNodeSelect(originalNode.id);
+          } else {
+            // Single click - show modal and maintain visual selection
+            doubleClickTimeoutRef.current = setTimeout(() => {
+              // Single click confirmed - show modal and keep node visually selected
+              logger.log('Single-click detected on node:', originalNode!.id);
+              selectCosmographNode(originalNode!); // Keep visual selection circle
+              onNodeClick(originalNode!); // Show modal
+              onNodeSelect(originalNode!.id); // Update selection state
+            }, 300);
+          }
+          
+          // Update click tracking using refs (no re-render)
+          lastClickTimeRef.current = currentTime;
+          lastClickedNodeRef.current = originalNode;
         } else {
-          // Single click - show modal and maintain visual selection
-          doubleClickTimeoutRef.current = setTimeout(() => {
-            // Single click confirmed - show modal and keep node visually selected
-            logger.log('Single-click detected on node:', node.id);
-            selectCosmographNode(node); // Keep visual selection circle
-            onNodeClick(node); // Show modal
-            onNodeSelect(node.id); // Update selection state
-          }, 300);
+          logger.warn('Could not find original node data for clicked node:', node);
         }
-        
-        // Update click tracking using refs (no re-render)
-        lastClickTimeRef.current = currentTime;
-        lastClickedNodeRef.current = node;
       } else {
         // Empty space was clicked - clear all selections and return to default state
         clearCosmographSelection();
@@ -572,8 +619,8 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
               return undefined; // Let strategy handle sizing
             }}
             
-            // Interaction - temporarily disable custom click handler to debug table issue
-            // onClick={handleClick}
+            // Interaction
+            onClick={handleClick}
             renderHoveredNodeRing={true}
             hoveredNodeRingColor="#22d3ee"
             focusedNodeRingColor="#fbbf24"
