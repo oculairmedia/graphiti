@@ -451,31 +451,51 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     }), [clearCosmographSelection, selectCosmographNode, selectCosmographNodes, zoomIn, zoomOut, fitView]);
 
     // Handle Cosmograph events with double-click detection
-    const handleClick = async (node?: any) => {
-      if (node) {
-        logger.log('Node clicked:', node);
+    // Cosmograph v2.0 onClick signature: (index: number | undefined, pointPosition: [number, number] | undefined, event: MouseEvent) => void
+    const handleClick = async (index?: number, pointPosition?: [number, number], event?: MouseEvent) => {
+      if (typeof index === 'number') {
+        logger.log('Point clicked at index:', index, 'position:', pointPosition);
         
-        // For Data Kit prepared data, we need to find the original node data
+        // Get the original node data using the index
         let originalNode: GraphNode | undefined;
         
-        // Try to find the original node by ID
-        if (node.id) {
-          originalNode = transformedData.nodes.find(n => n.id === String(node.id));
+        // Try to get the node from our transformed data using the index
+        if (index >= 0 && index < transformedData.nodes.length) {
+          const nodeData = transformedData.nodes[index];
+          originalNode = nodeData;
+          logger.log('Found original node by index:', originalNode);
         }
         
-        // If we can't find the original node, create a basic one from the click data
-        if (!originalNode && node.id) {
-          originalNode = {
-            id: String(node.id),
-            label: String(node.label || node.id),
-            node_type: String(node.node_type || 'Unknown'),
-            properties: {
-              degree_centrality: Number(node.degree_centrality || 0),
-              pagerank_centrality: Number(node.pagerank_centrality || 0),
-              betweenness_centrality: Number(node.betweenness_centrality || 0),
-              ...node // Include any other properties from the clicked node
+        // If we can't find the original node by index, try to query it from Cosmograph
+        if (!originalNode && cosmographRef.current && typeof cosmographRef.current.getPointsByIndices === 'function') {
+          try {
+            logger.log('Querying node data from Cosmograph for index:', index);
+            const pointData = await cosmographRef.current.getPointsByIndices([index]);
+            
+            if (pointData && pointData.numRows && pointData.numRows > 0) {
+              // Convert the point data to GraphNode format
+              const pointArray = cosmographRef.current.convertCosmographDataToObject(pointData);
+              if (pointArray && pointArray.length > 0) {
+                const point = pointArray[0];
+                originalNode = {
+                  id: String(point.id || index),
+                  label: String(point.label || point.id || index),
+                  node_type: String(point.node_type || 'Unknown'),
+                  size: Number(point.centrality || 1),
+                  properties: {
+                    degree_centrality: Number(point.degree_centrality || 0),
+                    pagerank_centrality: Number(point.pagerank_centrality || 0),
+                    betweenness_centrality: Number(point.betweenness_centrality || 0),
+                    centrality: Number(point.centrality || 0),
+                    ...point // Include all other properties
+                  }
+                } as GraphNode;
+                logger.log('Created node from Cosmograph data:', originalNode);
+              }
             }
-          } as GraphNode;
+          } catch (error) {
+            logger.error('Failed to retrieve point data from Cosmograph:', error);
+          }
         }
         
         if (originalNode) {
@@ -509,7 +529,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           lastClickTimeRef.current = currentTime;
           lastClickedNodeRef.current = originalNode;
         } else {
-          logger.warn('Could not find original node data for clicked node:', node);
+          logger.warn('Could not find or create node data for index:', index);
         }
       } else {
         // Empty space was clicked - clear all selections and return to default state
