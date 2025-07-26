@@ -310,12 +310,14 @@ export const GraphConfigProvider: React.FC<{ children: ReactNode }> = ({ childre
     }
 
     try {
-      // Try with better zoom multiplier
       const beforeZoom = cosmographRef.current.getZoomLevel();
-      const newZoom = Math.min(beforeZoom * 1.5, 10); // Cap at 10x zoom
-      cosmographRef.current.setZoomLevel(newZoom, 300); // Smoother 300ms animation
-      
-      console.log(`GraphConfigContext: Zoom in from ${beforeZoom.toFixed(2)} to ${newZoom.toFixed(2)}`);
+      if (beforeZoom !== undefined) {
+        const newZoom = Math.min(beforeZoom * 1.5, 10); // Cap at 10x zoom
+        cosmographRef.current.setZoomLevel(newZoom, 300);
+        console.log(`GraphConfigContext: Zoom in from ${beforeZoom.toFixed(2)} to ${newZoom.toFixed(2)}`);
+      } else {
+        console.warn('GraphConfigContext: Could not get current zoom level');
+      }
     } catch (error) {
       console.error('GraphConfigContext: Zoom in failed:', error);
     }
@@ -328,12 +330,14 @@ export const GraphConfigProvider: React.FC<{ children: ReactNode }> = ({ childre
     }
 
     try {
-      // Try with better zoom multiplier  
       const beforeZoom = cosmographRef.current.getZoomLevel();
-      const newZoom = Math.max(beforeZoom * 0.67, 0.1); // Floor at 0.1x zoom, better multiplier
-      cosmographRef.current.setZoomLevel(newZoom, 300); // Smoother 300ms animation
-      
-      console.log(`GraphConfigContext: Zoom out from ${beforeZoom.toFixed(2)} to ${newZoom.toFixed(2)}`);
+      if (beforeZoom !== undefined) {
+        const newZoom = Math.max(beforeZoom * 0.67, 0.05); // Lower minimum zoom like GraphCanvas
+        cosmographRef.current.setZoomLevel(newZoom, 300);
+        console.log(`GraphConfigContext: Zoom out from ${beforeZoom.toFixed(2)} to ${newZoom.toFixed(2)}`);
+      } else {
+        console.warn('GraphConfigContext: Could not get current zoom level');
+      }
     } catch (error) {
       console.error('GraphConfigContext: Zoom out failed:', error);
     }
@@ -346,8 +350,8 @@ export const GraphConfigProvider: React.FC<{ children: ReactNode }> = ({ childre
     }
 
     try {
-      cosmographRef.current.fitView(500); // Add duration for smoother animation
-      console.log('GraphConfigContext: Fit view executed');
+      cosmographRef.current.fitView(500, 0.1); // Duration and padding like GraphCanvas
+      console.log('GraphConfigContext: Fit view executed with padding');
     } catch (error) {
       console.error('GraphConfigContext: Fit view failed:', error);
     }

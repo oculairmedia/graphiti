@@ -93,7 +93,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       },
       links: {
         linkSourceBy: 'source',       // Source node ID field
-        linkTargetBy: 'target',       // Target node ID field (singular for v2.0)
+        linkTargetsBy: ['target'],    // Target node ID field (note: array format as per docs)
         linkColorBy: 'edge_type',     // Link color by type
         linkWidthBy: 'weight'         // Link width by weight
       }
@@ -404,34 +404,48 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     }, []);
 
     const zoomIn = useCallback(() => {
-      if (!cosmographRef.current?.setZoomLevel) return;
+      if (!cosmographRef.current) return;
       
       try {
+        // Use the official Cosmograph v2.0 API method with proper error handling
         const currentZoom = cosmographRef.current.getZoomLevel();
-        const newZoom = Math.min(currentZoom * 1.5, 10);
-        cosmographRef.current.setZoomLevel(newZoom, 300);
+        if (currentZoom !== undefined) {
+          const newZoom = Math.min(currentZoom * 1.5, 10);
+          cosmographRef.current.setZoomLevel(newZoom, 300);
+          logger.log(`Zoom in: ${currentZoom.toFixed(2)} → ${newZoom.toFixed(2)}`);
+        } else {
+          logger.warn('Could not get current zoom level for zoom in');
+        }
       } catch (error) {
         logger.warn('Zoom in failed:', error);
       }
     }, []);
 
     const zoomOut = useCallback(() => {
-      if (!cosmographRef.current?.setZoomLevel) return;
+      if (!cosmographRef.current) return;
       
       try {
+        // Use the official Cosmograph v2.0 API method with proper error handling
         const currentZoom = cosmographRef.current.getZoomLevel();
-        const newZoom = Math.max(currentZoom * 0.67, 0.1);
-        cosmographRef.current.setZoomLevel(newZoom, 300);
+        if (currentZoom !== undefined) {
+          const newZoom = Math.max(currentZoom * 0.67, 0.05); // Lower minimum zoom
+          cosmographRef.current.setZoomLevel(newZoom, 300);
+          logger.log(`Zoom out: ${currentZoom.toFixed(2)} → ${newZoom.toFixed(2)}`);
+        } else {
+          logger.warn('Could not get current zoom level for zoom out');
+        }
       } catch (error) {
         logger.warn('Zoom out failed:', error);
       }
     }, []);
 
     const fitView = useCallback(() => {
-      if (!cosmographRef.current?.fitView) return;
+      if (!cosmographRef.current) return;
       
       try {
-        cosmographRef.current.fitView(500);
+        // Use the official Cosmograph v2.0 API method with padding
+        cosmographRef.current.fitView(500, 0.1); // 500ms duration, 10% padding
+        logger.log('Fit view executed with padding');
       } catch (error) {
         logger.warn('Fit view failed:', error);
       }
@@ -581,10 +595,10 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     }
 
     return (
-      <CosmographProvider>
-        <div 
-          className={`relative overflow-hidden ${className}`}
-        >
+      <div 
+        className={`relative overflow-hidden ${className}`}
+      >
+        <CosmographProvider>
           <Cosmograph
             ref={cosmographRef}
             // Use Data Kit prepared data and configuration
@@ -678,19 +692,19 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             // Selection
             showLabelsFor={selectedNodes.map(id => ({ id }))}
           />
-          
-          {/* Performance Overlay */}
-          {stats && (
-            <div className="absolute top-4 left-4 glass text-xs text-muted-foreground p-2 rounded">
-              <div>Nodes: {stats.total_nodes.toLocaleString()}</div>
-              <div>Edges: {stats.total_edges.toLocaleString()}</div>
-              {stats.density !== undefined && (
-                <div>Density: {stats.density.toFixed(4)}</div>
-              )}
-            </div>
-          )}
-        </div>
-      </CosmographProvider>
+        </CosmographProvider>
+        
+        {/* Performance Overlay */}
+        {stats && (
+          <div className="absolute top-4 left-4 glass text-xs text-muted-foreground p-2 rounded">
+            <div>Nodes: {stats.total_nodes.toLocaleString()}</div>
+            <div>Edges: {stats.total_edges.toLocaleString()}</div>
+            {stats.density !== undefined && (
+              <div>Density: {stats.density.toFixed(4)}</div>
+            )}
+          </div>
+        )}
+      </div>
     );
   }
 );
