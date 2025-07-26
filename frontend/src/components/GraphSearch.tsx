@@ -200,10 +200,41 @@ export const GraphSearch: React.FC<GraphSearchProps> = React.memo(({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
   
-  // Get node type color from global configuration
-  const getNodeTypeColor = useCallback((nodeType: string) => {
-    return config.nodeTypeColors[nodeType] || '#9CA3AF'; // Default to gray if not configured
-  }, [config.nodeTypeColors]);
+  // Convert hex color to HSL for CSS custom properties
+  const hexToHsl = useCallback((hex: string) => {
+    // Remove # if present
+    hex = hex.replace('#', '');
+    
+    // Parse hex values
+    const r = parseInt(hex.substr(0, 2), 16) / 255;
+    const g = parseInt(hex.substr(2, 2), 16) / 255;
+    const b = parseInt(hex.substr(4, 2), 16) / 255;
+
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    let h = 0;
+    let s = 0;
+    const l = (max + min) / 2;
+
+    if (max !== min) {
+      const d = max - min;
+      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+      switch (max) {
+        case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+        case g: h = (b - r) / d + 2; break;
+        case b: h = (r - g) / d + 4; break;
+      }
+      h /= 6;
+    }
+
+    return `${Math.round(h * 360)} ${Math.round(s * 100)}% ${Math.round(l * 100)}%`;
+  }, []);
+
+  // Get HSL color for badge styling
+  const getBadgeHslColor = useCallback((nodeType: string) => {
+    const hexColor = config.nodeTypeColors[nodeType];
+    return hexColor ? hexToHsl(hexColor) : null;
+  }, [config.nodeTypeColors, hexToHsl]);
 
   // Log when nodes data changes
   useEffect(() => {
@@ -295,16 +326,16 @@ export const GraphSearch: React.FC<GraphSearchProps> = React.memo(({
                       </div>
                     </div>
                     
-                    {/* Node type badge with dynamic color */}
+                    {/* Node type badge with dynamic color via CSS custom properties */}
                     {node.node_type && (
                       <div className="flex-shrink-0">
                         <span 
-                          className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium"
-                          style={{
-                            backgroundColor: `${getNodeTypeColor(node.node_type)}20`, // 20% opacity background
-                            color: getNodeTypeColor(node.node_type),
-                            border: `1px solid ${getNodeTypeColor(node.node_type)}40` // 40% opacity border
-                          }}
+                          className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                            getBadgeHslColor(node.node_type) ? 'search-badge' : 'search-badge-default'
+                          }`}
+                          style={getBadgeHslColor(node.node_type) ? {
+                            '--badge-color': getBadgeHslColor(node.node_type)
+                          } as React.CSSProperties : undefined}
                         >
                           {node.node_type}
                         </span>
