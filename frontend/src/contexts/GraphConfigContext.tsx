@@ -328,16 +328,7 @@ export const GraphConfigProvider: React.FC<{ children: ReactNode }> = ({ childre
       if (beforeZoom !== undefined) {
         const newZoom = Math.min(beforeZoom * 1.5, 10); // Cap at 10x zoom
         console.log('🔍 Attempting to set zoom level to:', newZoom);
-        
-        // Try alternative zoom approach - use setZoomLevel without duration first
         cosmographRef.current.setZoomLevel(newZoom);
-        
-        // Then try forcing a redraw/update
-        if (cosmographRef.current.restart && typeof cosmographRef.current.restart === 'function') {
-          console.log('🔍 Calling restart to force redraw...');
-          cosmographRef.current.restart();
-        }
-        
         console.log(`✅ GraphConfigContext: Zoom in from ${beforeZoom.toFixed(2)} to ${newZoom.toFixed(2)}`);
       } else {
         console.warn('❌ GraphConfigContext: Could not get current zoom level - returned undefined');
@@ -371,16 +362,7 @@ export const GraphConfigProvider: React.FC<{ children: ReactNode }> = ({ childre
       if (beforeZoom !== undefined) {
         const newZoom = Math.max(beforeZoom * 0.67, 0.05); // Lower minimum zoom like GraphCanvas
         console.log('🔍 Attempting to set zoom level to:', newZoom);
-        
-        // Try alternative zoom approach - use setZoomLevel without duration first
         cosmographRef.current.setZoomLevel(newZoom);
-        
-        // Then try forcing a redraw/update
-        if (cosmographRef.current.restart && typeof cosmographRef.current.restart === 'function') {
-          console.log('🔍 Calling restart to force redraw for zoom out...');
-          cosmographRef.current.restart();
-        }
-        
         console.log(`✅ GraphConfigContext: Zoom out from ${beforeZoom.toFixed(2)} to ${newZoom.toFixed(2)}`);
       } else {
         console.warn('❌ GraphConfigContext: Could not get current zoom level - returned undefined');
