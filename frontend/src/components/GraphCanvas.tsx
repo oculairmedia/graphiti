@@ -6,6 +6,54 @@ import { useGraphConfig } from '../contexts/GraphConfigContext';
 import { logger } from '../utils/logger';
 import { hexToRgba, generateHSLColor } from '../utils/colorCache';
 
+// Global singleton to coordinate Data Kit usage across all component instances
+class DataKitCoordinator {
+  private static instance: DataKitCoordinator;
+  private isBusy = false;
+  private queue: Array<() => Promise<void>> = [];
+  
+  static getInstance(): DataKitCoordinator {
+    if (!DataKitCoordinator.instance) {
+      DataKitCoordinator.instance = new DataKitCoordinator();
+    }
+    return DataKitCoordinator.instance;
+  }
+  
+  async executeDataKit(task: () => Promise<void>): Promise<void> {
+    return new Promise((resolve, reject) => {
+      this.queue.push(async () => {
+        try {
+          await task();
+          resolve();
+        } catch (error) {
+          reject(error);
+        }
+      });
+      
+      this.processQueue();
+    });
+  }
+  
+  private async processQueue(): Promise<void> {
+    if (this.isBusy || this.queue.length === 0) {
+      return;
+    }
+    
+    this.isBusy = true;
+    const task = this.queue.shift()!;
+    
+    try {
+      await task();
+    } finally {
+      this.isBusy = false;
+      // Process next item in queue
+      setTimeout(() => this.processQueue(), 10);
+    }
+  }
+}
+
+const dataKitCoordinator = DataKitCoordinator.getInstance();
+
 interface GraphLink {
   source: string;
   target: string;
@@ -98,8 +146,15 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     const [keepRunning, setKeepRunning] = useState(false);
     const simulationTimerRef = useRef<NodeJS.Timeout | null>(null);
     
+    // Track simulation state for debugging incremental updates
+    const [isSimulationActive, setIsSimulationActive] = useState(false);
+    const lastResumeTimeRef = useRef<number>(0);
+    
     // Flag to prevent Data Kit reprocessing during incremental updates
     const isIncrementalUpdateRef = useRef(false);
+    
+    // Add component ID for debugging multiple instances
+    const componentId = useRef(Math.random().toString(36).substr(2, 9));
     
     // Update current data tracking when props change
     useEffect(() => {
@@ -138,6 +193,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         return;
       }
       
+      
       if (!nodes || !links || nodes.length === 0) {
         setCosmographData(null);
         setDataKitError(null);
@@ -147,11 +203,12 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       let cancelled = false;
       
       const prepareData = async () => {
-        try {
-          setIsDataPreparing(true);
-          setDataKitError(null);
-          
-          logger.log('GraphCanvas: Preparing data with Cosmograph Data Kit...');
+        await dataKitCoordinator.executeDataKit(async () => {
+          try {
+            setIsDataPreparing(true);
+            setDataKitError(null);
+            
+            logger.log(`GraphCanvas [${componentId.current}]: Preparing data with Cosmograph Data Kit...`);
           
           // Transform data to match Data Kit expectations with consistent types
           const transformedNodes = nodes.map(node => {
@@ -242,11 +299,12 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
               cosmographConfig: {}
             });
           }
-        } finally {
-          if (!cancelled) {
-            setIsDataPreparing(false);
+          } finally {
+            if (!cancelled) {
+              setIsDataPreparing(false);
+            }
           }
-        }
+        });
       };
 
       prepareData();
@@ -298,9 +356,12 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       let webglCleanup: (() => void) | undefined;
       
       const pollCosmographRef = () => {
+        console.log(`🔍 GraphCanvas [${componentId.current}]: Polling cosmographRef, attempt ${checkCount + 1}`);
+        console.log(`🔍 cosmographRef.current exists:`, !!cosmographRef.current);
+        
         if (cosmographRef.current) {
           try {
-            console.log('🟢 GraphCanvas: cosmographRef.current is available');
+            console.log(`🟢 GraphCanvas [${componentId.current}]: cosmographRef.current is available`);
             console.log('🟢 cosmographRef.current methods:', Object.getOwnPropertyNames(cosmographRef.current));
             console.log('🟢 About to call setCosmographRef...');
             setCosmographRef(cosmographRef);
@@ -335,12 +396,16 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             console.error('GraphCanvas: Error setting up cosmographRef:', error);
           }
         } else {
-          // Keep polling for cosmographRef every 100ms for up to 10 seconds
-          if (checkCount < 100) {
+          // Keep polling for cosmographRef with exponential backoff for up to 3 seconds
+          if (checkCount < 30) {
             checkCount++;
-            setTimeout(pollCosmographRef, 100);
+            // Exponential backoff: 50ms, 100ms, 150ms, 200ms, etc.
+            const delay = Math.min(50 + (checkCount * 10), 200);
+            setTimeout(pollCosmographRef, delay);
           } else {
-            console.warn('GraphCanvas: cosmographRef never became available after 10 seconds');
+            console.warn(`GraphCanvas [${componentId.current}]: cosmographRef never became available after 3 seconds`);
+            // Set a fallback timeout to prevent permanent blocking
+            setIsReady(false);
           }
         }
       };
@@ -747,8 +812,18 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     
     const resumeSimulation = useCallback(() => {
       if (cosmographRef.current && typeof cosmographRef.current.start === 'function') {
+        const currentTime = Date.now();
+        lastResumeTimeRef.current = currentTime;
+        
         cosmographRef.current.start(0.3); // Resume with moderate energy
-        logger.log('Simulation resumed');
+        setIsSimulationActive(true);
+        
+        logger.log(`Simulation resumed [${componentId.current}] at ${currentTime}`);
+        
+        // Use requestAnimationFrame to ensure the simulation state is properly propagated
+        requestAnimationFrame(() => {
+          console.log(`🎯 GraphCanvas [${componentId.current}]: Simulation resume completed, state should be active`);
+        });
       }
     }, []);
     

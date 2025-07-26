@@ -12,6 +12,7 @@ interface GraphDataDiff {
   removedLinkIds: string[];
   hasChanges: boolean;
   changeCount: number;
+  isInitialLoad: boolean;
 }
 
 interface GraphData {
@@ -38,7 +39,8 @@ export const useGraphDataDiff = (currentData: GraphData | null): GraphDataDiff =
       updatedLinks: [],
       removedLinkIds: [],
       hasChanges: false,
-      changeCount: 0
+      changeCount: 0,
+      isInitialLoad: false
     };
 
     // Return empty diff if no current data
@@ -48,9 +50,9 @@ export const useGraphDataDiff = (currentData: GraphData | null): GraphDataDiff =
 
     const previousData = previousDataRef.current;
     
-    // First time loading - everything is "added"
+    // First time loading - mark as initial load, don't trigger incremental updates
     if (!previousData) {
-      logger.log('useGraphDataDiff: Initial data load detected');
+      logger.log('useGraphDataDiff: Initial data load detected - not triggering incremental updates');
       return {
         addedNodes: currentData.nodes,
         updatedNodes: [],
@@ -58,8 +60,9 @@ export const useGraphDataDiff = (currentData: GraphData | null): GraphDataDiff =
         addedLinks: currentData.edges,
         updatedLinks: [],
         removedLinkIds: [],
-        hasChanges: true,
-        changeCount: currentData.nodes.length + currentData.edges.length
+        hasChanges: false, // Don't trigger incremental updates on initial load
+        changeCount: 0, // Don't count initial load as changes
+        isInitialLoad: true
       };
     }
 
@@ -160,7 +163,8 @@ export const useGraphDataDiff = (currentData: GraphData | null): GraphDataDiff =
       updatedLinks,
       removedLinkIds,
       hasChanges,
-      changeCount
+      changeCount,
+      isInitialLoad: false
     };
   }, [currentData]);
 
