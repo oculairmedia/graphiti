@@ -117,28 +117,51 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           logger.log('GraphCanvas: Preparing data with Cosmograph Data Kit...');
           
           // Transform data to match Data Kit expectations with consistent types
-          const transformedNodes = nodes.map(node => ({
-            id: String(node.id), // Ensure string type
-            label: String(node.label || node.id), // Ensure string type
-            node_type: String(node.node_type || 'Unknown'), // Ensure string type
-            centrality: Number(node.properties?.degree_centrality || node.properties?.pagerank_centrality || node.size || 1), // Ensure number type
-            // Add other commonly used properties with type safety
-            degree_centrality: Number(node.properties?.degree_centrality || 0),
-            pagerank_centrality: Number(node.properties?.pagerank_centrality || 0),
-            betweenness_centrality: Number(node.properties?.betweenness_centrality || 0)
-          }));
+          const transformedNodes = nodes.map(node => {
+            const nodeData = {
+              id: String(node.id), // Ensure string type
+              label: String(node.label || node.id), // Ensure string type
+              node_type: String(node.node_type || 'Unknown'), // Ensure string type
+              centrality: Number(node.properties?.degree_centrality || node.properties?.pagerank_centrality || node.size || 1), // Ensure number type
+              // Add other commonly used properties with type safety
+              degree_centrality: Number(node.properties?.degree_centrality || 0),
+              pagerank_centrality: Number(node.properties?.pagerank_centrality || 0),
+              betweenness_centrality: Number(node.properties?.betweenness_centrality || 0)
+            };
+            
+            // Validate that all required fields are present and valid
+            if (!nodeData.id || nodeData.id === 'undefined') {
+              logger.warn('Invalid node ID found:', node);
+            }
+            
+            return nodeData;
+          }).filter(node => node.id && node.id !== 'undefined'); // Remove invalid nodes
 
-          const transformedLinks = links.map(link => ({
-            source: String(link.source), // Ensure string type
-            target: String(link.target), // Ensure string type
-            edge_type: String(link.edge_type || 'default'), // Ensure string type
-            weight: Number(link.weight || 1) // Ensure number type
-          }));
+          const transformedLinks = links.map(link => {
+            const linkData = {
+              source: String(link.source), // Ensure string type
+              target: String(link.target), // Ensure string type
+              edge_type: String(link.edge_type || 'default'), // Ensure string type
+              weight: Number(link.weight || 1) // Ensure number type
+            };
+            
+            // Validate that source and target exist
+            if (!linkData.source || !linkData.target || linkData.source === 'undefined' || linkData.target === 'undefined') {
+              logger.warn('Invalid link found:', link);
+            }
+            
+            return linkData;
+          }).filter(link => link.source && link.target && link.source !== 'undefined' && link.target !== 'undefined'); // Remove invalid links
 
           logger.log(`GraphCanvas: Data Kit processing ${transformedNodes.length} nodes, ${transformedLinks.length} links`);
           logger.log('Sample node:', transformedNodes[0]);
           logger.log('Sample link:', transformedLinks[0]);
           logger.log('Data Kit config:', dataKitConfig);
+          
+          // Validate we have valid data before proceeding
+          if (transformedNodes.length === 0) {
+            throw new Error('No valid nodes found after transformation');
+          }
           
           const result = await prepareCosmographData(
             dataKitConfig,
@@ -149,6 +172,11 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           if (!cancelled && result) {
             // Extract the correct structure from Data Kit result
             const { points, links, cosmographConfig } = result;
+            logger.log('GraphCanvas: Data Kit result structure:', { 
+              pointsType: typeof points, 
+              linksType: typeof links, 
+              configKeys: Object.keys(cosmographConfig || {}) 
+            });
             setCosmographData({
               points,
               links,
@@ -488,48 +516,64 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             points={cosmographData.points}
             links={cosmographData.links}
             {...cosmographData.cosmographConfig}
+            
             // Override with UI-specific configurations
             fitViewOnInit={true}
             initialZoomLevel={1.5}
             disableZoom={false}
             backgroundColor={config.backgroundColor}
             
-            // Highlighted nodes styling
-            nodeColor={(node: any) => {
+            // Use Cosmograph v2.0 built-in color strategies
+            pointColorStrategy={(() => {
+              switch (config.colorScheme) {
+                case 'by-type': return 'palette';
+                case 'by-centrality': 
+                case 'by-pagerank': 
+                case 'by-degree': return 'interpolatePalette';
+                case 'by-community': return 'palette';
+                default: return 'palette';
+              }
+            })()}
+            pointColorPalette={(() => {
+              switch (config.colorScheme) {
+                case 'by-centrality': return ['#1e3a8a', '#3b82f6', '#60a5fa', '#93c5fd', '#dbeafe']; // Blue gradient
+                case 'by-pagerank': return ['#7c2d12', '#ea580c', '#f97316', '#fb923c', '#fed7aa']; // Orange gradient  
+                case 'by-degree': return ['#166534', '#16a34a', '#22c55e', '#4ade80', '#bbf7d0']; // Green gradient
+                case 'by-community': return ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD'];
+                default: return [
+                  config.nodeTypeColors.Entity || '#FF6B6B',
+                  config.nodeTypeColors.Episodic || '#4ECDC4', 
+                  config.nodeTypeColors.Agent || '#45B7D1',
+                  config.nodeTypeColors.Community || '#96CEB4'
+                ];
+              }
+            })()}
+            
+            // Use Cosmograph v2.0 built-in size strategies  
+            pointSizeStrategy={'auto'}
+            pointSizeRange={[config.minNodeSize * config.sizeMultiplier, config.maxNodeSize * config.sizeMultiplier]}
+            
+            // Highlighted nodes override (still need custom function for this)
+            pointColor={(node: any) => {
               const isHighlighted = highlightedNodes.includes(node.id);
               if (isHighlighted) {
                 return 'rgba(255, 215, 0, 0.9)'; // Gold highlight
               }
-              
-              // Fallback to Data Kit color or type-based color
-              if (cosmographData.cosmographConfig.nodeColor) {
-                return typeof cosmographData.cosmographConfig.nodeColor === 'function' 
-                  ? cosmographData.cosmographConfig.nodeColor(node)
-                  : cosmographData.cosmographConfig.nodeColor;
-              }
-              
-              // Type-based fallback
-              const nodeType = node.node_type as keyof typeof config.nodeTypeColors;
-              const typeColor = config.nodeTypeColors[nodeType] || '#b3b3b3';
-              return hexToRgba(typeColor, config.nodeOpacity / 100);
+              // Let the strategy handle normal coloring
+              return undefined;
             }}
             
-            nodeSize={(node: any) => {
-              // Data Kit should handle sizing, but add highlight effect
-              let baseSize = 1;
-              if (cosmographData.cosmographConfig.nodeSize) {
-                baseSize = typeof cosmographData.cosmographConfig.nodeSize === 'function'
-                  ? cosmographData.cosmographConfig.nodeSize(node)
-                  : cosmographData.cosmographConfig.nodeSize;
-              }
-              
-              // Make highlighted nodes 20% larger
+            pointSize={(node: any) => {
               const isHighlighted = highlightedNodes.includes(node.id);
-              return isHighlighted ? baseSize * 1.2 : baseSize;
+              if (isHighlighted) {
+                // Make highlighted nodes 20% larger than strategy-calculated size
+                return undefined; // Let strategy calculate, then we'll handle in CSS/other way
+              }
+              return undefined; // Let strategy handle sizing
             }}
             
-            // Interaction
-            onClick={handleClick}
+            // Interaction - temporarily disable custom click handler to debug table issue
+            // onClick={handleClick}
             renderHoveredNodeRing={true}
             hoveredNodeRingColor="#22d3ee"
             focusedNodeRingColor="#fbbf24"
