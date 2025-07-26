@@ -702,8 +702,11 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             // Link Properties
             linkColor={config.linkColor}
             linkOpacity={config.linkOpacity}
-            linkWidth={config.linkWidth}
+            linkGreyoutOpacity={config.linkGreyoutOpacity}
+            linkWidth={1}
             linkWidthBy={config.linkWidthBy}
+            linkWidthScale={config.linkWidth}
+            scaleLinksOnZoom={config.scaleLinksOnZoom}
             linkArrows={config.linkArrows}
             linkArrowsSizeScale={config.linkArrowsSizeScale}
             curvedLinks={config.curvedLinks}
@@ -712,6 +715,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             curvedLinkControlPointDistance={config.curvedLinkControlPointDistance}
             linkVisibilityDistanceRange={config.linkVisibilityDistance}
             linkVisibilityMinTransparency={config.linkVisibilityMinTransparency}
+            useClassicQuadtree={config.useClassicQuadtree}
             
             // Selection
             showLabelsFor={selectedNodes.map(id => ({ id }))}

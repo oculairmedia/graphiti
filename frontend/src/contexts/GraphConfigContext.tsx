@@ -65,14 +65,18 @@ interface GraphConfig {
   
   // Quadtree optimization
   useQuadtree: boolean;
+  useClassicQuadtree: boolean;
   quadtreeLevels: number;
   
   // Appearance
   linkWidth: number;
   linkWidthBy: string;
+  linkWidthScale: number;
   linkOpacity: number;
+  linkGreyoutOpacity: number;
   linkColor: string;
   linkColorScheme: string;
+  scaleLinksOnZoom: boolean;
   backgroundColor: string;
   
   // Link Visibility
@@ -182,14 +186,18 @@ const defaultConfig: GraphConfig = {
   
   // Quadtree optimization
   useQuadtree: false,
+  useClassicQuadtree: false,
   quadtreeLevels: 12,
   
   // Appearance
   linkWidth: 1,
   linkWidthBy: 'weight',
+  linkWidthScale: 1,
   linkOpacity: 0.8,
+  linkGreyoutOpacity: 0.1,
   linkColor: '#666666',
   linkColorScheme: 'uniform',
+  scaleLinksOnZoom: false,
   backgroundColor: '#0a0a0a',
   
   // Link Visibility
