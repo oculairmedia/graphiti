@@ -47,7 +47,7 @@ interface CosmographLink {
 }
 
 interface GraphConfig {
-  // Physics
+  // Physics - Updated for Cosmograph v2.0 simulation API
   gravity: number;
   repulsion: number;
   centerForce: number;
@@ -56,6 +56,12 @@ interface GraphConfig {
   linkDistance: number;
   mouseRepulsion: number;
   simulationDecay: number;
+  
+  // New Cosmograph v2.0 simulation properties
+  simulationRepulsionTheta: number;
+  disableSimulation: boolean | null;
+  spaceSize: number;
+  randomSeed?: number | string;
   
   // Quadtree optimization
   useQuadtree: boolean;
@@ -157,7 +163,7 @@ interface GraphConfigContextType {
 }
 
 const defaultConfig: GraphConfig = {
-  // Physics
+  // Physics - Cosmograph v2.0 simulation defaults
   gravity: 0.05,
   repulsion: 0.1,
   centerForce: 0.1,
@@ -166,6 +172,12 @@ const defaultConfig: GraphConfig = {
   linkDistance: 2,
   mouseRepulsion: 2.0,
   simulationDecay: 1000,
+  
+  // New Cosmograph v2.0 simulation properties
+  simulationRepulsionTheta: 1.7,
+  disableSimulation: null, // Auto-detect based on links
+  spaceSize: 4096,
+  randomSeed: undefined,
   
   // Quadtree optimization
   useQuadtree: false,
@@ -298,19 +310,12 @@ export const GraphConfigProvider: React.FC<{ children: ReactNode }> = ({ childre
     }
 
     try {
+      // Try with better zoom multiplier
       const beforeZoom = cosmographRef.current.getZoomLevel();
       const newZoom = Math.min(beforeZoom * 1.5, 10); // Cap at 10x zoom
-      cosmographRef.current.setZoomLevel(newZoom, 250);
+      cosmographRef.current.setZoomLevel(newZoom, 300); // Smoother 300ms animation
       
-      // Verify zoom operation worked
-      setTimeout(() => {
-        if (cosmographRef.current) {
-          const afterZoom = cosmographRef.current.getZoomLevel();
-          if (Math.abs(afterZoom - beforeZoom) < 0.01) {
-            console.warn('GraphConfigContext: Zoom in operation may have failed - zoom level unchanged');
-          }
-        }
-      }, 300);
+      console.log(`GraphConfigContext: Zoom in from ${beforeZoom.toFixed(2)} to ${newZoom.toFixed(2)}`);
     } catch (error) {
       console.error('GraphConfigContext: Zoom in failed:', error);
     }
@@ -323,19 +328,12 @@ export const GraphConfigProvider: React.FC<{ children: ReactNode }> = ({ childre
     }
 
     try {
+      // Try with better zoom multiplier  
       const beforeZoom = cosmographRef.current.getZoomLevel();
-      const newZoom = Math.max(beforeZoom * 0.7, 0.1); // Floor at 0.1x zoom
-      cosmographRef.current.setZoomLevel(newZoom, 250);
+      const newZoom = Math.max(beforeZoom * 0.67, 0.1); // Floor at 0.1x zoom, better multiplier
+      cosmographRef.current.setZoomLevel(newZoom, 300); // Smoother 300ms animation
       
-      // Verify zoom operation worked
-      setTimeout(() => {
-        if (cosmographRef.current) {
-          const afterZoom = cosmographRef.current.getZoomLevel();
-          if (Math.abs(afterZoom - beforeZoom) < 0.01) {
-            console.warn('GraphConfigContext: Zoom out operation may have failed - zoom level unchanged');
-          }
-        }
-      }, 300);
+      console.log(`GraphConfigContext: Zoom out from ${beforeZoom.toFixed(2)} to ${newZoom.toFixed(2)}`);
     } catch (error) {
       console.error('GraphConfigContext: Zoom out failed:', error);
     }
@@ -348,7 +346,8 @@ export const GraphConfigProvider: React.FC<{ children: ReactNode }> = ({ childre
     }
 
     try {
-      cosmographRef.current.fitView();
+      cosmographRef.current.fitView(500); // Add duration for smoother animation
+      console.log('GraphConfigContext: Fit view executed');
     } catch (error) {
       console.error('GraphConfigContext: Fit view failed:', error);
     }

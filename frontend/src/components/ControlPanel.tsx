@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { ChevronLeft, ChevronRight, Database, Settings2, Palette, Zap, RotateCcw, Paintbrush, Layers, Eye, RefreshCw, Cpu } from 'lucide-react';
+import React, { useState, useCallback } from 'react';
+import { ChevronLeft, ChevronRight, Database, Settings2, Palette, Zap, RotateCcw, Paintbrush, Layers, Eye, RefreshCw, Cpu, Play, Pause, Square, Shuffle } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
@@ -52,7 +52,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
   onToggleCollapse,
   onLayoutChange
 }) => {
-  const { config, updateConfig, updateNodeTypeConfigurations, applyLayout } = useGraphConfig();
+  const { config, updateConfig, updateNodeTypeConfigurations, applyLayout, cosmographRef } = useGraphConfig();
   
   // Get current graph data for layout operations
   const { data: graphData } = useQuery({
@@ -77,6 +77,47 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
       updateNodeTypeConfigurations(nodeTypeIds);
     }
   }, [nodeTypes, updateNodeTypeConfigurations]);
+
+  // Simulation control functions
+  const handleSimulationStart = useCallback(() => {
+    if (cosmographRef?.current && typeof cosmographRef.current.start === 'function') {
+      cosmographRef.current.start(1.0); // Full alpha for strong initial impulse
+      console.log('Simulation started');
+    }
+  }, [cosmographRef]);
+
+  const handleSimulationPause = useCallback(() => {
+    if (cosmographRef?.current && typeof cosmographRef.current.pause === 'function') {
+      cosmographRef.current.pause();
+      console.log('Simulation paused');
+    }
+  }, [cosmographRef]);
+
+  const handleSimulationRestart = useCallback(() => {
+    if (cosmographRef?.current && typeof cosmographRef.current.restart === 'function') {
+      cosmographRef.current.restart();
+      console.log('Simulation restarted');
+    }
+  }, [cosmographRef]);
+
+  const handleResetToDefaults = useCallback(() => {
+    updateConfig({
+      // Reset to Cosmograph v2.0 defaults
+      repulsion: 0.1,
+      simulationRepulsionTheta: 1.7,
+      linkSpring: 1.0,
+      linkDistance: 2,
+      gravity: 0.0,
+      centerForce: 0.0,
+      friction: 0.85,
+      simulationDecay: 1000,
+      mouseRepulsion: 2.0,
+      spaceSize: 4096,
+      randomSeed: undefined,
+      disableSimulation: null
+    });
+    console.log('Reset simulation to defaults');
+  }, [updateConfig]);
 
   const handleNodeTypeColorChange = (type: string, color: string) => {
     updateConfig({ 
@@ -521,42 +562,154 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
 
             {/* Physics Tab */}
             <TabsContent value="physics" className="mt-0 space-y-4">
+              {/* Simulation Control */}
+              <Card className="glass border-border/30">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm flex items-center space-x-2">
+                    <Play className="h-4 w-4 text-primary" />
+                    <span>Simulation Control</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Simulation Mode</Label>
+                    <Select 
+                      value={config.disableSimulation === null ? 'auto' : config.disableSimulation ? 'disabled' : 'enabled'} 
+                      onValueChange={(value) => {
+                        const newValue = value === 'auto' ? null : value === 'enabled' ? false : true;
+                        updateConfig({ disableSimulation: newValue });
+                      }}
+                    >
+                      <SelectTrigger className="h-8 bg-secondary/30">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="glass">
+                        <SelectItem value="auto">🤖 Auto (detect links)</SelectItem>
+                        <SelectItem value="enabled">▶️ Force Simulation On</SelectItem>
+                        <SelectItem value="disabled">⏹️ Static Positioning</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div className="grid grid-cols-3 gap-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="h-8 text-xs"
+                      onClick={handleSimulationStart}
+                    >
+                      <Play className="h-3 w-3 mr-1" />
+                      Start
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="h-8 text-xs"
+                      onClick={handleSimulationPause}
+                    >
+                      <Pause className="h-3 w-3 mr-1" />
+                      Pause
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="h-8 text-xs"
+                      onClick={handleSimulationRestart}
+                    >
+                      <RotateCcw className="h-3 w-3 mr-1" />
+                      Restart
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Force Configuration */}
               <Card className="glass border-border/30">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-sm flex items-center space-x-2">
                     <Zap className="h-4 w-4 text-primary" />
-                    <span>Force Simulation</span>
+                    <span>Force Configuration</span>
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div>
                     <div className="flex justify-between items-center mb-2">
-                      <Label className="text-xs text-muted-foreground">Gravity</Label>
-                      <Badge variant="outline" className="text-xs">{config.gravity.toFixed(1)}</Badge>
-                    </div>
-                    <Slider
-                      value={[config.gravity]}
-                      onValueChange={([value]) => updateConfig({ gravity: value })}
-                      max={1}
-                      min={0}
-                      step={0.1}
-                      className="w-full"
-                    />
-                  </div>
-
-                  <div>
-                    <div className="flex justify-between items-center mb-2">
                       <Label className="text-xs text-muted-foreground">Repulsion Force</Label>
-                      <Badge variant="outline" className="text-xs">{config.repulsion.toFixed(1)}</Badge>
+                      <Badge variant="outline" className="text-xs">{config.repulsion.toFixed(2)}</Badge>
                     </div>
                     <Slider
                       value={[config.repulsion]}
                       onValueChange={([value]) => updateConfig({ repulsion: value })}
                       max={2}
                       min={0}
+                      step={0.01}
+                      className="w-full"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">Controls node repulsion strength</p>
+                  </div>
+
+                  <div>
+                    <div className="flex justify-between items-center mb-2">
+                      <Label className="text-xs text-muted-foreground">Repulsion Theta</Label>
+                      <Badge variant="outline" className="text-xs">{config.simulationRepulsionTheta.toFixed(2)}</Badge>
+                    </div>
+                    <Slider
+                      value={[config.simulationRepulsionTheta]}
+                      onValueChange={([value]) => updateConfig({ simulationRepulsionTheta: value })}
+                      max={2}
+                      min={0.3}
                       step={0.1}
                       className="w-full"
                     />
+                    <p className="text-xs text-muted-foreground mt-1">Barnes-Hut approximation level (higher = more accurate)</p>
+                  </div>
+
+                  <div>
+                    <div className="flex justify-between items-center mb-2">
+                      <Label className="text-xs text-muted-foreground">Link Spring Force</Label>
+                      <Badge variant="outline" className="text-xs">{config.linkSpring.toFixed(2)}</Badge>
+                    </div>
+                    <Slider
+                      value={[config.linkSpring]}
+                      onValueChange={([value]) => updateConfig({ linkSpring: value })}
+                      max={2}
+                      min={0}
+                      step={0.01}
+                      className="w-full"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">Attraction strength between connected nodes</p>
+                  </div>
+
+                  <div>
+                    <div className="flex justify-between items-center mb-2">
+                      <Label className="text-xs text-muted-foreground">Link Distance</Label>
+                      <Badge variant="outline" className="text-xs">{config.linkDistance.toFixed(1)}</Badge>
+                    </div>
+                    <Slider
+                      value={[config.linkDistance]}
+                      onValueChange={([value]) => updateConfig({ linkDistance: value })}
+                      max={20}
+                      min={1}
+                      step={0.1}
+                      className="w-full"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">Minimum distance between linked nodes</p>
+                  </div>
+
+                  <div>
+                    <div className="flex justify-between items-center mb-2">
+                      <Label className="text-xs text-muted-foreground">Gravity Force</Label>
+                      <Badge variant="outline" className="text-xs">{config.gravity.toFixed(2)}</Badge>
+                    </div>
+                    <Slider
+                      value={[config.gravity]}
+                      onValueChange={([value]) => updateConfig({ gravity: value })}
+                      max={1}
+                      min={0}
+                      step={0.01}
+                      className="w-full"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">Attraction towards graph center</p>
                   </div>
 
                   <div>
@@ -567,77 +720,45 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
                     <Slider
                       value={[config.centerForce]}
                       onValueChange={([value]) => updateConfig({ centerForce: value })}
-                      max={0.5}
+                      max={1}
                       min={0}
                       step={0.01}
                       className="w-full"
                     />
+                    <p className="text-xs text-muted-foreground mt-1">Centering force pulling nodes together</p>
                   </div>
 
                   <div>
                     <div className="flex justify-between items-center mb-2">
-                      <Label className="text-xs text-muted-foreground">Friction/Drag</Label>
+                      <Label className="text-xs text-muted-foreground">Friction</Label>
                       <Badge variant="outline" className="text-xs">{config.friction.toFixed(2)}</Badge>
                     </div>
                     <Slider
                       value={[config.friction]}
                       onValueChange={([value]) => updateConfig({ friction: value })}
-                      max={0.99}
-                      min={0.5}
+                      max={1}
+                      min={0.8}
                       step={0.01}
                       className="w-full"
                     />
+                    <p className="text-xs text-muted-foreground mt-1">Node movement damping (higher = slower)</p>
                   </div>
+                </CardContent>
+              </Card>
 
-                  <div>
-                    <div className="flex justify-between items-center mb-2">
-                      <Label className="text-xs text-muted-foreground">Link Spring</Label>
-                      <Badge variant="outline" className="text-xs">{config.linkSpring.toFixed(1)}</Badge>
-                    </div>
-                    <Slider
-                      value={[config.linkSpring]}
-                      onValueChange={([value]) => updateConfig({ linkSpring: value })}
-                      max={2}
-                      min={0}
-                      step={0.1}
-                      className="w-full"
-                    />
-                  </div>
-
-                  <div>
-                    <div className="flex justify-between items-center mb-2">
-                      <Label className="text-xs text-muted-foreground">Link Distance</Label>
-                      <Badge variant="outline" className="text-xs">{config.linkDistance}px</Badge>
-                    </div>
-                    <Slider
-                      value={[config.linkDistance]}
-                      onValueChange={([value]) => updateConfig({ linkDistance: value })}
-                      max={100}
-                      min={5}
-                      step={5}
-                      className="w-full"
-                    />
-                  </div>
-
-                  <div>
-                    <div className="flex justify-between items-center mb-2">
-                      <Label className="text-xs text-muted-foreground">Mouse Repulsion</Label>
-                      <Badge variant="outline" className="text-xs">{config.mouseRepulsion}px</Badge>
-                    </div>
-                    <Slider
-                      value={[config.mouseRepulsion]}
-                      onValueChange={([value]) => updateConfig({ mouseRepulsion: value })}
-                      max={40}
-                      min={1}
-                      step={1}
-                      className="w-full"
-                    />
-                  </div>
-
+              {/* Advanced Settings */}
+              <Card className="glass border-border/30">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm flex items-center space-x-2">
+                    <Settings2 className="h-4 w-4 text-primary" />
+                    <span>Advanced Settings</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
                   <div>
                     <div className="flex justify-between items-center mb-2">
                       <Label className="text-xs text-muted-foreground">Simulation Decay</Label>
-                      <Badge variant="outline" className="text-xs">{config.simulationDecay}ms</Badge>
+                      <Badge variant="outline" className="text-xs">{config.simulationDecay}</Badge>
                     </div>
                     <Slider
                       value={[config.simulationDecay]}
@@ -647,11 +768,62 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
                       step={100}
                       className="w-full"
                     />
+                    <p className="text-xs text-muted-foreground mt-1">Simulation cooldown time</p>
                   </div>
 
-                  <Button variant="outline" className="w-full h-8" size="sm">
-                    <RotateCcw className="h-3 w-3 mr-2" />
-                    Reset Physics
+                  <div>
+                    <div className="flex justify-between items-center mb-2">
+                      <Label className="text-xs text-muted-foreground">Mouse Repulsion</Label>
+                      <Badge variant="outline" className="text-xs">{config.mouseRepulsion.toFixed(1)}</Badge>
+                    </div>
+                    <Slider
+                      value={[config.mouseRepulsion]}
+                      onValueChange={([value]) => updateConfig({ mouseRepulsion: value })}
+                      max={5}
+                      min={0}
+                      step={0.1}
+                      className="w-full"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">Repulsion force from mouse cursor</p>
+                  </div>
+
+                  <div>
+                    <div className="flex justify-between items-center mb-2">
+                      <Label className="text-xs text-muted-foreground">Space Size</Label>
+                      <Badge variant="outline" className="text-xs">{config.spaceSize}</Badge>
+                    </div>
+                    <Slider
+                      value={[config.spaceSize]}
+                      onValueChange={([value]) => updateConfig({ spaceSize: value })}
+                      max={8192}
+                      min={1024}
+                      step={256}
+                      className="w-full"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">Simulation space dimensions (max: 8192)</p>
+                  </div>
+
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Random Seed</Label>
+                    <Input
+                      type="text"
+                      value={config.randomSeed || ''}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        const numValue = parseFloat(value);
+                        updateConfig({ 
+                          randomSeed: value === '' ? undefined : (!isNaN(numValue) ? numValue : value)
+                        });
+                      }}
+                      className="h-8 bg-secondary/30 mt-1"
+                      placeholder="Optional (number or string)"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">Controls layout randomness for reproducible results</p>
+                  </div>
+
+                  <Button variant="outline" className="w-full h-8" size="sm" onClick={handleResetToDefaults}>
+                    <Shuffle className="h-3 w-3 mr-2" />
+                    Reset to Defaults
                   </Button>
                 </CardContent>
               </Card>
