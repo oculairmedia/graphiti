@@ -304,56 +304,105 @@ export const GraphConfigProvider: React.FC<{ children: ReactNode }> = ({ childre
   };
 
   const zoomIn = () => {
+    console.log('🔍 GraphConfigContext: zoomIn() called');
+    console.log('🔍 cosmographRef exists:', !!cosmographRef);
+    console.log('🔍 cosmographRef.current exists:', !!cosmographRef?.current);
+    
+    if (cosmographRef?.current) {
+      console.log('🔍 Available methods on cosmographRef.current:', Object.getOwnPropertyNames(cosmographRef.current));
+      console.log('🔍 setZoomLevel method exists:', typeof cosmographRef.current.setZoomLevel === 'function');
+      console.log('🔍 getZoomLevel method exists:', typeof cosmographRef.current.getZoomLevel === 'function');
+    }
+    
     if (!cosmographRef?.current) {
-      console.warn('GraphConfigContext: Zoom in failed - cosmographRef not available');
+      console.warn('❌ GraphConfigContext: Zoom in failed - cosmographRef not available');
+      console.log('🔍 cosmographRef state:', cosmographRef);
       return;
     }
 
     try {
+      console.log('🔍 Attempting to get current zoom level...');
       const beforeZoom = cosmographRef.current.getZoomLevel();
+      console.log('🔍 Current zoom level:', beforeZoom);
+      
       if (beforeZoom !== undefined) {
         const newZoom = Math.min(beforeZoom * 1.5, 10); // Cap at 10x zoom
+        console.log('🔍 Attempting to set zoom level to:', newZoom);
         cosmographRef.current.setZoomLevel(newZoom, 300);
-        console.log(`GraphConfigContext: Zoom in from ${beforeZoom.toFixed(2)} to ${newZoom.toFixed(2)}`);
+        console.log(`✅ GraphConfigContext: Zoom in from ${beforeZoom.toFixed(2)} to ${newZoom.toFixed(2)}`);
       } else {
-        console.warn('GraphConfigContext: Could not get current zoom level');
+        console.warn('❌ GraphConfigContext: Could not get current zoom level - returned undefined');
       }
     } catch (error) {
-      console.error('GraphConfigContext: Zoom in failed:', error);
+      console.error('❌ GraphConfigContext: Zoom in failed with error:', error);
+      console.log('🔍 Error details:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      });
     }
   };
 
   const zoomOut = () => {
+    console.log('🔍 GraphConfigContext: zoomOut() called');
+    console.log('🔍 cosmographRef exists:', !!cosmographRef);
+    console.log('🔍 cosmographRef.current exists:', !!cosmographRef?.current);
+    
     if (!cosmographRef?.current) {
-      console.warn('GraphConfigContext: Zoom out failed - cosmographRef not available');
+      console.warn('❌ GraphConfigContext: Zoom out failed - cosmographRef not available');
+      console.log('🔍 cosmographRef state:', cosmographRef);
       return;
     }
 
     try {
+      console.log('🔍 Attempting to get current zoom level for zoom out...');
       const beforeZoom = cosmographRef.current.getZoomLevel();
+      console.log('🔍 Current zoom level:', beforeZoom);
+      
       if (beforeZoom !== undefined) {
         const newZoom = Math.max(beforeZoom * 0.67, 0.05); // Lower minimum zoom like GraphCanvas
+        console.log('🔍 Attempting to set zoom level to:', newZoom);
         cosmographRef.current.setZoomLevel(newZoom, 300);
-        console.log(`GraphConfigContext: Zoom out from ${beforeZoom.toFixed(2)} to ${newZoom.toFixed(2)}`);
+        console.log(`✅ GraphConfigContext: Zoom out from ${beforeZoom.toFixed(2)} to ${newZoom.toFixed(2)}`);
       } else {
-        console.warn('GraphConfigContext: Could not get current zoom level');
+        console.warn('❌ GraphConfigContext: Could not get current zoom level - returned undefined');
       }
     } catch (error) {
-      console.error('GraphConfigContext: Zoom out failed:', error);
+      console.error('❌ GraphConfigContext: Zoom out failed with error:', error);
+      console.log('🔍 Error details:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      });
     }
   };
 
   const fitView = () => {
+    console.log('🔍 GraphConfigContext: fitView() called');
+    console.log('🔍 cosmographRef exists:', !!cosmographRef);
+    console.log('🔍 cosmographRef.current exists:', !!cosmographRef?.current);
+    
+    if (cosmographRef?.current) {
+      console.log('🔍 fitView method exists:', typeof cosmographRef.current.fitView === 'function');
+    }
+    
     if (!cosmographRef?.current) {
-      console.warn('GraphConfigContext: Fit view failed - cosmographRef not available');
+      console.warn('❌ GraphConfigContext: Fit view failed - cosmographRef not available');
+      console.log('🔍 cosmographRef state:', cosmographRef);
       return;
     }
 
     try {
+      console.log('🔍 Attempting to call fitView with duration 500ms and padding 0.1...');
       cosmographRef.current.fitView(500, 0.1); // Duration and padding like GraphCanvas
-      console.log('GraphConfigContext: Fit view executed with padding');
+      console.log('✅ GraphConfigContext: Fit view executed with padding');
     } catch (error) {
-      console.error('GraphConfigContext: Fit view failed:', error);
+      console.error('❌ GraphConfigContext: Fit view failed with error:', error);
+      console.log('🔍 Error details:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      });
     }
   };
 
@@ -490,8 +539,19 @@ export const GraphConfigProvider: React.FC<{ children: ReactNode }> = ({ childre
   };
 
   const setCosmographRefCallback = (ref: React.MutableRefObject<CosmographRefType>) => {
-    console.log('GraphConfigContext: Received cosmographRef', !!ref?.current);
+    console.log('📍 GraphConfigContext: setCosmographRef called');
+    console.log('📍 Received ref object:', !!ref);
+    console.log('📍 Ref.current exists:', !!ref?.current);
+    
+    if (ref?.current) {
+      console.log('📍 Available methods on ref.current:', Object.getOwnPropertyNames(ref.current));
+      console.log('📍 getZoomLevel available:', typeof ref.current.getZoomLevel === 'function');
+      console.log('📍 setZoomLevel available:', typeof ref.current.setZoomLevel === 'function');
+      console.log('📍 fitView available:', typeof ref.current.fitView === 'function');
+    }
+    
     setCosmographRef(ref);
+    console.log('📍 cosmographRef state updated in context');
   };
 
   return (
