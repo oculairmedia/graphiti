@@ -9,6 +9,7 @@ import { GraphNode } from '../api/types';
 import type { GraphData, GraphLink } from '../types/graph';
 import { logger } from '../utils/logger';
 import GraphErrorBoundary from './GraphErrorBoundary';
+import { useGraphDataDiff } from '../hooks/useGraphDataDiff';
 
 // Import the handle interface from GraphCanvas
 interface GraphCanvasHandle {
@@ -80,6 +81,10 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
 
   const graphCanvasRef = useRef<GraphCanvasHandle>(null);
 
+  // Stable data references to prevent cascade re-renders during incremental updates
+  const stableDataRef = useRef<{ nodes: GraphNode[], edges: GraphLink[] } | null>(null);
+  const [isIncrementalUpdate, setIsIncrementalUpdate] = useState(false);
+
   // Fetch graph data from Rust server
   const { data, isLoading, error } = useQuery({
     queryKey: ['graphData', config.queryType, config.nodeLimit],
@@ -90,11 +95,97 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
     refetchInterval: 30000, // Refresh every 30 seconds
   });
 
+  // Use data diffing to detect changes
+  const dataDiff = useGraphDataDiff(data || null);
+
+  // Handle incremental updates when changes are detected
+  useEffect(() => {
+    if (!dataDiff.hasChanges || !graphCanvasRef.current) {
+      return;
+    }
+
+    // Skip incremental updates for initial data load (everything would be "added")
+    if (!stableDataRef.current && data) {
+      logger.log('GraphViz: Initial data load, skipping incremental update');
+      stableDataRef.current = { nodes: [...data.nodes], edges: [...data.edges] };
+      return;
+    }
+
+    logger.log('GraphViz: Applying incremental updates', {
+      changeCount: dataDiff.changeCount,
+      hasCanvas: !!graphCanvasRef.current
+    });
+
+    const applyIncrementalUpdates = async () => {
+      setIsIncrementalUpdate(true);
+
+      try {
+        // Apply changes in order: removals first, then updates, then additions
+        if (dataDiff.removedNodeIds.length > 0) {
+          await graphCanvasRef.current!.removeNodes(dataDiff.removedNodeIds);
+          logger.log(`Applied node removals: ${dataDiff.removedNodeIds.length}`);
+        }
+
+        if (dataDiff.removedLinkIds.length > 0) {
+          await graphCanvasRef.current!.removeLinks(dataDiff.removedLinkIds);
+          logger.log(`Applied link removals: ${dataDiff.removedLinkIds.length}`);
+        }
+
+        if (dataDiff.updatedNodes.length > 0) {
+          await graphCanvasRef.current!.updateNodes(dataDiff.updatedNodes);
+          logger.log(`Applied node updates: ${dataDiff.updatedNodes.length}`);
+        }
+
+        if (dataDiff.updatedLinks.length > 0) {
+          await graphCanvasRef.current!.updateLinks(dataDiff.updatedLinks);
+          logger.log(`Applied link updates: ${dataDiff.updatedLinks.length}`);
+        }
+
+        if (dataDiff.addedNodes.length > 0 || dataDiff.addedLinks.length > 0) {
+          // Transform added links to have source/target format
+          const transformedAddedLinks = dataDiff.addedLinks.map(link => ({
+            ...link,
+            source: link.from,
+            target: link.to
+          }));
+          
+          await graphCanvasRef.current!.addIncrementalData(
+            dataDiff.addedNodes, 
+            transformedAddedLinks, 
+            false // Don't restart simulation for small additions
+          );
+          logger.log(`Applied additions: ${dataDiff.addedNodes.length} nodes, ${dataDiff.addedLinks.length} links`);
+        }
+
+        // Update stable data reference
+        if (data) {
+          stableDataRef.current = { nodes: [...data.nodes], edges: [...data.edges] };
+        }
+
+        logger.log('GraphViz: Incremental updates completed successfully');
+      } catch (error) {
+        logger.error('GraphViz: Incremental update failed:', error);
+        // Fallback to full reload on error
+        setIsIncrementalUpdate(false);
+      } finally {
+        // Reset incremental update flag after a brief delay
+        setTimeout(() => {
+          setIsIncrementalUpdate(false);
+        }, 100);
+      }
+    };
+
+    applyIncrementalUpdates();
+  }, [dataDiff, data]);
+
   // Enhanced filtering logic with virtualization for large graphs
   const filteredData = React.useMemo(() => {
-    if (!data) return { nodes: [], edges: [] };
+    // During incremental updates, use stable data to prevent cascade re-renders
+    const sourceData = isIncrementalUpdate ? stableDataRef.current : data;
     
-    const visibleNodes = data.nodes.filter(node => {
+    if (!sourceData) return { nodes: [], edges: [] };
+    
+    const visibleNodes = sourceData.nodes.filter(node => {
       // Basic node type visibility check
       const nodeType = node.node_type as keyof typeof config.nodeTypeVisibility;
       if (config.nodeTypeVisibility[nodeType] === false) return false;
@@ -161,13 +252,14 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
     }
     
     const visibleNodeIds = new Set(finalNodes.map(n => n.id));
-    const filteredEdges = data.edges.filter(edge => 
+    const filteredEdges = sourceData.edges.filter(edge => 
       visibleNodeIds.has(edge.from) && visibleNodeIds.has(edge.to)
     );
     
     return { nodes: finalNodes, edges: filteredEdges };
   }, [
     data, 
+    isIncrementalUpdate,
     config.nodeTypeVisibility, 
     config.filteredNodeTypes,
     config.minDegree,
@@ -181,6 +273,18 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
   ]);
 
   const transformedData = React.useMemo(() => {
+    // During incremental updates, return stable data to prevent prop changes
+    if (isIncrementalUpdate && stableDataRef.current) {
+      return {
+        nodes: stableDataRef.current.nodes,
+        links: stableDataRef.current.edges.map(edge => ({
+          ...edge,
+          source: edge.from,
+          target: edge.to,
+        })),
+      };
+    }
+    
     return {
       nodes: filteredData.nodes, // No unnecessary transformation
       links: filteredData.edges.map(edge => ({
@@ -189,7 +293,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
         target: edge.to,
       })),
     };
-  }, [filteredData]);
+  }, [filteredData, isIncrementalUpdate]);
 
   // Update node type configurations when data changes
   React.useEffect(() => {
