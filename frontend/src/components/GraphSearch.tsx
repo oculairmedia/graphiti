@@ -245,21 +245,22 @@ export const GraphSearch: React.FC<GraphSearchProps> = React.memo(({
           {isSearchOpen && searchResults.length > 0 && (
             <div 
               ref={resultsListRef}
-              className="absolute top-full left-0 right-0 mt-1 bg-popover border border-border/30 rounded-md shadow-lg z-50 max-h-80 overflow-y-auto"
+              className="absolute top-full left-0 right-0 mt-1 bg-popover border border-border/30 rounded-md shadow-lg z-50 max-h-80 overflow-y-auto custom-scrollbar"
               onScroll={handleResultsScroll}
             >
-              {searchResults.slice(0, visibleResultsCount).map((node, index) => (
+              <div className="pb-12">
+                {searchResults.slice(0, visibleResultsCount).map((node, index) => (
                 <div
                   key={node.id}
                   onClick={() => handleSelectResult(node)}
-                  className={`px-4 py-3 cursor-pointer border-b border-border/20 last:border-b-0 transition-colors ${
+                  className={`px-3 py-2 cursor-pointer border-b border-border/20 last:border-b-0 transition-colors ${
                     index === activeIndex ? 'bg-accent' : 'hover:bg-accent/50'
                   }`}
                 >
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-3">
                     <div className="flex-1 min-w-0">
+                      {/* Node name with highlighting */}
                       <div className="font-medium text-sm truncate">
-                        {/* Highlight matching text */}
                         {(() => {
                           const label = node.label || node.id;
                           const lowercaseLabel = label.toLowerCase();
@@ -275,42 +276,42 @@ export const GraphSearch: React.FC<GraphSearchProps> = React.memo(({
                           return label;
                         })()}
                       </div>
-                      {node.node_type && (
-                        <div className="text-xs text-muted-foreground">
-                          Type: {node.node_type}
-                        </div>
-                      )}
-                      {/* Show matching properties */}
-                      {node.properties && searchValue.trim() && (
-                        <div className="text-xs text-muted-foreground/80 mt-1">
-                          {Object.entries(node.properties)
-                            .filter(([key, val]) => 
-                              typeof val === 'string' && 
-                              val.toLowerCase().includes(searchValue.toLowerCase())
-                            )
-                            .slice(0, 2)
-                            .map(([key, val]) => `${key}: ${val}`)
-                            .join(', ')
+                      
+                      {/* Compact content preview */}
+                      <div className="text-xs text-muted-foreground truncate">
+                        {(() => {
+                          // Get content from properties
+                          const content = node.properties?.content || node.properties?.description || node.properties?.summary;
+                          if (content && typeof content === 'string') {
+                            return content.length > 60 ? `${content.substring(0, 60)}...` : content;
                           }
-                        </div>
-                      )}
+                          return `ID: ${node.id.substring(0, 12)}...`;
+                        })()}
+                      </div>
                     </div>
-                    <div className="text-xs text-muted-foreground ml-2 font-mono">
-                      {node.id}
-                    </div>
+                    
+                    {/* Node type badge */}
+                    {node.node_type && (
+                      <div className="flex-shrink-0">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-secondary/50 text-secondary-foreground">
+                          {node.node_type}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
+                
+                {/* Load More Indicator */}
+                {visibleResultsCount < searchResults.length && (
+                  <div className="px-4 py-2 text-center text-xs text-muted-foreground bg-muted/20 border-t border-border/20">
+                    Showing {visibleResultsCount} of {searchResults.length} results. Scroll for more...
+                  </div>
+                )}
+              </div>
               
-              {/* Load More Indicator */}
-              {visibleResultsCount < searchResults.length && (
-                <div className="px-4 py-2 text-center text-xs text-muted-foreground bg-muted/20 border-t border-border/20">
-                  Showing {visibleResultsCount} of {searchResults.length} results. Scroll for more...
-                </div>
-              )}
-              
-              {/* Search Actions Footer */}
-              <div className="px-4 py-2 bg-muted/30 border-t border-border/20">
+              {/* Search Actions Footer - Always visible */}
+              <div className="px-4 py-2 bg-popover/95 backdrop-blur-sm border-t border-border/20 sticky bottom-0">
                 <div className="flex items-center justify-between text-xs text-muted-foreground">
                   <span>{searchResults.length} result{searchResults.length !== 1 ? 's' : ''} found</span>
                   <div className="flex space-x-4">
