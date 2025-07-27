@@ -55,12 +55,15 @@ interface GraphConfig {
   friction: number;
   linkSpring: number;
   linkDistance: number;
+  linkDistRandomVariationRange: [number, number];
   mouseRepulsion: number;
   simulationDecay: number;
   
   // New Cosmograph v2.0 simulation properties
   simulationRepulsionTheta: number;
   simulationCluster: number;
+  simulationClusterStrength?: number;
+  simulationImpulse?: number;
   disableSimulation: boolean | null;
   spaceSize: number;
   randomSeed?: number | string;
@@ -198,12 +201,15 @@ const defaultConfig: GraphConfig = {
   friction: 0.86,
   linkSpring: 0.12,
   linkDistance: 3.1,
+  linkDistRandomVariationRange: [1, 1.2],
   mouseRepulsion: 10.0,
   simulationDecay: 10000, // 10 seconds for longer natural simulation
   
   // New Cosmograph v2.0 simulation properties
   simulationRepulsionTheta: 1.70,
   simulationCluster: 0.1, // Default cluster coefficient
+  simulationClusterStrength: undefined, // No clustering force by default
+  simulationImpulse: undefined, // No impulse by default
   disableSimulation: false, // Force simulation always on by default
   spaceSize: 4096,
   randomSeed: undefined,
