@@ -234,14 +234,14 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         pointLabelBy: 'label',        // Node display labels
         pointColorBy: 'node_type',    // Color by entity type
         pointSizeBy: 'centrality',    // Size by centrality metrics
-        pointIncludeColumns: ['degree_centrality', 'pagerank_centrality', 'betweenness_centrality', 'eigenvector_centrality', 'created_at', 'created_at_timestamp', 'updated_at'] // Include additional columns including temporal data
+        pointIncludeColumns: ['degree_centrality', 'pagerank_centrality', 'betweenness_centrality', 'eigenvector_centrality', 'created_at', 'created_at_timestamp'] // Include additional columns including temporal data
       },
       links: {
         linkSourceBy: 'source',       // Source node ID field
         linkTargetsBy: ['target'],    // Target node ID field - must be array format for v2.0
         linkColorBy: 'edge_type',     // Link color by type
         linkWidthBy: config.linkWidthBy,         // Link width by configured column
-        linkIncludeColumns: ['created_at', 'updated_at'] // Include temporal columns for timeline
+        linkIncludeColumns: [] // No additional columns needed for links
       }
     }), [config.linkWidthBy]);
 
@@ -1323,10 +1323,19 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
                 
                 // Zoom to fit the node and its neighbors
                 if (connectedIndices.length > 1 && typeof cosmographRef.current.fitViewByIndices === 'function') {
-                  cosmographRef.current.fitViewByIndices(connectedIndices, 500, 0.2); // 500ms animation, 20% padding
+                  // Use requestAnimationFrame to ensure smooth transition
+                  requestAnimationFrame(() => {
+                    if (cosmographRef.current && typeof cosmographRef.current.fitViewByIndices === 'function') {
+                      cosmographRef.current.fitViewByIndices(connectedIndices, 500, 0.2); // 500ms animation, 20% padding
+                    }
+                  });
                 } else if (typeof cosmographRef.current.zoomToPoint === 'function') {
                   // If no neighbors, just zoom to the single node
-                  cosmographRef.current.zoomToPoint(index, 500, 3.0, true);
+                  requestAnimationFrame(() => {
+                    if (cosmographRef.current && typeof cosmographRef.current.zoomToPoint === 'function') {
+                      cosmographRef.current.zoomToPoint(index, 500, 3.0, true);
+                    }
+                  });
                 }
                 
                 // Show the info panel
@@ -1363,8 +1372,13 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           
           // Reset view to show all nodes
           if (typeof cosmographRef.current.fitView === 'function') {
-            console.log('Empty space clicked - resetting view to fit all nodes');
-            cosmographRef.current.fitView(500); // 500ms animation
+            // Use requestAnimationFrame to ensure we're not in the middle of another update
+            requestAnimationFrame(() => {
+              if (cosmographRef.current && typeof cosmographRef.current.fitView === 'function') {
+                console.log('Empty space clicked - resetting view to fit all nodes');
+                cosmographRef.current.fitView(500); // 500ms animation
+              }
+            });
           }
         }
         onClearSelection?.();
