@@ -44,34 +44,6 @@ services:
       - "homepage.icon=si-graphql"
       - "homepage.href=http://192.168.50.90:8000"
       - "homepage.description=Knowledge graph API service"
-  neo4j:
-    image: neo4j:5.26.2
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "wget -qO- http://localhost:${NEO4J_PORT:-7474} || exit 1",
-        ]
-      interval: 1s
-      timeout: 10s
-      retries: 10
-      start_period: 3s
-    ports:
-      - "7474:7474" # HTTP
-      - "${NEO4J_PORT:-7687}:${NEO4J_PORT:-7687}" # Bolt
-    volumes:
-      - neo4j_data:/data
-    environment:
-      - NEO4J_AUTH=${NEO4J_USER}/${NEO4J_PASSWORD}
-    networks:
-      - graphiti_network
-    labels:
-      - "homepage.group=Knowledge Management"
-      - "homepage.name=Neo4j Database"
-      - "homepage.icon=si-neo4j"
-      - "homepage.href=http://192.168.50.90:7474"
-      - "homepage.description=Neo4j graph database browser"
-
   falkordb:
     build:
       context: .
@@ -100,46 +72,6 @@ services:
       - "homepage.icon=si-redis"
       - "homepage.href=http://192.168.50.90:3100"
       - "homepage.description=FalkorDB graph database"
-  
-  redisinsight:
-    image: redis/redisinsight:latest
-    container_name: graphiti-redisinsight
-    restart: unless-stopped
-    ports:
-      - "5540:5540"
-    volumes:
-      - redisinsight_data:/data
-    networks:
-      - graphiti_network
-    labels:
-      - "homepage.group=Knowledge Management"
-      - "homepage.name=RedisInsight"
-      - "homepage.icon=si-redis"
-      - "homepage.href=http://192.168.50.90:5540"
-      - "homepage.description=GUI for FalkorDB graph database"
-  
-  graph-visualizer:
-    build:
-      context: ./graph-visualizer
-      dockerfile: Dockerfile
-    container_name: graphiti-visualizer
-    restart: unless-stopped
-    ports:
-      - "5555:5000"
-    environment:
-      - FALKORDB_HOST=falkordb
-      - FALKORDB_PORT=6379
-      - GRAPH_NAME=graphiti_migration
-    depends_on:
-      - falkordb
-    networks:
-      - graphiti_network
-    labels:
-      - "homepage.group=Knowledge Management"
-      - "homepage.name=Graph Visualizer"
-      - "homepage.icon=mdi-graph"
-      - "homepage.href=http://192.168.50.90:5555"
-      - "homepage.description=Interactive graph visualization for FalkorDB"
   
   graph-visualizer-rust:
     build:
@@ -253,6 +185,4 @@ networks:
     driver: bridge
 
 volumes:
-  neo4j_data:
   falkordb_data:
-  redisinsight_data:
