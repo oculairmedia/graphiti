@@ -761,7 +761,6 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
               return (
                 <GraphCanvas 
                   ref={graphCanvasRef}
-                  key={JSON.stringify(config.nodeTypeColors)} // Force re-render when colors change
                   nodes={dataToUse.nodes}
                   links={dataToUse.links}
                   onNodeClick={handleNodeClick}
