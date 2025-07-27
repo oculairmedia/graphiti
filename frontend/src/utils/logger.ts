@@ -3,12 +3,18 @@ const isDevelopment = false; // Disabled for production
 
 export const logger = {
   log: (...args: unknown[]) => {
-    // Logging disabled
+    if (isDevelopment) {
+      console.log(...args);
+    }
   },
   warn: (...args: unknown[]) => {
-    // Logging disabled
+    if (isDevelopment) {
+      console.warn(...args);
+    }
   },
   error: (...args: unknown[]) => {
-    // Logging disabled
+    if (isDevelopment) {
+      console.error(...args);
+    }
   }
 };
