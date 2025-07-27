@@ -1369,6 +1369,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             randomSeed={config.randomSeed}
             simulationRepulsion={config.repulsion}
             simulationRepulsionTheta={config.simulationRepulsionTheta}
+            simulationCluster={config.simulationCluster}
             simulationLinkSpring={config.linkSpring}
             simulationLinkDistance={config.linkDistance}
             simulationGravity={config.gravity}

@@ -110,6 +110,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
       // Reset to Cosmograph v2.0 defaults
       repulsion: 0.1,
       simulationRepulsionTheta: 1.7,
+      simulationCluster: 0.1,
       linkSpring: 1.0,
       linkDistance: 2,
       gravity: 0.0,
@@ -746,6 +747,32 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
                       />
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">Centering force pulling nodes together</p>
+                  </div>
+
+                  <div>
+                    <Label className="text-xs text-muted-foreground mb-2 block">Cluster Coefficient</Label>
+                    <div className="flex items-center space-x-2 mb-2">
+                      <Slider
+                        value={[config.simulationCluster]}
+                        onValueChange={([value]) => updateConfig({ simulationCluster: value })}
+                        max={1}
+                        min={0}
+                        step={0.01}
+                        className="flex-1"
+                      />
+                      <Input
+                        type="text"
+                        value={config.simulationCluster.toFixed(2)}
+                        onChange={(e) => {
+                          const value = parseFloat(e.target.value);
+                          if (!isNaN(value)) {
+                            updateConfig({ simulationCluster: value });
+                          }
+                        }}
+                        className="w-16 h-6 bg-secondary/30 text-xs text-center"
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">Groups similar nodes together</p>
                   </div>
 
                   <div>

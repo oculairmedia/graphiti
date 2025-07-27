@@ -60,6 +60,7 @@ interface GraphConfig {
   
   // New Cosmograph v2.0 simulation properties
   simulationRepulsionTheta: number;
+  simulationCluster: number;
   disableSimulation: boolean | null;
   spaceSize: number;
   randomSeed?: number | string;
@@ -202,6 +203,7 @@ const defaultConfig: GraphConfig = {
   
   // New Cosmograph v2.0 simulation properties
   simulationRepulsionTheta: 1.70,
+  simulationCluster: 0.1, // Default cluster coefficient
   disableSimulation: false, // Force simulation always on by default
   spaceSize: 4096,
   randomSeed: undefined,
