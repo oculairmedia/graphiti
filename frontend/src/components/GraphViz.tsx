@@ -34,6 +34,8 @@ interface GraphCanvasHandle {
   selectPointsInRect: (selection: [[number, number], [number, number]] | null, addToSelection?: boolean) => void;
   selectPointsInPolygon: (polygonPoints: [number, number][], addToSelection?: boolean) => void;
   getConnectedPointIndices: (index: number) => number[] | undefined;
+  // Search methods
+  getPointIndicesByExactValues: (keyValues: Record<string, unknown>) => number[] | undefined;
   // Incremental update methods
   addIncrementalData: (newNodes: GraphNode[], newLinks: GraphLink[], runSimulation?: boolean) => void;
   updateNodes: (updatedNodes: GraphNode[]) => void;

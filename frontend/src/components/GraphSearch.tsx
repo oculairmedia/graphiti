@@ -47,27 +47,92 @@ export const GraphSearch: React.FC<GraphSearchProps> = React.memo(({
       return;
     }
     
-    const lowercaseQuery = query.toLowerCase();
-    const results = nodes.filter(node => {
-      const label = (node.label || node.id || '').toLowerCase();
-      const type = (node.node_type || '').toLowerCase();
-      const id = (node.id || '').toLowerCase();
+    // Check if this is an advanced search query
+    const advancedPattern = /^(\w+):(.+)$/;
+    const match = query.match(advancedPattern);
+    
+    let results: GraphNode[] = [];
+    const lowercaseQuery = query.toLowerCase(); // Define it here for the sort function
+    
+    if (match) {
+      // Advanced search: field:value
+      const [, field, value] = match;
+      const lowercaseValue = value.toLowerCase();
       
-      // Search in properties as well
-      let propertiesMatch = false;
-      if (node.properties) {
-        const propertiesText = Object.values(node.properties)
-          .filter(val => typeof val === 'string')
-          .join(' ')
-          .toLowerCase();
-        propertiesMatch = propertiesText.includes(lowercaseQuery);
+      // Try to use Cosmograph's exact value search for better performance
+      if (cosmographRef?.current && typeof cosmographRef.current.getPointIndicesByExactValues === 'function') {
+        try {
+          let searchQuery: Record<string, unknown> = {};
+          
+          // Handle special fields
+          if (field === 'type') {
+            searchQuery = { node_type: value };
+          } else if (field === 'id') {
+            searchQuery = { id: value };
+          } else if (field === 'label') {
+            searchQuery = { label: value };
+          } else {
+            // For other fields, try direct property search
+            searchQuery = { [field]: value };
+          }
+          
+          const indices = cosmographRef.current.getPointIndicesByExactValues(searchQuery);
+          if (indices && indices.length > 0) {
+            results = indices.map(idx => nodes[idx]).filter(Boolean);
+          }
+        } catch (error) {
+          // Fallback to manual search
+          results = nodes.filter(node => {
+            if (field === 'type') {
+              return (node.node_type || '').toLowerCase() === lowercaseValue;
+            } else if (field === 'id') {
+              return (node.id || '').toLowerCase() === lowercaseValue;
+            } else if (field === 'label') {
+              return (node.label || '').toLowerCase() === lowercaseValue;
+            } else if (node.properties && field in node.properties) {
+              return String(node.properties[field]).toLowerCase() === lowercaseValue;
+            }
+            return false;
+          });
+        }
+      } else {
+        // Fallback to manual search
+        results = nodes.filter(node => {
+          if (field === 'type') {
+            return (node.node_type || '').toLowerCase() === lowercaseValue;
+          } else if (field === 'id') {
+            return (node.id || '').toLowerCase() === lowercaseValue;
+          } else if (field === 'label') {
+            return (node.label || '').toLowerCase() === lowercaseValue;
+          } else if (node.properties && field in node.properties) {
+            return String(node.properties[field]).toLowerCase() === lowercaseValue;
+          }
+          return false;
+        });
       }
-      
-      return label.includes(lowercaseQuery) || 
-             type.includes(lowercaseQuery) || 
-             id.includes(lowercaseQuery) ||
-             propertiesMatch;
-    }); // Return all matching results
+    } else {
+      // Regular search
+      results = nodes.filter(node => {
+        const label = (node.label || node.id || '').toLowerCase();
+        const type = (node.node_type || '').toLowerCase();
+        const id = (node.id || '').toLowerCase();
+        
+        // Search in properties as well
+        let propertiesMatch = false;
+        if (node.properties) {
+          const propertiesText = Object.values(node.properties)
+            .filter(val => typeof val === 'string')
+            .join(' ')
+            .toLowerCase();
+          propertiesMatch = propertiesText.includes(lowercaseQuery);
+        }
+        
+        return label.includes(lowercaseQuery) || 
+               type.includes(lowercaseQuery) || 
+               id.includes(lowercaseQuery) ||
+               propertiesMatch;
+      });
+    }
     
     // Sort results by relevance - exact matches first
     results.sort((a, b) => {
@@ -90,7 +155,7 @@ export const GraphSearch: React.FC<GraphSearchProps> = React.memo(({
     setActiveIndex(-1);
     setVisibleResultsCount(20); // Reset visible count on new search
     
-  }, [nodes]);
+  }, [nodes, cosmographRef]);
   
   // Handle search input changes
   const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -155,19 +220,39 @@ export const GraphSearch: React.FC<GraphSearchProps> = React.memo(({
     // Focus and select the node in Cosmograph if available
     if (cosmographRef?.current) {
       try {
-        // Find the node index in the current data
-        const nodeIndex = nodes.findIndex(n => n.id === node.id);
-        if (nodeIndex >= 0) {
-          // Use Cosmograph's focus methods
-          if (typeof cosmographRef.current.setFocusedPoint === 'function') {
-            cosmographRef.current.setFocusedPoint(nodeIndex);
+        // Try to use exact value search first for better performance
+        if (typeof cosmographRef.current.getPointIndicesByExactValues === 'function') {
+          const indices = cosmographRef.current.getPointIndicesByExactValues({ id: node.id });
+          if (indices && indices.length > 0) {
+            const nodeIndex = indices[0];
+            
+            // Use Cosmograph's focus methods
+            if (typeof cosmographRef.current.setFocusedPoint === 'function') {
+              cosmographRef.current.setFocusedPoint(nodeIndex);
+            }
+            
+            // Also select the node
+            if (typeof cosmographRef.current.selectPoint === 'function') {
+              cosmographRef.current.selectPoint(nodeIndex);
+            } else if (typeof cosmographRef.current.selectPoints === 'function') {
+              cosmographRef.current.selectPoints([nodeIndex]);
+            }
           }
-          
-          // Also select the node
-          if (typeof cosmographRef.current.selectPoint === 'function') {
-            cosmographRef.current.selectPoint(nodeIndex);
-          } else if (typeof cosmographRef.current.selectPoints === 'function') {
-            cosmographRef.current.selectPoints([nodeIndex]);
+        } else {
+          // Fallback to linear search
+          const nodeIndex = nodes.findIndex(n => n.id === node.id);
+          if (nodeIndex >= 0) {
+            // Use Cosmograph's focus methods
+            if (typeof cosmographRef.current.setFocusedPoint === 'function') {
+              cosmographRef.current.setFocusedPoint(nodeIndex);
+            }
+            
+            // Also select the node
+            if (typeof cosmographRef.current.selectPoint === 'function') {
+              cosmographRef.current.selectPoint(nodeIndex);
+            } else if (typeof cosmographRef.current.selectPoints === 'function') {
+              cosmographRef.current.selectPoints([nodeIndex]);
+            }
           }
         }
       } catch (error) {
@@ -246,7 +331,7 @@ export const GraphSearch: React.FC<GraphSearchProps> = React.memo(({
               value={searchValue}
               onChange={handleSearchChange}
               onKeyDown={handleKeyDown}
-              placeholder="Search nodes by name, type, ID, or properties..."
+              placeholder="Search nodes... (try 'type:Entity' or 'label:example')"
               className="pl-10 h-10 bg-secondary/50 border-border/30 focus:border-primary/50 transition-colors"
             />
             {searchValue && (
