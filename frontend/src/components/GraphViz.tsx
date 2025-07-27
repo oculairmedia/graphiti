@@ -487,8 +487,13 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
       
       // Zoom to fit the selected subnetwork
       if (highlightedIndices.length > 0 && graphCanvasRef.current && typeof graphCanvasRef.current.fitViewByIndices === 'function') {
-        console.log('Zooming to fit subnetwork with indices:', highlightedIndices);
-        graphCanvasRef.current.fitViewByIndices(highlightedIndices, 500, 0.15); // 500ms animation, 15% padding
+        // Use requestAnimationFrame to ensure smooth transition
+        requestAnimationFrame(() => {
+          if (graphCanvasRef.current && typeof graphCanvasRef.current.fitViewByIndices === 'function') {
+            console.log('Zooming to fit subnetwork with indices:', highlightedIndices);
+            graphCanvasRef.current.fitViewByIndices(highlightedIndices, 500, 0.15); // 500ms animation, 15% padding
+          }
+        });
       }
       
     } else {
@@ -519,8 +524,13 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
     
     // Reset view to show all nodes when clearing selections
     if (hasSelections && graphCanvasRef.current && typeof graphCanvasRef.current.fitView === 'function') {
-      console.log('Resetting view to fit all nodes');
-      graphCanvasRef.current.fitView(500); // 500ms animation to reset view
+      // Use requestAnimationFrame to avoid conflicts
+      requestAnimationFrame(() => {
+        if (graphCanvasRef.current && typeof graphCanvasRef.current.fitView === 'function') {
+          console.log('Resetting view to fit all nodes');
+          graphCanvasRef.current.fitView(500); // 500ms animation to reset view
+        }
+      });
     }
   }, [selectedNodes.length, selectedNode?.id, highlightedNodes.length]);
 
