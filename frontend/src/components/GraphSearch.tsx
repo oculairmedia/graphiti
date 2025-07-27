@@ -210,7 +210,7 @@ export const GraphSearch: React.FC<GraphSearchProps> = React.memo(({
   }, [isSearchOpen, searchResults, activeIndex, onSelectNodes, visibleResultsCount]);
   
   // Handle result selection
-  const handleSelectResult = useCallback((node: GraphNode) => {
+  const handleSelectResult = useCallback(async (node: GraphNode) => {
     
     // Call the node selection handler
     if (onNodeSelect) {
@@ -218,44 +218,15 @@ export const GraphSearch: React.FC<GraphSearchProps> = React.memo(({
     }
     
     // Focus and select the node in Cosmograph if available
-    console.log('GraphSearch handleSelectResult - cosmographRef:', cosmographRef);
-    console.log('GraphSearch handleSelectResult - cosmographRef.current:', cosmographRef?.current);
     if (cosmographRef?.current) {
       try {
-        // Try to use exact value search first for better performance
-        if (typeof cosmographRef.current.getPointIndicesByExactValues === 'function') {
-          const indices = cosmographRef.current.getPointIndicesByExactValues({ id: node.id });
-          console.log('Search exact value indices:', indices, 'for node:', node.id);
-          if (indices && indices.length > 0) {
-            const nodeIndex = indices[0];
-            console.log('Found node at index:', nodeIndex);
-            
-            // Use Cosmograph's focus methods
-            if (typeof cosmographRef.current.setFocusedPoint === 'function') {
-              cosmographRef.current.setFocusedPoint(nodeIndex);
-            }
-            
-            // Also select the node
-            if (typeof cosmographRef.current.selectPoint === 'function') {
-              cosmographRef.current.selectPoint(nodeIndex);
-            } else if (typeof cosmographRef.current.selectPoints === 'function') {
-              cosmographRef.current.selectPoints([nodeIndex]);
-            }
-            
-            // Zoom to the selected node
-            if (typeof cosmographRef.current.zoomToPoint === 'function') {
-              // Ensure simulation is running for smooth zoom
-              if (typeof cosmographRef.current.start === 'function') {
-                cosmographRef.current.start(0.1);
-              }
-              cosmographRef.current.zoomToPoint(nodeIndex, 250, 4.0, true);
-            }
-          }
+        // Skip exact value search for now due to Promise handling issues
+        // TODO: Fix getPointIndicesByExactValues to properly handle async
+        if (false && typeof cosmographRef.current.getPointIndicesByExactValues === 'function') {
+          // This method returns a Promise but our wrapper doesn't handle it correctly yet
         } else {
           // Fallback to linear search
-          console.log('Falling back to linear search for node:', node.id);
           const nodeIndex = nodes.findIndex(n => n.id === node.id);
-          console.log('Linear search found index:', nodeIndex);
           if (nodeIndex >= 0) {
             // Use Cosmograph's focus methods
             if (typeof cosmographRef.current.setFocusedPoint === 'function') {
