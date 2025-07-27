@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { ChevronLeft, ChevronRight, Database, Settings2, Palette, Zap, RotateCcw, Paintbrush, Layers, Eye, RefreshCw, Cpu, Play, Pause, Square, Shuffle, ZoomIn, Download } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Database, Settings2, Palette, Zap, RotateCcw, Paintbrush, Layers, Eye, RefreshCw, Cpu, Square, Shuffle, ZoomIn, Download } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
@@ -104,23 +104,6 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
   
   // Node type configurations are now updated in GraphViz.tsx to avoid duplicate calls
 
-  // Simulation control functions
-  const handleSimulationStart = useCallback(() => {
-    if (cosmographRef?.current && typeof cosmographRef.current.start === 'function') {
-    }
-  }, [cosmographRef]);
-
-  const handleSimulationPause = useCallback(() => {
-    if (cosmographRef?.current && typeof cosmographRef.current.pause === 'function') {
-      cosmographRef.current.pause();
-    }
-  }, [cosmographRef]);
-
-  const handleSimulationRestart = useCallback(() => {
-    if (cosmographRef?.current && typeof cosmographRef.current.restart === 'function') {
-      cosmographRef.current.restart();
-    }
-  }, [cosmographRef]);
 
   const handleResetToDefaults = useCallback(() => {
     updateConfig({
@@ -599,66 +582,6 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
 
             {/* Physics Tab */}
             <TabsContent value="physics" className="mt-0 space-y-4">
-              {/* Simulation Control */}
-              <Card className="glass border-border/30">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm flex items-center space-x-2">
-                    <Play className="h-4 w-4 text-primary" />
-                    <span>Simulation Control</span>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Simulation Mode</Label>
-                    <Select 
-                      value={config.disableSimulation === null ? 'auto' : config.disableSimulation ? 'disabled' : 'enabled'} 
-                      onValueChange={(value) => {
-                        const newValue = value === 'auto' ? null : value === 'enabled' ? false : true;
-                        updateConfig({ disableSimulation: newValue });
-                      }}
-                    >
-                      <SelectTrigger className="h-8 bg-secondary/30">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent className="glass">
-                        <SelectItem value="auto">🤖 Auto (detect links)</SelectItem>
-                        <SelectItem value="enabled">▶️ Force Simulation On</SelectItem>
-                        <SelectItem value="disabled">⏹️ Static Positioning</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  
-                  <div className="grid grid-cols-3 gap-2">
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      className="h-8 text-xs"
-                      onClick={handleSimulationStart}
-                    >
-                      <Play className="h-3 w-3 mr-1" />
-                      Start
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      className="h-8 text-xs"
-                      onClick={handleSimulationPause}
-                    >
-                      <Pause className="h-3 w-3 mr-1" />
-                      Pause
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      className="h-8 text-xs"
-                      onClick={handleSimulationRestart}
-                    >
-                      <RotateCcw className="h-3 w-3 mr-1" />
-                      Restart
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
 
               {/* Force Configuration */}
               <Card className="glass border-border/30">
