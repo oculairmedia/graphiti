@@ -383,7 +383,7 @@ export const GraphConfigProvider: React.FC<{ children: ReactNode }> = ({ childre
       if (beforeZoom !== undefined && !isNaN(beforeZoom)) {
         const newZoom = Math.min(beforeZoom * 1.5, 10);
         console.log('GraphConfigContext: Setting new zoom level:', newZoom);
-        cosmographRef.current.setZoomLevel(newZoom, config.fitViewDuration || 250);
+        cosmographRef.current.setZoomLevel(newZoom);
       } else {
         console.warn('GraphConfigContext: Invalid zoom level:', beforeZoom);
       }
@@ -405,7 +405,7 @@ export const GraphConfigProvider: React.FC<{ children: ReactNode }> = ({ childre
       if (beforeZoom !== undefined && !isNaN(beforeZoom)) {
         const newZoom = Math.max(beforeZoom / 1.5, 0.1);
         console.log('GraphConfigContext: Setting new zoom level:', newZoom);
-        cosmographRef.current.setZoomLevel(newZoom, config.fitViewDuration || 250);
+        cosmographRef.current.setZoomLevel(newZoom);
       } else {
         console.warn('GraphConfigContext: Invalid zoom level:', beforeZoom);
       }
@@ -423,7 +423,7 @@ export const GraphConfigProvider: React.FC<{ children: ReactNode }> = ({ childre
     try {
       console.log('GraphConfigContext: Calling fitView with duration:', config.fitViewDuration);
       // fitView method only accepts duration parameter, padding is set during initialization
-      cosmographRef.current.fitView(config.fitViewDuration || 250);
+      cosmographRef.current.fitView();
     } catch (error) {
       console.error('GraphConfigContext: Fit view failed:', error);
     }
