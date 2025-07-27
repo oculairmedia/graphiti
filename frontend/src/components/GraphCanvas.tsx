@@ -514,34 +514,35 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       if (!cosmographRef.current) return;
       
       try {
-        // Use the official Cosmograph v2.0 API method with proper error handling
+        // Use the official Cosmograph v2.0 API method with animation duration
         const currentZoom = cosmographRef.current.getZoomLevel();
         if (currentZoom !== undefined) {
           const newZoom = Math.min(currentZoom * 1.5, 10);
-          cosmographRef.current.setZoomLevel(newZoom);
+          cosmographRef.current.setZoomLevel(newZoom, config.fitViewDuration);
         } else {
           logger.warn('Could not get current zoom level for zoom in');
         }
       } catch (error) {
         logger.warn('Zoom in failed:', error);
       }
-    }, []);
+    }, [config.fitViewDuration]);
 
     const zoomOut = useCallback(() => {
       if (!cosmographRef.current) return;
       
       try {
-        // Use the official Cosmograph v2.0 API method with proper error handling
+        // Use the official Cosmograph v2.0 API method with animation duration
         const currentZoom = cosmographRef.current.getZoomLevel();
         if (currentZoom !== undefined) {
-          cosmographRef.current.setZoomLevel(newZoom);
+          const newZoom = Math.max(currentZoom / 1.5, 0.1);
+          cosmographRef.current.setZoomLevel(newZoom, config.fitViewDuration);
         } else {
           logger.warn('Could not get current zoom level for zoom out');
         }
       } catch (error) {
         logger.warn('Zoom out failed:', error);
       }
-    }, []);
+    }, [config.fitViewDuration]);
 
     const fitView = useCallback(() => {
       if (!cosmographRef.current) return;
@@ -560,7 +561,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       try {
         // Use the Cosmograph v2.0 zoomToPoint method with config defaults
         const actualDuration = duration !== undefined ? duration : config.fitViewDuration;
-        const actualScale = scale !== undefined ? scale : 2.0; // Default zoom scale
+        const actualScale = scale !== undefined ? scale : 10.0; // Very high zoom scale for detailed focus
         const actualCanZoomOut = canZoomOut !== undefined ? canZoomOut : true;
         cosmographRef.current.zoomToPoint(index, actualDuration, actualScale, actualCanZoomOut);
       } catch (error) {
