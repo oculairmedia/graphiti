@@ -237,7 +237,7 @@ services:
     networks:
       - graphiti_network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:3003/health"]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -245,7 +245,7 @@ services:
       - "homepage.group=Knowledge Management"
       - "homepage.name=Centrality Service (Rust)"
       - "homepage.icon=si-rust"
-      - "homepage.href=http://192.168.50.90:3001"
+      - "homepage.href=http://192.168.50.90:3003"
       - "homepage.description=High-performance centrality calculations with native FalkorDB algorithms"
 
 networks:

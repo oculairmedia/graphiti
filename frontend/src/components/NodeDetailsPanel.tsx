@@ -12,6 +12,7 @@ import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, us
 import { arrayMove, SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { restrictToVerticalAxis } from '@dnd-kit/modifiers';
 import { usePersistedSections } from '@/hooks/usePersistedConfig';
+import { useNodeCentralityWithFallback } from '@/hooks/useCentrality';
 
 interface NodeDetailsPanelProps {
   node: GraphNode;
@@ -29,7 +30,7 @@ export const NodeDetailsPanel: React.FC<NodeDetailsPanelProps> = ({
   // Default section configuration
   const defaultSections: SectionConfig[] = [
     { id: 'summary', title: 'Summary', isCollapsed: false, order: 0, isVisible: true },
-    { id: 'properties', title: 'Properties', isCollapsed: false, order: 1, isVisible: true },
+    { id: 'properties', title: 'Properties', isCollapsed: true, order: 1, isVisible: true },
     { id: 'centrality', title: 'Centrality Metrics', isCollapsed: false, order: 2, isVisible: true },
     { id: 'connections', title: 'Connections', isCollapsed: false, order: 3, isVisible: true },
     { id: 'timestamps', title: 'Timeline', isCollapsed: false, order: 4, isVisible: true },
@@ -37,7 +38,10 @@ export const NodeDetailsPanel: React.FC<NodeDetailsPanelProps> = ({
   ];
 
   // Section state management with persistence
-  const [sections, setSections, isSectionsLoaded] = usePersistedSections(defaultSections);
+  const [sections, setPersistedSections, isSectionsLoaded] = usePersistedSections(defaultSections);
+  
+  // State for summary expansion
+  const [isSummaryExpanded, setIsSummaryExpanded] = useState(false);
 
   // Drag and drop sensors
   const sensors = useSensors(
@@ -50,7 +54,7 @@ export const NodeDetailsPanel: React.FC<NodeDetailsPanelProps> = ({
     const { active, over } = event;
 
     if (active.id !== over.id) {
-      setSections((sections) => {
+      setPersistedSections((sections) => {
         const oldIndex = sections.findIndex((section) => section.id === active.id);
         const newIndex = sections.findIndex((section) => section.id === over.id);
 
@@ -66,7 +70,7 @@ export const NodeDetailsPanel: React.FC<NodeDetailsPanelProps> = ({
 
   // Handle section collapse toggle
   const handleToggleCollapse = (sectionId: string) => {
-    setSections((sections) =>
+    setPersistedSections((sections) =>
       sections.map((section) =>
         section.id === sectionId
           ? { ...section, isCollapsed: !section.isCollapsed }
@@ -124,18 +128,21 @@ export const NodeDetailsPanel: React.FC<NodeDetailsPanelProps> = ({
     });
   };
 
+  // Use centrality hook with fallback
+  const { centrality, isLoading: centralityLoading, source } = useNodeCentralityWithFallback(node.id, node.properties);
+
   // Use real node data
   const data = {
     id: node.id,
     name: node.label || node.id,
     type: node.node_type || 'Unknown',
-    summary: node.summary || node.description || '',
+    summary: node.summary || node.description || node.properties?.summary || node.properties?.content || node.properties?.source_description || '',
     properties: node.properties || {},
-    centrality: {
-      degree: node.properties?.degree_centrality || 0,
-      betweenness: node.properties?.betweenness_centrality || 0,
-      pagerank: node.properties?.pagerank_centrality || node.properties?.pagerank || 0,
-      eigenvector: node.properties?.eigenvector_centrality || 0
+    centrality: centrality || {
+      degree: 0,
+      betweenness: 0,
+      pagerank: 0,
+      eigenvector: 0
     },
     timestamps: {
       created: node.created_at || node.properties?.created || new Date().toISOString(),
@@ -194,13 +201,37 @@ export const NodeDetailsPanel: React.FC<NodeDetailsPanelProps> = ({
                 
                 switch (section.id) {
                   case 'summary':
-                    return data.summary ? (
+                    if (!data.summary) return null;
+                    
+                    const TRUNCATE_LENGTH = 200;
+                    const needsTruncation = data.summary.length > TRUNCATE_LENGTH;
+                    const displaySummary = needsTruncation && !isSummaryExpanded 
+                      ? data.summary.substring(0, TRUNCATE_LENGTH) + '...'
+                      : data.summary;
+                    
+                    return (
                       <CollapsibleSection key={section.id} {...sectionProps}>
-                        <p className="text-sm leading-relaxed break-words overflow-wrap-anywhere">
-                          {data.summary}
-                        </p>
+                        <div 
+                          className={`text-sm leading-relaxed break-words overflow-wrap-anywhere ${
+                            needsTruncation && !isSummaryExpanded ? 'cursor-pointer' : ''
+                          }`}
+                          onClick={() => needsTruncation && setIsSummaryExpanded(!isSummaryExpanded)}
+                        >
+                          <p>{displaySummary}</p>
+                          {needsTruncation && (
+                            <button
+                              className="text-xs text-primary hover:text-primary/80 mt-1 focus:outline-none"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setIsSummaryExpanded(!isSummaryExpanded);
+                              }}
+                            >
+                              {isSummaryExpanded ? 'Show less' : 'Show more'}
+                            </button>
+                          )}
+                        </div>
                       </CollapsibleSection>
-                    ) : null;
+                    );
 
                   case 'properties':
                     return (
@@ -224,22 +255,35 @@ export const NodeDetailsPanel: React.FC<NodeDetailsPanelProps> = ({
                     return (
                       <CollapsibleSection key={section.id} {...sectionProps}>
                         <div className="space-y-3">
-                          {Object.entries(data.centrality).map(([metric, value]) => (
-                            <div key={metric}>
-                              <div className="flex justify-between items-center mb-1">
-                                <span className="text-xs capitalize">
-                                  {metric.replace(/([A-Z])/g, ' $1')}
-                                </span>
-                                <span className="text-xs text-primary font-medium">
-                                  {(Number(value) * 100).toFixed(1)}%
-                                </span>
-                              </div>
-                              <Progress 
-                                value={Number(value) * 100} 
-                                className="h-1.5"
-                              />
+                          {centralityLoading && source === 'none' ? (
+                            <div className="text-xs text-muted-foreground text-center py-2">
+                              Loading centrality metrics...
                             </div>
-                          ))}
+                          ) : (
+                            <>
+                              {source === 'api' && (
+                                <Badge variant="outline" className="text-xs mb-2">
+                                  Live Data
+                                </Badge>
+                              )}
+                              {Object.entries(data.centrality).map(([metric, value]) => (
+                                <div key={metric}>
+                                  <div className="flex justify-between items-center mb-1">
+                                    <span className="text-xs capitalize">
+                                      {metric.replace(/([A-Z])/g, ' $1')}
+                                    </span>
+                                    <span className="text-xs text-primary font-medium">
+                                      {(Number(value) * 100).toFixed(1)}%
+                                    </span>
+                                  </div>
+                                  <Progress 
+                                    value={Number(value) * 100} 
+                                    className="h-1.5"
+                                  />
+                                </div>
+                              ))}
+                            </>
+                          )}
                         </div>
                       </CollapsibleSection>
                     );

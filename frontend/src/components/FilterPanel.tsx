@@ -53,6 +53,8 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
     selectedTypes: config.filteredNodeTypes,
     degreeRange: [config.minDegree, config.maxDegree],
     pagerankRange: [config.minPagerank, config.maxPagerank],
+    betweennessRange: [config.minBetweenness, config.maxBetweenness],
+    eigenvectorRange: [config.minEigenvector, config.maxEigenvector],
     minConnections: config.minConnections.toString(),
     maxConnections: config.maxConnections.toString(),
     dateRange: { start: config.startDate, end: config.endDate }
@@ -65,13 +67,16 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
         selectedTypes: config.filteredNodeTypes,
         degreeRange: [config.minDegree, config.maxDegree],
         pagerankRange: [config.minPagerank, config.maxPagerank],
+        betweennessRange: [config.minBetweenness, config.maxBetweenness],
+        eigenvectorRange: [config.minEigenvector, config.maxEigenvector],
         minConnections: config.minConnections.toString(),
         maxConnections: config.maxConnections.toString(),
         dateRange: { start: config.startDate, end: config.endDate }
       });
     }
   }, [isOpen, config.filteredNodeTypes, config.minDegree, config.maxDegree, 
-      config.minPagerank, config.maxPagerank, config.minConnections, 
+      config.minPagerank, config.maxPagerank, config.minBetweenness, config.maxBetweenness,
+      config.minEigenvector, config.maxEigenvector, config.minConnections, 
       config.maxConnections, config.startDate, config.endDate]);
 
   const handleTypeToggle = (typeId: string) => {
@@ -89,6 +94,8 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
       selectedTypes: allTypes,
       degreeRange: [0, 100],
       pagerankRange: [0, 100],
+      betweennessRange: [0, 100],
+      eigenvectorRange: [0, 100],
       minConnections: '0',
       maxConnections: '1000',
       dateRange: { start: '', end: '' }
@@ -102,6 +109,10 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
       maxDegree: tempFilters.degreeRange[1],
       minPagerank: tempFilters.pagerankRange[0],
       maxPagerank: tempFilters.pagerankRange[1],
+      minBetweenness: tempFilters.betweennessRange[0],
+      maxBetweenness: tempFilters.betweennessRange[1],
+      minEigenvector: tempFilters.eigenvectorRange[0],
+      maxEigenvector: tempFilters.eigenvectorRange[1],
       minConnections: parseInt(tempFilters.minConnections) || 0,
       maxConnections: parseInt(tempFilters.maxConnections) || 1000,
       startDate: tempFilters.dateRange.start,
@@ -234,6 +245,40 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
                   <Slider
                     value={tempFilters.pagerankRange}
                     onValueChange={(value) => setTempFilters(prev => ({ ...prev, pagerankRange: value }))}
+                    max={100}
+                    min={0}
+                    step={1}
+                    className="w-full"
+                  />
+                </div>
+
+                <div>
+                  <div className="flex justify-between items-center mb-3">
+                    <Label className="text-sm font-medium">Betweenness Centrality</Label>
+                    <Badge variant="outline" className="text-xs">
+                      {tempFilters.betweennessRange[0]}% - {tempFilters.betweennessRange[1]}%
+                    </Badge>
+                  </div>
+                  <Slider
+                    value={tempFilters.betweennessRange}
+                    onValueChange={(value) => setTempFilters(prev => ({ ...prev, betweennessRange: value }))}
+                    max={100}
+                    min={0}
+                    step={1}
+                    className="w-full"
+                  />
+                </div>
+
+                <div>
+                  <div className="flex justify-between items-center mb-3">
+                    <Label className="text-sm font-medium">Eigenvector Centrality</Label>
+                    <Badge variant="outline" className="text-xs">
+                      {tempFilters.eigenvectorRange[0]}% - {tempFilters.eigenvectorRange[1]}%
+                    </Badge>
+                  </div>
+                  <Slider
+                    value={tempFilters.eigenvectorRange}
+                    onValueChange={(value) => setTempFilters(prev => ({ ...prev, eigenvectorRange: value }))}
                     max={100}
                     min={0}
                     step={1}

@@ -51,13 +51,13 @@ export const usePersistedSections = (defaultSections: SectionConfig[]) => {
       try {
         // Merge stored preferences with default sections
         const mergedSections = defaultSections.map(defaultSection => {
-          const stored = stored.nodeDetailsSections![defaultSection.id];
-          if (stored) {
+          const storedSection = stored.nodeDetailsSections![defaultSection.id];
+          if (storedSection) {
             return {
               ...defaultSection,
-              isCollapsed: stored.isCollapsed,
-              order: stored.order,
-              isVisible: stored.isVisible
+              isCollapsed: storedSection.isCollapsed,
+              order: storedSection.order,
+              isVisible: storedSection.isVisible
             };
           }
           return defaultSection;

@@ -11,7 +11,7 @@ import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
-import { useGraphConfig } from '@/contexts/GraphConfigContext';
+import { useGraphConfig, generateNodeTypeColor } from '@/contexts/GraphConfigContext';
 import { useQuery } from '@tanstack/react-query';
 import { graphClient } from '@/api/graphClient';
 import { ColorPicker } from '@/components/ui/ColorPicker';
@@ -102,13 +102,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
   // Compute real node types from graph data with memoization
   const nodeTypes = React.useMemo(() => computeNodeTypes(graphData), [graphData]);
   
-  // Update node type configurations when graph data changes
-  React.useEffect(() => {
-    if (nodeTypes.length > 0) {
-      const nodeTypeIds = nodeTypes.map(type => type.id);
-      updateNodeTypeConfigurations(nodeTypeIds);
-    }
-  }, [nodeTypes, updateNodeTypeConfigurations]);
+  // Node type configurations are now updated in GraphViz.tsx to avoid duplicate calls
 
   // Simulation control functions
   const handleSimulationStart = useCallback(() => {
@@ -421,37 +415,52 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  {nodeTypes.map((type) => (
-                    <div key={type.id} className="space-y-2 p-3 rounded-lg border border-border/30">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-3">
-                          <Checkbox
-                            checked={config.nodeTypeVisibility[type.id as keyof typeof config.nodeTypeVisibility]}
-                            onCheckedChange={(checked) => 
-                              handleNodeTypeVisibilityChange(type.id, !!checked)
-                            }
-                          />
-                          <div className="flex items-center space-x-2">
-                            <div 
-                              className="w-4 h-4 rounded-full border border-border/30 control-color-indicator"
-                              style={{
-                                '--indicator-color': hexToHsl(config.nodeTypeColors[type.id as keyof typeof config.nodeTypeColors] || '#9CA3AF')
-                              } as React.CSSProperties}
+                  {nodeTypes.map((type, index) => {
+                    // This is the EXACT same logic used in GraphCanvas pointColor function
+                    const actualColor = (() => {
+                      // Check if we have a configured color
+                      if (config.nodeTypeColors[type.id]) {
+                        console.log(`ControlPanel: Using configured color for ${type.id}: ${config.nodeTypeColors[type.id]}`);
+                        return config.nodeTypeColors[type.id];
+                      }
+                      // Otherwise generate the default color
+                      const generatedColor = generateNodeTypeColor(type.id, index);
+                      console.log(`ControlPanel: Generated color for ${type.id}: ${generatedColor}`);
+                      return generatedColor;
+                    })();
+                    
+                    return (
+                      <div key={type.id} className="space-y-2 p-3 rounded-lg border border-border/30">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-3">
+                            <Checkbox
+                              checked={config.nodeTypeVisibility[type.id] !== false}
+                              onCheckedChange={(checked) => 
+                                handleNodeTypeVisibilityChange(type.id, !!checked)
+                              }
                             />
-                            <span className="text-sm font-medium">{type.name}</span>
+                            <div className="flex items-center space-x-2">
+                              <div 
+                                className="w-4 h-4 rounded-full border border-border/30 control-color-indicator"
+                                style={{
+                                  '--indicator-color': hexToHsl(actualColor)
+                                } as React.CSSProperties}
+                              />
+                              <span className="text-sm font-medium">{type.name}</span>
+                            </div>
                           </div>
+                          <Badge variant="outline" className="text-xs">
+                            {type.count.toLocaleString()}
+                          </Badge>
                         </div>
-                        <Badge variant="outline" className="text-xs">
-                          {type.count.toLocaleString()}
-                        </Badge>
+                        <ColorPicker
+                          color={actualColor}
+                          onChange={(color) => handleNodeTypeColorChange(type.id, color)}
+                          className="w-full"
+                        />
                       </div>
-                      <ColorPicker
-                        color={config.nodeTypeColors[type.id as keyof typeof config.nodeTypeColors]}
-                        onChange={(color) => handleNodeTypeColorChange(type.id, color)}
-                        className="w-full"
-                      />
-                    </div>
-                  ))}
+                    );
+                  })}
                 </CardContent>
               </Card>
 

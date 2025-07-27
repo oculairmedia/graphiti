@@ -31,6 +31,7 @@ struct Node {
     id: String,
     label: String,
     node_type: String,
+    summary: Option<String>,  // Add summary field for NodeDetailsPanel
     // Remove frontend-calculated fields - let Cosmograph v2.0 handle transformations
     properties: HashMap<String, serde_json::Value>,
 }
@@ -139,7 +140,7 @@ async fn main() -> anyhow::Result<()> {
         .layer(CorsLayer::permissive())
         .with_state(state);
 
-    let addr = "0.0.0.0:3000";
+    let addr = std::env::var("BIND_ADDR").unwrap_or_else(|_| "0.0.0.0:3000".to_string());
     info!("Server starting on {}", addr);
     
     let listener = tokio::net::TcpListener::bind(addr).await?;
@@ -275,7 +276,7 @@ fn build_query(query_type: &str, limit: usize, offset: usize, search: Option<&st
                 n.uuid as source_id, n.name as source_name, 
                 type(r) as rel_type, 
                 m.uuid as target_id, m.name as target_name,
-                labels(n)[0] as source_label, labels(m)[0] as target_label,
+                COALESCE(n.type, labels(n)[0]) as source_label, COALESCE(m.type, labels(m)[0]) as target_label,
                 COALESCE(n.degree_centrality, 0) as source_degree, 
                 COALESCE(m.degree_centrality, 0) as target_degree,
                 properties(n) as source_props, properties(m) as target_props
@@ -295,7 +296,7 @@ fn build_query(query_type: &str, limit: usize, offset: usize, search: Option<&st
                 n.uuid as source_id, n.name as source_name, 
                 type(r) as rel_type, 
                 m.uuid as target_id, m.name as target_name,
-                labels(n)[0] as source_label, labels(m)[0] as target_label,
+                COALESCE(n.type, labels(n)[0]) as source_label, COALESCE(m.type, labels(m)[0]) as target_label,
                 n.degree_centrality as source_degree, m.degree_centrality as target_degree,
                 properties(n) as source_props, properties(m) as target_props
             LIMIT {}
@@ -313,7 +314,7 @@ fn build_query(query_type: &str, limit: usize, offset: usize, search: Option<&st
                 n.uuid as source_id, n.name as source_name, 
                 type(r) as rel_type, 
                 m.uuid as target_id, m.name as target_name,
-                labels(n)[0] as source_label, labels(m)[0] as target_label,
+                COALESCE(n.type, labels(n)[0]) as source_label, COALESCE(m.type, labels(m)[0]) as target_label,
                 n.degree_centrality as source_degree, m.degree_centrality as target_degree,
                 properties(n) as source_props, properties(m) as target_props
             LIMIT {}
@@ -333,7 +334,7 @@ fn build_query(query_type: &str, limit: usize, offset: usize, search: Option<&st
                         n.uuid as source_id, n.name as source_name, 
                         type(r[0]) as rel_type, 
                         m.uuid as target_id, m.name as target_name,
-                        labels(n)[0] as source_label, labels(m)[0] as target_label,
+                        COALESCE(n.type, labels(n)[0]) as source_label, COALESCE(m.type, labels(m)[0]) as target_label,
                         n.degree_centrality as source_degree, m.degree_centrality as target_degree,
                         properties(n) as source_props, properties(m) as target_props
                     LIMIT {}
@@ -370,15 +371,27 @@ async fn execute_graph_query(client: &FalkorAsyncClient, graph_name: &str, query
                 let mut node_props = source_props.clone();
                 // Ensure name is in properties for Cosmograph
                 node_props.insert("name".to_string(), serde_json::Value::String(source_name.clone()));
-                // Add centrality metrics for frontend to use
-                node_props.insert("degree_centrality".to_string(), serde_json::json!(source_degree));
+                // Only add degree_centrality if not already in properties
+                if !node_props.contains_key("degree_centrality") {
+                    node_props.insert("degree_centrality".to_string(), serde_json::json!(source_degree));
+                }
                 // Add node type for color mapping
                 node_props.insert("type".to_string(), serde_json::Value::String(source_label.clone()));
+                
+                // Extract summary from content, source_description, or summary field
+                let summary = node_props.get("summary")
+                    .or_else(|| node_props.get("content"))
+                    .or_else(|| node_props.get("source_description"))
+                    .and_then(|v| match v {
+                        serde_json::Value::String(s) => Some(s.clone()),
+                        _ => v.as_str().map(|s| s.to_string())
+                    });
                 
                 nodes_map.insert(source_id.clone(), Node {
                     id: source_id.clone(),
                     label: truncate_string(&source_name, 50),
                     node_type: source_label.clone(),
+                    summary,
                     properties: node_props,
                 });
             }
@@ -399,15 +412,27 @@ async fn execute_graph_query(client: &FalkorAsyncClient, graph_name: &str, query
                     let mut node_props = target_props.clone();
                     // Ensure name is in properties for Cosmograph
                     node_props.insert("name".to_string(), serde_json::Value::String(target_name.clone()));
-                    // Add centrality metrics for frontend to use
-                    node_props.insert("degree_centrality".to_string(), serde_json::json!(target_degree));
+                    // Only add degree_centrality if not already in properties
+                    if !node_props.contains_key("degree_centrality") {
+                        node_props.insert("degree_centrality".to_string(), serde_json::json!(target_degree));
+                    }
                     // Add node type for color mapping
                     node_props.insert("type".to_string(), serde_json::Value::String(target_label.clone()));
+                    
+                    // Extract summary from content, source_description, or summary field
+                    let summary = node_props.get("summary")
+                        .or_else(|| node_props.get("content"))
+                        .or_else(|| node_props.get("source_description"))
+                        .and_then(|v| match v {
+                            serde_json::Value::String(s) => Some(s.clone()),
+                            _ => v.as_str().map(|s| s.to_string())
+                        });
                     
                     nodes_map.insert(target_id.clone(), Node {
                         id: target_id.clone(),
                         label: truncate_string(&target_name, 50),
                         node_type: target_label.clone(),
+                        summary,
                         properties: node_props,
                     });
                 }
@@ -446,7 +471,7 @@ async fn execute_graph_query(client: &FalkorAsyncClient, graph_name: &str, query
 async fn calculate_graph_stats(client: &FalkorAsyncClient, graph_name: &str) -> anyhow::Result<GraphStats> {
     let node_count_query = "MATCH (n) RETURN count(n) as count";
     let edge_count_query = "MATCH ()-[r]->() RETURN count(r) as count";
-    let type_dist_query = "MATCH (n) RETURN labels(n)[0] as type, count(n) as count";
+    let type_dist_query = "MATCH (n) RETURN COALESCE(n.type, labels(n)[0]) as type, count(n) as count";
     
     let mut graph = client.select_graph(graph_name);
     let mut node_result = graph.query(node_count_query).execute().await?;
@@ -562,4 +587,4 @@ fn falkor_value_to_json(value: &FalkorValue) -> serde_json::Value {
         }
         _ => serde_json::Value::String(format!("{:?}", value)),
     }
-}
+}// Force rebuild Sat Jul 26 09:13:22 PM EDT 2025

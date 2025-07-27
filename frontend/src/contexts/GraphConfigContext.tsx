@@ -4,7 +4,7 @@ import type { GraphNode, GraphEdge } from '../types/graph';
 import { usePersistedGraphConfig, usePersistedNodeTypes } from '@/hooks/usePersistedConfig';
 
 // Generate default colors for dynamic node types
-const generateNodeTypeColor = (nodeType: string, index: number): string => {
+export const generateNodeTypeColor = (nodeType: string, index: number): string => {
   // Predefined color palette for common node types
   const colorPalette = [
     '#4ECDC4', // Teal
@@ -23,11 +23,11 @@ const generateNodeTypeColor = (nodeType: string, index: number): string => {
   
   // Use specific colors for known node types
   const knownTypeColors: Record<string, string> = {
-    'Entity': '#4ECDC4',
-    'Episodic': '#B794F6',
-    'Agent': '#F6AD55', 
-    'Community': '#90CDF4',
-    'Unknown': '#9CA3AF'
+    'Entity': '#B794F6',    // Purple
+    'Episodic': '#4ECDC4',  // Teal
+    'Agent': '#F6AD55',     // Orange
+    'Community': '#90CDF4', // Blue
+    'Unknown': '#9CA3AF'    // Gray
   };
   
   if (knownTypeColors[nodeType]) {
@@ -146,6 +146,10 @@ interface GraphConfig {
   maxDegree: number;
   minPagerank: number;
   maxPagerank: number;
+  minBetweenness: number;
+  maxBetweenness: number;
+  minEigenvector: number;
+  maxEigenvector: number;
   minConnections: number;
   maxConnections: number;
   startDate: string;
@@ -279,6 +283,10 @@ const defaultConfig: GraphConfig = {
   maxDegree: 100,
   minPagerank: 0,
   maxPagerank: 100,
+  minBetweenness: 0,
+  maxBetweenness: 100,
+  minEigenvector: 0,
+  maxEigenvector: 100,
   minConnections: 0,
   maxConnections: 1000,
   startDate: '',
@@ -302,31 +310,27 @@ export const GraphConfigProvider: React.FC<{ children: ReactNode }> = ({ childre
   const updateNodeTypeConfigurations = useCallback((nodeTypes: string[]) => {
     if (nodeTypes.length === 0) return;
     
-    // Always merge with persisted configurations first to get user customizations
-    // Pass current config so mergeWithPersisted has proper base values
-    const merged = mergeNodeTypes(config.nodeTypeColors, config.nodeTypeVisibility);
-    console.log('GraphConfigContext: Updating node type configurations for types:', nodeTypes, 'with merged:', merged);
+    // Start with current config to preserve any recent user changes
+    const newNodeTypeColors: Record<string, string> = { ...config.nodeTypeColors };
+    const newNodeTypeVisibility: Record<string, boolean> = { ...config.nodeTypeVisibility };
     
-    // Start with persisted colors and visibility, then add new types
-    const newNodeTypeColors: Record<string, string> = { ...merged.colors };
-    const newNodeTypeVisibility: Record<string, boolean> = { ...merged.visibility };
+    console.log('GraphConfigContext: Updating node type configurations for types:', nodeTypes);
+    console.log('GraphConfigContext: Current colors:', config.nodeTypeColors);
     
-    // Only generate colors for truly new node types that don't exist in either current config or persisted config
+    // Process each node type
     nodeTypes.forEach((nodeType, index) => {
-      // Only generate new color if this type is completely new (not in current config AND not in persisted config)
+      // For colors: only add if not already in config
       if (!newNodeTypeColors[nodeType]) {
-        newNodeTypeColors[nodeType] = generateNodeTypeColor(nodeType, index);
-        console.log('GraphConfigContext: Generated new color for new type:', nodeType, newNodeTypeColors[nodeType]);
-      } else {
-        console.log('GraphConfigContext: Preserving existing/persisted color for type:', nodeType, newNodeTypeColors[nodeType]);
+        // Get the exact index this type would have in the sorted list
+        const sortedTypes = [...nodeTypes].sort();
+        const typeIndex = sortedTypes.indexOf(nodeType);
+        newNodeTypeColors[nodeType] = generateNodeTypeColor(nodeType, typeIndex);
+        console.log('GraphConfigContext: Generated new color for type:', nodeType, newNodeTypeColors[nodeType]);
       }
       
-      // Only set visibility if this type is completely new
+      // For visibility: only add if not already in config
       if (newNodeTypeVisibility[nodeType] === undefined) {
         newNodeTypeVisibility[nodeType] = true;
-        console.log('GraphConfigContext: Set default visibility for new type:', nodeType);
-      } else {
-        console.log('GraphConfigContext: Preserving existing/persisted visibility for type:', nodeType, newNodeTypeVisibility[nodeType]);
       }
     });
     
@@ -354,7 +358,7 @@ export const GraphConfigProvider: React.FC<{ children: ReactNode }> = ({ childre
     } else {
       console.log('GraphConfigContext: No changes needed for node type configurations');
     }
-  }, [mergeNodeTypes, config.nodeTypeColors, config.nodeTypeVisibility, setConfig]);
+  }, [config.nodeTypeColors, config.nodeTypeVisibility, setConfig]);
 
   const updateConfig = useCallback((updates: Partial<GraphConfig>) => {
     console.log('GraphConfigContext: updateConfig called with:', updates);

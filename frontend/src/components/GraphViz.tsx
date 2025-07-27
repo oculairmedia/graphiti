@@ -222,6 +222,10 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
     maxDegree: config.maxDegree,
     minPagerank: config.minPagerank,
     maxPagerank: config.maxPagerank,
+    minBetweenness: config.minBetweenness,
+    maxBetweenness: config.maxBetweenness,
+    minEigenvector: config.minEigenvector,
+    maxEigenvector: config.maxEigenvector,
     minConnections: config.minConnections,
     maxConnections: config.maxConnections,
     startDate: config.startDate,
@@ -233,6 +237,10 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
     config.maxDegree,
     config.minPagerank,
     config.maxPagerank,
+    config.minBetweenness,
+    config.maxBetweenness,
+    config.minEigenvector,
+    config.maxEigenvector,
     config.minConnections,
     config.maxConnections,
     config.startDate,
@@ -265,6 +273,16 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
       const pagerank = node.properties?.pagerank_centrality || node.properties?.pagerank || 0;
       const pagerankPercent = Math.min((pagerank / 0.1) * 100, 100); // Normalize to 0-100
       if (pagerankPercent < filterConfig.minPagerank || pagerankPercent > filterConfig.maxPagerank) return false;
+      
+      // Betweenness centrality filter
+      const betweenness = node.properties?.betweenness_centrality || 0;
+      const betweennessPercent = Math.min((betweenness / 1) * 100, 100); // Normalize to 0-100
+      if (betweennessPercent < filterConfig.minBetweenness || betweennessPercent > filterConfig.maxBetweenness) return false;
+      
+      // Eigenvector centrality filter
+      const eigenvector = node.properties?.eigenvector_centrality || 0;
+      const eigenvectorPercent = Math.min((eigenvector / 1) * 100, 100); // Normalize to 0-100
+      if (eigenvectorPercent < filterConfig.minEigenvector || eigenvectorPercent > filterConfig.maxEigenvector) return false;
       
       // Connection count filter
       const connections = node.properties?.degree || node.properties?.connections || 0;
@@ -743,6 +761,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
               return (
                 <GraphCanvas 
                   ref={graphCanvasRef}
+                  key={JSON.stringify(config.nodeTypeColors)} // Force re-render when colors change
                   nodes={dataToUse.nodes}
                   links={dataToUse.links}
                   onNodeClick={handleNodeClick}
