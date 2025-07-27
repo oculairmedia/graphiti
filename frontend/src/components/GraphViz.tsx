@@ -26,6 +26,14 @@ interface GraphCanvasHandle {
   getTrackedPointPositionsMap: () => Map<number, [number, number]> | undefined;
   setData: (nodes: GraphNode[], links: GraphLink[], runSimulation?: boolean) => void;
   restart: () => void;
+  // Selection tools
+  activateRectSelection: () => void;
+  deactivateRectSelection: () => void;
+  activatePolygonalSelection: () => void;
+  deactivatePolygonalSelection: () => void;
+  selectPointsInRect: (selection: [[number, number], [number, number]] | null, addToSelection?: boolean) => void;
+  selectPointsInPolygon: (polygonPoints: [number, number][], addToSelection?: boolean) => void;
+  getConnectedPointIndices: (index: number) => number[] | undefined;
   // Incremental update methods
   addIncrementalData: (newNodes: GraphNode[], newLinks: GraphLink[], runSimulation?: boolean) => void;
   updateNodes: (updatedNodes: GraphNode[]) => void;
@@ -49,6 +57,7 @@ import { LayoutPanel } from './LayoutPanel';
 import { FilterPanel } from './FilterPanel';
 import { StatsPanel } from './StatsPanel';
 import { QuickActions } from './QuickActions';
+import { SelectionTools, SelectionMode } from './SelectionTools';
 
 interface GraphVizProps {
   className?: string;
@@ -79,6 +88,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
   const [showLayoutPanel, setShowLayoutPanel] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [selectionMode, setSelectionMode] = useState<SelectionMode>('normal');
 
   const graphCanvasRef = useRef<GraphCanvasHandle>(null);
 
@@ -369,7 +379,27 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
   };
 
   const handleNodeClick = (node: GraphNode) => {
-    setSelectedNode(node);
+    if (selectionMode === 'connected' && graphCanvasRef.current) {
+      // In connected mode, select all connected nodes
+      const nodeIndex = transformedData.nodes.findIndex(n => n.id === node.id);
+      if (nodeIndex !== -1) {
+        const connectedIndices = graphCanvasRef.current.getConnectedPointIndices(nodeIndex);
+        if (connectedIndices && connectedIndices.length > 0) {
+          // Add the clicked node itself
+          const allIndices = [nodeIndex, ...connectedIndices];
+          const connectedNodes = allIndices
+            .map(idx => transformedData.nodes[idx])
+            .filter(Boolean);
+          
+          if (connectedNodes.length > 0) {
+            handleSelectNodes(connectedNodes);
+          }
+        }
+      }
+    } else {
+      // Normal click behavior
+      setSelectedNode(node);
+    }
   };
 
   const handleNodeSelectWithCosmograph = (node: GraphNode) => {
@@ -542,6 +572,36 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
       // Screenshot capture failed
     }
   };
+
+  const handleSelectionModeChange = useCallback((mode: SelectionMode) => {
+    setSelectionMode(mode);
+    
+    if (!graphCanvasRef.current) return;
+
+    // Deactivate previous selection modes
+    if (selectionMode === 'rectangle') {
+      graphCanvasRef.current.deactivateRectSelection();
+    } else if (selectionMode === 'polygon') {
+      graphCanvasRef.current.deactivatePolygonalSelection();
+    }
+
+    // Activate new selection mode
+    switch (mode) {
+      case 'rectangle':
+        graphCanvasRef.current.activateRectSelection();
+        break;
+      case 'polygon':
+        graphCanvasRef.current.activatePolygonalSelection();
+        break;
+      case 'connected':
+        // Connected mode doesn't need activation, it works on click
+        break;
+      case 'normal':
+      default:
+        // Normal mode is the default
+        break;
+    }
+  }, [selectionMode]);
 
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -767,7 +827,14 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
           )}
 
           {/* Quick Actions Toolbar */}
-          <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2">
+          <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 flex flex-col items-center space-y-2">
+            {/* Selection Tools */}
+            <SelectionTools 
+              onModeChange={handleSelectionModeChange}
+              className="glass-panel rounded-full px-4 py-2 animate-fade-in"
+            />
+            
+            {/* Quick Actions */}
             <QuickActions 
               selectedCount={selectedNodes.length}
               onClearSelection={clearAllSelections}
