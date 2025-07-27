@@ -109,6 +109,14 @@ interface CosmographRef {
   unfocusNode: () => void;
   restart: () => void;
   start: () => void;
+  // Selection tools
+  activateRectSelection: () => void;
+  deactivateRectSelection: () => void;
+  activatePolygonalSelection: () => void;
+  deactivatePolygonalSelection: () => void;
+  selectPointsInRect: (selection: [[number, number], [number, number]] | null, addToSelection?: boolean) => void;
+  selectPointsInPolygon: (polygonPoints: [number, number][], addToSelection?: boolean) => void;
+  getConnectedPointIndices: (index: number) => number[] | undefined;
   _canvasElement?: HTMLCanvasElement;
 }
 
@@ -135,6 +143,14 @@ interface GraphCanvasHandle {
   getTrackedPointPositionsMap: () => Map<number, [number, number]> | undefined;
   setData: (nodes: GraphNode[], links: GraphLink[], runSimulation?: boolean) => void;
   restart: () => void;
+  // Selection tools
+  activateRectSelection: () => void;
+  deactivateRectSelection: () => void;
+  activatePolygonalSelection: () => void;
+  deactivatePolygonalSelection: () => void;
+  selectPointsInRect: (selection: [[number, number], [number, number]] | null, addToSelection?: boolean) => void;
+  selectPointsInPolygon: (polygonPoints: [number, number][], addToSelection?: boolean) => void;
+  getConnectedPointIndices: (index: number) => number[] | undefined;
   // Incremental update methods
   addIncrementalData: (newNodes: GraphNode[], newLinks: GraphLink[], runSimulation?: boolean) => void;
   updateNodes: (updatedNodes: GraphNode[]) => void;
@@ -629,6 +645,80 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       }
     }, []);
 
+    // Rectangle selection methods
+    const activateRectSelection = useCallback(() => {
+      if (!cosmographRef.current) return;
+      
+      try {
+        cosmographRef.current.activateRectSelection();
+      } catch (error) {
+        logger.warn('Activate rect selection failed:', error);
+      }
+    }, []);
+
+    const deactivateRectSelection = useCallback(() => {
+      if (!cosmographRef.current) return;
+      
+      try {
+        cosmographRef.current.deactivateRectSelection();
+      } catch (error) {
+        logger.warn('Deactivate rect selection failed:', error);
+      }
+    }, []);
+
+    const selectPointsInRect = useCallback((selection: [[number, number], [number, number]] | null, addToSelection = false) => {
+      if (!cosmographRef.current) return;
+      
+      try {
+        cosmographRef.current.selectPointsInRect(selection, addToSelection);
+      } catch (error) {
+        logger.warn('Select points in rect failed:', error);
+      }
+    }, []);
+
+    // Polygonal selection methods
+    const activatePolygonalSelection = useCallback(() => {
+      if (!cosmographRef.current) return;
+      
+      try {
+        cosmographRef.current.activatePolygonalSelection();
+      } catch (error) {
+        logger.warn('Activate polygonal selection failed:', error);
+      }
+    }, []);
+
+    const deactivatePolygonalSelection = useCallback(() => {
+      if (!cosmographRef.current) return;
+      
+      try {
+        cosmographRef.current.deactivatePolygonalSelection();
+      } catch (error) {
+        logger.warn('Deactivate polygonal selection failed:', error);
+      }
+    }, []);
+
+    const selectPointsInPolygon = useCallback((polygonPoints: [number, number][], addToSelection = false) => {
+      if (!cosmographRef.current) return;
+      
+      try {
+        cosmographRef.current.selectPointsInPolygon(polygonPoints, addToSelection);
+      } catch (error) {
+        logger.warn('Select points in polygon failed:', error);
+      }
+    }, []);
+
+    // Get connected nodes
+    const getConnectedPointIndices = useCallback((index: number): number[] | undefined => {
+      if (!cosmographRef.current) return undefined;
+      
+      try {
+        return cosmographRef.current.getConnectedPointIndices(index);
+      } catch (error) {
+        logger.warn('Get connected point indices failed:', error);
+        return undefined;
+      }
+    }, []);
+
     // Incremental update methods
     const addIncrementalData = useCallback(async (newNodes: GraphNode[], newLinks: GraphLink[], runSimulation = false) => {
       if (!cosmographRef.current) return;
@@ -969,6 +1059,14 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           cosmographRef.current.restart();
         }
       },
+      // Selection tools
+      activateRectSelection,
+      deactivateRectSelection,
+      activatePolygonalSelection,
+      deactivatePolygonalSelection,
+      selectPointsInRect,
+      selectPointsInPolygon,
+      getConnectedPointIndices,
       // Incremental update methods
       addIncrementalData,
       updateNodes,
@@ -984,7 +1082,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       setIncrementalUpdateFlag: (enabled: boolean) => {
         isIncrementalUpdateRef.current = enabled;
       }
-    }), [clearCosmographSelection, selectCosmographNode, selectCosmographNodes, zoomIn, zoomOut, fitView, fitViewByIndices, zoomToPoint, trackPointPositionsByIndices, getTrackedPointPositionsMap, addIncrementalData, updateNodes, updateLinks, removeNodes, removeLinks, startSimulation, pauseSimulation, resumeSimulation, keepSimulationRunning]);
+    }), [clearCosmographSelection, selectCosmographNode, selectCosmographNodes, zoomIn, zoomOut, fitView, fitViewByIndices, zoomToPoint, trackPointPositionsByIndices, getTrackedPointPositionsMap, activateRectSelection, deactivateRectSelection, activatePolygonalSelection, deactivatePolygonalSelection, selectPointsInRect, selectPointsInPolygon, getConnectedPointIndices, addIncrementalData, updateNodes, updateLinks, removeNodes, removeLinks, startSimulation, pauseSimulation, resumeSimulation, keepSimulationRunning]);
 
     // Handle Cosmograph events with double-click detection
     // Cosmograph v2.0 onClick signature: (index: number | undefined, pointPosition: [number, number] | undefined, event: MouseEvent) => void
