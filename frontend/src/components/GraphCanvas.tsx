@@ -626,7 +626,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         
         // Use the Cosmograph v2.0 zoomToPoint method with config defaults
         const actualDuration = duration !== undefined ? duration : config.fitViewDuration;
-        const actualScale = scale !== undefined ? scale : 10.0; // Very high zoom scale for detailed focus
+        const actualScale = scale !== undefined ? scale : 6.0; // Good zoom scale for detailed focus
         const actualCanZoomOut = canZoomOut !== undefined ? canZoomOut : true;
         cosmographRef.current.zoomToPoint(index, actualDuration, actualScale, actualCanZoomOut);
       } catch (error) {
