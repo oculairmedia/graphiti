@@ -55,20 +55,14 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
   
   // Add debug logging for button clicks
   const handleZoomIn = useCallback(() => {
-    console.log('🔵 GraphViz: Zoom In button clicked');
-    console.log('🔵 zoomIn function exists:', typeof zoomIn === 'function');
     zoomIn();
   }, [zoomIn]);
   
   const handleZoomOut = useCallback(() => {
-    console.log('🔵 GraphViz: Zoom Out button clicked');
-    console.log('🔵 zoomOut function exists:', typeof zoomOut === 'function');
     zoomOut();
   }, [zoomOut]);
   
   const handleFitView = useCallback(() => {
-    console.log('🔵 GraphViz: Fit View button clicked');
-    console.log('🔵 fitView function exists:', typeof fitView === 'function');
     fitView();
   }, [fitView]);
   const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);
@@ -108,7 +102,6 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
   // Handle initial load separately from incremental updates
   useEffect(() => {
     if (dataDiff.isInitialLoad && !isGraphInitialized) {
-      console.log('📊 GraphViz: Initial load detected - setting up graph for first time');
       setIsGraphInitialized(true);
       // Store initial stable data reference
       if (data) {
@@ -130,19 +123,16 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
     // Skip if no changes, no ref available, initial load, or graph not initialized
     if (!dataDiff.hasChanges || !graphCanvasRef.current || dataDiff.isInitialLoad || !isGraphInitialized) {
       if (dataDiff.isInitialLoad) {
-        console.log('📊 GraphViz: Skipping incremental update for initial load');
       }
       return;
     }
 
     // Ensure we have stable data from previous state
     if (!stableDataRef.current) {
-      console.warn('📊 GraphViz: No stable data reference available for incremental update');
       return;
     }
 
     const applyIncrementalUpdates = async () => {
-      console.log('🔄 GraphViz: Starting incremental updates');
       
       // Set flags BEFORE triggering React re-render to prevent Data Kit processing
       if (graphCanvasRef.current?.setIncrementalUpdateFlag) {
@@ -186,7 +176,6 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
           // Resume simulation after incremental data changes, with proper timing
           setTimeout(() => {
             if (graphCanvasRef.current?.resumeSimulation) {
-              console.log('🎯 GraphViz: Calling resumeSimulation after incremental update');
               graphCanvasRef.current.resumeSimulation();
             }
           }, 100); // Small delay to ensure component has updated
@@ -198,15 +187,12 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
         }
 
         logger.log('GraphViz: Incremental updates completed successfully');
-        console.log('🔄 GraphViz: Incremental updates finished, simulation should resume automatically');
       } catch (error) {
         logger.error('GraphViz: Incremental update failed:', error);
-        console.log('❌ GraphViz: Incremental update failed, resetting flags');
         // Fallback to full reload on error
         setIsIncrementalUpdate(false);
       } finally {
         // Flag will be reset when the next real data change occurs
-        console.log('🔄 GraphViz: Incremental update completed, keeping flag active for stable props');
       }
     };
 
@@ -741,7 +727,6 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
                 ? stableGraphPropsRef.current 
                 : transformedData;
               
-              console.log('📊 GraphViz: Rendering GraphCanvas with props', {
                 nodeCount: dataToUse.nodes.length,
                 linkCount: dataToUse.links.length,
                 isIncrementalUpdate,

@@ -107,22 +107,18 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
   // Simulation control functions
   const handleSimulationStart = useCallback(() => {
     if (cosmographRef?.current && typeof cosmographRef.current.start === 'function') {
-      cosmographRef.current.start(1.0); // Full alpha for strong initial impulse
-      console.log('Simulation started');
     }
   }, [cosmographRef]);
 
   const handleSimulationPause = useCallback(() => {
     if (cosmographRef?.current && typeof cosmographRef.current.pause === 'function') {
       cosmographRef.current.pause();
-      console.log('Simulation paused');
     }
   }, [cosmographRef]);
 
   const handleSimulationRestart = useCallback(() => {
     if (cosmographRef?.current && typeof cosmographRef.current.restart === 'function') {
       cosmographRef.current.restart();
-      console.log('Simulation restarted');
     }
   }, [cosmographRef]);
 
@@ -142,11 +138,9 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
       randomSeed: undefined,
       disableSimulation: null
     });
-    console.log('Reset simulation to defaults');
   }, [updateConfig]);
 
   const handleNodeTypeColorChange = (type: string, color: string) => {
-    console.log('ControlPanel: User changing color for type:', type, 'to:', color);
     
     updateConfig({ 
       nodeTypeColors: { 
@@ -157,7 +151,6 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
   };
 
   const handleNodeTypeVisibilityChange = (type: string, visible: boolean) => {
-    console.log('ControlPanel: User changing visibility for type:', type, 'to:', visible);
     
     updateConfig({ 
       nodeTypeVisibility: { 
@@ -175,7 +168,6 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
         queryKey: ['graphData', config.queryType, config.nodeLimit] 
       });
     } catch (error) {
-      console.error('Error refreshing graph:', error);
       // In production, you might want to show a user-friendly error message
       // toast.error('Failed to refresh graph data. Please try again.');
     } finally {
@@ -186,14 +178,11 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
   const handleQuickQuery = async (queryType: string, limit: number): Promise<void> => {
     try {
       updateConfig({ queryType, nodeLimit: limit });
-      // Small delay to let config update, then refresh
       setTimeout(() => {
         handleRefreshGraph().catch(error => {
-          console.error('Error in handleQuickQuery refresh:', error);
         });
       }, 100);
     } catch (error) {
-      console.error('Error in handleQuickQuery:', error);
     }
   };
 
@@ -420,12 +409,10 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
                     const actualColor = (() => {
                       // Check if we have a configured color
                       if (config.nodeTypeColors[type.id]) {
-                        console.log(`ControlPanel: Using configured color for ${type.id}: ${config.nodeTypeColors[type.id]}`);
                         return config.nodeTypeColors[type.id];
                       }
                       // Otherwise generate the default color
                       const generatedColor = generateNodeTypeColor(type.id, index);
-                      console.log(`ControlPanel: Generated color for ${type.id}: ${generatedColor}`);
                       return generatedColor;
                     })();
                     
@@ -1364,11 +1351,9 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
                       size="sm" 
                       className="h-8 text-xs"
                       onClick={() => {
-                        console.log('Applying force-directed layout with data:', graphData?.nodes?.length, 'nodes');
                         if (graphData?.nodes && graphData?.edges) {
                           applyLayout('force-directed', {}, { nodes: graphData.nodes, edges: graphData.edges });
                         } else {
-                          console.warn('No graph data available for layout');
                         }
                       }}
                     >
@@ -1379,11 +1364,9 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
                       size="sm" 
                       className="h-8 text-xs"
                       onClick={() => {
-                        console.log('Applying circular layout with data:', graphData?.nodes?.length, 'nodes');
                         if (graphData?.nodes && graphData?.edges) {
                           applyLayout('circular', {}, { nodes: graphData.nodes, edges: graphData.edges });
                         } else {
-                          console.warn('No graph data available for layout');
                         }
                       }}
                     >
@@ -1397,11 +1380,9 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
                       size="sm" 
                       className="h-8 text-xs"
                       onClick={() => {
-                        console.log('Applying hierarchical layout with data:', graphData?.nodes?.length, 'nodes');
                         if (graphData?.nodes && graphData?.edges) {
                           applyLayout('hierarchical', {}, { nodes: graphData.nodes, edges: graphData.edges });
                         } else {
-                          console.warn('No graph data available for layout');
                         }
                       }}
                     >
@@ -1412,11 +1393,9 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
                       size="sm" 
                       className="h-8 text-xs"
                       onClick={() => {
-                        console.log('Applying radial layout with data:', graphData?.nodes?.length, 'nodes');
                         if (graphData?.nodes && graphData?.edges) {
                           applyLayout('radial', {}, { nodes: graphData.nodes, edges: graphData.edges });
                         } else {
-                          console.warn('No graph data available for layout');
                         }
                       }}
                     >
