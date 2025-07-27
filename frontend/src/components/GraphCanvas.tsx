@@ -98,6 +98,10 @@ interface CosmographRef {
   setZoomLevel: (level: number, duration?: number) => void;
   getZoomLevel: () => number;
   fitView: (duration?: number) => void;
+  zoomToPoint: (index: number, duration?: number, scale?: number, canZoomOut?: boolean) => void;
+  trackPointPositionsByIndices: (indices: number[]) => void;
+  getTrackedPointPositionsMap: () => Map<number, [number, number]> | undefined;
+  getTrackedPointPositionsArray: () => Float32Array | undefined;
   selectNode: (node: GraphNode) => void;
   selectNodes: (nodes: GraphNode[]) => void;
   unselectAll: () => void;
@@ -124,6 +128,9 @@ interface GraphCanvasHandle {
   zoomIn: () => void;
   zoomOut: () => void;
   fitView: () => void;
+  zoomToPoint: (index: number, duration?: number, scale?: number, canZoomOut?: boolean) => void;
+  trackPointPositionsByIndices: (indices: number[]) => void;
+  getTrackedPointPositionsMap: () => Map<number, [number, number]> | undefined;
   setData: (nodes: GraphNode[], links: GraphLink[], runSimulation?: boolean) => void;
   restart: () => void;
   // Incremental update methods
@@ -547,6 +554,41 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       }
     }, [config.fitViewDuration]);
 
+    const zoomToPoint = useCallback((index: number, duration?: number, scale?: number, canZoomOut?: boolean) => {
+      if (!cosmographRef.current) return;
+      
+      try {
+        // Use the Cosmograph v2.0 zoomToPoint method with config defaults
+        const actualDuration = duration !== undefined ? duration : config.fitViewDuration;
+        const actualScale = scale !== undefined ? scale : 2.0; // Default zoom scale
+        const actualCanZoomOut = canZoomOut !== undefined ? canZoomOut : true;
+        cosmographRef.current.zoomToPoint(index, actualDuration, actualScale, actualCanZoomOut);
+      } catch (error) {
+        logger.warn('Zoom to point failed:', error);
+      }
+    }, [config.fitViewDuration]);
+
+    const trackPointPositionsByIndices = useCallback((indices: number[]) => {
+      if (!cosmographRef.current) return;
+      
+      try {
+        cosmographRef.current.trackPointPositionsByIndices(indices);
+      } catch (error) {
+        logger.warn('Track point positions failed:', error);
+      }
+    }, []);
+
+    const getTrackedPointPositionsMap = useCallback(() => {
+      if (!cosmographRef.current) return undefined;
+      
+      try {
+        return cosmographRef.current.getTrackedPointPositionsMap();
+      } catch (error) {
+        logger.warn('Get tracked point positions failed:', error);
+        return undefined;
+      }
+    }, []);
+
     // Incremental update methods
     const addIncrementalData = useCallback(async (newNodes: GraphNode[], newLinks: GraphLink[], runSimulation = false) => {
       if (!cosmographRef.current) return;
@@ -873,6 +915,9 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       zoomIn,
       zoomOut,
       fitView,
+      zoomToPoint,
+      trackPointPositionsByIndices,
+      getTrackedPointPositionsMap,
       setData: (nodes: GraphNode[], links: GraphLink[], runSimulation = true) => {
         if (cosmographRef.current && typeof cosmographRef.current.setData === 'function') {
           cosmographRef.current.setData(nodes, links, runSimulation);
@@ -898,7 +943,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       setIncrementalUpdateFlag: (enabled: boolean) => {
         isIncrementalUpdateRef.current = enabled;
       }
-    }), [clearCosmographSelection, selectCosmographNode, selectCosmographNodes, zoomIn, zoomOut, fitView, addIncrementalData, updateNodes, updateLinks, removeNodes, removeLinks, startSimulation, pauseSimulation, resumeSimulation, keepSimulationRunning]);
+    }), [clearCosmographSelection, selectCosmographNode, selectCosmographNodes, zoomIn, zoomOut, fitView, zoomToPoint, trackPointPositionsByIndices, getTrackedPointPositionsMap, addIncrementalData, updateNodes, updateLinks, removeNodes, removeLinks, startSimulation, pauseSimulation, resumeSimulation, keepSimulationRunning]);
 
     // Handle Cosmograph events with double-click detection
     // Cosmograph v2.0 onClick signature: (index: number | undefined, pointPosition: [number, number] | undefined, event: MouseEvent) => void
@@ -963,6 +1008,12 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             onNodeClick(originalNode);
             onNodeSelect(originalNode.id);
             
+            // Center and zoom to the selected node using zoomToPoint
+            zoomToPoint(index);
+            
+            // Track the selected node position
+            trackPointPositionsByIndices([index]);
+            
             // Set focus on the clicked node to show focused ring color
             if (cosmographRef.current && typeof cosmographRef.current.setFocusedPoint === 'function') {
               cosmographRef.current.setFocusedPoint(index);
@@ -974,6 +1025,12 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
               selectCosmographNode(originalNode!); // Keep visual selection circle
               onNodeClick(originalNode!); // Show modal
               onNodeSelect(originalNode!.id); // Update selection state
+              
+              // Center and zoom to the selected node using zoomToPoint
+              zoomToPoint(index);
+              
+              // Track the selected node position
+              trackPointPositionsByIndices([index]);
               
               // Set focus on the clicked node to show focused ring color
               if (cosmographRef.current && typeof cosmographRef.current.setFocusedPoint === 'function') {

@@ -160,6 +160,10 @@ interface CosmographRefType {
   setZoomLevel: (level: number, duration?: number) => void;
   getZoomLevel: () => number;
   fitView: (duration?: number) => void;
+  zoomToPoint: (index: number, duration?: number, scale?: number, canZoomOut?: boolean) => void;
+  trackPointPositionsByIndices: (indices: number[]) => void;
+  getTrackedPointPositionsMap: () => Map<number, [number, number]> | undefined;
+  getTrackedPointPositionsArray: () => Float32Array | undefined;
   selectNode: (node: unknown) => void;
   selectNodes: (nodes: unknown[]) => void;
   unselectAll: () => void;

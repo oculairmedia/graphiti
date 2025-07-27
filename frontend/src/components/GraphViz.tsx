@@ -20,6 +20,9 @@ interface GraphCanvasHandle {
   zoomIn: () => void;
   zoomOut: () => void;
   fitView: () => void;
+  zoomToPoint: (index: number, duration?: number, scale?: number, canZoomOut?: boolean) => void;
+  trackPointPositionsByIndices: (indices: number[]) => void;
+  getTrackedPointPositionsMap: () => Map<number, [number, number]> | undefined;
   setData: (nodes: GraphNode[], links: GraphLink[], runSimulation?: boolean) => void;
   restart: () => void;
   // Incremental update methods
