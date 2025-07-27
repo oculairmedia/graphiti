@@ -52,7 +52,6 @@ export const useGraphDataDiff = (currentData: GraphData | null): GraphDataDiff =
     
     // First time loading - mark as initial load, don't trigger incremental updates
     if (!previousData) {
-      logger.log('useGraphDataDiff: Initial data load detected - not triggering incremental updates');
       return {
         addedNodes: currentData.nodes,
         updatedNodes: [],
@@ -148,11 +147,6 @@ export const useGraphDataDiff = (currentData: GraphData | null): GraphDataDiff =
 
     // Only log when there are actual changes to reduce console noise
     if (hasChanges) {
-      logger.log('useGraphDataDiff: Changes detected', {
-        totalChanges: changeCount,
-        nodes: `+${addedNodes.length} ~${updatedNodes.length} -${removedNodeIds.length}`,
-        links: `+${addedLinks.length} ~${updatedLinks.length} -${removedLinkIds.length}`
-      });
     }
 
     return {

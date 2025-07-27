@@ -90,7 +90,6 @@ export const GraphSearch: React.FC<GraphSearchProps> = React.memo(({
     setActiveIndex(-1);
     setVisibleResultsCount(20); // Reset visible count on new search
     
-    console.log(`🔍 Search "${query}" found ${results.length} results`);
   }, [nodes]);
   
   // Handle search input changes
@@ -134,7 +133,6 @@ export const GraphSearch: React.FC<GraphSearchProps> = React.memo(({
           // Select all results if no specific item is active
           if (onSelectNodes) {
             onSelectNodes(searchResults);
-            console.log(`🎯 Selected all ${searchResults.length} search results`);
           }
         }
         break;
@@ -148,7 +146,6 @@ export const GraphSearch: React.FC<GraphSearchProps> = React.memo(({
   
   // Handle result selection
   const handleSelectResult = useCallback((node: GraphNode) => {
-    console.log('🎯 Search result selected:', node.label || node.id);
     
     // Call the node selection handler
     if (onNodeSelect) {
@@ -164,20 +161,16 @@ export const GraphSearch: React.FC<GraphSearchProps> = React.memo(({
           // Use Cosmograph's focus methods
           if (typeof cosmographRef.current.setFocusedPoint === 'function') {
             cosmographRef.current.setFocusedPoint(nodeIndex);
-            console.log(`🎯 Focused Cosmograph node at index ${nodeIndex}`);
           }
           
           // Also select the node
           if (typeof cosmographRef.current.selectPoint === 'function') {
             cosmographRef.current.selectPoint(nodeIndex);
-            console.log(`✅ Selected Cosmograph node at index ${nodeIndex}`);
           } else if (typeof cosmographRef.current.selectPoints === 'function') {
             cosmographRef.current.selectPoints([nodeIndex]);
-            console.log(`✅ Selected Cosmograph node at index ${nodeIndex}`);
           }
         }
       } catch (error) {
-        console.warn('Could not focus/select node in Cosmograph:', error);
       }
     }
     
@@ -238,11 +231,6 @@ export const GraphSearch: React.FC<GraphSearchProps> = React.memo(({
 
   // Log when nodes data changes
   useEffect(() => {
-    console.log('🔍 GraphSearch received nodes:', {
-      count: nodes.length,
-      firstNode: nodes[0],
-      nodeTypes: [...new Set(nodes.map(n => n.node_type).filter(Boolean))].slice(0, 5)
-    });
   }, [nodes]);
   
   return (

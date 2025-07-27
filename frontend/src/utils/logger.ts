@@ -1,20 +1,14 @@
 // Development-only logging utility
-const isDevelopment = import.meta.env.DEV;
+const isDevelopment = false; // Disabled for production
 
 export const logger = {
   log: (...args: unknown[]) => {
-    if (isDevelopment) {
-      console.log(...args);
-    }
+    // Logging disabled
   },
   warn: (...args: unknown[]) => {
-    if (isDevelopment) {
-      console.warn(...args);
-    }
+    // Logging disabled
   },
   error: (...args: unknown[]) => {
-    if (isDevelopment) {
-      console.error(...args);
-    }
+    // Logging disabled
   }
 };

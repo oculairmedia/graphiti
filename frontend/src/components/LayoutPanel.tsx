@@ -47,10 +47,8 @@ export const LayoutPanel: React.FC<LayoutPanelProps> = ({
   };
   
   const handleApplyLayout = () => {
-    console.log('LayoutPanel: Applying layout', selectedLayout, 'with data:', nodes.length, 'nodes', edges.length, 'edges');
     
     if (!nodes.length || !edges.length) {
-      console.warn('LayoutPanel: No graph data available for layout');
       return;
     }
 
@@ -63,10 +61,8 @@ export const LayoutPanel: React.FC<LayoutPanelProps> = ({
   };
   
   const handlePresetApply = (presetType: string) => {
-    console.log('LayoutPanel: Applying preset', presetType, 'with data:', nodes.length, 'nodes', edges.length, 'edges');
     
     if (!nodes.length || !edges.length) {
-      console.warn('LayoutPanel: No graph data available for preset layout');
       return;
     }
 
@@ -158,12 +154,10 @@ export const LayoutPanel: React.FC<LayoutPanelProps> = ({
               title={layout.name}
               onClick={() => {
                 handleLayoutChange(layout.id);
-                console.log('LayoutPanel: Quick applying layout', layout.id, 'with data:', nodes.length, 'nodes', edges.length, 'edges');
                 
                 if (nodes.length && edges.length) {
                   applyLayout(layout.id, {}, { nodes, edges });
                 } else {
-                  console.warn('LayoutPanel: No graph data available for quick layout');
                 }
               }}
             >

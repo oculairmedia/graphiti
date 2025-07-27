@@ -66,9 +66,7 @@ export const usePersistedSections = (defaultSections: SectionConfig[]) => {
         // Sort by order
         mergedSections.sort((a, b) => a.order - b.order);
         setSections(mergedSections);
-        console.log('usePersistedSections: Loaded sections from storage');
       } catch (error) {
-        console.error('usePersistedSections: Failed to merge stored sections:', error);
       }
     }
     setIsLoaded(true);
@@ -98,7 +96,6 @@ export const usePersistedSections = (defaultSections: SectionConfig[]) => {
       
       saveConfigToStorage(updated);
     } catch (error) {
-      console.error('usePersistedSections: Failed to save sections:', error);
     }
   }, [sections, isLoaded]);
   
@@ -131,9 +128,7 @@ export const usePersistedGraphConfig = <T extends Record<string, any>>(defaultCo
         // Merge stored config with defaults
         const merged = mergeDifferentialConfig(defaultConfig, stored.graphConfig as Partial<T>);
         setConfig(merged);
-        console.log('usePersistedGraphConfig: Loaded configuration from storage');
       } catch (error) {
-        console.error('usePersistedGraphConfig: Failed to merge stored config:', error);
       }
     }
     setIsLoaded(true);
@@ -149,7 +144,6 @@ export const usePersistedGraphConfig = <T extends Record<string, any>>(defaultCo
       // Only store differences from defaults
       // Note: createDifferentialConfig now handles nodeTypeColors/nodeTypeVisibility specially
       const diff = createDifferentialConfig(config, defaultConfig);
-      console.log('usePersistedGraphConfig: Saving config diff:', diff);
       
       const updated: PersistedConfig = {
         ...existing,
@@ -160,12 +154,7 @@ export const usePersistedGraphConfig = <T extends Record<string, any>>(defaultCo
       };
       
       saveConfigToStorage(updated);
-      console.log('usePersistedGraphConfig: Config saved successfully with node types:', {
-        nodeTypeColors: Object.keys(config.nodeTypeColors || {}).length,
-        nodeTypeVisibility: Object.keys(config.nodeTypeVisibility || {}).length
-      });
     } catch (error) {
-      console.error('usePersistedGraphConfig: Failed to save config:', error);
     }
   }, [config, defaultConfig, isLoaded]);
   
@@ -193,7 +182,6 @@ export const useConfigPersistence = () => {
       // Force page reload to reset all state
       window.location.reload();
     } catch (error) {
-      console.error('useConfigPersistence: Failed to reset configuration:', error);
     }
   }, []);
   
@@ -203,10 +191,8 @@ export const useConfigPersistence = () => {
       if (stored) {
         exportConfigToFile(stored);
       } else {
-        console.warn('useConfigPersistence: No configuration to export');
       }
     } catch (error) {
-      console.error('useConfigPersistence: Failed to export configuration:', error);
     }
   }, []);
   
@@ -222,7 +208,6 @@ export const useConfigPersistence = () => {
       }
       return false;
     } catch (error) {
-      console.error('useConfigPersistence: Failed to import configuration:', error);
       return false;
     }
   }, []);
@@ -231,7 +216,6 @@ export const useConfigPersistence = () => {
     try {
       return getStorageUsage();
     } catch (error) {
-      console.error('useConfigPersistence: Failed to get storage info:', error);
       return { used: 0, available: 0 };
     }
   }, []);
@@ -281,14 +265,8 @@ export const usePersistedNodeTypes = (
         mergedVisibility[type] = visible;
       });
       
-      console.log('usePersistedNodeTypes: Merged node type configurations', {
-        storedColors: Object.keys(storedColors).length,
-        baseColors: Object.keys(baseColors).length,
-        mergedColors: Object.keys(mergedColors).length
-      });
       return { colors: mergedColors, visibility: mergedVisibility };
     } catch (error) {
-      console.error('usePersistedNodeTypes: Failed to merge node type configs:', error);
       // Fallback to at least returning stored values
       return { colors: { ...baseColors, ...storedColors }, visibility: { ...baseVisibility, ...storedVisibility } };
     }
