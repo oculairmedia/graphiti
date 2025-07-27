@@ -1310,6 +1310,25 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
                 // Track the selected node position
                 trackPointPositionsByIndices([index]);
                 
+                // Find connected nodes for this node
+                const connectedIndices: number[] = [index]; // Start with the clicked node
+                
+                if (typeof cosmographRef.current.getConnectedPointIndices === 'function') {
+                  const neighbors = cosmographRef.current.getConnectedPointIndices(index);
+                  if (neighbors && neighbors.length > 0) {
+                    connectedIndices.push(...neighbors);
+                    console.log(`Node ${originalNode.label} has ${neighbors.length} neighbors, zooming to subnetwork`);
+                  }
+                }
+                
+                // Zoom to fit the node and its neighbors
+                if (connectedIndices.length > 1 && typeof cosmographRef.current.fitViewByIndices === 'function') {
+                  cosmographRef.current.fitViewByIndices(connectedIndices, 500, 0.2); // 500ms animation, 20% padding
+                } else if (typeof cosmographRef.current.zoomToPoint === 'function') {
+                  // If no neighbors, just zoom to the single node
+                  cosmographRef.current.zoomToPoint(index, 500, 3.0, true);
+                }
+                
                 // Show the info panel
                 onNodeClick(originalNode);
                 onNodeSelect(originalNode.id);
@@ -1340,6 +1359,12 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             cosmographRef.current.unfocusNode();
           } else if (typeof cosmographRef.current.setFocusedPoint === 'function') {
             cosmographRef.current.setFocusedPoint();
+          }
+          
+          // Reset view to show all nodes
+          if (typeof cosmographRef.current.fitView === 'function') {
+            console.log('Empty space clicked - resetting view to fit all nodes');
+            cosmographRef.current.fitView(500); // 500ms animation
           }
         }
         onClearSelection?.();
