@@ -237,6 +237,11 @@ export const GraphSearch: React.FC<GraphSearchProps> = React.memo(({
             } else if (typeof cosmographRef.current.selectPoints === 'function') {
               cosmographRef.current.selectPoints([nodeIndex]);
             }
+            
+            // Zoom to the selected node
+            if (typeof cosmographRef.current.zoomToPoint === 'function') {
+              cosmographRef.current.zoomToPoint(nodeIndex, 250, 4.0, true);
+            }
           }
         } else {
           // Fallback to linear search
@@ -252,6 +257,11 @@ export const GraphSearch: React.FC<GraphSearchProps> = React.memo(({
               cosmographRef.current.selectPoint(nodeIndex);
             } else if (typeof cosmographRef.current.selectPoints === 'function') {
               cosmographRef.current.selectPoints([nodeIndex]);
+            }
+            
+            // Zoom to the selected node
+            if (typeof cosmographRef.current.zoomToPoint === 'function') {
+              cosmographRef.current.zoomToPoint(nodeIndex, 250, 4.0, true);
             }
           }
         }
