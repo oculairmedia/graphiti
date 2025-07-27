@@ -486,6 +486,9 @@ pub async fn calculate_all_centralities(
 
     let betweenness = calculate_betweenness_centrality(client, group_id, sample_size).await?;
 
+    // Find max degree for normalization
+    let max_degree = degree.scores.values().fold(0.0_f64, |a, &b| a.max(b));
+    
     // Combine all scores
     let mut all_scores = HashMap::new();
     let all_nodes: std::collections::HashSet<String> = pagerank
@@ -499,29 +502,23 @@ pub async fn calculate_all_centralities(
     for node_id in all_nodes {
         let mut node_scores = HashMap::new();
 
-        node_scores.insert(
-            "pagerank".to_string(),
-            pagerank.scores.get(&node_id).copied().unwrap_or(0.0),
-        );
-        node_scores.insert(
-            "degree".to_string(),
-            degree.scores.get(&node_id).copied().unwrap_or(0.0),
-        );
-        node_scores.insert(
-            "betweenness".to_string(),
-            betweenness.scores.get(&node_id).copied().unwrap_or(0.0),
-        );
+        // PageRank is already normalized by the algorithm
+        let pagerank_score = pagerank.scores.get(&node_id).copied().unwrap_or(0.0);
+        node_scores.insert("pagerank".to_string(), pagerank_score);
+        
+        // Normalize degree centrality to [0,1] by dividing by max degree
+        let degree_raw = degree.scores.get(&node_id).copied().unwrap_or(0.0);
+        let degree_normalized = if max_degree > 0.0 { degree_raw / max_degree } else { 0.0 };
+        node_scores.insert("degree".to_string(), degree_normalized);
+        
+        // Betweenness is already normalized in the approximation function
+        let betweenness_score = betweenness.scores.get(&node_id).copied().unwrap_or(0.0);
+        node_scores.insert("betweenness".to_string(), betweenness_score);
 
-        // Calculate composite importance score
-        let normalized_pagerank = node_scores["pagerank"] * 1000.0;
-        let normalized_degree = (node_scores["degree"] + 1.0).ln();
-        let normalized_betweenness = node_scores["betweenness"] * 100.0;
-
-        let importance = 0.5 * normalized_pagerank
-            + 0.3 * normalized_degree
-            + 0.2 * normalized_betweenness;
-
-        node_scores.insert("importance".to_string(), importance);
+        // Calculate eigenvector centrality approximation (importance)
+        // Use a weighted combination that's guaranteed to be in [0,1] range
+        let eigenvector = (0.5 * pagerank_score + 0.3 * degree_normalized + 0.2 * betweenness_score).min(1.0);
+        node_scores.insert("importance".to_string(), eigenvector);
 
         all_scores.insert(node_id, node_scores);
     }

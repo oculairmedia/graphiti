@@ -7,6 +7,9 @@ import {
   SearchResponse,
   NodeDetails,
   ErrorResponse,
+  CentralityMetrics,
+  CentralityStats,
+  BulkCentralityResponse,
 } from './types';
 
 export class GraphClient {
@@ -114,6 +117,22 @@ export class GraphClient {
     return this.fetchWithError<{ edges: GraphData['edges'] }>(
       `${this.baseUrl}/edges/by-node/${nodeId}`
     );
+  }
+
+  // Centrality endpoints
+  async getNodeCentrality(nodeId: string): Promise<CentralityMetrics> {
+    return this.fetchWithError<CentralityMetrics>(`${this.baseUrl}/centrality/${nodeId}`);
+  }
+
+  async getBulkCentrality(nodeIds: string[]): Promise<BulkCentralityResponse> {
+    return this.fetchWithError<BulkCentralityResponse>(`${this.baseUrl}/centrality/bulk`, {
+      method: 'POST',
+      body: JSON.stringify({ node_ids: nodeIds }),
+    });
+  }
+
+  async getCentralityStats(): Promise<CentralityStats> {
+    return this.fetchWithError<CentralityStats>(`${this.baseUrl}/centrality/stats`);
   }
 }
 

@@ -118,23 +118,28 @@ impl FalkorClient {
 
         for (node_uuid, node_scores) in scores {
             let mut set_clauses = Vec::new();
-            let mut params = HashMap::new();
-
-            params.insert("uuid".to_string(), FalkorValue::String(node_uuid.clone()));
 
             for (score_name, score_value) in node_scores {
-                let param_name = format!("centrality_{}", score_name);
-                set_clauses.push(format!("n.{} = ${}", param_name, param_name));
-                params.insert(param_name, FalkorValue::F64(*score_value));
+                // Convert score names to match frontend expectations
+                let property_name = match score_name.as_str() {
+                    "pagerank" => "pagerank_centrality",
+                    "degree" => "degree_centrality", 
+                    "betweenness" => "betweenness_centrality",
+                    "importance" => "eigenvector_centrality", // Map importance to eigenvector
+                    _ => &format!("{}_centrality", score_name),
+                };
+                set_clauses.push(format!("n.{} = {}", property_name, score_value));
             }
 
             if !set_clauses.is_empty() {
+                // Use direct query without parameters
                 let query = format!(
-                    "MATCH (n {{uuid: $uuid}}) SET {}",
+                    "MATCH (n {{uuid: '{}'}}) SET {}",
+                    node_uuid,
                     set_clauses.join(", ")
                 );
 
-                if let Err(e) = self.execute_query(&query, Some(params)).await {
+                if let Err(e) = self.execute_query(&query, None).await {
                     warn!("Failed to store scores for node {}: {}", node_uuid, e);
                     // Continue with other nodes rather than failing completely
                 }

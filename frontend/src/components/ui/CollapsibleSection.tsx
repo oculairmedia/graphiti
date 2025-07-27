@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChevronDown, ChevronUp, GripVertical } from 'lucide-react';
+import { ChevronDown, ChevronRight, GripVertical } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import * as Collapsible from '@radix-ui/react-collapsible';
 import { useSortable } from '@dnd-kit/sortable';
@@ -65,9 +65,9 @@ export const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
             >
               <div className="flex items-center gap-1">
                 {section.isCollapsed ? (
-                  <ChevronDown className="h-3 w-3" />
+                  <ChevronRight className="h-3 w-3" />
                 ) : (
-                  <ChevronUp className="h-3 w-3" />
+                  <ChevronDown className="h-3 w-3" />
                 )}
                 {section.title}
               </div>

@@ -2,7 +2,7 @@ import React, { useEffect, useRef, forwardRef, useState, useCallback } from 'rea
 import { Cosmograph, prepareCosmographData } from '@cosmograph/react';
 import { GraphNode } from '../api/types';
 import type { GraphData } from '../types/graph';
-import { useGraphConfig } from '../contexts/GraphConfigContext';
+import { useGraphConfig, generateNodeTypeColor } from '../contexts/GraphConfigContext';
 import { logger } from '../utils/logger';
 import { hexToRgba, generateHSLColor } from '../utils/colorCache';
 
@@ -175,7 +175,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         pointLabelBy: 'label',        // Node display labels
         pointColorBy: 'node_type',    // Color by entity type
         pointSizeBy: 'centrality',    // Size by centrality metrics
-        pointIncludeColumns: ['degree_centrality', 'pagerank_centrality', 'betweenness_centrality'] // Include additional columns
+        pointIncludeColumns: ['degree_centrality', 'pagerank_centrality', 'betweenness_centrality', 'eigenvector_centrality'] // Include additional columns
       },
       links: {
         linkSourceBy: 'source',       // Source node ID field
@@ -220,7 +220,8 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
               // Add other commonly used properties with type safety
               degree_centrality: Number(node.properties?.degree_centrality || 0),
               pagerank_centrality: Number(node.properties?.pagerank_centrality || 0),
-              betweenness_centrality: Number(node.properties?.betweenness_centrality || 0)
+              betweenness_centrality: Number(node.properties?.betweenness_centrality || 0),
+              eigenvector_centrality: Number(node.properties?.eigenvector_centrality || 0)
             };
             
             // Validate that all required fields are present and valid
@@ -581,7 +582,8 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             centrality: Number(node.properties?.degree_centrality || node.properties?.pagerank_centrality || node.size || 1),
             degree_centrality: Number(node.properties?.degree_centrality || 0),
             pagerank_centrality: Number(node.properties?.pagerank_centrality || 0),
-            betweenness_centrality: Number(node.properties?.betweenness_centrality || 0)
+            betweenness_centrality: Number(node.properties?.betweenness_centrality || 0),
+            eigenvector_centrality: Number(node.properties?.eigenvector_centrality || 0)
           }));
           
           const transformedLinks = updatedLinks.map(link => ({
@@ -629,7 +631,8 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           centrality: Number(node.properties?.degree_centrality || node.properties?.pagerank_centrality || node.size || 1),
           degree_centrality: Number(node.properties?.degree_centrality || 0),
           pagerank_centrality: Number(node.properties?.pagerank_centrality || 0),
-          betweenness_centrality: Number(node.properties?.betweenness_centrality || 0)
+          betweenness_centrality: Number(node.properties?.betweenness_centrality || 0),
+          eigenvector_centrality: Number(node.properties?.eigenvector_centrality || 0)
         }));
         
         const transformedLinks = currentLinks.map(link => ({
@@ -675,7 +678,8 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           centrality: Number(node.properties?.degree_centrality || node.properties?.pagerank_centrality || node.size || 1),
           degree_centrality: Number(node.properties?.degree_centrality || 0),
           pagerank_centrality: Number(node.properties?.pagerank_centrality || 0),
-          betweenness_centrality: Number(node.properties?.betweenness_centrality || 0)
+          betweenness_centrality: Number(node.properties?.betweenness_centrality || 0),
+          eigenvector_centrality: Number(node.properties?.eigenvector_centrality || 0)
         }));
         
         const transformedLinks = newCurrentLinks.map(link => ({
@@ -723,7 +727,8 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           centrality: Number(node.properties?.degree_centrality || node.properties?.pagerank_centrality || node.size || 1),
           degree_centrality: Number(node.properties?.degree_centrality || 0),
           pagerank_centrality: Number(node.properties?.pagerank_centrality || 0),
-          betweenness_centrality: Number(node.properties?.betweenness_centrality || 0)
+          betweenness_centrality: Number(node.properties?.betweenness_centrality || 0),
+          eigenvector_centrality: Number(node.properties?.eigenvector_centrality || 0)
         }));
         
         const transformedLinks = filteredLinks.map(link => ({
@@ -768,7 +773,8 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           centrality: Number(node.properties?.degree_centrality || node.properties?.pagerank_centrality || node.size || 1),
           degree_centrality: Number(node.properties?.degree_centrality || 0),
           pagerank_centrality: Number(node.properties?.pagerank_centrality || 0),
-          betweenness_centrality: Number(node.properties?.betweenness_centrality || 0)
+          betweenness_centrality: Number(node.properties?.betweenness_centrality || 0),
+          eigenvector_centrality: Number(node.properties?.eigenvector_centrality || 0)
         }));
         
         const transformedLinks = filteredLinks.map(link => ({
@@ -937,6 +943,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
                     degree_centrality: Number(point.degree_centrality || 0),
                     pagerank_centrality: Number(point.pagerank_centrality || 0),
                     betweenness_centrality: Number(point.betweenness_centrality || 0),
+                    eigenvector_centrality: Number(point.eigenvector_centrality || 0),
                     centrality: Number(point.centrality || 0),
                     ...point // Include all other properties
                   }
@@ -1060,12 +1067,12 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             // Use Cosmograph v2.0 built-in color strategies
             pointColorStrategy={(() => {
               switch (config.colorScheme) {
-                case 'by-type': return 'palette';
+                case 'by-type': return 'direct'; // Use direct strategy to ensure pointColor is used
                 case 'by-centrality': 
                 case 'by-pagerank': 
                 case 'by-degree': return 'interpolatePalette';
                 case 'by-community': return 'palette';
-                default: return 'palette';
+                default: return 'direct';
               }
             })()}
             pointColorPalette={(() => {
@@ -1074,15 +1081,10 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
                 case 'by-pagerank': return ['#7c2d12', '#ea580c', '#f97316', '#fb923c', '#fed7aa']; // Orange gradient  
                 case 'by-degree': return ['#166534', '#16a34a', '#22c55e', '#4ade80', '#bbf7d0']; // Green gradient
                 case 'by-community': return ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD'];
-                default: {
-                  // Use dynamic node type colors from the actual data
-                  const nodeTypeColors = Object.values(config.nodeTypeColors);
-                  if (nodeTypeColors.length > 0) {
-                    return nodeTypeColors;
-                  }
-                  // Fallback colors if no types configured yet
+                case 'by-type': 
+                default: 
+                  // Provide fallback colors that Cosmograph can use if our custom function returns undefined
                   return ['#4ECDC4', '#B794F6', '#F6AD55', '#90CDF4', '#FF6B6B', '#4ADE80'];
-                }
               }
             })()}
             
@@ -1090,13 +1092,40 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             pointSizeStrategy={'auto'}
             pointSizeRange={[config.minNodeSize * config.sizeMultiplier, config.maxNodeSize * config.sizeMultiplier]}
             
-            // Highlighted nodes override (still need custom function for this)
+            // Use pointColorBy to specify which column contains the color data
+            pointColorBy={config.colorScheme === 'by-type' ? 'node_type' : undefined}
+            
+            // Use pointColorByFn to transform node_type values into actual colors
+            pointColorByFn={config.colorScheme === 'by-type' ? (nodeType: string) => {
+              // Use configured color for this type
+              const typeColor = config.nodeTypeColors[nodeType];
+              if (typeColor) {
+                console.log(`GraphCanvas: Using color ${typeColor} for type ${nodeType}`);
+                return typeColor;
+              }
+              
+              // Generate color if not configured
+              const allNodeTypes = [...new Set(nodes.map(n => n.node_type).filter(Boolean))].sort();
+              const typeIndex = allNodeTypes.indexOf(nodeType);
+              const generatedColor = generateNodeTypeColor(nodeType, typeIndex);
+              console.log(`GraphCanvas: Generated color ${generatedColor} for type ${nodeType}`);
+              return generatedColor;
+            } : undefined}
+            
+            // Use pointColor only for highlighting
             pointColor={(node: any) => {
+              // Check if highlighted
               const isHighlighted = highlightedNodes.includes(node.id);
               if (isHighlighted) {
                 return 'rgba(255, 215, 0, 0.9)'; // Gold highlight
               }
-              // Let the strategy handle normal coloring
+              
+              // For non-type color schemes, return undefined
+              if (config.colorScheme !== 'by-type') {
+                return undefined;
+              }
+              
+              // For by-type, we shouldn't reach here as pointColorByFn handles it
               return undefined;
             }}
             

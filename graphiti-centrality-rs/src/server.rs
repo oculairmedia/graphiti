@@ -145,8 +145,16 @@ async fn degree_endpoint(
     )
     .await
     {
-        Ok(result) => {
+        Ok(mut result) => {
             let execution_time_ms = start.elapsed().as_millis();
+
+            // Normalize degree scores to [0,1] range
+            let max_degree = result.scores.values().fold(0.0_f64, |a, &b| a.max(b));
+            if max_degree > 0.0 {
+                for score in result.scores.values_mut() {
+                    *score /= max_degree;
+                }
+            }
 
             // Store results if requested
             if request.store_results {
