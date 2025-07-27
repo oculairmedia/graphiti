@@ -1310,33 +1310,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
                 // Track the selected node position
                 trackPointPositionsByIndices([index]);
                 
-                // Find connected nodes for this node
-                const connectedIndices: number[] = [index]; // Start with the clicked node
-                
-                if (typeof cosmographRef.current.getConnectedPointIndices === 'function') {
-                  const neighbors = cosmographRef.current.getConnectedPointIndices(index);
-                  if (neighbors && neighbors.length > 0) {
-                    connectedIndices.push(...neighbors);
-                    console.log(`Node ${originalNode.label} has ${neighbors.length} neighbors, zooming to subnetwork`);
-                  }
-                }
-                
-                // Zoom to fit the node and its neighbors
-                if (connectedIndices.length > 1 && typeof cosmographRef.current.fitViewByIndices === 'function') {
-                  // Use requestAnimationFrame to ensure smooth transition
-                  requestAnimationFrame(() => {
-                    if (cosmographRef.current && typeof cosmographRef.current.fitViewByIndices === 'function') {
-                      cosmographRef.current.fitViewByIndices(connectedIndices, 500, 0.2); // 500ms animation, 20% padding
-                    }
-                  });
-                } else if (typeof cosmographRef.current.zoomToPoint === 'function') {
-                  // If no neighbors, just zoom to the single node
-                  requestAnimationFrame(() => {
-                    if (cosmographRef.current && typeof cosmographRef.current.zoomToPoint === 'function') {
-                      cosmographRef.current.zoomToPoint(index, 500, 3.0, true);
-                    }
-                  });
-                }
+                // Removed automatic zoom on node selection for now
                 
                 // Show the info panel
                 onNodeClick(originalNode);
@@ -1370,16 +1344,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             cosmographRef.current.setFocusedPoint();
           }
           
-          // Reset view to show all nodes
-          if (typeof cosmographRef.current.fitView === 'function') {
-            // Use requestAnimationFrame to ensure we're not in the middle of another update
-            requestAnimationFrame(() => {
-              if (cosmographRef.current && typeof cosmographRef.current.fitView === 'function') {
-                console.log('Empty space clicked - resetting view to fit all nodes');
-                cosmographRef.current.fitView(500); // 500ms animation
-              }
-            });
-          }
+          // Removed automatic fitView on empty space for now
         }
         onClearSelection?.();
       }
@@ -1434,8 +1399,8 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             // Override with UI-specific configurations
             fitViewOnInit={true}
             fitViewDelay={1500} // Let nodes settle before fitting view
-            fitViewDuration={config.fitViewDuration} // Use configurable duration
-            fitViewPadding={config.fitViewPadding} // Use configurable padding
+            // fitViewDuration={config.fitViewDuration} // Commented out - might be causing issues
+            // fitViewPadding={config.fitViewPadding} // Commented out - might be causing issues
             initialZoomLevel={1.5}
             disableZoom={false}
             backgroundColor={config.backgroundColor}
@@ -1536,6 +1501,17 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             focusedPointRingColor={config.focusedPointRingColor}
             focusedPointIndex={config.focusedPointIndex}
             renderLinks={config.renderLinks}
+            
+            // Debug zoom events
+            onZoomStart={(e, userDriven) => {
+              console.log('Zoom started', { userDriven, transform: e.transform });
+            }}
+            onZoom={(e, userDriven) => {
+              console.log('Zooming', { userDriven, k: e.transform.k });
+            }}
+            onZoomEnd={(e, userDriven) => {
+              console.log('Zoom ended', { userDriven, transform: e.transform });
+            }}
             
             nodeGreyoutOpacity={selectedNodes.length > 0 || highlightedNodes.length > 0 ? 0.1 : 1}
             
