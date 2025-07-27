@@ -1006,25 +1006,12 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     const keepSimulationRunning = useCallback((enable: boolean) => {
       setKeepRunning(enable);
       
-      if (enable) {
-        // Start periodic simulation restarts to keep it alive
-        if (simulationTimerRef.current) {
-          clearInterval(simulationTimerRef.current);
-        }
-        
-        simulationTimerRef.current = setInterval(() => {
-          if (cosmographRef.current && typeof cosmographRef.current.start === 'function') {
-            // Restart with low energy to keep nodes moving gently
-            cosmographRef.current.start(0.1);
-          }
-        }, 5000); // Restart every 5 seconds
-        
-      } else {
-        // Stop the periodic restarts
-        if (simulationTimerRef.current) {
-          clearInterval(simulationTimerRef.current);
-          simulationTimerRef.current = null;
-        }
+      // Don't interfere with Cosmograph's built-in simulation control
+      // The simulation will run naturally based on the simulationDecay setting
+      
+      if (simulationTimerRef.current) {
+        clearInterval(simulationTimerRef.current);
+        simulationTimerRef.current = null;
       }
     }, []);
     

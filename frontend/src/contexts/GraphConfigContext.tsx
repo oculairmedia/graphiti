@@ -198,7 +198,7 @@ const defaultConfig: GraphConfig = {
   linkSpring: 0.12,
   linkDistance: 3.1,
   mouseRepulsion: 10.0,
-  simulationDecay: 2000,
+  simulationDecay: 10000, // 10 seconds for longer natural simulation
   
   // New Cosmograph v2.0 simulation properties
   simulationRepulsionTheta: 1.70,
