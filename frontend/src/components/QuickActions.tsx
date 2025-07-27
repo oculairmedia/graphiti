@@ -20,6 +20,21 @@ export const QuickActions: React.FC<QuickActionsProps> = ({
   onZoomOut,
   onScreenshot
 }) => {
+  const handleZoomIn = () => {
+    console.log('QuickActions: Zoom In clicked');
+    onZoomIn();
+  };
+
+  const handleZoomOut = () => {
+    console.log('QuickActions: Zoom Out clicked');
+    onZoomOut();
+  };
+
+  const handleFitToScreen = () => {
+    console.log('QuickActions: Fit to Screen clicked');
+    onFitToScreen();
+  };
+
   return (
     <div className="glass-panel rounded-full px-4 py-2 flex items-center space-x-2 animate-fade-in">
       
@@ -87,7 +102,7 @@ export const QuickActions: React.FC<QuickActionsProps> = ({
         <Button
           variant="ghost"
           size="sm"
-          onClick={onZoomOut}
+          onClick={handleZoomOut}
           className="h-8 px-2 hover:bg-primary/10"
           title="Zoom Out"
         >
@@ -96,7 +111,7 @@ export const QuickActions: React.FC<QuickActionsProps> = ({
         <Button
           variant="ghost"
           size="sm"
-          onClick={onFitToScreen}
+          onClick={handleFitToScreen}
           className="h-8 px-2 hover:bg-primary/10"
           title="Fit to Screen"
         >
@@ -105,7 +120,7 @@ export const QuickActions: React.FC<QuickActionsProps> = ({
         <Button
           variant="ghost"
           size="sm"
-          onClick={onZoomIn}
+          onClick={handleZoomIn}
           className="h-8 px-2 hover:bg-primary/10"
           title="Zoom In"
         >

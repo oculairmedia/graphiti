@@ -70,14 +70,17 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
   
   // Add debug logging for button clicks
   const handleZoomIn = useCallback(() => {
+    console.log('GraphViz: handleZoomIn called');
     zoomIn();
   }, [zoomIn]);
   
   const handleZoomOut = useCallback(() => {
+    console.log('GraphViz: handleZoomOut called');
     zoomOut();
   }, [zoomOut]);
   
   const handleFitView = useCallback(() => {
+    console.log('GraphViz: handleFitView called');
     fitView();
   }, [fitView]);
   const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);

@@ -372,47 +372,60 @@ export const GraphConfigProvider: React.FC<{ children: ReactNode }> = ({ childre
 
   const zoomIn = () => {
     if (!cosmographRef?.current) {
+      console.warn('GraphConfigContext: cosmographRef is not available for zoomIn');
       return;
     }
 
     try {
       const beforeZoom = cosmographRef.current.getZoomLevel();
+      console.log('GraphConfigContext: Current zoom level:', beforeZoom);
       
-      if (beforeZoom !== undefined) {
+      if (beforeZoom !== undefined && !isNaN(beforeZoom)) {
         const newZoom = Math.min(beforeZoom * 1.5, 10);
-        cosmographRef.current.setZoomLevel(newZoom, config.fitViewDuration);
+        console.log('GraphConfigContext: Setting new zoom level:', newZoom);
+        cosmographRef.current.setZoomLevel(newZoom, config.fitViewDuration || 250);
+      } else {
+        console.warn('GraphConfigContext: Invalid zoom level:', beforeZoom);
       }
     } catch (error) {
-      // Zoom operation failed
+      console.error('GraphConfigContext: Zoom in failed:', error);
     }
   };
 
   const zoomOut = () => {
     if (!cosmographRef?.current) {
+      console.warn('GraphConfigContext: cosmographRef is not available for zoomOut');
       return;
     }
 
     try {
       const beforeZoom = cosmographRef.current.getZoomLevel();
+      console.log('GraphConfigContext: Current zoom level:', beforeZoom);
       
-      if (beforeZoom !== undefined) {
+      if (beforeZoom !== undefined && !isNaN(beforeZoom)) {
         const newZoom = Math.max(beforeZoom / 1.5, 0.1);
-        cosmographRef.current.setZoomLevel(newZoom, config.fitViewDuration);
+        console.log('GraphConfigContext: Setting new zoom level:', newZoom);
+        cosmographRef.current.setZoomLevel(newZoom, config.fitViewDuration || 250);
+      } else {
+        console.warn('GraphConfigContext: Invalid zoom level:', beforeZoom);
       }
     } catch (error) {
-      // Zoom operation failed
+      console.error('GraphConfigContext: Zoom out failed:', error);
     }
   };
 
   const fitView = () => {
     if (!cosmographRef?.current) {
+      console.warn('GraphConfigContext: cosmographRef is not available for fitView');
       return;
     }
 
     try {
+      console.log('GraphConfigContext: Calling fitView with duration:', config.fitViewDuration);
       // fitView method only accepts duration parameter, padding is set during initialization
-      cosmographRef.current.fitView(config.fitViewDuration);
+      cosmographRef.current.fitView(config.fitViewDuration || 250);
     } catch (error) {
+      console.error('GraphConfigContext: Fit view failed:', error);
     }
   };
 
