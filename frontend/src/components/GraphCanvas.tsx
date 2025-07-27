@@ -1401,7 +1401,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             fitViewDelay={1500} // Let nodes settle before fitting view
             // fitViewDuration={config.fitViewDuration} // Commented out - might be causing issues
             // fitViewPadding={config.fitViewPadding} // Commented out - might be causing issues
-            initialZoomLevel={1.5}
+            // initialZoomLevel={1.5} // Commented out - causing infinite zoom loop
             disableZoom={false}
             backgroundColor={config.backgroundColor}
             
@@ -1502,16 +1502,16 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             focusedPointIndex={config.focusedPointIndex}
             renderLinks={config.renderLinks}
             
-            // Debug zoom events
-            onZoomStart={(e, userDriven) => {
-              console.log('Zoom started', { userDriven, transform: e.transform });
-            }}
-            onZoom={(e, userDriven) => {
-              console.log('Zooming', { userDriven, k: e.transform.k });
-            }}
-            onZoomEnd={(e, userDriven) => {
-              console.log('Zoom ended', { userDriven, transform: e.transform });
-            }}
+            // Zoom event handlers (debugging disabled for now)
+            // onZoomStart={(e, userDriven) => {
+            //   console.log('Zoom started', { userDriven, transform: e.transform });
+            // }}
+            // onZoom={(e, userDriven) => {
+            //   console.log('Zooming', { userDriven, k: e.transform.k });
+            // }}
+            // onZoomEnd={(e, userDriven) => {
+            //   console.log('Zoom ended', { userDriven, transform: e.transform });
+            // }}
             
             nodeGreyoutOpacity={selectedNodes.length > 0 || highlightedNodes.length > 0 ? 0.1 : 1}
             
