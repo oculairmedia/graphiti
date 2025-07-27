@@ -624,12 +624,13 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       if (!cosmographRef.current) return;
       
       try {
-        // fitView method only accepts duration parameter, padding is set during initialization
-        cosmographRef.current.fitView(config.fitViewDuration);
+        // Call fitView without parameters
+        cosmographRef.current.fitView();
+        logger.log('Fit view executed successfully');
       } catch (error) {
         logger.warn('Fit view failed:', error);
       }
-    }, [config.fitViewDuration]);
+    }, []);
 
     const fitViewByIndices = useCallback((indices: number[], duration?: number, padding?: number) => {
       if (!cosmographRef.current) return;
