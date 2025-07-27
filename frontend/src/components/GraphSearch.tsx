@@ -218,13 +218,17 @@ export const GraphSearch: React.FC<GraphSearchProps> = React.memo(({
     }
     
     // Focus and select the node in Cosmograph if available
+    console.log('GraphSearch handleSelectResult - cosmographRef:', cosmographRef);
+    console.log('GraphSearch handleSelectResult - cosmographRef.current:', cosmographRef?.current);
     if (cosmographRef?.current) {
       try {
         // Try to use exact value search first for better performance
         if (typeof cosmographRef.current.getPointIndicesByExactValues === 'function') {
           const indices = cosmographRef.current.getPointIndicesByExactValues({ id: node.id });
+          console.log('Search exact value indices:', indices, 'for node:', node.id);
           if (indices && indices.length > 0) {
             const nodeIndex = indices[0];
+            console.log('Found node at index:', nodeIndex);
             
             // Use Cosmograph's focus methods
             if (typeof cosmographRef.current.setFocusedPoint === 'function') {
@@ -249,7 +253,9 @@ export const GraphSearch: React.FC<GraphSearchProps> = React.memo(({
           }
         } else {
           // Fallback to linear search
+          console.log('Falling back to linear search for node:', node.id);
           const nodeIndex = nodes.findIndex(n => n.id === node.id);
+          console.log('Linear search found index:', nodeIndex);
           if (nodeIndex >= 0) {
             // Use Cosmograph's focus methods
             if (typeof cosmographRef.current.setFocusedPoint === 'function') {
