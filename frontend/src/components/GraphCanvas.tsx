@@ -1020,6 +1020,36 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       }
     }, []);
     
+    // Handle tab visibility changes to restart simulation
+    useEffect(() => {
+      const handleVisibilityChange = () => {
+        if (!document.hidden && cosmographRef.current && !config.disableSimulation) {
+          // Tab is now visible, restart simulation with low energy
+          if (typeof cosmographRef.current.start === 'function') {
+            cosmographRef.current.start(0.1);
+          }
+        }
+      };
+
+      // Also handle window focus for better reliability
+      const handleFocus = () => {
+        if (cosmographRef.current && !config.disableSimulation) {
+          // Window regained focus, ensure simulation is running
+          if (typeof cosmographRef.current.start === 'function') {
+            cosmographRef.current.start(0.05); // Even lower energy for focus events
+          }
+        }
+      };
+
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+      window.addEventListener('focus', handleFocus);
+      
+      return () => {
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+        window.removeEventListener('focus', handleFocus);
+      };
+    }, [config.disableSimulation]);
+    
     // Cleanup all timers and refs on unmount
     useEffect(() => {
       return () => {
