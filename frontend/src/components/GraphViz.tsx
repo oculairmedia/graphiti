@@ -89,6 +89,8 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [selectionMode, setSelectionMode] = useState<SelectionMode>('normal');
+  const [hoveredNode, setHoveredNode] = useState<GraphNode | null>(null);
+  const [hoveredConnectedNodes, setHoveredConnectedNodes] = useState<string[]>([]);
 
   const graphCanvasRef = useRef<GraphCanvasHandle>(null);
 
@@ -603,6 +605,28 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
     }
   }, [selectionMode]);
 
+  const handleNodeHover = useCallback((node: GraphNode | null) => {
+    setHoveredNode(node);
+    
+    if (node && graphCanvasRef.current) {
+      // Find connected nodes
+      const nodeIndex = transformedData.nodes.findIndex(n => n.id === node.id);
+      if (nodeIndex !== -1) {
+        const connectedIndices = graphCanvasRef.current.getConnectedPointIndices(nodeIndex);
+        if (connectedIndices && connectedIndices.length > 0) {
+          const connectedNodeIds = connectedIndices
+            .map(idx => transformedData.nodes[idx]?.id)
+            .filter(Boolean);
+          setHoveredConnectedNodes(connectedNodeIds);
+        } else {
+          setHoveredConnectedNodes([]);
+        }
+      }
+    } else {
+      setHoveredConnectedNodes([]);
+    }
+  }, [transformedData.nodes]);
+
   useEffect(() => {
     const handleFullscreenChange = () => {
       setIsFullscreen(!!document.fullscreenElement);
@@ -806,8 +830,9 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
                   onNodeClick={handleNodeClick}
                   onNodeSelect={handleNodeSelect}
                   onClearSelection={clearAllSelections}
+                  onNodeHover={handleNodeHover}
                   selectedNodes={selectedNodes}
-                  highlightedNodes={highlightedNodes}
+                  highlightedNodes={[...highlightedNodes, ...hoveredConnectedNodes]}
                   stats={data?.stats}
                   className="h-full w-full"
                 />
@@ -823,6 +848,13 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
                 onClose={clearAllSelections}
                 onShowNeighbors={handleShowNeighbors}
               />
+            </div>
+          )}
+
+          {/* Hover Tooltip */}
+          {hoveredNode && hoveredConnectedNodes.length > 0 && (
+            <div className="absolute bottom-20 left-1/2 transform -translate-x-1/2 glass-panel px-3 py-1 rounded-full text-xs text-muted-foreground animate-fade-in pointer-events-none">
+              {hoveredNode.label} • {hoveredConnectedNodes.length} connected nodes
             </div>
           )}
 
