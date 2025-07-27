@@ -124,6 +124,7 @@ interface GraphCanvasProps {
   onNodeClick: (node: GraphNode) => void;
   onNodeSelect: (nodeId: string) => void;
   onClearSelection?: () => void;
+  onNodeHover?: (node: GraphNode | null) => void;
   selectedNodes: string[];
   highlightedNodes: string[];
   className?: string;
@@ -172,7 +173,7 @@ interface GraphCanvasComponentProps extends GraphCanvasProps {
 }
 
 const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
-  ({ onNodeClick, onNodeSelect, onClearSelection, selectedNodes, highlightedNodes, className, stats, nodes, links }, ref) => {
+  ({ onNodeClick, onNodeSelect, onClearSelection, onNodeHover, selectedNodes, highlightedNodes, className, stats, nodes, links }, ref) => {
     const cosmographRef = useRef<CosmographRef | null>(null);
     const [isReady, setIsReady] = useState(false);
     const [isCanvasReady, setIsCanvasReady] = useState(false);
@@ -1322,6 +1323,18 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             enableDrag={true}
             enableRightClickRepulsion={true}
             onClick={handleClick}
+            onMouseMove={(index) => {
+              if (index !== undefined && index >= 0) {
+                // Hovering over a node
+                const hoveredNode = currentNodes[index];
+                if (hoveredNode) {
+                  onNodeHover?.(hoveredNode);
+                }
+              } else {
+                // Not hovering over any node
+                onNodeHover?.(null);
+              }
+            }}
             
             // Hover and focus styling from config
             hoveredPointCursor={config.hoveredPointCursor}
@@ -1401,7 +1414,8 @@ export const GraphCanvas = React.memo(GraphCanvasComponent, (prevProps, nextProp
   // Check callback functions by reference (they should be stable with useCallback)
   const callbacksChanged = prevProps.onNodeClick !== nextProps.onNodeClick ||
                            prevProps.onNodeSelect !== nextProps.onNodeSelect ||
-                           prevProps.onClearSelection !== nextProps.onClearSelection;
+                           prevProps.onClearSelection !== nextProps.onClearSelection ||
+                           prevProps.onNodeHover !== nextProps.onNodeHover;
   
   // Simple reference comparison for selection arrays (should be stable)
   const selectedNodesChanged = prevProps.selectedNodes !== nextProps.selectedNodes;
