@@ -189,7 +189,6 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     useEffect(() => {
       // Skip reprocessing if we're in the middle of an incremental update
       if (isIncrementalUpdateRef.current) {
-        console.log('⏭️ GraphCanvas: Skipping Data Kit preparation - incremental update in progress');
         return;
       }
       
@@ -326,19 +325,16 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
 
       const handleContextLost = (event: Event) => {
         event.preventDefault();
-        console.warn('GraphCanvas: WebGL context lost, attempting recovery...');
         setWebglContextLost(true);
       };
 
       const handleContextRestored = () => {
-        console.log('GraphCanvas: WebGL context restored');
         setWebglContextLost(false);
         
         // Trigger re-render by restarting the simulation
         try {
           cosmographRef.current?.restart();
         } catch (error) {
-          console.error('GraphCanvas: Error restarting after context restore:', error);
         }
       };
 
@@ -357,16 +353,10 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       let webglCleanup: (() => void) | undefined;
       
       const pollCosmographRef = () => {
-        console.log(`🔍 GraphCanvas [${componentId.current}]: Polling cosmographRef, attempt ${checkCount + 1}`);
-        console.log(`🔍 cosmographRef.current exists:`, !!cosmographRef.current);
         
         if (cosmographRef.current) {
           try {
-            console.log(`🟢 GraphCanvas [${componentId.current}]: cosmographRef.current is available`);
-            console.log('🟢 cosmographRef.current methods:', Object.getOwnPropertyNames(cosmographRef.current));
-            console.log('🟢 About to call setCosmographRef...');
             setCosmographRef(cosmographRef);
-            console.log('🟢 setCosmographRef called successfully');
             setIsReady(true);
             
             // Set up WebGL context loss recovery
@@ -378,7 +368,6 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
               
               setIsCanvasReady(prevReady => {
                 if (hasCanvas !== prevReady) {
-                  console.log('GraphCanvas: Canvas ready state changed to', hasCanvas);
                 }
                 return hasCanvas;
               });
@@ -394,7 +383,6 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             // Start canvas polling immediately
             pollCanvas();
           } catch (error) {
-            console.error('GraphCanvas: Error setting up cosmographRef:', error);
           }
         } else {
           // Keep polling for cosmographRef with exponential backoff for up to 3 seconds
@@ -404,7 +392,6 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             const delay = Math.min(50 + (checkCount * 10), 200);
             setTimeout(pollCosmographRef, delay);
           } else {
-            console.warn(`GraphCanvas [${componentId.current}]: cosmographRef never became available after 3 seconds`);
             // Set a fallback timeout to prevent permanent blocking
             setIsReady(false);
           }
@@ -535,7 +522,6 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         // Use the official Cosmograph v2.0 API method with proper error handling
         const currentZoom = cosmographRef.current.getZoomLevel();
         if (currentZoom !== undefined) {
-          const newZoom = Math.max(currentZoom * 0.67, 0.05); // Lower minimum zoom
           cosmographRef.current.setZoomLevel(newZoom);
           logger.log(`Zoom out: ${currentZoom.toFixed(2)} → ${newZoom.toFixed(2)}`);
         } else {
@@ -828,7 +814,6 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         
         // Use requestAnimationFrame to ensure the simulation state is properly propagated
         requestAnimationFrame(() => {
-          console.log(`🎯 GraphCanvas [${componentId.current}]: Simulation resume completed, state should be active`);
         });
       }
     }, []);
@@ -900,7 +885,6 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       keepSimulationRunning,
       // External incremental flag control
       setIncrementalUpdateFlag: (enabled: boolean) => {
-        console.log('🚩 GraphCanvas: External flag control - setting to', enabled);
         isIncrementalUpdateRef.current = enabled;
       }
     }), [clearCosmographSelection, selectCosmographNode, selectCosmographNodes, zoomIn, zoomOut, fitView, addIncrementalData, updateNodes, updateLinks, removeNodes, removeLinks, startSimulation, pauseSimulation, resumeSimulation, keepSimulationRunning]);
@@ -1100,7 +1084,6 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
               // Use configured color for this type
               const typeColor = config.nodeTypeColors[nodeType];
               if (typeColor) {
-                console.log(`GraphCanvas: Using color ${typeColor} for type ${nodeType}`);
                 return typeColor;
               }
               
@@ -1108,7 +1091,6 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
               const allNodeTypes = [...new Set(nodes.map(n => n.node_type).filter(Boolean))].sort();
               const typeIndex = allNodeTypes.indexOf(nodeType);
               const generatedColor = generateNodeTypeColor(nodeType, typeIndex);
-              console.log(`GraphCanvas: Generated color ${generatedColor} for type ${nodeType}`);
               return generatedColor;
             } : undefined}
             

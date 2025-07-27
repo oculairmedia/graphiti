@@ -314,8 +314,6 @@ export const GraphConfigProvider: React.FC<{ children: ReactNode }> = ({ childre
     const newNodeTypeColors: Record<string, string> = { ...config.nodeTypeColors };
     const newNodeTypeVisibility: Record<string, boolean> = { ...config.nodeTypeVisibility };
     
-    console.log('GraphConfigContext: Updating node type configurations for types:', nodeTypes);
-    console.log('GraphConfigContext: Current colors:', config.nodeTypeColors);
     
     // Process each node type
     nodeTypes.forEach((nodeType, index) => {
@@ -325,7 +323,6 @@ export const GraphConfigProvider: React.FC<{ children: ReactNode }> = ({ childre
         const sortedTypes = [...nodeTypes].sort();
         const typeIndex = sortedTypes.indexOf(nodeType);
         newNodeTypeColors[nodeType] = generateNodeTypeColor(nodeType, typeIndex);
-        console.log('GraphConfigContext: Generated new color for type:', nodeType, newNodeTypeColors[nodeType]);
       }
       
       // For visibility: only add if not already in config
@@ -342,7 +339,6 @@ export const GraphConfigProvider: React.FC<{ children: ReactNode }> = ({ childre
     const hasVisibilityChanges = JSON.stringify(config.nodeTypeVisibility) !== JSON.stringify(newNodeTypeVisibility);
     
     if (hasColorChanges || hasVisibilityChanges) {
-      console.log('GraphConfigContext: Applying node type configuration changes', {
         colorChanges: hasColorChanges,
         visibilityChanges: hasVisibilityChanges,
         newColors: Object.keys(newNodeTypeColors).length,
@@ -356,15 +352,12 @@ export const GraphConfigProvider: React.FC<{ children: ReactNode }> = ({ childre
         filteredNodeTypes: newFilteredNodeTypes
       }));
     } else {
-      console.log('GraphConfigContext: No changes needed for node type configurations');
     }
   }, [config.nodeTypeColors, config.nodeTypeVisibility, setConfig]);
 
   const updateConfig = useCallback((updates: Partial<GraphConfig>) => {
-    console.log('GraphConfigContext: updateConfig called with:', updates);
     setConfig(prev => {
       const newConfig = { ...prev, ...updates };
-      console.log('GraphConfigContext: New config after update:', newConfig);
       // Note: Updates will be applied through React props in GraphCanvas
       // Cosmograph React component handles updates automatically through props
       return newConfig;
@@ -372,38 +365,22 @@ export const GraphConfigProvider: React.FC<{ children: ReactNode }> = ({ childre
   }, [setConfig]);
 
   const zoomIn = () => {
-    console.log('🔍 GraphConfigContext: zoomIn() called');
-    console.log('🔍 cosmographRef exists:', !!cosmographRef);
-    console.log('🔍 cosmographRef.current exists:', !!cosmographRef?.current);
     
     if (cosmographRef?.current) {
-      console.log('🔍 Available methods on cosmographRef.current:', Object.getOwnPropertyNames(cosmographRef.current));
-      console.log('🔍 setZoomLevel method exists:', typeof cosmographRef.current.setZoomLevel === 'function');
-      console.log('🔍 getZoomLevel method exists:', typeof cosmographRef.current.getZoomLevel === 'function');
     }
     
     if (!cosmographRef?.current) {
-      console.warn('❌ GraphConfigContext: Zoom in failed - cosmographRef not available');
-      console.log('🔍 cosmographRef state:', cosmographRef);
       return;
     }
 
     try {
-      console.log('🔍 Attempting to get current zoom level...');
       const beforeZoom = cosmographRef.current.getZoomLevel();
-      console.log('🔍 Current zoom level:', beforeZoom);
       
       if (beforeZoom !== undefined) {
-        const newZoom = Math.min(beforeZoom * 1.5, 10); // Cap at 10x zoom
-        console.log('🔍 Attempting to set zoom level to:', newZoom);
         cosmographRef.current.setZoomLevel(newZoom);
-        console.log(`✅ GraphConfigContext: Zoom in from ${beforeZoom.toFixed(2)} to ${newZoom.toFixed(2)}`);
       } else {
-        console.warn('❌ GraphConfigContext: Could not get current zoom level - returned undefined');
       }
     } catch (error) {
-      console.error('❌ GraphConfigContext: Zoom in failed with error:', error);
-      console.log('🔍 Error details:', {
         name: error.name,
         message: error.message,
         stack: error.stack
@@ -412,32 +389,19 @@ export const GraphConfigProvider: React.FC<{ children: ReactNode }> = ({ childre
   };
 
   const zoomOut = () => {
-    console.log('🔍 GraphConfigContext: zoomOut() called');
-    console.log('🔍 cosmographRef exists:', !!cosmographRef);
-    console.log('🔍 cosmographRef.current exists:', !!cosmographRef?.current);
     
     if (!cosmographRef?.current) {
-      console.warn('❌ GraphConfigContext: Zoom out failed - cosmographRef not available');
-      console.log('🔍 cosmographRef state:', cosmographRef);
       return;
     }
 
     try {
-      console.log('🔍 Attempting to get current zoom level for zoom out...');
       const beforeZoom = cosmographRef.current.getZoomLevel();
-      console.log('🔍 Current zoom level:', beforeZoom);
       
       if (beforeZoom !== undefined) {
-        const newZoom = Math.max(beforeZoom * 0.67, 0.05); // Lower minimum zoom like GraphCanvas
-        console.log('🔍 Attempting to set zoom level to:', newZoom);
         cosmographRef.current.setZoomLevel(newZoom);
-        console.log(`✅ GraphConfigContext: Zoom out from ${beforeZoom.toFixed(2)} to ${newZoom.toFixed(2)}`);
       } else {
-        console.warn('❌ GraphConfigContext: Could not get current zoom level - returned undefined');
       }
     } catch (error) {
-      console.error('❌ GraphConfigContext: Zoom out failed with error:', error);
-      console.log('🔍 Error details:', {
         name: error.name,
         message: error.message,
         stack: error.stack
@@ -447,7 +411,6 @@ export const GraphConfigProvider: React.FC<{ children: ReactNode }> = ({ childre
 
   const fitView = () => {
     if (!cosmographRef?.current) {
-      console.warn('GraphConfigContext: fitView failed - cosmographRef not available');
       return;
     }
 
@@ -455,20 +418,16 @@ export const GraphConfigProvider: React.FC<{ children: ReactNode }> = ({ childre
       // fitView method only accepts duration parameter, padding is set during initialization
       cosmographRef.current.fitView(config.fitViewDuration);
     } catch (error) {
-      console.error('GraphConfigContext: fitView failed:', error);
     }
   };
 
   const applyLayout = async (layoutType: string, options?: Record<string, unknown>, graphData?: { nodes: GraphNode[], edges: GraphEdge[] }) => {
-    console.log('GraphConfigContext: applyLayout called', { layoutType, hasGraphData: !!graphData, nodeCount: graphData?.nodes?.length, edgeCount: graphData?.edges?.length, hasCosmographRef: !!cosmographRef?.current });
     
     if (!cosmographRef?.current) {
-      console.error('GraphConfigContext: No cosmographRef available');
       return;
     }
     
     if (!graphData || !graphData.nodes?.length) {
-      console.error('GraphConfigContext: No graph data provided', graphData);
       return;
     }
 
@@ -487,12 +446,10 @@ export const GraphConfigProvider: React.FC<{ children: ReactNode }> = ({ childre
         radialCenter: currentConfig.radialCenter,
         circularOrdering: currentConfig.circularOrdering as 'degree' | 'centrality' | 'type' | 'alphabetical',
         clusterBy: currentConfig.clusterBy as 'type' | 'community' | 'centrality' | 'temporal',
-        canvasWidth: 1200, // TODO: Get from actual canvas dimensions
         canvasHeight: 800,
         ...options
       };
       
-      console.log('GraphConfigContext: Layout options', layoutOptions);
 
       if (layoutType === 'force-directed') {
         // For force-directed, just restart simulation with updated physics
@@ -510,9 +467,7 @@ export const GraphConfigProvider: React.FC<{ children: ReactNode }> = ({ childre
         }
       } else {
         // Calculate actual positions using layout algorithms
-        console.log('GraphConfigContext: Calculating positions for', layoutType);
         const positions = calculateLayoutPositions(layoutType, graphData.nodes, graphData.edges, layoutOptions);
-        console.log('GraphConfigContext: Calculated', positions.length, 'positions');
         
         // Create nodes with calculated positions
         const positionedNodes = graphData.nodes.map((node, index) => ({
@@ -528,15 +483,12 @@ export const GraphConfigProvider: React.FC<{ children: ReactNode }> = ({ childre
           target: edge.to
         }));
 
-        console.log('GraphConfigContext: Prepared', positionedNodes.length, 'positioned nodes and', transformedEdges.length, 'edges');
 
         // Apply positions to Cosmograph - disable simulation for fixed layouts
         if (cosmographRef.current.setData) {
           const shouldRunSimulation = layoutType === 'force-directed';
-          console.log('GraphConfigContext: Calling setData with runSimulation =', shouldRunSimulation);
           cosmographRef.current.setData(positionedNodes, transformedEdges, shouldRunSimulation);
         } else {
-          console.error('GraphConfigContext: setData method not available on cosmographRef');
         }
 
         // Update physics parameters for the layout type
@@ -585,7 +537,6 @@ export const GraphConfigProvider: React.FC<{ children: ReactNode }> = ({ childre
       }
       
     } catch (error) {
-      console.error('GraphConfigContext: Layout application failed:', error);
     } finally {
       setIsApplyingLayout(false);
     }
