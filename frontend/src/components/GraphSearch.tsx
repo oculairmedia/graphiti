@@ -240,6 +240,10 @@ export const GraphSearch: React.FC<GraphSearchProps> = React.memo(({
             
             // Zoom to the selected node
             if (typeof cosmographRef.current.zoomToPoint === 'function') {
+              // Ensure simulation is running for smooth zoom
+              if (typeof cosmographRef.current.start === 'function') {
+                cosmographRef.current.start(0.1);
+              }
               cosmographRef.current.zoomToPoint(nodeIndex, 250, 4.0, true);
             }
           }
@@ -261,6 +265,10 @@ export const GraphSearch: React.FC<GraphSearchProps> = React.memo(({
             
             // Zoom to the selected node
             if (typeof cosmographRef.current.zoomToPoint === 'function') {
+              // Ensure simulation is running for smooth zoom
+              if (typeof cosmographRef.current.start === 'function') {
+                cosmographRef.current.start(0.1);
+              }
               cosmographRef.current.zoomToPoint(nodeIndex, 250, 4.0, true);
             }
           }
