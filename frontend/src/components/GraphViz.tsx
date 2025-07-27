@@ -59,7 +59,7 @@ import { LayoutPanel } from './LayoutPanel';
 import { FilterPanel } from './FilterPanel';
 import { StatsPanel } from './StatsPanel';
 import { QuickActions } from './QuickActions';
-import { SelectionTools, SelectionMode } from './SelectionTools';
+import { GraphTimeline, GraphTimelineHandle } from './GraphTimeline';
 
 interface GraphVizProps {
   className?: string;
@@ -90,12 +90,12 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
   const [showLayoutPanel, setShowLayoutPanel] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [selectionMode, setSelectionMode] = useState<SelectionMode>('normal');
   const [hoveredNode, setHoveredNode] = useState<GraphNode | null>(null);
   const [hoveredConnectedNodes, setHoveredConnectedNodes] = useState<string[]>([]);
   const [isSimulationRunning, setIsSimulationRunning] = useState(true);
 
   const graphCanvasRef = useRef<GraphCanvasHandle>(null);
+  const timelineRef = useRef<GraphTimelineHandle>(null);
 
   // Stable data references to prevent cascade re-renders during incremental updates
   const stableDataRef = useRef<{ nodes: GraphNode[], edges: GraphLink[] } | null>(null);
@@ -108,10 +108,28 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
   // Fetch graph data from Rust server
   const { data, isLoading, error } = useQuery({
     queryKey: ['graphData', config.queryType, config.nodeLimit],
-    queryFn: () => graphClient.getGraphData({ 
-      query_type: config.queryType,
-      limit: config.nodeLimit 
-    }),
+    queryFn: async () => {
+      const result = await graphClient.getGraphData({ 
+        query_type: config.queryType,
+        limit: config.nodeLimit 
+      });
+      // Debug: log a sample of the data structure
+      if (result && result.nodes && result.nodes.length > 0) {
+        logger.log('Sample node data:', result.nodes[0]);
+        logger.log('Node properties:', result.nodes[0].properties);
+        // Find nodes with temporal data
+        const nodesWithDates = result.nodes.filter((n: any) => 
+          n.created_at || n.properties?.created_at || n.properties?.created || 
+          n.properties?.date || n.properties?.timestamp
+        );
+        logger.log(`Nodes with temporal data: ${nodesWithDates.length}/${result.nodes.length}`);
+        if (nodesWithDates.length > 0) {
+          logger.log('Sample node with date:', nodesWithDates[0]);
+        }
+        logger.log('Sample edge data:', result.edges && result.edges[0]);
+      }
+      return result;
+    },
     refetchInterval: 30000, // Refresh every 30 seconds
   });
 
@@ -384,27 +402,8 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
   };
 
   const handleNodeClick = (node: GraphNode) => {
-    if (selectionMode === 'connected' && graphCanvasRef.current) {
-      // In connected mode, select all connected nodes
-      const nodeIndex = transformedData.nodes.findIndex(n => n.id === node.id);
-      if (nodeIndex !== -1) {
-        const connectedIndices = graphCanvasRef.current.getConnectedPointIndices(nodeIndex);
-        if (connectedIndices && connectedIndices.length > 0) {
-          // Add the clicked node itself
-          const allIndices = [nodeIndex, ...connectedIndices];
-          const connectedNodes = allIndices
-            .map(idx => transformedData.nodes[idx])
-            .filter(Boolean);
-          
-          if (connectedNodes.length > 0) {
-            handleSelectNodes(connectedNodes);
-          }
-        }
-      }
-    } else {
-      // Normal click behavior
-      setSelectedNode(node);
-    }
+    // Normal click behavior
+    setSelectedNode(node);
   };
 
   const handleNodeSelectWithCosmograph = (node: GraphNode) => {
@@ -578,35 +577,6 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
     }
   };
 
-  const handleSelectionModeChange = useCallback((mode: SelectionMode) => {
-    setSelectionMode(mode);
-    
-    if (!graphCanvasRef.current) return;
-
-    // Deactivate previous selection modes
-    if (selectionMode === 'rectangle') {
-      graphCanvasRef.current.deactivateRectSelection();
-    } else if (selectionMode === 'polygon') {
-      graphCanvasRef.current.deactivatePolygonalSelection();
-    }
-
-    // Activate new selection mode
-    switch (mode) {
-      case 'rectangle':
-        graphCanvasRef.current.activateRectSelection();
-        break;
-      case 'polygon':
-        graphCanvasRef.current.activatePolygonalSelection();
-        break;
-      case 'connected':
-        // Connected mode doesn't need activation, it works on click
-        break;
-      case 'normal':
-      default:
-        // Normal mode is the default
-        break;
-    }
-  }, [selectionMode]);
 
   const handleNodeHover = useCallback((node: GraphNode | null) => {
     setHoveredNode(node);
@@ -727,6 +697,34 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
           <Button
             variant="ghost"
             size="sm"
+            onClick={handleZoomOut}
+            className="hover:bg-primary/10"
+            title="Zoom Out"
+          >
+            <ZoomOut className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleZoomIn}
+            className="hover:bg-primary/10"
+            title="Zoom In"
+          >
+            <ZoomIn className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleFitView}
+            className="hover:bg-primary/10"
+            title="Fit to View"
+          >
+            <Maximize2 className="h-4 w-4" />
+          </Button>
+          <div className="w-px h-6 bg-border/50" />
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={handleDownloadGraph}
             className="hover:bg-primary/10"
             title="Download Graph"
@@ -760,24 +758,6 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
             title={isSimulationRunning ? "Pause Simulation" : "Play Simulation"}
           >
             {isSimulationRunning ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleZoomOut}
-            className="hover:bg-primary/10"
-            title="Zoom Out"
-          >
-            <ZoomOut className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleZoomIn}
-            className="hover:bg-primary/10"
-            title="Zoom In"
-          >
-            <ZoomIn className="h-4 w-4" />
           </Button>
           <Button
             variant="ghost"
@@ -884,11 +864,6 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
 
           {/* Quick Actions Toolbar */}
           <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 flex flex-col items-center space-y-2">
-            {/* Selection Tools */}
-            <SelectionTools 
-              onModeChange={handleSelectionModeChange}
-              className="glass-panel rounded-full px-4 py-2 animate-fade-in"
-            />
             
             {/* Quick Actions */}
             <QuickActions 
@@ -928,6 +903,25 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
           onClose={() => setShowStatsPanel(false)}
           data={data}
         />
+      )}
+      
+      {/* Timeline at the bottom */}
+      {data && (
+        <div className={`fixed bottom-0 z-50 transition-all duration-300`}
+          style={{
+            left: leftPanelCollapsed ? '48px' : '320px',
+            right: rightPanelCollapsed ? '48px' : '320px'
+          }}
+        >
+          <GraphTimeline 
+            ref={timelineRef}
+            onTimeRangeChange={(range) => {
+              // Handle timeline range changes
+              logger.log('Timeline range changed:', range);
+            }}
+            className=""
+          />
+        </div>
       )}
       </div>
     </CosmographProvider>

@@ -103,10 +103,20 @@ interface CosmographRef {
   trackPointPositionsByIndices: (indices: number[]) => void;
   getTrackedPointPositionsMap: () => Map<number, [number, number]> | undefined;
   getTrackedPointPositionsArray: () => Float32Array | undefined;
-  selectNode: (node: GraphNode) => void;
+  // Selection methods
+  selectNode: (node: GraphNode, selectAdjacentNodes?: boolean) => void;
   selectNodes: (nodes: GraphNode[]) => void;
+  getSelectedNodes: () => GraphNode[];
+  unselectNodes: () => void;
   unselectAll: () => void;
+  // Focus methods
+  focusNode: (node?: GraphNode) => void;
   unfocusNode: () => void;
+  // Adjacent nodes
+  getAdjacentNodes: (id: string) => GraphNode[] | undefined;
+  // Node position methods
+  getNodePositions: () => Record<string, { x: number; y: number }>;
+  getNodePositionsMap: () => Map<string, [number, number]>;
   restart: () => void;
   start: () => void;
   // Selection tools
@@ -214,6 +224,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     const lastClickTimeRef = useRef<number>(0);
     const lastClickedNodeRef = useRef<GraphNode | null>(null);
     const doubleClickTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    
 
 
     // Data Kit configuration for Cosmograph v2.0
@@ -223,13 +234,14 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         pointLabelBy: 'label',        // Node display labels
         pointColorBy: 'node_type',    // Color by entity type
         pointSizeBy: 'centrality',    // Size by centrality metrics
-        pointIncludeColumns: ['degree_centrality', 'pagerank_centrality', 'betweenness_centrality', 'eigenvector_centrality'] // Include additional columns
+        pointIncludeColumns: ['degree_centrality', 'pagerank_centrality', 'betweenness_centrality', 'eigenvector_centrality', 'created_at', 'created_at_timestamp', 'updated_at'] // Include additional columns including temporal data
       },
       links: {
         linkSourceBy: 'source',       // Source node ID field
         linkTargetsBy: ['target'],    // Target node ID field - must be array format for v2.0
         linkColorBy: 'edge_type',     // Link color by type
-        linkWidthBy: config.linkWidthBy         // Link width by configured column
+        linkWidthBy: config.linkWidthBy,         // Link width by configured column
+        linkIncludeColumns: ['created_at', 'updated_at'] // Include temporal columns for timeline
       }
     }), [config.linkWidthBy]);
 
@@ -258,6 +270,10 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           
           // Transform data to match Data Kit expectations with consistent types
           const transformedNodes = nodes.map((node, index) => {
+            // Extract created_at from properties if it exists there
+            const createdAt = node.properties?.created_at || node.created_at || node.properties?.created || null;
+            
+            
             const nodeData = {
               id: String(node.id), // Ensure string type
               index: index, // Required for v2.0: ordinal index
@@ -268,7 +284,11 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
               degree_centrality: Number(node.properties?.degree_centrality || 0),
               pagerank_centrality: Number(node.properties?.pagerank_centrality || 0),
               betweenness_centrality: Number(node.properties?.betweenness_centrality || 0),
-              eigenvector_centrality: Number(node.properties?.eigenvector_centrality || 0)
+              eigenvector_centrality: Number(node.properties?.eigenvector_centrality || 0),
+              // Include temporal data for timeline - keep as string (timeline can parse ISO dates)
+              created_at: createdAt,
+              // Also include as timestamp for timeline
+              created_at_timestamp: createdAt ? new Date(createdAt).getTime() : null
             };
             
             // Validate that all required fields are present and valid
@@ -295,7 +315,10 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
               target: String(link.target), // Ensure string type
               targetIndex: targetIndex !== undefined ? targetIndex : -1, // Required for v2.0
               edge_type: String(link.edge_type || 'default'), // Ensure string type
-              weight: Number(link.weight || 1) // Ensure number type
+              weight: Number(link.weight || 1), // Ensure number type
+              // Include temporal data if available
+              created_at: link.created_at,
+              updated_at: link.updated_at
             };
             
             // Validate that source and target exist and have valid indices
@@ -328,7 +351,9 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           
           if (!cancelled && result) {
             // Extract the correct structure from Data Kit result
-            const { points, links, cosmographConfig } = result;
+            const { points, links, cosmographConfig, pointsSummary } = result;
+            
+            
             setCosmographData({
               points,
               links,
@@ -538,8 +563,10 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     const clearCosmographSelection = useCallback(() => {
       if (cosmographRef.current) {
         try {
-          // For Cosmograph v2.0, use the proper methods
-          if (typeof cosmographRef.current.unselectAllPoints === 'function') {
+          // Use native Cosmograph methods to clear selection
+          if (typeof cosmographRef.current.unselectAll === 'function') {
+            cosmographRef.current.unselectAll();
+          } else if (typeof cosmographRef.current.unselectAllPoints === 'function') {
             cosmographRef.current.unselectAllPoints();
           } else if (typeof cosmographRef.current.selectPoints === 'function') {
             cosmographRef.current.selectPoints([]);
@@ -547,8 +574,10 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             logger.warn('No clear selection method found on Cosmograph instance');
           }
           
-          // Additional step: clear focused point
-          if (typeof cosmographRef.current.setFocusedPoint === 'function') {
+          // Clear focused node using native method
+          if (typeof cosmographRef.current.unfocusNode === 'function') {
+            cosmographRef.current.unfocusNode();
+          } else if (typeof cosmographRef.current.setFocusedPoint === 'function') {
             cosmographRef.current.setFocusedPoint();
           }
         } catch (error) {
@@ -767,7 +796,10 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             degree_centrality: Number(node.properties?.degree_centrality || 0),
             pagerank_centrality: Number(node.properties?.pagerank_centrality || 0),
             betweenness_centrality: Number(node.properties?.betweenness_centrality || 0),
-            eigenvector_centrality: Number(node.properties?.eigenvector_centrality || 0)
+            eigenvector_centrality: Number(node.properties?.eigenvector_centrality || 0),
+            // Include temporal data for timeline
+            created_at: node.properties?.created_at || node.created_at || node.properties?.created || null,
+            created_at_timestamp: (node.properties?.created_at || node.created_at || node.properties?.created) ? new Date(node.properties?.created_at || node.created_at || node.properties?.created).getTime() : null
           }));
           
           const transformedLinks = updatedLinks.map(link => ({
@@ -815,7 +847,10 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           degree_centrality: Number(node.properties?.degree_centrality || 0),
           pagerank_centrality: Number(node.properties?.pagerank_centrality || 0),
           betweenness_centrality: Number(node.properties?.betweenness_centrality || 0),
-          eigenvector_centrality: Number(node.properties?.eigenvector_centrality || 0)
+          eigenvector_centrality: Number(node.properties?.eigenvector_centrality || 0),
+          // Include temporal data for timeline
+          created_at: node.properties?.created_at || node.created_at || node.properties?.created || null,
+          created_at_timestamp: (node.properties?.created_at || node.created_at || node.properties?.created) ? new Date(node.properties?.created_at || node.created_at || node.properties?.created).getTime() : null
         }));
         
         const transformedLinks = currentLinks.map(link => ({
@@ -861,7 +896,10 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           degree_centrality: Number(node.properties?.degree_centrality || 0),
           pagerank_centrality: Number(node.properties?.pagerank_centrality || 0),
           betweenness_centrality: Number(node.properties?.betweenness_centrality || 0),
-          eigenvector_centrality: Number(node.properties?.eigenvector_centrality || 0)
+          eigenvector_centrality: Number(node.properties?.eigenvector_centrality || 0),
+          // Include temporal data for timeline
+          created_at: node.properties?.created_at || node.created_at || node.properties?.created || null,
+          created_at_timestamp: (node.properties?.created_at || node.created_at || node.properties?.created) ? new Date(node.properties?.created_at || node.created_at || node.properties?.created).getTime() : null
         }));
         
         const transformedLinks = newCurrentLinks.map(link => ({
@@ -909,7 +947,10 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           degree_centrality: Number(node.properties?.degree_centrality || 0),
           pagerank_centrality: Number(node.properties?.pagerank_centrality || 0),
           betweenness_centrality: Number(node.properties?.betweenness_centrality || 0),
-          eigenvector_centrality: Number(node.properties?.eigenvector_centrality || 0)
+          eigenvector_centrality: Number(node.properties?.eigenvector_centrality || 0),
+          // Include temporal data for timeline
+          created_at: node.properties?.created_at || node.created_at || node.properties?.created || null,
+          created_at_timestamp: (node.properties?.created_at || node.created_at || node.properties?.created) ? new Date(node.properties?.created_at || node.created_at || node.properties?.created).getTime() : null
         }));
         
         const transformedLinks = filteredLinks.map(link => ({
@@ -954,7 +995,10 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           degree_centrality: Number(node.properties?.degree_centrality || 0),
           pagerank_centrality: Number(node.properties?.pagerank_centrality || 0),
           betweenness_centrality: Number(node.properties?.betweenness_centrality || 0),
-          eigenvector_centrality: Number(node.properties?.eigenvector_centrality || 0)
+          eigenvector_centrality: Number(node.properties?.eigenvector_centrality || 0),
+          // Include temporal data for timeline
+          created_at: node.properties?.created_at || node.created_at || node.properties?.created || null,
+          created_at_timestamp: (node.properties?.created_at || node.created_at || node.properties?.created) ? new Date(node.properties?.created_at || node.created_at || node.properties?.created).getTime() : null
         }));
         
         const transformedLinks = filteredLinks.map(link => ({
@@ -1019,6 +1063,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         simulationTimerRef.current = null;
       }
     }, []);
+
     
     // Handle tab visibility changes to restart simulation
     useEffect(() => {
@@ -1125,11 +1170,11 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       }
     }), [clearCosmographSelection, selectCosmographNode, selectCosmographNodes, zoomIn, zoomOut, fitView, fitViewByIndices, zoomToPoint, trackPointPositionsByIndices, getTrackedPointPositionsMap, activateRectSelection, deactivateRectSelection, activatePolygonalSelection, deactivatePolygonalSelection, selectPointsInRect, selectPointsInPolygon, getConnectedPointIndices, getPointIndicesByExactValues, addIncrementalData, updateNodes, updateLinks, removeNodes, removeLinks, startSimulation, pauseSimulation, resumeSimulation, keepSimulationRunning]);
 
-    // Handle Cosmograph events with double-click detection
+    // Handle Cosmograph events with native selection methods and multi-selection
     // Cosmograph v2.0 onClick signature: (index: number | undefined, pointPosition: [number, number] | undefined, event: MouseEvent) => void
     const handleClick = async (index?: number, pointPosition?: [number, number], event?: MouseEvent) => {
       
-      if (typeof index === 'number') {
+      if (typeof index === 'number' && cosmographRef.current) {
         
         // Get the original node data using the index
         let originalNode: GraphNode | undefined;
@@ -1141,7 +1186,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         }
         
         // If we can't find the original node by index, try to query it from Cosmograph
-        if (!originalNode && cosmographRef.current && typeof cosmographRef.current.getPointsByIndices === 'function') {
+        if (!originalNode && typeof cosmographRef.current.getPointsByIndices === 'function') {
           try {
             const pointData = await cosmographRef.current.getPointsByIndices([index]);
             
@@ -1182,41 +1227,94 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             doubleClickTimeoutRef.current = null;
           }
           
-          if (isDoubleClick) {
-            // Double-click detected - select node with Cosmograph visual effects
-            selectCosmographNode(originalNode);
+          // Use native Cosmograph selection methods
+          if (event?.shiftKey || event?.ctrlKey || event?.metaKey) {
+            // Multi-selection with shift/ctrl
+            if (typeof cosmographRef.current.selectPoints === 'function') {
+              // Get currently selected point indices
+              const currentlySelectedIndices: number[] = [];
+              if (typeof cosmographRef.current.getSelectedPointIndices === 'function') {
+                const selected = cosmographRef.current.getSelectedPointIndices();
+                if (selected) currentlySelectedIndices.push(...selected);
+              }
+              
+              const isAlreadySelected = currentlySelectedIndices.includes(index);
+              
+              if (isAlreadySelected) {
+                // Deselect the node - remove from selection
+                const newSelection = currentlySelectedIndices.filter(i => i !== index);
+                cosmographRef.current.selectPoints(newSelection);
+              } else {
+                // Add to selection
+                cosmographRef.current.selectPoints([...currentlySelectedIndices, index]);
+              }
+            }
+            
+            // Highlight adjacent nodes if shift is held
+            if (event?.shiftKey && typeof cosmographRef.current.getAdjacentNodes === 'function') {
+              const adjacentNodes = cosmographRef.current.getAdjacentNodes(originalNode.id);
+              if (adjacentNodes && adjacentNodes.length > 0) {
+                logger.log(`Node ${originalNode.label} has ${adjacentNodes.length} adjacent nodes`);
+              }
+            }
+            
+            // Always call onNodeClick to show the info panel even with modifiers
             onNodeClick(originalNode);
             onNodeSelect(originalNode.id);
-            
-            // Center and zoom to the selected node using zoomToPoint
-            zoomToPoint(index);
-            
-            // Track the selected node position
-            trackPointPositionsByIndices([index]);
-            
-            // Set focus on the clicked node to show focused ring color
-            if (cosmographRef.current && typeof cosmographRef.current.setFocusedPoint === 'function') {
-              cosmographRef.current.setFocusedPoint(index);
-            }
           } else {
-            // Single click - show modal and maintain visual selection
-            doubleClickTimeoutRef.current = setTimeout(() => {
-              // Single click confirmed - show modal and keep node visually selected
-              selectCosmographNode(originalNode!); // Keep visual selection circle
-              onNodeClick(originalNode!); // Show modal
-              onNodeSelect(originalNode!.id); // Update selection state
+            // Handle single click or double click
+            if (isDoubleClick) {
+              // Double-click - select, focus, and zoom
               
-              // Center and zoom to the selected node using zoomToPoint
+              // Select the node
+              if (typeof cosmographRef.current.selectPoint === 'function') {
+                cosmographRef.current.selectPoint(index);
+              } else if (typeof cosmographRef.current.selectPoints === 'function') {
+                cosmographRef.current.selectPoints([index]);
+              }
+              
+              // Focus the node (draws a ring around it)
+              if (typeof cosmographRef.current.setFocusedPoint === 'function') {
+                cosmographRef.current.setFocusedPoint(index);
+              }
+              
+              // Center and zoom to the selected node
               zoomToPoint(index);
               
               // Track the selected node position
               trackPointPositionsByIndices([index]);
               
-              // Set focus on the clicked node to show focused ring color
-              if (cosmographRef.current && typeof cosmographRef.current.setFocusedPoint === 'function') {
-                cosmographRef.current.setFocusedPoint(index);
-              }
-            }, 300);
+              // Log tracking info - position will be tracked
+              logger.log(`Tracking node ${originalNode.label} (index: ${index})`);
+              
+              // Show the info panel
+              onNodeClick(originalNode);
+              onNodeSelect(originalNode.id);
+            } else {
+              // Single click - wait to see if it's a double click
+              doubleClickTimeoutRef.current = setTimeout(() => {
+                // Single click confirmed - select and show info panel
+                
+                // Select the node
+                if (typeof cosmographRef.current.selectPoint === 'function') {
+                  cosmographRef.current.selectPoint(index);
+                } else if (typeof cosmographRef.current.selectPoints === 'function') {
+                  cosmographRef.current.selectPoints([index]);
+                }
+                
+                // Focus the node (draws a ring around it)
+                if (typeof cosmographRef.current.setFocusedPoint === 'function') {
+                  cosmographRef.current.setFocusedPoint(index);
+                }
+                
+                // Track the selected node position
+                trackPointPositionsByIndices([index]);
+                
+                // Show the info panel
+                onNodeClick(originalNode);
+                onNodeSelect(originalNode.id);
+              }, 300);
+            }
           }
           
           // Update click tracking using refs (no re-render)
@@ -1227,7 +1325,23 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         }
       } else {
         // Empty space was clicked - clear all selections and return to default state
-        clearCosmographSelection();
+        if (cosmographRef.current) {
+          // Clear selection using native methods
+          if (typeof cosmographRef.current.unselectAll === 'function') {
+            cosmographRef.current.unselectAll();
+          } else if (typeof cosmographRef.current.unselectAllPoints === 'function') {
+            cosmographRef.current.unselectAllPoints();
+          } else if (typeof cosmographRef.current.selectPoints === 'function') {
+            cosmographRef.current.selectPoints([]);
+          }
+          
+          // Clear focused node using native method
+          if (typeof cosmographRef.current.unfocusNode === 'function') {
+            cosmographRef.current.unfocusNode();
+          } else if (typeof cosmographRef.current.setFocusedPoint === 'function') {
+            cosmographRef.current.setFocusedPoint();
+          }
+        }
         onClearSelection?.();
       }
     };
