@@ -117,6 +117,8 @@ interface CosmographRef {
   selectPointsInRect: (selection: [[number, number], [number, number]] | null, addToSelection?: boolean) => void;
   selectPointsInPolygon: (polygonPoints: [number, number][], addToSelection?: boolean) => void;
   getConnectedPointIndices: (index: number) => number[] | undefined;
+  // Search methods
+  getPointIndicesByExactValues: (keyValues: Record<string, unknown>) => number[] | undefined;
   _canvasElement?: HTMLCanvasElement;
 }
 
@@ -152,6 +154,8 @@ interface GraphCanvasHandle {
   selectPointsInRect: (selection: [[number, number], [number, number]] | null, addToSelection?: boolean) => void;
   selectPointsInPolygon: (polygonPoints: [number, number][], addToSelection?: boolean) => void;
   getConnectedPointIndices: (index: number) => number[] | undefined;
+  // Search methods
+  getPointIndicesByExactValues: (keyValues: Record<string, unknown>) => number[] | undefined;
   // Incremental update methods
   addIncrementalData: (newNodes: GraphNode[], newLinks: GraphLink[], runSimulation?: boolean) => void;
   updateNodes: (updatedNodes: GraphNode[]) => void;
@@ -720,6 +724,18 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       }
     }, []);
 
+    // Search for nodes by exact property values
+    const getPointIndicesByExactValues = useCallback((keyValues: Record<string, unknown>): number[] | undefined => {
+      if (!cosmographRef.current) return undefined;
+      
+      try {
+        return cosmographRef.current.getPointIndicesByExactValues(keyValues);
+      } catch (error) {
+        logger.warn('Get point indices by exact values failed:', error);
+        return undefined;
+      }
+    }, []);
+
     // Incremental update methods
     const addIncrementalData = useCallback(async (newNodes: GraphNode[], newLinks: GraphLink[], runSimulation = false) => {
       if (!cosmographRef.current) return;
@@ -1068,6 +1084,8 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       selectPointsInRect,
       selectPointsInPolygon,
       getConnectedPointIndices,
+      // Search methods
+      getPointIndicesByExactValues,
       // Incremental update methods
       addIncrementalData,
       updateNodes,
@@ -1083,7 +1101,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       setIncrementalUpdateFlag: (enabled: boolean) => {
         isIncrementalUpdateRef.current = enabled;
       }
-    }), [clearCosmographSelection, selectCosmographNode, selectCosmographNodes, zoomIn, zoomOut, fitView, fitViewByIndices, zoomToPoint, trackPointPositionsByIndices, getTrackedPointPositionsMap, activateRectSelection, deactivateRectSelection, activatePolygonalSelection, deactivatePolygonalSelection, selectPointsInRect, selectPointsInPolygon, getConnectedPointIndices, addIncrementalData, updateNodes, updateLinks, removeNodes, removeLinks, startSimulation, pauseSimulation, resumeSimulation, keepSimulationRunning]);
+    }), [clearCosmographSelection, selectCosmographNode, selectCosmographNodes, zoomIn, zoomOut, fitView, fitViewByIndices, zoomToPoint, trackPointPositionsByIndices, getTrackedPointPositionsMap, activateRectSelection, deactivateRectSelection, activatePolygonalSelection, deactivatePolygonalSelection, selectPointsInRect, selectPointsInPolygon, getConnectedPointIndices, getPointIndicesByExactValues, addIncrementalData, updateNodes, updateLinks, removeNodes, removeLinks, startSimulation, pauseSimulation, resumeSimulation, keepSimulationRunning]);
 
     // Handle Cosmograph events with double-click detection
     // Cosmograph v2.0 onClick signature: (index: number | undefined, pointPosition: [number, number] | undefined, event: MouseEvent) => void
