@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Search, Settings, BarChart3, Download, Upload, Maximize2, ZoomIn, ZoomOut, Camera, Filter, Layout, Eye, EyeOff } from 'lucide-react';
+import { Search, Settings, BarChart3, Download, Upload, Maximize2, ZoomIn, ZoomOut, Camera, Filter, Layout, Eye, EyeOff, Play, Pause } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -93,6 +93,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
   const [selectionMode, setSelectionMode] = useState<SelectionMode>('normal');
   const [hoveredNode, setHoveredNode] = useState<GraphNode | null>(null);
   const [hoveredConnectedNodes, setHoveredConnectedNodes] = useState<string[]>([]);
+  const [isSimulationRunning, setIsSimulationRunning] = useState(true);
 
   const graphCanvasRef = useRef<GraphCanvasHandle>(null);
 
@@ -629,6 +630,18 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
     }
   }, [transformedData.nodes]);
 
+  const toggleSimulation = useCallback(() => {
+    if (!graphCanvasRef.current) return;
+    
+    if (isSimulationRunning) {
+      graphCanvasRef.current.pauseSimulation();
+      setIsSimulationRunning(false);
+    } else {
+      graphCanvasRef.current.resumeSimulation();
+      setIsSimulationRunning(true);
+    }
+  }, [isSimulationRunning]);
+
   useEffect(() => {
     const handleFullscreenChange = () => {
       setIsFullscreen(!!document.fullscreenElement);
@@ -738,6 +751,15 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
             title="Take Screenshot"
           >
             <Camera className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={toggleSimulation}
+            className="hover:bg-primary/10"
+            title={isSimulationRunning ? "Pause Simulation" : "Play Simulation"}
+          >
+            {isSimulationRunning ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
           </Button>
           <Button
             variant="ghost"
