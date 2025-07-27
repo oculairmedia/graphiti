@@ -98,6 +98,7 @@ interface CosmographRef {
   setZoomLevel: (level: number, duration?: number) => void;
   getZoomLevel: () => number;
   fitView: (duration?: number) => void;
+  fitViewByIndices: (indices: number[], duration?: number, padding?: number) => void;
   zoomToPoint: (index: number, duration?: number, scale?: number, canZoomOut?: boolean) => void;
   trackPointPositionsByIndices: (indices: number[]) => void;
   getTrackedPointPositionsMap: () => Map<number, [number, number]> | undefined;
@@ -128,6 +129,7 @@ interface GraphCanvasHandle {
   zoomIn: () => void;
   zoomOut: () => void;
   fitView: () => void;
+  fitViewByIndices: (indices: number[], duration?: number, padding?: number) => void;
   zoomToPoint: (index: number, duration?: number, scale?: number, canZoomOut?: boolean) => void;
   trackPointPositionsByIndices: (indices: number[]) => void;
   getTrackedPointPositionsMap: () => Map<number, [number, number]> | undefined;
@@ -204,7 +206,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       },
       links: {
         linkSourceBy: 'source',       // Source node ID field
-        linkTargetsBy: ['target'],    // Target node ID field (note: array format as per docs)
+        linkTargetsBy: ['target'],    // Target node ID field - must be array format for v2.0
         linkColorBy: 'edge_type',     // Link color by type
         linkWidthBy: config.linkWidthBy         // Link width by configured column
       }
@@ -234,9 +236,10 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             
           
           // Transform data to match Data Kit expectations with consistent types
-          const transformedNodes = nodes.map(node => {
+          const transformedNodes = nodes.map((node, index) => {
             const nodeData = {
               id: String(node.id), // Ensure string type
+              index: index, // Required for v2.0: ordinal index
               label: String(node.label || node.id), // Ensure string type
               node_type: String(node.node_type || 'Unknown'), // Ensure string type
               centrality: Number(node.properties?.degree_centrality || node.properties?.pagerank_centrality || node.size || 1), // Ensure number type
@@ -255,21 +258,34 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             return nodeData;
           }).filter(node => node.id && node.id !== 'undefined'); // Remove invalid nodes
 
+          // Create a map for quick node index lookup
+          const nodeIndexMap = new Map<string, number>();
+          transformedNodes.forEach((node, index) => {
+            nodeIndexMap.set(node.id, index);
+          });
+
           const transformedLinks = links.map(link => {
+            const sourceIndex = nodeIndexMap.get(String(link.source));
+            const targetIndex = nodeIndexMap.get(String(link.target));
+            
             const linkData = {
               source: String(link.source), // Ensure string type
+              sourceIndex: sourceIndex !== undefined ? sourceIndex : -1, // Required for v2.0
               target: String(link.target), // Ensure string type
+              targetIndex: targetIndex !== undefined ? targetIndex : -1, // Required for v2.0
               edge_type: String(link.edge_type || 'default'), // Ensure string type
               weight: Number(link.weight || 1) // Ensure number type
             };
             
-            // Validate that source and target exist
-            if (!linkData.source || !linkData.target || linkData.source === 'undefined' || linkData.target === 'undefined') {
-              logger.warn('Invalid link found:', link);
+            // Validate that source and target exist and have valid indices
+            if (!linkData.source || !linkData.target || linkData.source === 'undefined' || linkData.target === 'undefined' || 
+                linkData.sourceIndex === -1 || linkData.targetIndex === -1) {
+              logger.warn('Invalid link found:', link, 'indices:', linkData.sourceIndex, linkData.targetIndex);
             }
             
             return linkData;
-          }).filter(link => link.source && link.target && link.source !== 'undefined' && link.target !== 'undefined'); // Remove invalid links
+          }).filter(link => link.source && link.target && link.source !== 'undefined' && link.target !== 'undefined' && 
+                           link.sourceIndex !== -1 && link.targetIndex !== -1); // Remove invalid links
 
           
           // Log node type distribution for color mapping debugging
@@ -475,6 +491,16 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             
             if (nodeIndices.length > 0) {
               cosmographRef.current.selectPoints(nodeIndices);
+              
+              // For multiple nodes, use fitViewByIndices to show all selected nodes
+              if (nodeIndices.length > 1) {
+                // Call fitViewByIndices after this function completes
+                setTimeout(() => {
+                  if (cosmographRef.current && typeof cosmographRef.current.fitViewByIndices === 'function') {
+                    cosmographRef.current.fitViewByIndices(nodeIndices, config.fitViewDuration, config.fitViewPadding);
+                  }
+                }, 0);
+              }
             } else {
               logger.warn('No valid node indices found for selection');
             }
@@ -485,7 +511,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           logger.error('Error selecting Cosmograph nodes:', error);
         }
       }
-    }, [transformedData.nodes]);
+    }, [transformedData.nodes, config.fitViewDuration, config.fitViewPadding]);
 
     // Method to clear Cosmograph selection and return to default state
     const clearCosmographSelection = useCallback(() => {
@@ -554,6 +580,19 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         logger.warn('Fit view failed:', error);
       }
     }, [config.fitViewDuration]);
+
+    const fitViewByIndices = useCallback((indices: number[], duration?: number, padding?: number) => {
+      if (!cosmographRef.current) return;
+      
+      try {
+        // Use the Cosmograph v2.0 fitViewByIndices method with config defaults
+        const actualDuration = duration !== undefined ? duration : config.fitViewDuration;
+        const actualPadding = padding !== undefined ? padding : config.fitViewPadding;
+        cosmographRef.current.fitViewByIndices(indices, actualDuration, actualPadding);
+      } catch (error) {
+        logger.warn('Fit view by indices failed:', error);
+      }
+    }, [config.fitViewDuration, config.fitViewPadding]);
 
     const zoomToPoint = useCallback((index: number, duration?: number, scale?: number, canZoomOut?: boolean) => {
       if (!cosmographRef.current) return;
@@ -916,6 +955,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       zoomIn,
       zoomOut,
       fitView,
+      fitViewByIndices,
       zoomToPoint,
       trackPointPositionsByIndices,
       getTrackedPointPositionsMap,
@@ -944,7 +984,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       setIncrementalUpdateFlag: (enabled: boolean) => {
         isIncrementalUpdateRef.current = enabled;
       }
-    }), [clearCosmographSelection, selectCosmographNode, selectCosmographNodes, zoomIn, zoomOut, fitView, zoomToPoint, trackPointPositionsByIndices, getTrackedPointPositionsMap, addIncrementalData, updateNodes, updateLinks, removeNodes, removeLinks, startSimulation, pauseSimulation, resumeSimulation, keepSimulationRunning]);
+    }), [clearCosmographSelection, selectCosmographNode, selectCosmographNodes, zoomIn, zoomOut, fitView, fitViewByIndices, zoomToPoint, trackPointPositionsByIndices, getTrackedPointPositionsMap, addIncrementalData, updateNodes, updateLinks, removeNodes, removeLinks, startSimulation, pauseSimulation, resumeSimulation, keepSimulationRunning]);
 
     // Handle Cosmograph events with double-click detection
     // Cosmograph v2.0 onClick signature: (index: number | undefined, pointPosition: [number, number] | undefined, event: MouseEvent) => void

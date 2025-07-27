@@ -160,6 +160,7 @@ interface CosmographRefType {
   setZoomLevel: (level: number, duration?: number) => void;
   getZoomLevel: () => number;
   fitView: (duration?: number) => void;
+  fitViewByIndices: (indices: number[], duration?: number, padding?: number) => void;
   zoomToPoint: (index: number, duration?: number, scale?: number, canZoomOut?: boolean) => void;
   trackPointPositionsByIndices: (indices: number[]) => void;
   getTrackedPointPositionsMap: () => Map<number, [number, number]> | undefined;
@@ -370,8 +371,8 @@ export const GraphConfigProvider: React.FC<{ children: ReactNode }> = ({ childre
       const beforeZoom = cosmographRef.current.getZoomLevel();
       
       if (beforeZoom !== undefined) {
-        const newZoom = beforeZoom * 1.5;
-        cosmographRef.current.setZoomLevel(newZoom);
+        const newZoom = Math.min(beforeZoom * 1.5, 10);
+        cosmographRef.current.setZoomLevel(newZoom, config.fitViewDuration);
       }
     } catch (error) {
       // Zoom operation failed
@@ -387,8 +388,8 @@ export const GraphConfigProvider: React.FC<{ children: ReactNode }> = ({ childre
       const beforeZoom = cosmographRef.current.getZoomLevel();
       
       if (beforeZoom !== undefined) {
-        const newZoom = beforeZoom / 1.5;
-        cosmographRef.current.setZoomLevel(newZoom);
+        const newZoom = Math.max(beforeZoom / 1.5, 0.1);
+        cosmographRef.current.setZoomLevel(newZoom, config.fitViewDuration);
       }
     } catch (error) {
       // Zoom operation failed
