@@ -548,6 +548,21 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
   }, []);
 
+  // Cleanup refs on unmount to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      // Clear data refs
+      stableDataRef.current = null;
+      stableGraphPropsRef.current = null;
+      stableTransformedDataRef.current = null;
+      
+      // Clear any pending operations
+      if (graphCanvasRef.current) {
+        graphCanvasRef.current = null;
+      }
+    };
+  }, []);
+
   // Handle loading state
   if (isLoading) {
     return (
