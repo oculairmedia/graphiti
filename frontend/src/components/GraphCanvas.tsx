@@ -619,6 +619,11 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       if (!cosmographRef.current) return;
       
       try {
+        // Ensure simulation is running for smooth zoom animation
+        if (typeof cosmographRef.current.start === 'function') {
+          cosmographRef.current.start(0.1); // Start with low energy just for the zoom
+        }
+        
         // Use the Cosmograph v2.0 zoomToPoint method with config defaults
         const actualDuration = duration !== undefined ? duration : config.fitViewDuration;
         const actualScale = scale !== undefined ? scale : 10.0; // Very high zoom scale for detailed focus
