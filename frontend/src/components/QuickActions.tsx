@@ -82,6 +82,37 @@ export const QuickActions: React.FC<QuickActionsProps> = ({
         </Button>
       </div>
 
+      {/* Zoom Controls */}
+      <div className="flex items-center space-x-1 border-l border-border/30 pl-2">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onZoomOut}
+          className="h-8 px-2 hover:bg-primary/10"
+          title="Zoom Out"
+        >
+          <ZoomOut className="h-3 w-3" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onFitToScreen}
+          className="h-8 px-2 hover:bg-primary/10"
+          title="Fit to Screen"
+        >
+          <Maximize2 className="h-3 w-3" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onZoomIn}
+          className="h-8 px-2 hover:bg-primary/10"
+          title="Zoom In"
+        >
+          <ZoomIn className="h-3 w-3" />
+        </Button>
+      </div>
+
       {/* Graph Navigation */}
       <div className="flex items-center space-x-1 border-l border-border/30 pl-2">
         <Button
