@@ -697,34 +697,6 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
           <Button
             variant="ghost"
             size="sm"
-            onClick={handleZoomOut}
-            className="hover:bg-primary/10"
-            title="Zoom Out"
-          >
-            <ZoomOut className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleZoomIn}
-            className="hover:bg-primary/10"
-            title="Zoom In"
-          >
-            <ZoomIn className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleFitView}
-            className="hover:bg-primary/10"
-            title="Fit to View"
-          >
-            <Maximize2 className="h-4 w-4" />
-          </Button>
-          <div className="w-px h-6 bg-border/50" />
-          <Button
-            variant="ghost"
-            size="sm"
             onClick={handleDownloadGraph}
             className="hover:bg-primary/10"
             title="Download Graph"
@@ -862,8 +834,8 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
             </div>
           )}
 
-          {/* Quick Actions Toolbar */}
-          <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 flex flex-col items-center space-y-2">
+          {/* Quick Actions Toolbar - Positioned above timeline */}
+          <div className="absolute bottom-32 left-1/2 transform -translate-x-1/2 flex flex-col items-center space-y-2 z-50">
             
             {/* Quick Actions */}
             <QuickActions 
