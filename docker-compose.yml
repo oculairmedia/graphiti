@@ -121,34 +121,36 @@ services:
       - "homepage.href=http://192.168.50.90:8088"
       - "homepage.description=React frontend for graph visualization"
 
-  graphiti-mcp:
-    build:
-      context: ./mcp_server
-      dockerfile: Dockerfile
-    container_name: graphiti-mcp
-    restart: unless-stopped
-    ports:
-      - "8001:8000" # MCP Server HTTP endpoint
-    environment:
-      - GRAPHITI_API_URL=http://graph:8000
-      - FALKORDB_URI=redis://falkordb:6379
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      - MODEL_NAME=${MODEL_NAME:-qwen2.5:32b}
-      - SMALL_MODEL_NAME=${SMALL_MODEL_NAME:-qwen2.5:7b}
-      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-http://host.docker.internal:11434/v1}
-      - SEMAPHORE_LIMIT=${SEMAPHORE_LIMIT:-5}
-    depends_on:
-      graph:
-        condition: service_healthy
-    networks:
-      - graphiti_network
-    labels:
-      - "homepage.group=AI Services"
-      - "homepage.name=Graphiti MCP Server"
-      - "homepage.icon=si-openai"
-      - "homepage.href=http://192.168.50.90:8001"
-      - "homepage.description=Model Context Protocol server for AI assistants"
-    command: ["uv", "run", "graphiti_mcp_server.py", "--transport", "sse"]
+  # graphiti-mcp:
+  #   build:
+  #     context: ./mcp_server
+  #     dockerfile: Dockerfile
+  #   container_name: graphiti-mcp
+  #   restart: unless-stopped
+  #   ports:
+  #     - "8001:8000" # MCP Server HTTP endpoint
+  #   environment:
+  #     - GRAPHITI_API_URL=http://graph:8000
+  #     - NEO4J_URI=bolt://falkordb:6379
+  #     - NEO4J_USER=default
+  #     - NEO4J_PASSWORD=
+  #     - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+  #     - MODEL_NAME=${MODEL_NAME:-qwen2.5:32b}
+  #     - SMALL_MODEL_NAME=${SMALL_MODEL_NAME:-qwen2.5:7b}
+  #     - OPENAI_BASE_URL=${OPENAI_BASE_URL:-http://host.docker.internal:11434/v1}
+  #     - SEMAPHORE_LIMIT=${SEMAPHORE_LIMIT:-5}
+  #   depends_on:
+  #     graph:
+  #       condition: service_healthy
+  #   networks:
+  #     - graphiti_network
+  #   labels:
+  #     - "homepage.group=AI Services"
+  #     - "homepage.name=Graphiti MCP Server"
+  #     - "homepage.icon=si-openai"
+  #     - "homepage.href=http://192.168.50.90:8001"
+  #     - "homepage.description=Model Context Protocol server for AI assistants"
+  #   command: ["uv", "run", "graphiti_mcp_server.py", "--transport", "sse"]
 
   graphiti-centrality-rs:
     build:
