@@ -186,9 +186,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
           stableDataRef.current = { nodes: [...data.nodes], edges: [...data.edges] };
         }
 
-        logger.log('GraphViz: Incremental updates completed successfully');
       } catch (error) {
-        logger.error('GraphViz: Incremental update failed:', error);
         // Fallback to full reload on error
         setIsIncrementalUpdate(false);
       } finally {
@@ -293,7 +291,6 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
     const MAX_RENDERED_NODES = 5000;
 
     if (visibleNodes.length > LARGE_GRAPH_THRESHOLD) {
-      logger.log(`Large graph detected: ${visibleNodes.length} nodes. Applying virtualization.`);
       
       // Calculate importance score for each node
       const nodesWithScore = visibleNodes.map(node => {
@@ -313,7 +310,6 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
         .slice(0, MAX_RENDERED_NODES)
         .map(item => item.node);
         
-      logger.log(`Virtualization applied: reduced from ${visibleNodes.length} to ${finalNodes.length} nodes`);
     }
     
     const visibleNodeIds = new Set(finalNodes.map(n => n.id));
@@ -442,20 +438,8 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
         graphCanvasRef.current.selectNodes(allHighlightedNodes);
       }
       
-      const isExpanding = highlightedNodes.length > 0;
-      logger.log(
-        isExpanding 
-          ? `Expanded network: found ${newNeighborNodes.length} new neighbors. Total nodes: ${allHighlightedIds.length}`
-          : `Found ${newNeighborNodes.length} neighbors for node ${nodeId}:`, 
-        newNeighborNodes.map(n => n.label || n.id)
-      );
     } else {
-      const isExpanding = highlightedNodes.length > 0;
-      logger.log(
-        isExpanding 
-          ? `No new neighbors found. Network expansion complete with ${nodesToExplore.length} nodes.`
-          : `No neighbors found for node ${nodeId}`
-      );
+      // No neighbors found
     }
   };
 
@@ -551,7 +535,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
         stream.getTracks().forEach(track => track.stop());
       });
     } catch (error) {
-      logger.warn('Screenshot capture failed:', error);
+      // Screenshot capture failed
     }
   };
 
@@ -726,14 +710,6 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
               const dataToUse = isIncrementalUpdate && stableGraphPropsRef.current 
                 ? stableGraphPropsRef.current 
                 : transformedData;
-              
-                nodeCount: dataToUse.nodes.length,
-                linkCount: dataToUse.links.length,
-                isIncrementalUpdate,
-                usingStableData: isIncrementalUpdate && !!stableGraphPropsRef.current,
-                selectedNodesCount: selectedNodes.length,
-                highlightedNodesCount: highlightedNodes.length
-              });
               
               // Update stable props when not in incremental update mode
               if (!isIncrementalUpdate) {

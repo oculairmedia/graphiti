@@ -207,7 +207,6 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             setIsDataPreparing(true);
             setDataKitError(null);
             
-            logger.log(`GraphCanvas [${componentId.current}]: Preparing data with Cosmograph Data Kit...`);
           
           // Transform data to match Data Kit expectations with consistent types
           const transformedNodes = nodes.map(node => {
@@ -247,17 +246,12 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             return linkData;
           }).filter(link => link.source && link.target && link.source !== 'undefined' && link.target !== 'undefined'); // Remove invalid links
 
-          logger.log(`GraphCanvas: Data Kit processing ${transformedNodes.length} nodes, ${transformedLinks.length} links`);
-          logger.log('Sample node:', transformedNodes[0]);
-          logger.log('Sample link:', transformedLinks[0]);
-          logger.log('Data Kit config:', dataKitConfig);
           
           // Log node type distribution for color mapping debugging
           const nodeTypeDistribution = transformedNodes.reduce((acc, node) => {
             acc[node.node_type] = (acc[node.node_type] || 0) + 1;
             return acc;
           }, {} as Record<string, number>);
-          logger.log('Node type distribution:', nodeTypeDistribution);
           
           // Validate we have valid data before proceeding
           if (transformedNodes.length === 0) {
@@ -273,17 +267,11 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           if (!cancelled && result) {
             // Extract the correct structure from Data Kit result
             const { points, links, cosmographConfig } = result;
-            logger.log('GraphCanvas: Data Kit result structure:', { 
-              pointsType: typeof points, 
-              linksType: typeof links, 
-              configKeys: Object.keys(cosmographConfig || {}) 
-            });
             setCosmographData({
               points,
               links,
               cosmographConfig
             });
-            logger.log('GraphCanvas: Data Kit preparation completed successfully');
           }
         } catch (error) {
           if (!cancelled) {
@@ -292,7 +280,6 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             setDataKitError(errorMessage);
             
             // Fallback to direct data passing
-            logger.log('GraphCanvas: Falling back to direct data passing');
             setCosmographData({
               points: transformedNodes,
               links: transformedLinks,
@@ -428,7 +415,6 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             const nodeIndex = transformedData.nodes.findIndex(n => n.id === node.id);
             if (nodeIndex >= 0) {
               cosmographRef.current.selectPoint(nodeIndex);
-              logger.log('Selected node by index:', nodeIndex, node.id);
             } else {
               logger.warn('Could not find node index for selection:', node.id);
             }
@@ -436,7 +422,6 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             const nodeIndex = transformedData.nodes.findIndex(n => n.id === node.id);
             if (nodeIndex >= 0) {
               cosmographRef.current.selectPoints([nodeIndex]);
-              logger.log('Selected node by index array:', nodeIndex, node.id);
             }
           }
         } catch (error) {
@@ -457,7 +442,6 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             
             if (nodeIndices.length > 0) {
               cosmographRef.current.selectPoints(nodeIndices);
-              logger.log('Selected Cosmograph nodes by indices:', nodeIndices, nodes.map(n => n.id));
             } else {
               logger.warn('No valid node indices found for selection');
             }
@@ -477,19 +461,15 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           // For Cosmograph v2.0, use the proper methods
           if (typeof cosmographRef.current.unselectAllPoints === 'function') {
             cosmographRef.current.unselectAllPoints();
-            logger.log('Cleared Cosmograph selection with unselectAllPoints()');
           } else if (typeof cosmographRef.current.selectPoints === 'function') {
             cosmographRef.current.selectPoints([]);
-            logger.log('Cleared Cosmograph selection with selectPoints([])');
           } else {
             logger.warn('No clear selection method found on Cosmograph instance');
-            logger.log('Available methods:', Object.getOwnPropertyNames(cosmographRef.current));
           }
           
           // Additional step: clear focused point
           if (typeof cosmographRef.current.setFocusedPoint === 'function') {
             cosmographRef.current.setFocusedPoint();
-            logger.log('🚫 Cleared focused point');
           }
         } catch (error) {
           logger.error('Error clearing Cosmograph selection:', error);
@@ -506,7 +486,6 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         if (currentZoom !== undefined) {
           const newZoom = Math.min(currentZoom * 1.5, 10);
           cosmographRef.current.setZoomLevel(newZoom);
-          logger.log(`Zoom in: ${currentZoom.toFixed(2)} → ${newZoom.toFixed(2)}`);
         } else {
           logger.warn('Could not get current zoom level for zoom in');
         }
@@ -523,7 +502,6 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         const currentZoom = cosmographRef.current.getZoomLevel();
         if (currentZoom !== undefined) {
           cosmographRef.current.setZoomLevel(newZoom);
-          logger.log(`Zoom out: ${currentZoom.toFixed(2)} → ${newZoom.toFixed(2)}`);
         } else {
           logger.warn('Could not get current zoom level for zoom out');
         }
@@ -581,7 +559,6 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           
           // Use direct setData without Data Kit reprocessing for better performance
           cosmographRef.current.setData(transformedNodes, transformedLinks, runSimulation);
-          logger.log(`Incremental update: added ${newNodes.length} nodes, ${newLinks.length} links`);
         }
       } catch (error) {
         logger.error('Incremental data update failed:', error);
@@ -629,7 +606,6 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         }));
         
         cosmographRef.current.setData(transformedNodes, transformedLinks, false);
-        logger.log(`Updated ${updatedNodes.length} nodes`);
       } catch (error) {
         logger.error('Node update failed:', error);
       } finally {
@@ -676,7 +652,6 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         }));
         
         cosmographRef.current.setData(transformedNodes, transformedLinks, false);
-        logger.log(`Updated ${updatedLinks.length} links`);
       } catch (error) {
         logger.error('Link update failed:', error);
       } finally {
@@ -725,7 +700,6 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         }));
         
         cosmographRef.current.setData(transformedNodes, transformedLinks, false);
-        logger.log(`Removed ${nodeIds.length} nodes and their connected links`);
       } catch (error) {
         logger.error('Node removal failed:', error);
       } finally {
@@ -771,7 +745,6 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         }));
         
         cosmographRef.current.setData(transformedNodes, transformedLinks, false);
-        logger.log(`Removed ${linkIds.length} links`);
       } catch (error) {
         logger.error('Link removal failed:', error);
       } finally {
@@ -785,14 +758,12 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     const startSimulation = useCallback((alpha = 1.0) => {
       if (cosmographRef.current && typeof cosmographRef.current.start === 'function') {
         cosmographRef.current.start(alpha);
-        logger.log(`Simulation started with alpha: ${alpha}`);
       }
     }, []);
     
     const pauseSimulation = useCallback(() => {
       if (cosmographRef.current && typeof cosmographRef.current.pause === 'function') {
         cosmographRef.current.pause();
-        logger.log('Simulation paused');
       }
       
       // Clear the keep-running timer
@@ -810,7 +781,6 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         cosmographRef.current.start(0.3); // Resume with moderate energy
         setIsSimulationActive(true);
         
-        logger.log(`Simulation resumed [${componentId.current}] at ${currentTime}`);
         
         // Use requestAnimationFrame to ensure the simulation state is properly propagated
         requestAnimationFrame(() => {
@@ -834,14 +804,12 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           }
         }, 5000); // Restart every 5 seconds
         
-        logger.log('Continuous simulation enabled');
       } else {
         // Stop the periodic restarts
         if (simulationTimerRef.current) {
           clearInterval(simulationTimerRef.current);
           simulationTimerRef.current = null;
         }
-        logger.log('Continuous simulation disabled');
       }
     }, []);
     
@@ -892,10 +860,8 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     // Handle Cosmograph events with double-click detection
     // Cosmograph v2.0 onClick signature: (index: number | undefined, pointPosition: [number, number] | undefined, event: MouseEvent) => void
     const handleClick = async (index?: number, pointPosition?: [number, number], event?: MouseEvent) => {
-      logger.log('🖱️ handleClick called with index:', index, 'pointPosition:', pointPosition, 'event:', event);
       
       if (typeof index === 'number') {
-        logger.log('✅ Point clicked at index:', index, 'position:', pointPosition);
         
         // Get the original node data using the index
         let originalNode: GraphNode | undefined;
@@ -904,13 +870,11 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         if (index >= 0 && index < transformedData.nodes.length) {
           const nodeData = transformedData.nodes[index];
           originalNode = nodeData;
-          logger.log('Found original node by index:', originalNode);
         }
         
         // If we can't find the original node by index, try to query it from Cosmograph
         if (!originalNode && cosmographRef.current && typeof cosmographRef.current.getPointsByIndices === 'function') {
           try {
-            logger.log('Querying node data from Cosmograph for index:', index);
             const pointData = await cosmographRef.current.getPointsByIndices([index]);
             
             if (pointData && pointData.numRows && pointData.numRows > 0) {
@@ -932,7 +896,6 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
                     ...point // Include all other properties
                   }
                 } as GraphNode;
-                logger.log('Created node from Cosmograph data:', originalNode);
               }
             }
           } catch (error) {
@@ -960,13 +923,11 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             // Set focus on the clicked node to show focused ring color
             if (cosmographRef.current && typeof cosmographRef.current.setFocusedPoint === 'function') {
               cosmographRef.current.setFocusedPoint(index);
-              logger.log('🎯 Set focused point to index:', index);
             }
           } else {
             // Single click - show modal and maintain visual selection
             doubleClickTimeoutRef.current = setTimeout(() => {
               // Single click confirmed - show modal and keep node visually selected
-              logger.log('Single-click detected on node:', originalNode!.id);
               selectCosmographNode(originalNode!); // Keep visual selection circle
               onNodeClick(originalNode!); // Show modal
               onNodeSelect(originalNode!.id); // Update selection state
@@ -974,7 +935,6 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
               // Set focus on the clicked node to show focused ring color
               if (cosmographRef.current && typeof cosmographRef.current.setFocusedPoint === 'function') {
                 cosmographRef.current.setFocusedPoint(index);
-                logger.log('🎯 Set focused point to index:', index);
               }
             }, 300);
           }
@@ -987,7 +947,6 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         }
       } else {
         // Empty space was clicked - clear all selections and return to default state
-        logger.log('❌ Empty space clicked - clearing selection and focus');
         clearCosmographSelection();
         onClearSelection?.();
       }

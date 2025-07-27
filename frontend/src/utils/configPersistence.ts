@@ -119,7 +119,6 @@ export const getStorageUsage = (): { used: number; available: number } => {
 // Core persistence functions
 export const saveConfigToStorage = (config: PersistedConfig): boolean => {
   if (!isStorageAvailable()) {
-    console.warn('ConfigPersistence: localStorage not available');
     return false;
   }
 
@@ -139,20 +138,16 @@ export const saveConfigToStorage = (config: PersistedConfig): boolean => {
     const serialized = JSON.stringify(configWithTimestamp);
     localStorage.setItem(STORAGE_KEYS.MAIN_CONFIG, serialized);
     
-    console.log('ConfigPersistence: Configuration saved successfully');
     return true;
   } catch (error) {
-    console.error('ConfigPersistence: Failed to save configuration:', error);
     
     // Handle quota exceeded
     if (error instanceof Error && error.name === 'QuotaExceededError') {
-      console.warn('ConfigPersistence: Storage quota exceeded, clearing backup');
       try {
         localStorage.removeItem(STORAGE_KEYS.BACKUP_CONFIG);
         localStorage.setItem(STORAGE_KEYS.MAIN_CONFIG, JSON.stringify(config));
         return true;
       } catch {
-        console.error('ConfigPersistence: Could not save even after clearing backup');
       }
     }
     
@@ -175,7 +170,6 @@ export const loadConfigFromStorage = (): PersistedConfig | null => {
     
     // Validate basic structure
     if (!parsed || typeof parsed !== 'object' || typeof parsed.version !== 'number') {
-      console.warn('ConfigPersistence: Invalid configuration structure, ignoring');
       return null;
     }
 
@@ -190,18 +184,15 @@ export const loadConfigFromStorage = (): PersistedConfig | null => {
 
     return parsed;
   } catch (error) {
-    console.error('ConfigPersistence: Failed to load configuration:', error);
     
     // Try backup
     try {
       const backup = localStorage.getItem(STORAGE_KEYS.BACKUP_CONFIG);
       if (backup) {
-        console.log('ConfigPersistence: Loading from backup');
         const parsed = JSON.parse(backup) as PersistedConfig;
         return parsed;
       }
     } catch (backupError) {
-      console.error('ConfigPersistence: Backup also corrupted:', backupError);
     }
     
     return null;
@@ -214,9 +205,7 @@ export const clearPersistedConfig = (): void => {
   try {
     localStorage.removeItem(STORAGE_KEYS.MAIN_CONFIG);
     localStorage.removeItem(STORAGE_KEYS.BACKUP_CONFIG);
-    console.log('ConfigPersistence: All configuration cleared');
   } catch (error) {
-    console.error('ConfigPersistence: Failed to clear configuration:', error);
   }
 };
 
@@ -233,7 +222,6 @@ const migrateConfig = (config: PersistedConfig): PersistedConfig | null => {
     
     return migrated;
   } catch (error) {
-    console.error('ConfigPersistence: Migration failed:', error);
     return null;
   }
 };
@@ -306,7 +294,6 @@ export const exportConfigToFile = (config: PersistedConfig): void => {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   } catch (error) {
-    console.error('ConfigPersistence: Failed to export configuration:', error);
   }
 };
 
@@ -323,16 +310,13 @@ export const importConfigFromFile = (file: File): Promise<PersistedConfig | null
         if (config && typeof config === 'object' && typeof config.version === 'number') {
           resolve(config);
         } else {
-          console.error('ConfigPersistence: Invalid configuration file structure');
           resolve(null);
         }
       } catch (error) {
-        console.error('ConfigPersistence: Failed to parse configuration file:', error);
         resolve(null);
       }
     };
     reader.onerror = () => {
-      console.error('ConfigPersistence: Failed to read configuration file');
       resolve(null);
     };
     reader.readAsText(file);

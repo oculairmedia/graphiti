@@ -339,19 +339,12 @@ export const GraphConfigProvider: React.FC<{ children: ReactNode }> = ({ childre
     const hasVisibilityChanges = JSON.stringify(config.nodeTypeVisibility) !== JSON.stringify(newNodeTypeVisibility);
     
     if (hasColorChanges || hasVisibilityChanges) {
-        colorChanges: hasColorChanges,
-        visibilityChanges: hasVisibilityChanges,
-        newColors: Object.keys(newNodeTypeColors).length,
-        newVisibility: Object.keys(newNodeTypeVisibility).length
-      });
-      
       setConfig(prev => ({
         ...prev,
         nodeTypeColors: newNodeTypeColors,
         nodeTypeVisibility: newNodeTypeVisibility,
         filteredNodeTypes: newFilteredNodeTypes
       }));
-    } else {
     }
   }, [config.nodeTypeColors, config.nodeTypeVisibility, setConfig]);
 
@@ -365,10 +358,6 @@ export const GraphConfigProvider: React.FC<{ children: ReactNode }> = ({ childre
   }, [setConfig]);
 
   const zoomIn = () => {
-    
-    if (cosmographRef?.current) {
-    }
-    
     if (!cosmographRef?.current) {
       return;
     }
@@ -377,19 +366,15 @@ export const GraphConfigProvider: React.FC<{ children: ReactNode }> = ({ childre
       const beforeZoom = cosmographRef.current.getZoomLevel();
       
       if (beforeZoom !== undefined) {
+        const newZoom = beforeZoom * 1.5;
         cosmographRef.current.setZoomLevel(newZoom);
-      } else {
       }
     } catch (error) {
-        name: error.name,
-        message: error.message,
-        stack: error.stack
-      });
+      // Zoom operation failed
     }
   };
 
   const zoomOut = () => {
-    
     if (!cosmographRef?.current) {
       return;
     }
@@ -398,14 +383,11 @@ export const GraphConfigProvider: React.FC<{ children: ReactNode }> = ({ childre
       const beforeZoom = cosmographRef.current.getZoomLevel();
       
       if (beforeZoom !== undefined) {
+        const newZoom = beforeZoom / 1.5;
         cosmographRef.current.setZoomLevel(newZoom);
-      } else {
       }
     } catch (error) {
-        name: error.name,
-        message: error.message,
-        stack: error.stack
-      });
+      // Zoom operation failed
     }
   };
 
@@ -422,7 +404,6 @@ export const GraphConfigProvider: React.FC<{ children: ReactNode }> = ({ childre
   };
 
   const applyLayout = async (layoutType: string, options?: Record<string, unknown>, graphData?: { nodes: GraphNode[], edges: GraphEdge[] }) => {
-    
     if (!cosmographRef?.current) {
       return;
     }
@@ -488,7 +469,6 @@ export const GraphConfigProvider: React.FC<{ children: ReactNode }> = ({ childre
         if (cosmographRef.current.setData) {
           const shouldRunSimulation = layoutType === 'force-directed';
           cosmographRef.current.setData(positionedNodes, transformedEdges, shouldRunSimulation);
-        } else {
         }
 
         // Update physics parameters for the layout type
@@ -537,6 +517,7 @@ export const GraphConfigProvider: React.FC<{ children: ReactNode }> = ({ childre
       }
       
     } catch (error) {
+      // Layout application failed
     } finally {
       setIsApplyingLayout(false);
     }
