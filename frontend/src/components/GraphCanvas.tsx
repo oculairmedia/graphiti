@@ -11,6 +11,7 @@ class DataKitCoordinator {
   private static instance: DataKitCoordinator;
   private isBusy = false;
   private queue: Array<() => Promise<void>> = [];
+  private processTimeoutId: NodeJS.Timeout | null = null;
   
   static getInstance(): DataKitCoordinator {
     if (!DataKitCoordinator.instance) {
@@ -46,9 +47,26 @@ class DataKitCoordinator {
       await task();
     } finally {
       this.isBusy = false;
+      // Clear any existing timeout before setting new one
+      if (this.processTimeoutId) {
+        clearTimeout(this.processTimeoutId);
+      }
       // Process next item in queue
-      setTimeout(() => this.processQueue(), 10);
+      this.processTimeoutId = setTimeout(() => {
+        this.processTimeoutId = null;
+        this.processQueue();
+      }, 10);
     }
+  }
+  
+  // Method to clean up pending operations
+  cleanup(): void {
+    if (this.processTimeoutId) {
+      clearTimeout(this.processTimeoutId);
+      this.processTimeoutId = null;
+    }
+    this.queue = [];
+    this.isBusy = false;
   }
 }
 
@@ -363,6 +381,10 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
                 checkCount++;
                 // Aggressive polling for first 2 seconds, then slower
                 const delay = checkCount < 40 ? 50 : 200;
+                // Clear any existing timeout before setting new one
+                if (intervalRef.current) {
+                  clearTimeout(intervalRef.current);
+                }
                 intervalRef.current = setTimeout(pollCanvas, delay);
               }
             };
@@ -377,7 +399,11 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             checkCount++;
             // Exponential backoff: 50ms, 100ms, 150ms, 200ms, etc.
             const delay = Math.min(50 + (checkCount * 10), 200);
-            setTimeout(pollCosmographRef, delay);
+            // Use intervalRef to track this timeout as well
+            if (intervalRef.current) {
+              clearTimeout(intervalRef.current);
+            }
+            intervalRef.current = setTimeout(pollCosmographRef, delay);
           } else {
             // Set a fallback timeout to prevent permanent blocking
             setIsReady(false);
@@ -813,12 +839,29 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       }
     }, []);
     
-    // Cleanup simulation timer on unmount
+    // Cleanup all timers and refs on unmount
     useEffect(() => {
       return () => {
+        // Clear simulation timer
         if (simulationTimerRef.current) {
           clearInterval(simulationTimerRef.current);
+          simulationTimerRef.current = null;
         }
+        // Clear double-click timeout
+        if (doubleClickTimeoutRef.current) {
+          clearTimeout(doubleClickTimeoutRef.current);
+          doubleClickTimeoutRef.current = null;
+        }
+        // Clear canvas polling interval
+        if (intervalRef.current) {
+          clearTimeout(intervalRef.current);
+          intervalRef.current = null;
+        }
+        // Clear refs to prevent memory leaks
+        cosmographRef.current = null;
+        lastClickedNodeRef.current = null;
+        isIncrementalUpdateRef.current = false;
+        lastResumeTimeRef.current = 0;
       };
     }, []);
 

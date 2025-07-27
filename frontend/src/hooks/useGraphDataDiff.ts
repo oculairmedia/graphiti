@@ -24,6 +24,9 @@ interface GraphData {
  * Custom hook that detects changes between current and previous graph data
  * Returns structured diff information for incremental updates
  */
+// WeakMap for storing node property hashes to reduce memory usage
+const nodePropertyCache = new WeakMap<GraphNode, string>();
+
 export const useGraphDataDiff = (currentData: GraphData | null): GraphDataDiff => {
   const previousDataRef = useRef<GraphData | null>(null);
   const previousNodeMapRef = useRef<Map<string, GraphNode>>(new Map());
@@ -86,12 +89,23 @@ export const useGraphDataDiff = (currentData: GraphData | null): GraphDataDiff =
         addedNodes.push(currentNode);
       } else {
         // Check if node was updated by comparing key properties
-        const currentPropertiesHash = JSON.stringify(currentNode.properties);
+        // Use cached hash if available, otherwise compute and cache it
+        let currentPropertiesHash = nodePropertyCache.get(currentNode);
+        if (!currentPropertiesHash) {
+          currentPropertiesHash = JSON.stringify(currentNode.properties);
+          nodePropertyCache.set(currentNode, currentPropertiesHash);
+        }
+        
+        let previousPropertiesHash = nodePropertyCache.get(previousNode);
+        if (!previousPropertiesHash) {
+          previousPropertiesHash = JSON.stringify(previousNode.properties || {});
+        }
+        
         const hasChanges = (
           previousNode.label !== currentNode.label ||
           previousNode.node_type !== currentNode.node_type ||
           previousNode.size !== currentNode.size ||
-          (previousNode as any).propertiesHash !== currentPropertiesHash
+          previousPropertiesHash !== currentPropertiesHash
         );
         
         if (hasChanges) {
@@ -162,37 +176,26 @@ export const useGraphDataDiff = (currentData: GraphData | null): GraphDataDiff =
     };
   }, [currentData]);
 
-  // Update refs after diff calculation - store minimal data for comparison
+  // Update refs after diff calculation - store actual objects for WeakMap usage
   if (currentData) {
     previousDataRef.current = currentData; // Store reference, not copy
     
-    // Update node map with only essential properties for comparison
+    // Update node map with actual node references
     previousNodeMapRef.current = new Map(
-      currentData.nodes.map(node => [
-        node.id, 
-        {
-          id: node.id,
-          label: node.label,
-          node_type: node.node_type,
-          size: node.size,
-          // Store properties hash instead of full object to save memory
-          propertiesHash: JSON.stringify(node.properties)
-        } as any
-      ])
+      currentData.nodes.map(node => {
+        // Cache the properties hash for this node
+        if (!nodePropertyCache.has(node)) {
+          nodePropertyCache.set(node, JSON.stringify(node.properties || {}));
+        }
+        return [node.id, node];
+      })
     );
     
-    // Update link map with minimal data
+    // Update link map with actual link references
     previousLinkMapRef.current = new Map(
       currentData.edges.map(link => [
         `${link.source || link.from}-${link.target || link.to}`, 
-        {
-          from: link.from,
-          to: link.to,
-          source: link.source,
-          target: link.target,
-          edge_type: link.edge_type,
-          weight: link.weight
-        } as any
+        link
       ])
     );
   }
