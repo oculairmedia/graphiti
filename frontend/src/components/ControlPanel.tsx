@@ -111,8 +111,11 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
       repulsion: 0.1,
       simulationRepulsionTheta: 1.7,
       simulationCluster: 0.1,
+      simulationClusterStrength: undefined,
+      simulationImpulse: undefined,
       linkSpring: 1.0,
       linkDistance: 2,
+      linkDistRandomVariationRange: [1, 1.2],
       gravity: 0.0,
       centerForce: 0.0,
       friction: 0.85,
@@ -697,6 +700,64 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
                     <p className="text-xs text-muted-foreground mt-1">Minimum distance between linked nodes</p>
                   </div>
 
+                  {/* Link Distance Random Variation */}
+                  <div>
+                    <Label className="text-xs text-muted-foreground mb-2 block">Link Distance Variation</Label>
+                    <div className="flex items-center space-x-2 mb-2">
+                      <span className="text-xs text-muted-foreground">Min:</span>
+                      <Slider
+                        value={[config.linkDistRandomVariationRange[0]]}
+                        onValueChange={([value]) => updateConfig({ 
+                          linkDistRandomVariationRange: [value, config.linkDistRandomVariationRange[1]] 
+                        })}
+                        max={2}
+                        min={0.5}
+                        step={0.1}
+                        className="flex-1"
+                      />
+                      <Input
+                        type="text"
+                        value={config.linkDistRandomVariationRange[0].toFixed(1)}
+                        onChange={(e) => {
+                          const value = parseFloat(e.target.value);
+                          if (!isNaN(value)) {
+                            updateConfig({ 
+                              linkDistRandomVariationRange: [value, config.linkDistRandomVariationRange[1]] 
+                            });
+                          }
+                        }}
+                        className="w-12 h-6 bg-secondary/30 text-xs text-center"
+                      />
+                    </div>
+                    <div className="flex items-center space-x-2 mb-2">
+                      <span className="text-xs text-muted-foreground">Max:</span>
+                      <Slider
+                        value={[config.linkDistRandomVariationRange[1]]}
+                        onValueChange={([value]) => updateConfig({ 
+                          linkDistRandomVariationRange: [config.linkDistRandomVariationRange[0], value] 
+                        })}
+                        max={3}
+                        min={0.5}
+                        step={0.1}
+                        className="flex-1"
+                      />
+                      <Input
+                        type="text"
+                        value={config.linkDistRandomVariationRange[1].toFixed(1)}
+                        onChange={(e) => {
+                          const value = parseFloat(e.target.value);
+                          if (!isNaN(value)) {
+                            updateConfig({ 
+                              linkDistRandomVariationRange: [config.linkDistRandomVariationRange[0], value] 
+                            });
+                          }
+                        }}
+                        className="w-12 h-6 bg-secondary/30 text-xs text-center"
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">Random variation range for link distances</p>
+                  </div>
+
                   <div>
                     <Label className="text-xs text-muted-foreground mb-2 block">Gravity Force</Label>
                     <div className="flex items-center space-x-2 mb-2">
@@ -773,6 +834,79 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
                       />
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">Groups similar nodes together</p>
+                  </div>
+
+                  <div>
+                    <Label className="text-xs text-muted-foreground mb-2 block">Cluster Strength</Label>
+                    <div className="flex items-center space-x-2 mb-2">
+                      <input
+                        type="checkbox"
+                        checked={config.simulationClusterStrength !== undefined}
+                        onChange={(e) => updateConfig({ 
+                          simulationClusterStrength: e.target.checked ? 0.5 : undefined 
+                        })}
+                        className="mr-2"
+                      />
+                      <Slider
+                        value={[config.simulationClusterStrength ?? 0.5]}
+                        onValueChange={([value]) => updateConfig({ simulationClusterStrength: value })}
+                        max={1}
+                        min={0}
+                        step={0.01}
+                        className="flex-1"
+                        disabled={config.simulationClusterStrength === undefined}
+                      />
+                      <Input
+                        type="text"
+                        value={config.simulationClusterStrength !== undefined ? config.simulationClusterStrength.toFixed(2) : "Off"}
+                        onChange={(e) => {
+                          const value = parseFloat(e.target.value);
+                          if (!isNaN(value)) {
+                            updateConfig({ simulationClusterStrength: value });
+                          }
+                        }}
+                        className="w-16 h-6 bg-secondary/30 text-xs text-center"
+                        disabled={config.simulationClusterStrength === undefined}
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">Force strength for clustering (0-1)</p>
+                  </div>
+                  
+                  {/* Simulation Impulse */}
+                  <div>
+                    <Label className="text-xs text-muted-foreground mb-2 block">Simulation Impulse</Label>
+                    <div className="flex items-center space-x-2 mb-2">
+                      <input
+                        type="checkbox"
+                        checked={config.simulationImpulse !== undefined}
+                        onChange={(e) => updateConfig({ 
+                          simulationImpulse: e.target.checked ? 0.5 : undefined 
+                        })}
+                        className="mr-2"
+                      />
+                      <Slider
+                        value={[config.simulationImpulse ?? 0.5]}
+                        onValueChange={([value]) => updateConfig({ simulationImpulse: value })}
+                        max={1}
+                        min={0}
+                        step={0.01}
+                        className="flex-1"
+                        disabled={config.simulationImpulse === undefined}
+                      />
+                      <Input
+                        type="text"
+                        value={config.simulationImpulse !== undefined ? config.simulationImpulse.toFixed(2) : "Off"}
+                        onChange={(e) => {
+                          const value = parseFloat(e.target.value);
+                          if (!isNaN(value)) {
+                            updateConfig({ simulationImpulse: value });
+                          }
+                        }}
+                        className="w-16 h-6 bg-secondary/30 text-xs text-center"
+                        disabled={config.simulationImpulse === undefined}
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">Impulse coefficient for data updates (0-1)</p>
                   </div>
 
                   <div>
