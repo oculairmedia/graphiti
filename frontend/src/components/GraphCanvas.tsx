@@ -320,6 +320,8 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             nodeIndexMap.set(node.id, index);
           });
 
+          logger.log('GraphCanvas: Processing links:', links.length, 'nodes in map:', nodeIndexMap.size);
+          
           const transformedLinks = links.map(link => {
             const sourceIndex = nodeIndexMap.get(String(link.source));
             const targetIndex = nodeIndexMap.get(String(link.target));
@@ -345,6 +347,8 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             return linkData;
           }).filter(link => link.source && link.target && link.source !== 'undefined' && link.target !== 'undefined' && 
                            link.sourceIndex !== -1 && link.targetIndex !== -1); // Remove invalid links
+          
+          logger.log('GraphCanvas: Transformed links:', transformedLinks.length, 'valid links');
 
           
           // Log node type distribution for color mapping debugging

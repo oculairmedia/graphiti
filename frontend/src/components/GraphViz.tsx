@@ -377,6 +377,8 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
     }
     
     const visibleNodeIds = new Set(finalNodes.map(n => n.id));
+    logger.log('GraphViz: Source edges:', sourceData.edges.length, 'Visible node IDs:', visibleNodeIds.size);
+    
     const filteredLinks = sourceData.edges
       .filter(edge => visibleNodeIds.has(edge.from) && visibleNodeIds.has(edge.to))
       .map(edge => ({
@@ -384,6 +386,8 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
         source: edge.from,
         target: edge.to,
       }));
+    
+    logger.log('GraphViz: Filtered links:', filteredLinks.length);
     
     const newTransformedData = {
       nodes: finalNodes,
