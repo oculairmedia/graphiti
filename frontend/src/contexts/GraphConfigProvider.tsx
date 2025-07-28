@@ -135,7 +135,7 @@ const defaultStableConfig: StableConfig = {
   
   // Fit view
   fitViewDuration: 1000,
-  fitViewPadding: 50,
+  fitViewPadding: 0.1, // 10% padding around the graph
 };
 
 const defaultDynamicConfig: DynamicConfig = {
