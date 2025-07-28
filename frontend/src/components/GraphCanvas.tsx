@@ -1613,7 +1613,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             linkSourceIndexBy="sourceIndex"
             linkTargetBy="target"
             linkTargetIndexBy="targetIndex"
-            linkColorBy="edge_type"
+            // linkColorBy="edge_type"  // Disabled to let config color take over
             linkWidthBy="weight"
             
             // Override with UI-specific configurations

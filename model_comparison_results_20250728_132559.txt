@@ -1,0 +1,418 @@
+================================================================================
+MODEL COMPARISON REPORT
+================================================================================
+
+Episode tested: 8c425c15-daa2-4a44-a057-9b5284df87ea
+Content length: 1065 characters
+Content preview:
+claude_code(system): User request: The user is working on implementing a graph visualization feature with React and Cosmograph. They've asked to add zoom controls with buttons for zoom in, zoom out, and fit view. The implementation involves:
+
+1. GraphCanvas component at /opt/stacks/graphiti/frontend...
+
+--------------------------------------------------------------------------------
+PERFORMANCE METRICS
+--------------------------------------------------------------------------------
+Model           Time (sec)      Entities Found       Status
+--------------------------------------------------------------------------------
+qwen3:8b        60.31           11                   Success
+qwen3:30b       186.92          22                   Success
+qwen3:32b       156.03          1                    Success
+
+--------------------------------------------------------------------------------
+ENTITY EXTRACTION DETAILS
+--------------------------------------------------------------------------------
+
+
+qwen3:8b extracted 11 entities:
+  1. claude_code
+  2. User
+  3. React
+  4. Cosmograph
+  5. GraphCanvas
+  6. useRef
+  7. useImperativeHandle
+  8. useState
+  9. useEffect
+  10. TypeScript
+  11. GraphCanvasRef
+
+qwen3:30b extracted 22 entities:
+  1. claude_code
+  2. User
+  3. GraphCanvas
+  4. Cosmograph
+  5. React
+  6. WebGL
+  7. useImperativeHandle
+  8. React hooks
+  9. ref
+  10. useState
+  11. useEffect
+  12. Cosmograph configuration
+  13. node colors
+  14. sizes
+  15. physics settings
+  16. Graph data structures
+  17. nodes
+  18. edges
+  19. TypeScript interfaces
+  20. GraphCanvasRef
+  21. Event handlers
+  22. user interactions
+
+qwen3:32b extracted 1 entities:
+  1. claude_code
+
+--------------------------------------------------------------------------------
+ENTITY COMPARISON
+--------------------------------------------------------------------------------
+
+Total unique entities found across all models: 24
+
+'Cosmograph':
+  Found by: qwen3:8b, qwen3:30b
+
+'Cosmograph configuration':
+  Found by: qwen3:30b
+
+'Event handlers':
+  Found by: qwen3:30b
+
+'Graph data structures':
+  Found by: qwen3:30b
+
+'GraphCanvas':
+  Found by: qwen3:8b, qwen3:30b
+
+'GraphCanvasRef':
+  Found by: qwen3:8b, qwen3:30b
+
+'React':
+  Found by: qwen3:8b, qwen3:30b
+
+'React hooks':
+  Found by: qwen3:30b
+
+'TypeScript':
+  Found by: qwen3:8b
+
+'TypeScript interfaces':
+  Found by: qwen3:30b
+
+'User':
+  Found by: qwen3:8b, qwen3:30b
+
+'WebGL':
+  Found by: qwen3:30b
+
+'claude_code':
+  Found by: qwen3:8b, qwen3:30b, qwen3:32b
+
+'edges':
+  Found by: qwen3:30b
+
+'node colors':
+  Found by: qwen3:30b
+
+'nodes':
+  Found by: qwen3:30b
+
+'physics settings':
+  Found by: qwen3:30b
+
+'ref':
+  Found by: qwen3:30b
+
+'sizes':
+  Found by: qwen3:30b
+
+'useEffect':
+  Found by: qwen3:8b, qwen3:30b
+
+'useImperativeHandle':
+  Found by: qwen3:8b, qwen3:30b
+
+'useRef':
+  Found by: qwen3:8b
+
+'useState':
+  Found by: qwen3:8b, qwen3:30b
+
+'user interactions':
+  Found by: qwen3:30b
+
+
+================================================================================
+RAW JSON RESULTS
+================================================================================
+{
+  "episode": {
+    "uuid": "8c425c15-daa2-4a44-a057-9b5284df87ea",
+    "content_length": 1065,
+    "created_at": "2025-07-28T17:19:15.794390+00:00"
+  },
+  "results": [
+    {
+      "model": "qwen3:8b",
+      "success": true,
+      "extraction_time_seconds": 60.313779,
+      "entities_count": 11,
+      "entities": [
+        {
+          "name": "claude_code",
+          "labels": [
+            "Entity"
+          ],
+          "uuid": "4863c1a6-a696-45d3-8b74-823daf0d0c5f"
+        },
+        {
+          "name": "User",
+          "labels": [
+            "Entity"
+          ],
+          "uuid": "4acfeb41-162e-45f3-b057-0fe170306bdd"
+        },
+        {
+          "name": "React",
+          "labels": [
+            "Entity"
+          ],
+          "uuid": "45fc1cd8-b8e4-4c4e-9007-ccb965c08d0d"
+        },
+        {
+          "name": "Cosmograph",
+          "labels": [
+            "Entity"
+          ],
+          "uuid": "82111b9b-4ec7-4902-832b-27e8b509a41e"
+        },
+        {
+          "name": "GraphCanvas",
+          "labels": [
+            "Entity"
+          ],
+          "uuid": "ed0c73e7-477c-4598-ab9f-d4da0d5cee01"
+        },
+        {
+          "name": "useRef",
+          "labels": [
+            "Entity"
+          ],
+          "uuid": "e48b7a8d-0142-4c28-b4de-99b419264047"
+        },
+        {
+          "name": "useImperativeHandle",
+          "labels": [
+            "Entity"
+          ],
+          "uuid": "ebfcb31e-3b5e-4368-99d3-7993172ffd38"
+        },
+        {
+          "name": "useState",
+          "labels": [
+            "Entity"
+          ],
+          "uuid": "84077037-2fc3-4a6a-8706-c6e302ec0ffd"
+        },
+        {
+          "name": "useEffect",
+          "labels": [
+            "Entity"
+          ],
+          "uuid": "0ccc0f67-2a43-495c-aafb-769785090158"
+        },
+        {
+          "name": "TypeScript",
+          "labels": [
+            "Entity"
+          ],
+          "uuid": "1799cb7f-3352-4971-b759-0f6005034a69"
+        },
+        {
+          "name": "GraphCanvasRef",
+          "labels": [
+            "Entity"
+          ],
+          "uuid": "77f891eb-a057-4f8f-9025-daddadd988f8"
+        }
+      ]
+    },
+    {
+      "model": "qwen3:30b",
+      "success": true,
+      "extraction_time_seconds": 186.92077,
+      "entities_count": 22,
+      "entities": [
+        {
+          "name": "claude_code",
+          "labels": [
+            "Entity"
+          ],
+          "uuid": "0e44409d-b8d8-4611-a85f-bbfda091cd2d"
+        },
+        {
+          "name": "User",
+          "labels": [
+            "Entity"
+          ],
+          "uuid": "8e8b8b30-0d3b-405c-908e-8abb317266d7"
+        },
+        {
+          "name": "GraphCanvas",
+          "labels": [
+            "Entity"
+          ],
+          "uuid": "3690cc1f-591e-4feb-9e64-889a262035b2"
+        },
+        {
+          "name": "Cosmograph",
+          "labels": [
+            "Entity"
+          ],
+          "uuid": "368e581d-fddb-4b8f-9aa4-898ebecb0e70"
+        },
+        {
+          "name": "React",
+          "labels": [
+            "Entity"
+          ],
+          "uuid": "712637dc-6e9c-48c5-b805-98499e99314a"
+        },
+        {
+          "name": "WebGL",
+          "labels": [
+            "Entity"
+          ],
+          "uuid": "c2f07f2a-58d4-4e3d-b0ea-83654ed7f1f4"
+        },
+        {
+          "name": "useImperativeHandle",
+          "labels": [
+            "Entity"
+          ],
+          "uuid": "2528ae81-72f5-43f6-b79f-dfbb531b0e3e"
+        },
+        {
+          "name": "React hooks",
+          "labels": [
+            "Entity"
+          ],
+          "uuid": "71cb44c0-6263-422a-8236-8de52e70bcf7"
+        },
+        {
+          "name": "ref",
+          "labels": [
+            "Entity"
+          ],
+          "uuid": "9ede16cd-066e-4814-8140-2c6b8384bf7d"
+        },
+        {
+          "name": "useState",
+          "labels": [
+            "Entity"
+          ],
+          "uuid": "4a5ba1b7-1766-4ea5-b46d-e6780a4cc145"
+        },
+        {
+          "name": "useEffect",
+          "labels": [
+            "Entity"
+          ],
+          "uuid": "7e7c3deb-a54c-47eb-966f-bad1e1b24f89"
+        },
+        {
+          "name": "Cosmograph configuration",
+          "labels": [
+            "Entity"
+          ],
+          "uuid": "160519f7-2638-46c2-9ee4-7575798db9d6"
+        },
+        {
+          "name": "node colors",
+          "labels": [
+            "Entity"
+          ],
+          "uuid": "8f35dffb-0e96-4e9b-a20a-162455ab3343"
+        },
+        {
+          "name": "sizes",
+          "labels": [
+            "Entity"
+          ],
+          "uuid": "ab112a16-bdcf-47ac-b1b8-5ea716a4c054"
+        },
+        {
+          "name": "physics settings",
+          "labels": [
+            "Entity"
+          ],
+          "uuid": "5fc45341-42ae-4d47-b8eb-b2ab7db8c624"
+        },
+        {
+          "name": "Graph data structures",
+          "labels": [
+            "Entity"
+          ],
+          "uuid": "1caed73e-d496-40bf-95a3-119fc60b9f9e"
+        },
+        {
+          "name": "nodes",
+          "labels": [
+            "Entity"
+          ],
+          "uuid": "0d01e818-9e6e-44e7-8e67-4f2e5d3dfec3"
+        },
+        {
+          "name": "edges",
+          "labels": [
+            "Entity"
+          ],
+          "uuid": "a88566ae-123a-4242-b640-8f87419de4c0"
+        },
+        {
+          "name": "TypeScript interfaces",
+          "labels": [
+            "Entity"
+          ],
+          "uuid": "3b7d8a79-9841-4dca-b617-0b450ebd17d9"
+        },
+        {
+          "name": "GraphCanvasRef",
+          "labels": [
+            "Entity"
+          ],
+          "uuid": "9995b34e-9d5d-4751-b565-6d5d35b966f4"
+        },
+        {
+          "name": "Event handlers",
+          "labels": [
+            "Entity"
+          ],
+          "uuid": "5c458f3f-3ced-45c2-9294-4975e66b28ee"
+        },
+        {
+          "name": "user interactions",
+          "labels": [
+            "Entity"
+          ],
+          "uuid": "09bf0175-f0f5-47cd-ae72-28d52eec1e31"
+        }
+      ]
+    },
+    {
+      "model": "qwen3:32b",
+      "success": true,
+      "extraction_time_seconds": 156.029547,
+      "entities_count": 1,
+      "entities": [
+        {
+          "name": "claude_code",
+          "labels": [
+            "Entity"
+          ],
+          "uuid": "53c41c20-ad56-4cff-b3a9-68b990b0c53e"
+        }
+      ]
+    }
+  ]
+}

@@ -109,7 +109,7 @@ async fn main() -> anyhow::Result<()> {
     let falkor_port = std::env::var("FALKORDB_PORT").unwrap_or_else(|_| "6379".to_string());
     let graph_name = std::env::var("GRAPH_NAME").unwrap_or_else(|_| "graphiti_migration".to_string());
     
-    let connection_string = format!("falkor://{}:{}", falkor_host, falkor_port);
+    let connection_string = format!("redis://{}:{}", falkor_host, falkor_port);
     info!("Connecting to FalkorDB at {}", connection_string);
     
     let connection_info: FalkorConnectionInfo = connection_string
@@ -268,30 +268,20 @@ async fn get_cache_stats(State(state): State<AppState>) -> Result<Json<CacheStat
 
 fn build_query(query_type: &str, limit: usize, offset: usize, search: Option<&str>) -> String {
     match query_type {
-        "entire_graph" => format!(
-            r#"
-            MATCH (n)
-            OPTIONAL MATCH (n)-[r]->(m)
-            RETURN DISTINCT 
-                n.uuid as source_id, n.name as source_name, 
-                type(r) as rel_type, 
-                m.uuid as target_id, m.name as target_name,
-                COALESCE(n.type, labels(n)[0]) as source_label, COALESCE(m.type, labels(m)[0]) as target_label,
-                COALESCE(n.degree_centrality, 0) as source_degree, 
-                COALESCE(m.degree_centrality, 0) as target_degree,
-                properties(n) as source_props, properties(m) as target_props
-            LIMIT {}
-            "#,
-            limit
-        ),
+        "entire_graph" => {
+            // For entire_graph, we need a special handling to get ALL nodes and edges
+            // The regular OPTIONAL MATCH approach misses some edges
+            // We'll handle this differently in execute_graph_query
+            "ENTIRE_GRAPH_SPECIAL".to_string()
+        },
         
         "high_degree" => format!(
             r#"
             MATCH (n) 
-            WHERE EXISTS(n.degree_centrality) AND n.degree_centrality > 20
+            WHERE EXISTS(n.degree_centrality) AND n.degree_centrality > 0.001
             WITH n ORDER BY n.degree_centrality DESC SKIP {} LIMIT {}
             MATCH (n)-[r]-(m) 
-            WHERE EXISTS(m.degree_centrality) AND m.degree_centrality > 10
+            WHERE EXISTS(m.degree_centrality) AND m.degree_centrality > 0.0005
             RETURN DISTINCT 
                 n.uuid as source_id, n.name as source_name, 
                 type(r) as rel_type, 
@@ -351,15 +341,95 @@ fn build_query(query_type: &str, limit: usize, offset: usize, search: Option<&st
 }
 
 async fn execute_graph_query(client: &FalkorAsyncClient, graph_name: &str, query: &str) -> anyhow::Result<GraphData> {
-    let mut graph = client.select_graph(graph_name);
-    let mut result_set = graph.query(query).execute().await?;
-    
     let mut nodes_map: HashMap<String, Node> = HashMap::new();
     let mut edges = Vec::new();
     
-    // Process results
-    while let Some(row) = result_set.data.next() {
-        if row.len() >= 9 {
+    // Special handling for entire_graph query
+    if query == "ENTIRE_GRAPH_SPECIAL" {
+        // Query 1: Get all nodes
+        let nodes_query = r#"
+            MATCH (n)
+            RETURN 
+                n.uuid as id,
+                n.name as name,
+                COALESCE(n.type, labels(n)[0]) as node_type,
+                COALESCE(n.degree_centrality, 0) as degree_centrality,
+                properties(n) as props
+        "#;
+        
+        let mut graph = client.select_graph(graph_name);
+        let mut nodes_result = graph.query(nodes_query).execute().await?;
+        
+        // Process all nodes
+        while let Some(row) = nodes_result.data.next() {
+            if row.len() >= 5 {
+                let node_id = value_to_string(&row[0]);
+                let node_name = value_to_string(&row[1]);
+                let node_type = value_to_string(&row[2]);
+                let degree_centrality = value_to_f64(&row[3]);
+                let mut node_props = value_to_properties(&row[4]);
+                
+                // Ensure required properties
+                node_props.insert("name".to_string(), serde_json::Value::String(node_name.clone()));
+                if !node_props.contains_key("degree_centrality") {
+                    node_props.insert("degree_centrality".to_string(), serde_json::json!(degree_centrality));
+                }
+                node_props.insert("type".to_string(), serde_json::Value::String(node_type.clone()));
+                
+                // Extract summary
+                let summary = node_props.get("summary")
+                    .or_else(|| node_props.get("content"))
+                    .or_else(|| node_props.get("source_description"))
+                    .and_then(|v| match v {
+                        serde_json::Value::String(s) => Some(s.clone()),
+                        _ => v.as_str().map(|s| s.to_string())
+                    });
+                
+                nodes_map.insert(node_id.clone(), Node {
+                    id: node_id,
+                    label: truncate_string(&node_name, 50),
+                    node_type,
+                    summary,
+                    properties: node_props,
+                });
+            }
+        }
+        
+        // Query 2: Get all edges
+        let edges_query = r#"
+            MATCH (n)-[r]->(m)
+            RETURN 
+                n.uuid as source_id,
+                m.uuid as target_id,
+                type(r) as rel_type
+        "#;
+        
+        let mut graph = client.select_graph(graph_name);
+        let mut edges_result = graph.query(edges_query).execute().await?;
+        
+        // Process all edges
+        while let Some(row) = edges_result.data.next() {
+            if row.len() >= 3 {
+                let source_id = value_to_string(&row[0]);
+                let target_id = value_to_string(&row[1]);
+                let rel_type = value_to_string(&row[2]);
+                
+                edges.push(Edge {
+                    from: source_id,
+                    to: target_id,
+                    edge_type: rel_type,
+                    weight: 1.0,
+                });
+            }
+        }
+    } else {
+        // Regular query processing
+        let mut graph = client.select_graph(graph_name);
+        let mut result_set = graph.query(query).execute().await?;
+    
+        // Process results
+        while let Some(row) = result_set.data.next() {
+            if row.len() >= 9 {
             // Process source node (always present)
             let source_id = value_to_string(&row[0]);
             let source_name = value_to_string(&row[1]);
@@ -447,6 +517,7 @@ async fn execute_graph_query(client: &FalkorAsyncClient, graph_name: &str, query
             }
         }
     }
+    } // Close the else block
     
     let nodes: Vec<Node> = nodes_map.into_values().collect();
     
