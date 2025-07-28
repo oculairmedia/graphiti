@@ -2,7 +2,7 @@ import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { Filter, Route, Focus, Trash2, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { useGraphConfig } from '@/contexts/GraphConfigContext';
+import { useGraphConfig } from '@/contexts/GraphConfigProvider';
 import { GraphNode } from '../api/types';
 
 interface GraphSearchProps {

@@ -2,7 +2,8 @@ import React, { useEffect, useRef, forwardRef, useState, useCallback } from 'rea
 import { Cosmograph, prepareCosmographData } from '@cosmograph/react';
 import { GraphNode } from '../api/types';
 import type { GraphData } from '../types/graph';
-import { useGraphConfig, generateNodeTypeColor } from '../contexts/GraphConfigContext';
+import { useGraphConfig } from '../contexts/GraphConfigProvider';
+import { generateNodeTypeColor } from '../contexts/GraphConfigContext';
 import { logger } from '../utils/logger';
 import { hexToRgba, generateHSLColor } from '../utils/colorCache';
 
@@ -227,24 +228,30 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     
 
 
-    // Data Kit configuration for Cosmograph v2.0
+    // Data Kit configuration for Cosmograph v2.0 - stable config to prevent reprocessing
     const dataKitConfig = React.useMemo(() => ({
       points: {
         pointIdBy: 'id',              // Required: unique identifier field
+        pointIndexBy: 'index',        // Required: ordinal index field
         pointLabelBy: 'label',        // Node display labels
         pointColorBy: 'node_type',    // Color by entity type
         pointSizeBy: 'centrality',    // Size by centrality metrics
         pointIncludeColumns: ['degree_centrality', 'pagerank_centrality', 'betweenness_centrality', 'eigenvector_centrality', 'created_at', 'created_at_timestamp'] // Include additional columns including temporal data
       },
       links: {
-        linkSourceBy: 'source',       // Source node ID field
-        linkTargetsBy: ['target'],    // Target node ID field - must be array format for v2.0
-        linkColorBy: 'edge_type',     // Link color by type
-        linkWidthBy: config.linkWidthBy,         // Link width by configured column
-        linkIncludeColumns: [] // No additional columns needed for links
+        linkSourceBy: 'source',         // Source node ID field
+        linkSourceIndexBy: 'sourceIndex', // Required: source node index
+        linkTargetBy: 'target',         // Target node ID field (singular for single target)
+        linkTargetIndexBy: 'targetIndex', // Required: target node index
+        linkColorBy: 'edge_type',      // Link color by type
+        linkWidthBy: 'weight',         // Use stable default instead of config value
+        linkIncludeColumns: ['created_at', 'updated_at'] // Include temporal data for links
       }
-    }), [config.linkWidthBy]);
+    }), []);
 
+    // Track previous data to prevent unnecessary reprocessing
+    const prevDataRef = useRef<{ nodeCount: number; linkCount: number }>({ nodeCount: 0, linkCount: 0 });
+    
     // Data Kit preparation effect
     useEffect(() => {
       // Skip reprocessing if we're in the middle of an incremental update
@@ -252,12 +259,20 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         return;
       }
       
-      
       if (!nodes || !links || nodes.length === 0) {
         setCosmographData(null);
         setDataKitError(null);
+        prevDataRef.current = { nodeCount: 0, linkCount: 0 };
         return;
       }
+      
+      // Skip if data hasn't actually changed (same counts)
+      if (prevDataRef.current.nodeCount === nodes.length && 
+          prevDataRef.current.linkCount === links.length) {
+        return;
+      }
+      
+      prevDataRef.current = { nodeCount: nodes.length, linkCount: links.length };
 
       let cancelled = false;
       
@@ -343,21 +358,15 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             throw new Error('No valid nodes found after transformation');
           }
           
-          const result = await prepareCosmographData(
-            dataKitConfig,
-            transformedNodes,
-            transformedLinks
-          );
+          // BYPASS Data Kit - it's causing issues with links configuration
+          // Use direct data instead
+          logger.log('GraphCanvas: Bypassing Data Kit, using direct data');
           
-          if (!cancelled && result) {
-            // Extract the correct structure from Data Kit result
-            const { points, links, cosmographConfig, pointsSummary } = result;
-            
-            
+          if (!cancelled) {
             setCosmographData({
-              points,
-              links,
-              cosmographConfig
+              points: transformedNodes,
+              links: transformedLinks,
+              cosmographConfig: dataKitConfig
             });
           }
         } catch (error) {
@@ -387,6 +396,13 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         cancelled = true;
       };
     }, [nodes, links, dataKitConfig]);
+
+    // Log when simulation should be ready
+    useEffect(() => {
+      if (cosmographData && isCanvasReady) {
+        logger.log('GraphCanvas: Data loaded and canvas ready, simulation should start automatically');
+      }
+    }, [cosmographData, isCanvasReady]);
 
     // Canvas readiness tracking with single polling mechanism and WebGL context loss recovery
     const intervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -436,7 +452,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             // Set up WebGL context loss recovery
             webglCleanup = setupWebGLContextRecovery();
             
-            // Start canvas polling
+            // Start canvas polling with optimized intervals
             const pollCanvas = () => {
               const hasCanvas = !!cosmographRef.current?._canvasElement;
               
@@ -446,15 +462,20 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
                 return hasCanvas;
               });
               
-              if (!hasCanvas && checkCount < 100) { // Max 5 seconds of polling
+              // Stop polling once canvas is found or after reasonable attempts
+              if (!hasCanvas && checkCount < 20) { // Max 3 seconds of polling  
                 checkCount++;
-                // Aggressive polling for first 2 seconds, then slower
-                const delay = checkCount < 40 ? 50 : 200;
+                // Progressive delay: 100ms, 150ms, 200ms, etc.
+                const delay = Math.min(100 + (checkCount * 50), 500);
                 // Clear any existing timeout before setting new one
                 if (intervalRef.current) {
                   clearTimeout(intervalRef.current);
                 }
                 intervalRef.current = setTimeout(pollCanvas, delay);
+              } else if (!hasCanvas) {
+                // Canvas not found after polling, log warning
+                logger.warn('Canvas element not found after polling');
+                setIsCanvasReady(false);
               }
             };
             
@@ -492,13 +513,113 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           webglCleanup();
         }
       };
-    }, [setCosmographRef, setupWebGLContextRecovery]);
+    }, [setCosmographRef]);
 
 
     // Simplified data transformation for legacy compatibility
     const transformedData = React.useMemo(() => {
       return { nodes, links };
     }, [nodes, links]);
+    
+    // Memoize node types for color generation
+    const allNodeTypes = React.useMemo(() => {
+      if (!nodes || nodes.length === 0) return [];
+      return [...new Set(nodes.map(n => n.node_type).filter(Boolean))].sort();
+    }, [nodes]);
+    
+    // Memoize color strategy
+    const pointColorStrategy = React.useMemo(() => {
+      switch (config.colorScheme) {
+        case 'by-type': return 'map'; // Use 'map' strategy for node types
+        case 'by-centrality': 
+        case 'by-pagerank': 
+        case 'by-degree': return 'interpolatePalette';
+        case 'by-community': return 'palette';
+        default: return 'map';
+      }
+    }, [config.colorScheme]);
+    
+    // Memoize color palette
+    const pointColorPalette = React.useMemo(() => {
+      switch (config.colorScheme) {
+        case 'by-centrality': return ['#1e3a8a', '#3b82f6', '#60a5fa', '#93c5fd', '#dbeafe'];
+        case 'by-pagerank': return ['#7c2d12', '#ea580c', '#f97316', '#fb923c', '#fed7aa'];
+        case 'by-degree': return ['#166534', '#16a34a', '#22c55e', '#4ade80', '#bbf7d0'];
+        case 'by-community': return ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD'];
+        case 'by-type': 
+        default: 
+          return ['#4ECDC4', '#B794F6', '#F6AD55', '#90CDF4', '#FF6B6B', '#4ADE80'];
+      }
+    }, [config.colorScheme]);
+    
+    // Memoize color by function
+    const pointColorByFn = React.useMemo(() => {
+      if (config.colorScheme !== 'by-type') return undefined;
+      
+      return (nodeType: string) => {
+        const typeColor = config.nodeTypeColors[nodeType];
+        if (typeColor) {
+          return typeColor;
+        }
+        
+        const typeIndex = allNodeTypes.indexOf(nodeType);
+        const generatedColor = generateNodeTypeColor(nodeType, typeIndex);
+        return generatedColor;
+      };
+    }, [config.colorScheme, config.nodeTypeColors, allNodeTypes]);
+    
+    // Memoize point color function
+    const pointColorFn = React.useCallback((node: any) => {
+      const isHighlighted = highlightedNodes.includes(node.id);
+      if (isHighlighted) {
+        return 'rgba(255, 215, 0, 0.9)';
+      }
+      
+      if (config.colorScheme !== 'by-type') {
+        return undefined;
+      }
+      
+      return undefined;
+    }, [highlightedNodes, config.colorScheme]);
+    
+    // Memoize point size function
+    const pointSizeFn = React.useCallback((node: any) => {
+      const isHighlighted = highlightedNodes.includes(node.id);
+      if (isHighlighted) {
+        return undefined;
+      }
+      return undefined;
+    }, [highlightedNodes]);
+    
+    // Throttle mouse move to prevent excessive updates
+    const lastHoverTimeRef = useRef<number>(0);
+    const lastHoveredIndexRef = useRef<number | undefined>(undefined);
+    
+    const handleMouseMove = React.useCallback((index: number | undefined) => {
+      const now = Date.now();
+      
+      // Throttle to max 60fps (16ms)
+      if (now - lastHoverTimeRef.current < 16) {
+        return;
+      }
+      
+      // Skip if same index
+      if (index === lastHoveredIndexRef.current) {
+        return;
+      }
+      
+      lastHoverTimeRef.current = now;
+      lastHoveredIndexRef.current = index;
+      
+      if (index !== undefined && index >= 0) {
+        const hoveredNode = currentNodes[index];
+        if (hoveredNode) {
+          onNodeHover?.(hoveredNode);
+        }
+      } else {
+        onNodeHover?.(null);
+      }
+    }, [currentNodes, onNodeHover]);
 
     // Method to select a single node in Cosmograph
     const selectCosmographNode = useCallback((node: GraphNode) => {
@@ -623,14 +744,29 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     const fitView = useCallback(() => {
       if (!cosmographRef.current) return;
       
+      // Ensure canvas is ready
+      if (!isCanvasReady) {
+        logger.warn('GraphCanvas: Cannot fitView - canvas not ready');
+        return;
+      }
+      
+      // Ensure we have data
+      if (!currentNodes.length || !currentLinks.length) {
+        logger.warn('GraphCanvas: Cannot fitView - no data');
+        return;
+      }
+      
       try {
-        // Call fitView without parameters
-        cosmographRef.current.fitView();
-        logger.log('Fit view executed successfully');
+        logger.log('GraphCanvas: Calling fitView with duration:', config.fitViewDuration, 'padding:', config.fitViewPadding);
+        
+        // Call fitView directly without pausing simulation
+        // Cosmograph v2.0 handles the animation smoothly without needing to pause
+        cosmographRef.current.fitView(config.fitViewDuration, config.fitViewPadding);
+        
       } catch (error) {
         logger.warn('Fit view failed:', error);
       }
-    }, []);
+    }, [config.fitViewDuration, config.fitViewPadding, currentNodes.length, currentLinks.length, isCanvasReady]);
 
     const fitViewByIndices = useCallback((indices: number[], duration?: number, padding?: number) => {
       if (!cosmographRef.current) return;
@@ -1066,25 +1202,44 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     }, []);
 
     
-    // Handle tab visibility changes to restart simulation
+    // Handle tab visibility changes to restart simulation with debouncing
     useEffect(() => {
+      let visibilityTimeoutId: NodeJS.Timeout | null = null;
+      let focusTimeoutId: NodeJS.Timeout | null = null;
+      
       const handleVisibilityChange = () => {
-        if (!document.hidden && cosmographRef.current && !config.disableSimulation) {
-          // Tab is now visible, restart simulation with low energy
-          if (typeof cosmographRef.current.start === 'function') {
-            cosmographRef.current.start(0.1);
-          }
+        // Clear any existing timeout
+        if (visibilityTimeoutId) {
+          clearTimeout(visibilityTimeoutId);
         }
+        
+        // Debounce visibility change handling
+        visibilityTimeoutId = setTimeout(() => {
+          if (!document.hidden && cosmographRef.current && !config.disableSimulation) {
+            // Tab is now visible, restart simulation with low energy
+            if (typeof cosmographRef.current.start === 'function') {
+              cosmographRef.current.start(0.1);
+            }
+          }
+        }, 300); // 300ms debounce
       };
 
       // Also handle window focus for better reliability
       const handleFocus = () => {
-        if (cosmographRef.current && !config.disableSimulation) {
-          // Window regained focus, ensure simulation is running
-          if (typeof cosmographRef.current.start === 'function') {
-            cosmographRef.current.start(0.05); // Even lower energy for focus events
-          }
+        // Clear any existing timeout
+        if (focusTimeoutId) {
+          clearTimeout(focusTimeoutId);
         }
+        
+        // Debounce focus handling
+        focusTimeoutId = setTimeout(() => {
+          if (cosmographRef.current && !config.disableSimulation) {
+            // Window regained focus, ensure simulation is running
+            if (typeof cosmographRef.current.start === 'function') {
+              cosmographRef.current.start(0.05); // Even lower energy for focus events
+            }
+          }
+        }, 500); // 500ms debounce for focus
       };
 
       document.addEventListener('visibilitychange', handleVisibilityChange);
@@ -1093,6 +1248,14 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       return () => {
         document.removeEventListener('visibilitychange', handleVisibilityChange);
         window.removeEventListener('focus', handleFocus);
+        
+        // Clean up timeouts
+        if (visibilityTimeoutId) {
+          clearTimeout(visibilityTimeoutId);
+        }
+        if (focusTimeoutId) {
+          clearTimeout(focusTimeoutId);
+        }
       };
     }, [config.disableSimulation]);
     
@@ -1122,8 +1285,8 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       };
     }, []);
 
-    // Expose methods to parent via ref
-    React.useImperativeHandle(ref, () => ({
+    // Create stable method refs
+    const methodsRef = useRef({
       clearSelection: clearCosmographSelection,
       selectNode: selectCosmographNode,
       selectNodes: selectCosmographNodes,
@@ -1134,6 +1297,61 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       zoomToPoint,
       trackPointPositionsByIndices,
       getTrackedPointPositionsMap,
+      activateRectSelection,
+      deactivateRectSelection,
+      activatePolygonalSelection,
+      deactivatePolygonalSelection,
+      selectPointsInRect,
+      selectPointsInPolygon,
+      getConnectedPointIndices,
+      getPointIndicesByExactValues,
+      addIncrementalData,
+      updateNodes,
+      updateLinks,
+      removeNodes,
+      removeLinks,
+      startSimulation,
+      pauseSimulation,
+      resumeSimulation,
+      keepSimulationRunning
+    });
+    
+    // Update methods ref when dependencies change
+    useEffect(() => {
+      methodsRef.current = {
+        clearSelection: clearCosmographSelection,
+        selectNode: selectCosmographNode,
+        selectNodes: selectCosmographNodes,
+        zoomIn,
+        zoomOut,
+        fitView,
+        fitViewByIndices,
+        zoomToPoint,
+        trackPointPositionsByIndices,
+        getTrackedPointPositionsMap,
+        activateRectSelection,
+        deactivateRectSelection,
+        activatePolygonalSelection,
+        deactivatePolygonalSelection,
+        selectPointsInRect,
+        selectPointsInPolygon,
+        getConnectedPointIndices,
+        getPointIndicesByExactValues,
+        addIncrementalData,
+        updateNodes,
+        updateLinks,
+        removeNodes,
+        removeLinks,
+        startSimulation,
+        pauseSimulation,
+        resumeSimulation,
+        keepSimulationRunning
+      };
+    });
+    
+    // Expose methods to parent via ref with minimal dependencies
+    React.useImperativeHandle(ref, () => ({
+      ...methodsRef.current,
       setData: (nodes: GraphNode[], links: GraphLink[], runSimulation = true) => {
         if (cosmographRef.current && typeof cosmographRef.current.setData === 'function') {
           cosmographRef.current.setData(nodes, links, runSimulation);
@@ -1144,32 +1362,10 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           cosmographRef.current.restart();
         }
       },
-      // Selection tools
-      activateRectSelection,
-      deactivateRectSelection,
-      activatePolygonalSelection,
-      deactivatePolygonalSelection,
-      selectPointsInRect,
-      selectPointsInPolygon,
-      getConnectedPointIndices,
-      // Search methods
-      getPointIndicesByExactValues,
-      // Incremental update methods
-      addIncrementalData,
-      updateNodes,
-      updateLinks,
-      removeNodes,
-      removeLinks,
-      // Simulation control methods
-      startSimulation,
-      pauseSimulation,
-      resumeSimulation,
-      keepSimulationRunning,
-      // External incremental flag control
       setIncrementalUpdateFlag: (enabled: boolean) => {
         isIncrementalUpdateRef.current = enabled;
       }
-    }), [clearCosmographSelection, selectCosmographNode, selectCosmographNodes, zoomIn, zoomOut, fitView, fitViewByIndices, zoomToPoint, trackPointPositionsByIndices, getTrackedPointPositionsMap, activateRectSelection, deactivateRectSelection, activatePolygonalSelection, deactivatePolygonalSelection, selectPointsInRect, selectPointsInPolygon, getConnectedPointIndices, getPointIndicesByExactValues, addIncrementalData, updateNodes, updateLinks, removeNodes, removeLinks, startSimulation, pauseSimulation, resumeSimulation, keepSimulationRunning]);
+    }), []);
 
     // Handle Cosmograph events with native selection methods and multi-selection
     // Cosmograph v2.0 onClick signature: (index: number | undefined, pointPosition: [number, number] | undefined, event: MouseEvent) => void
@@ -1392,108 +1588,57 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       >
           <Cosmograph
             ref={cosmographRef}
-            // Use Data Kit prepared data and configuration
+            // Use prepared data directly
             points={cosmographData.points}
             links={cosmographData.links}
-            {...cosmographData.cosmographConfig}
+            // Point configuration
+            pointIdBy="id"
+            pointIndexBy="index"
+            pointLabelBy="label"
+            pointColorBy="node_type"
+            pointSizeBy="centrality"
+            // Link configuration
+            linkSourceBy="source"
+            linkSourceIndexBy="sourceIndex"
+            linkTargetBy="target"
+            linkTargetIndexBy="targetIndex"
+            linkColorBy="edge_type"
+            linkWidthBy="weight"
             
             // Override with UI-specific configurations
-            fitViewOnInit={true}
-            fitViewDelay={1500} // Let nodes settle before fitting view
-            // fitViewDuration={config.fitViewDuration} // Commented out - might be causing issues
-            // fitViewPadding={config.fitViewPadding} // Commented out - might be causing issues
+            fitViewOnInit={false} // Disable automatic fitView to prevent simulation interruption
+            // fitViewDelay={1500} // Not needed when fitViewOnInit is false
+            fitViewDuration={config.fitViewDuration}
+            fitViewPadding={config.fitViewPadding}
             // initialZoomLevel={1.5} // Commented out - causing infinite zoom loop
             disableZoom={false}
             backgroundColor={config.backgroundColor}
             
             // Use Cosmograph v2.0 built-in color strategies
-            pointColorStrategy={(() => {
-              switch (config.colorScheme) {
-                case 'by-type': return 'direct'; // Use direct strategy to ensure pointColor is used
-                case 'by-centrality': 
-                case 'by-pagerank': 
-                case 'by-degree': return 'interpolatePalette';
-                case 'by-community': return 'palette';
-                default: return 'direct';
-              }
-            })()}
-            pointColorPalette={(() => {
-              switch (config.colorScheme) {
-                case 'by-centrality': return ['#1e3a8a', '#3b82f6', '#60a5fa', '#93c5fd', '#dbeafe']; // Blue gradient
-                case 'by-pagerank': return ['#7c2d12', '#ea580c', '#f97316', '#fb923c', '#fed7aa']; // Orange gradient  
-                case 'by-degree': return ['#166534', '#16a34a', '#22c55e', '#4ade80', '#bbf7d0']; // Green gradient
-                case 'by-community': return ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD'];
-                case 'by-type': 
-                default: 
-                  // Provide fallback colors that Cosmograph can use if our custom function returns undefined
-                  return ['#4ECDC4', '#B794F6', '#F6AD55', '#90CDF4', '#FF6B6B', '#4ADE80'];
-              }
-            })()}
+            pointColorStrategy={pointColorStrategy}
+            pointColorPalette={pointColorPalette}
+            pointColorByMap={config.nodeTypeColors}
             
             // Use Cosmograph v2.0 built-in size strategies  
             pointSizeStrategy={'auto'}
             pointSizeRange={[config.minNodeSize * config.sizeMultiplier, config.maxNodeSize * config.sizeMultiplier]}
             
-            // Use pointColorBy to specify which column contains the color data
-            pointColorBy={config.colorScheme === 'by-type' ? 'node_type' : undefined}
+            // pointColorBy is already set above to 'node_type'
+            // pointColorBy={config.colorScheme === 'by-type' ? 'node_type' : undefined}
             
-            // Use pointColorByFn to transform node_type values into actual colors
-            pointColorByFn={config.colorScheme === 'by-type' ? (nodeType: string) => {
-              // Use configured color for this type
-              const typeColor = config.nodeTypeColors[nodeType];
-              if (typeColor) {
-                return typeColor;
-              }
-              
-              // Generate color if not configured
-              const allNodeTypes = [...new Set(nodes.map(n => n.node_type).filter(Boolean))].sort();
-              const typeIndex = allNodeTypes.indexOf(nodeType);
-              const generatedColor = generateNodeTypeColor(nodeType, typeIndex);
-              return generatedColor;
-            } : undefined}
+            // pointColorByFn not needed when using 'map' strategy
+            // pointColorByFn={pointColorByFn}
             
             // Use pointColor only for highlighting
-            pointColor={(node: any) => {
-              // Check if highlighted
-              const isHighlighted = highlightedNodes.includes(node.id);
-              if (isHighlighted) {
-                return 'rgba(255, 215, 0, 0.9)'; // Gold highlight
-              }
-              
-              // For non-type color schemes, return undefined
-              if (config.colorScheme !== 'by-type') {
-                return undefined;
-              }
-              
-              // For by-type, we shouldn't reach here as pointColorByFn handles it
-              return undefined;
-            }}
+            pointColor={pointColorFn}
             
-            pointSize={(node: any) => {
-              const isHighlighted = highlightedNodes.includes(node.id);
-              if (isHighlighted) {
-                // Make highlighted nodes 20% larger than strategy-calculated size
-                return undefined; // Let strategy calculate, then we'll handle in CSS/other way
-              }
-              return undefined; // Let strategy handle sizing
-            }}
+            pointSize={pointSizeFn}
             
             // Interaction
             enableDrag={true}
             enableRightClickRepulsion={true}
             onClick={handleClick}
-            onMouseMove={(index) => {
-              if (index !== undefined && index >= 0) {
-                // Hovering over a node
-                const hoveredNode = currentNodes[index];
-                if (hoveredNode) {
-                  onNodeHover?.(hoveredNode);
-                }
-              } else {
-                // Not hovering over any node
-                onNodeHover?.(null);
-              }
-            }}
+            onMouseMove={handleMouseMove}
             
             // Hover and focus styling from config
             hoveredPointCursor={config.hoveredPointCursor}
@@ -1524,7 +1669,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             enableSimulationDuringZoom={true}
             
             // Simulation - Cosmograph v2.0 API
-            disableSimulation={config.disableSimulation}
+            enableSimulation={true} // Explicitly enable simulation
             spaceSize={config.spaceSize}
             randomSeed={config.randomSeed}
             simulationRepulsion={config.repulsion}
@@ -1546,8 +1691,10 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             linkOpacity={config.linkOpacity}
             linkGreyoutOpacity={config.linkGreyoutOpacity}
             linkWidth={1}
-            linkWidthBy={config.linkWidthBy}
+            // linkWidthBy is already set above to 'weight'
+            // linkWidthBy={config.linkWidthBy}
             linkWidthScale={config.linkWidth}
+            linkWidthRange={[0.5, 5]} // Set link width range for auto scaling
             scaleLinksOnZoom={config.scaleLinksOnZoom}
             linkArrows={config.linkArrows}
             linkArrowsSizeScale={config.linkArrowsSizeScale}
