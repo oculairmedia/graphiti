@@ -289,14 +289,20 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             const createdAt = node.properties?.created_at || node.created_at || node.properties?.created || null;
             
             
+            const degree = Number(node.properties?.degree_centrality || 0);
+            
             const nodeData = {
               id: String(node.id), // Ensure string type
               index: index, // Required for v2.0: ordinal index
               label: String(node.label || node.id), // Ensure string type
               node_type: String(node.node_type || 'Unknown'), // Ensure string type
               centrality: Number(node.properties?.degree_centrality || node.properties?.pagerank_centrality || node.size || 1), // Ensure number type
+              // Add cluster assignment based on degree centrality
+              cluster: degree > 0.5 ? 'high' : 
+                      degree > 0.2 ? 'medium' : 
+                      'low',
               // Add other commonly used properties with type safety
-              degree_centrality: Number(node.properties?.degree_centrality || 0),
+              degree_centrality: degree,
               pagerank_centrality: Number(node.properties?.pagerank_centrality || 0),
               betweenness_centrality: Number(node.properties?.betweenness_centrality || 0),
               eigenvector_centrality: Number(node.properties?.eigenvector_centrality || 0),
@@ -1601,6 +1607,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             pointLabelBy="label"
             pointColorBy="node_type"
             pointSizeBy="centrality"
+            pointClusterBy="cluster"  // Group nodes by their cluster assignment
             // Link configuration
             linkSourceBy="source"
             linkSourceIndexBy="sourceIndex"
