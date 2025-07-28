@@ -77,10 +77,12 @@ class AsyncWorker:
     async def worker(self):
         while True:
             try:
-                print(f'Got a job: (size of remaining queue: {self.queue.qsize()})')
+                print(f'Got a job: (size of remaining queue: {self.queue.qsize()})', flush=True)
                 job = await self.queue.get()
+                print(f'DEBUG: Job type: {type(job).__name__}', flush=True)
+                print(f'DEBUG: Job details: {str(job)[:200]}', flush=True)
                 await job()
-                print('Job completed successfully')
+                print('Job completed successfully', flush=True)
             except asyncio.CancelledError:
                 break
             except Exception as e:
@@ -121,21 +123,56 @@ async def add_messages(
     graphiti: ZepGraphitiDep,
 ):
     async def add_messages_task(m: Message):
-        await graphiti.add_episode(
-            uuid=m.uuid,
-            group_id=request.group_id,
-            name=m.name,
-            episode_body=f'{m.role or ""}({m.role_type}): {m.content}',
-            reference_time=m.timestamp,
-            source=EpisodeType.message,
-            source_description=m.source_description,
-        )
-        # Invalidate cache after successful data operation
-        await invalidate_cache()
+        print(f"=== TASK DEBUG: Processing message - group_id={request.group_id}, name={m.name} ===", flush=True)
+        print(f"TASK DEBUG: Message content: {m.content[:100]}...", flush=True)
+        
+        try:
+            print(f"EPISODE_DEBUG: About to call add_episode for uuid={m.uuid}", flush=True)
+            print(f"EPISODE_DEBUG: Using graphiti instance: {type(graphiti).__name__}", flush=True)
+            print(f"EPISODE_DEBUG: Driver type: {type(graphiti.driver).__name__ if hasattr(graphiti, 'driver') else 'Unknown'}", flush=True)
+            
+            result = await graphiti.add_episode(
+                uuid=m.uuid,
+                group_id=request.group_id,
+                name=m.name,
+                episode_body=f'{m.role or ""}({m.role_type}): {m.content}',
+                reference_time=m.timestamp,
+                source=EpisodeType.message,
+                source_description=m.source_description,
+            )
+            
+            print(f"EPISODE_DEBUG: add_episode returned, result type: {type(result).__name__ if result else 'None'}", flush=True)
+            
+            if result:
+                print(f"EPISODE_DEBUG: Episode created: {result.episode.uuid if hasattr(result, 'episode') and result.episode else 'No episode in result'}", flush=True)
+                print(f"EPISODE_DEBUG: Episode group_id: {result.episode.group_id if hasattr(result, 'episode') and result.episode and hasattr(result.episode, 'group_id') else 'N/A'}", flush=True)
+                print(f"EPISODE_DEBUG: Entities created: {len(result.nodes) if hasattr(result, 'nodes') and result.nodes else 0}", flush=True)
+                
+                # Log the actual episode data
+                if hasattr(result, 'episode') and result.episode:
+                    print(f"EPISODE_DEBUG: Episode data - name: {result.episode.name if hasattr(result.episode, 'name') else 'N/A'}", flush=True)
+                    print(f"EPISODE_DEBUG: Episode data - content: {result.episode.content[:100] if hasattr(result.episode, 'content') else 'N/A'}...", flush=True)
+            else:
+                print("EPISODE_DEBUG: ⚠️ add_episode returned None!", flush=True)
+            
+            logger.info(f"DEBUG: add_episode result - episode created: {result.episode.uuid if result and result.episode else 'None'}")
+            logger.info(f"DEBUG: Entities created: {len(result.nodes) if result and result.nodes else 0}")
+            
+            # Invalidate cache after successful data operation
+            await invalidate_cache()
+        except Exception as e:
+            logger.error(f"DEBUG: Error in add_episode: {type(e).__name__}: {e}")
+            raise
 
+    print(f"=== ADD_MESSAGES DEBUG: Received {len(request.messages)} messages for group_id={request.group_id} ===", flush=True)
+    
     for m in request.messages:
-        await async_worker.queue.put(partial(add_messages_task, m))
+        print(f"DEBUG: Queueing message - content={m.content[:50]}...", flush=True)
+        task = partial(add_messages_task, m)
+        await async_worker.queue.put(task)
+        print(f"DEBUG: Message queued, queue size: {async_worker.queue.qsize()}", flush=True)
 
+    print(f"=== ADD_MESSAGES DEBUG: All messages queued ===", flush=True)
     return Result(message='Messages added to processing queue', success=True)
 
 

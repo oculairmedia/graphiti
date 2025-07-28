@@ -749,6 +749,7 @@ name = "graphiti-core"
 version = "0.17.8"
 source = { editable = "." }
 dependencies = [
+    { name = "aiohttp" },
     { name = "diskcache" },
     { name = "neo4j" },
     { name = "numpy" },
@@ -802,6 +803,7 @@ voyageai = [
 
 [package.metadata]
 requires-dist = [
+    { name = "aiohttp", specifier = ">=3.9.0" },
     { name = "anthropic", marker = "extra == 'anthropic'", specifier = ">=0.49.0" },
     { name = "anthropic", marker = "extra == 'dev'", specifier = ">=0.49.0" },
     { name = "diskcache", specifier = ">=5.6.3" },
