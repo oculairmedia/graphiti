@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
 import { GraphNode } from '../api/types';
-import { useGraphConfig } from '../contexts/GraphConfigContext';
+import { useGraphConfig } from '../contexts/GraphConfigProvider';
 import { CollapsibleSection, type SectionConfig } from '@/components/ui/CollapsibleSection';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { arrayMove, SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';

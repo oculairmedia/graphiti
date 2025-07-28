@@ -2,6 +2,8 @@ import React, { createContext, useContext, useState, ReactNode, useCallback } fr
 import { calculateLayoutPositions, type LayoutOptions } from '../utils/layoutAlgorithms';
 import type { GraphNode, GraphEdge } from '../types/graph';
 import { usePersistedGraphConfig, usePersistedNodeTypes } from '@/hooks/usePersistedConfig';
+import type { GraphConfig, StableConfig, DynamicConfig } from './configTypes';
+import { isStableConfigKey, splitConfig } from './configTypes';
 
 // Generate default colors for dynamic node types
 export const generateNodeTypeColor = (nodeType: string, index: number): string => {
@@ -45,119 +47,6 @@ interface CosmographLink {
   edge_type?: string;
   properties?: Record<string, unknown>;
   [key: string]: unknown;
-}
-
-interface GraphConfig {
-  // Physics - Updated for Cosmograph v2.0 simulation API
-  gravity: number;
-  repulsion: number;
-  centerForce: number;
-  friction: number;
-  linkSpring: number;
-  linkDistance: number;
-  linkDistRandomVariationRange: [number, number];
-  mouseRepulsion: number;
-  simulationDecay: number;
-  
-  // New Cosmograph v2.0 simulation properties
-  simulationRepulsionTheta: number;
-  simulationCluster: number;
-  simulationClusterStrength?: number;
-  simulationImpulse?: number;
-  disableSimulation: boolean | null;
-  spaceSize: number;
-  randomSeed?: number | string;
-  
-  // Quadtree optimization
-  useQuadtree: boolean;
-  useClassicQuadtree: boolean;
-  quadtreeLevels: number;
-  
-  // Appearance
-  linkWidth: number;
-  linkWidthBy: string;
-  linkWidthScale: number;
-  linkOpacity: number;
-  linkGreyoutOpacity: number;
-  linkColor: string;
-  linkColorScheme: string;
-  scaleLinksOnZoom: boolean;
-  backgroundColor: string;
-  
-  // Link Visibility
-  linkVisibilityDistance: [number, number]; // [min, max] in pixels
-  linkVisibilityMinTransparency: number; // 0-1
-  linkArrows: boolean;
-  linkArrowsSizeScale: number;
-  
-  // Curved Links
-  curvedLinks: boolean;
-  curvedLinkSegments: number;
-  curvedLinkWeight: number;
-  curvedLinkControlPointDistance: number;
-  
-  // Node sizing
-  minNodeSize: number;
-  maxNodeSize: number;
-  sizeMultiplier: number;
-  nodeOpacity: number;
-  sizeMapping: string;
-  borderWidth: number;
-  
-  // Node colors by type - now dynamic
-  nodeTypeColors: Record<string, string>;
-  nodeTypeVisibility: Record<string, boolean>;
-  
-  // Labels
-  showLabels: boolean;
-  showHoveredNodeLabel: boolean;
-  labelColor: string;
-  hoveredLabelColor: string;
-  labelSize: number;
-  labelOpacity: number;
-  
-  // Visual preferences
-  colorScheme: string;
-  gradientHighColor: string;
-  gradientLowColor: string;
-  
-  // Hover and focus styling
-  hoveredPointCursor: string;
-  renderHoveredPointRing: boolean;
-  hoveredPointRingColor: string;
-  focusedPointRingColor: string;
-  focusedPointIndex?: number;
-  renderLinks: boolean;
-  
-  // Fit view configuration
-  fitViewDuration: number;
-  fitViewPadding: number;
-  
-  // Query
-  queryType: string;
-  nodeLimit: number;
-  
-  // Layout
-  layout: string;
-  hierarchyDirection: string;
-  radialCenter: string;
-  circularOrdering: string;
-  clusterBy: string;
-  
-  // Filters
-  filteredNodeTypes: string[];
-  minDegree: number;
-  maxDegree: number;
-  minPagerank: number;
-  maxPagerank: number;
-  minBetweenness: number;
-  maxBetweenness: number;
-  minEigenvector: number;
-  maxEigenvector: number;
-  minConnections: number;
-  maxConnections: number;
-  startDate: string;
-  endDate: string;
 }
 
 interface CosmographRefType {
@@ -323,43 +212,47 @@ export const GraphConfigProvider: React.FC<{ children: ReactNode }> = ({ childre
   const updateNodeTypeConfigurations = useCallback((nodeTypes: string[]) => {
     if (nodeTypes.length === 0) return;
     
-    // Start with current config to preserve any recent user changes
-    const newNodeTypeColors: Record<string, string> = { ...config.nodeTypeColors };
-    const newNodeTypeVisibility: Record<string, boolean> = { ...config.nodeTypeVisibility };
-    
-    
-    // Process each node type
-    nodeTypes.forEach((nodeType, index) => {
-      // For colors: only add if not already in config
-      if (!newNodeTypeColors[nodeType]) {
-        // Get the exact index this type would have in the sorted list
-        const sortedTypes = [...nodeTypes].sort();
-        const typeIndex = sortedTypes.indexOf(nodeType);
-        newNodeTypeColors[nodeType] = generateNodeTypeColor(nodeType, typeIndex);
+    setConfig(prev => {
+      // Start with current config to preserve any recent user changes
+      const newNodeTypeColors: Record<string, string> = { ...prev.nodeTypeColors };
+      const newNodeTypeVisibility: Record<string, boolean> = { ...prev.nodeTypeVisibility };
+      
+      let hasChanges = false;
+      
+      // Process each node type
+      nodeTypes.forEach((nodeType, index) => {
+        // For colors: only add if not already in config
+        if (!newNodeTypeColors[nodeType]) {
+          // Get the exact index this type would have in the sorted list
+          const sortedTypes = [...nodeTypes].sort();
+          const typeIndex = sortedTypes.indexOf(nodeType);
+          newNodeTypeColors[nodeType] = generateNodeTypeColor(nodeType, typeIndex);
+          hasChanges = true;
+        }
+        
+        // For visibility: only add if not already in config
+        if (newNodeTypeVisibility[nodeType] === undefined) {
+          newNodeTypeVisibility[nodeType] = true;
+          hasChanges = true;
+        }
+      });
+      
+      // Only update if there are actually changes
+      if (!hasChanges) {
+        return prev;
       }
       
-      // For visibility: only add if not already in config
-      if (newNodeTypeVisibility[nodeType] === undefined) {
-        newNodeTypeVisibility[nodeType] = true;
-      }
-    });
-    
-    // Update filtered node types to include all visible types
-    const newFilteredNodeTypes = nodeTypes.filter(type => newNodeTypeVisibility[type]);
-    
-    // Only update if there are actually changes to avoid unnecessary re-renders
-    const hasColorChanges = JSON.stringify(config.nodeTypeColors) !== JSON.stringify(newNodeTypeColors);
-    const hasVisibilityChanges = JSON.stringify(config.nodeTypeVisibility) !== JSON.stringify(newNodeTypeVisibility);
-    
-    if (hasColorChanges || hasVisibilityChanges) {
-      setConfig(prev => ({
+      // Update filtered node types to include all visible types
+      const newFilteredNodeTypes = nodeTypes.filter(type => newNodeTypeVisibility[type]);
+      
+      return {
         ...prev,
         nodeTypeColors: newNodeTypeColors,
         nodeTypeVisibility: newNodeTypeVisibility,
         filteredNodeTypes: newFilteredNodeTypes
-      }));
-    }
-  }, [config.nodeTypeColors, config.nodeTypeVisibility, setConfig]);
+      };
+    });
+  }, [setConfig]);
 
   const updateConfig = useCallback((updates: Partial<GraphConfig>) => {
     setConfig(prev => {
@@ -421,9 +314,11 @@ export const GraphConfigProvider: React.FC<{ children: ReactNode }> = ({ childre
     }
 
     try {
-      console.log('GraphConfigContext: Calling fitView with duration:', config.fitViewDuration);
-      // fitView method only accepts duration parameter, padding is set during initialization
-      cosmographRef.current.fitView();
+      console.log('GraphConfigContext: Calling fitView through ref');
+      // Call the GraphCanvas fitView which handles timing properly
+      if (typeof cosmographRef.current.fitView === 'function') {
+        cosmographRef.current.fitView();
+      }
     } catch (error) {
       console.error('GraphConfigContext: Fit view failed:', error);
     }

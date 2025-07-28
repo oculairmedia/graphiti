@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useGraphConfig } from '../contexts/GraphConfigContext';
+import { useGraphConfig } from '../contexts/GraphConfigProvider';
 import type { GraphData } from '../types/graph';
 
 interface FilterPanelProps {

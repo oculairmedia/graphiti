@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { useGraphConfig } from '../contexts/GraphConfigContext';
+import { useGraphConfig } from '../contexts/GraphConfigProvider';
 import { useQuery } from '@tanstack/react-query';
 import { graphClient } from '@/api/graphClient';
 

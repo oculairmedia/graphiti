@@ -50,7 +50,7 @@ interface GraphCanvasHandle {
   // External incremental flag control
   setIncrementalUpdateFlag: (enabled: boolean) => void;
 }
-import { useGraphConfig } from '../contexts/GraphConfigContext';
+import { useGraphConfig } from '../contexts/GraphConfigProvider';
 import { ControlPanel } from './ControlPanel';
 import { GraphSearch } from './GraphSearch';
 import { GraphCanvas } from './GraphCanvas';
@@ -133,11 +133,20 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
       }
       return result;
     },
-    refetchInterval: 30000, // Refresh every 30 seconds
+    // Disabled auto-refetch to improve performance
+    // refetchInterval: 30000, // Refresh every 30 seconds
   });
 
   // Use data diffing to detect changes
   const dataDiff = useGraphDataDiff(data || null);
+  
+  // Debug logging
+  useEffect(() => {
+    logger.log('GraphViz: Query state', { isLoading, hasData: !!data, error: error?.message });
+    if (data) {
+      logger.log('GraphViz: Data loaded', { nodes: data.nodes?.length, edges: data.edges?.length });
+    }
+  }, [isLoading, data, error]);
   
   // Handle initial load separately from incremental updates
   useEffect(() => {
@@ -271,94 +280,61 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
     config.endDate
   ]);
 
-  const filteredData = React.useMemo(() => {
-    // During incremental updates, use stable data to prevent cascade re-renders
-    const sourceData = isIncrementalUpdate ? stableDataRef.current : data;
+  // Memoize filter function to prevent recreation
+  const nodePassesFilters = React.useCallback((node: GraphNode, filterConfig: any) => {
+    // Basic node type visibility check
+    const nodeType = node.node_type as keyof typeof filterConfig.nodeTypeVisibility;
+    if (filterConfig.nodeTypeVisibility[nodeType] === false) return false;
     
-    if (!sourceData) return { nodes: [], edges: [] };
+    // Node type filter - only apply if we have filtered types configured
+    if (filterConfig.filteredNodeTypes.length > 0 && !filterConfig.filteredNodeTypes.includes(node.node_type)) return false;
     
+    // Skip metric filters if all at default values
+    const hasMetricFilters = filterConfig.minDegree > 0 || filterConfig.maxDegree < 100 ||
+                           filterConfig.minPagerank > 0 || filterConfig.maxPagerank < 100 ||
+                           filterConfig.minBetweenness > 0 || filterConfig.maxBetweenness < 100 ||
+                           filterConfig.minEigenvector > 0 || filterConfig.maxEigenvector < 100;
     
-    const visibleNodes = sourceData.nodes.filter(node => {
-      // Basic node type visibility check
-      const nodeType = node.node_type as keyof typeof filterConfig.nodeTypeVisibility;
-      if (filterConfig.nodeTypeVisibility[nodeType] === false) return false;
-      
-      // Advanced filter checks from FilterPanel
-      
-      // Node type filter - only apply if we have filtered types configured
-      if (filterConfig.filteredNodeTypes.length > 0 && !filterConfig.filteredNodeTypes.includes(node.node_type)) return false;
-      
+    if (hasMetricFilters) {
       // Degree centrality filter
       const degree = node.properties?.degree_centrality || 0;
-      const degreePercent = Math.min((degree / 100) * 100, 100); // Normalize to 0-100
+      const degreePercent = Math.min((degree / 100) * 100, 100);
       if (degreePercent < filterConfig.minDegree || degreePercent > filterConfig.maxDegree) return false;
       
       // PageRank filter
       const pagerank = node.properties?.pagerank_centrality || node.properties?.pagerank || 0;
-      const pagerankPercent = Math.min((pagerank / 0.1) * 100, 100); // Normalize to 0-100
+      const pagerankPercent = Math.min((pagerank / 0.1) * 100, 100);
       if (pagerankPercent < filterConfig.minPagerank || pagerankPercent > filterConfig.maxPagerank) return false;
       
       // Betweenness centrality filter
       const betweenness = node.properties?.betweenness_centrality || 0;
-      const betweennessPercent = Math.min((betweenness / 1) * 100, 100); // Normalize to 0-100
+      const betweennessPercent = Math.min((betweenness / 1) * 100, 100);
       if (betweennessPercent < filterConfig.minBetweenness || betweennessPercent > filterConfig.maxBetweenness) return false;
       
       // Eigenvector centrality filter
       const eigenvector = node.properties?.eigenvector_centrality || 0;
-      const eigenvectorPercent = Math.min((eigenvector / 1) * 100, 100); // Normalize to 0-100
+      const eigenvectorPercent = Math.min((eigenvector / 1) * 100, 100);
       if (eigenvectorPercent < filterConfig.minEigenvector || eigenvectorPercent > filterConfig.maxEigenvector) return false;
-      
-      // Connection count filter
-      const connections = node.properties?.degree || node.properties?.connections || 0;
-      if (connections < filterConfig.minConnections || connections > filterConfig.maxConnections) return false;
-      
-      // Date range filter
-      if (filterConfig.startDate || filterConfig.endDate) {
-        const nodeDate = node.created_at || node.properties?.created || node.properties?.date;
-        if (nodeDate) {
-          const date = new Date(nodeDate);
-          if (filterConfig.startDate && date < new Date(filterConfig.startDate)) return false;
-          if (filterConfig.endDate && date > new Date(filterConfig.endDate)) return false;
-        }
-      }
-      
-      return true;
-    });
-
-    // Virtualization: For very large graphs (>10k nodes), prioritize most important nodes
-    let finalNodes = visibleNodes;
-    const LARGE_GRAPH_THRESHOLD = 10000;
-    const MAX_RENDERED_NODES = 5000;
-
-    if (visibleNodes.length > LARGE_GRAPH_THRESHOLD) {
-      
-      // Calculate importance score for each node
-      const nodesWithScore = visibleNodes.map(node => {
-        const degree = node.properties?.degree_centrality || 0;
-        const pagerank = node.properties?.pagerank_centrality || node.properties?.pagerank || 0;
-        const betweenness = node.properties?.betweenness_centrality || 0;
-        
-        // Composite importance score (weighted combination)
-        const importanceScore = (degree * 0.4) + (pagerank * 1000 * 0.4) + (betweenness * 0.2);
-        
-        return { node, importanceScore };
-      });
-
-      // Sort by importance and take top N nodes
-      nodesWithScore.sort((a, b) => b.importanceScore - a.importanceScore);
-      finalNodes = nodesWithScore
-        .slice(0, MAX_RENDERED_NODES)
-        .map(item => item.node);
-        
     }
     
-    const visibleNodeIds = new Set(finalNodes.map(n => n.id));
-    const filteredEdges = sourceData.edges.filter(edge => 
-      visibleNodeIds.has(edge.from) && visibleNodeIds.has(edge.to)
-    );
+    // Connection count filter
+    if (filterConfig.minConnections > 0 || filterConfig.maxConnections < 1000) {
+      const connections = node.properties?.degree || node.properties?.connections || 0;
+      if (connections < filterConfig.minConnections || connections > filterConfig.maxConnections) return false;
+    }
     
-    return { nodes: finalNodes, edges: filteredEdges };
-  }, [data, isIncrementalUpdate, filterConfig]);
+    // Date range filter
+    if (filterConfig.startDate || filterConfig.endDate) {
+      const nodeDate = node.created_at || node.properties?.created || node.properties?.date;
+      if (nodeDate) {
+        const date = new Date(nodeDate);
+        if (filterConfig.startDate && date < new Date(filterConfig.startDate)) return false;
+        if (filterConfig.endDate && date > new Date(filterConfig.endDate)) return false;
+      }
+    }
+    
+    return true;
+  }, []);
 
   // Create a stable reference that never changes during incremental updates
   const stableTransformedDataRef = useRef<{ nodes: GraphNode[], links: GraphLink[] } | null>(null);
@@ -369,13 +345,49 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
       return stableTransformedDataRef.current;
     }
     
-    const newTransformedData = {
-      nodes: filteredData.nodes,
-      links: filteredData.edges.map(edge => ({
+    // During incremental updates, use stable data to prevent cascade re-renders
+    const sourceData = isIncrementalUpdate ? stableDataRef.current : data;
+    
+    if (!sourceData) {
+      logger.warn('GraphViz: No source data available', { isIncrementalUpdate, hasData: !!data });
+      return { nodes: [], links: [] };
+    }
+    
+    const visibleNodes = sourceData.nodes.filter(node => nodePassesFilters(node, filterConfig));
+
+    // Virtualization: For very large graphs (>10k nodes), prioritize most important nodes
+    let finalNodes = visibleNodes;
+    const LARGE_GRAPH_THRESHOLD = 10000;
+    const MAX_RENDERED_NODES = 5000;
+
+    if (visibleNodes.length > LARGE_GRAPH_THRESHOLD) {
+      // Pre-calculate importance scores
+      const nodesWithScore = visibleNodes.map(node => ({
+        node,
+        importanceScore: (node.properties?.degree_centrality || 0) * 0.4 + 
+                        (node.properties?.pagerank_centrality || node.properties?.pagerank || 0) * 1000 * 0.4 + 
+                        (node.properties?.betweenness_centrality || 0) * 0.2
+      }));
+
+      // Sort by importance and take top N nodes
+      nodesWithScore.sort((a, b) => b.importanceScore - a.importanceScore);
+      finalNodes = nodesWithScore
+        .slice(0, MAX_RENDERED_NODES)
+        .map(item => item.node);
+    }
+    
+    const visibleNodeIds = new Set(finalNodes.map(n => n.id));
+    const filteredLinks = sourceData.edges
+      .filter(edge => visibleNodeIds.has(edge.from) && visibleNodeIds.has(edge.to))
+      .map(edge => ({
         ...edge,
         source: edge.from,
         target: edge.to,
-      })),
+      }));
+    
+    const newTransformedData = {
+      nodes: finalNodes,
+      links: filteredLinks,
     };
     
     // Update stable reference when not in incremental mode
@@ -384,17 +396,17 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
     }
     
     return newTransformedData;
-  }, [filteredData, isIncrementalUpdate]);
+  }, [data, isIncrementalUpdate, filterConfig, nodePassesFilters]);
 
   // Update node type configurations when data changes
   React.useEffect(() => {
     if (data?.nodes && data.nodes.length > 0) {
-      const nodeTypes = [...new Set(data.nodes.map(node => node.node_type).filter(Boolean))];
+      const nodeTypes = [...new Set(data.nodes.map(node => node.node_type).filter(Boolean))].sort();
       if (nodeTypes.length > 0) {
         updateNodeTypeConfigurations(nodeTypes);
       }
     }
-  }, [data, updateNodeTypeConfigurations]);
+  }, [data?.nodes?.length, updateNodeTypeConfigurations]);
 
   const handleNodeSelect = (nodeId: string) => {
     if (selectedNodes.includes(nodeId)) {
@@ -511,10 +523,10 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
   }, [selectedNodes.length, selectedNode?.id, highlightedNodes.length]);
 
   const handleLayoutChange = useCallback((layoutType: string) => {
-    if (filteredData && filteredData.nodes.length > 0) {
-      applyLayout(layoutType, {}, { nodes: filteredData.nodes, edges: filteredData.edges });
+    if (transformedData && transformedData.nodes.length > 0) {
+      applyLayout(layoutType, {}, { nodes: transformedData.nodes, edges: transformedData.links.map(link => ({ from: link.source, to: link.target, ...link })) });
     }
-  }, [applyLayout, filteredData]);
+  }, [applyLayout, transformedData]);
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -683,7 +695,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
           </Badge>
           {data && data.nodes.length > 10000 && (
             <Badge variant="outline" className="text-xs border-warning text-warning">
-              Virtualized ({filteredData.nodes.length.toLocaleString()}/{data.nodes.length.toLocaleString()})
+              Virtualized ({transformedData.nodes.length.toLocaleString()}/{data.nodes.length.toLocaleString()})
             </Badge>
           )}
         </div>

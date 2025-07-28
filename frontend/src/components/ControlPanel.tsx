@@ -11,7 +11,8 @@ import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
-import { useGraphConfig, generateNodeTypeColor } from '@/contexts/GraphConfigContext';
+import { useGraphConfig } from '@/contexts/GraphConfigProvider';
+import { generateNodeTypeColor } from '@/contexts/GraphConfigContext';
 import { useQuery } from '@tanstack/react-query';
 import { graphClient } from '@/api/graphClient';
 import { ColorPicker } from '@/components/ui/ColorPicker';
@@ -86,17 +87,9 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
   const { config, updateConfig, updateNodeTypeConfigurations, applyLayout, cosmographRef } = useGraphConfig();
   const { resetAllConfig, exportConfig, importConfig, getStorageInfo } = useConfigPersistence();
   
-  // Get current graph data for layout operations
-  const { data: graphData } = useQuery({
-    queryKey: ['graphData', config.queryType, config.nodeLimit],
-    queryFn: () => graphClient.getGraphData({
-      query_type: config.queryType,
-      limit: config.nodeLimit
-    }),
-    staleTime: 30000,
-    refetchOnWindowFocus: false
-  });
+  // Get current graph data from the query cache instead of making duplicate queries
   const queryClient = useQueryClient();
+  const graphData = queryClient.getQueryData<GraphData>(['graphData', config.queryType, config.nodeLimit]);
   const [isRefreshing, setIsRefreshing] = useState(false);
   
   // Compute real node types from graph data with memoization
