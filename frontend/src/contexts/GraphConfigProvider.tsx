@@ -68,18 +68,18 @@ const defaultStableConfig: StableConfig = {
   // Physics - Cosmograph v2.0 simulation defaults
   gravity: 0.05,
   repulsion: 3.0,
-  centerForce: 0.01,
-  friction: 0.85,
-  linkSpring: 0.2,
-  linkDistance: 30,
-  linkDistRandomVariationRange: [0.9, 1.1],
-  mouseRepulsion: 15,
-  simulationDecay: 1000, // Default value from Cosmograph documentation
-  simulationRepulsionTheta: 1.5,
-  simulationCluster: 0,
+  centerForce: 0.10,
+  friction: 0.86,
+  linkSpring: 0.12,
+  linkDistance: 3.1,
+  linkDistRandomVariationRange: [1, 1.2],
+  mouseRepulsion: 10.0,
+  simulationDecay: 10000, // 10 seconds for longer natural simulation
+  simulationRepulsionTheta: 1.70,
+  simulationCluster: 0.1, // Default cluster coefficient
   simulationClusterStrength: 0.5,
   simulationImpulse: 0.01,
-  spaceSize: 8192,
+  spaceSize: 4096,
   
   // Quadtree optimization
   useQuadtree: true,
@@ -152,7 +152,7 @@ const defaultDynamicConfig: DynamicConfig = {
   
   // Query
   queryType: 'entire_graph',
-  nodeLimit: 1000,
+  nodeLimit: 100000,
   
   // Layout
   layout: 'force',
