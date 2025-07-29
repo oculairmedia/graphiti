@@ -291,9 +291,9 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
     
     // Skip metric filters if all at default values
     const hasMetricFilters = filterConfig.minDegree > 0 || filterConfig.maxDegree < 100 ||
-                           filterConfig.minPagerank > 0 || filterConfig.maxPagerank < 100 ||
-                           filterConfig.minBetweenness > 0 || filterConfig.maxBetweenness < 100 ||
-                           filterConfig.minEigenvector > 0 || filterConfig.maxEigenvector < 100;
+                           filterConfig.minPagerank > 0 || filterConfig.maxPagerank < 1 ||
+                           filterConfig.minBetweenness > 0 || filterConfig.maxBetweenness < 1 ||
+                           filterConfig.minEigenvector > 0 || filterConfig.maxEigenvector < 1;
     
     if (hasMetricFilters) {
       // Degree centrality filter
