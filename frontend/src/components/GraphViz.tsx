@@ -68,19 +68,15 @@ interface GraphVizProps {
 export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
   const { config, applyLayout, zoomIn, zoomOut, fitView, updateNodeTypeConfigurations } = useGraphConfig();
   
-  // Add debug logging for button clicks
   const handleZoomIn = useCallback(() => {
-    console.log('GraphViz: handleZoomIn called');
     zoomIn();
   }, [zoomIn]);
   
   const handleZoomOut = useCallback(() => {
-    console.log('GraphViz: handleZoomOut called');
     zoomOut();
   }, [zoomOut]);
   
   const handleFitView = useCallback(() => {
-    console.log('GraphViz: handleFitView called');
     fitView();
   }, [fitView]);
   const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);
@@ -116,21 +112,6 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
         query_type: config.queryType,
         limit: config.nodeLimit 
       });
-      // Debug: log a sample of the data structure
-      if (result && result.nodes && result.nodes.length > 0) {
-        logger.log('Sample node data:', result.nodes[0]);
-        logger.log('Node properties:', result.nodes[0].properties);
-        // Find nodes with temporal data
-        const nodesWithDates = result.nodes.filter((n: any) => 
-          n.created_at || n.properties?.created_at || n.properties?.created || 
-          n.properties?.date || n.properties?.timestamp
-        );
-        logger.log(`Nodes with temporal data: ${nodesWithDates.length}/${result.nodes.length}`);
-        if (nodesWithDates.length > 0) {
-          logger.log('Sample node with date:', nodesWithDates[0]);
-        }
-        logger.log('Sample edge data:', result.edges && result.edges[0]);
-      }
       return result;
     },
     // Disabled auto-refetch to improve performance
@@ -140,11 +121,10 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
   // Use data diffing to detect changes
   const dataDiff = useGraphDataDiff(data || null);
   
-  // Debug logging
+  // Handle data loading state changes
   useEffect(() => {
-    logger.log('GraphViz: Query state', { isLoading, hasData: !!data, error: error?.message });
     if (data) {
-      logger.log('GraphViz: Data loaded', { nodes: data.nodes?.length, edges: data.edges?.length });
+      // Data loaded successfully
     }
   }, [isLoading, data, error]);
   
@@ -377,7 +357,6 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
     }
     
     const visibleNodeIds = new Set(finalNodes.map(n => n.id));
-    logger.log('GraphViz: Source edges:', sourceData.edges.length, 'Visible node IDs:', visibleNodeIds.size);
     
     const filteredLinks = sourceData.edges
       .filter(edge => visibleNodeIds.has(edge.from) && visibleNodeIds.has(edge.to))
@@ -386,8 +365,6 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
         source: edge.from,
         target: edge.to,
       }));
-    
-    logger.log('GraphViz: Filtered links:', filteredLinks.length);
     
     const newTransformedData = {
       nodes: finalNodes,
@@ -912,7 +889,6 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
             ref={timelineRef}
             onTimeRangeChange={(range) => {
               // Handle timeline range changes
-              logger.log('Timeline range changed:', range);
             }}
             className=""
           />
