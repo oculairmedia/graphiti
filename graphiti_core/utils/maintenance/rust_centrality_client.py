@@ -39,7 +39,7 @@ class RustCentralityClient:
         Args:
             base_url: Base URL of the Rust centrality service
         """
-        self.base_url = base_url or os.getenv("RUST_CENTRALITY_URL", "http://localhost:3001")
+        self.base_url = base_url or os.getenv("RUST_CENTRALITY_URL", "http://localhost:3003")
         self.timeout = aiohttp.ClientTimeout(total=300)  # 5 minute timeout
         
         logger.info(f"Initialized Rust centrality client with base URL: {self.base_url}")

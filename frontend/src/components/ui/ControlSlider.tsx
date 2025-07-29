@@ -29,6 +29,9 @@ export const ControlSlider: React.FC<ControlSliderProps> = ({
   formatValue,
   icon,
 }) => {
+  // Handle undefined or null values by using the minimum value
+  const safeValue = value ?? min;
+  
   const handleSliderChange = (values: number[]) => {
     onChange(values[0]);
   };
@@ -40,7 +43,7 @@ export const ControlSlider: React.FC<ControlSliderProps> = ({
     }
   };
 
-  const displayValue = formatValue ? formatValue(value) : value.toFixed(2);
+  const displayValue = formatValue ? formatValue(safeValue) : safeValue.toFixed(2);
 
   return (
     <div className={cn('space-y-2', className)}>
@@ -52,7 +55,7 @@ export const ControlSlider: React.FC<ControlSliderProps> = ({
         {showInput && (
           <Input
             type="number"
-            value={value}
+            value={safeValue}
             onChange={handleInputChange}
             min={min}
             max={max}
@@ -65,7 +68,7 @@ export const ControlSlider: React.FC<ControlSliderProps> = ({
         )}
       </div>
       <Slider
-        value={[value]}
+        value={[safeValue]}
         onValueChange={handleSliderChange}
         min={min}
         max={max}
