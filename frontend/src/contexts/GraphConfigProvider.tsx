@@ -4,7 +4,7 @@ import type { GraphNode, GraphEdge } from '../types/graph';
 import { usePersistedGraphConfig, usePersistedNodeTypes } from '@/hooks/usePersistedConfig';
 import type { GraphConfig, StableConfig, DynamicConfig } from './configTypes';
 import { isStableConfigKey, splitConfig } from './configTypes';
-import { generateNodeTypeColor } from './GraphConfigContext';
+import { generateNodeTypeColor } from '../utils/nodeTypeColors';
 
 // Cosmograph types
 interface CosmographLink {

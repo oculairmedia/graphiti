@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { useColorUtils } from '@/hooks/useColorUtils';
-import { generateNodeTypeColor } from '@/contexts/GraphConfigContext';
+import { generateNodeTypeColor } from '@/utils/nodeTypeColors';
 
 interface NodeType {
   id: string;
