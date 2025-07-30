@@ -321,9 +321,9 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         linkSourceIndexBy: 'sourceIndex', // Required: source node index
         linkTargetBy: 'target',         // Target node ID field (singular for single target)
         linkTargetIndexBy: 'targetIndex', // Required: target node index
-        linkColorBy: 'edge_type',      // Link color by type
+        // linkColorBy removed - using linkColorByFn instead
         linkWidthBy: config.linkWidthBy || 'weight',         // Dynamic width column
-        linkIncludeColumns: ['created_at', 'updated_at', 'weight', 'strength', 'confidence'] // Include various link properties
+        linkIncludeColumns: ['created_at', 'updated_at', 'weight', 'strength', 'confidence', 'edge_type'] // Include various link properties
       }
     }), [pointColorBy, pointSizeBy, config.linkWidthBy]);
 
@@ -668,7 +668,11 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       const minWeight = Math.min(...weights);
       const weightRange = maxWeight - minWeight || 1;
       
-      return (link: GraphLink) => {
+      return (linkValue: any, linkIndex: number) => {
+        // Get the actual link data from the current links
+        const link = currentLinks[linkIndex];
+        if (!link) return config.linkColor;
+        
         switch (config.linkColorScheme) {
           case 'by-weight': {
             // Color by edge weight - interpolate between low and high colors
@@ -1914,7 +1918,8 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             simulationRepulsionFromMouse={config.mouseRepulsion}
             
             // Link Properties
-            linkColor={linkColorFn || config.linkColor}
+            linkColor={config.linkColor}
+            linkColorByFn={linkColorFn}
             linkOpacity={config.linkOpacity}
             linkGreyoutOpacity={config.linkGreyoutOpacity}
             linkWidth={1}
