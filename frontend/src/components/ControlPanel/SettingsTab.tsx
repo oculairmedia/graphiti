@@ -161,6 +161,22 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
                   <span>Toggle Physics</span>
                   <Badge variant="secondary" className="text-xs">Space</Badge>
                 </div>
+                <div className="flex justify-between">
+                  <span>Toggle Labels</span>
+                  <Badge variant="secondary" className="text-xs">L</Badge>
+                </div>
+                <div className="flex justify-between">
+                  <span>Reset Zoom</span>
+                  <Badge variant="secondary" className="text-xs">R</Badge>
+                </div>
+                <div className="flex justify-between">
+                  <span>Debug Info</span>
+                  <Badge variant="secondary" className="text-xs">D</Badge>
+                </div>
+                <div className="flex justify-between">
+                  <span>Search</span>
+                  <Badge variant="secondary" className="text-xs">Ctrl+F</Badge>
+                </div>
               </div>
             </>
           )}

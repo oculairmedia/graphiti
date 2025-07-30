@@ -58,6 +58,12 @@ export interface StableConfig {
   hoveredLabelColor: string;
   labelSize: number;
   labelOpacity: number;
+  labelVisibilityThreshold: number;
+  labelFontWeight: string;
+  labelBackgroundColor: string;
+  hoveredLabelSize: number;
+  hoveredLabelFontWeight: string;
+  hoveredLabelBackgroundColor: string;
   
   // Visual defaults
   colorScheme: string;
@@ -93,6 +99,7 @@ export interface DynamicConfig {
   // Query parameters
   queryType: string;
   nodeLimit: number;
+  searchTerm: string;
   
   // Layout
   layout: string;
@@ -100,6 +107,29 @@ export interface DynamicConfig {
   radialCenter: string;
   circularOrdering: string;
   clusterBy: string;
+  
+  // Advanced rendering options
+  renderLabels: boolean;
+  edgeArrows: boolean;
+  edgeArrowScale: number;
+  pointsOnEdge: boolean;
+  advancedOptionsEnabled: boolean;
+  pixelationThreshold: number;
+  renderSelectedNodesOnTop: boolean;
+  performanceMode: boolean;
+  
+  // Display settings
+  showFPS: boolean;
+  showNodeCount: boolean;
+  showDebugInfo: boolean;
+  
+  // Interaction settings
+  enableHoverEffects: boolean;
+  enablePanOnDrag: boolean;
+  enableZoomOnScroll: boolean;
+  enableClickSelection: boolean;
+  enableDoubleClickFocus: boolean;
+  enableKeyboardShortcuts: boolean;
   
   // Filters
   filteredNodeTypes: string[];
@@ -134,6 +164,8 @@ export const isStableConfigKey = (key: string): boolean => {
     'curvedLinkWeight', 'curvedLinkControlPointDistance', 'minNodeSize',
     'maxNodeSize', 'sizeMultiplier', 'nodeOpacity', 'borderWidth',
     'labelColor', 'hoveredLabelColor', 'labelSize', 'labelOpacity',
+    'labelVisibilityThreshold', 'labelFontWeight', 'labelBackgroundColor',
+    'hoveredLabelSize', 'hoveredLabelFontWeight', 'hoveredLabelBackgroundColor',
     'colorScheme', 'gradientHighColor', 'gradientLowColor', 'hoveredPointCursor',
     'renderHoveredPointRing', 'hoveredPointRingColor', 'focusedPointRingColor',
     'fitViewDuration', 'fitViewPadding'

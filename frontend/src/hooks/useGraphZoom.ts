@@ -5,7 +5,7 @@ interface CosmographRef {
   setZoomLevel: (level: number, duration?: number) => void;
   getZoomLevel: () => number;
   fitView: (duration?: number, padding?: number) => void;
-  fitViewByIndices: (indices: number[], duration?: number, padding?: number) => void;
+  fitViewByPointIndices: (indices: number[], duration?: number, padding?: number) => void;
   zoomToPoint: (index: number, duration?: number, scale?: number, canZoomOut?: boolean) => void;
   trackPointPositionsByIndices: (indices: number[]) => void;
   getTrackedPointPositionsMap: () => Map<number, [number, number]> | undefined;
@@ -88,13 +88,13 @@ export function useGraphZoom(
     }
   }, [cosmographRef, fitViewDuration, fitViewPadding, isCanvasReady, hasData]);
 
-  const fitViewByIndices = useCallback((indices: number[], duration?: number, padding?: number) => {
+  const fitViewByPointIndices = useCallback((indices: number[], duration?: number, padding?: number) => {
     if (!cosmographRef.current || indices.length === 0) return;
     
     try {
       const actualDuration = duration !== undefined ? duration : fitViewDuration;
       const actualPadding = padding !== undefined ? padding : fitViewPadding;
-      cosmographRef.current.fitViewByIndices(indices, actualDuration, actualPadding);
+      cosmographRef.current.fitViewByPointIndices(indices, actualDuration, actualPadding);
       logger.log(`Fit view to ${indices.length} nodes`);
     } catch (error) {
       logger.warn('Fit view by indices failed:', error);
@@ -170,7 +170,7 @@ export function useGraphZoom(
     zoomIn,
     zoomOut,
     fitView,
-    fitViewByIndices,
+    fitViewByPointIndices,
     zoomToPoint,
     trackPointPositionsByIndices,
     getTrackedPointPositionsMap,

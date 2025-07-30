@@ -202,6 +202,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
                 isRefreshing={isRefreshing}
                 onQueryTypeChange={(value) => updateConfig({ queryType: value })}
                 onNodeLimitChange={(value) => updateConfig({ nodeLimit: value })}
+                onSearchTermChange={(value) => updateConfig({ searchTerm: value })}
                 onRefreshGraph={handleRefreshGraph}
                 onQuickQuery={handleQuickQuery}
               />

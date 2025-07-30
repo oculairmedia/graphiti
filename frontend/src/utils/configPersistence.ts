@@ -52,11 +52,19 @@ export interface PersistedGraphConfig {
   nodeTypeVisibility?: Record<string, boolean>;
   
   // Labels
+  renderLabels?: boolean;
   showLabels?: boolean;
   showHoveredNodeLabel?: boolean;
   labelColor?: string;
+  hoveredLabelColor?: string;
   labelSize?: number;
   labelOpacity?: number;
+  labelVisibilityThreshold?: number;
+  labelFontWeight?: string;
+  labelBackgroundColor?: string;
+  hoveredLabelSize?: number;
+  hoveredLabelFontWeight?: string;
+  hoveredLabelBackgroundColor?: string;
   
   // Visual preferences
   colorScheme?: string;
@@ -70,16 +78,93 @@ export interface PersistedGraphConfig {
   circularOrdering?: string;
   clusterBy?: string;
   
+  // Query
+  queryType?: string;
+  nodeLimit?: number;
+  searchTerm?: string;
+  
   // Filters
   filteredNodeTypes?: string[];
   minDegree?: number;
   maxDegree?: number;
   minPagerank?: number;
   maxPagerank?: number;
+  minBetweenness?: number;
+  maxBetweenness?: number;
+  minEigenvector?: number;
+  maxEigenvector?: number;
   minConnections?: number;
   maxConnections?: number;
   startDate?: string;
   endDate?: string;
+  
+  // Advanced rendering options
+  edgeArrows?: boolean;
+  edgeArrowScale?: number;
+  pointsOnEdge?: boolean;
+  advancedOptionsEnabled?: boolean;
+  pixelationThreshold?: number;
+  renderSelectedNodesOnTop?: boolean;
+  
+  // Display settings
+  showFPS?: boolean;
+  showNodeCount?: boolean;
+  showDebugInfo?: boolean;
+  
+  // Interaction settings
+  enableHoverEffects?: boolean;
+  enablePanOnDrag?: boolean;
+  enableZoomOnScroll?: boolean;
+  enableClickSelection?: boolean;
+  enableDoubleClickFocus?: boolean;
+  enableKeyboardShortcuts?: boolean;
+  
+  // Performance
+  performanceMode?: boolean;
+  
+  // Link configuration
+  linkWidthBy?: string;
+  linkColorScheme?: string;
+  
+  // Additional physics properties
+  linkDistRandomVariationRange?: [number, number];
+  simulationCluster?: number;
+  simulationClusterStrength?: number;
+  simulationImpulse?: number;
+  useQuadtree?: boolean;
+  useClassicQuadtree?: boolean;
+  quadtreeLevels?: number;
+  
+  // Link visibility
+  linkVisibilityDistance?: [number, number];
+  linkVisibilityMinTransparency?: number;
+  linkArrows?: boolean;
+  linkArrowsSizeScale?: number;
+  
+  // Curved links
+  curvedLinks?: boolean;
+  curvedLinkSegments?: number;
+  curvedLinkWeight?: number;
+  curvedLinkControlPointDistance?: number;
+  
+  // Hover and focus
+  hoveredPointCursor?: string;
+  renderHoveredPointRing?: boolean;
+  hoveredPointRingColor?: string;
+  focusedPointRingColor?: string;
+  focusedPointIndex?: number;
+  renderLinks?: boolean;
+  
+  // Fit view
+  fitViewDuration?: number;
+  fitViewPadding?: number;
+  
+  // Border
+  borderWidth?: number;
+  
+  // Link greyout
+  linkGreyoutOpacity?: number;
+  scaleLinksOnZoom?: boolean;
 }
 
 export interface PersistedConfig {
