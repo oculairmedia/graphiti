@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useRef, useEffect, useState, useCallback, useTransition, useDeferredValue } from 'react';
 import { Filter, Route, Focus, Trash2, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -33,6 +33,11 @@ export const GraphSearch: React.FC<GraphSearchProps> = React.memo(({
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
   const [visibleResultsCount, setVisibleResultsCount] = useState(20); // Start with 20 visible results
+  
+  // React 19 performance features
+  const [isPending, startTransition] = useTransition();
+  const deferredSearchValue = useDeferredValue(searchValue);
+  const deferredSearchResults = useDeferredValue(searchResults);
   
   // Refs for DOM elements
   const searchContainerRef = useRef<HTMLDivElement>(null);
@@ -157,57 +162,16 @@ export const GraphSearch: React.FC<GraphSearchProps> = React.memo(({
     
   }, [nodes, cosmographRef]);
   
-  // Handle search input changes
+  // Handle search input changes with transition for non-blocking updates
   const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setSearchValue(value);
-    performSearch(value);
+    
+    // Use transition for non-blocking search updates
+    startTransition(() => {
+      performSearch(value);
+    });
   }, [performSearch]);
-  
-  // Handle scroll to load more results
-  const handleResultsScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
-    const target = e.target as HTMLDivElement;
-    const { scrollTop, scrollHeight, clientHeight } = target;
-    
-    // If scrolled near bottom (90%) and we have more results to show
-    if (scrollTop + clientHeight >= scrollHeight * 0.9 && visibleResultsCount < searchResults.length) {
-      setVisibleResultsCount(prev => Math.min(prev + 20, searchResults.length));
-    }
-  }, [visibleResultsCount, searchResults.length]);
-
-  // Handle keyboard navigation
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (!isSearchOpen) return;
-    
-    const visibleResults = searchResults.slice(0, visibleResultsCount);
-    
-    switch (e.key) {
-      case 'ArrowDown':
-        e.preventDefault();
-        setActiveIndex(prev => Math.min(prev + 1, visibleResults.length - 1));
-        break;
-      case 'ArrowUp':
-        e.preventDefault();
-        setActiveIndex(prev => Math.max(prev - 1, -1));
-        break;
-      case 'Enter':
-        e.preventDefault();
-        if (activeIndex >= 0 && searchResults[activeIndex]) {
-          handleSelectResult(searchResults[activeIndex]);
-        } else if (searchResults.length > 0) {
-          // Select all results if no specific item is active
-          if (onSelectNodes) {
-            onSelectNodes(searchResults);
-          }
-        }
-        break;
-      case 'Escape':
-        setIsSearchOpen(false);
-        setActiveIndex(-1);
-        searchInputRef.current?.blur();
-        break;
-    }
-  }, [isSearchOpen, searchResults, activeIndex, onSelectNodes, visibleResultsCount]);
   
   // Handle result selection
   const handleSelectResult = useCallback(async (node: GraphNode) => {
@@ -261,6 +225,51 @@ export const GraphSearch: React.FC<GraphSearchProps> = React.memo(({
     setIsSearchOpen(false);
     setActiveIndex(-1);
   }, [onNodeSelect, cosmographRef, nodes]);
+
+  // Handle scroll to load more results
+  const handleResultsScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLDivElement;
+    const { scrollTop, scrollHeight, clientHeight } = target;
+    
+    // If scrolled near bottom (90%) and we have more results to show
+    if (scrollTop + clientHeight >= scrollHeight * 0.9 && visibleResultsCount < deferredSearchResults.length) {
+      setVisibleResultsCount(prev => Math.min(prev + 20, deferredSearchResults.length));
+    }
+  }, [visibleResultsCount, deferredSearchResults.length]);
+
+  // Handle keyboard navigation
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (!isSearchOpen) return;
+    
+    const visibleResults = deferredSearchResults.slice(0, visibleResultsCount);
+    
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        setActiveIndex(prev => Math.min(prev + 1, visibleResults.length - 1));
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        setActiveIndex(prev => Math.max(prev - 1, -1));
+        break;
+      case 'Enter':
+        e.preventDefault();
+        if (activeIndex >= 0 && deferredSearchResults[activeIndex]) {
+          handleSelectResult(deferredSearchResults[activeIndex]);
+        } else if (deferredSearchResults.length > 0) {
+          // Select all results if no specific item is active
+          if (onSelectNodes) {
+            onSelectNodes(deferredSearchResults);
+          }
+        }
+        break;
+      case 'Escape':
+        setIsSearchOpen(false);
+        setActiveIndex(-1);
+        searchInputRef.current?.blur();
+        break;
+    }
+  }, [isSearchOpen, deferredSearchResults, activeIndex, onSelectNodes, visibleResultsCount, handleSelectResult]);
   
   // Close search results when clicking outside
   useEffect(() => {
@@ -329,7 +338,9 @@ export const GraphSearch: React.FC<GraphSearchProps> = React.memo(({
               onChange={handleSearchChange}
               onKeyDown={handleKeyDown}
               placeholder="Search nodes... (try 'type:Entity' or 'label:example')"
-              className="pl-10 h-10 bg-secondary/50 border-border/30 focus:border-primary/50 transition-colors"
+              className={`pl-10 h-10 bg-secondary/50 border-border/30 focus:border-primary/50 transition-colors ${
+                isPending ? 'opacity-70' : ''
+              }`}
             />
             {searchValue && (
               <Button
@@ -347,15 +358,15 @@ export const GraphSearch: React.FC<GraphSearchProps> = React.memo(({
             )}
           </div>
           
-          {/* Search Results Dropdown */}
-          {isSearchOpen && searchResults.length > 0 && (
+          {/* Search Results Dropdown - Using deferred values for smooth rendering */}
+          {isSearchOpen && deferredSearchResults.length > 0 && (
             <div 
               ref={resultsListRef}
               className="absolute top-full left-0 right-0 mt-1 bg-popover border border-border/30 rounded-md shadow-lg z-50 max-h-80 overflow-y-auto custom-scrollbar"
               onScroll={handleResultsScroll}
             >
               <div className="pb-12">
-                {searchResults.slice(0, visibleResultsCount).map((node, index) => (
+                {deferredSearchResults.slice(0, visibleResultsCount).map((node, index) => (
                 <div
                   key={node.id}
                   onClick={() => handleSelectResult(node)}
@@ -370,10 +381,10 @@ export const GraphSearch: React.FC<GraphSearchProps> = React.memo(({
                         {(() => {
                           const label = node.label || node.id;
                           const lowercaseLabel = label.toLowerCase();
-                          const lowercaseQuery = searchValue.toLowerCase();
+                          const lowercaseQuery = deferredSearchValue.toLowerCase();
                           
                           if (lowercaseLabel.includes(lowercaseQuery)) {
-                            const parts = label.split(new RegExp(`(${searchValue})`, 'gi'));
+                            const parts = label.split(new RegExp(`(${deferredSearchValue})`, 'gi'));
                             return parts.map((part, i) => (
                               part.toLowerCase() === lowercaseQuery ? 
                                 <mark key={i} className="bg-primary/30">{part}</mark> : part

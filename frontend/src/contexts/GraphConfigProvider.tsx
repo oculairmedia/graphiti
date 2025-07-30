@@ -48,8 +48,8 @@ interface DynamicConfigContextType {
 }
 
 interface GraphControlContextType {
-  cosmographRef: React.MutableRefObject<CosmographRefType> | null;
-  setCosmographRef: (ref: React.MutableRefObject<CosmographRefType>) => void;
+  cosmographRef: React.RefObject<CosmographRefType> | null;
+  setCosmographRef: (ref: React.RefObject<CosmographRefType>) => void;
   zoomIn: () => void;
   zoomOut: () => void;
   fitView: () => void;
@@ -192,7 +192,7 @@ export function GraphConfigProvider({ children }: { children: ReactNode }) {
   // State
   const [stableConfig, setStableConfig] = useState<StableConfig>(initialStable);
   const [dynamicConfig, setDynamicConfig] = useState<DynamicConfig>(initialDynamic);
-  const [cosmographRef, setCosmographRef] = useState<React.MutableRefObject<CosmographRefType> | null>(null);
+  const [cosmographRef, setCosmographRef] = useState<React.RefObject<CosmographRefType> | null>(null);
   const [isApplyingLayout, setIsApplyingLayout] = useState(false);
   
   // Batch update queue

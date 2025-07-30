@@ -1,4 +1,5 @@
 import React from 'react';
+import { prefetchDNS, preconnect, preload } from 'react-dom';
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -24,8 +25,20 @@ const queryClient = new QueryClient({
 });
 
 const App = () => {
-  // Cleanup memory monitor on app unmount
+  // Preload resources for better performance
   React.useEffect(() => {
+    // Preconnect to API endpoints if configured
+    const apiUrl = import.meta.env.VITE_API_URL;
+    if (apiUrl) {
+      const url = new URL(apiUrl);
+      prefetchDNS(url.hostname);
+      preconnect(url.origin);
+    }
+    
+    // Preload critical fonts
+    preload('/fonts/inter-var.woff2', { as: 'font', type: 'font/woff2', crossOrigin: 'anonymous' });
+    
+    // Cleanup memory monitor on app unmount
     return () => {
       memoryMonitor.stop();
     };

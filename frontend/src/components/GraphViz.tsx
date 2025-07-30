@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { preload } from 'react-dom';
 import { useStableCallback } from '../hooks/useStableCallback';
 import { CosmographProvider } from '@cosmograph/react';
 import { useGraphConfig } from '../contexts/GraphConfigProvider';
@@ -73,6 +74,20 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
     data,
     stableDataRef
   );
+  
+  // Preload resources for better performance
+  useEffect(() => {
+    // Preload WebGL shaders and resources that Cosmograph might use
+    // This helps with initial render performance
+    preload('/shaders/vertex.glsl', { as: 'fetch' });
+    preload('/shaders/fragment.glsl', { as: 'fetch' });
+    
+    // Preload any graph data endpoints if known
+    const graphDataEndpoint = import.meta.env.VITE_GRAPH_DATA_ENDPOINT;
+    if (graphDataEndpoint) {
+      preload(graphDataEndpoint, { as: 'fetch', crossOrigin: 'anonymous' });
+    }
+  }, []);
 
   // Use stable callbacks for navigation handlers
   const handleZoomIn = useStableCallback(zoomIn);
