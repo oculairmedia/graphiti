@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useMemo } from 'react';
+import { useState, useCallback, useRef, useMemo, useOptimistic } from 'react';
 import { GraphNode } from '../api/types';
 import { GraphLink } from '../types/graph';
 
@@ -14,12 +14,43 @@ export function useNodeSelection(
   graphCanvasRef: React.RefObject<GraphCanvasHandle>
 ) {
   const [selectedNodes, setSelectedNodes] = useState<string[]>([]);
+  const [optimisticSelectedNodes, addOptimisticSelectedNode] = useOptimistic(
+    selectedNodes,
+    (state: string[], newNodeId: string | { remove: string }) => {
+      if (typeof newNodeId === 'string') {
+        return state.includes(newNodeId) 
+          ? state.filter(id => id !== newNodeId)
+          : [...state, newNodeId];
+      } else {
+        // Handle removal
+        return state.filter(id => id !== newNodeId.remove);
+      }
+    }
+  );
+  
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
+  const [optimisticSelectedNode, setOptimisticSelectedNode] = useOptimistic(
+    selectedNode,
+    (_state: GraphNode | null, newNode: GraphNode | null) => newNode
+  );
+  
   const [highlightedNodes, setHighlightedNodes] = useState<string[]>([]);
+  const [optimisticHighlightedNodes, addOptimisticHighlightedNodes] = useOptimistic(
+    highlightedNodes,
+    (_state: string[], newNodeIds: string[]) => newNodeIds
+  );
+  
   const [hoveredNode, setHoveredNode] = useState<GraphNode | null>(null);
   const [hoveredConnectedNodes, setHoveredConnectedNodes] = useState<string[]>([]);
 
-  const handleNodeSelect = useCallback((nodeId: string) => {
+  const handleNodeSelect = useCallback(async (nodeId: string) => {
+    // Optimistically update the selection immediately
+    addOptimisticSelectedNode(nodeId);
+    
+    // Simulate async operation (e.g., API call, graph update)
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
+    // Actually update the state
     setSelectedNodes(prev => {
       if (prev.includes(nodeId)) {
         return prev.filter(id => id !== nodeId);
@@ -27,27 +58,46 @@ export function useNodeSelection(
         return [...prev, nodeId];
       }
     });
-  }, []);
+  }, [addOptimisticSelectedNode]);
 
-  const handleNodeClick = useCallback((node: GraphNode) => {
+  const handleNodeClick = useCallback(async (node: GraphNode) => {
+    // Optimistically update immediately
+    setOptimisticSelectedNode(node);
+    
+    // Simulate async operation
+    await new Promise(resolve => setTimeout(resolve, 50));
+    
+    // Actually update the state
     setSelectedNode(node);
-  }, []);
+  }, [setOptimisticSelectedNode]);
 
-  const handleNodeSelectWithCosmograph = useCallback((node: GraphNode) => {
-    // Set React state
-    setSelectedNode(node);
-    handleNodeSelect(node.id);
+  const handleNodeSelectWithCosmograph = useCallback(async (node: GraphNode) => {
+    // Optimistically update immediately
+    setOptimisticSelectedNode(node);
+    addOptimisticSelectedNode(node.id);
     
     // Also select in Cosmograph for visual effects
     if (graphCanvasRef.current && typeof graphCanvasRef.current.selectNode === 'function') {
       graphCanvasRef.current.selectNode(node);
     }
-  }, [handleNodeSelect, graphCanvasRef]);
+    
+    // Actually update the state after async operation
+    await handleNodeSelect(node.id);
+    setSelectedNode(node);
+  }, [handleNodeSelect, graphCanvasRef, setOptimisticSelectedNode, addOptimisticSelectedNode]);
 
-  const handleHighlightNodes = useCallback((nodes: GraphNode[]) => {
+  const handleHighlightNodes = useCallback(async (nodes: GraphNode[]) => {
     const nodeIds = nodes.map(node => node.id);
+    
+    // Optimistically update immediately
+    addOptimisticHighlightedNodes(nodeIds);
+    
+    // Simulate async operation
+    await new Promise(resolve => setTimeout(resolve, 50));
+    
+    // Actually update the state
     setHighlightedNodes(nodeIds);
-  }, []);
+  }, [addOptimisticHighlightedNodes]);
 
   const handleSelectNodes = useCallback((nodes: GraphNode[]) => {
     // Select multiple nodes with Cosmograph visual effects
@@ -150,9 +200,9 @@ export function useNodeSelection(
 
   // Memoize the return object to prevent unnecessary re-renders
   return useMemo(() => ({
-    selectedNodes,
-    selectedNode,
-    highlightedNodes,
+    selectedNodes: optimisticSelectedNodes,
+    selectedNode: optimisticSelectedNode,
+    highlightedNodes: optimisticHighlightedNodes,
     hoveredNode,
     hoveredConnectedNodes,
     handleNodeSelect,
@@ -164,9 +214,9 @@ export function useNodeSelection(
     handleNodeHover,
     clearAllSelections,
   }), [
-    selectedNodes,
-    selectedNode,
-    highlightedNodes,
+    optimisticSelectedNodes,
+    optimisticSelectedNode,
+    optimisticHighlightedNodes,
     hoveredNode,
     hoveredConnectedNodes,
     handleNodeSelect,
