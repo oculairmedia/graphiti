@@ -1,0 +1,58 @@
+import { useContext } from 'react';
+import { StableConfigContext, DynamicConfigContext, GraphControlContext } from '../contexts/GraphConfigProvider';
+import type { GraphConfig } from '../contexts/configTypes';
+
+export function useStableConfig() {
+  const context = useContext(StableConfigContext);
+  if (!context) {
+    throw new Error('useStableConfig must be used within GraphConfigProvider');
+  }
+  return context;
+}
+
+export function useDynamicConfig() {
+  const context = useContext(DynamicConfigContext);
+  if (!context) {
+    throw new Error('useDynamicConfig must be used within GraphConfigProvider');
+  }
+  return context;
+}
+
+export function useGraphControl() {
+  const context = useContext(GraphControlContext);
+  if (!context) {
+    throw new Error('useGraphControl must be used within GraphConfigProvider');
+  }
+  return context;
+}
+
+// Combined hook for backward compatibility
+export function useGraphConfig() {
+  const { config: stableConfig, updateConfig: updateStable } = useStableConfig();
+  const { config: dynamicConfig, updateConfig: updateDynamic } = useDynamicConfig();
+  const control = useGraphControl();
+  
+  return {
+    config: { ...stableConfig, ...dynamicConfig } as GraphConfig,
+    updateConfig: (updates: Partial<GraphConfig>) => {
+      const stableUpdates: Partial<typeof stableConfig> = {};
+      const dynamicUpdates: Partial<typeof dynamicConfig> = {};
+      
+      Object.entries(updates).forEach(([key, value]) => {
+        if (key in stableConfig) {
+          (stableUpdates as any)[key] = value;
+        } else {
+          (dynamicUpdates as any)[key] = value;
+        }
+      });
+      
+      if (Object.keys(stableUpdates).length > 0) {
+        updateStable(stableUpdates);
+      }
+      if (Object.keys(dynamicUpdates).length > 0) {
+        updateDynamic(dynamicUpdates);
+      }
+    },
+    ...control
+  };
+}

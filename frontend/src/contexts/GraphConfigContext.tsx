@@ -1,10 +1,11 @@
-import React, { createContext, useContext, useState, ReactNode, useCallback } from 'react';
+import React, { useState, ReactNode, useCallback } from 'react';
 import { calculateLayoutPositions, type LayoutOptions } from '../utils/layoutAlgorithms';
 import type { GraphNode, GraphEdge } from '../types/graph';
 import { usePersistedGraphConfig, usePersistedNodeTypes } from '@/hooks/usePersistedConfig';
 import type { GraphConfig } from './configTypes';
 import { generateNodeTypeColor } from '../utils/nodeTypeColors';
 import type { GraphConfigContextType } from './GraphConfigContextTypes';
+import { GraphConfigContext } from './useGraphConfig';
 
 // Re-export types needed internally
 type CosmographLink = {
@@ -185,7 +186,6 @@ const defaultConfig: GraphConfig = {
   pointClusterStrengthBy: 'clusterStrength'
 };
 
-export const GraphConfigContext = createContext<GraphConfigContextType | undefined>(undefined);
 
 export const GraphConfigProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [config, setConfig, isConfigLoaded] = usePersistedGraphConfig(defaultConfig);
@@ -456,10 +456,3 @@ export const GraphConfigProvider: React.FC<{ children: ReactNode }> = ({ childre
   );
 };
 
-export const useGraphConfig = () => {
-  const context = useContext(GraphConfigContext);
-  if (!context) {
-    throw new Error('useGraphConfig must be used within a GraphConfigProvider');
-  }
-  return context;
-};

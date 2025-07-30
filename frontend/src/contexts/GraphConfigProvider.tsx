@@ -5,6 +5,7 @@ import { usePersistedGraphConfig, usePersistedNodeTypes } from '@/hooks/usePersi
 import type { GraphConfig, StableConfig, DynamicConfig } from './configTypes';
 import { isStableConfigKey, splitConfig } from './configTypes';
 import { generateNodeTypeColor } from '../utils/nodeTypeColors';
+export { useGraphConfig, useStableConfig, useDynamicConfig, useGraphControl } from '../hooks/useGraphConfigHooks';
 
 // Cosmograph types
 interface CosmographLink {
@@ -58,10 +59,10 @@ interface GraphControlContextType {
   updateNodeTypeConfigurations: (nodeTypes: string[]) => void;
 }
 
-// Create separate contexts
-const StableConfigContext = createContext<StableConfigContextType | undefined>(undefined);
-const DynamicConfigContext = createContext<DynamicConfigContextType | undefined>(undefined);
-const GraphControlContext = createContext<GraphControlContextType | undefined>(undefined);
+// Create separate contexts - exported for hooks
+export const StableConfigContext = createContext<StableConfigContextType | undefined>(undefined);
+export const DynamicConfigContext = createContext<DynamicConfigContextType | undefined>(undefined);
+export const GraphControlContext = createContext<GraphControlContextType | undefined>(undefined);
 
 // Default configurations
 const defaultStableConfig: StableConfig = {
@@ -384,64 +385,4 @@ export function GraphConfigProvider({ children }: { children: ReactNode }) {
       </DynamicConfigContext.Provider>
     </StableConfigContext.Provider>
   );
-}
-
-// Hook exports
-export function useStableConfig() {
-  const context = useContext(StableConfigContext);
-  if (!context) {
-    throw new Error('useStableConfig must be used within GraphConfigProvider');
-  }
-  return context;
-}
-
-export function useDynamicConfig() {
-  const context = useContext(DynamicConfigContext);
-  if (!context) {
-    throw new Error('useDynamicConfig must be used within GraphConfigProvider');
-  }
-  return context;
-}
-
-export function useGraphControl() {
-  const context = useContext(GraphControlContext);
-  if (!context) {
-    throw new Error('useGraphControl must be used within GraphConfigProvider');
-  }
-  return context;
-}
-
-// Combined hook for backward compatibility
-export function useGraphConfig() {
-  const { config: stableConfig, updateConfig: updateStable } = useStableConfig();
-  const { config: dynamicConfig, updateConfig: updateDynamic } = useDynamicConfig();
-  const control = useGraphControl();
-  
-  const config = { ...stableConfig, ...dynamicConfig } as GraphConfig;
-  
-  const updateConfig = useCallback((updates: Partial<GraphConfig>) => {
-    const stableUpdates: Partial<StableConfig> = {};
-    const dynamicUpdates: Partial<DynamicConfig> = {};
-    
-    Object.entries(updates).forEach(([key, value]) => {
-      if (isStableConfigKey(key)) {
-        (stableUpdates as Record<string, unknown>)[key] = value;
-      } else {
-        (dynamicUpdates as Record<string, unknown>)[key] = value;
-      }
-    });
-    
-    if (Object.keys(stableUpdates).length > 0) {
-      updateStable(stableUpdates);
-    }
-    if (Object.keys(dynamicUpdates).length > 0) {
-      updateDynamic(dynamicUpdates);
-    }
-  }, [updateStable, updateDynamic]);
-  
-  return {
-    config,
-    updateConfig,
-    ...control
-  };
 }

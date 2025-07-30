@@ -13,7 +13,7 @@ import { useSimulation } from '../hooks/useSimulation';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { useColorUtils } from '../hooks/useColorUtils';
 import { searchIndex } from '../utils/searchIndex';
-import { GraphConfigContext } from '../contexts/GraphConfigContext';
+import { GraphConfigContext } from '../contexts/useGraphConfig';
 
 const dataKitCoordinator = DataKitCoordinator.getInstance();
 

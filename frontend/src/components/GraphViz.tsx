@@ -77,10 +77,8 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
   
   // Preload resources for better performance
   useEffect(() => {
-    // Preload WebGL shaders and resources that Cosmograph might use
-    // This helps with initial render performance
-    preload('/shaders/vertex.glsl', { as: 'fetch' });
-    preload('/shaders/fragment.glsl', { as: 'fetch' });
+    // Note: Shader preloading removed - shader files not present in public directory
+    // Cosmograph handles its own WebGL shader loading internally
     
     // Preload any graph data endpoints if known
     const graphDataEndpoint = import.meta.env.VITE_GRAPH_DATA_ENDPOINT;
