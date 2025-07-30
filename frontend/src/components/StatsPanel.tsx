@@ -151,17 +151,7 @@ export const StatsPanel: React.FC<StatsPanelProps> = React.memo(({
   // Get real performance metrics
   const realPerformance = usePerformanceMonitoring();
 
-  // Memoize expensive statistics computation with proper dependencies
-  const nodeTypeHash = React.useMemo(() => 
-    data?.nodes?.reduce((hash, node) => hash + (node.node_type || ''), '') || '', 
-    [data?.nodes]
-  );
-  
-  const edgeTypeHash = React.useMemo(() => 
-    data?.edges?.reduce((hash, edge) => hash + (edge.edge_type || ''), '') || '', 
-    [data?.edges]
-  );
-
+  // Memoize expensive statistics computation
   const stats = React.useMemo(() => {
     const baseStats = computeGraphStats(data);
     if (baseStats) {
@@ -177,7 +167,7 @@ export const StatsPanel: React.FC<StatsPanelProps> = React.memo(({
       };
     }
     return baseStats;
-  }, [data, nodeTypeHash, edgeTypeHash, realPerformance]);
+  }, [data, realPerformance]);
 
   if (!isOpen) return null;
 

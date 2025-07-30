@@ -2,45 +2,12 @@ import React, { createContext, useContext, useState, ReactNode, useCallback } fr
 import { calculateLayoutPositions, type LayoutOptions } from '../utils/layoutAlgorithms';
 import type { GraphNode, GraphEdge } from '../types/graph';
 import { usePersistedGraphConfig, usePersistedNodeTypes } from '@/hooks/usePersistedConfig';
-import type { GraphConfig, StableConfig, DynamicConfig } from './configTypes';
-import { isStableConfigKey, splitConfig } from './configTypes';
+import type { GraphConfig } from './configTypes';
+import { generateNodeTypeColor } from '../utils/nodeTypeColors';
+import type { GraphConfigContextType } from './GraphConfigContextTypes';
 
-// Generate default colors for dynamic node types
-export const generateNodeTypeColor = (nodeType: string, index: number): string => {
-  // Predefined color palette for common node types
-  const colorPalette = [
-    '#4ECDC4', // Teal
-    '#B794F6', // Purple  
-    '#F6AD55', // Orange
-    '#90CDF4', // Blue
-    '#FF6B6B', // Red
-    '#4ADE80', // Green
-    '#FBBF24', // Yellow
-    '#EC4899', // Pink
-    '#8B5CF6', // Violet
-    '#06B6D4', // Cyan
-    '#F59E0B', // Amber
-    '#EF4444'  // Red variant
-  ];
-  
-  // Use specific colors for known node types
-  const knownTypeColors: Record<string, string> = {
-    'Entity': '#B794F6',    // Purple
-    'Episodic': '#4ECDC4',  // Teal
-    'Agent': '#F6AD55',     // Orange
-    'Community': '#90CDF4', // Blue
-    'Unknown': '#9CA3AF'    // Gray
-  };
-  
-  if (knownTypeColors[nodeType]) {
-    return knownTypeColors[nodeType];
-  }
-  
-  // For unknown types, use the color palette cyclically
-  return colorPalette[index % colorPalette.length];
-};
-
-interface CosmographLink {
+// Re-export types needed internally
+type CosmographLink = {
   source: string;
   target: string;
   weight?: number;
@@ -49,7 +16,7 @@ interface CosmographLink {
   [key: string]: unknown;
 }
 
-interface CosmographRefType {
+type CosmographRefType = {
   setZoomLevel: (level: number, duration?: number) => void;
   getZoomLevel: () => number;
   fitView: (duration?: number) => void;
@@ -66,20 +33,6 @@ interface CosmographRefType {
   start: () => void;
   setData?: (nodes: GraphNode[], links: CosmographLink[], runSimulation?: boolean) => void;
   _canvasElement?: HTMLCanvasElement;
-}
-
-interface GraphConfigContextType {
-  config: GraphConfig;
-  updateConfig: (updates: Partial<GraphConfig>) => void;
-  updateNodeTypeConfigurations: (nodeTypes: string[]) => void;
-  cosmographRef: React.RefObject<CosmographRefType> | null;
-  setCosmographRef: (ref: React.RefObject<CosmographRefType>) => void;
-  // Graph control methods
-  zoomIn: () => void;
-  zoomOut: () => void;
-  fitView: () => void;
-  applyLayout: (layoutType: string, options?: Record<string, unknown>, graphData?: { nodes: GraphNode[], edges: GraphEdge[] }) => void;
-  isApplyingLayout: boolean;
 }
 
 const defaultConfig: GraphConfig = {
