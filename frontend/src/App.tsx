@@ -1,5 +1,5 @@
 import React from 'react';
-import { prefetchDNS, preconnect, preload } from 'react-dom';
+import { prefetchDNS, preconnect } from 'react-dom';
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";

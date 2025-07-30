@@ -1,5 +1,4 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { preload } from 'react-dom';
 import { useStableCallback } from '../hooks/useStableCallback';
 import { CosmographProvider } from '@cosmograph/react';
 import { useGraphConfig } from '../contexts/GraphConfigProvider';
@@ -80,11 +79,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
     // Note: Shader preloading removed - shader files not present in public directory
     // Cosmograph handles its own WebGL shader loading internally
     
-    // Preload any graph data endpoints if known
-    const graphDataEndpoint = import.meta.env.VITE_GRAPH_DATA_ENDPOINT;
-    if (graphDataEndpoint) {
-      preload(graphDataEndpoint, { as: 'fetch', crossOrigin: 'anonymous' });
-    }
+    // Graph data endpoints are loaded on demand by the query hooks
   }, []);
 
   // Use stable callbacks for navigation handlers
