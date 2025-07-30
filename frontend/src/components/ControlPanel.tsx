@@ -122,9 +122,11 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
       updateConfig({ queryType, nodeLimit: limit });
       setTimeout(() => {
         handleRefreshGraph().catch(error => {
+          // Refresh error handled silently
         });
       }, 100);
     } catch (error) {
+      // Query error handled silently to not interrupt UI flow
     }
   };
 

@@ -23,7 +23,7 @@ interface PhysicsControlsTabProps {
     mouseRepulsion: number;
     disableSimulation: boolean | null;
   };
-  onConfigUpdate: (updates: any) => void;
+  onConfigUpdate: (updates: Record<string, unknown>) => void;
   onResetToDefaults: () => void;
 }
 

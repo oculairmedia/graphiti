@@ -34,14 +34,16 @@ export function calculateClusterLayout(
         // In a real implementation, you'd run community detection algorithms
         clusterKey = node.node_type;
         break;
-      case 'centrality':
+      case 'centrality': {
         const centrality = node.properties?.degree_centrality || 0;
         clusterKey = centrality > 50 ? 'high' : centrality > 20 ? 'medium' : 'low';
         break;
-      case 'temporal':
+      }
+      case 'temporal': {
         const date = node.created_at || node.properties?.created || node.properties?.date;
         clusterKey = date ? new Date(date).getFullYear().toString() : 'unknown';
         break;
+      }
       default:
         clusterKey = 'default';
     }

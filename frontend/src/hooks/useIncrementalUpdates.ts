@@ -30,7 +30,7 @@ export function useIncrementalUpdates(
   isGraphInitialized: boolean,
   isIncrementalUpdate: boolean,
   setIsIncrementalUpdate: (value: boolean) => void,
-  data: any,
+  data: GraphData | null,
   stableDataRef: React.MutableRefObject<{ nodes: GraphNode[], edges: GraphLink[] } | null>
 ) {
   // Handle incremental updates when changes are detected (skip initial loads)

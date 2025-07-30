@@ -181,9 +181,9 @@ export const splitConfig = (config: GraphConfig): { stable: StableConfig; dynami
   
   Object.entries(config).forEach(([key, value]) => {
     if (isStableConfigKey(key)) {
-      (stable as any)[key] = value;
+      (stable as Record<string, unknown>)[key] = value;
     } else {
-      (dynamic as any)[key] = value;
+      (dynamic as Record<string, unknown>)[key] = value;
     }
   });
   

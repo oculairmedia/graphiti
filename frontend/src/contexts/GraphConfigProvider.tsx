@@ -425,9 +425,9 @@ export function useGraphConfig() {
     
     Object.entries(updates).forEach(([key, value]) => {
       if (isStableConfigKey(key)) {
-        (stableUpdates as any)[key] = value;
+        (stableUpdates as Record<string, unknown>)[key] = value;
       } else {
-        (dynamicUpdates as any)[key] = value;
+        (dynamicUpdates as Record<string, unknown>)[key] = value;
       }
     });
     

@@ -161,6 +161,7 @@ export const useGraphDataDiff = (currentData: GraphData | null): GraphDataDiff =
 
     // Only log when there are actual changes to reduce console noise
     if (hasChanges) {
+      // Changes detected, diff calculation complete
     }
 
     return {

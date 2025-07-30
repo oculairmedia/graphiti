@@ -19,7 +19,7 @@ interface SettingsTabProps {
     showDebugInfo: boolean;
     performanceMode: boolean;
   };
-  onConfigUpdate: (updates: any) => void;
+  onConfigUpdate: (updates: Record<string, unknown>) => void;
   graphStats?: {
     nodeCount: number;
     edgeCount: number;

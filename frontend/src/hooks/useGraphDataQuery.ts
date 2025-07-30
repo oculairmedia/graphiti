@@ -71,18 +71,23 @@ export function useGraphDataQuery() {
     // Reset incremental update flag when we get a completely new dataset
     if (data && !dataDiff.hasChanges && isIncrementalUpdate) {
       setIsIncrementalUpdate(false);
+      // Clear filter cache on data reset
+      filterCacheRef.current.clear();
     }
   }, [data, dataDiff.hasChanges, isIncrementalUpdate]);
 
-  // Update node type configurations when data changes
+  // Memoize node types to avoid recalculation
+  const nodeTypes = useMemo(() => {
+    if (!data?.nodes || data.nodes.length === 0) return [];
+    return [...new Set(data.nodes.map(node => node.node_type).filter(Boolean))].sort();
+  }, [data?.nodes]);
+  
+  // Update node type configurations when node types change
   useEffect(() => {
-    if (data?.nodes && data.nodes.length > 0) {
-      const nodeTypes = [...new Set(data.nodes.map(node => node.node_type).filter(Boolean))].sort();
-      if (nodeTypes.length > 0) {
-        updateNodeTypeConfigurations(nodeTypes);
-      }
+    if (nodeTypes.length > 0) {
+      updateNodeTypeConfigurations(nodeTypes);
     }
-  }, [data?.nodes?.length, updateNodeTypeConfigurations]);
+  }, [nodeTypes, updateNodeTypeConfigurations]);
 
   // Create stable filter config to prevent unnecessary recalculations
   const filterConfig = useMemo<FilterConfig>(() => ({
@@ -117,14 +122,31 @@ export function useGraphDataQuery() {
     config.endDate
   ]);
 
+  // Cache for filter results to avoid recalculating for the same nodes
+  const filterCacheRef = useRef(new Map<string, boolean>());
+  
   // Memoize filter function to prevent recreation
   const nodePassesFilters = useCallback((node: GraphNode, filterConfig: FilterConfig) => {
+    // Create cache key from node ID and filter config hash
+    const cacheKey = `${node.id}:${JSON.stringify(filterConfig)}`;
+    
+    // Check cache first
+    const cached = filterCacheRef.current.get(cacheKey);
+    if (cached !== undefined) {
+      return cached;
+    }
     // Basic node type visibility check
     const nodeType = node.node_type as keyof typeof filterConfig.nodeTypeVisibility;
-    if (filterConfig.nodeTypeVisibility[nodeType] === false) return false;
+    if (filterConfig.nodeTypeVisibility[nodeType] === false) {
+      filterCacheRef.current.set(cacheKey, false);
+      return false;
+    }
     
     // Node type filter - only apply if we have filtered types configured
-    if (filterConfig.filteredNodeTypes.length > 0 && !filterConfig.filteredNodeTypes.includes(node.node_type)) return false;
+    if (filterConfig.filteredNodeTypes.length > 0 && !filterConfig.filteredNodeTypes.includes(node.node_type)) {
+      filterCacheRef.current.set(cacheKey, false);
+      return false;
+    }
     
     // Skip metric filters if all at default values
     const hasMetricFilters = filterConfig.minDegree > 0 || filterConfig.maxDegree < 100 ||
@@ -136,28 +158,43 @@ export function useGraphDataQuery() {
       // Degree centrality filter
       const degree = node.properties?.degree_centrality || 0;
       const degreePercent = Math.min((degree / 100) * 100, 100);
-      if (degreePercent < filterConfig.minDegree || degreePercent > filterConfig.maxDegree) return false;
+      if (degreePercent < filterConfig.minDegree || degreePercent > filterConfig.maxDegree) {
+        filterCacheRef.current.set(cacheKey, false);
+        return false;
+      }
       
       // PageRank filter
       const pagerank = node.properties?.pagerank_centrality || node.properties?.pagerank || 0;
       const pagerankPercent = Math.min((pagerank / 0.1) * 100, 100);
-      if (pagerankPercent < filterConfig.minPagerank || pagerankPercent > filterConfig.maxPagerank) return false;
+      if (pagerankPercent < filterConfig.minPagerank || pagerankPercent > filterConfig.maxPagerank) {
+        filterCacheRef.current.set(cacheKey, false);
+        return false;
+      }
       
       // Betweenness centrality filter
       const betweenness = node.properties?.betweenness_centrality || 0;
       const betweennessPercent = Math.min((betweenness / 1) * 100, 100);
-      if (betweennessPercent < filterConfig.minBetweenness || betweennessPercent > filterConfig.maxBetweenness) return false;
+      if (betweennessPercent < filterConfig.minBetweenness || betweennessPercent > filterConfig.maxBetweenness) {
+        filterCacheRef.current.set(cacheKey, false);
+        return false;
+      }
       
       // Eigenvector centrality filter
       const eigenvector = node.properties?.eigenvector_centrality || 0;
       const eigenvectorPercent = Math.min((eigenvector / 1) * 100, 100);
-      if (eigenvectorPercent < filterConfig.minEigenvector || eigenvectorPercent > filterConfig.maxEigenvector) return false;
+      if (eigenvectorPercent < filterConfig.minEigenvector || eigenvectorPercent > filterConfig.maxEigenvector) {
+        filterCacheRef.current.set(cacheKey, false);
+        return false;
+      }
     }
     
     // Connection count filter
     if (filterConfig.minConnections > 0 || filterConfig.maxConnections < 1000) {
       const connections = node.properties?.degree || node.properties?.connections || 0;
-      if (connections < filterConfig.minConnections || connections > filterConfig.maxConnections) return false;
+      if (connections < filterConfig.minConnections || connections > filterConfig.maxConnections) {
+        filterCacheRef.current.set(cacheKey, false);
+        return false;
+      }
     }
     
     // Date range filter
@@ -165,9 +202,23 @@ export function useGraphDataQuery() {
       const nodeDate = node.created_at || node.properties?.created || node.properties?.date;
       if (nodeDate) {
         const date = new Date(nodeDate);
-        if (filterConfig.startDate && date < new Date(filterConfig.startDate)) return false;
-        if (filterConfig.endDate && date > new Date(filterConfig.endDate)) return false;
+        if (filterConfig.startDate && date < new Date(filterConfig.startDate)) {
+          filterCacheRef.current.set(cacheKey, false);
+          return false;
+        }
+        if (filterConfig.endDate && date > new Date(filterConfig.endDate)) {
+          filterCacheRef.current.set(cacheKey, false);
+          return false;
+        }
       }
+    }
+    
+    // Cache the result
+    filterCacheRef.current.set(cacheKey, true);
+    
+    // Clear cache if it gets too large
+    if (filterCacheRef.current.size > 10000) {
+      filterCacheRef.current.clear();
     }
     
     return true;

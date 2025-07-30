@@ -1,4 +1,5 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { useStableCallback } from '../hooks/useStableCallback';
 import { CosmographProvider } from '@cosmograph/react';
 import { useGraphConfig } from '../contexts/GraphConfigProvider';
 import { ControlPanel } from './ControlPanel';
@@ -110,18 +111,10 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
     stableDataRef
   );
 
-  // Navigation handlers
-  const handleZoomIn = useCallback(() => {
-    zoomIn();
-  }, [zoomIn]);
-  
-  const handleZoomOut = useCallback(() => {
-    zoomOut();
-  }, [zoomOut]);
-  
-  const handleFitView = useCallback(() => {
-    fitView();
-  }, [fitView]);
+  // Use stable callbacks for navigation handlers
+  const handleZoomIn = useStableCallback(zoomIn);
+  const handleZoomOut = useStableCallback(zoomOut);
+  const handleFitView = useStableCallback(fitView);
 
   const handleLayoutChange = useCallback((layoutType: string) => {
     if (transformedData && transformedData.nodes.length > 0) {
@@ -136,7 +129,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
     }
   }, [applyLayout, transformedData]);
 
-  const toggleFullscreen = () => {
+  const toggleFullscreen = useCallback(() => {
     if (!document.fullscreenElement) {
       document.documentElement.requestFullscreen();
       setIsFullscreen(true);
@@ -144,9 +137,9 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
       document.exitFullscreen();
       setIsFullscreen(false);
     }
-  };
+  }, []);
 
-  const handleDownloadGraph = () => {
+  const handleDownloadGraph = useCallback(() => {
     if (!data) return;
     
     const graphData = {
@@ -168,9 +161,9 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-  };
+  }, [data]);
 
-  const handleCaptureScreenshot = async () => {
+  const handleCaptureScreenshot = useCallback(async () => {
     try {
       const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
       const video = document.createElement('video');
@@ -202,7 +195,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
     } catch (error) {
       // Screenshot capture failed
     }
-  };
+  }, []);
 
   const toggleSimulation = useCallback(() => {
     if (!graphCanvasRef.current) return;
@@ -238,6 +231,23 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
     };
   }, []);
 
+  // Memoize data for rendering to prevent unnecessary re-renders
+  const dataToUse = useMemo(() => {
+    if (isIncrementalUpdate && stableGraphPropsRef.current) {
+      return stableGraphPropsRef.current;
+    }
+    
+    // Update stable props when not in incremental update mode
+    if (!isIncrementalUpdate && transformedData) {
+      stableGraphPropsRef.current = {
+        nodes: transformedData.nodes,
+        links: transformedData.links
+      };
+    }
+    
+    return transformedData || { nodes: [], links: [] };
+  }, [isIncrementalUpdate, transformedData]);
+
   // Handle loading state
   if (isLoading) {
     return (
@@ -262,19 +272,6 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
         </div>
       </div>
     );
-  }
-
-  // Get data for rendering
-  const dataToUse = isIncrementalUpdate && stableGraphPropsRef.current 
-    ? stableGraphPropsRef.current 
-    : transformedData;
-  
-  // Update stable props when not in incremental update mode
-  if (!isIncrementalUpdate) {
-    stableGraphPropsRef.current = {
-      nodes: transformedData.nodes,
-      links: transformedData.links
-    };
   }
 
   return (

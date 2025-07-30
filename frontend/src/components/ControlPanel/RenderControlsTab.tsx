@@ -40,7 +40,7 @@ interface RenderControlsTabProps {
     edgeArrowScale: number;
     pointsOnEdge: boolean;
   };
-  onConfigUpdate: (updates: any) => void;
+  onConfigUpdate: (updates: Record<string, unknown>) => void;
 }
 
 export const RenderControlsTab: React.FC<RenderControlsTabProps> = ({

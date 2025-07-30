@@ -42,10 +42,10 @@ export const layoutAlgorithms: Record<string, LayoutAlgorithm> = {
  */
 export function applyLayout(
   layoutName: string,
-  nodes: any[],
-  edges: any[],
-  options?: any
-): any[] {
+  nodes: GraphNode[],
+  edges: GraphEdge[],
+  options?: LayoutOptions
+): { x: number; y: number }[] {
   const algorithm = layoutAlgorithms[layoutName];
   if (!algorithm) {
     console.warn(`Unknown layout algorithm: ${layoutName}`);
