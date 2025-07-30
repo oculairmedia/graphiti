@@ -35,8 +35,8 @@ const App = () => {
       preconnect(url.origin);
     }
     
-    // Preload critical fonts
-    preload('/fonts/inter-var.woff2', { as: 'font', type: 'font/woff2', crossOrigin: 'anonymous' });
+    // Note: Font preloading removed - font files not present in public directory
+    // If adding custom fonts, ensure they exist in public/fonts/ first
     
     // Cleanup memory monitor on app unmount
     return () => {
