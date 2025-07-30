@@ -19,8 +19,8 @@ interface CosmographLink {
 interface CosmographRefType {
   setZoomLevel: (level: number, duration?: number) => void;
   getZoomLevel: () => number;
-  fitView: (duration?: number) => void;
-  fitViewByIndices: (indices: number[], duration?: number, padding?: number) => void;
+  fitView: (duration?: number, padding?: number) => void;
+  fitViewByPointIndices: (indices: number[], duration?: number, padding?: number) => void;
   zoomToPoint: (index: number, duration?: number, scale?: number, canZoomOut?: boolean) => void;
   trackPointPositionsByIndices: (indices: number[]) => void;
   getTrackedPointPositionsMap: () => Map<number, [number, number]> | undefined;
@@ -290,9 +290,30 @@ export function GraphConfigProvider({ children }: { children: ReactNode }) {
   }, [cosmographRef]);
   
   const fitView = useCallback(() => {
-    if (!cosmographRef?.current) return;
-    cosmographRef.current.fitView();
-  }, [cosmographRef]);
+    console.log('GraphConfigProvider: fitView called - using fallback zoom approach');
+    
+    if (!cosmographRef?.current) {
+      console.warn('GraphConfigProvider: No cosmographRef available');
+      return;
+    }
+    
+    try {
+      // Since the React wrapper doesn't expose fitView methods, 
+      // we'll implement a simple zoom reset as a workaround
+      if (typeof cosmographRef.current.setZoomLevel === 'function') {
+        // Reset to a reasonable zoom level that shows most of the graph
+        // This is a workaround since we can't access the actual fitView method
+        const defaultZoom = 1.0;
+        cosmographRef.current.setZoomLevel(defaultZoom, stableConfig.fitViewDuration);
+        console.log('GraphConfigProvider: Reset zoom to', defaultZoom);
+      } else {
+        console.error('GraphConfigProvider: setZoomLevel not available');
+        console.log('Available on ref:', Object.keys(cosmographRef.current));
+      }
+    } catch (error) {
+      console.error('fitView error:', error);
+    }
+  }, [cosmographRef, stableConfig.fitViewDuration]);
   
   const applyLayout = useCallback(async (
     layoutType: string,
@@ -333,13 +354,13 @@ export function GraphConfigProvider({ children }: { children: ReactNode }) {
         cosmographRef.current.setData(nodesWithPositions, links, false);
         
         setTimeout(() => {
-          cosmographRef.current?.fitView();
+          cosmographRef.current?.fitView(stableConfig.fitViewDuration, stableConfig.fitViewPadding);
         }, 100);
       }
     } finally {
       setIsApplyingLayout(false);
     }
-  }, [cosmographRef]);
+  }, [cosmographRef, stableConfig.fitViewDuration, stableConfig.fitViewPadding]);
   
   return (
     <StableConfigContext.Provider value={{ config: stableConfig, updateConfig: updateStableConfig }}>

@@ -13,7 +13,7 @@ interface GraphCanvasHandle {
   zoomIn: () => void;
   zoomOut: () => void;
   fitView: () => void;
-  fitViewByIndices: (indices: number[], duration?: number, padding?: number) => void;
+  fitViewByPointIndices: (indices: number[], duration?: number, padding?: number) => void;
   zoomToPoint: (index: number, duration?: number, scale?: number, canZoomOut?: boolean) => void;
   trackPointPositionsByIndices: (indices: number[]) => void;
   getTrackedPointPositionsMap: () => Map<number, [number, number]> | undefined;
@@ -50,6 +50,7 @@ interface GraphViewportProps {
   stats?: any;
   onNodeClick: (node: GraphNode) => void;
   onNodeSelect: (nodeId: string) => void;
+  onSelectNodes?: (nodes: GraphNode[]) => void;
   onNodeHover: (node: GraphNode | null) => void;
   onClearSelection: () => void;
   onShowNeighbors: (nodeId: string) => void;
@@ -70,6 +71,7 @@ export const GraphViewport = forwardRef<GraphCanvasHandle, GraphViewportProps>((
   stats,
   onNodeClick,
   onNodeSelect,
+  onSelectNodes,
   onNodeHover,
   onClearSelection,
   onShowNeighbors,
@@ -87,6 +89,7 @@ export const GraphViewport = forwardRef<GraphCanvasHandle, GraphViewportProps>((
           links={links}
           onNodeClick={onNodeClick}
           onNodeSelect={onNodeSelect}
+          onSelectNodes={onSelectNodes}
           onClearSelection={onClearSelection}
           onNodeHover={onNodeHover}
           selectedNodes={selectedNodes}

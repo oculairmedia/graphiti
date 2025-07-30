@@ -53,7 +53,7 @@ interface CosmographRefType {
   setZoomLevel: (level: number, duration?: number) => void;
   getZoomLevel: () => number;
   fitView: (duration?: number) => void;
-  fitViewByIndices: (indices: number[], duration?: number, padding?: number) => void;
+  fitViewByPointIndices: (indices: number[], duration?: number, padding?: number) => void;
   zoomToPoint: (index: number, duration?: number, scale?: number, canZoomOut?: boolean) => void;
   trackPointPositionsByIndices: (indices: number[]) => void;
   getTrackedPointPositionsMap: () => Map<number, [number, number]> | undefined;
@@ -124,6 +124,9 @@ const defaultConfig: GraphConfig = {
   linkVisibilityMinTransparency: 0.25,
   linkArrows: true,
   linkArrowsSizeScale: 1.0,
+  edgeArrows: false,
+  edgeArrowScale: 1.0,
+  pointsOnEdge: false,
   
   // Curved Links
   curvedLinks: true,
@@ -144,12 +147,19 @@ const defaultConfig: GraphConfig = {
   nodeTypeVisibility: {},
   
   // Labels
+  renderLabels: true,
   showLabels: true,
   showHoveredNodeLabel: true,
   labelColor: '#ffffff',
   hoveredLabelColor: '#ffffff',
   labelSize: 12,
   labelOpacity: 80, // Using percentage (0-100)
+  labelVisibilityThreshold: 0.5,
+  labelFontWeight: 'normal',
+  labelBackgroundColor: 'rgba(0, 0, 0, 0.7)',
+  hoveredLabelSize: 14,
+  hoveredLabelFontWeight: 'bold',
+  hoveredLabelBackgroundColor: 'rgba(0, 0, 0, 0.9)',
   
   // Visual preferences
   colorScheme: 'by-type',
@@ -171,6 +181,7 @@ const defaultConfig: GraphConfig = {
   // Query
   queryType: 'entire_graph',
   nodeLimit: 100000,
+  searchTerm: '',
   
   // Layout
   layout: 'force-directed',
@@ -193,6 +204,27 @@ const defaultConfig: GraphConfig = {
   maxConnections: 1000,
   startDate: '',
   endDate: '',
+  
+  // Advanced rendering options
+  advancedOptionsEnabled: false,
+  pixelationThreshold: 1,
+  renderSelectedNodesOnTop: false,
+  
+  // Display settings
+  showFPS: false,
+  showNodeCount: true,
+  showDebugInfo: false,
+  
+  // Interaction settings
+  enableHoverEffects: true,
+  enablePanOnDrag: true,
+  enableZoomOnScroll: true,
+  enableClickSelection: true,
+  enableDoubleClickFocus: true,
+  enableKeyboardShortcuts: true,
+  
+  // Performance
+  performanceMode: false
 };
 
 const GraphConfigContext = createContext<GraphConfigContextType | undefined>(undefined);

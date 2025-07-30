@@ -10,6 +10,7 @@ import { DataKitCoordinator } from '../utils/DataKitCoordinator';
 import { useGraphZoom } from '../hooks/useGraphZoom';
 import { useGraphEvents } from '../hooks/useGraphEvents';
 import { useSimulation } from '../hooks/useSimulation';
+import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { useColorUtils } from '../hooks/useColorUtils';
 
 const dataKitCoordinator = DataKitCoordinator.getInstance();
@@ -39,8 +40,8 @@ interface GraphStats {
 interface CosmographRef {
   setZoomLevel: (level: number, duration?: number) => void;
   getZoomLevel: () => number;
-  fitView: (duration?: number) => void;
-  fitViewByIndices: (indices: number[], duration?: number, padding?: number) => void;
+  fitView: (duration?: number, padding?: number) => void;
+  fitViewByPointIndices: (indices: number[], duration?: number, padding?: number) => void;
   zoomToPoint: (index: number, duration?: number, scale?: number, canZoomOut?: boolean) => void;
   trackPointPositionsByIndices: (indices: number[]) => void;
   getTrackedPointPositionsMap: () => Map<number, [number, number]> | undefined;
@@ -77,6 +78,7 @@ interface CosmographRef {
 interface GraphCanvasProps {
   onNodeClick: (node: GraphNode) => void;
   onNodeSelect: (nodeId: string) => void;
+  onSelectNodes?: (nodes: GraphNode[]) => void;
   onClearSelection?: () => void;
   onNodeHover?: (node: GraphNode | null) => void;
   selectedNodes: string[];
@@ -91,8 +93,8 @@ interface GraphCanvasHandle {
   selectNodes: (nodes: GraphNode[]) => void;
   zoomIn: () => void;
   zoomOut: () => void;
-  fitView: () => void;
-  fitViewByIndices: (indices: number[], duration?: number, padding?: number) => void;
+  fitView: (duration?: number, padding?: number) => void;
+  fitViewByPointIndices: (indices: number[], duration?: number, padding?: number) => void;
   zoomToPoint: (index: number, duration?: number, scale?: number, canZoomOut?: boolean) => void;
   trackPointPositionsByIndices: (indices: number[]) => void;
   getTrackedPointPositionsMap: () => Map<number, [number, number]> | undefined;
@@ -129,7 +131,7 @@ interface GraphCanvasComponentProps extends GraphCanvasProps {
 }
 
 const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
-  ({ onNodeClick, onNodeSelect, onClearSelection, onNodeHover, selectedNodes, highlightedNodes, className, stats, nodes, links }, ref) => {
+  ({ onNodeClick, onNodeSelect, onSelectNodes, onClearSelection, onNodeHover, selectedNodes, highlightedNodes, className, stats, nodes, links }, ref) => {
     const cosmographRef = useRef<CosmographRef | null>(null);
     const [isReady, setIsReady] = useState(false);
     const [isCanvasReady, setIsCanvasReady] = useState(false);
@@ -167,7 +169,128 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     const lastClickedNodeRef = useRef<GraphNode | null>(null);
     const doubleClickTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     
-
+    // Selection handlers for keyboard shortcuts
+    const handleSelectAll = useCallback(() => {
+      if (!cosmographRef.current || !currentNodes.length) return;
+      
+      // Use onSelectNodes if available (for multi-select)
+      if (onSelectNodes) {
+        onSelectNodes(currentNodes);
+      } else {
+        // Fallback: Select all visible nodes in Cosmograph
+        if (cosmographRef.current.selectNodes) {
+          cosmographRef.current.selectNodes(currentNodes);
+        }
+        
+        // For React state, we need to call onNodeSelect for each node
+        // since it expects a single node ID
+        currentNodes.forEach(node => {
+          if (!selectedNodes.includes(node.id)) {
+            onNodeSelect?.(node.id);
+          }
+        });
+      }
+    }, [currentNodes, onNodeSelect, onSelectNodes, selectedNodes]);
+    
+    const handleDeselectAll = useCallback(() => {
+      onClearSelection?.();
+    }, [onClearSelection]);
+    
+    // Initialize keyboard shortcuts
+    useKeyboardShortcuts({
+      onSelectAll: handleSelectAll,
+      onDeselectAll: handleDeselectAll,
+      cosmographRef
+    });
+    
+    // Search functionality
+    const performSearch = useCallback(() => {
+      if (!cosmographRef.current || !config.searchTerm || config.searchTerm.trim() === '') {
+        // Clear search highlights if search is empty
+        return;
+      }
+      
+      const searchTerm = config.searchTerm.toLowerCase();
+      const isRegex = searchTerm.startsWith('/') && searchTerm.endsWith('/');
+      let searchPattern: RegExp | null = null;
+      
+      if (isRegex) {
+        try {
+          searchPattern = new RegExp(searchTerm.slice(1, -1), 'i');
+        } catch (e) {
+          // Invalid regex, treat as literal
+        }
+      }
+      
+      const matchingNodes = currentNodes.filter(node => {
+        const label = (node.label || node.id || '').toLowerCase();
+        const nodeType = (node.node_type || '').toLowerCase();
+        const description = (node.properties?.description || '').toLowerCase();
+        
+        if (searchPattern) {
+          return searchPattern.test(label) || 
+                 searchPattern.test(nodeType) || 
+                 searchPattern.test(description);
+        }
+        
+        return label.includes(searchTerm) || 
+               nodeType.includes(searchTerm) || 
+               description.includes(searchTerm);
+      });
+      
+      if (matchingNodes.length > 0) {
+        // Select matching nodes
+        const matchingIds = matchingNodes.map(node => node.id);
+        onNodeSelect?.(matchingIds);
+        
+        // Focus on the first match
+        if (cosmographRef.current.focusOnPoints && matchingNodes[0]) {
+          const nodeIndex = currentNodes.findIndex(n => n.id === matchingNodes[0].id);
+          if (nodeIndex >= 0) {
+            cosmographRef.current.focusOnPoints([nodeIndex], 1000);
+          }
+        }
+      }
+    }, [config.searchTerm, currentNodes, onNodeSelect]);
+    
+    // Trigger search when searchTerm changes
+    useEffect(() => {
+      if (config.queryType === 'search' && config.searchTerm) {
+        performSearch();
+      }
+    }, [config.searchTerm, config.queryType, performSearch]);
+    
+    // Memoize color strategy and color by field - moved here before dataKitConfig
+    const { pointColorStrategy, pointColorBy } = React.useMemo(() => {
+      switch (config.colorScheme) {
+        case 'by-type': 
+          return { pointColorStrategy: 'map', pointColorBy: 'node_type' };
+        case 'by-centrality': 
+          return { pointColorStrategy: 'interpolate', pointColorBy: 'degree_centrality' };
+        case 'by-pagerank': 
+          return { pointColorStrategy: 'interpolate', pointColorBy: 'pagerank_centrality' };
+        case 'by-degree': 
+          return { pointColorStrategy: 'interpolate', pointColorBy: 'degree_centrality' };
+        case 'by-community': 
+          return { pointColorStrategy: 'auto', pointColorBy: 'cluster' };
+        default: 
+          return { pointColorStrategy: 'map', pointColorBy: 'node_type' };
+      }
+    }, [config.colorScheme]);
+    
+    // Memoize size by field based on mapping - moved here before dataKitConfig
+    const pointSizeBy = React.useMemo(() => {
+      switch (config.sizeMapping) {
+        case 'uniform': return undefined; // Will use uniform size
+        case 'degree': return 'degree_centrality';
+        case 'betweenness': return 'betweenness_centrality';
+        case 'pagerank': return 'pagerank_centrality';
+        case 'importance': return 'eigenvector_centrality';
+        case 'connections': return 'degree_centrality'; // Same as degree
+        case 'custom': return 'centrality'; // Default centrality field
+        default: return 'centrality';
+      }
+    }, [config.sizeMapping]);
 
     // Data Kit configuration for Cosmograph v2.0 - stable config to prevent reprocessing
     const dataKitConfig = React.useMemo(() => ({
@@ -175,8 +298,8 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         pointIdBy: 'id',              // Required: unique identifier field
         pointIndexBy: 'index',        // Required: ordinal index field
         pointLabelBy: 'label',        // Node display labels
-        pointColorBy: 'node_type',    // Color by entity type
-        pointSizeBy: 'centrality',    // Size by centrality metrics
+        pointColorBy: pointColorBy || 'node_type',    // Dynamic color by field based on scheme
+        pointSizeBy: pointSizeBy || 'centrality',    // Dynamic size by field based on mapping
         pointIncludeColumns: ['degree_centrality', 'pagerank_centrality', 'betweenness_centrality', 'eigenvector_centrality', 'created_at', 'created_at_timestamp'] // Include additional columns including temporal data
       },
       links: {
@@ -185,10 +308,10 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         linkTargetBy: 'target',         // Target node ID field (singular for single target)
         linkTargetIndexBy: 'targetIndex', // Required: target node index
         linkColorBy: 'edge_type',      // Link color by type
-        linkWidthBy: 'weight',         // Use stable default instead of config value
-        linkIncludeColumns: ['created_at', 'updated_at'] // Include temporal data for links
+        linkWidthBy: config.linkWidthBy || 'weight',         // Dynamic width column
+        linkIncludeColumns: ['created_at', 'updated_at', 'weight', 'strength', 'confidence'] // Include various link properties
       }
-    }), []);
+    }), [pointColorBy, pointSizeBy, config.linkWidthBy]);
 
     // Track previous data to prevent unnecessary reprocessing
     const prevDataRef = useRef<{ nodeCount: number; linkCount: number }>({ nodeCount: 0, linkCount: 0 });
@@ -238,10 +361,10 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
               label: String(node.label || node.id), // Ensure string type
               node_type: String(node.node_type || 'Unknown'), // Ensure string type
               centrality: Number(node.properties?.degree_centrality || node.properties?.pagerank_centrality || node.size || 1), // Ensure number type
-              // Add cluster assignment based on degree centrality
-              cluster: degree > 0.5 ? 'high' : 
-                      degree > 0.2 ? 'medium' : 
-                      'low',
+              // Add cluster assignment based on node type for more meaningful clustering
+              cluster: String(node.node_type || 'Unknown'),
+              // Add cluster strength - entities of the same type will be attracted to each other
+              clusterStrength: 0.7, // Strong clustering by type (0-1 range)
               // Add other commonly used properties with type safety
               degree_centrality: degree,
               pagerank_centrality: Number(node.properties?.pagerank_centrality || 0),
@@ -397,6 +520,8 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         
         if (cosmographRef.current) {
           try {
+            // Set the ref for use in GraphConfigProvider
+            console.log('GraphCanvas: Setting cosmographRef');
             setCosmographRef(cosmographRef);
             setIsReady(true);
             
@@ -478,30 +603,25 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       return [...new Set(nodes.map(n => n.node_type).filter(Boolean))].sort();
     }, [nodes]);
     
-    // Memoize color strategy
-    const pointColorStrategy = React.useMemo(() => {
-      switch (config.colorScheme) {
-        case 'by-type': return 'map'; // Use 'map' strategy for node types
-        case 'by-centrality': 
-        case 'by-pagerank': 
-        case 'by-degree': return 'interpolatePalette';
-        case 'by-community': return 'palette';
-        default: return 'map';
-      }
-    }, [config.colorScheme]);
     
-    // Memoize color palette
+    // Memoize color palette based on scheme
     const pointColorPalette = React.useMemo(() => {
-      switch (config.colorScheme) {
-        case 'by-centrality': return ['#1e3a8a', '#3b82f6', '#60a5fa', '#93c5fd', '#dbeafe'];
-        case 'by-pagerank': return ['#7c2d12', '#ea580c', '#f97316', '#fb923c', '#fed7aa'];
-        case 'by-degree': return ['#166534', '#16a34a', '#22c55e', '#4ade80', '#bbf7d0'];
-        case 'by-community': return ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD'];
-        case 'by-type': 
-        default: 
-          return ['#4ECDC4', '#B794F6', '#F6AD55', '#90CDF4', '#FF6B6B', '#4ADE80'];
+      if (config.colorScheme === 'by-type') {
+        return undefined; // Use pointColorByMap for type-based coloring
       }
-    }, [config.colorScheme]);
+      
+      // For gradient-based schemes, use gradient from low to high color
+      if (['by-centrality', 'by-pagerank', 'by-degree'].includes(config.colorScheme)) {
+        return [config.gradientLowColor, config.gradientHighColor];
+      }
+      
+      // For community detection, use a diverse palette
+      if (config.colorScheme === 'by-community') {
+        return ['#ff6b6b', '#4ecdc4', '#45b7d1', '#f39c12', '#e74c3c', '#9b59b6', '#3498db', '#2ecc71'];
+      }
+      
+      return undefined;
+    }, [config.colorScheme, config.gradientLowColor, config.gradientHighColor]);
     
     // Memoize color by function
     const pointColorByFn = React.useMemo(() => {
@@ -519,6 +639,81 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       };
     }, [config.colorScheme, config.nodeTypeColors, allNodeTypes]);
     
+    // Memoize link color function based on scheme
+    const linkColorFn = React.useMemo(() => {
+      if (!config.linkColorScheme || config.linkColorScheme === 'uniform') {
+        return undefined; // Use default link color
+      }
+      
+      // Pre-calculate weight ranges for performance
+      const weights = currentLinks.map(l => l.weight || 1);
+      const maxWeight = Math.max(...weights);
+      const minWeight = Math.min(...weights);
+      const weightRange = maxWeight - minWeight || 1;
+      
+      return (link: any) => {
+        switch (config.linkColorScheme) {
+          case 'by-weight':
+            // Color by edge weight - interpolate between low and high colors
+            const weight = link.weight || 1;
+            const normalized = (weight - minWeight) / weightRange;
+            // Interpolate between link color and a highlight color
+            const r = Math.round(102 + (239 - 102) * normalized); // From #666 to #ef4444
+            const g = Math.round(102 + (68 - 102) * normalized);
+            const b = Math.round(102 + (68 - 102) * normalized);
+            return `rgb(${r}, ${g}, ${b})`;
+            
+          case 'by-type':
+            // Color by edge type
+            const edgeType = link.edge_type || 'default';
+            const typeColors: Record<string, string> = {
+              'relates_to': '#4ECDC4',
+              'causes': '#F6AD55',
+              'precedes': '#B794F6',
+              'contains': '#90CDF4',
+              'default': config.linkColor
+            };
+            return typeColors[edgeType] || config.linkColor;
+            
+          case 'by-distance':
+            // Color by link distance/length
+            const sourceNode = currentNodes.find(n => n.id === link.source);
+            const targetNode = currentNodes.find(n => n.id === link.target);
+            if (sourceNode?.x !== undefined && targetNode?.x !== undefined) {
+              const distance = Math.sqrt(
+                Math.pow(targetNode.x - sourceNode.x, 2) + 
+                Math.pow(targetNode.y - sourceNode.y, 2)
+              );
+              const maxDist = 500; // Approximate max distance
+              const normalizedDist = Math.min(distance / maxDist, 1);
+              // Fade from bright to dim based on distance
+              const opacity = Math.round(255 * (1 - normalizedDist * 0.7));
+              return `rgba(102, 102, 102, ${opacity / 255})`;
+            }
+            return config.linkColor;
+            
+          case 'node-gradient':
+            // Gradient from source to target node colors
+            const sourceNodeColor = config.nodeTypeColors[currentNodes.find(n => n.id === link.source)?.node_type || ''];
+            const targetNodeColor = config.nodeTypeColors[currentNodes.find(n => n.id === link.target)?.node_type || ''];
+            // For simplicity, use source node color (true gradient would require custom shader)
+            return sourceNodeColor || config.linkColor;
+            
+          case 'by-community':
+            // Color bridges between communities differently
+            const sourceCommunity = currentNodes.find(n => n.id === link.source)?.cluster;
+            const targetCommunity = currentNodes.find(n => n.id === link.target)?.cluster;
+            if (sourceCommunity !== targetCommunity) {
+              return '#FF6B6B'; // Highlight inter-community links
+            }
+            return config.linkColor;
+            
+          default:
+            return config.linkColor;
+        }
+      };
+    }, [config.linkColorScheme, config.linkColor, config.nodeTypeColors, currentLinks, currentNodes]);
+
     // Memoize point color function
     const pointColorFn = React.useCallback((node: any) => {
       const isHighlighted = highlightedNodes.includes(node.id);
@@ -535,6 +730,10 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     
     // Memoize point size function
     const pointSizeFn = React.useCallback((node: any) => {
+      // Handle uniform size mapping
+      if (config.sizeMapping === 'uniform') {
+        return (config.minNodeSize + config.maxNodeSize) / 2 * config.sizeMultiplier;
+      }
       const isHighlighted = highlightedNodes.includes(node.id);
       if (isHighlighted) {
         return undefined;
@@ -610,12 +809,12 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             if (nodeIndices.length > 0) {
               cosmographRef.current.selectPoints(nodeIndices);
               
-              // For multiple nodes, use fitViewByIndices to show all selected nodes
+              // For multiple nodes, use fitViewByPointIndices to show all selected nodes
               if (nodeIndices.length > 1) {
-                // Call fitViewByIndices after this function completes
+                // Call fitViewByPointIndices after this function completes
                 setTimeout(() => {
-                  if (cosmographRef.current && typeof cosmographRef.current.fitViewByIndices === 'function') {
-                    cosmographRef.current.fitViewByIndices(nodeIndices, config.fitViewDuration, config.fitViewPadding);
+                  if (cosmographRef.current && typeof cosmographRef.current.fitViewByPointIndices === 'function') {
+                    cosmographRef.current.fitViewByPointIndices(nodeIndices, config.fitViewDuration, config.fitViewPadding);
                   }
                 }, 0);
               }
@@ -701,9 +900,9 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         return;
       }
       
-      // Ensure we have data
-      if (!currentNodes.length || !currentLinks.length) {
-        logger.warn('GraphCanvas: Cannot fitView - no data');
+      // Ensure we have data (nodes are required, links are optional)
+      if (!currentNodes.length) {
+        logger.warn('GraphCanvas: Cannot fitView - no nodes');
         return;
       }
       
@@ -717,16 +916,16 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       } catch (error) {
         logger.warn('Fit view failed:', error);
       }
-    }, [config.fitViewDuration, config.fitViewPadding, currentNodes.length, currentLinks.length, isCanvasReady]);
+    }, [config.fitViewDuration, config.fitViewPadding, currentNodes.length, isCanvasReady]);
 
-    const fitViewByIndices = useCallback((indices: number[], duration?: number, padding?: number) => {
+    const fitViewByPointIndices = useCallback((indices: number[], duration?: number, padding?: number) => {
       if (!cosmographRef.current) return;
       
       try {
-        // Use the Cosmograph v2.0 fitViewByIndices method with config defaults
+        // Use the Cosmograph v2.0 fitViewByPointIndices method with config defaults
         const actualDuration = duration !== undefined ? duration : config.fitViewDuration;
         const actualPadding = padding !== undefined ? padding : config.fitViewPadding;
-        cosmographRef.current.fitViewByIndices(indices, actualDuration, actualPadding);
+        cosmographRef.current.fitViewByPointIndices(indices, actualDuration, actualPadding);
       } catch (error) {
         logger.warn('Fit view by indices failed:', error);
       }
@@ -881,6 +1080,8 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             label: String(node.label || node.id),
             node_type: String(node.node_type || 'Unknown'),
             centrality: Number(node.properties?.degree_centrality || node.properties?.pagerank_centrality || node.size || 1),
+            cluster: String(node.node_type || 'Unknown'),
+            clusterStrength: 0.7,
             degree_centrality: Number(node.properties?.degree_centrality || 0),
             pagerank_centrality: Number(node.properties?.pagerank_centrality || 0),
             betweenness_centrality: Number(node.properties?.betweenness_centrality || 0),
@@ -938,7 +1139,10 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           eigenvector_centrality: Number(node.properties?.eigenvector_centrality || 0),
           // Include temporal data for timeline
           created_at: node.properties?.created_at || node.created_at || node.properties?.created || null,
-          created_at_timestamp: (node.properties?.created_at || node.created_at || node.properties?.created) ? new Date(node.properties?.created_at || node.created_at || node.properties?.created).getTime() : null
+          created_at_timestamp: (node.properties?.created_at || node.created_at || node.properties?.created) ? new Date(node.properties?.created_at || node.created_at || node.properties?.created).getTime() : null,
+          // Cluster by node type for proper grouping
+          cluster: String(node.node_type || 'Unknown'),
+          clusterStrength: 0.7 // Strong clustering by type (0-1 range)
         }));
         
         const transformedLinks = currentLinks.map(link => ({
@@ -987,7 +1191,10 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           eigenvector_centrality: Number(node.properties?.eigenvector_centrality || 0),
           // Include temporal data for timeline
           created_at: node.properties?.created_at || node.created_at || node.properties?.created || null,
-          created_at_timestamp: (node.properties?.created_at || node.created_at || node.properties?.created) ? new Date(node.properties?.created_at || node.created_at || node.properties?.created).getTime() : null
+          created_at_timestamp: (node.properties?.created_at || node.created_at || node.properties?.created) ? new Date(node.properties?.created_at || node.created_at || node.properties?.created).getTime() : null,
+          // Cluster by node type for proper grouping
+          cluster: String(node.node_type || 'Unknown'),
+          clusterStrength: 0.7 // Strong clustering by type (0-1 range)
         }));
         
         const transformedLinks = newCurrentLinks.map(link => ({
@@ -1038,7 +1245,10 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           eigenvector_centrality: Number(node.properties?.eigenvector_centrality || 0),
           // Include temporal data for timeline
           created_at: node.properties?.created_at || node.created_at || node.properties?.created || null,
-          created_at_timestamp: (node.properties?.created_at || node.created_at || node.properties?.created) ? new Date(node.properties?.created_at || node.created_at || node.properties?.created).getTime() : null
+          created_at_timestamp: (node.properties?.created_at || node.created_at || node.properties?.created) ? new Date(node.properties?.created_at || node.created_at || node.properties?.created).getTime() : null,
+          // Cluster by node type for proper grouping
+          cluster: String(node.node_type || 'Unknown'),
+          clusterStrength: 0.7 // Strong clustering by type (0-1 range)
         }));
         
         const transformedLinks = filteredLinks.map(link => ({
@@ -1086,7 +1296,10 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           eigenvector_centrality: Number(node.properties?.eigenvector_centrality || 0),
           // Include temporal data for timeline
           created_at: node.properties?.created_at || node.created_at || node.properties?.created || null,
-          created_at_timestamp: (node.properties?.created_at || node.created_at || node.properties?.created) ? new Date(node.properties?.created_at || node.created_at || node.properties?.created).getTime() : null
+          created_at_timestamp: (node.properties?.created_at || node.created_at || node.properties?.created) ? new Date(node.properties?.created_at || node.created_at || node.properties?.created).getTime() : null,
+          // Cluster by node type for proper grouping
+          cluster: String(node.node_type || 'Unknown'),
+          clusterStrength: 0.7 // Strong clustering by type (0-1 range)
         }));
         
         const transformedLinks = filteredLinks.map(link => ({
@@ -1244,7 +1457,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       zoomIn,
       zoomOut,
       fitView,
-      fitViewByIndices,
+      fitViewByPointIndices,
       zoomToPoint,
       trackPointPositionsByIndices,
       getTrackedPointPositionsMap,
@@ -1276,7 +1489,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         zoomIn,
         zoomOut,
         fitView,
-        fitViewByIndices,
+        fitViewByPointIndices,
         zoomToPoint,
         trackPointPositionsByIndices,
         getTrackedPointPositionsMap,
@@ -1546,16 +1759,17 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             pointIdBy="id"
             pointIndexBy="index"
             pointLabelBy="label"
-            pointColorBy="node_type"
-            pointSizeBy="centrality"
+            pointColorBy={pointColorBy}
+            pointSizeBy={pointSizeBy}
             pointClusterBy="cluster"  // Group nodes by their cluster assignment
+            pointClusterStrengthBy="clusterStrength"  // Control clustering attraction strength
             // Link configuration
             linkSourceBy="source"
             linkSourceIndexBy="sourceIndex"
             linkTargetBy="target"
             linkTargetIndexBy="targetIndex"
             // linkColorBy="edge_type"  // Disabled to let config color take over
-            linkWidthBy="weight"
+            linkWidthBy={config.linkWidthBy || "weight"}
             
             // Override with UI-specific configurations
             fitViewOnInit={false} // Disable automatic fitView to prevent simulation interruption
@@ -1575,11 +1789,6 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             pointSizeStrategy={'auto'}
             pointSizeRange={[config.minNodeSize * config.sizeMultiplier, config.maxNodeSize * config.sizeMultiplier]}
             
-            // pointColorBy is already set above to 'node_type'
-            // pointColorBy={config.colorScheme === 'by-type' ? 'node_type' : undefined}
-            
-            // pointColorByFn not needed when using 'map' strategy
-            // pointColorByFn={pointColorByFn}
             
             // Use pointColor only for highlighting
             pointColor={pointColorFn}
@@ -1614,8 +1823,9 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             nodeGreyoutOpacity={selectedNodes.length > 0 || highlightedNodes.length > 0 ? 0.1 : 1}
             
             // Performance
-            pixelRatio={2.5}
-            showFPSMonitor={false}
+            pixelRatio={config.performanceMode ? 1.0 : (currentNodes.length > 10000 ? 1.5 : 2.5)}
+            showFPSMonitor={config.showFPS}
+            renderUnselectedNodesTransparency={config.pixelationThreshold > 0 ? Math.max(0.1, 1 - config.pixelationThreshold / 20) : 1}
             
             // Zoom behavior
             enableSimulationDuringZoom={true}
@@ -1639,7 +1849,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             simulationRepulsionFromMouse={config.mouseRepulsion}
             
             // Link Properties
-            linkColor={config.linkColor}
+            linkColor={linkColorFn || config.linkColor}
             linkOpacity={config.linkOpacity}
             linkGreyoutOpacity={config.linkGreyoutOpacity}
             linkWidth={1}
@@ -1648,10 +1858,10 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             linkWidthScale={config.linkWidth}
             linkWidthRange={[0.5, 5]} // Set link width range for auto scaling
             scaleLinksOnZoom={config.scaleLinksOnZoom}
-            linkArrows={config.linkArrows}
-            linkArrowsSizeScale={config.linkArrowsSizeScale}
-            curvedLinks={config.curvedLinks}
-            curvedLinkSegments={config.curvedLinkSegments}
+            linkArrows={config.edgeArrows || config.linkArrows}
+            linkArrowsSizeScale={config.edgeArrowScale || config.linkArrowsSizeScale}
+            curvedLinks={config.performanceMode ? false : config.curvedLinks}
+            curvedLinkSegments={config.performanceMode ? 10 : config.curvedLinkSegments}
             curvedLinkWeight={config.curvedLinkWeight}
             curvedLinkControlPointDistance={config.curvedLinkControlPointDistance}
             linkVisibilityDistanceRange={config.linkVisibilityDistance}
@@ -1659,16 +1869,50 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             useClassicQuadtree={config.useClassicQuadtree}
             
             // Selection
-            showLabelsFor={selectedNodes.map(id => ({ id }))}
+            showLabelsFor={config.renderLabels ? undefined : selectedNodes.map(id => ({ id }))}
+            
+            // Label rendering
+            showLabels={config.performanceMode ? false : config.renderLabels}
+            labelVisibility={config.performanceMode ? 0 : (config.renderLabels ? 1.0 : 0)}
+            labelStyle={{
+              fontSize: config.labelSize,
+              fontWeight: config.labelFontWeight,
+              color: config.labelColor,
+              backgroundColor: config.labelBackgroundColor,
+              padding: '2px 4px',
+              borderRadius: '2px'
+            }}
+            hoveredLabelStyle={{
+              fontSize: config.hoveredLabelSize,
+              fontWeight: config.hoveredLabelFontWeight,
+              color: config.hoveredLabelColor,
+              backgroundColor: config.hoveredLabelBackgroundColor,
+              padding: '3px 6px',
+              borderRadius: '3px'
+            }}
           />
         
         {/* Performance Overlay */}
-        {stats && (
-          <div className="absolute top-4 left-4 glass text-xs text-muted-foreground p-2 rounded">
-            <div>Nodes: {stats.total_nodes.toLocaleString()}</div>
-            <div>Edges: {stats.total_edges.toLocaleString()}</div>
-            {stats.density !== undefined && (
-              <div>Density: {stats.density.toFixed(4)}</div>
+        {(config.showNodeCount || config.showDebugInfo) && stats && (
+          <div className="absolute top-4 left-4 glass text-xs text-muted-foreground p-2 rounded space-y-1">
+            {config.showNodeCount && (
+              <>
+                <div>Nodes: {stats.total_nodes.toLocaleString()}</div>
+                <div>Edges: {stats.total_edges.toLocaleString()}</div>
+              </>
+            )}
+            {config.showDebugInfo && (
+              <>
+                {stats.density !== undefined && (
+                  <div>Density: {stats.density.toFixed(4)}</div>
+                )}
+                <div>Selected: {selectedNodes.length}</div>
+                <div>Highlighted: {highlightedNodes.length}</div>
+                <div>View: {config.queryType}</div>
+                <div>Color: {config.colorScheme}</div>
+                <div>Labels: {config.renderLabels ? 'On' : 'Off'}</div>
+                <div>Physics: {config.disableSimulation ? 'Off' : 'On'}</div>
+              </>
             )}
           </div>
         )}

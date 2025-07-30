@@ -19,8 +19,8 @@ interface GraphCanvasHandle {
   selectNodes: (nodes: GraphNode[]) => void;
   zoomIn: () => void;
   zoomOut: () => void;
-  fitView: () => void;
-  fitViewByIndices: (indices: number[], duration?: number, padding?: number) => void;
+  fitView: (duration?: number, padding?: number) => void;
+  fitViewByPointIndices: (indices: number[], duration?: number, padding?: number) => void;
   zoomToPoint: (index: number, duration?: number, scale?: number, canZoomOut?: boolean) => void;
   trackPointPositionsByIndices: (indices: number[]) => void;
   getTrackedPointPositionsMap: () => Map<number, [number, number]> | undefined;
@@ -326,6 +326,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
             stats={data?.stats}
             onNodeClick={handleNodeClick}
             onNodeSelect={handleNodeSelect}
+            onSelectNodes={handleSelectNodes}
             onNodeHover={handleNodeHover}
             onClearSelection={clearAllSelections}
             onShowNeighbors={handleShowNeighbors}

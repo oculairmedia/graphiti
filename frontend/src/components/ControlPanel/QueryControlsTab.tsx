@@ -10,10 +10,12 @@ interface QueryControlsTabProps {
   config: {
     queryType: string;
     nodeLimit: number;
+    searchTerm?: string;
   };
   isRefreshing: boolean;
   onQueryTypeChange: (value: string) => void;
   onNodeLimitChange: (value: number) => void;
+  onSearchTermChange?: (value: string) => void;
   onRefreshGraph: () => void;
   onQuickQuery: (queryType: string, limit: number) => void;
 }
@@ -23,6 +25,7 @@ export const QueryControlsTab: React.FC<QueryControlsTabProps> = ({
   isRefreshing,
   onQueryTypeChange,
   onNodeLimitChange,
+  onSearchTermChange,
   onRefreshGraph,
   onQuickQuery,
 }) => {
@@ -67,8 +70,15 @@ export const QueryControlsTab: React.FC<QueryControlsTabProps> = ({
               <Label className="text-xs text-muted-foreground">Search Term</Label>
               <Input
                 type="text"
+                value={config.searchTerm || ''}
+                onChange={(e) => onSearchTermChange?.(e.target.value)}
                 placeholder="Enter search term..."
                 className="h-8 bg-secondary/30"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    onRefreshGraph();
+                  }
+                }}
               />
             </div>
           )}
