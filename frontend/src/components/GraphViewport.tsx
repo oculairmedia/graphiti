@@ -6,39 +6,8 @@ import { NodeDetailsPanel } from './NodeDetailsPanel';
 import { QuickActions } from './QuickActions';
 import GraphErrorBoundary from './GraphErrorBoundary';
 import { useStableCallback } from '../hooks/useStableCallback';
+import type { GraphCanvasHandle, GraphStats } from '../types/components';
 
-interface GraphCanvasHandle {
-  clearSelection: () => void;
-  selectNode: (node: GraphNode) => void;
-  selectNodes: (nodes: GraphNode[]) => void;
-  zoomIn: () => void;
-  zoomOut: () => void;
-  fitView: () => void;
-  fitViewByPointIndices: (indices: number[], duration?: number, padding?: number) => void;
-  zoomToPoint: (index: number, duration?: number, scale?: number, canZoomOut?: boolean) => void;
-  trackPointPositionsByIndices: (indices: number[]) => void;
-  getTrackedPointPositionsMap: () => Map<number, [number, number]> | undefined;
-  setData: (nodes: GraphNode[], links: GraphLink[], runSimulation?: boolean) => void;
-  restart: () => void;
-  activateRectSelection: () => void;
-  deactivateRectSelection: () => void;
-  activatePolygonalSelection: () => void;
-  deactivatePolygonalSelection: () => void;
-  selectPointsInRect: (selection: [[number, number], [number, number]] | null, addToSelection?: boolean) => void;
-  selectPointsInPolygon: (polygonPoints: [number, number][], addToSelection?: boolean) => void;
-  getConnectedPointIndices: (index: number) => number[] | undefined;
-  getPointIndicesByExactValues: (keyValues: Record<string, unknown>) => number[] | undefined;
-  addIncrementalData: (newNodes: GraphNode[], newLinks: GraphLink[], runSimulation?: boolean) => void;
-  updateNodes: (updatedNodes: GraphNode[]) => void;
-  updateLinks: (updatedLinks: GraphLink[]) => void;
-  removeNodes: (nodeIds: string[]) => void;
-  removeLinks: (linkIds: string[]) => void;
-  startSimulation: (alpha?: number) => void;
-  pauseSimulation: () => void;
-  resumeSimulation: () => void;
-  keepSimulationRunning: (enable: boolean) => void;
-  setIncrementalUpdateFlag: (enabled: boolean) => void;
-}
 
 interface GraphViewportProps {
   nodes: GraphNode[];

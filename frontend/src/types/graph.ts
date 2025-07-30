@@ -1,18 +1,9 @@
 // Graph data types for Graphiti frontend
 
-export interface GraphNodeProperties {
-  degree_centrality?: number;
-  betweenness_centrality?: number;
-  pagerank_centrality?: number;
-  pagerank?: number;
-  eigenvector_centrality?: number;
-  degree?: number;
-  connections?: number;
-  created?: string;
-  updated?: string;
-  date?: string;
-  [key: string]: unknown; // Allow additional properties
-}
+import type { NodeProperties, EdgeProperties } from './properties';
+
+// Re-export NodeProperties for backward compatibility
+export type GraphNodeProperties = NodeProperties;
 
 export interface GraphNode {
   id: string;
@@ -22,12 +13,11 @@ export interface GraphNode {
   description?: string;
   created_at?: string;
   updated_at?: string;
-  properties?: GraphNodeProperties;
+  properties?: NodeProperties;
 }
 
-export interface GraphEdgeProperties {
-  [key: string]: unknown;
-}
+// Re-export EdgeProperties for backward compatibility
+export type GraphEdgeProperties = EdgeProperties;
 
 export interface GraphEdge {
   id: string;
@@ -36,7 +26,7 @@ export interface GraphEdge {
   label?: string;
   weight?: number;
   edge_type?: string;
-  properties?: GraphEdgeProperties;
+  properties?: EdgeProperties;
 }
 
 export interface GraphDataStats {

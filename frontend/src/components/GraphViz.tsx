@@ -12,47 +12,10 @@ import { GraphNavBar } from './GraphNavBar';
 import { useGraphDataQuery } from '../hooks/useGraphDataQuery';
 import { useNodeSelection } from '../hooks/useNodeSelection';
 import { useIncrementalUpdates } from '../hooks/useIncrementalUpdates';
-
-// Import the handle interface from GraphCanvas
-interface GraphCanvasHandle {
-  clearSelection: () => void;
-  selectNode: (node: GraphNode) => void;
-  selectNodes: (nodes: GraphNode[]) => void;
-  zoomIn: () => void;
-  zoomOut: () => void;
-  fitView: (duration?: number, padding?: number) => void;
-  fitViewByPointIndices: (indices: number[], duration?: number, padding?: number) => void;
-  zoomToPoint: (index: number, duration?: number, scale?: number, canZoomOut?: boolean) => void;
-  trackPointPositionsByIndices: (indices: number[]) => void;
-  getTrackedPointPositionsMap: () => Map<number, [number, number]> | undefined;
-  setData: (nodes: GraphNode[], links: GraphLink[], runSimulation?: boolean) => void;
-  restart: () => void;
-  activateRectSelection: () => void;
-  deactivateRectSelection: () => void;
-  activatePolygonalSelection: () => void;
-  deactivatePolygonalSelection: () => void;
-  selectPointsInRect: (selection: [[number, number], [number, number]] | null, addToSelection?: boolean) => void;
-  selectPointsInPolygon: (polygonPoints: [number, number][], addToSelection?: boolean) => void;
-  getConnectedPointIndices: (index: number) => number[] | undefined;
-  getPointIndicesByExactValues: (keyValues: Record<string, unknown>) => number[] | undefined;
-  addIncrementalData: (newNodes: GraphNode[], newLinks: GraphLink[], runSimulation?: boolean) => void;
-  updateNodes: (updatedNodes: GraphNode[]) => void;
-  updateLinks: (updatedLinks: GraphLink[]) => void;
-  removeNodes: (nodeIds: string[]) => void;
-  removeLinks: (linkIds: string[]) => void;
-  startSimulation: (alpha?: number) => void;
-  pauseSimulation: () => void;
-  resumeSimulation: () => void;
-  keepSimulationRunning: (enable: boolean) => void;
-  setIncrementalUpdateFlag: (enabled: boolean) => void;
-}
-
 import { GraphNode } from '../api/types';
 import { GraphLink } from '../types/graph';
-
-interface GraphVizProps {
-  className?: string;
-}
+import type { GraphCanvasHandle, GraphVizProps } from '../types/components';
+import { getErrorMessage } from '../types/errors';
 
 export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
   const { applyLayout, zoomIn, zoomOut, fitView } = useGraphConfig();
@@ -193,7 +156,8 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
         stream.getTracks().forEach(track => track.stop());
       });
     } catch (error) {
-      // Screenshot capture failed
+      // Screenshot capture failed - user cancelled or not supported
+      console.info('Screenshot capture cancelled or not supported');
     }
   }, []);
 
