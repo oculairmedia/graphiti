@@ -105,5 +105,5 @@ export function useIncrementalUpdates(
     };
 
     applyIncrementalUpdates();
-  }, [dataDiff.hasChanges, dataDiff.changeCount, dataDiff.isInitialLoad, isGraphInitialized, data, graphCanvasRef, setIsIncrementalUpdate, stableDataRef]);
+  }, [dataDiff.hasChanges, dataDiff.changeCount, dataDiff.isInitialLoad, dataDiff.addedNodes, dataDiff.removedNodeIds, dataDiff.updatedNodes, dataDiff.addedLinks, dataDiff.removedLinkIds, dataDiff.updatedLinks, isGraphInitialized, data, graphCanvasRef, setIsIncrementalUpdate, stableDataRef]);
 }

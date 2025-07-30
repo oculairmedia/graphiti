@@ -20,7 +20,7 @@ export function useGraphData(nodes: GraphNode[], links: GraphEdge[]) {
   const isIncrementalUpdateRef = useRef(false);
   
   // DataKit config (stable to prevent reprocessing)
-  const dataKitConfig = {
+  const dataKitConfig = useMemo(() => ({
     points: {
       pointIdBy: 'id',
       pointIndexBy: 'index',
@@ -37,7 +37,7 @@ export function useGraphData(nodes: GraphNode[], links: GraphEdge[]) {
       linkWidthBy: 'weight',
       linkIncludeColumns: ['created_at', 'updated_at']
     }
-  };
+  }), []);
   
   // Update current nodes and links when props change
   useEffect(() => {
@@ -117,7 +117,7 @@ export function useGraphData(nodes: GraphNode[], links: GraphEdge[]) {
     return () => {
       cancelled = true;
     };
-  }, [nodes, links]);
+  }, [nodes, links, dataKitConfig]);
   
   return {
     cosmographData,

@@ -71,7 +71,7 @@ export const usePersistedSections = (defaultSections: SectionConfig[]) => {
       }
     }
     setIsLoaded(true);
-  }, []);
+  }, [defaultSections]);
   
   // Save to storage function
   const saveSections = useCallback(() => {
@@ -135,7 +135,7 @@ export const usePersistedGraphConfig = <T extends Record<string, unknown>>(defau
       }
     }
     setIsLoaded(true);
-  }, []);
+  }, [defaultConfig]);
   
   // Save to storage function
   const saveConfig = useCallback(() => {
