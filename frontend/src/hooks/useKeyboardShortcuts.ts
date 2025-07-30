@@ -1,6 +1,7 @@
 import { useEffect, useCallback } from 'react';
 import { useGraphConfig } from '@/contexts/GraphConfigProvider';
 import type { CosmographRef } from '@cosmograph/react';
+import type { CosmographExtended } from '../types/components';
 
 interface KeyboardShortcutsProps {
   onSelectAll?: () => void;
@@ -70,31 +71,39 @@ export const useKeyboardShortcuts = ({
       // Pan with arrow keys
       case 'arrowup':
         event.preventDefault();
-        if (cosmographRef?.current?._camera) {
-          // Access the camera and pan it
-          const camera = cosmographRef.current._camera;
-          camera.pan({ x: 0, y: -50 });
+        if (cosmographRef?.current) {
+          // Use type assertion for internal camera access
+          const extended = cosmographRef.current as CosmographExtended;
+          if (extended._camera) {
+            extended._camera.pan({ x: 0, y: -50 });
+          }
         }
         break;
       case 'arrowdown':
         event.preventDefault();
-        if (cosmographRef?.current?._camera) {
-          const camera = cosmographRef.current._camera;
-          camera.pan({ x: 0, y: 50 });
+        if (cosmographRef?.current) {
+          const extended = cosmographRef.current as CosmographExtended;
+          if (extended._camera) {
+            extended._camera.pan({ x: 0, y: 50 });
+          }
         }
         break;
       case 'arrowleft':
         event.preventDefault();
-        if (cosmographRef?.current?._camera) {
-          const camera = cosmographRef.current._camera;
-          camera.pan({ x: -50, y: 0 });
+        if (cosmographRef?.current) {
+          const extended = cosmographRef.current as CosmographExtended;
+          if (extended._camera) {
+            extended._camera.pan({ x: -50, y: 0 });
+          }
         }
         break;
       case 'arrowright':
         event.preventDefault();
-        if (cosmographRef?.current?._camera) {
-          const camera = cosmographRef.current._camera;
-          camera.pan({ x: 50, y: 0 });
+        if (cosmographRef?.current) {
+          const extended = cosmographRef.current as CosmographExtended;
+          if (extended._camera) {
+            extended._camera.pan({ x: 50, y: 0 });
+          }
         }
         break;
 
