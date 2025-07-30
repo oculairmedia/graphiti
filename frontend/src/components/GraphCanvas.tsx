@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, forwardRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, forwardRef, useState, useCallback, use } from 'react';
 import { Cosmograph, prepareCosmographData } from '@cosmograph/react';
 import { GraphNode } from '../api/types';
 import type { GraphData } from '../types/graph';
@@ -13,8 +13,26 @@ import { useSimulation } from '../hooks/useSimulation';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { useColorUtils } from '../hooks/useColorUtils';
 import { searchIndex } from '../utils/searchIndex';
+import { GraphConfigContext } from '../contexts/GraphConfigContext';
 
 const dataKitCoordinator = DataKitCoordinator.getInstance();
+
+// Example of React 19's use API for conditional context consumption
+// This demonstrates how 'use' can be called conditionally, unlike useContext
+function ConditionalConfigConsumer({ shouldUseConfig }: { shouldUseConfig: boolean }) {
+  if (!shouldUseConfig) {
+    return null; // Early return before using context
+  }
+  
+  // The 'use' API allows conditional consumption after early returns
+  const config = use(GraphConfigContext);
+  
+  if (!config) {
+    return <div>Loading config...</div>;
+  }
+  
+  return <div>Config loaded: {config.config.layout}</div>;
+}
 
 interface GraphLink {
   source: string;

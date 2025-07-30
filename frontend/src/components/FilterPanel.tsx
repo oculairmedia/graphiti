@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useOptimistic, useTransition } from 'react';
 import { X, Filter, Calendar, TrendingUp, Tag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -24,6 +24,15 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
   data
 }) => {
   const { config, updateConfig } = useGraphConfig();
+  
+  // React 19 performance features
+  const [isPending, startTransition] = useTransition();
+  
+  // Optimistic state for immediate UI feedback
+  const [optimisticConfig, setOptimisticConfig] = useOptimistic(
+    config,
+    (state, newConfig: typeof config) => ({ ...state, ...newConfig })
+  );
   
   // Compute real node type statistics from actual data
   const nodeTypeStats = useMemo(() => {
@@ -103,7 +112,7 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
   };
   
   const applyFilters = () => {
-    updateConfig({
+    const newConfig = {
       filteredNodeTypes: tempFilters.selectedTypes,
       minDegree: tempFilters.degreeRange[0],
       maxDegree: tempFilters.degreeRange[1],
@@ -117,7 +126,16 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
       maxConnections: parseInt(tempFilters.maxConnections) || 1000,
       startDate: tempFilters.dateRange.start,
       endDate: tempFilters.dateRange.end
+    };
+    
+    // Apply optimistic update immediately for instant feedback
+    setOptimisticConfig(newConfig);
+    
+    // Then apply the actual update in a transition
+    startTransition(() => {
+      updateConfig(newConfig);
     });
+    
     onClose();
   };
   

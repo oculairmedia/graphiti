@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useState, useDeferredValue, useTransition } from 'react';
 import { X, Pin, Eye, EyeOff, Copy, Download, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -42,6 +42,9 @@ const NodeDetailsPanelComponent: React.FC<NodeDetailsPanelProps> = ({
   
   // State for summary expansion
   const [isSummaryExpanded, setIsSummaryExpanded] = useState(false);
+  
+  // React 19 performance features
+  const [isPending, startTransition] = useTransition();
 
   // Drag and drop sensors
   const sensors = useSensors(
@@ -68,15 +71,17 @@ const NodeDetailsPanelComponent: React.FC<NodeDetailsPanelProps> = ({
     }
   };
 
-  // Handle section collapse toggle
+  // Handle section collapse toggle with transition for non-blocking updates
   const handleToggleCollapse = (sectionId: string) => {
-    setPersistedSections((sections) =>
-      sections.map((section) =>
-        section.id === sectionId
-          ? { ...section, isCollapsed: !section.isCollapsed }
-          : section
-      )
-    );
+    startTransition(() => {
+      setPersistedSections((sections) =>
+        sections.map((section) =>
+          section.id === sectionId
+            ? { ...section, isCollapsed: !section.isCollapsed }
+            : section
+        )
+      );
+    });
   };
 
   // Get section by id
@@ -131,13 +136,16 @@ const NodeDetailsPanelComponent: React.FC<NodeDetailsPanelProps> = ({
   // Use centrality hook with fallback
   const { centrality, isLoading: centralityLoading, source } = useNodeCentralityWithFallback(node.id, node.properties);
 
-  // Use real node data
+  // Use real node data with deferred value for expensive property calculations
+  const nodeProperties = node.properties || {};
+  const deferredProperties = useDeferredValue(nodeProperties);
+  
   const data = {
     id: node.id,
     name: node.label || node.id,
     type: node.node_type || 'Unknown',
-    summary: node.summary || node.description || node.properties?.summary || node.properties?.content || node.properties?.source_description || '',
-    properties: node.properties || {},
+    summary: node.summary || node.description || deferredProperties?.summary || deferredProperties?.content || deferredProperties?.source_description || '',
+    properties: deferredProperties,
     centrality: centrality || {
       degree: 0,
       betweenness: 0,
@@ -145,10 +153,10 @@ const NodeDetailsPanelComponent: React.FC<NodeDetailsPanelProps> = ({
       eigenvector: 0
     },
     timestamps: {
-      created: node.created_at || node.properties?.created || new Date().toISOString(),
-      updated: node.updated_at || node.properties?.updated || new Date().toISOString()
+      created: node.created_at || deferredProperties?.created || new Date().toISOString(),
+      updated: node.updated_at || deferredProperties?.updated || new Date().toISOString()
     },
-    connections: node.properties?.degree || node.properties?.connections || 0
+    connections: deferredProperties?.degree || deferredProperties?.connections || 0
   };
 
   return (

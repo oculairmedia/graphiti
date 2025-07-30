@@ -72,8 +72,8 @@ interface GraphConfigContextType {
   config: GraphConfig;
   updateConfig: (updates: Partial<GraphConfig>) => void;
   updateNodeTypeConfigurations: (nodeTypes: string[]) => void;
-  cosmographRef: React.MutableRefObject<CosmographRefType> | null;
-  setCosmographRef: (ref: React.MutableRefObject<CosmographRefType>) => void;
+  cosmographRef: React.RefObject<CosmographRefType> | null;
+  setCosmographRef: (ref: React.RefObject<CosmographRefType>) => void;
   // Graph control methods
   zoomIn: () => void;
   zoomOut: () => void;
@@ -227,11 +227,11 @@ const defaultConfig: GraphConfig = {
   performanceMode: false
 };
 
-const GraphConfigContext = createContext<GraphConfigContextType | undefined>(undefined);
+export const GraphConfigContext = createContext<GraphConfigContextType | undefined>(undefined);
 
 export const GraphConfigProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [config, setConfig, isConfigLoaded] = usePersistedGraphConfig(defaultConfig);
-  const [cosmographRef, setCosmographRef] = useState<React.MutableRefObject<CosmographRefType> | null>(null);
+  const [cosmographRef, setCosmographRef] = useState<React.RefObject<CosmographRefType> | null>(null);
   const [isApplyingLayout, setIsApplyingLayout] = useState(false);
   const { mergeWithPersisted: mergeNodeTypes, isLoaded: isNodeTypesLoaded } = usePersistedNodeTypes(
     config.nodeTypeColors,
@@ -476,7 +476,7 @@ export const GraphConfigProvider: React.FC<{ children: ReactNode }> = ({ childre
     }
   };
 
-  const setCosmographRefCallback = (ref: React.MutableRefObject<CosmographRefType>) => {
+  const setCosmographRefCallback = (ref: React.RefObject<CosmographRefType>) => {
     setCosmographRef(ref);
   };
 
