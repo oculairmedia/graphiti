@@ -4,9 +4,9 @@ import { transformNodes, transformLinks } from '../utils/graphDataTransform';
 import { logger } from '../utils/logger';
 
 interface CosmographData {
-  points: any[];
-  links: any[];
-  cosmographConfig: any;
+  points: GraphNode[];
+  links: GraphEdge[];
+  cosmographConfig: Record<string, unknown>;
 }
 
 export function useGraphData(nodes: GraphNode[], links: GraphEdge[]) {

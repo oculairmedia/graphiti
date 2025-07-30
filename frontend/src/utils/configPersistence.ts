@@ -191,7 +191,7 @@ export const getStorageUsage = (): { used: number; available: number } => {
   
   let used = 0;
   for (const key in localStorage) {
-    if (localStorage.hasOwnProperty(key)) {
+    if (Object.prototype.hasOwnProperty.call(localStorage, key)) {
       used += localStorage[key].length + key.length;
     }
   }
@@ -233,6 +233,7 @@ export const saveConfigToStorage = (config: PersistedConfig): boolean => {
         localStorage.setItem(STORAGE_KEYS.MAIN_CONFIG, JSON.stringify(config));
         return true;
       } catch {
+        // Save failed even after clearing backup
       }
     }
     
@@ -278,6 +279,7 @@ export const loadConfigFromStorage = (): PersistedConfig | null => {
         return parsed;
       }
     } catch (backupError) {
+      // Backup recovery failed
     }
     
     return null;
@@ -291,13 +293,14 @@ export const clearPersistedConfig = (): void => {
     localStorage.removeItem(STORAGE_KEYS.MAIN_CONFIG);
     localStorage.removeItem(STORAGE_KEYS.BACKUP_CONFIG);
   } catch (error) {
+    // Clear failed, ignore
   }
 };
 
 // Migration system for future schema changes
 const migrateConfig = (config: PersistedConfig): PersistedConfig | null => {
   try {
-    let migrated = { ...config };
+    const migrated = { ...config };
     
     // Version 0 to 1 migration (if needed in future)
     if (config.version === 0) {
@@ -312,7 +315,7 @@ const migrateConfig = (config: PersistedConfig): PersistedConfig | null => {
 };
 
 // Utility to create differential config (only store changes from defaults)
-export const createDifferentialConfig = <T extends Record<string, any>>(
+export const createDifferentialConfig = <T extends Record<string, unknown>>(
   current: T,
   defaults: T
 ): Partial<T> => {
@@ -345,7 +348,7 @@ export const createDifferentialConfig = <T extends Record<string, any>>(
 };
 
 // Utility to merge differential config back with defaults
-export const mergeDifferentialConfig = <T extends Record<string, any>>(
+export const mergeDifferentialConfig = <T extends Record<string, unknown>>(
   defaults: T,
   diff: Partial<T>
 ): T => {
@@ -356,7 +359,7 @@ export const mergeDifferentialConfig = <T extends Record<string, any>>(
       // Handle nested objects
       if (typeof diff[key] === 'object' && diff[key] !== null && !Array.isArray(diff[key]) &&
           typeof defaults[key] === 'object' && defaults[key] !== null && !Array.isArray(defaults[key])) {
-        merged[key] = mergeDifferentialConfig(defaults[key], diff[key] as any);
+        merged[key] = mergeDifferentialConfig(defaults[key] as Record<string, unknown>, diff[key] as Record<string, unknown>) as T[Extract<keyof T, string>];
       } else {
         merged[key] = diff[key] as T[typeof key];
       }
@@ -379,6 +382,7 @@ export const exportConfigToFile = (config: PersistedConfig): void => {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   } catch (error) {
+    // Export failed
   }
 };
 

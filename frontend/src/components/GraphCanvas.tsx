@@ -12,6 +12,7 @@ import { useGraphEvents } from '../hooks/useGraphEvents';
 import { useSimulation } from '../hooks/useSimulation';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { useColorUtils } from '../hooks/useColorUtils';
+import { searchIndex } from '../utils/searchIndex';
 
 const dataKitCoordinator = DataKitCoordinator.getInstance();
 
@@ -135,7 +136,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     const cosmographRef = useRef<CosmographRef | null>(null);
     const [isReady, setIsReady] = useState(false);
     const [isCanvasReady, setIsCanvasReady] = useState(false);
-    const [cosmographData, setCosmographData] = useState<any>(null);
+    const [cosmographData, setCosmographData] = useState<{ nodes: GraphNode[], links: GraphLink[] } | null>(null);
     const [dataKitError, setDataKitError] = useState<string | null>(null);
     const [isDataPreparing, setIsDataPreparing] = useState(false);
     const { config, setCosmographRef } = useGraphConfig();
@@ -158,10 +159,16 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     // Add component ID for debugging multiple instances
     const componentId = useRef(Math.random().toString(36).substr(2, 9));
     
-    // Update current data tracking when props change
+    // Update current data tracking and search index when props change
     useEffect(() => {
       setCurrentNodes(nodes);
       setCurrentLinks(links);
+      
+      // Update search index for fast searching
+      if (nodes.length > 0) {
+        searchIndex.buildIndex(nodes);
+        logger.log('Search index updated with', nodes.length, 'nodes');
+      }
     }, [nodes, links]);
     
     // Double-click detection using refs to avoid re-renders
@@ -203,55 +210,44 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       cosmographRef
     });
     
-    // Search functionality
+    // Search functionality using indexed search
     const performSearch = useCallback(() => {
       if (!cosmographRef.current || !config.searchTerm || config.searchTerm.trim() === '') {
         // Clear search highlights if search is empty
         return;
       }
       
-      const searchTerm = config.searchTerm.toLowerCase();
-      const isRegex = searchTerm.startsWith('/') && searchTerm.endsWith('/');
-      let searchPattern: RegExp | null = null;
-      
-      if (isRegex) {
-        try {
-          searchPattern = new RegExp(searchTerm.slice(1, -1), 'i');
-        } catch (e) {
-          // Invalid regex, treat as literal
-        }
-      }
-      
-      const matchingNodes = currentNodes.filter(node => {
-        const label = (node.label || node.id || '').toLowerCase();
-        const nodeType = (node.node_type || '').toLowerCase();
-        const description = (node.properties?.description || '').toLowerCase();
-        
-        if (searchPattern) {
-          return searchPattern.test(label) || 
-                 searchPattern.test(nodeType) || 
-                 searchPattern.test(description);
-        }
-        
-        return label.includes(searchTerm) || 
-               nodeType.includes(searchTerm) || 
-               description.includes(searchTerm);
+      // Use search index for fast search
+      const matchingNodes = searchIndex.search(config.searchTerm, {
+        limit: 500,
+        fuzzy: false
       });
       
       if (matchingNodes.length > 0) {
         // Select matching nodes
         const matchingIds = matchingNodes.map(node => node.id);
-        onNodeSelect?.(matchingIds);
+        if (onSelectNodes) {
+          onSelectNodes(matchingNodes);
+        } else {
+          // Fallback to individual selection
+          matchingIds.forEach(id => onNodeSelect?.(id));
+        }
         
-        // Focus on the first match
-        if (cosmographRef.current.focusOnPoints && matchingNodes[0]) {
-          const nodeIndex = currentNodes.findIndex(n => n.id === matchingNodes[0].id);
-          if (nodeIndex >= 0) {
-            cosmographRef.current.focusOnPoints([nodeIndex], 1000);
+        // Focus on the first few matches
+        if (cosmographRef.current.fitViewByPointIndices && matchingNodes.length <= 10) {
+          const nodeIndices = matchingNodes
+            .slice(0, 10)
+            .map(node => currentNodes.findIndex(n => n.id === node.id))
+            .filter(idx => idx >= 0);
+          
+          if (nodeIndices.length > 0) {
+            cosmographRef.current.fitViewByPointIndices(nodeIndices, 1000, 0.2);
           }
         }
       }
-    }, [config.searchTerm, currentNodes, onNodeSelect]);
+      
+      logger.log(`Search found ${matchingNodes.length} nodes for query: ${config.searchTerm}`);
+    }, [config.searchTerm, currentNodes, onNodeSelect, onSelectNodes]);
     
     // Trigger search when searchTerm changes
     useEffect(() => {
@@ -499,6 +495,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         try {
           cosmographRef.current?.restart();
         } catch (error) {
+          // WebGL context recovery error
         }
       };
 
@@ -534,6 +531,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
               
               setIsCanvasReady(prevReady => {
                 if (hasCanvas !== prevReady) {
+                  // State change detected, no additional action needed
                 }
                 return hasCanvas;
               });
@@ -558,6 +556,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             // Start canvas polling immediately
             pollCanvas();
           } catch (error) {
+            // Canvas setup error
           }
         } else {
           // Keep polling for cosmographRef with exponential backoff for up to 3 seconds
@@ -589,7 +588,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           webglCleanup();
         }
       };
-    }, [setCosmographRef]);
+    }, [setCosmographRef, setupWebGLContextRecovery]);
 
 
     // Simplified data transformation for legacy compatibility
@@ -651,9 +650,9 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       const minWeight = Math.min(...weights);
       const weightRange = maxWeight - minWeight || 1;
       
-      return (link: any) => {
+      return (link: GraphLink) => {
         switch (config.linkColorScheme) {
-          case 'by-weight':
+          case 'by-weight': {
             // Color by edge weight - interpolate between low and high colors
             const weight = link.weight || 1;
             const normalized = (weight - minWeight) / weightRange;
@@ -662,8 +661,9 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             const g = Math.round(102 + (68 - 102) * normalized);
             const b = Math.round(102 + (68 - 102) * normalized);
             return `rgb(${r}, ${g}, ${b})`;
+          }
             
-          case 'by-type':
+          case 'by-type': {
             // Color by edge type
             const edgeType = link.edge_type || 'default';
             const typeColors: Record<string, string> = {
@@ -674,8 +674,9 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
               'default': config.linkColor
             };
             return typeColors[edgeType] || config.linkColor;
+          }
             
-          case 'by-distance':
+          case 'by-distance': {
             // Color by link distance/length
             const sourceNode = currentNodes.find(n => n.id === link.source);
             const targetNode = currentNodes.find(n => n.id === link.target);
@@ -691,15 +692,17 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
               return `rgba(102, 102, 102, ${opacity / 255})`;
             }
             return config.linkColor;
+          }
             
-          case 'node-gradient':
+          case 'node-gradient': {
             // Gradient from source to target node colors
             const sourceNodeColor = config.nodeTypeColors[currentNodes.find(n => n.id === link.source)?.node_type || ''];
             const targetNodeColor = config.nodeTypeColors[currentNodes.find(n => n.id === link.target)?.node_type || ''];
             // For simplicity, use source node color (true gradient would require custom shader)
             return sourceNodeColor || config.linkColor;
+          }
             
-          case 'by-community':
+          case 'by-community': {
             // Color bridges between communities differently
             const sourceCommunity = currentNodes.find(n => n.id === link.source)?.cluster;
             const targetCommunity = currentNodes.find(n => n.id === link.target)?.cluster;
@@ -707,6 +710,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
               return '#FF6B6B'; // Highlight inter-community links
             }
             return config.linkColor;
+          }
             
           default:
             return config.linkColor;
@@ -715,7 +719,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     }, [config.linkColorScheme, config.linkColor, config.nodeTypeColors, currentLinks, currentNodes]);
 
     // Memoize point color function
-    const pointColorFn = React.useCallback((node: any) => {
+    const pointColorFn = React.useCallback((node: GraphNode) => {
       const isHighlighted = highlightedNodes.includes(node.id);
       if (isHighlighted) {
         return 'rgba(255, 215, 0, 0.9)';
@@ -729,7 +733,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     }, [highlightedNodes, config.colorScheme]);
     
     // Memoize point size function
-    const pointSizeFn = React.useCallback((node: any) => {
+    const pointSizeFn = React.useCallback((node: GraphNode) => {
       // Handle uniform size mapping
       if (config.sizeMapping === 'uniform') {
         return (config.minNodeSize + config.maxNodeSize) / 2 * config.sizeMultiplier;
@@ -739,36 +743,73 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         return undefined;
       }
       return undefined;
-    }, [highlightedNodes]);
+    }, [highlightedNodes, config.minNodeSize, config.maxNodeSize, config.sizeMapping, config.sizeMultiplier]);
     
-    // Throttle mouse move to prevent excessive updates
+    // Improved throttling for mouse move with requestAnimationFrame
     const lastHoverTimeRef = useRef<number>(0);
     const lastHoveredIndexRef = useRef<number | undefined>(undefined);
+    const hoverAnimationFrameRef = useRef<number | null>(null);
+    const pendingHoverRef = useRef<{ index: number | undefined } | null>(null);
     
     const handleMouseMove = React.useCallback((index: number | undefined) => {
-      const now = Date.now();
-      
-      // Throttle to max 60fps (16ms)
-      if (now - lastHoverTimeRef.current < 16) {
-        return;
-      }
-      
       // Skip if same index
       if (index === lastHoveredIndexRef.current) {
         return;
       }
       
-      lastHoverTimeRef.current = now;
-      lastHoveredIndexRef.current = index;
+      // Store pending hover
+      pendingHoverRef.current = { index };
       
-      if (index !== undefined && index >= 0) {
-        const hoveredNode = currentNodes[index];
-        if (hoveredNode) {
-          onNodeHover?.(hoveredNode);
-        }
-      } else {
-        onNodeHover?.(null);
+      // Cancel previous animation frame
+      if (hoverAnimationFrameRef.current) {
+        cancelAnimationFrame(hoverAnimationFrameRef.current);
       }
+      
+      // Schedule update on next animation frame
+      hoverAnimationFrameRef.current = requestAnimationFrame(() => {
+        const now = Date.now();
+        
+        // Throttle to max 30fps (33ms) for better performance
+        if (now - lastHoverTimeRef.current < 33) {
+          // Reschedule for next frame
+          hoverAnimationFrameRef.current = requestAnimationFrame(() => {
+            if (pendingHoverRef.current) {
+              const { index } = pendingHoverRef.current;
+              lastHoverTimeRef.current = now;
+              lastHoveredIndexRef.current = index;
+              
+              if (index !== undefined && index >= 0) {
+                const hoveredNode = currentNodes[index];
+                if (hoveredNode) {
+                  onNodeHover?.(hoveredNode);
+                }
+              } else {
+                onNodeHover?.(null);
+              }
+              
+              pendingHoverRef.current = null;
+            }
+          });
+          return;
+        }
+        
+        if (pendingHoverRef.current) {
+          const { index } = pendingHoverRef.current;
+          lastHoverTimeRef.current = now;
+          lastHoveredIndexRef.current = index;
+          
+          if (index !== undefined && index >= 0) {
+            const hoveredNode = currentNodes[index];
+            if (hoveredNode) {
+              onNodeHover?.(hoveredNode);
+            }
+          } else {
+            onNodeHover?.(null);
+          }
+          
+          pendingHoverRef.current = null;
+        }
+      });
     }, [currentNodes, onNodeHover]);
 
     // Method to select a single node in Cosmograph
@@ -1421,7 +1462,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           clearTimeout(focusTimeoutId);
         }
       };
-    }, [config.disableSimulation]);
+    }, [config.disableSimulation, setupWebGLContextRecovery]);
     
     // Cleanup all timers and refs on unmount
     useEffect(() => {
@@ -1441,11 +1482,17 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           clearTimeout(intervalRef.current);
           intervalRef.current = null;
         }
+        // Clear hover animation frame
+        if (hoverAnimationFrameRef.current) {
+          cancelAnimationFrame(hoverAnimationFrameRef.current);
+          hoverAnimationFrameRef.current = null;
+        }
         // Clear refs to prevent memory leaks
         cosmographRef.current = null;
         lastClickedNodeRef.current = null;
         isIncrementalUpdateRef.current = false;
         lastResumeTimeRef.current = 0;
+        pendingHoverRef.current = null;
       };
     }, []);
 

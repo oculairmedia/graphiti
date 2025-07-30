@@ -37,20 +37,24 @@ export function calculateCircularLayout(
   // Sort nodes based on ordering criteria
   const sortedNodes = [...nodes].sort((a, b) => {
     switch (circularOrdering) {
-      case 'degree':
+      case 'degree': {
         const degreeA = a.properties?.degree_centrality || 0;
         const degreeB = b.properties?.degree_centrality || 0;
         return degreeB - degreeA;
-      case 'centrality':
+      }
+      case 'centrality': {
         const centralityA = a.properties?.pagerank_centrality || 0;
         const centralityB = b.properties?.pagerank_centrality || 0;
         return centralityB - centralityA;
-      case 'type':
+      }
+      case 'type': {
         return a.node_type.localeCompare(b.node_type);
-      case 'alphabetical':
+      }
+      case 'alphabetical': {
         const labelA = a.label || a.id;
         const labelB = b.label || b.id;
         return labelA.localeCompare(labelB);
+      }
       default:
         return 0;
     }
@@ -244,20 +248,24 @@ export function calculateClusterLayout(
     let clusterKey: string;
     
     switch (clusterBy) {
-      case 'type':
+      case 'type': {
         clusterKey = node.node_type;
         break;
-      case 'community':
+      }
+      case 'community': {
         clusterKey = node.node_type; // Use type as proxy for community
         break;
-      case 'centrality':
+      }
+      case 'centrality': {
         const centrality = node.properties?.degree_centrality || 0;
         clusterKey = centrality > 50 ? 'high' : centrality > 20 ? 'medium' : 'low';
         break;
-      case 'temporal':
+      }
+      case 'temporal': {
         const date = node.created_at || node.properties?.created || node.properties?.date;
         clusterKey = date ? new Date(date).getFullYear().toString() : 'unknown';
         break;
+      }
       default:
         clusterKey = 'default';
     }
@@ -483,7 +491,7 @@ export function calculateLayoutPositions(
     case 'temporal':
       return calculateTemporalLayout(nodes, edges, options);
     case 'force-directed':
-    default:
+    default: {
       // For force-directed, return random positions and let physics handle it
       const centerX = (options.canvasWidth || DEFAULT_CANVAS_WIDTH) / 2;
       const centerY = (options.canvasHeight || DEFAULT_CANVAS_HEIGHT) / 2;
@@ -491,5 +499,6 @@ export function calculateLayoutPositions(
         x: centerX + (Math.random() - 0.5) * 200,
         y: centerY + (Math.random() - 0.5) * 200
       }));
+    }
   }
 }

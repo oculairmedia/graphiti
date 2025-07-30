@@ -22,20 +22,24 @@ export function calculateCircularLayout(
   // Sort nodes based on ordering criteria
   const sortedNodes = [...nodes].sort((a, b) => {
     switch (circularOrdering) {
-      case 'degree':
+      case 'degree': {
         const degreeA = a.properties?.degree_centrality || 0;
         const degreeB = b.properties?.degree_centrality || 0;
         return degreeB - degreeA;
-      case 'centrality':
+      }
+      case 'centrality': {
         const centralityA = a.properties?.pagerank_centrality || 0;
         const centralityB = b.properties?.pagerank_centrality || 0;
         return centralityB - centralityA;
-      case 'type':
+      }
+      case 'type': {
         return a.node_type.localeCompare(b.node_type);
-      case 'alphabetical':
+      }
+      case 'alphabetical': {
         const labelA = a.label || a.id;
         const labelB = b.label || b.id;
         return labelA.localeCompare(labelB);
+      }
       default:
         return 0;
     }

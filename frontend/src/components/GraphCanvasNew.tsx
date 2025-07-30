@@ -34,7 +34,7 @@ const GraphCanvasNew = forwardRef<GraphCanvasRef, GraphCanvasProps>(({
   className = ''
 }, ref) => {
   // Refs
-  const cosmographRef = useRef<any>(null);
+  const cosmographRef = useRef<CosmographRef | null>(null);
   const selectedNodesRef = useRef<string[]>([]);
   
   // Hooks
@@ -106,7 +106,7 @@ const GraphCanvasNew = forwardRef<GraphCanvasRef, GraphCanvasProps>(({
   }, [setCosmographRef]);
   
   // Node click handler
-  const handleNodeClick = useCallback((clickedNode: any) => {
+  const handleNodeClick = useCallback((clickedNode: GraphNode | null) => {
     if (!clickedNode) {
       selectedNodesRef.current = [];
       onNodeClick?.(null);

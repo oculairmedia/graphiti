@@ -12,7 +12,7 @@ interface QuickActionsProps {
   onScreenshot: () => void;
 }
 
-export const QuickActions: React.FC<QuickActionsProps> = ({
+const QuickActionsComponent: React.FC<QuickActionsProps> = ({
   selectedCount,
   onClearSelection,
   onFitToScreen,
@@ -20,21 +20,6 @@ export const QuickActions: React.FC<QuickActionsProps> = ({
   onZoomOut,
   onScreenshot
 }) => {
-  const handleZoomIn = () => {
-    console.log('QuickActions: Zoom In clicked');
-    onZoomIn();
-  };
-
-  const handleZoomOut = () => {
-    console.log('QuickActions: Zoom Out clicked');
-    onZoomOut();
-  };
-
-  const handleFitToScreen = () => {
-    console.log('QuickActions: Fit to Screen clicked');
-    onFitToScreen();
-  };
-
   return (
     <div className="glass-panel rounded-full px-4 py-2 flex items-center space-x-2 animate-fade-in">
       
@@ -102,7 +87,7 @@ export const QuickActions: React.FC<QuickActionsProps> = ({
         <Button
           variant="ghost"
           size="sm"
-          onClick={handleZoomOut}
+          onClick={onZoomOut}
           className="h-8 px-2 hover:bg-primary/10"
           title="Zoom Out"
         >
@@ -111,7 +96,7 @@ export const QuickActions: React.FC<QuickActionsProps> = ({
         <Button
           variant="ghost"
           size="sm"
-          onClick={handleFitToScreen}
+          onClick={onFitToScreen}
           className="h-8 px-2 hover:bg-primary/10"
           title="Fit to Screen"
         >
@@ -120,7 +105,7 @@ export const QuickActions: React.FC<QuickActionsProps> = ({
         <Button
           variant="ghost"
           size="sm"
-          onClick={handleZoomIn}
+          onClick={onZoomIn}
           className="h-8 px-2 hover:bg-primary/10"
           title="Zoom In"
         >
@@ -142,3 +127,6 @@ export const QuickActions: React.FC<QuickActionsProps> = ({
     </div>
   );
 };
+
+// Export memoized component to prevent unnecessary re-renders
+export const QuickActions = React.memo(QuickActionsComponent);

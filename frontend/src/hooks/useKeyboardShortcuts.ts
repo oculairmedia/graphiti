@@ -1,10 +1,11 @@
 import { useEffect, useCallback } from 'react';
 import { useGraphConfig } from '@/contexts/GraphConfigProvider';
+import type { CosmographRef } from '@cosmograph/react';
 
 interface KeyboardShortcutsProps {
   onSelectAll?: () => void;
   onDeselectAll?: () => void;
-  cosmographRef?: React.MutableRefObject<any>;
+  cosmographRef?: React.MutableRefObject<CosmographRef | null>;
 }
 
 export const useKeyboardShortcuts = ({ 
@@ -31,11 +32,24 @@ export const useKeyboardShortcuts = ({
     const isCtrlOrCmd = event.ctrlKey || event.metaKey;
 
     switch (key) {
-      // Fit view
+      // Fit view (f) or Focus search (Ctrl/Cmd + F)
       case 'f':
         if (!isCtrlOrCmd) {
           event.preventDefault();
           fitView();
+        } else {
+          event.preventDefault();
+          // Change to search mode and focus search input
+          updateConfig({ queryType: 'search' });
+          
+          // Focus search input after a brief delay to ensure UI updates
+          setTimeout(() => {
+            const searchInput = document.querySelector('[data-search-input]') as HTMLInputElement;
+            if (searchInput) {
+              searchInput.focus();
+              searchInput.select();
+            }
+          }, 100);
         }
         break;
 
@@ -130,23 +144,6 @@ export const useKeyboardShortcuts = ({
         }
         break;
 
-      // Focus search (Ctrl/Cmd + F)
-      case 'f':
-        if (isCtrlOrCmd) {
-          event.preventDefault();
-          // Change to search mode and focus search input
-          updateConfig({ queryType: 'search' });
-          
-          // Focus the search input after a small delay to allow UI update
-          setTimeout(() => {
-            const searchInput = document.querySelector('input[placeholder="Enter search term..."]') as HTMLInputElement;
-            if (searchInput) {
-              searchInput.focus();
-              searchInput.select();
-            }
-          }, 100);
-        }
-        break;
       
       // Number keys for quick layout switching
       case '1':

@@ -20,7 +20,7 @@ interface NodeDetailsPanelProps {
   onShowNeighbors?: (nodeId: string) => void;
 }
 
-export const NodeDetailsPanel: React.FC<NodeDetailsPanelProps> = ({ 
+const NodeDetailsPanelComponent: React.FC<NodeDetailsPanelProps> = ({ 
   node, 
   onClose,
   onShowNeighbors
@@ -50,7 +50,7 @@ export const NodeDetailsPanel: React.FC<NodeDetailsPanelProps> = ({
   );
 
   // Handle section reordering
-  const handleDragEnd = (event: any) => {
+  const handleDragEnd = (event: { active: { id: string }, over: { id: string } }) => {
     const { active, over } = event;
 
     if (active.id !== over.id) {
@@ -200,7 +200,7 @@ export const NodeDetailsPanel: React.FC<NodeDetailsPanelProps> = ({
                 const sectionProps = { section, onToggleCollapse: handleToggleCollapse };
                 
                 switch (section.id) {
-                  case 'summary':
+                  case 'summary': {
                     if (!data.summary) return null;
                     
                     const TRUNCATE_LENGTH = 200;
@@ -232,8 +232,9 @@ export const NodeDetailsPanel: React.FC<NodeDetailsPanelProps> = ({
                         </div>
                       </CollapsibleSection>
                     );
+                  }
 
-                  case 'properties':
+                  case 'properties': {
                     return (
                       <CollapsibleSection key={section.id} {...sectionProps}>
                         <div className="space-y-2 min-w-0">
@@ -250,8 +251,9 @@ export const NodeDetailsPanel: React.FC<NodeDetailsPanelProps> = ({
                         </div>
                       </CollapsibleSection>
                     );
+                  }
 
-                  case 'centrality':
+                  case 'centrality': {
                     return (
                       <CollapsibleSection key={section.id} {...sectionProps}>
                         <div className="space-y-3">
@@ -287,8 +289,9 @@ export const NodeDetailsPanel: React.FC<NodeDetailsPanelProps> = ({
                         </div>
                       </CollapsibleSection>
                     );
+                  }
 
-                  case 'connections':
+                  case 'connections': {
                     return (
                       <CollapsibleSection key={section.id} {...sectionProps}>
                         <div className="flex items-center justify-between">
@@ -299,8 +302,9 @@ export const NodeDetailsPanel: React.FC<NodeDetailsPanelProps> = ({
                         </div>
                       </CollapsibleSection>
                     );
+                  }
 
-                  case 'timestamps':
+                  case 'timestamps': {
                     return (
                       <CollapsibleSection key={section.id} {...sectionProps}>
                         <div className="space-y-1">
@@ -315,8 +319,9 @@ export const NodeDetailsPanel: React.FC<NodeDetailsPanelProps> = ({
                         </div>
                       </CollapsibleSection>
                     );
+                  }
 
-                  case 'actions':
+                  case 'actions': {
                     return (
                       <CollapsibleSection key={section.id} {...sectionProps}>
                         <div className="space-y-2">
@@ -352,6 +357,7 @@ export const NodeDetailsPanel: React.FC<NodeDetailsPanelProps> = ({
                         </div>
                       </CollapsibleSection>
                     );
+                  }
 
                   default:
                     return null;
@@ -363,3 +369,11 @@ export const NodeDetailsPanel: React.FC<NodeDetailsPanelProps> = ({
     </Card>
   );
 };
+
+// Export memoized component to prevent unnecessary re-renders
+export const NodeDetailsPanel = React.memo(NodeDetailsPanelComponent, (prevProps, nextProps) => {
+  // Only re-render if node ID changes or callbacks change
+  return prevProps.node.id === nextProps.node.id &&
+         prevProps.onClose === nextProps.onClose &&
+         prevProps.onShowNeighbors === nextProps.onShowNeighbors;
+});

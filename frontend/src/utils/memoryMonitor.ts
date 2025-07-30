@@ -8,6 +8,12 @@ interface MemorySnapshot {
   jsHeapSizeLimit: number;
 }
 
+interface PerformanceMemory {
+  usedJSHeapSize: number;
+  totalJSHeapSize: number;
+  jsHeapSizeLimit: number;
+}
+
 class MemoryMonitor {
   private snapshots: MemorySnapshot[] = [];
   private readonly maxSnapshots = 10;
@@ -44,13 +50,13 @@ class MemoryMonitor {
   private isSupported(): boolean {
     return typeof performance !== 'undefined' && 
            'memory' in performance &&
-           typeof (performance as any).memory === 'object';
+           typeof (performance as { memory?: PerformanceMemory }).memory === 'object';
   }
 
   private checkMemory(): void {
     if (!this.isSupported()) return;
 
-    const memory = (performance as any).memory;
+    const memory = (performance as { memory?: PerformanceMemory }).memory!;
     const snapshot: MemorySnapshot = {
       timestamp: Date.now(),
       usedJSHeapSize: memory.usedJSHeapSize,
@@ -117,7 +123,7 @@ class MemoryMonitor {
       return;
     }
 
-    const memory = (performance as any).memory;
+    const memory = (performance as { memory?: PerformanceMemory }).memory!;
     const usage = memory.usedJSHeapSize / memory.jsHeapSizeLimit;
 
     console.log('[MemoryMonitor] Current memory stats:', {

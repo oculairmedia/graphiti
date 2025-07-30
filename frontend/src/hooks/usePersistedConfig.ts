@@ -67,6 +67,7 @@ export const usePersistedSections = (defaultSections: SectionConfig[]) => {
         mergedSections.sort((a, b) => a.order - b.order);
         setSections(mergedSections);
       } catch (error) {
+        // Failed to load sections, use defaults
       }
     }
     setIsLoaded(true);
@@ -96,6 +97,7 @@ export const usePersistedSections = (defaultSections: SectionConfig[]) => {
       
       saveConfigToStorage(updated);
     } catch (error) {
+      // Failed to save sections
     }
   }, [sections, isLoaded]);
   
@@ -116,7 +118,7 @@ export const usePersistedSections = (defaultSections: SectionConfig[]) => {
 };
 
 // Hook for persisted graph configuration
-export const usePersistedGraphConfig = <T extends Record<string, any>>(defaultConfig: T) => {
+export const usePersistedGraphConfig = <T extends Record<string, unknown>>(defaultConfig: T) => {
   const [config, setConfig] = useState<T>(defaultConfig);
   const [isLoaded, setIsLoaded] = useState(false);
   
@@ -129,6 +131,7 @@ export const usePersistedGraphConfig = <T extends Record<string, any>>(defaultCo
         const merged = mergeDifferentialConfig(defaultConfig, stored.graphConfig as Partial<T>);
         setConfig(merged);
       } catch (error) {
+        // Failed to load sections, use defaults
       }
     }
     setIsLoaded(true);
@@ -155,6 +158,7 @@ export const usePersistedGraphConfig = <T extends Record<string, any>>(defaultCo
       
       saveConfigToStorage(updated);
     } catch (error) {
+      // Failed to save config
     }
   }, [config, defaultConfig, isLoaded]);
   
@@ -182,6 +186,7 @@ export const useConfigPersistence = () => {
       // Force page reload to reset all state
       window.location.reload();
     } catch (error) {
+      // Failed to clear config
     }
   }, []);
   
@@ -191,8 +196,10 @@ export const useConfigPersistence = () => {
       if (stored) {
         exportConfigToFile(stored);
       } else {
+        // No config to export
       }
     } catch (error) {
+      // Export failed
     }
   }, []);
   

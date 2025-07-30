@@ -1,20 +1,21 @@
 import React, { memo, forwardRef } from 'react';
-import { Cosmograph } from '@cosmograph/react';
+import { Cosmograph, CosmographRef } from '@cosmograph/react';
 import type { GraphNode } from '../api/types';
+import type { GraphLink } from '../types/graph';
 import { useStableConfig } from '../contexts/GraphConfigProvider';
 import { hexToRgba } from '../utils/colorCache';
 
 interface StableCosmographProps {
   nodes: GraphNode[];
-  links: any[];
+  links: GraphLink[];
   width: number;
   height: number;
   // Dynamic props that trigger updates
   nodeColor?: (node: GraphNode) => string;
   nodeSize?: (node: GraphNode) => number;
   nodeLabel?: (node: GraphNode) => string | undefined;
-  linkColor?: (link: any) => string;
-  linkWidth?: (link: any) => number;
+  linkColor?: (link: GraphLink) => string;
+  linkWidth?: (link: GraphLink) => number;
   // Event handlers
   onZoom?: () => void;
   onNodeMouseOver?: (node: GraphNode | undefined) => void;
@@ -30,7 +31,7 @@ interface StableCosmographProps {
 }
 
 // Memoized Cosmograph wrapper that only re-renders when necessary
-const StableCosmograph = memo(forwardRef<any, StableCosmographProps>((props, ref) => {
+const StableCosmograph = memo(forwardRef<CosmographRef, StableCosmographProps>((props, ref) => {
   const { config: stableConfig } = useStableConfig();
   
   const {

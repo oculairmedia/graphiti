@@ -31,7 +31,7 @@ interface NodeStylingTabProps {
   nodeTypes: NodeType[];
   onNodeTypeColorChange: (type: string, color: string) => void;
   onNodeTypeVisibilityChange: (type: string, visible: boolean) => void;
-  onConfigUpdate: (updates: any) => void;
+  onConfigUpdate: (updates: Record<string, unknown>) => void;
 }
 
 export const NodeStylingTab: React.FC<NodeStylingTabProps> = ({

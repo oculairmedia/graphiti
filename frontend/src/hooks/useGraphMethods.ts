@@ -2,9 +2,10 @@ import { useCallback, MutableRefObject } from 'react';
 import type { GraphNode, GraphEdge } from '../types/graph';
 import { transformDataForUpdate } from '../utils/graphDataTransform';
 import { logger } from '../utils/logger';
+import type { CosmographRef } from '@cosmograph/react';
 
 interface GraphMethodsProps {
-  cosmographRef: MutableRefObject<any>;
+  cosmographRef: MutableRefObject<CosmographRef | null>;
   currentNodes: GraphNode[];
   currentLinks: GraphEdge[];
   setCurrentNodes: (nodes: GraphNode[]) => void;

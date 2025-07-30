@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useMemo } from 'react';
 import { GraphNode } from '../api/types';
 import { GraphLink } from '../types/graph';
 
@@ -20,12 +20,14 @@ export function useNodeSelection(
   const [hoveredConnectedNodes, setHoveredConnectedNodes] = useState<string[]>([]);
 
   const handleNodeSelect = useCallback((nodeId: string) => {
-    if (selectedNodes.includes(nodeId)) {
-      setSelectedNodes(selectedNodes.filter(id => id !== nodeId));
-    } else {
-      setSelectedNodes([...selectedNodes, nodeId]);
-    }
-  }, [selectedNodes]);
+    setSelectedNodes(prev => {
+      if (prev.includes(nodeId)) {
+        return prev.filter(id => id !== nodeId);
+      } else {
+        return [...prev, nodeId];
+      }
+    });
+  }, []);
 
   const handleNodeClick = useCallback((node: GraphNode) => {
     setSelectedNode(node);
@@ -126,23 +128,28 @@ export function useNodeSelection(
   }, [transformedData.nodes, graphCanvasRef]);
 
   const clearAllSelections = useCallback(() => {
-    // Only update state if there's actually something to clear
-    const hasSelections = selectedNodes.length > 0 || selectedNode !== null || highlightedNodes.length > 0;
-    
-    if (hasSelections) {
-      // Batch state updates to prevent multiple re-renders
-      setSelectedNodes([]); // Clear multi-selection
-      setSelectedNode(null); // Clear single selection and close modal
-      setHighlightedNodes([]); // Clear search highlights
-    }
+    // Check current state using refs to avoid dependencies
+    setSelectedNodes(prev => {
+      if (prev.length > 0) return [];
+      return prev;
+    });
+    setSelectedNode(prev => {
+      if (prev !== null) return null;
+      return prev;
+    });
+    setHighlightedNodes(prev => {
+      if (prev.length > 0) return [];
+      return prev;
+    });
     
     // Clear GraphCanvas selection using direct ref (only for clearing)
     if (graphCanvasRef.current && typeof graphCanvasRef.current.clearSelection === 'function') {
       graphCanvasRef.current.clearSelection();
     }
-  }, [selectedNodes.length, selectedNode, highlightedNodes.length, graphCanvasRef]);
+  }, [graphCanvasRef]);
 
-  return {
+  // Memoize the return object to prevent unnecessary re-renders
+  return useMemo(() => ({
     selectedNodes,
     selectedNode,
     highlightedNodes,
@@ -156,5 +163,19 @@ export function useNodeSelection(
     handleShowNeighbors,
     handleNodeHover,
     clearAllSelections,
-  };
+  }), [
+    selectedNodes,
+    selectedNode,
+    highlightedNodes,
+    hoveredNode,
+    hoveredConnectedNodes,
+    handleNodeSelect,
+    handleNodeClick,
+    handleNodeSelectWithCosmograph,
+    handleHighlightNodes,
+    handleSelectNodes,
+    handleShowNeighbors,
+    handleNodeHover,
+    clearAllSelections,
+  ]);
 }

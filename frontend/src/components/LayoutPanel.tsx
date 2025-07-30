@@ -158,6 +158,7 @@ export const LayoutPanel: React.FC<LayoutPanelProps> = ({
                 if (nodes.length && edges.length) {
                   applyLayout(layout.id, {}, { nodes, edges });
                 } else {
+                  // No data to apply layout to
                 }
               }}
             >

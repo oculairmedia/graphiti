@@ -222,7 +222,8 @@ export const GraphSearch: React.FC<GraphSearchProps> = React.memo(({
       try {
         // Skip exact value search for now due to Promise handling issues
         // TODO: Fix getPointIndicesByExactValues to properly handle async
-        if (false && typeof cosmographRef.current.getPointIndicesByExactValues === 'function') {
+        const useExactValueSearch = false; // Temporarily disabled
+        if (useExactValueSearch && typeof cosmographRef.current.getPointIndicesByExactValues === 'function') {
           // This method returns a Promise but our wrapper doesn't handle it correctly yet
         } else {
           // Fallback to linear search
@@ -251,6 +252,7 @@ export const GraphSearch: React.FC<GraphSearchProps> = React.memo(({
           }
         }
       } catch (error) {
+        // Node focus failed, handled silently
       }
     }
     
