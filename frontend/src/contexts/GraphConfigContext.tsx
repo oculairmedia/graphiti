@@ -224,7 +224,12 @@ const defaultConfig: GraphConfig = {
   enableKeyboardShortcuts: true,
   
   // Performance
-  performanceMode: false
+  performanceMode: false,
+  
+  // Clustering
+  clusteringEnabled: true,
+  pointClusterBy: 'cluster',
+  pointClusterStrengthBy: 'clusterStrength'
 };
 
 export const GraphConfigContext = createContext<GraphConfigContextType | undefined>(undefined);

@@ -93,6 +93,11 @@ export interface DynamicConfig {
   nodeTypeVisibility: Record<string, boolean>;
   sizeMapping: string;
   
+  // Clustering configuration
+  clusteringEnabled: boolean;
+  pointClusterBy: string;
+  pointClusterStrengthBy: string;
+  
   // Current focus
   focusedPointIndex?: number;
   
