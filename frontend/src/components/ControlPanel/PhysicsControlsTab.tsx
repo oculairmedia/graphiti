@@ -22,6 +22,9 @@ interface PhysicsControlsTabProps {
     simulationCluster: number;
     mouseRepulsion: number;
     disableSimulation: boolean | null;
+    clusteringEnabled: boolean;
+    pointClusterBy: string;
+    pointClusterStrengthBy: string;
   };
   onConfigUpdate: (updates: Record<string, unknown>) => void;
   onResetToDefaults: () => void;
@@ -176,6 +179,24 @@ export const PhysicsControlsTab: React.FC<PhysicsControlsTabProps> = ({
           />
           <p className="text-xs text-muted-foreground -mt-2">Force decay rate over time</p>
 
+          <div className="flex items-center space-x-2 p-3 rounded-lg bg-secondary/20 border border-border/30">
+            <Checkbox
+              checked={config.clusteringEnabled}
+              onCheckedChange={(checked) => 
+                onConfigUpdate({ clusteringEnabled: checked as boolean })
+              }
+            />
+            <Label className="text-sm cursor-pointer">
+              <Activity className="inline-block h-3 w-3 mr-1" />
+              Enable Clustering
+            </Label>
+          </div>
+          {config.clusteringEnabled && (
+            <p className="text-xs text-muted-foreground">
+              Nodes will cluster based on their type or other properties
+            </p>
+          )}
+
           <ControlSlider
             label="Cluster Force"
             value={config.simulationCluster}
@@ -183,6 +204,7 @@ export const PhysicsControlsTab: React.FC<PhysicsControlsTabProps> = ({
             max={5}
             step={0.01}
             onChange={(value) => onConfigUpdate({ simulationCluster: value })}
+            disabled={!config.clusteringEnabled}
           />
           <p className="text-xs text-muted-foreground -mt-2">Clustering attraction between similar nodes</p>
 

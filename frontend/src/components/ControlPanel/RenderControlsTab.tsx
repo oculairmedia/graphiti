@@ -39,6 +39,10 @@ interface RenderControlsTabProps {
     edgeArrows: boolean;
     edgeArrowScale: number;
     pointsOnEdge: boolean;
+    curvedLinks: boolean;
+    curvedLinkSegments: number;
+    curvedLinkWeight: number;
+    curvedLinkControlPointDistance: number;
   };
   onConfigUpdate: (updates: Record<string, unknown>) => void;
 }
@@ -131,6 +135,51 @@ export const RenderControlsTab: React.FC<RenderControlsTabProps> = ({
               </SelectContent>
             </Select>
           </div>
+
+          <div className="flex items-center justify-between">
+            <Label className="text-xs text-muted-foreground">Curved Links</Label>
+            <Checkbox
+              checked={config.curvedLinks}
+              onCheckedChange={(checked) => onConfigUpdate({ curvedLinks: !!checked })}
+            />
+          </div>
+
+          {config.curvedLinks && (
+            <>
+              <ControlSlider
+                label="Curve Segments"
+                value={config.curvedLinkSegments}
+                min={3}
+                max={50}
+                step={1}
+                onChange={(value) => onConfigUpdate({ curvedLinkSegments: value })}
+                formatValue={(v) => v.toString()}
+              />
+              <p className="text-xs text-muted-foreground -mt-2">Number of segments for curved links</p>
+
+              <ControlSlider
+                label="Curve Weight"
+                value={config.curvedLinkWeight}
+                min={0}
+                max={2}
+                step={0.1}
+                onChange={(value) => onConfigUpdate({ curvedLinkWeight: value })}
+                formatValue={(v) => v.toFixed(1)}
+              />
+              <p className="text-xs text-muted-foreground -mt-2">Strength of the curve effect</p>
+
+              <ControlSlider
+                label="Control Point Distance"
+                value={config.curvedLinkControlPointDistance}
+                min={0}
+                max={2}
+                step={0.1}
+                onChange={(value) => onConfigUpdate({ curvedLinkControlPointDistance: value })}
+                formatValue={(v) => v.toFixed(1)}
+              />
+              <p className="text-xs text-muted-foreground -mt-2">Distance of curve control points</p>
+            </>
+          )}
         </CardContent>
       </Card>
 

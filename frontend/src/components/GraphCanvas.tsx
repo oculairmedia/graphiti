@@ -1826,8 +1826,8 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             pointLabelBy="label"
             pointColorBy={pointColorBy}
             pointSizeBy={pointSizeBy}
-            pointClusterBy="cluster"  // Group nodes by their cluster assignment
-            pointClusterStrengthBy="clusterStrength"  // Control clustering attraction strength
+            pointClusterBy={config.clusteringEnabled ? config.pointClusterBy : undefined}  // Group nodes by their cluster assignment
+            pointClusterStrengthBy={config.clusteringEnabled ? config.pointClusterStrengthBy : undefined}  // Control clustering attraction strength
             // Link configuration
             linkSourceBy="source"
             linkSourceIndexBy="sourceIndex"
