@@ -3,7 +3,7 @@ import { Cosmograph, prepareCosmographData } from '@cosmograph/react';
 import { GraphNode } from '../api/types';
 import type { GraphData } from '../types/graph';
 import { useGraphConfig } from '../contexts/GraphConfigProvider';
-import { generateNodeTypeColor } from '../contexts/GraphConfigContext';
+import { generateNodeTypeColor } from '../utils/nodeTypeColors';
 import { logger } from '../utils/logger';
 import { hexToRgba, generateHSLColor } from '../utils/colorCache';
 import { DataKitCoordinator } from '../utils/DataKitCoordinator';
