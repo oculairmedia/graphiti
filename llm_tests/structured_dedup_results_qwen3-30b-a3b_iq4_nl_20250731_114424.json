@@ -1,0 +1,46 @@
+{
+  "model": "qwen3-30b-a3b:iq4_nl",
+  "test_type": "structured_output",
+  "timestamp": "20250731_114424",
+  "results": [
+    {
+      "test": "Basic name variations",
+      "score": "3/3",
+      "percentage": 100.0,
+      "has_bounds_errors": false,
+      "bounds_errors": [],
+      "errors": []
+    },
+    {
+      "test": "Overlapping duplicates",
+      "score": "1/3",
+      "percentage": 33.33333333333333,
+      "has_bounds_errors": false,
+      "bounds_errors": [],
+      "errors": [
+        "Entity 0: expected duplicate_idx=0, got -1",
+        "Entity 2: expected duplicate_idx=0, got -1"
+      ]
+    },
+    {
+      "test": "No duplicates",
+      "score": "2/2",
+      "percentage": 100.0,
+      "has_bounds_errors": false,
+      "bounds_errors": [],
+      "errors": []
+    },
+    {
+      "test": "Edge case - out of bounds test",
+      "score": "0/3",
+      "percentage": 0.0,
+      "has_bounds_errors": false,
+      "bounds_errors": [],
+      "errors": [
+        "Entity 0: NOT FOUND in response",
+        "Entity 1: NOT FOUND in response",
+        "Entity 2: NOT FOUND in response"
+      ]
+    }
+  ]
+}

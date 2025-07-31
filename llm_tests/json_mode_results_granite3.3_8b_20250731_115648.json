@@ -1,0 +1,53 @@
+{
+  "model": "granite3.3:8b",
+  "json_mode": {
+    "accuracy": 54.166666666666664,
+    "bounds_errors": 0,
+    "results": [
+      {
+        "test": "Basic name variations",
+        "score": "2/3",
+        "percentage": 66.66666666666666,
+        "has_bounds_errors": false,
+        "bounds_errors": [],
+        "errors": [
+          "Entity 2: expected duplicate_idx=2, got -1"
+        ],
+        "mode": "json"
+      },
+      {
+        "test": "Overlapping duplicates",
+        "score": "0/3",
+        "percentage": 0.0,
+        "has_bounds_errors": false,
+        "bounds_errors": [],
+        "errors": [
+          "Entity 0: expected duplicate_idx=0, got 1",
+          "Entity 1: expected duplicate_idx=0, got -1",
+          "Entity 2: expected duplicate_idx=0, got -1"
+        ],
+        "mode": "json"
+      },
+      {
+        "test": "No duplicates",
+        "score": "2/2",
+        "percentage": 100.0,
+        "has_bounds_errors": false,
+        "bounds_errors": [],
+        "errors": [],
+        "mode": "json"
+      },
+      {
+        "test": "Edge case - bounds validation",
+        "score": "1/2",
+        "percentage": 50.0,
+        "has_bounds_errors": false,
+        "bounds_errors": [],
+        "errors": [
+          "Entity 0: expected duplicate_idx=0, got -1"
+        ],
+        "mode": "json"
+      }
+    ]
+  }
+}

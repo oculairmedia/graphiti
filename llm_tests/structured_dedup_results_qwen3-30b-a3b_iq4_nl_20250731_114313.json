@@ -1,0 +1,47 @@
+{
+  "model": "qwen3-30b-a3b:iq4_nl",
+  "test_type": "structured_output",
+  "timestamp": "20250731_114313",
+  "results": [
+    {
+      "test": "Basic name variations",
+      "score": "0/0",
+      "percentage": 0,
+      "has_bounds_errors": false,
+      "bounds_errors": [],
+      "errors": [
+        "Client error '404 Not Found' for url 'http://100.81.139.20:11434/chat'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404"
+      ]
+    },
+    {
+      "test": "Overlapping duplicates",
+      "score": "0/0",
+      "percentage": 0,
+      "has_bounds_errors": false,
+      "bounds_errors": [],
+      "errors": [
+        "Client error '404 Not Found' for url 'http://100.81.139.20:11434/chat'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404"
+      ]
+    },
+    {
+      "test": "No duplicates",
+      "score": "0/0",
+      "percentage": 0,
+      "has_bounds_errors": false,
+      "bounds_errors": [],
+      "errors": [
+        "Client error '404 Not Found' for url 'http://100.81.139.20:11434/chat'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404"
+      ]
+    },
+    {
+      "test": "Edge case - out of bounds test",
+      "score": "0/0",
+      "percentage": 0,
+      "has_bounds_errors": false,
+      "bounds_errors": [],
+      "errors": [
+        "Client error '404 Not Found' for url 'http://100.81.139.20:11434/chat'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/404"
+      ]
+    }
+  ]
+}

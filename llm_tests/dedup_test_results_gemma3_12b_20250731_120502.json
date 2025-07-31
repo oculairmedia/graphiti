@@ -1,0 +1,33 @@
+[
+  {
+    "test": "Basic name variations",
+    "score": "3/3",
+    "percentage": 100.0,
+    "has_bounds_errors": false,
+    "errors": []
+  },
+  {
+    "test": "Overlapping duplicates",
+    "score": "3/3",
+    "percentage": 100.0,
+    "has_bounds_errors": false,
+    "errors": []
+  },
+  {
+    "test": "No duplicates",
+    "score": "2/2",
+    "percentage": 100.0,
+    "has_bounds_errors": false,
+    "errors": []
+  },
+  {
+    "test": "Edge case - similar but different types",
+    "score": "0/2",
+    "percentage": 0.0,
+    "has_bounds_errors": false,
+    "errors": [
+      "Entity 0: expected duplicate_idx=1, got 0",
+      "Entity 1: expected duplicate_idx=0, got 1"
+    ]
+  }
+]
