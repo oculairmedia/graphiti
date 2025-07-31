@@ -1,0 +1,6 @@
+# Crontab for Graphiti maintenance tasks
+# Run deduplication every hour at minute 15
+15 * * * * /app/scripts/deduplication_cron.sh
+
+# Run entity extraction every hour at minute 45
+45 * * * * /app/scripts/entity_extraction_cron.sh
