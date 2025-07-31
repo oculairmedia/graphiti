@@ -15,6 +15,90 @@ from graph_service.config import get_settings
 
 logger = logging.getLogger(__name__)
 
+# Centrality calculation debouncing
+_centrality_timer = None
+_centrality_groups = set()
+_centrality_lock = asyncio.Lock()
+
+async def trigger_centrality_calculation(group_id: str = None):
+    """Trigger centrality calculation after data changes with debouncing"""
+    global _centrality_timer, _centrality_groups
+    
+    async with _centrality_lock:
+        # Cancel existing timer if any
+        if _centrality_timer and not _centrality_timer.done():
+            _centrality_timer.cancel()
+        
+        # Add group to process
+        if group_id:
+            _centrality_groups.add(group_id)
+        
+        # Schedule new calculation in 5 seconds
+        _centrality_timer = asyncio.create_task(_delayed_centrality_calculation())
+
+async def _delayed_centrality_calculation():
+    """Execute centrality calculation after debounce delay"""
+    global _centrality_groups
+    
+    # Wait for debounce delay
+    await asyncio.sleep(5.0)
+    
+    async with _centrality_lock:
+        groups_to_process = list(_centrality_groups)
+        _centrality_groups.clear()
+    
+    print(f"=== CENTRALITY_DEBUG: Processing centrality for {len(groups_to_process)} groups ===", flush=True)
+    
+    try:
+        settings = get_settings()
+        
+        if not settings.use_rust_centrality:
+            print("CENTRALITY_DEBUG: Rust centrality service disabled, skipping", flush=True)
+            return
+            
+        # Use the Rust centrality service
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            print(f"CENTRALITY_DEBUG: Calling centrality service at {settings.rust_centrality_url}", flush=True)
+            
+            # If we have specific groups, process them individually
+            if groups_to_process:
+                for group_id in groups_to_process:
+                    try:
+                        response = await client.post(
+                            f"{settings.rust_centrality_url}/centrality/all",
+                            json={"group_id": group_id, "store_results": True}
+                        )
+                        
+                        if response.status_code == 200:
+                            result = response.json()
+                            print(f"CENTRALITY_DEBUG: ✅ Centrality for group {group_id} - processed {len(result.get('scores', {}))} nodes", flush=True)
+                        else:
+                            print(f"CENTRALITY_DEBUG: ❌ Centrality for group {group_id} failed with status {response.status_code}", flush=True)
+                    except Exception as e:
+                        print(f"CENTRALITY_DEBUG: ❌ Error calculating centrality for group {group_id}: {e}", flush=True)
+            else:
+                # Process entire graph
+                try:
+                    response = await client.post(
+                        f"{settings.rust_centrality_url}/centrality/all",
+                        json={"store_results": True}  # No group_id means process all
+                    )
+                    
+                    if response.status_code == 200:
+                        result = response.json()
+                        print(f"CENTRALITY_DEBUG: ✅ Centrality calculation successful - processed {len(result.get('scores', {}))} nodes", flush=True)
+                        logger.info(f"Centrality calculated for {len(result.get('scores', {}))} nodes")
+                    else:
+                        print(f"CENTRALITY_DEBUG: ❌ Centrality calculation failed with status {response.status_code}", flush=True)
+                        logger.warning(f"Centrality calculation failed: {response.status_code}")
+                        
+                except Exception as e:
+                    print(f"CENTRALITY_DEBUG: ❌ Error calculating centrality for entire graph: {e}", flush=True)
+    except Exception as e:
+        print(f"CENTRALITY_DEBUG: ❌ Exception in centrality calculation: {type(e).__name__}: {e}", flush=True)
+        logger.error(f"Error in centrality calculation: {e}")
+        # Don't fail the main operation if centrality calculation fails
+
 
 async def invalidate_cache():
     """Invalidate the Rust server cache after data changes"""
@@ -160,6 +244,9 @@ async def add_messages(
             
             # Invalidate cache after successful data operation
             await invalidate_cache()
+            
+            # Trigger centrality calculation for new data
+            await trigger_centrality_calculation(request.group_id)
         except Exception as e:
             logger.error(f"DEBUG: Error in add_episode: {type(e).__name__}: {e}")
             raise
@@ -189,6 +276,8 @@ async def add_entity_node(
     )
     # Invalidate cache after successful data operation
     await invalidate_cache()
+    # Trigger centrality calculation for new node
+    await trigger_centrality_calculation(request.group_id)
     return node
 
 

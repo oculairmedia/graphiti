@@ -25,7 +25,7 @@ RUN rm src/main.rs src/lib.rs
 COPY src ./src
 
 # Build application with optimizations
-RUN cargo build --release
+RUN cargo clean --release -p graphiti-centrality-rs && cargo build --release
 
 # Production stage
 FROM debian:bookworm-slim

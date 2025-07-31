@@ -28,6 +28,10 @@ class Settings(BaseSettings):
     rust_server_url: str = Field("http://graph-visualizer-rust:3000")
     enable_cache_invalidation: bool = Field(True)
     cache_invalidation_timeout: int = Field(5000)  # milliseconds
+    
+    # Rust centrality service configuration
+    use_rust_centrality: bool = Field(True)
+    rust_centrality_url: str = Field("http://graphiti-centrality-rs:3003")
 
     model_config = SettingsConfigDict(env_file='.env', extra='ignore')
     

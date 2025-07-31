@@ -263,6 +263,13 @@ async def resolve_extracted_nodes(
         resolution_id: int = resolution.get('id', -1)
         duplicate_idx: int = resolution.get('duplicate_idx', -1)
 
+        # Validate resolution_id is within bounds
+        if not (0 <= resolution_id < len(extracted_nodes)):
+            logger.warning(
+                f"Invalid resolution_id {resolution_id} for extracted_nodes of length {len(extracted_nodes)}. Skipping resolution."
+            )
+            continue
+
         extracted_node = extracted_nodes[resolution_id]
 
         resolved_node = (
@@ -280,7 +287,14 @@ async def resolve_extracted_nodes(
         if duplicate_idx not in duplicates and duplicate_idx > -1:
             duplicates.append(duplicate_idx)
         for idx in duplicates:
-            existing_node = existing_nodes[idx] if idx < len(existing_nodes) else resolved_node
+            # Validate idx is within bounds
+            if not (0 <= idx < len(existing_nodes)):
+                logger.warning(
+                    f"Invalid duplicate index {idx} for existing_nodes of length {len(existing_nodes)}. Using resolved_node instead."
+                )
+                existing_node = resolved_node
+            else:
+                existing_node = existing_nodes[idx]
 
             node_duplicates.append((extracted_node, existing_node))
 

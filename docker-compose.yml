@@ -108,8 +108,8 @@ services:
       - 8088:80
     environment:
       - NODE_ENV=production
-      - VITE_API_BASE_URL=http://graph-visualizer-rust:3000
-      - VITE_WS_URL=ws://graph-visualizer-rust:3000/ws
+      - VITE_API_BASE_URL=http://192.168.50.90:3000
+      - VITE_WS_URL=ws://192.168.50.90:3000/ws
     depends_on:
       - graph-visualizer-rust
     networks:
