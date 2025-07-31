@@ -1,0 +1,38 @@
+[
+  {
+    "test": "Basic name variations",
+    "score": "0/0",
+    "percentage": 0,
+    "has_bounds_errors": false,
+    "errors": [
+      "Failed to parse JSON response"
+    ]
+  },
+  {
+    "test": "Overlapping duplicates",
+    "score": "0/0",
+    "percentage": 0,
+    "has_bounds_errors": false,
+    "errors": [
+      "Failed to parse JSON response"
+    ]
+  },
+  {
+    "test": "No duplicates",
+    "score": "0/0",
+    "percentage": 0,
+    "has_bounds_errors": false,
+    "errors": [
+      "Failed to parse JSON response"
+    ]
+  },
+  {
+    "test": "Edge case - similar but different types",
+    "score": "0/0",
+    "percentage": 0,
+    "has_bounds_errors": false,
+    "errors": [
+      "Failed to parse JSON response"
+    ]
+  }
+]

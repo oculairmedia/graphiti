@@ -1,0 +1,125 @@
+[
+  {
+    "test": "Simple conversation",
+    "extracted": {
+      "Person": [
+        "Bob Smith",
+        "Alice Johnson"
+      ],
+      "Organization": [
+        "Microsoft"
+      ],
+      "Location": [
+        "Seattle"
+      ],
+      "Time": [
+        "Tuesday"
+      ]
+    },
+    "expected": {
+      "Person": [
+        "Bob Smith",
+        "Alice Johnson"
+      ],
+      "Organization": [
+        "Microsoft"
+      ],
+      "Location": [
+        "Seattle"
+      ],
+      "Time": [
+        "last Tuesday"
+      ]
+    },
+    "metrics": {
+      "precision": 0.8,
+      "recall": 0.8,
+      "f1_score": 0.8000000000000002,
+      "true_positives": 4,
+      "false_positives": 1,
+      "false_negatives": 1
+    },
+    "time": 3.246598243713379
+  },
+  {
+    "test": "Technical discussion",
+    "extracted": {
+      "Person": [
+        "Dr. Chen"
+      ],
+      "Organization": [
+        "Stanford University",
+        "IBM Research"
+      ]
+    },
+    "expected": {
+      "Person": [
+        "Dr. Chen"
+      ],
+      "Organization": [
+        "Stanford University",
+        "IBM Research",
+        "Nature"
+      ],
+      "Metric": [
+        "99.9% fidelity"
+      ]
+    },
+    "metrics": {
+      "precision": 1.0,
+      "recall": 0.6,
+      "f1_score": 0.7499999999999999,
+      "true_positives": 3,
+      "false_positives": 0,
+      "false_negatives": 2
+    },
+    "time": 0.547156810760498
+  },
+  {
+    "test": "Business context",
+    "extracted": {
+      "Person": [
+        "Sarah Williams"
+      ],
+      "Organization": [
+        "TechCorp",
+        "DataSystems"
+      ],
+      "Location": [
+        "New York",
+        "London"
+      ],
+      "Money": [
+        "$2.5 billion"
+      ]
+    },
+    "expected": {
+      "Person": [
+        "Sarah Williams"
+      ],
+      "Title": [
+        "CEO"
+      ],
+      "Organization": [
+        "TechCorp",
+        "DataSystems"
+      ],
+      "Money": [
+        "$2.5 billion"
+      ],
+      "Location": [
+        "New York",
+        "London"
+      ]
+    },
+    "metrics": {
+      "precision": 1.0,
+      "recall": 0.8571428571428571,
+      "f1_score": 0.923076923076923,
+      "true_positives": 6,
+      "false_positives": 0,
+      "false_negatives": 1
+    },
+    "time": 0.6669831275939941
+  }
+]

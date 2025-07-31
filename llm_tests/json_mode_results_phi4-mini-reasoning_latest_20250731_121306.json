@@ -1,0 +1,56 @@
+{
+  "model": "phi4-mini-reasoning:latest",
+  "json_mode": {
+    "accuracy": 25.0,
+    "bounds_errors": 0,
+    "results": [
+      {
+        "test": "Basic name variations",
+        "score": "0/3",
+        "percentage": 0.0,
+        "has_bounds_errors": false,
+        "bounds_errors": [],
+        "errors": [
+          "Entity 0: expected duplicate_idx=0, got -1",
+          "Entity 1: expected duplicate_idx=1, got 0",
+          "Entity 2: expected duplicate_idx=2, got -1"
+        ],
+        "mode": "json"
+      },
+      {
+        "test": "Overlapping duplicates",
+        "score": "0/3",
+        "percentage": 0.0,
+        "has_bounds_errors": false,
+        "bounds_errors": [],
+        "errors": [
+          "Entity 0: expected duplicate_idx=0, got 1",
+          "Entity 1: expected duplicate_idx=0, got -1",
+          "Entity 2: expected duplicate_idx=0, got -1"
+        ],
+        "mode": "json"
+      },
+      {
+        "test": "No duplicates",
+        "score": "2/2",
+        "percentage": 100.0,
+        "has_bounds_errors": false,
+        "bounds_errors": [],
+        "errors": [],
+        "mode": "json"
+      },
+      {
+        "test": "Edge case - bounds validation",
+        "score": "0/2",
+        "percentage": 0.0,
+        "has_bounds_errors": false,
+        "bounds_errors": [],
+        "errors": [
+          "Entity 0: NOT FOUND in response",
+          "Entity 1: expected duplicate_idx=-1, got 0"
+        ],
+        "mode": "json"
+      }
+    ]
+  }
+}
