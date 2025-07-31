@@ -33,6 +33,8 @@ services:
       - USE_OLLAMA_EMBEDDINGS=${USE_OLLAMA_EMBEDDINGS:-true}
       - USE_RUST_CENTRALITY=${USE_RUST_CENTRALITY:-true}
       - RUST_CENTRALITY_URL=${RUST_CENTRALITY_URL:-http://graphiti-centrality-rs:3003}
+      - RUST_SERVER_URL=http://graph-visualizer-rust:3000
+      - ENABLE_CACHE_INVALIDATION=true
     networks:
       - graphiti_network
     labels:
