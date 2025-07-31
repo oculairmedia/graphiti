@@ -94,7 +94,7 @@ async def calculate_pagerank(
         WHERE n.group_id = $group_id
         RETURN n.uuid AS uuid
         """
-        records, _, _ = await driver.execute_query(nodes_query, params={"group_id": group_id})
+        records, _, _ = await driver.execute_query(nodes_query, group_id=group_id)
     else:
         nodes_query = """
         MATCH (n)
@@ -123,7 +123,7 @@ async def calculate_pagerank(
             WHERE target.uuid = $node_id
             RETURN source.uuid AS source_id
             """
-            in_edges, _, _ = await driver.execute_query(in_edges_query, params={"node_id": node_id})
+            in_edges, _, _ = await driver.execute_query(in_edges_query, node_id=node_id)
             
             # Calculate new PageRank score
             rank_sum = 0.0
@@ -135,7 +135,7 @@ async def calculate_pagerank(
                 WHERE n.uuid = $node_id
                 RETURN count(e) AS out_count
                 """
-                out_records, _, _ = await driver.execute_query(out_count_query, params={"node_id": source_id})
+                out_records, _, _ = await driver.execute_query(out_count_query, node_id=source_id)
                 out_count = out_records[0]["out_count"] if out_records else 1
                 
                 rank_sum += pagerank.get(source_id, initial_score) / max(out_count, 1)
@@ -213,7 +213,7 @@ async def calculate_degree_centrality(
     else:
         raise ValueError(f"Invalid direction: {direction}. Must be 'in', 'out', or 'both'")
     
-    records, _, _ = await driver.execute_query(query, params=params)
+    records, _, _ = await driver.execute_query(query, **params)
     
     if direction == "both":
         degrees = {record["uuid"]: {"total": record["total_degree"]} for record in records}
@@ -274,7 +274,7 @@ async def calculate_betweenness_centrality(
     RETURN n.uuid AS uuid
     """
     
-    records, _, _ = await driver.execute_query(nodes_query, params=params)
+    records, _, _ = await driver.execute_query(nodes_query, **params)
     node_ids = [record["uuid"] for record in records]
     
     if sample_size and sample_size < len(node_ids):
@@ -292,25 +292,29 @@ async def calculate_betweenness_centrality(
             if source == target:
                 continue
             
-            # Find shortest paths (limited to 3 for performance)
+            # Find shortest paths - FalkorDB requires directed traversal
             paths_query = """
-            MATCH path = shortestPath((source)-[*..10]-(target))
+            MATCH (source), (target)
             WHERE source.uuid = $source AND target.uuid = $target
-            RETURN nodes(path) AS path_nodes
+            WITH source, target
+            RETURN nodes(shortestPath((source)-[*..10]->(target))) AS path_nodes
             LIMIT 3
             """
             
             paths_records, _, _ = await driver.execute_query(
                 paths_query, 
-                params={"source": source, "target": target}
+                source=source, 
+                target=target
             )
             
             for path_record in paths_records:
-                path_nodes = path_record["path_nodes"]
-                # Increment betweenness for intermediate nodes
-                for node in path_nodes[1:-1]:  # Exclude source and target
-                    if node.get("uuid") in betweenness:
-                        betweenness[node.get("uuid")] += 1.0
+                path_nodes = path_record.get("path_nodes")
+                if path_nodes and len(path_nodes) > 2:
+                    # Increment betweenness for intermediate nodes
+                    for node in path_nodes[1:-1]:  # Exclude source and target
+                        node_uuid = node.get("uuid") if isinstance(node, dict) else None
+                        if node_uuid and node_uuid in betweenness:
+                            betweenness[node_uuid] += 1.0
     
     # Normalize scores
     if len(node_ids) > 2:
@@ -348,7 +352,7 @@ async def store_centrality_scores(
             MATCH (n {{uuid: $uuid}})
             SET {', '.join(set_clauses)}
             """
-            await driver.execute_query(query, params=params)
+            await driver.execute_query(query, **params)
     
     logger.info("Centrality scores stored successfully")
 
