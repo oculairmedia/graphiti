@@ -10,6 +10,8 @@ from datetime import datetime
 from time import time
 from typing import List, Dict, Tuple
 import numpy as np
+import os
+import httpx
 
 from graphiti_core import Graphiti
 from graphiti_core.nodes import EntityNode
@@ -425,8 +427,37 @@ class EntityDeduplicator:
         if not dry_run:
             result["merge_results"] = merge_results
             
+            # Trigger centrality calculation if entities were merged
+            if total_merged > 0:
+                await self._trigger_centrality_calculation(group_id)
+            
         logger.info(f"Deduplication complete: {result}")
         return result
+        
+    async def _trigger_centrality_calculation(self, group_id: str = None):
+        """Trigger centrality calculation after deduplication"""
+        # Get centrality service URL from environment or use default
+        centrality_url = os.getenv('RUST_CENTRALITY_URL', 'http://graphiti-centrality-rs:3003')
+        
+        try:
+            logger.info(f"Triggering centrality calculation for group: {group_id or 'all'}")
+            
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"{centrality_url}/centrality/all",
+                    params={"group_id": group_id} if group_id else None,
+                    timeout=30.0
+                )
+                
+                if response.status_code == 200:
+                    logger.info("Centrality calculation triggered successfully")
+                else:
+                    logger.warning(f"Centrality calculation request returned status {response.status_code}")
+                    
+        except Exception as e:
+            logger.error(f"Failed to trigger centrality calculation: {e}")
+            # Don't fail the deduplication if centrality fails
+            pass
 
 
 async def main():
@@ -440,15 +471,15 @@ async def main():
     
     # Create FalkorDB driver
     driver = FalkorDriver(
-        host="localhost",  # Use localhost since we're running from host
-        port=6389,  # External port mapped in docker-compose
+        host=os.getenv('FALKORDB_HOST', 'localhost'),  # Use environment variable or localhost
+        port=int(os.getenv('FALKORDB_PORT', 6389)),  # Use environment variable or external port
         database="graphiti_migration"  # Correct database name
     )
     
-    # Create a custom LLM client with qwen3:30b for deduplication
+    # Create a custom LLM client with gemma3:12b for deduplication
     custom_llm_config = LLMConfig(
-        model="qwen3:30b",  # Use 30b instead of 32b
-        small_model="qwen3:30b",
+        model="gemma3:12b",  # Using gemma3 for better accuracy
+        small_model="gemma3:12b",
         temperature=0.0  # Deterministic for deduplication
     )
     

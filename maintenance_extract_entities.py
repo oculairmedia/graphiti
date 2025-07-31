@@ -263,7 +263,7 @@ async def main():
     
     # Use same LLM config as deduplication
     llm_config = LLMConfig(
-        model="qwen3:30b",
+        model="gemma3:12b",  # Using gemma3 for better accuracy
         temperature=0.0
     )
     
