@@ -121,9 +121,9 @@ export const GraphitiSearch: React.FC<GraphitiSearchProps> = ({
             )}
 
             {searchResults.length > 0 && (
-              <ScrollArea className="h-[400px]">
+              <ScrollArea className="h-[300px]">
                 <div className="space-y-2 pr-4">
-                  {searchResults.map((node) => (
+                  {searchResults.slice(0, 4).map((node) => (
                     <Card
                       key={node.uuid}
                       className={cn(

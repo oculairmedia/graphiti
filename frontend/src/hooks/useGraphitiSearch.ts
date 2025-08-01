@@ -12,7 +12,7 @@ export interface UseGraphitiSearchOptions {
 }
 
 export function useGraphitiSearch(options: UseGraphitiSearchOptions = {}) {
-  const { graphCanvasRef, onNodeSelect, defaultMaxNodes = 20 } = options;
+  const { graphCanvasRef, onNodeSelect, defaultMaxNodes = 4 } = options;
   
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -23,11 +23,18 @@ export function useGraphitiSearch(options: UseGraphitiSearchOptions = {}) {
 
   // Search mutation
   const searchMutation = useMutation({
-    mutationFn: (params: GraphitiNodeSearchQuery) => graphitiClient.searchNodes(params),
+    mutationFn: (params: GraphitiNodeSearchQuery) => {
+      console.log('Searching with params:', params);
+      return graphitiClient.searchNodes(params);
+    },
     onSuccess: (data) => {
+      console.log('Search results:', data);
       // Highlight all search results in the graph
       const nodeIds = new Set(data.nodes.map(node => node.uuid));
       setHighlightedNodeIds(nodeIds);
+    },
+    onError: (error) => {
+      console.error('Search error:', error);
     },
   });
 
@@ -49,12 +56,15 @@ export function useGraphitiSearch(options: UseGraphitiSearchOptions = {}) {
   // Auto-search when debounced query changes
   useEffect(() => {
     if (debouncedQuery) {
-      search(debouncedQuery);
+      searchMutation.mutate({
+        query: debouncedQuery,
+        max_nodes: defaultMaxNodes,
+      });
     } else {
       searchMutation.reset();
       setHighlightedNodeIds(new Set());
     }
-  }, [debouncedQuery, search, searchMutation]);
+  }, [debouncedQuery, defaultMaxNodes]);
 
   // Focus on a specific node
   const focusNode = useCallback((nodeId: string) => {
