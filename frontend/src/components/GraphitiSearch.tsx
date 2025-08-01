@@ -84,115 +84,102 @@ export const GraphitiSearch: React.FC<GraphitiSearchProps> = ({
   }, [searchResults]);
 
   return (
-    <div className={cn('flex flex-col h-full', className)}>
-      <Card className="glass border-border/30 flex flex-col h-full">
-        <CardHeader className="pb-3 flex-shrink-0">
-          <CardTitle className="text-sm flex items-center space-x-2">
-            <Search className="h-4 w-4 text-primary" />
-            <span>Knowledge Search</span>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="flex-1 flex flex-col overflow-hidden p-0 px-4 pb-4">
+    <Card className={cn("glass border-border/30", className)}>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-sm flex items-center space-x-2">
+          <Search className="h-4 w-4 text-primary" />
+          <span>Knowledge Search</span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-2 p-0 px-3 pb-3">
           {/* Search Input */}
-          <div className="relative mb-3">
+          <div className="relative">
             <Input
               ref={inputRef}
               type="text"
-              placeholder="Search entities, concepts, or relationships..."
+              placeholder="Search entities, concepts..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onFocus={() => setIsExpanded(true)}
-              className="pr-10"
+              className="pr-10 h-8 text-sm"
             />
             {searchQuery && (
               <Button
                 variant="ghost"
                 size="sm"
-                className="absolute right-1 top-1 h-7 w-7 p-0"
+                className="absolute right-1 top-0.5 h-7 w-7 p-0"
                 onClick={handleClear}
               >
-                <X className="h-4 w-4" />
+                <X className="h-3 w-3" />
               </Button>
             )}
           </div>
 
           {/* Search Results */}
           {isExpanded && searchQuery && (
-            <div className="flex-1 flex flex-col overflow-hidden">
+            <div className="space-y-2">
               {isSearching && (
-                <div className="flex items-center justify-center py-4">
-                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                <div className="flex items-center justify-center py-3">
+                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                 </div>
               )}
 
               {searchError && (
-                <Alert variant="destructive" className="mb-2">
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>
+                <Alert variant="destructive" className="py-2">
+                  <AlertCircle className="h-3 w-3" />
+                  <AlertDescription className="text-xs">
                     {searchError instanceof Error ? searchError.message : 'Search failed'}
                   </AlertDescription>
                 </Alert>
               )}
 
               {!isSearching && !searchError && searchResults.length === 0 && (
-                <div className="text-center py-4 text-sm text-muted-foreground">
+                <div className="text-center py-3 text-xs text-muted-foreground">
                   No results found for "{searchQuery}"
                 </div>
               )}
 
               {searchResults.length > 0 && (
-                <div className="flex-1 flex flex-col overflow-hidden">
-                  <ScrollArea className="flex-1" ref={scrollRef} onScrollCapture={handleScroll}>
-                    <div className="space-y-2 pr-4">
+                <>
+                  <ScrollArea className="h-[350px]" ref={scrollRef} onScrollCapture={handleScroll}>
+                    <div className="space-y-1.5 pr-2">
                       {searchResults.slice(0, displayedResults).map((node) => (
                         <div
                           key={node.uuid}
                           className={cn(
-                            'cursor-pointer transition-all p-3 rounded-md border bg-secondary/30 hover:bg-secondary/50',
-                            selectedNodeId === node.uuid && 'ring-2 ring-primary'
+                            'cursor-pointer transition-all p-2 rounded-md border bg-secondary/30 hover:bg-secondary/50',
+                            selectedNodeId === node.uuid && 'ring-1 ring-primary'
                           )}
                           onClick={() => selectNode(node)}
                         >
                           {/* Node Name and Type */}
-                          <div className="flex items-start justify-between gap-2 mb-2">
-                            <h4 className="font-medium text-sm line-clamp-1 flex-1">
+                          <div className="flex items-start justify-between gap-1 mb-1">
+                            <h4 className="font-medium text-xs line-clamp-1 flex-1">
                               {node.name}
                             </h4>
-                            <Badge variant="secondary" className="text-xs shrink-0">
+                            <Badge variant="secondary" className="text-[10px] px-1 py-0 shrink-0">
                               {node.labels[0] || 'Entity'}
                             </Badge>
                           </div>
 
                           {/* Summary */}
                           {node.summary && (
-                            <p className="text-xs text-muted-foreground line-clamp-2 mb-2">
+                            <p className="text-[11px] text-muted-foreground line-clamp-2 mb-1">
                               {node.summary}
                             </p>
                           )}
 
                           {/* Metadata */}
-                          <div className="flex items-center gap-3 text-xs text-muted-foreground mb-2">
-                            <div className="flex items-center gap-1">
-                              <Calendar className="h-3 w-3" />
+                          <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                            <div className="flex items-center gap-0.5">
+                              <Calendar className="h-2.5 w-2.5" />
                               <span>{formatDate(node.created_at)}</span>
                             </div>
-                            {node.group_id && (
-                              <div className="flex items-center gap-1">
-                                <Tag className="h-3 w-3" />
-                                <span className="truncate max-w-[100px]">{node.group_id}</span>
-                              </div>
-                            )}
                             {getCentralityScore(node) > 1 && (
-                              <Badge variant="outline" className="text-xs px-1 py-0">
-                                {getCentralityScore(node).toFixed(0)}% central
+                              <Badge variant="outline" className="text-[10px] px-1 py-0 h-4">
+                                {getCentralityScore(node).toFixed(0)}%
                               </Badge>
                             )}
-                          </div>
-
-                          {/* Click to Focus */}
-                          <div className="flex items-center justify-end text-xs text-primary">
-                            <span>Click to focus</span>
-                            <ChevronRight className="h-3 w-3 ml-1" />
                           </div>
                         </div>
                       ))}
@@ -207,15 +194,14 @@ export const GraphitiSearch: React.FC<GraphitiSearchProps> = ({
                   </ScrollArea>
 
                   {/* Results Summary */}
-                  <div className="text-xs text-muted-foreground text-center pt-2 border-t flex-shrink-0">
+                  <div className="text-[10px] text-muted-foreground text-center pt-1 border-t">
                     Found {searchResults.length} result{searchResults.length !== 1 ? 's' : ''}
                   </div>
-                </div>
+                </>
               )}
             </div>
           )}
         </CardContent>
       </Card>
-    </div>
   );
 };
