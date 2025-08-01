@@ -279,6 +279,9 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
               collapsed={leftPanelCollapsed}
               onToggleCollapse={() => setLeftPanelCollapsed(!leftPanelCollapsed)}
               onLayoutChange={handleLayoutChange}
+              graphCanvasRef={graphCanvasRef}
+              nodes={dataToUse.nodes}
+              onNodeSelect={handleNodeClick}
             />
           </div>
 

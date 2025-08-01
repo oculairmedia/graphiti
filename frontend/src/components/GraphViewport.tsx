@@ -4,11 +4,9 @@ import { GraphLink } from '../types/graph';
 import { GraphCanvas, type GraphCanvasRef as GraphCanvasHandle } from './GraphCanvas';
 import { NodeDetailsPanel } from './NodeDetailsPanel';
 import { QuickActions } from './QuickActions';
-import { GraphitiSearch } from './GraphitiSearch';
 import GraphErrorBoundary from './GraphErrorBoundary';
 import { useStableCallback } from '../hooks/useStableCallback';
 import type { GraphStats } from '../types/components';
-import type { NodeResult } from '../api/types';
 
 
 interface GraphViewportProps {
@@ -106,26 +104,6 @@ const GraphViewportComponent = forwardRef<GraphCanvasHandle, GraphViewportProps>
         />
       </GraphErrorBoundary>
       
-      {/* Graphiti Knowledge Search Panel */}
-      <div className="absolute top-4 left-4 w-96 z-50">
-        <GraphitiSearch
-          graphCanvasRef={ref as React.RefObject<GraphCanvasHandle>}
-          onNodeSelect={(node: NodeResult) => {
-            console.log('GraphitiSearch: Node selected:', node);
-            console.log('GraphitiSearch: Looking for node with ID:', node.uuid);
-            // Find the corresponding GraphNode by UUID
-            const graphNode = nodes.find(n => n.id === node.uuid);
-            console.log('GraphitiSearch: Found graph node:', graphNode);
-            if (graphNode) {
-              stableOnNodeClick(graphNode);
-            } else {
-              console.warn('GraphitiSearch: No graph node found with UUID:', node.uuid);
-              console.log('Available node IDs:', nodes.slice(0, 5).map(n => n.id));
-            }
-          }}
-        />
-      </div>
-
       {/* Node Details Panel Overlay */}
       {selectedNode && (
         <div className="absolute top-4 right-4 w-96 animate-slide-in-right">
