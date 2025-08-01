@@ -1,14 +1,12 @@
 from datetime import datetime
-from typing import Optional, Dict, Any, List
+from typing import Any, Dict, List, Optional
+
 from pydantic import BaseModel, Field
 
 
 class UpdateNodeSummaryRequest(BaseModel):
     summary: str = Field(
-        ..., 
-        description='The new summary text for the node',
-        min_length=0,
-        max_length=5000
+        ..., description='The new summary text for the node', min_length=0, max_length=5000
     )
 
 
@@ -19,7 +17,9 @@ class NodeResponse(BaseModel):
     summary: str = Field(default='', description='Node summary')
     labels: List[str] = Field(default_factory=list, description='Node labels')
     created_at: datetime = Field(..., description='Node creation timestamp')
-    attributes: Dict[str, Any] = Field(default_factory=dict, description='Additional node attributes')
-    
+    attributes: Dict[str, Any] = Field(
+        default_factory=dict, description='Additional node attributes'
+    )
+
     class Config:
         from_attributes = True

@@ -5,6 +5,7 @@ Graphiti MCP Server - Exposes Graphiti functionality through the Model Context P
 
 import argparse
 import asyncio
+import json
 import logging
 import os
 import sys
@@ -12,14 +13,12 @@ from collections.abc import Callable
 from datetime import datetime, timezone
 from typing import Any, TypedDict, cast
 
+import httpx
 from azure.identity import DefaultAzureCredential, get_bearer_token_provider
 from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
 from openai import AsyncAzureOpenAI
 from pydantic import BaseModel, Field
-
-import httpx
-import json
 
 load_dotenv()
 
@@ -439,7 +438,7 @@ class GraphAPIConfig(BaseModel):
     """Configuration for Graph API endpoints."""
 
     base_url: str = 'http://localhost:8003'
-    
+
     @classmethod
     def from_env(cls) -> 'GraphAPIConfig':
         """Create API configuration from environment variables."""
@@ -560,10 +559,7 @@ async def initialize_graphiti():
 
     try:
         # Initialize HTTP client for FastAPI server
-        http_client = httpx.AsyncClient(
-            base_url=config.api.base_url,
-            timeout=30.0
-        )
+        http_client = httpx.AsyncClient(base_url=config.api.base_url, timeout=30.0)
 
         # Test connection to FastAPI server
         response = await http_client.get('/healthcheck')
@@ -624,21 +620,21 @@ async def add_memory(
             'source': source,
             'source_description': source_description,
         }
-        
+
         if uuid:
             payload['uuid'] = uuid
 
         # Send request to FastAPI server
         response = await http_client.post('/messages', json=payload)
         response.raise_for_status()
-        
+
         result = response.json()
         logger.info(f"Episode '{name}' added successfully via FastAPI")
-        
+
         return SuccessResponse(message=f"Episode '{name}' added successfully")
-        
+
     except httpx.HTTPStatusError as e:
-        error_msg = f"HTTP error {e.response.status_code}: {e.response.text}"
+        error_msg = f'HTTP error {e.response.status_code}: {e.response.text}'
         logger.error(f'Error adding episode via FastAPI: {error_msg}')
         return ErrorResponse(error=f'Error adding episode: {error_msg}')
     except Exception as e:
@@ -681,7 +677,7 @@ async def search_memory_nodes(
             'group_ids': effective_group_ids,
             'num_results': max_nodes,
         }
-        
+
         if center_node_uuid:
             payload['center_node_uuid'] = center_node_uuid
         if entity:
@@ -690,14 +686,14 @@ async def search_memory_nodes(
         # Send request to FastAPI server
         response = await http_client.post('/search/nodes', json=payload)
         response.raise_for_status()
-        
+
         result = response.json()
         nodes = result.get('nodes', [])
-        
+
         return NodeSearchResponse(message='Nodes retrieved successfully', nodes=nodes)
-        
+
     except httpx.HTTPStatusError as e:
-        error_msg = f"HTTP error {e.response.status_code}: {e.response.text}"
+        error_msg = f'HTTP error {e.response.status_code}: {e.response.text}'
         logger.error(f'Error searching nodes via FastAPI: {error_msg}')
         return ErrorResponse(error=f'Error searching nodes: {error_msg}')
     except Exception as e:
@@ -742,21 +738,21 @@ async def search_memory_facts(
             'group_ids': effective_group_ids,
             'num_results': max_facts,
         }
-        
+
         if center_node_uuid:
             payload['center_node_uuid'] = center_node_uuid
 
         # Send request to FastAPI server
         response = await http_client.post('/search', json=payload)
         response.raise_for_status()
-        
+
         result = response.json()
         facts = result.get('edges', [])
-        
+
         return FactSearchResponse(message='Facts retrieved successfully', facts=facts)
-        
+
     except httpx.HTTPStatusError as e:
-        error_msg = f"HTTP error {e.response.status_code}: {e.response.text}"
+        error_msg = f'HTTP error {e.response.status_code}: {e.response.text}'
         logger.error(f'Error searching facts via FastAPI: {error_msg}')
         return ErrorResponse(error=f'Error searching facts: {error_msg}')
     except Exception as e:
@@ -781,11 +777,11 @@ async def delete_entity_edge(uuid: str) -> SuccessResponse | ErrorResponse:
         # Send DELETE request to FastAPI server
         response = await http_client.delete(f'/entity-edge/{uuid}')
         response.raise_for_status()
-        
+
         return SuccessResponse(message=f'Entity edge with UUID {uuid} deleted successfully')
-        
+
     except httpx.HTTPStatusError as e:
-        error_msg = f"HTTP error {e.response.status_code}: {e.response.text}"
+        error_msg = f'HTTP error {e.response.status_code}: {e.response.text}'
         logger.error(f'Error deleting entity edge via FastAPI: {error_msg}')
         return ErrorResponse(error=f'Error deleting entity edge: {error_msg}')
     except Exception as e:
@@ -810,11 +806,11 @@ async def delete_episode(uuid: str) -> SuccessResponse | ErrorResponse:
         # Send DELETE request to FastAPI server
         response = await http_client.delete(f'/episode/{uuid}')
         response.raise_for_status()
-        
+
         return SuccessResponse(message=f'Episode with UUID {uuid} deleted successfully')
-        
+
     except httpx.HTTPStatusError as e:
-        error_msg = f"HTTP error {e.response.status_code}: {e.response.text}"
+        error_msg = f'HTTP error {e.response.status_code}: {e.response.text}'
         logger.error(f'Error deleting episode via FastAPI: {error_msg}')
         return ErrorResponse(error=f'Error deleting episode: {error_msg}')
     except Exception as e:
@@ -839,11 +835,11 @@ async def get_entity_edge(uuid: str) -> dict[str, Any] | ErrorResponse:
         # Send GET request to FastAPI server
         response = await http_client.get(f'/entity-edge/{uuid}')
         response.raise_for_status()
-        
+
         return response.json()
-        
+
     except httpx.HTTPStatusError as e:
-        error_msg = f"HTTP error {e.response.status_code}: {e.response.text}"
+        error_msg = f'HTTP error {e.response.status_code}: {e.response.text}'
         logger.error(f'Error getting entity edge via FastAPI: {error_msg}')
         return ErrorResponse(error=f'Error getting entity edge: {error_msg}')
     except Exception as e:
@@ -875,24 +871,24 @@ async def get_episodes(
             return ErrorResponse(error='Group ID must be a string')
 
         # Send GET request to FastAPI server
-        response = await http_client.get(f'/episodes/{effective_group_id}', params={'last_n': last_n})
+        response = await http_client.get(
+            f'/episodes/{effective_group_id}', params={'last_n': last_n}
+        )
         response.raise_for_status()
-        
+
         result = response.json()
         episodes = result.get('episodes', [])
-        
+
         return episodes
-        
+
     except httpx.HTTPStatusError as e:
-        error_msg = f"HTTP error {e.response.status_code}: {e.response.text}"
+        error_msg = f'HTTP error {e.response.status_code}: {e.response.text}'
         logger.error(f'Error getting episodes via FastAPI: {error_msg}')
         return ErrorResponse(error=f'Error getting episodes: {error_msg}')
     except Exception as e:
         error_msg = str(e)
         logger.error(f'Error getting episodes: {error_msg}')
         return ErrorResponse(error=f'Error getting episodes: {error_msg}')
-
-
 
 
 @mcp.resource('http://graphiti/status')

@@ -3,89 +3,91 @@
 Test edge extraction using actual Graphiti prompt format
 """
 
-import json
 import asyncio
-import httpx
+import json
 import time
 from datetime import datetime
-from typing import List, Dict, Any
+from typing import Any, Dict, List
+
+import httpx
 
 # Test cases with Graphiti format
 TEST_CASES = [
     {
-        "name": "CEO relationship",
-        "episode_content": "John Smith is the CEO of Microsoft and married to Jane Doe.",
-        "nodes": [
-            {"id": 0, "name": "John Smith", "entity_types": ["Person"]},
-            {"id": 1, "name": "Microsoft", "entity_types": ["Organization"]},
-            {"id": 2, "name": "Jane Doe", "entity_types": ["Person"]}
+        'name': 'CEO relationship',
+        'episode_content': 'John Smith is the CEO of Microsoft and married to Jane Doe.',
+        'nodes': [
+            {'id': 0, 'name': 'John Smith', 'entity_types': ['Person']},
+            {'id': 1, 'name': 'Microsoft', 'entity_types': ['Organization']},
+            {'id': 2, 'name': 'Jane Doe', 'entity_types': ['Person']},
         ],
-        "expected_edges": [
-            {"source_id": 0, "relation": "IS_CEO_OF", "target_id": 1},
-            {"source_id": 0, "relation": "MARRIED_TO", "target_id": 2}
-        ]
+        'expected_edges': [
+            {'source_id': 0, 'relation': 'IS_CEO_OF', 'target_id': 1},
+            {'source_id': 0, 'relation': 'MARRIED_TO', 'target_id': 2},
+        ],
     },
     {
-        "name": "Acquisition with date",
-        "episode_content": "Apple acquired Beats Electronics for $3 billion in May 2014.",
-        "nodes": [
-            {"id": 0, "name": "Apple", "entity_types": ["Organization"]},
-            {"id": 1, "name": "Beats Electronics", "entity_types": ["Organization"]}
+        'name': 'Acquisition with date',
+        'episode_content': 'Apple acquired Beats Electronics for $3 billion in May 2014.',
+        'nodes': [
+            {'id': 0, 'name': 'Apple', 'entity_types': ['Organization']},
+            {'id': 1, 'name': 'Beats Electronics', 'entity_types': ['Organization']},
         ],
-        "expected_edges": [
-            {"source_id": 0, "relation": "ACQUIRED", "target_id": 1}
-        ]
+        'expected_edges': [{'source_id': 0, 'relation': 'ACQUIRED', 'target_id': 1}],
     },
     {
-        "name": "Complex relationships",
-        "episode_content": "Dr. Sarah Chen graduated from MIT in 2010 and now works at Google Research in Tokyo.",
-        "nodes": [
-            {"id": 0, "name": "Dr. Sarah Chen", "entity_types": ["Person"]},
-            {"id": 1, "name": "MIT", "entity_types": ["Organization", "University"]},
-            {"id": 2, "name": "Google Research", "entity_types": ["Organization"]},
-            {"id": 3, "name": "Tokyo", "entity_types": ["Location"]}
+        'name': 'Complex relationships',
+        'episode_content': 'Dr. Sarah Chen graduated from MIT in 2010 and now works at Google Research in Tokyo.',
+        'nodes': [
+            {'id': 0, 'name': 'Dr. Sarah Chen', 'entity_types': ['Person']},
+            {'id': 1, 'name': 'MIT', 'entity_types': ['Organization', 'University']},
+            {'id': 2, 'name': 'Google Research', 'entity_types': ['Organization']},
+            {'id': 3, 'name': 'Tokyo', 'entity_types': ['Location']},
         ],
-        "expected_edges": [
-            {"source_id": 0, "relation": "GRADUATED_FROM", "target_id": 1},
-            {"source_id": 0, "relation": "WORKS_AT", "target_id": 2},
-            {"source_id": 2, "relation": "LOCATED_IN", "target_id": 3}
-        ]
-    }
+        'expected_edges': [
+            {'source_id': 0, 'relation': 'GRADUATED_FROM', 'target_id': 1},
+            {'source_id': 0, 'relation': 'WORKS_AT', 'target_id': 2},
+            {'source_id': 2, 'relation': 'LOCATED_IN', 'target_id': 3},
+        ],
+    },
 ]
+
 
 def build_graphiti_prompt(test_case: Dict[str, Any]) -> str:
     """Build prompt using Graphiti's actual format"""
-    
-    system_prompt = ('You are an expert fact extractor that extracts fact triples from text. '
-                    '1. Extracted fact triples should also be extracted with relevant date information.'
-                    '2. Treat the CURRENT TIME as the time the CURRENT MESSAGE was sent. All temporal information should be extracted relative to this time.')
-    
+
+    system_prompt = (
+        'You are an expert fact extractor that extracts fact triples from text. '
+        '1. Extracted fact triples should also be extracted with relevant date information.'
+        '2. Treat the CURRENT TIME as the time the CURRENT MESSAGE was sent. All temporal information should be extracted relative to this time.'
+    )
+
     # Mock edge types for common relationships
     edge_types = [
         {
-            "fact_type_name": "WORKS_AT",
-            "fact_type_signature": ("Person", "Organization"),
-            "fact_type_description": "Person works at an organization"
+            'fact_type_name': 'WORKS_AT',
+            'fact_type_signature': ('Person', 'Organization'),
+            'fact_type_description': 'Person works at an organization',
         },
         {
-            "fact_type_name": "IS_CEO_OF", 
-            "fact_type_signature": ("Person", "Organization"),
-            "fact_type_description": "Person is CEO of an organization"
+            'fact_type_name': 'IS_CEO_OF',
+            'fact_type_signature': ('Person', 'Organization'),
+            'fact_type_description': 'Person is CEO of an organization',
         },
         {
-            "fact_type_name": "MARRIED_TO",
-            "fact_type_signature": ("Person", "Person"),
-            "fact_type_description": "Person is married to another person"
+            'fact_type_name': 'MARRIED_TO',
+            'fact_type_signature': ('Person', 'Person'),
+            'fact_type_description': 'Person is married to another person',
         },
         {
-            "fact_type_name": "ACQUIRED",
-            "fact_type_signature": ("Organization", "Organization"),
-            "fact_type_description": "Organization acquired another organization"
-        }
+            'fact_type_name': 'ACQUIRED',
+            'fact_type_signature': ('Organization', 'Organization'),
+            'fact_type_description': 'Organization acquired another organization',
+        },
     ]
-    
-    reference_time = datetime.utcnow().isoformat() + "Z"
-    
+
+    reference_time = datetime.utcnow().isoformat() + 'Z'
+
     user_prompt = f"""
 <PREVIOUS_MESSAGES>
 []
@@ -147,99 +149,108 @@ Return a JSON object with an "edges" array. Each edge should have:
 - valid_at: When the fact became true (ISO 8601 or null)
 - invalid_at: When the fact stopped being true (ISO 8601 or null)
 """
-    
+
     return system_prompt, user_prompt
+
 
 async def test_model_graphiti_format(model: str):
     """Test a model using Graphiti's actual prompt format"""
-    
-    print(f"\nTesting {model} with Graphiti format")
-    print("=" * 60)
-    
-    base_url = "http://100.81.139.20:11434"
+
+    print(f'\nTesting {model} with Graphiti format')
+    print('=' * 60)
+
+    base_url = 'http://100.81.139.20:11434'
     total_correct = 0
     total_expected = 0
-    
+
     async with httpx.AsyncClient(timeout=60.0) as client:
         for test_case in TEST_CASES:
-            print(f"\n{test_case['name']}: {test_case['episode_content'][:50]}...")
-            
+            print(f'\n{test_case["name"]}: {test_case["episode_content"][:50]}...')
+
             system_prompt, user_prompt = build_graphiti_prompt(test_case)
-            
-            print("  Extracting...", end="", flush=True)
+
+            print('  Extracting...', end='', flush=True)
             start = time.time()
-            
+
             response = await client.post(
-                f"{base_url}/api/chat",
+                f'{base_url}/api/chat',
                 json={
-                    "model": model,
-                    "messages": [
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt}
+                    'model': model,
+                    'messages': [
+                        {'role': 'system', 'content': system_prompt},
+                        {'role': 'user', 'content': user_prompt},
                     ],
-                    "stream": False,
-                    "options": {"temperature": 0.0}
-                }
+                    'stream': False,
+                    'options': {'temperature': 0.0},
+                },
             )
-            
+
             elapsed = time.time() - start
             content = response.json()['message']['content']
-            
+
             # Parse response
             edges = []
             try:
                 # Try to parse JSON
-                if "```json" in content:
-                    json_start = content.find("```json") + 7
-                    json_end = content.find("```", json_start)
+                if '```json' in content:
+                    json_start = content.find('```json') + 7
+                    json_end = content.find('```', json_start)
                     content = content[json_start:json_end].strip()
-                
+
                 data = json.loads(content)
-                if isinstance(data, dict) and "edges" in data:
-                    edges = data["edges"]
+                if isinstance(data, dict) and 'edges' in data:
+                    edges = data['edges']
                 elif isinstance(data, list):
                     edges = data
-                    
+
             except Exception as e:
-                print(f" ERROR parsing: {str(e)[:50]}")
+                print(f' ERROR parsing: {str(e)[:50]}')
                 continue
-            
+
             # Score results
             correct = 0
             for edge in edges:
-                if all(k in edge for k in ['source_entity_id', 'target_entity_id', 'relation_type']):
+                if all(
+                    k in edge for k in ['source_entity_id', 'target_entity_id', 'relation_type']
+                ):
                     for expected in test_case['expected_edges']:
-                        if (edge['source_entity_id'] == expected['source_id'] and 
-                            edge['target_entity_id'] == expected['target_id']):
+                        if (
+                            edge['source_entity_id'] == expected['source_id']
+                            and edge['target_entity_id'] == expected['target_id']
+                        ):
                             correct += 1
                             break
-            
+
             total_correct += correct
             total_expected += len(test_case['expected_edges'])
-            
-            print(f" Done! Time: {elapsed:.1f}s, Found: {len(edges)}, Correct: {correct}/{len(test_case['expected_edges'])}")
-            
+
+            print(
+                f' Done! Time: {elapsed:.1f}s, Found: {len(edges)}, Correct: {correct}/{len(test_case["expected_edges"])}'
+            )
+
             # Show first edge as example
             if edges:
-                print(f"  Example: {json.dumps(edges[0], indent=2)}")
-    
+                print(f'  Example: {json.dumps(edges[0], indent=2)}')
+
     accuracy = total_correct / total_expected if total_expected > 0 else 0
-    print(f"\nOverall accuracy: {accuracy:.1%} ({total_correct}/{total_expected})")
+    print(f'\nOverall accuracy: {accuracy:.1%} ({total_correct}/{total_expected})')
     return accuracy
 
+
 async def main():
-    models = ["gemma3:4b", "gemma3:12b", "exaone3.5:2.4b"]
-    
+    models = ['gemma3:4b', 'gemma3:12b', 'exaone3.5:2.4b']
+
     results = {}
     for model in models:
         accuracy = await test_model_graphiti_format(model)
         results[model] = accuracy
-    
-    print("\n" + "=" * 60)
-    print("GRAPHITI FORMAT RESULTS")
-    print("=" * 60)
-    for model, acc in sorted(results.items(), key=lambda x: x[1], reverse=True):
-        print(f"{model:20} {acc:6.1%}")
 
-if __name__ == "__main__":
+    print('\n' + '=' * 60)
+    print('GRAPHITI FORMAT RESULTS')
+    print('=' * 60)
+    for model, acc in sorted(results.items(), key=lambda x: x[1], reverse=True):
+        print(f'{model:20} {acc:6.1%}')
+
+
+if __name__ == '__main__':
     asyncio.run(main())

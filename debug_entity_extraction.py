@@ -3,8 +3,9 @@
 Debug entity extraction by checking what entities were actually created
 """
 
-from falkordb import FalkorDB
 import json
+
+from falkordb import FalkorDB
 
 # Connect to FalkorDB
 falkor_db = FalkorDB(host='localhost', port=6389)
@@ -19,8 +20,8 @@ ORDER BY e.created_at DESC
 
 result = db.query(query)
 
-print("Entities Extracted from Test Episodes:")
-print("=" * 100)
+print('Entities Extracted from Test Episodes:')
+print('=' * 100)
 
 current_episode = None
 for record in result.result_set:
@@ -30,19 +31,19 @@ for record in result.result_set:
     entity_name = record[3]
     entity_type = record[4]
     entity_summary = record[5]
-    
+
     if current_episode != episode_id:
         if current_episode:
             print()
         current_episode = episode_id
-        print(f"Episode: {episode_name} ({episode_id})")
-        print("-" * 50)
-    
-    print(f"  - Entity: {entity_name}")
-    print(f"    Type: {entity_type}")
-    print(f"    ID: {entity_id}")
+        print(f'Episode: {episode_name} ({episode_id})')
+        print('-' * 50)
+
+    print(f'  - Entity: {entity_name}')
+    print(f'    Type: {entity_type}')
+    print(f'    ID: {entity_id}')
     if entity_summary:
-        print(f"    Summary: {entity_summary[:100]}...")
+        print(f'    Summary: {entity_summary[:100]}...')
 
 # Also check if there are any entities without the test group
 query2 = """
@@ -55,10 +56,10 @@ LIMIT 20
 
 result2 = db.query(query2)
 
-print("\n\nRecent Entities (last 10 minutes):")
-print("=" * 100)
+print('\n\nRecent Entities (last 10 minutes):')
+print('=' * 100)
 for record in result2.result_set:
     name = record[0]
     entity_type = record[1]
     group_id = record[2]
-    print(f"{name} ({entity_type}) - group: {group_id}")
+    print(f'{name} ({entity_type}) - group: {group_id}')

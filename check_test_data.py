@@ -19,16 +19,16 @@ LIMIT 10
 
 result = db.query(query)
 
-print("Test Episodic Nodes:")
-print("=" * 80)
+print('Test Episodic Nodes:')
+print('=' * 80)
 for record in result.result_set:
     uuid = record[0]
     name = record[1]
-    content = record[2][:100] if record[2] else "No content"
-    print(f"UUID: {uuid}")
-    print(f"Name: {name}")
-    print(f"Content: {content}...")
-    print("-" * 40)
+    content = record[2][:100] if record[2] else 'No content'
+    print(f'UUID: {uuid}')
+    print(f'Name: {name}')
+    print(f'Content: {content}...')
+    print('-' * 40)
 
 # Check entities created from test messages
 entity_query = """
@@ -39,13 +39,13 @@ ORDER BY mention_count DESC
 
 entity_result = db.query(entity_query)
 
-print("\nEntities Extracted from Test Messages:")
-print("=" * 80)
+print('\nEntities Extracted from Test Messages:')
+print('=' * 80)
 for record in entity_result.result_set:
     name = record[0]
     entity_type = record[1]
     mentions = record[2]
-    print(f"{name} ({entity_type}) - {mentions} mentions")
+    print(f'{name} ({entity_type}) - {mentions} mentions')
 
 # Count total test episodes
 count_query = """
@@ -55,4 +55,4 @@ RETURN COUNT(e) as total
 
 count_result = db.query(count_query)
 total = count_result.result_set[0][0] if count_result.result_set else 0
-print(f"\nTotal test episodes: {total}")
+print(f'\nTotal test episodes: {total}')

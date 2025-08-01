@@ -348,12 +348,13 @@ async def node_fulltext_search(
     filter_query, filter_params = node_search_filter_query_constructor(search_filter)
 
     base_query = get_nodes_query(driver.provider, 'node_name_and_summary', '$query')
-    
+
     if driver.provider == 'falkordb':
         # FalkorDB requires YIELD to be part of the CALL statement
-        yield_clause = " YIELD node AS n, score"
+        yield_clause = ' YIELD node AS n, score'
         query = (
-            base_query + yield_clause
+            base_query
+            + yield_clause
             + """
             WITH n, score
             LIMIT $limit
@@ -371,7 +372,7 @@ async def node_fulltext_search(
             WHERE n:Entity AND n.group_id IN $group_ids
         """
         )
-    
+
     query = (
         query
         + filter_query

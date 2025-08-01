@@ -20,78 +20,73 @@ from typing import Optional
 
 from graphiti_core.cross_encoder.openai_reranker_client import OpenAIRerankerClient
 from graphiti_core.embedder import EmbedderClient, OpenAIEmbedder, OpenAIEmbedderConfig
-from graphiti_core.llm_client import LLMClient, OpenAIClient, LLMConfig
+from graphiti_core.llm_client import LLMClient, LLMConfig, OpenAIClient
 
 logger = logging.getLogger(__name__)
 
 
 class GraphitiClientFactory:
     """Centralized factory for creating Graphiti clients with environment-aware configuration."""
-    
+
     @staticmethod
     def create_llm_client() -> Optional[LLMClient]:
         """Create LLM client based on environment configuration."""
         if os.getenv('USE_OLLAMA', '').lower() == 'true':
             try:
                 from openai import AsyncOpenAI
-                
+
                 ollama_base_url = os.getenv('OLLAMA_BASE_URL', 'http://localhost:11434/v1')
                 ollama_model = os.getenv('OLLAMA_MODEL', 'mistral:latest')
-                
-                logger.info(f"Creating Ollama LLM client with model {ollama_model} at {ollama_base_url}")
-                
-                client = AsyncOpenAI(
-                    base_url=ollama_base_url,
-                    api_key="ollama"
+
+                logger.info(
+                    f'Creating Ollama LLM client with model {ollama_model} at {ollama_base_url}'
                 )
-                
+
+                client = AsyncOpenAI(base_url=ollama_base_url, api_key='ollama')
+
                 config = LLMConfig(
-                    model=ollama_model,
-                    small_model=ollama_model,
-                    temperature=0.7,
-                    max_tokens=2000
+                    model=ollama_model, small_model=ollama_model, temperature=0.7, max_tokens=2000
                 )
-                
+
                 return OpenAIClient(config=config, client=client)
             except Exception as e:
-                logger.error(f"Failed to create Ollama LLM client: {e}")
-                logger.info("Falling back to OpenAI LLM client")
-        
+                logger.error(f'Failed to create Ollama LLM client: {e}')
+                logger.info('Falling back to OpenAI LLM client')
+
         # Default to OpenAI client
         return OpenAIClient()
-    
+
     @staticmethod
     def create_embedder() -> Optional[EmbedderClient]:
         """Create embedder client based on environment configuration."""
         if os.getenv('USE_OLLAMA', '').lower() == 'true':
             try:
                 from openai import AsyncOpenAI
-                
+
                 ollama_base_url = os.getenv('OLLAMA_BASE_URL', 'http://localhost:11434/v1')
                 ollama_embed_model = os.getenv('OLLAMA_EMBED_MODEL', 'mxbai-embed-large:latest')
-                
-                logger.info(f"Creating Ollama embedder with model {ollama_embed_model} at {ollama_base_url}")
-                
-                client = AsyncOpenAI(
-                    base_url=ollama_base_url,
-                    api_key="ollama"
+
+                logger.info(
+                    f'Creating Ollama embedder with model {ollama_embed_model} at {ollama_base_url}'
                 )
-                
-                config = OpenAIEmbedderConfig(
-                    embedding_model=ollama_embed_model
-                )
-                
+
+                client = AsyncOpenAI(base_url=ollama_base_url, api_key='ollama')
+
+                config = OpenAIEmbedderConfig(embedding_model=ollama_embed_model)
+
                 embedder = OpenAIEmbedder(config=config, client=client)
-                logger.info(f"Successfully created Ollama embedder with model: {config.embedding_model}")
+                logger.info(
+                    f'Successfully created Ollama embedder with model: {config.embedding_model}'
+                )
                 return embedder
             except Exception as e:
-                logger.error(f"Failed to create Ollama embedder: {e}")
-                logger.info("Falling back to OpenAI embedder")
-        
+                logger.error(f'Failed to create Ollama embedder: {e}')
+                logger.info('Falling back to OpenAI embedder')
+
         # Default to OpenAI embedder
-        logger.info("Creating default OpenAI embedder")
+        logger.info('Creating default OpenAI embedder')
         return OpenAIEmbedder()
-    
+
     @staticmethod
     def create_cross_encoder():
         """Create cross encoder client (currently only OpenAI supported)."""
