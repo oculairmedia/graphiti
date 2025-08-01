@@ -13,6 +13,9 @@ import { arrayMove, SortableContext, verticalListSortingStrategy } from '@dnd-ki
 import { restrictToVerticalAxis } from '@dnd-kit/modifiers';
 import { usePersistedSections } from '@/hooks/usePersistedConfig';
 import { useNodeCentralityWithFallback } from '@/hooks/useCentrality';
+import { SummaryEditor, SummaryEditButton } from './SummaryEditor';
+import { graphClient } from '../api/graphClient';
+import { useToast } from '@/hooks/use-toast';
 
 interface NodeDetailsPanelProps {
   node: GraphNode;
@@ -40,8 +43,11 @@ const NodeDetailsPanelComponent: React.FC<NodeDetailsPanelProps> = ({
   // Section state management with persistence
   const [sections, setPersistedSections, isSectionsLoaded] = usePersistedSections(defaultSections);
   
-  // State for summary expansion
+  // State for summary expansion and editing
   const [isSummaryExpanded, setIsSummaryExpanded] = useState(false);
+  const [isEditingSummary, setIsEditingSummary] = useState(false);
+  const [nodeSummary, setNodeSummary] = useState(node.summary || '');
+  const { toast } = useToast();
   
   // React 19 performance features
   const [isPending, startTransition] = useTransition();
@@ -144,7 +150,7 @@ const NodeDetailsPanelComponent: React.FC<NodeDetailsPanelProps> = ({
     id: node.id,
     name: node.label || node.id,
     type: node.node_type || 'Unknown',
-    summary: node.summary || node.description || deferredProperties?.summary || deferredProperties?.content || deferredProperties?.source_description || '',
+    summary: nodeSummary || node.summary || node.description || deferredProperties?.summary || deferredProperties?.content || deferredProperties?.source_description || '',
     properties: deferredProperties,
     centrality: centrality || {
       degree: 0,
@@ -209,7 +215,7 @@ const NodeDetailsPanelComponent: React.FC<NodeDetailsPanelProps> = ({
                 
                 switch (section.id) {
                   case 'summary': {
-                    if (!data.summary) return null;
+                    if (!data.summary && !isEditingSummary) return null;
                     
                     const TRUNCATE_LENGTH = 200;
                     const needsTruncation = data.summary.length > TRUNCATE_LENGTH;
@@ -218,26 +224,59 @@ const NodeDetailsPanelComponent: React.FC<NodeDetailsPanelProps> = ({
                       : data.summary;
                     
                     return (
-                      <CollapsibleSection key={section.id} {...sectionProps}>
-                        <div 
-                          className={`text-sm leading-relaxed break-words overflow-wrap-anywhere ${
-                            needsTruncation && !isSummaryExpanded ? 'cursor-pointer' : ''
-                          }`}
-                          onClick={() => needsTruncation && setIsSummaryExpanded(!isSummaryExpanded)}
-                        >
-                          <p>{displaySummary}</p>
-                          {needsTruncation && (
-                            <button
-                              className="text-xs text-primary hover:text-primary/80 mt-1 focus:outline-none"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setIsSummaryExpanded(!isSummaryExpanded);
-                              }}
-                            >
-                              {isSummaryExpanded ? 'Show less' : 'Show more'}
-                            </button>
-                          )}
-                        </div>
+                      <CollapsibleSection 
+                        key={section.id} 
+                        {...sectionProps}
+                        headerAction={!isEditingSummary && (
+                          <SummaryEditButton onClick={() => setIsEditingSummary(true)} />
+                        )}
+                      >
+                        {isEditingSummary ? (
+                          <SummaryEditor
+                            nodeId={node.id}
+                            nodeName={data.name}
+                            initialSummary={data.summary}
+                            onSave={async (newSummary) => {
+                              try {
+                                const result = await graphClient.updateNodeSummary(node.id, newSummary);
+                                setNodeSummary(result.summary);
+                                setIsEditingSummary(false);
+                                toast({
+                                  title: "Summary updated",
+                                  description: "The entity summary has been successfully updated.",
+                                });
+                              } catch (error) {
+                                toast({
+                                  title: "Update failed",
+                                  description: error instanceof Error ? error.message : "Failed to update summary",
+                                  variant: "destructive",
+                                });
+                                throw error;
+                              }
+                            }}
+                            onCancel={() => setIsEditingSummary(false)}
+                          />
+                        ) : (
+                          <div 
+                            className={`text-sm leading-relaxed break-words overflow-wrap-anywhere ${
+                              needsTruncation && !isSummaryExpanded ? 'cursor-pointer' : ''
+                            }`}
+                            onClick={() => needsTruncation && setIsSummaryExpanded(!isSummaryExpanded)}
+                          >
+                            <p>{displaySummary}</p>
+                            {needsTruncation && (
+                              <button
+                                className="text-xs text-primary hover:text-primary/80 mt-1 focus:outline-none"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setIsSummaryExpanded(!isSummaryExpanded);
+                                }}
+                              >
+                                {isSummaryExpanded ? 'Show less' : 'Show more'}
+                              </button>
+                            )}
+                          </div>
+                        )}
                       </CollapsibleSection>
                     );
                   }

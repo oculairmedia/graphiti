@@ -11,6 +11,7 @@ from .retrieve import (
     NodeResult,
     EdgesByNodeResponse,
 )
+from .nodes import UpdateNodeSummaryRequest, NodeResponse
 
 __all__ = [
     'SearchQuery',
@@ -26,4 +27,6 @@ __all__ = [
     'NodeSearchResults',
     'NodeResult',
     'EdgesByNodeResponse',
+    'UpdateNodeSummaryRequest',
+    'NodeResponse',
 ]
