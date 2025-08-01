@@ -222,13 +222,14 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
             </TabsTrigger>
           </TabsList>
 
-          <div className="flex-1 overflow-y-auto custom-scrollbar px-4 pb-4 min-h-0">
+          <div className="flex-1 flex flex-col min-h-0">
             
             {/* Search Tab */}
-            <TabsContent value="search" className="mt-0">
+            <TabsContent value="search" className="mt-0 flex-1 flex flex-col overflow-hidden px-4 pb-4">
               {graphCanvasRef && onNodeSelect && (
                 <GraphitiSearch
                   graphCanvasRef={graphCanvasRef}
+                  className="h-full"
                   onNodeSelect={(node: NodeResult) => {
                     // Find the corresponding GraphNode by UUID
                     const graphNode = nodes.find(n => n.id === node.uuid);
@@ -241,7 +242,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
             </TabsContent>
             
             {/* Query Controls Tab */}
-            <TabsContent value="query" className="mt-0">
+            <TabsContent value="query" className="mt-0 overflow-y-auto custom-scrollbar px-4 pb-4">
               <QueryControlsTab
                 config={config}
                 isRefreshing={isRefreshing}
@@ -254,7 +255,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
             </TabsContent>
 
             {/* Node Styling Tab */}
-            <TabsContent value="styling" className="mt-0">
+            <TabsContent value="styling" className="mt-0 overflow-y-auto custom-scrollbar px-4 pb-4">
               <NodeStylingTab
                 config={config}
                 nodeTypes={nodeTypes}
@@ -265,7 +266,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
             </TabsContent>
 
             {/* Physics Tab */}
-            <TabsContent value="physics" className="mt-0">
+            <TabsContent value="physics" className="mt-0 overflow-y-auto custom-scrollbar px-4 pb-4">
               <PhysicsControlsTab
                 config={config}
                 onConfigUpdate={updateConfig}
@@ -274,7 +275,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
             </TabsContent>
 
             {/* Render Controls Tab */}
-            <TabsContent value="render" className="mt-0">
+            <TabsContent value="render" className="mt-0 overflow-y-auto custom-scrollbar px-4 pb-4">
               <RenderControlsTab
                 config={config}
                 onConfigUpdate={updateConfig}
@@ -282,7 +283,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
             </TabsContent>
 
             {/* Settings Tab */}
-            <TabsContent value="settings" className="mt-0">
+            <TabsContent value="settings" className="mt-0 overflow-y-auto custom-scrollbar px-4 pb-4">
               <SettingsTab
                 config={config}
                 onConfigUpdate={updateConfig}
