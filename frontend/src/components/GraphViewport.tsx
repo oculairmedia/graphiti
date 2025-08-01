@@ -1,4 +1,4 @@
-import React, { forwardRef } from 'react';
+import React, { forwardRef, useMemo } from 'react';
 import { GraphNode } from '../api/types';
 import { GraphLink } from '../types/graph';
 import { GraphCanvas, type GraphCanvasRef as GraphCanvasHandle } from './GraphCanvas';
@@ -72,6 +72,21 @@ const GraphViewportComponent = forwardRef<GraphCanvasHandle, GraphViewportProps>
   const stableOnZoomOut = useStableCallback(onZoomOut);
   const stableOnFitView = useStableCallback(onFitView);
   const stableOnScreenshot = useStableCallback(onScreenshot);
+
+  // Calculate connected nodes count for selected node
+  const selectedNodeConnections = useMemo(() => {
+    if (!selectedNode) return 0;
+    
+    let connectionCount = 0;
+    links.forEach(link => {
+      if (link.source === selectedNode.id || link.target === selectedNode.id) {
+        connectionCount++;
+      }
+    });
+    
+    return connectionCount;
+  }, [selectedNode, links]);
+
   return (
     <div className="flex-1 relative">
       <GraphErrorBoundary>
@@ -116,6 +131,7 @@ const GraphViewportComponent = forwardRef<GraphCanvasHandle, GraphViewportProps>
         <div className="absolute top-4 right-4 w-96 animate-slide-in-right">
           <NodeDetailsPanel 
             node={selectedNode}
+            connections={selectedNodeConnections}
             onClose={stableOnClearSelection}
             onShowNeighbors={stableOnShowNeighbors}
           />
