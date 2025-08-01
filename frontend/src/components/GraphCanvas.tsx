@@ -153,6 +153,12 @@ interface GraphCanvasComponentProps extends GraphCanvasProps {
 const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
   ({ onNodeClick, onNodeSelect, onSelectNodes, onClearSelection, onNodeHover, selectedNodes, highlightedNodes, className, stats, nodes, links }, ref) => {
     const cosmographRef = useRef<CosmographRef | null>(null);
+    
+    // Add a stable ref for the Cosmograph instance to prevent issues in dev mode
+    const stableCosmographRef = useRef<CosmographRef | null>(null);
+    useEffect(() => {
+      stableCosmographRef.current = cosmographRef.current;
+    });
     const [isReady, setIsReady] = useState(false);
     const [isCanvasReady, setIsCanvasReady] = useState(false);
     const [cosmographData, setCosmographData] = useState<{ nodes: GraphNode[], links: GraphLink[] } | null>(null);
@@ -998,10 +1004,18 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     const focusOnNodes = useCallback((nodeIds: string[], duration?: number, padding?: number) => {
       console.log('GraphCanvas: focusOnNodes called with nodeIds:', nodeIds);
       console.log('GraphCanvas: cosmographRef.current exists:', !!cosmographRef.current);
-      console.log('GraphCanvas: nodes.length:', nodes.length);
       
-      if (!cosmographRef.current || !nodes.length) {
-        logger.warn('GraphCanvas: focusOnNodes returning early - cosmographRef:', !!cosmographRef.current, 'nodes:', nodes.length);
+      if (!cosmographRef.current) {
+        logger.warn('GraphCanvas: focusOnNodes returning early - no cosmographRef');
+        return;
+      }
+      
+      // Use currentNodes instead of nodes prop to avoid stale closures in dev mode
+      const nodesList = currentNodes.length > 0 ? currentNodes : nodes;
+      console.log('GraphCanvas: using nodes.length:', nodesList.length);
+      
+      if (!nodesList.length) {
+        logger.warn('GraphCanvas: focusOnNodes returning early - no nodes available');
         return;
       }
       
@@ -1009,7 +1023,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         // Find indices of the nodes with the given IDs
         const indices: number[] = [];
         nodeIds.forEach(nodeId => {
-          const index = nodes.findIndex(node => node.id === nodeId);
+          const index = nodesList.findIndex(node => node.id === nodeId);
           if (index >= 0) {
             indices.push(index);
           }
@@ -1019,29 +1033,44 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         
         if (indices.length > 0) {
           // First select the nodes visually
-          const nodesToSelect = indices.map(idx => nodes[idx]).filter(Boolean);
+          const nodesToSelect = indices.map(idx => nodesList[idx]).filter(Boolean);
           if (nodesToSelect.length > 0) {
             selectCosmographNodes(nodesToSelect);
           }
           
-          // Then use Cosmograph's fitViewByIndices method with a small delay
-          if (cosmographRef.current && cosmographRef.current.fitViewByIndices) {
+          // Use requestAnimationFrame for better timing in dev mode
+          requestAnimationFrame(() => {
+            // Double-check cosmographRef is still valid
+            if (!cosmographRef.current) {
+              logger.warn('GraphCanvas: cosmographRef lost after frame');
+              return;
+            }
+            
+            // Verify the method exists
+            if (typeof cosmographRef.current.fitViewByIndices !== 'function') {
+              logger.warn('fitViewByIndices method not available on Cosmograph instance');
+              return;
+            }
+            
             const actualDuration = duration !== undefined ? duration : 1000;
             const actualPadding = padding !== undefined ? padding : 0.2;
             
-            // Add a small delay to ensure the graph is ready
+            // Use shorter delay in development for better responsiveness
+            const delay = process.env.NODE_ENV === 'development' ? 50 : 200;
+            
             setTimeout(() => {
               try {
-                console.log('GraphCanvas: Calling fitViewByIndices with indices:', indices);
-                cosmographRef.current!.fitViewByIndices(indices, actualDuration, actualPadding);
+                // Final safety check
+                if (cosmographRef.current && typeof cosmographRef.current.fitViewByIndices === 'function') {
+                  console.log('GraphCanvas: Calling fitViewByIndices with indices:', indices);
+                  cosmographRef.current.fitViewByIndices(indices, actualDuration, actualPadding);
+                }
               } catch (error) {
                 console.error('GraphCanvas: fitViewByIndices failed:', error);
                 logger.warn('fitViewByIndices failed:', error);
               }
-            }, 200); // 200ms delay to ensure rendering is complete
-          } else {
-            logger.warn('fitViewByIndices method not available on Cosmograph instance');
-          }
+            }, delay);
+          });
         } else {
           logger.warn('No nodes found with the provided IDs:', nodeIds);
         }
