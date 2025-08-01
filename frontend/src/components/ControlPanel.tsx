@@ -225,10 +225,11 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
           <div className="flex-1 overflow-y-auto custom-scrollbar px-4 pb-4 min-h-0">
             
             {/* Search Tab */}
-            <TabsContent value="search" className="mt-0">
+            <TabsContent value="search" className="mt-0 h-full">
               {graphCanvasRef && onNodeSelect && (
                 <GraphitiSearch
                   graphCanvasRef={graphCanvasRef}
+                  className="h-full"
                   onNodeSelect={(node: NodeResult) => {
                     // Find the corresponding GraphNode by UUID
                     const graphNode = nodes.find(n => n.id === node.uuid);
