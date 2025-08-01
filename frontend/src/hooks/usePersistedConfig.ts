@@ -102,7 +102,7 @@ export const usePersistedSections = (defaultSections: SectionConfig[]) => {
   }, [sections, isLoaded]);
   
   // Debounced save
-  const debouncedSave = useDebouncedSave(saveSections, 1000);
+  const debouncedSave = useDebouncedSave(saveSections, 300);
   
   // Enhanced setter that triggers save
   const setPersistedSections = useCallback((newSections: SectionConfig[] | ((prev: SectionConfig[]) => SectionConfig[])) => {
@@ -121,21 +121,32 @@ export const usePersistedSections = (defaultSections: SectionConfig[]) => {
 export const usePersistedGraphConfig = <T extends Record<string, unknown>>(defaultConfig: T) => {
   const [config, setConfig] = useState<T>(defaultConfig);
   const [isLoaded, setIsLoaded] = useState(false);
+  const isInitialMount = useRef(true);
   
   // Load from storage on mount
   useEffect(() => {
-    const stored = loadConfigFromStorage();
-    if (stored?.graphConfig) {
+    // Only load on initial mount
+    if (!isInitialMount.current) return;
+    isInitialMount.current = false;
+    
+    const loadPersistedData = async () => {
       try {
-        // Merge stored config with defaults
-        const merged = mergeDifferentialConfig(defaultConfig, stored.graphConfig as Partial<T>);
-        setConfig(merged);
+        const stored = loadConfigFromStorage();
+        if (stored?.graphConfig) {
+          console.log('usePersistedGraphConfig: Loading stored config', stored.graphConfig);
+          // Merge stored config with defaults
+          const merged = mergeDifferentialConfig(defaultConfig, stored.graphConfig as Partial<T>);
+          setConfig(merged);
+        }
       } catch (error) {
-        // Failed to load sections, use defaults
+        console.error('usePersistedGraphConfig: Failed to load config', error);
+      } finally {
+        setIsLoaded(true);
       }
-    }
-    setIsLoaded(true);
-  }, [defaultConfig]);
+    };
+    
+    loadPersistedData();
+  }, []); // Empty dependency array - only run once
   
   // Save to storage function
   const saveConfig = useCallback(() => {
@@ -158,22 +169,30 @@ export const usePersistedGraphConfig = <T extends Record<string, unknown>>(defau
       
       saveConfigToStorage(updated);
     } catch (error) {
-      // Failed to save config
+      console.error('usePersistedGraphConfig: Failed to save config', error);
     }
   }, [config, defaultConfig, isLoaded]);
   
   // Debounced save
-  const debouncedSave = useDebouncedSave(saveConfig, 1000);
+  const debouncedSave = useDebouncedSave(saveConfig, 300);
   
   // Enhanced setter that triggers save
   const setPersistedConfig = useCallback((newConfig: T | ((prev: T) => T)) => {
-    setConfig(prev => {
-      const updated = typeof newConfig === 'function' ? newConfig(prev) : newConfig;
-      // Trigger save after state update
-      setTimeout(debouncedSave, 0);
-      return updated;
-    });
-  }, [debouncedSave]);
+    setConfig(newConfig);
+  }, []);
+  
+  // Save config when it changes (after initial load)
+  const isFirstRender = useRef(true);
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    
+    if (isLoaded) {
+      debouncedSave();
+    }
+  }, [config, isLoaded, debouncedSave]);
   
   return [config, setPersistedConfig, isLoaded] as const;
 };

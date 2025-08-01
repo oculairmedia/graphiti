@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useRef, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, useRef, ReactNode, useMemo, useEffect } from 'react';
 import { calculateLayoutPositions, type LayoutOptions } from '../utils/layoutAlgorithms';
 import type { GraphNode, GraphEdge } from '../types/graph';
 import { usePersistedGraphConfig, usePersistedNodeTypes } from '@/hooks/usePersistedConfig';
@@ -180,21 +180,62 @@ const defaultDynamicConfig: DynamicConfig = {
 
 // Provider component
 export function GraphConfigProvider({ children }: { children: ReactNode }) {
-  // Load persisted config
-  const [persistedConfig, setPersistedConfig] = usePersistedGraphConfig();
+  // Combine default configs for persistence - memoize to prevent infinite loops
+  const defaultCombinedConfig = useMemo<GraphConfig>(() => ({ 
+    ...defaultStableConfig, 
+    ...defaultDynamicConfig 
+  }), []);
   
-  // Split persisted config if it exists
-  const initialConfig = persistedConfig ? 
-    { ...defaultStableConfig, ...defaultDynamicConfig, ...persistedConfig } :
-    { ...defaultStableConfig, ...defaultDynamicConfig };
-    
-  const { stable: initialStable, dynamic: initialDynamic } = splitConfig(initialConfig);
+  // Load persisted config with proper parameters
+  const [persistedConfig, setPersistedConfig, isPersistedLoaded] = usePersistedGraphConfig<GraphConfig>(defaultCombinedConfig);
   
-  // State
-  const [stableConfig, setStableConfig] = useState<StableConfig>(initialStable);
-  const [dynamicConfig, setDynamicConfig] = useState<DynamicConfig>(initialDynamic);
+  // Split default configs for initial state
+  const { stable: defaultStable, dynamic: defaultDynamic } = splitConfig(defaultCombinedConfig);
+  
+  // State - initialize with defaults
+  const [stableConfig, setStableConfig] = useState<StableConfig>(defaultStable);
+  const [dynamicConfig, setDynamicConfig] = useState<DynamicConfig>(defaultDynamic);
   const [cosmographRef, setCosmographRef] = useState<React.RefObject<CosmographRefType> | null>(null);
   const [isApplyingLayout, setIsApplyingLayout] = useState(false);
+  const [isLoadingPersistedConfig, setIsLoadingPersistedConfig] = useState(true);
+  
+  // Refs to hold latest config values for persistence
+  const stableConfigRef = useRef<StableConfig>(stableConfig);
+  const dynamicConfigRef = useRef<DynamicConfig>(dynamicConfig);
+  const hasLoadedPersistedRef = useRef(false);
+  
+  // Update refs when state changes
+  useEffect(() => {
+    stableConfigRef.current = stableConfig;
+  }, [stableConfig]);
+  
+  useEffect(() => {
+    dynamicConfigRef.current = dynamicConfig;
+  }, [dynamicConfig]);
+  
+  // Update states when persisted config loads - only once
+  useEffect(() => {
+    if (!isPersistedLoaded || hasLoadedPersistedRef.current) return;
+    
+    hasLoadedPersistedRef.current = true;
+    
+    if (persistedConfig && Object.keys(persistedConfig).length > 0) {
+      console.log('GraphConfigProvider: Loading persisted config');
+      const { stable: loadedStable, dynamic: loadedDynamic } = splitConfig(persistedConfig);
+      
+      // Only update if there are actual differences
+      if (Object.keys(loadedStable).length > 0) {
+        setStableConfig(prev => ({ ...prev, ...loadedStable }));
+      }
+      if (Object.keys(loadedDynamic).length > 0) {
+        setDynamicConfig(prev => ({ ...prev, ...loadedDynamic }));
+      }
+    } else {
+      console.log('GraphConfigProvider: No persisted config found, using defaults');
+    }
+    
+    setIsLoadingPersistedConfig(false);
+  }, [isPersistedLoaded, persistedConfig]);
   
   // Batch update queue
   const batchUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -202,25 +243,45 @@ export function GraphConfigProvider({ children }: { children: ReactNode }) {
   
   // Update stable config
   const updateStableConfig = useCallback((updates: Partial<StableConfig>) => {
+    // Don't allow updates while loading persisted config
+    if (isLoadingPersistedConfig) {
+      console.log('GraphConfigProvider: Ignoring stable config update during load', updates);
+      return;
+    }
+    
     setStableConfig(prev => {
       const newConfig = { ...prev, ...updates };
-      // Persist the full config
-      const fullConfig = { ...newConfig, ...dynamicConfig };
-      setPersistedConfig(fullConfig);
       return newConfig;
     });
-  }, [dynamicConfig, setPersistedConfig]);
+    
+    // Persist after state update using refs
+    setTimeout(() => {
+      const fullConfig = { ...stableConfigRef.current, ...dynamicConfigRef.current };
+      console.log('GraphConfigProvider: Saving stable config update', updates, 'Full config:', fullConfig);
+      setPersistedConfig(fullConfig);
+    }, 0);
+  }, [setPersistedConfig, isLoadingPersistedConfig]);
   
   // Update dynamic config immediately
   const updateDynamicConfig = useCallback((updates: Partial<DynamicConfig>) => {
+    // Don't allow updates while loading persisted config
+    if (isLoadingPersistedConfig) {
+      console.log('GraphConfigProvider: Ignoring dynamic config update during load', updates);
+      return;
+    }
+    
     setDynamicConfig(prev => {
       const newConfig = { ...prev, ...updates };
-      // Persist the full config
-      const fullConfig = { ...stableConfig, ...newConfig };
-      setPersistedConfig(fullConfig);
       return newConfig;
     });
-  }, [stableConfig, setPersistedConfig]);
+    
+    // Persist after state update using refs
+    setTimeout(() => {
+      const fullConfig = { ...stableConfigRef.current, ...dynamicConfigRef.current };
+      console.log('GraphConfigProvider: Saving dynamic config update', updates, 'Full config:', fullConfig);
+      setPersistedConfig(fullConfig);
+    }, 0);
+  }, [setPersistedConfig, isLoadingPersistedConfig]);
   
   // Batch update dynamic config
   const batchUpdateDynamicConfig = useCallback((updater: (draft: DynamicConfig) => void) => {
@@ -247,6 +308,12 @@ export function GraphConfigProvider({ children }: { children: ReactNode }) {
   const updateNodeTypeConfigurations = useCallback((nodeTypes: string[]) => {
     if (nodeTypes.length === 0) return;
     
+    // Don't allow updates while loading persisted config
+    if (isLoadingPersistedConfig) {
+      console.log('GraphConfigProvider: Ignoring node type config update during load');
+      return;
+    }
+    
     setDynamicConfig(prev => {
       const existingTypes = Object.keys(prev.nodeTypeColors);
       const newTypes = nodeTypes.filter(type => !existingTypes.includes(type));
@@ -269,13 +336,15 @@ export function GraphConfigProvider({ children }: { children: ReactNode }) {
         nodeTypeVisibility: newVisibility
       };
       
-      // Persist
-      const fullConfig = { ...stableConfig, ...newConfig };
-      setPersistedConfig(fullConfig);
-      
       return newConfig;
     });
-  }, [stableConfig, setPersistedConfig]);
+    
+    // Persist after state update using refs
+    setTimeout(() => {
+      const fullConfig = { ...stableConfigRef.current, ...dynamicConfigRef.current };
+      setPersistedConfig(fullConfig);
+    }, 0);
+  }, [setPersistedConfig, isLoadingPersistedConfig]);
   
   // Graph control methods
   const zoomIn = useCallback(() => {
