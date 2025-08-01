@@ -100,26 +100,42 @@ services:
   frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile
-      target: production
-    container_name: graphiti-frontend
+      dockerfile: Dockerfile.simple
+    container_name: graphiti-frontend-app
     restart: unless-stopped
-    ports:
-      - 8088:80
+    expose:
+      - 3000
     environment:
       - NODE_ENV=production
-      - VITE_API_BASE_URL=http://192.168.50.90:3000
-      - VITE_WS_URL=ws://192.168.50.90:3000/ws
     depends_on:
       - graph-visualizer-rust
     networks:
       - graphiti_network
     labels:
       - homepage.group=Knowledge Management
-      - homepage.name=Graphiti Frontend
+      - homepage.name=Graphiti Frontend App
       - homepage.icon=si-react
+      - homepage.description=React frontend application
+  
+  nginx:
+    image: nginx:alpine
+    container_name: graphiti-nginx
+    restart: unless-stopped
+    ports:
+      - 8088:80
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - frontend
+      - graph-visualizer-rust
+    networks:
+      - graphiti_network
+    labels:
+      - homepage.group=Knowledge Management
+      - homepage.name=Graphiti Nginx Proxy
+      - homepage.icon=si-nginx
       - homepage.href=http://192.168.50.90:8088
-      - homepage.description=React frontend for graph visualization
+      - homepage.description=Reverse proxy for Graphiti services
   # graphiti-mcp:
   #   build:
   #     context: ./mcp_server

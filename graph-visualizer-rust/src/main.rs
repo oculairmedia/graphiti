@@ -1,8 +1,8 @@
 use axum::{
-    extract::{Query, State, WebSocketUpgrade},
+    extract::{Path, Query, State, WebSocketUpgrade},
     http::StatusCode,
     response::{IntoResponse, Json},
-    routing::{get, post},
+    routing::{get, patch, post},
     Router,
 };
 use dashmap::DashMap;
@@ -97,6 +97,18 @@ struct CacheResponse {
     cleared_entries: usize,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+struct UpdateSummaryRequest {
+    summary: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct NodeUpdateResponse {
+    uuid: String,
+    name: String,
+    summary: String,
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // Initialize tracing
@@ -136,6 +148,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/search", get(search))
         .route("/api/cache/clear", post(clear_cache))
         .route("/api/cache/stats", get(get_cache_stats))
+        .route("/api/nodes/:id/summary", patch(update_node_summary))
         .route("/ws", get(websocket_handler))
         .layer(CorsLayer::permissive())
         .with_state(state);
@@ -657,5 +670,77 @@ fn falkor_value_to_json(value: &FalkorValue) -> serde_json::Value {
             serde_json::Value::Object(obj)
         }
         _ => serde_json::Value::String(format!("{:?}", value)),
+    }
+}
+
+// Helper function to escape strings for Cypher queries
+fn escape_cypher_string(s: &str) -> String {
+    s.replace('\\', "\\\\")
+        .replace('\'', "\\'")
+        .replace('"', "\\\"")
+        .replace('\n', "\\n")
+        .replace('\r', "\\r")
+        .replace('\t', "\\t")
+}
+
+async fn update_node_summary(
+    Path(node_id): Path<String>,
+    State(state): State<AppState>,
+    Json(request): Json<UpdateSummaryRequest>,
+) -> Result<Json<NodeUpdateResponse>, (StatusCode, Json<ErrorResponse>)> {
+    // Update the node summary in FalkorDB
+    let query = format!(
+        r#"
+        MATCH (n {{uuid: '{}'}})
+        SET n.summary = '{}'
+        RETURN n.uuid as uuid, n.name as name, n.summary as summary
+        "#,
+        escape_cypher_string(&node_id),
+        escape_cypher_string(&request.summary)
+    );
+    
+    let mut graph = state.client.select_graph(&state.graph_name);
+    match graph.query(&query).execute().await {
+        Ok(mut result) => {
+            if let Some(row) = result.data.next() {
+                if row.len() >= 3 {
+                    let uuid = value_to_string(&row[0]);
+                    let name = value_to_string(&row[1]);
+                    let summary = value_to_string(&row[2]);
+                    
+                    // Clear cache to ensure fresh data
+                    state.graph_cache.clear();
+                    
+                    Ok(Json(NodeUpdateResponse {
+                        uuid,
+                        name,
+                        summary,
+                    }))
+                } else {
+                    Err((
+                        StatusCode::NOT_FOUND,
+                        Json(ErrorResponse {
+                            error: format!("Node with id {} not found", node_id),
+                        }),
+                    ))
+                }
+            } else {
+                Err((
+                    StatusCode::NOT_FOUND,
+                    Json(ErrorResponse {
+                        error: format!("Node with id {} not found", node_id),
+                    }),
+                ))
+            }
+        }
+        Err(e) => {
+            error!("Failed to update node summary: {}", e);
+            Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: format!("Failed to update summary: {}", e),
+                }),
+            ))
+        }
     }
 }// Force rebuild Sat Jul 26 09:13:22 PM EDT 2025

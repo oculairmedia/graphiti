@@ -18,13 +18,15 @@ interface CollapsibleSectionProps {
   onToggleCollapse: (id: string) => void;
   children: React.ReactNode;
   className?: string;
+  headerAction?: React.ReactNode;
 }
 
 export const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
   section,
   onToggleCollapse,
   children,
-  className = ""
+  className = "",
+  headerAction
 }) => {
   const {
     attributes,
@@ -74,16 +76,19 @@ export const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
             </Button>
           </Collapsible.Trigger>
           
-          <div
-            {...attributes}
-            {...listeners}
-            className="
-              opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing
-              p-1 hover:bg-secondary rounded text-muted-foreground hover:text-foreground
-            "
-            aria-label={`Drag ${section.title} section`}
-          >
-            <GripVertical className="h-3 w-3" />
+          <div className="flex items-center gap-1">
+            {headerAction}
+            <div
+              {...attributes}
+              {...listeners}
+              className="
+                opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing
+                p-1 hover:bg-secondary rounded text-muted-foreground hover:text-foreground
+              "
+              aria-label={`Drag ${section.title} section`}
+            >
+              <GripVertical className="h-3 w-3" />
+            </div>
           </div>
         </div>
 

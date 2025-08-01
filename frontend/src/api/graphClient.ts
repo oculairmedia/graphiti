@@ -134,6 +134,16 @@ export class GraphClient {
   async getCentralityStats(): Promise<CentralityStats> {
     return this.fetchWithError<CentralityStats>(`${this.baseUrl}/centrality/stats`);
   }
+
+  async updateNodeSummary(nodeId: string, summary: string): Promise<{ uuid: string; name: string; summary: string }> {
+    return this.fetchWithError<{ uuid: string; name: string; summary: string }>(
+      `${this.baseUrl}/nodes/${nodeId}/summary`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ summary }),
+      }
+    );
+  }
 }
 
 // Export singleton instance
