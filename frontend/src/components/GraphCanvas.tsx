@@ -253,14 +253,14 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         }
         
         // Focus on the first few matches
-        if (cosmographRef.current.fitViewByPointIndices && matchingNodes.length <= 10) {
+        if (cosmographRef.current.fitViewByIndices && matchingNodes.length <= 10) {
           const nodeIndices = matchingNodes
             .slice(0, 10)
             .map(node => currentNodes.findIndex(n => n.id === node.id))
             .filter(idx => idx >= 0);
           
           if (nodeIndices.length > 0) {
-            cosmographRef.current.fitViewByPointIndices(nodeIndices, 1000, 0.2);
+            cosmographRef.current.fitViewByIndices(nodeIndices, 1000, 0.2);
           }
         }
       }
@@ -873,12 +873,12 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             if (nodeIndices.length > 0) {
               cosmographRef.current.selectPoints(nodeIndices);
               
-              // For multiple nodes, use fitViewByPointIndices to show all selected nodes
+              // For multiple nodes, use fitViewByIndices to show all selected nodes
               if (nodeIndices.length > 1) {
-                // Call fitViewByPointIndices after this function completes
+                // Call fitViewByIndices after this function completes
                 setTimeout(() => {
-                  if (cosmographRef.current && typeof cosmographRef.current.fitViewByPointIndices === 'function') {
-                    cosmographRef.current.fitViewByPointIndices(nodeIndices, config.fitViewDuration, config.fitViewPadding);
+                  if (cosmographRef.current && typeof cosmographRef.current.fitViewByIndices === 'function') {
+                    cosmographRef.current.fitViewByIndices(nodeIndices, config.fitViewDuration, config.fitViewPadding);
                   }
                 }, 0);
               }
@@ -986,10 +986,10 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       if (!cosmographRef.current) return;
       
       try {
-        // Use the Cosmograph v2.0 fitViewByPointIndices method with config defaults
+        // Use the Cosmograph v2.0 fitViewByIndices method with config defaults
         const actualDuration = duration !== undefined ? duration : config.fitViewDuration;
         const actualPadding = padding !== undefined ? padding : config.fitViewPadding;
-        cosmographRef.current.fitViewByPointIndices(indices, actualDuration, actualPadding);
+        cosmographRef.current.fitViewByIndices(indices, actualDuration, actualPadding);
       } catch (error) {
         logger.warn('Fit view by indices failed:', error);
       }
@@ -1024,13 +1024,21 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             selectCosmographNodes(nodesToSelect);
           }
           
-          // Then use Cosmograph's fitViewByIndices method
+          // Then use Cosmograph's fitViewByIndices method with a small delay
           if (cosmographRef.current && cosmographRef.current.fitViewByIndices) {
             const actualDuration = duration !== undefined ? duration : 1000;
             const actualPadding = padding !== undefined ? padding : 0.2;
             
-            console.log('GraphCanvas: Calling fitViewByIndices with indices:', indices);
-            cosmographRef.current.fitViewByIndices(indices, actualDuration, actualPadding);
+            // Add a small delay to ensure the graph is ready
+            setTimeout(() => {
+              try {
+                console.log('GraphCanvas: Calling fitViewByIndices with indices:', indices);
+                cosmographRef.current!.fitViewByIndices(indices, actualDuration, actualPadding);
+              } catch (error) {
+                console.error('GraphCanvas: fitViewByIndices failed:', error);
+                logger.warn('fitViewByIndices failed:', error);
+              }
+            }, 200); // 200ms delay to ensure rendering is complete
           } else {
             logger.warn('fitViewByIndices method not available on Cosmograph instance');
           }
