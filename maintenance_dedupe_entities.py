@@ -160,11 +160,15 @@ class EntityDeduplicator:
     
     def _are_names_similar(self, name1: str, name2: str, threshold: float) -> bool:
         """Check if two names are similar enough to be duplicates"""
+        # First check for exact match (case sensitive)
+        if name1 == name2:
+            return True
+            
         # Normalize names with enhanced normalization
         norm1 = self._normalize_name(name1)
         norm2 = self._normalize_name(name2)
         
-        # Exact match
+        # Exact match after normalization
         if norm1 == norm2:
             return True
         
@@ -509,7 +513,7 @@ async def main():
     # First do a dry run to see what would be merged
     logger.info("Running dry run to identify duplicates...")
     dry_run_result = await deduplicator.run_deduplication(
-        group_id="claude_conversations",  # Focus on Claude conversation entities
+        group_id=None,  # Process all entities, not just claude_conversations
         dry_run=True
     )
     
@@ -523,7 +527,7 @@ async def main():
         if True:  # response.lower() == 'y':
             logger.info("Running actual deduplication...")
             result = await deduplicator.run_deduplication(
-                group_id="claude_conversations",
+                group_id=None,  # Process all entities
                 dry_run=False
                 # Process all groups
             )
