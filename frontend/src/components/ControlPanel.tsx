@@ -1,11 +1,13 @@
 import React, { useState, useCallback } from 'react';
-import { ChevronLeft, ChevronRight, Database, Settings2, Palette, Zap, Paintbrush, Layers } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Database, Settings2, Palette, Zap, Paintbrush, Layers, Search } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useGraphConfig } from '@/contexts/GraphConfigProvider';
 import type { GraphData, GraphNode } from '@/types/graph';
 import { useConfigPersistence } from '@/hooks/usePersistedConfig';
+import { GraphitiSearch } from './GraphitiSearch';
+import type { NodeResult } from '../api/types';
 
 // Import tab components
 import { QueryControlsTab } from './ControlPanel/QueryControlsTab';
@@ -14,10 +16,23 @@ import { PhysicsControlsTab } from './ControlPanel/PhysicsControlsTab';
 import { RenderControlsTab } from './ControlPanel/RenderControlsTab';
 import { SettingsTab } from './ControlPanel/SettingsTab';
 
+interface GraphCanvasHandle {
+  clearSelection: () => void;
+  selectNode: (node: GraphNode) => void;
+  selectNodes: (nodes: GraphNode[]) => void;
+  focusOnNodes: (nodeIds: string[], duration?: number, padding?: number) => void;
+  zoomIn: () => void;
+  zoomOut: () => void;
+  fitView: (duration?: number, padding?: number) => void;
+}
+
 interface ControlPanelProps {
   collapsed: boolean;
   onToggleCollapse: () => void;
   onLayoutChange?: (layout: string) => void;
+  graphCanvasRef?: React.RefObject<GraphCanvasHandle>;
+  nodes?: GraphNode[];
+  onNodeSelect?: (node: GraphNode) => void;
 }
 
 // Compute node types from real graph data dynamically
@@ -47,7 +62,10 @@ const computeNodeTypes = (graphData?: GraphData): Array<{ id: string; name: stri
 export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({ 
   collapsed, 
   onToggleCollapse,
-  onLayoutChange
+  onLayoutChange,
+  graphCanvasRef,
+  nodes = [],
+  onNodeSelect
 }) => {
   const { config, updateConfig, updateNodeTypeConfigurations, applyLayout, cosmographRef } = useGraphConfig();
   const { resetAllConfig, exportConfig, importConfig, getStorageInfo } = useConfigPersistence();
@@ -142,17 +160,23 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
           <ChevronRight className="h-4 w-4" />
         </Button>
         <div className="flex flex-col space-y-3">
+          <Button variant="ghost" size="sm" className="p-2 hover:bg-primary/10" title="Search">
+            <Search className="h-4 w-4" />
+          </Button>
           <Button variant="ghost" size="sm" className="p-2 hover:bg-primary/10" title="Query">
             <Database className="h-4 w-4" />
-          </Button>
-          <Button variant="ghost" size="sm" className="p-2 hover:bg-primary/10" title="Rendering">
-            <Settings2 className="h-4 w-4" />
           </Button>
           <Button variant="ghost" size="sm" className="p-2 hover:bg-primary/10" title="Node Styling">
             <Paintbrush className="h-4 w-4" />
           </Button>
           <Button variant="ghost" size="sm" className="p-2 hover:bg-primary/10" title="Physics">
             <Zap className="h-4 w-4" />
+          </Button>
+          <Button variant="ghost" size="sm" className="p-2 hover:bg-primary/10" title="Rendering">
+            <Layers className="h-4 w-4" />
+          </Button>
+          <Button variant="ghost" size="sm" className="p-2 hover:bg-primary/10" title="Settings">
+            <Settings2 className="h-4 w-4" />
           </Button>
         </div>
       </div>
@@ -176,8 +200,11 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
 
       {/* Scrollable Content with Tabs */}
       <div className="flex-1 flex flex-col min-h-0">
-        <Tabs defaultValue="query" className="flex-1 flex flex-col min-h-0">
-          <TabsList className="grid grid-cols-5 m-4 mb-2 glass">
+        <Tabs defaultValue="search" className="flex-1 flex flex-col min-h-0">
+          <TabsList className="grid grid-cols-6 m-4 mb-2 glass">
+            <TabsTrigger value="search" className="text-xs">
+              <Search className="h-3 w-3" />
+            </TabsTrigger>
             <TabsTrigger value="query" className="text-xs">
               <Database className="h-3 w-3" />
             </TabsTrigger>
@@ -196,6 +223,25 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
           </TabsList>
 
           <div className="flex-1 overflow-y-auto custom-scrollbar px-4 pb-4 min-h-0">
+            
+            {/* Search Tab */}
+            <TabsContent value="search" className="mt-0">
+              <div className="space-y-4">
+                <h3 className="text-sm font-medium text-muted-foreground">Knowledge Search</h3>
+                {graphCanvasRef && onNodeSelect && (
+                  <GraphitiSearch
+                    graphCanvasRef={graphCanvasRef}
+                    onNodeSelect={(node: NodeResult) => {
+                      // Find the corresponding GraphNode by UUID
+                      const graphNode = nodes.find(n => n.id === node.uuid);
+                      if (graphNode) {
+                        onNodeSelect(graphNode);
+                      }
+                    }}
+                  />
+                )}
+              </div>
+            </TabsContent>
             
             {/* Query Controls Tab */}
             <TabsContent value="query" className="mt-0">
