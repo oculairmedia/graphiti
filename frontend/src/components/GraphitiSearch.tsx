@@ -84,16 +84,16 @@ export const GraphitiSearch: React.FC<GraphitiSearchProps> = ({
   }, [searchResults]);
 
   return (
-    <Card className={cn("glass border-border/30", className)}>
-      <CardHeader className="pb-3">
+    <Card className={cn("glass border-border/30 flex flex-col h-full", className)}>
+      <CardHeader className="pb-3 flex-shrink-0">
         <CardTitle className="text-sm flex items-center space-x-2">
           <Search className="h-4 w-4 text-primary" />
           <span>Knowledge Search</span>
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-2 p-0 px-3 pb-3">
+      <CardContent className="flex-1 flex flex-col p-0 px-3 pb-3 min-h-0">
           {/* Search Input */}
-          <div className="relative">
+          <div className="relative flex-shrink-0 mb-2">
             <Input
               ref={inputRef}
               type="text"
@@ -117,7 +117,7 @@ export const GraphitiSearch: React.FC<GraphitiSearchProps> = ({
 
           {/* Search Results */}
           {isExpanded && searchQuery && (
-            <div className="space-y-2">
+            <div className="flex-1 flex flex-col min-h-0">
               {isSearching && (
                 <div className="flex items-center justify-center py-3">
                   <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
@@ -140,8 +140,8 @@ export const GraphitiSearch: React.FC<GraphitiSearchProps> = ({
               )}
 
               {searchResults.length > 0 && (
-                <>
-                  <ScrollArea className="h-[350px]" ref={scrollRef} onScrollCapture={handleScroll}>
+                <div className="flex-1 flex flex-col overflow-hidden">
+                  <ScrollArea className="flex-1" ref={scrollRef} onScrollCapture={handleScroll}>
                     <div className="space-y-1.5 pr-2">
                       {searchResults.slice(0, displayedResults).map((node) => (
                         <div
@@ -194,10 +194,10 @@ export const GraphitiSearch: React.FC<GraphitiSearchProps> = ({
                   </ScrollArea>
 
                   {/* Results Summary */}
-                  <div className="text-[10px] text-muted-foreground text-center pt-1 border-t">
+                  <div className="text-[10px] text-muted-foreground text-center pt-1 border-t flex-shrink-0">
                     Found {searchResults.length} result{searchResults.length !== 1 ? 's' : ''}
                   </div>
-                </>
+                </div>
               )}
             </div>
           )}
