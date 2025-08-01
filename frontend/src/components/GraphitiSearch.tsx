@@ -84,17 +84,17 @@ export const GraphitiSearch: React.FC<GraphitiSearchProps> = ({
   }, [searchResults]);
 
   return (
-    <div className={cn('space-y-4', className)}>
-      <Card className="glass border-border/30">
-        <CardHeader className="pb-3">
+    <div className={cn('flex flex-col h-full', className)}>
+      <Card className="glass border-border/30 flex flex-col h-full">
+        <CardHeader className="pb-3 flex-shrink-0">
           <CardTitle className="text-sm flex items-center space-x-2">
             <Search className="h-4 w-4 text-primary" />
             <span>Knowledge Search</span>
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent className="flex-1 flex flex-col overflow-hidden p-0 px-4 pb-4">
           {/* Search Input */}
-          <div className="relative">
+          <div className="relative mb-3">
             <Input
               ref={inputRef}
               type="text"
@@ -118,7 +118,7 @@ export const GraphitiSearch: React.FC<GraphitiSearchProps> = ({
 
           {/* Search Results */}
           {isExpanded && searchQuery && (
-            <div className="space-y-2">
+            <div className="flex-1 flex flex-col overflow-hidden">
               {isSearching && (
                 <div className="flex items-center justify-center py-4">
                   <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -126,7 +126,7 @@ export const GraphitiSearch: React.FC<GraphitiSearchProps> = ({
               )}
 
               {searchError && (
-                <Alert variant="destructive">
+                <Alert variant="destructive" className="mb-2">
                   <AlertCircle className="h-4 w-4" />
                   <AlertDescription>
                     {searchError instanceof Error ? searchError.message : 'Search failed'}
@@ -141,8 +141,8 @@ export const GraphitiSearch: React.FC<GraphitiSearchProps> = ({
               )}
 
               {searchResults.length > 0 && (
-                <>
-                  <ScrollArea className="h-[400px]" ref={scrollRef} onScrollCapture={handleScroll}>
+                <div className="flex-1 flex flex-col overflow-hidden">
+                  <ScrollArea className="flex-1" ref={scrollRef} onScrollCapture={handleScroll}>
                     <div className="space-y-2 pr-4">
                       {searchResults.slice(0, displayedResults).map((node) => (
                         <div
@@ -207,10 +207,10 @@ export const GraphitiSearch: React.FC<GraphitiSearchProps> = ({
                   </ScrollArea>
 
                   {/* Results Summary */}
-                  <div className="text-xs text-muted-foreground text-center pt-2 border-t">
+                  <div className="text-xs text-muted-foreground text-center pt-2 border-t flex-shrink-0">
                     Found {searchResults.length} result{searchResults.length !== 1 ? 's' : ''}
                   </div>
-                </>
+                </div>
               )}
             </div>
           )}
