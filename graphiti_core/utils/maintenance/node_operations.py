@@ -187,6 +187,37 @@ async def resolve_extracted_nodes(
     llm_client = clients.llm_client
     driver = clients.driver
 
+    # First, check for exact name matches in the database for each extracted node
+    exact_match_candidates: list[EntityNode] = []
+    if existing_nodes_override is None:
+        for node in extracted_nodes:
+            # Query for exact name matches
+            exact_query = """
+            MATCH (n:Entity)
+            WHERE n.name = $name AND n.group_id = $group_id
+            RETURN n
+            """
+            records, _, _ = await driver.execute_query(
+                exact_query,
+                name=node.name,
+                group_id=node.group_id
+            )
+            
+            for record in records:
+                n = record.get('n')
+                if n and hasattr(n, 'properties'):
+                    props = n.properties
+                    exact_node = EntityNode(
+                        uuid=props.get('uuid'),
+                        name=props.get('name'),
+                        labels=props.get('labels', ['Entity']),
+                        group_id=props.get('group_id'),
+                        summary=props.get('summary'),
+                        name_embedding=props.get('name_embedding'),
+                        created_at=props.get('created_at')
+                    )
+                    exact_match_candidates.append(exact_node)
+
     search_results: list[SearchResults] = await semaphore_gather(
         *[
             search(
@@ -205,6 +236,10 @@ async def resolve_extracted_nodes(
         if existing_nodes_override is None
         else existing_nodes_override
     )
+    
+    # Add exact matches to candidates (they might not be returned by search)
+    if existing_nodes_override is None:
+        candidate_nodes.extend(exact_match_candidates)
 
     existing_nodes_dict: dict[str, EntityNode] = {node.uuid: node for node in candidate_nodes}
 
