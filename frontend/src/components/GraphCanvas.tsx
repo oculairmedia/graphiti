@@ -110,6 +110,7 @@ interface GraphCanvasHandle {
   clearSelection: () => void;
   selectNode: (node: GraphNode) => void;
   selectNodes: (nodes: GraphNode[]) => void;
+  focusOnNodes: (nodeIds: string[], duration?: number, padding?: number) => void;
   zoomIn: () => void;
   zoomOut: () => void;
   fitView: (duration?: number, padding?: number) => void;
@@ -994,6 +995,36 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       }
     }, [config.fitViewDuration, config.fitViewPadding]);
 
+    const focusOnNodes = useCallback((nodeIds: string[], duration?: number, padding?: number) => {
+      if (!cosmographRef.current || !currentNodes.length) return;
+      
+      try {
+        // Find indices of the nodes with the given IDs
+        const indices: number[] = [];
+        nodeIds.forEach(nodeId => {
+          const index = currentNodes.findIndex(node => node.id === nodeId);
+          if (index >= 0) {
+            indices.push(index);
+          }
+        });
+        
+        if (indices.length > 0) {
+          // First select the nodes
+          const nodesToSelect = indices.map(idx => currentNodes[idx]).filter(Boolean);
+          if (nodesToSelect.length > 0) {
+            selectCosmographNodes(nodesToSelect);
+          }
+          
+          // Then focus on them
+          fitViewByPointIndices(indices, duration, padding);
+        } else {
+          logger.warn('No nodes found with the provided IDs:', nodeIds);
+        }
+      } catch (error) {
+        logger.warn('Focus on nodes failed:', error);
+      }
+    }, [currentNodes, selectCosmographNodes, fitViewByPointIndices]);
+
     const zoomToPoint = useCallback((index: number, duration?: number, scale?: number, canZoomOut?: boolean) => {
       if (!cosmographRef.current) return;
       
@@ -1555,6 +1586,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         clearSelection: clearCosmographSelection,
         selectNode: selectCosmographNode,
         selectNodes: selectCosmographNodes,
+        focusOnNodes,
         zoomIn,
         zoomOut,
         fitView,
@@ -1990,6 +2022,9 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     );
   }
 );
+
+// Export the ref type for external use
+export type GraphCanvasRef = GraphCanvasHandle;
 
 // Export with React.memo to prevent unnecessary re-renders
 export const GraphCanvas = React.memo(GraphCanvasComponent, (prevProps, nextProps) => {

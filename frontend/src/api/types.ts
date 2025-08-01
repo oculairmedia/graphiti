@@ -114,3 +114,21 @@ export interface CentralityStats {
 export interface BulkCentralityResponse {
   [nodeId: string]: CentralityMetrics;
 }
+
+// Graphiti-specific types (from Python server)
+export interface NodeResult {
+  uuid: string;
+  name: string;
+  summary: string;
+  labels: string[];
+  group_id: string;
+  created_at: string;
+  attributes: {
+    labels?: string[];
+    betweenness_centrality?: number;
+    pagerank_centrality?: number;
+    degree_centrality?: number;
+    eigenvector_centrality?: number;
+    [key: string]: any;
+  };
+}
