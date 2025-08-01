@@ -1,8 +1,8 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useCallback, useEffect } from 'react';
 import { Search, X, AlertCircle, Loader2, ChevronRight, Calendar, Tag } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -23,7 +23,9 @@ export const GraphitiSearch: React.FC<GraphitiSearchProps> = ({
   onNodeSelect,
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [displayedResults, setDisplayedResults] = useState(10); // Start with 10 results
   const inputRef = useRef<HTMLInputElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   const {
     searchQuery,
@@ -64,66 +66,78 @@ export const GraphitiSearch: React.FC<GraphitiSearchProps> = ({
     return Math.max(pagerank * 100, degree * 100);
   };
 
+  // Handle infinite scroll
+  const handleScroll = useCallback(() => {
+    if (!scrollRef.current) return;
+    
+    const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
+    if (scrollTop + clientHeight >= scrollHeight - 50) { // Load more when near bottom
+      if (displayedResults < searchResults.length) {
+        setDisplayedResults(prev => Math.min(prev + 10, searchResults.length));
+      }
+    }
+  }, [displayedResults, searchResults.length]);
+
+  // Reset displayed results when search results change
+  useEffect(() => {
+    setDisplayedResults(10);
+  }, [searchResults]);
+
   return (
-    <Card className={cn('w-full max-w-md shadow-lg', className)}>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-lg flex items-center gap-2">
-          <Search className="h-4 w-4" />
-          Graphiti Knowledge Search
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {/* Search Input */}
-        <div className="relative">
-          <Input
-            ref={inputRef}
-            type="text"
-            placeholder="Search entities, concepts, or relationships..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            onFocus={() => setIsExpanded(true)}
-            className="pr-10"
-          />
-          {searchQuery && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="absolute right-1 top-1 h-7 w-7 p-0"
-              onClick={handleClear}
-            >
-              <X className="h-4 w-4" />
-            </Button>
+    <div className={cn('space-y-3', className)}>
+      {/* Search Input */}
+      <div className="relative">
+        <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+        <Input
+          ref={inputRef}
+          type="text"
+          placeholder="Search entities, concepts, or relationships..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          onFocus={() => setIsExpanded(true)}
+          className="pl-8 pr-10"
+        />
+        {searchQuery && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="absolute right-1 top-1 h-7 w-7 p-0"
+            onClick={handleClear}
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        )}
+      </div>
+
+      {/* Search Results */}
+      {isExpanded && searchQuery && (
+        <div className="space-y-2">
+          {isSearching && (
+            <div className="flex items-center justify-center py-4">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
           )}
-        </div>
 
-        {/* Search Results */}
-        {isExpanded && searchQuery && (
-          <div className="space-y-2">
-            {isSearching && (
-              <div className="flex items-center justify-center py-4">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-              </div>
-            )}
+          {searchError && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                {searchError instanceof Error ? searchError.message : 'Search failed'}
+              </AlertDescription>
+            </Alert>
+          )}
 
-            {searchError && (
-              <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>
-                  {searchError instanceof Error ? searchError.message : 'Search failed'}
-                </AlertDescription>
-              </Alert>
-            )}
+          {!isSearching && !searchError && searchResults.length === 0 && (
+            <div className="text-center py-4 text-sm text-muted-foreground">
+              No results found for "{searchQuery}"
+            </div>
+          )}
 
-            {!isSearching && !searchError && searchResults.length === 0 && (
-              <div className="text-center py-4 text-sm text-muted-foreground">
-                No results found for "{searchQuery}"
-              </div>
-            )}
-
-            {searchResults.length > 0 && (
-              <ScrollArea className="h-[300px]">
+          {searchResults.length > 0 && (
+            <>
+              <ScrollArea className="h-[400px]" ref={scrollRef} onScrollCapture={handleScroll}>
                 <div className="space-y-2 pr-4">
-                  {searchResults.slice(0, 4).map((node) => (
+                  {searchResults.slice(0, displayedResults).map((node) => (
                     <Card
                       key={node.uuid}
                       className={cn(
@@ -177,19 +191,24 @@ export const GraphitiSearch: React.FC<GraphitiSearchProps> = ({
                       </CardContent>
                     </Card>
                   ))}
+                  
+                  {/* Loading more indicator */}
+                  {displayedResults < searchResults.length && (
+                    <div className="text-center py-2 text-xs text-muted-foreground">
+                      Showing {displayedResults} of {searchResults.length} results
+                    </div>
+                  )}
                 </div>
               </ScrollArea>
-            )}
 
-            {/* Results Summary */}
-            {searchResults.length > 0 && (
+              {/* Results Summary */}
               <div className="text-xs text-muted-foreground text-center pt-2 border-t">
                 Found {searchResults.length} result{searchResults.length !== 1 ? 's' : ''}
               </div>
-            )}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+            </>
+          )}
+        </div>
+      )}
+    </div>
   );
 };

@@ -12,7 +12,7 @@ export interface UseGraphitiSearchOptions {
 }
 
 export function useGraphitiSearch(options: UseGraphitiSearchOptions = {}) {
-  const { graphCanvasRef, onNodeSelect, defaultMaxNodes = 4 } = options;
+  const { graphCanvasRef, onNodeSelect, defaultMaxNodes = 40 } = options;
   
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
