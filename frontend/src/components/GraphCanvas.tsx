@@ -1009,21 +1009,29 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         });
         
         if (indices.length > 0) {
-          // First select the nodes
+          // First select the nodes visually
           const nodesToSelect = indices.map(idx => currentNodes[idx]).filter(Boolean);
           if (nodesToSelect.length > 0) {
             selectCosmographNodes(nodesToSelect);
           }
           
-          // Then focus on them
-          fitViewByPointIndices(indices, duration, padding);
+          // Then use Cosmograph's fitViewByPointIndices method
+          if (cosmographRef.current && cosmographRef.current.fitViewByPointIndices) {
+            const actualDuration = duration !== undefined ? duration : 1000;
+            const actualPadding = padding !== undefined ? padding : 0.2;
+            
+            console.log('GraphCanvas: Calling fitViewByPointIndices with indices:', indices);
+            cosmographRef.current.fitViewByPointIndices(indices, actualDuration, actualPadding);
+          } else {
+            logger.warn('fitViewByPointIndices method not available on Cosmograph instance');
+          }
         } else {
           logger.warn('No nodes found with the provided IDs:', nodeIds);
         }
       } catch (error) {
         logger.warn('Focus on nodes failed:', error);
       }
-    }, [currentNodes, selectCosmographNodes, fitViewByPointIndices]);
+    }, [currentNodes, selectCosmographNodes]);
 
     const zoomToPoint = useCallback((index: number, duration?: number, scale?: number, canZoomOut?: boolean) => {
       if (!cosmographRef.current) return;
@@ -1612,11 +1620,67 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         resumeSimulation,
         keepSimulationRunning
       };
-    });
+    }, [
+      clearCosmographSelection,
+      selectCosmographNode,
+      selectCosmographNodes,
+      focusOnNodes,
+      zoomIn,
+      zoomOut,
+      fitView,
+      fitViewByPointIndices,
+      zoomToPoint,
+      trackPointPositionsByIndices,
+      getTrackedPointPositionsMap,
+      activateRectSelection,
+      deactivateRectSelection,
+      activatePolygonalSelection,
+      deactivatePolygonalSelection,
+      selectPointsInRect,
+      selectPointsInPolygon,
+      getConnectedPointIndices,
+      getPointIndicesByExactValues,
+      addIncrementalData,
+      updateNodes,
+      updateLinks,
+      removeNodes,
+      removeLinks,
+      startSimulation,
+      pauseSimulation,
+      resumeSimulation,
+      keepSimulationRunning
+    ]);
     
     // Expose methods to parent via ref with minimal dependencies
     React.useImperativeHandle(ref, () => ({
-      ...methodsRef.current,
+      clearSelection: clearCosmographSelection,
+      selectNode: selectCosmographNode,
+      selectNodes: selectCosmographNodes,
+      focusOnNodes,
+      zoomIn,
+      zoomOut,
+      fitView,
+      fitViewByPointIndices,
+      zoomToPoint,
+      trackPointPositionsByIndices,
+      getTrackedPointPositionsMap,
+      activateRectSelection,
+      deactivateRectSelection,
+      activatePolygonalSelection,
+      deactivatePolygonalSelection,
+      selectPointsInRect,
+      selectPointsInPolygon,
+      getConnectedPointIndices,
+      getPointIndicesByExactValues,
+      addIncrementalData,
+      updateNodes,
+      updateLinks,
+      removeNodes,
+      removeLinks,
+      startSimulation,
+      pauseSimulation,
+      resumeSimulation,
+      keepSimulationRunning,
       setData: (nodes: GraphNode[], links: GraphLink[], runSimulation = true) => {
         if (cosmographRef.current && typeof cosmographRef.current.setData === 'function') {
           cosmographRef.current.setData(nodes, links, runSimulation);
@@ -1630,7 +1694,36 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       setIncrementalUpdateFlag: (enabled: boolean) => {
         isIncrementalUpdateRef.current = enabled;
       }
-    }), []);
+    }), [
+      clearCosmographSelection,
+      selectCosmographNode,
+      selectCosmographNodes,
+      focusOnNodes,
+      zoomIn,
+      zoomOut,
+      fitView,
+      fitViewByPointIndices,
+      zoomToPoint,
+      trackPointPositionsByIndices,
+      getTrackedPointPositionsMap,
+      activateRectSelection,
+      deactivateRectSelection,
+      activatePolygonalSelection,
+      deactivatePolygonalSelection,
+      selectPointsInRect,
+      selectPointsInPolygon,
+      getConnectedPointIndices,
+      getPointIndicesByExactValues,
+      addIncrementalData,
+      updateNodes,
+      updateLinks,
+      removeNodes,
+      removeLinks,
+      startSimulation,
+      pauseSimulation,
+      resumeSimulation,
+      keepSimulationRunning
+    ]);
 
     // Handle Cosmograph events with native selection methods and multi-selection
     // Cosmograph v2.0 onClick signature: (index: number | undefined, pointPosition: [number, number] | undefined, event: MouseEvent) => void
