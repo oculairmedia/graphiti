@@ -14,6 +14,7 @@ import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { useColorUtils } from '../hooks/useColorUtils';
 import { searchIndex } from '../utils/searchIndex';
 import { GraphConfigContext } from '../contexts/useGraphConfig';
+import { useWebSocketContext } from '../contexts/WebSocketProvider';
 
 const dataKitCoordinator = DataKitCoordinator.getInstance();
 
@@ -166,6 +167,10 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     const [isDataPreparing, setIsDataPreparing] = useState(false);
     const { config, setCosmographRef } = useGraphConfig();
     
+    // Glowing nodes state for real-time visualization
+    const [glowingNodes, setGlowingNodes] = useState<Map<string, number>>(new Map());
+    const { subscribe: subscribeToWebSocket } = useWebSocketContext();
+    
     // Track current data for incremental updates
     const [currentNodes, setCurrentNodes] = useState<GraphNode[]>([]);
     const [currentLinks, setCurrentLinks] = useState<GraphLink[]>([]);
@@ -234,6 +239,37 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       onDeselectAll: handleDeselectAll,
       cosmographRef
     });
+    
+    // Subscribe to WebSocket node access events
+    useEffect(() => {
+      const unsubscribe = subscribeToWebSocket((event) => {
+        if (event.type === 'node_access' && event.node_ids) {
+          const now = Date.now();
+          setGlowingNodes(prev => {
+            const updated = new Map(prev);
+            event.node_ids.forEach(nodeId => {
+              updated.set(nodeId, now);
+            });
+            return updated;
+          });
+          
+          // Remove glow after 2 seconds
+          setTimeout(() => {
+            setGlowingNodes(prev => {
+              const updated = new Map(prev);
+              event.node_ids.forEach(nodeId => {
+                if (updated.get(nodeId) === now) {
+                  updated.delete(nodeId);
+                }
+              });
+              return updated;
+            });
+          }, 2000);
+        }
+      });
+      
+      return unsubscribe;
+    }, [subscribeToWebSocket]);
     
     // Search functionality using indexed search
     const performSearch = useCallback(() => {
@@ -749,6 +785,12 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
 
     // Memoize point color function
     const pointColorFn = React.useCallback((node: GraphNode) => {
+      // Check if node is glowing
+      const isGlowing = glowingNodes.has(node.id);
+      if (isGlowing) {
+        return 'rgba(99, 102, 241, 0.9)'; // Bright indigo glow
+      }
+      
       const isHighlighted = highlightedNodes.includes(node.id);
       if (isHighlighted) {
         return 'rgba(255, 215, 0, 0.9)';
@@ -759,10 +801,19 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       }
       
       return undefined;
-    }, [highlightedNodes, config.colorScheme]);
+    }, [highlightedNodes, config.colorScheme, glowingNodes]);
     
     // Memoize point size function
     const pointSizeFn = React.useCallback((node: GraphNode) => {
+      // Check if node is glowing and make it larger
+      const isGlowing = glowingNodes.has(node.id);
+      if (isGlowing) {
+        const baseSize = config.sizeMapping === 'uniform' 
+          ? (config.minNodeSize + config.maxNodeSize) / 2 
+          : config.maxNodeSize;
+        return baseSize * config.sizeMultiplier * 1.5; // 50% larger when glowing
+      }
+      
       // Handle uniform size mapping
       if (config.sizeMapping === 'uniform') {
         return (config.minNodeSize + config.maxNodeSize) / 2 * config.sizeMultiplier;
@@ -772,7 +823,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         return undefined;
       }
       return undefined;
-    }, [highlightedNodes, config.minNodeSize, config.maxNodeSize, config.sizeMapping, config.sizeMultiplier]);
+    }, [highlightedNodes, config.minNodeSize, config.maxNodeSize, config.sizeMapping, config.sizeMultiplier, glowingNodes]);
     
     // Improved throttling for mouse move with requestAnimationFrame
     const lastHoverTimeRef = useRef<number>(0);
