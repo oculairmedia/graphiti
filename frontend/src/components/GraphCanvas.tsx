@@ -982,7 +982,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       }
     }, [config.fitViewDuration, config.fitViewPadding, currentNodes.length, isCanvasReady]);
 
-    const fitViewByPointIndices = useCallback((indices: number[], duration?: number, padding?: number) => {
+    const fitViewByIndices = useCallback((indices: number[], duration?: number, padding?: number) => {
       if (!cosmographRef.current) return;
       
       try {
@@ -996,34 +996,43 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     }, [config.fitViewDuration, config.fitViewPadding]);
 
     const focusOnNodes = useCallback((nodeIds: string[], duration?: number, padding?: number) => {
-      if (!cosmographRef.current || !currentNodes.length) return;
+      console.log('GraphCanvas: focusOnNodes called with nodeIds:', nodeIds);
+      console.log('GraphCanvas: cosmographRef.current exists:', !!cosmographRef.current);
+      console.log('GraphCanvas: nodes.length:', nodes.length);
+      
+      if (!cosmographRef.current || !nodes.length) {
+        logger.warn('GraphCanvas: focusOnNodes returning early - cosmographRef:', !!cosmographRef.current, 'nodes:', nodes.length);
+        return;
+      }
       
       try {
         // Find indices of the nodes with the given IDs
         const indices: number[] = [];
         nodeIds.forEach(nodeId => {
-          const index = currentNodes.findIndex(node => node.id === nodeId);
+          const index = nodes.findIndex(node => node.id === nodeId);
           if (index >= 0) {
             indices.push(index);
           }
         });
         
+        console.log('GraphCanvas: Found indices:', indices);
+        
         if (indices.length > 0) {
           // First select the nodes visually
-          const nodesToSelect = indices.map(idx => currentNodes[idx]).filter(Boolean);
+          const nodesToSelect = indices.map(idx => nodes[idx]).filter(Boolean);
           if (nodesToSelect.length > 0) {
             selectCosmographNodes(nodesToSelect);
           }
           
-          // Then use Cosmograph's fitViewByPointIndices method
-          if (cosmographRef.current && cosmographRef.current.fitViewByPointIndices) {
+          // Then use Cosmograph's fitViewByIndices method
+          if (cosmographRef.current && cosmographRef.current.fitViewByIndices) {
             const actualDuration = duration !== undefined ? duration : 1000;
             const actualPadding = padding !== undefined ? padding : 0.2;
             
-            console.log('GraphCanvas: Calling fitViewByPointIndices with indices:', indices);
-            cosmographRef.current.fitViewByPointIndices(indices, actualDuration, actualPadding);
+            console.log('GraphCanvas: Calling fitViewByIndices with indices:', indices);
+            cosmographRef.current.fitViewByIndices(indices, actualDuration, actualPadding);
           } else {
-            logger.warn('fitViewByPointIndices method not available on Cosmograph instance');
+            logger.warn('fitViewByIndices method not available on Cosmograph instance');
           }
         } else {
           logger.warn('No nodes found with the provided IDs:', nodeIds);
@@ -1031,7 +1040,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       } catch (error) {
         logger.warn('Focus on nodes failed:', error);
       }
-    }, [currentNodes, selectCosmographNodes]);
+    }, [nodes, selectCosmographNodes]);
 
     const zoomToPoint = useCallback((index: number, duration?: number, scale?: number, canZoomOut?: boolean) => {
       if (!cosmographRef.current) return;
@@ -1565,7 +1574,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       zoomIn,
       zoomOut,
       fitView,
-      fitViewByPointIndices,
+      fitViewByIndices,
       zoomToPoint,
       trackPointPositionsByIndices,
       getTrackedPointPositionsMap,
@@ -1598,7 +1607,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         zoomIn,
         zoomOut,
         fitView,
-        fitViewByPointIndices,
+        fitViewByIndices,
         zoomToPoint,
         trackPointPositionsByIndices,
         getTrackedPointPositionsMap,
@@ -1628,7 +1637,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       zoomIn,
       zoomOut,
       fitView,
-      fitViewByPointIndices,
+      fitViewByIndices,
       zoomToPoint,
       trackPointPositionsByIndices,
       getTrackedPointPositionsMap,
@@ -1660,7 +1669,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       zoomIn,
       zoomOut,
       fitView,
-      fitViewByPointIndices,
+      fitViewByIndices,
       zoomToPoint,
       trackPointPositionsByIndices,
       getTrackedPointPositionsMap,
@@ -1702,7 +1711,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       zoomIn,
       zoomOut,
       fitView,
-      fitViewByPointIndices,
+      fitViewByIndices,
       zoomToPoint,
       trackPointPositionsByIndices,
       getTrackedPointPositionsMap,
