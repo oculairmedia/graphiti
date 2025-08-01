@@ -13,6 +13,11 @@ export default defineConfig(({ mode }) => ({
         target: 'http://localhost:3000',
         changeOrigin: true,
       },
+      '/graphiti': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/graphiti/, ''),
+      },
     },
   },
   plugins: [
