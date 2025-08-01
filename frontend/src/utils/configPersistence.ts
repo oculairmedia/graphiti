@@ -204,10 +204,17 @@ export const getStorageUsage = (): { used: number; available: number } => {
 // Core persistence functions
 export const saveConfigToStorage = (config: PersistedConfig): boolean => {
   if (!isStorageAvailable()) {
+    console.warn('configPersistence: localStorage not available for saving');
     return false;
   }
 
   try {
+    // Validate config before saving
+    if (!validatePersistedConfig(config)) {
+      console.error('configPersistence: Attempted to save invalid config', config);
+      return false;
+    }
+    
     // Create backup of current config before saving new one
     const existing = localStorage.getItem(STORAGE_KEYS.MAIN_CONFIG);
     if (existing) {
@@ -223,17 +230,28 @@ export const saveConfigToStorage = (config: PersistedConfig): boolean => {
     const serialized = JSON.stringify(configWithTimestamp);
     localStorage.setItem(STORAGE_KEYS.MAIN_CONFIG, serialized);
     
+    console.log('configPersistence: Successfully saved config', {
+      version: configWithTimestamp.version,
+      hasNodeDetails: !!config.nodeDetailsSections,
+      hasGraphConfig: !!config.graphConfig,
+      size: serialized.length
+    });
+    
     return true;
   } catch (error) {
+    console.error('configPersistence: Failed to save config', error);
     
     // Handle quota exceeded
     if (error instanceof Error && error.name === 'QuotaExceededError') {
+      console.warn('configPersistence: localStorage quota exceeded, clearing backup');
       try {
         localStorage.removeItem(STORAGE_KEYS.BACKUP_CONFIG);
-        localStorage.setItem(STORAGE_KEYS.MAIN_CONFIG, JSON.stringify(config));
+        const serialized = JSON.stringify(config);
+        localStorage.setItem(STORAGE_KEYS.MAIN_CONFIG, serialized);
+        console.log('configPersistence: Saved after clearing backup');
         return true;
-      } catch {
-        // Save failed even after clearing backup
+      } catch (retryError) {
+        console.error('configPersistence: Save failed even after clearing backup', retryError);
       }
     }
     
@@ -241,26 +259,52 @@ export const saveConfigToStorage = (config: PersistedConfig): boolean => {
   }
 };
 
+// Validate configuration structure
+const validatePersistedConfig = (config: unknown): config is PersistedConfig => {
+  if (!config || typeof config !== 'object') return false;
+  const cfg = config as Record<string, unknown>;
+  
+  // Check required fields
+  if (typeof cfg.version !== 'number' || typeof cfg.timestamp !== 'number') {
+    return false;
+  }
+  
+  // Validate optional sections if present
+  if (cfg.nodeDetailsSections && typeof cfg.nodeDetailsSections !== 'object') {
+    return false;
+  }
+  
+  if (cfg.graphConfig && typeof cfg.graphConfig !== 'object') {
+    return false;
+  }
+  
+  return true;
+};
+
 export const loadConfigFromStorage = (): PersistedConfig | null => {
   if (!isStorageAvailable()) {
+    console.warn('configPersistence: localStorage not available');
     return null;
   }
 
   try {
     const stored = localStorage.getItem(STORAGE_KEYS.MAIN_CONFIG);
     if (!stored) {
+      console.log('configPersistence: No stored config found');
       return null;
     }
 
-    const parsed = JSON.parse(stored) as PersistedConfig;
+    const parsed = JSON.parse(stored);
     
     // Validate basic structure
-    if (!parsed || typeof parsed !== 'object' || typeof parsed.version !== 'number') {
+    if (!validatePersistedConfig(parsed)) {
+      console.error('configPersistence: Invalid config structure', parsed);
       return null;
     }
 
     // Handle version migrations if needed
     if (parsed.version < CURRENT_SCHEMA_VERSION) {
+      console.log(`configPersistence: Migrating config from v${parsed.version} to v${CURRENT_SCHEMA_VERSION}`);
       const migrated = migrateConfig(parsed);
       if (migrated) {
         saveConfigToStorage(migrated); // Save migrated version
@@ -268,18 +312,29 @@ export const loadConfigFromStorage = (): PersistedConfig | null => {
       }
     }
 
+    console.log('configPersistence: Successfully loaded config', {
+      version: parsed.version,
+      hasNodeDetails: !!parsed.nodeDetailsSections,
+      hasGraphConfig: !!parsed.graphConfig
+    });
     return parsed;
   } catch (error) {
+    console.error('configPersistence: Failed to load main config', error);
     
     // Try backup
     try {
       const backup = localStorage.getItem(STORAGE_KEYS.BACKUP_CONFIG);
       if (backup) {
-        const parsed = JSON.parse(backup) as PersistedConfig;
-        return parsed;
+        const parsed = JSON.parse(backup);
+        if (validatePersistedConfig(parsed)) {
+          console.log('configPersistence: Restored from backup');
+          // Restore backup to main
+          localStorage.setItem(STORAGE_KEYS.MAIN_CONFIG, backup);
+          return parsed;
+        }
       }
     } catch (backupError) {
-      // Backup recovery failed
+      console.error('configPersistence: Backup recovery failed', backupError);
     }
     
     return null;
@@ -321,12 +376,20 @@ export const createDifferentialConfig = <T extends Record<string, unknown>>(
 ): Partial<T> => {
   const diff: Partial<T> = {};
   
+  // Always include certain critical fields
+  const alwaysIncludeFields = ['nodeTypeColors', 'nodeTypeVisibility', 'filteredNodeTypes'];
+  
   for (const key in current) {
-    // Special handling for nodeTypeColors and nodeTypeVisibility
-    // Always include them if they have any content, even if default is empty object
-    if (key === 'nodeTypeColors' || key === 'nodeTypeVisibility') {
-      if (current[key] && typeof current[key] === 'object' && Object.keys(current[key]).length > 0) {
-        diff[key] = current[key];
+    // Special handling for fields that should always be included if they have content
+    if (alwaysIncludeFields.includes(key)) {
+      const value = current[key];
+      if (value && typeof value === 'object') {
+        // For objects, only include if non-empty
+        if (Array.isArray(value) ? value.length > 0 : Object.keys(value).length > 0) {
+          diff[key] = value;
+        }
+      } else if (value !== undefined && value !== null) {
+        diff[key] = value;
       }
       continue;
     }
@@ -344,6 +407,11 @@ export const createDifferentialConfig = <T extends Record<string, unknown>>(
     }
   }
   
+  // Ensure we're not returning a completely empty object
+  if (Object.keys(diff).length === 0) {
+    console.log('createDifferentialConfig: No differences found from defaults');
+  }
+  
   return diff;
 };
 
@@ -352,6 +420,12 @@ export const mergeDifferentialConfig = <T extends Record<string, unknown>>(
   defaults: T,
   diff: Partial<T>
 ): T => {
+  // If diff is empty or undefined, return defaults
+  if (!diff || Object.keys(diff).length === 0) {
+    console.log('mergeDifferentialConfig: No differences found, returning defaults');
+    return defaults;
+  }
+  
   const merged = { ...defaults };
   
   for (const key in diff) {
@@ -365,6 +439,11 @@ export const mergeDifferentialConfig = <T extends Record<string, unknown>>(
       }
     }
   }
+  
+  console.log('mergeDifferentialConfig: Merged config', { 
+    diffKeys: Object.keys(diff), 
+    mergedKeys: Object.keys(merged).filter(k => merged[k] !== defaults[k]) 
+  });
   
   return merged;
 };

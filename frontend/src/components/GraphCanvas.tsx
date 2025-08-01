@@ -668,7 +668,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       const minWeight = Math.min(...weights);
       const weightRange = maxWeight - minWeight || 1;
       
-      return (linkValue: any, linkIndex: number) => {
+      return (linkValue: GraphLink, linkIndex: number) => {
         // Get the actual link data from the current links
         const link = currentLinks[linkIndex];
         if (!link) return config.linkColor;
