@@ -122,10 +122,17 @@ const GraphViewportComponent = forwardRef<GraphCanvasHandle, GraphViewportProps>
         </div>
       )}
 
-      {/* Hover Tooltip */}
-      {hoveredNode && hoveredConnectedNodes.length > 0 && (
-        <div className="absolute bottom-20 left-1/2 transform -translate-x-1/2 glass-panel px-3 py-1 rounded-full text-xs text-muted-foreground animate-fade-in pointer-events-none">
-          {hoveredNode.label} • {hoveredConnectedNodes.length} connected nodes
+      {/* Hover Tooltip - Positioned above viewport controls */}
+      {hoveredNode && (
+        <div className="absolute bottom-48 left-1/2 transform -translate-x-1/2 glass-panel px-4 py-2 rounded-lg text-sm font-medium text-foreground opacity-0 animate-[opacity_200ms_ease-in_forwards] pointer-events-none shadow-lg backdrop-blur-md bg-background/90 border border-border z-[60]">
+          <div className="text-center">
+            <div className="text-base font-semibold">{hoveredNode.label || hoveredNode.name}</div>
+            {hoveredConnectedNodes.length > 0 && (
+              <div className="text-xs text-muted-foreground mt-1">
+                {hoveredConnectedNodes.length} connected node{hoveredConnectedNodes.length !== 1 ? 's' : ''}
+              </div>
+            )}
+          </div>
         </div>
       )}
 

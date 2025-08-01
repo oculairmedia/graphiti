@@ -108,6 +108,10 @@ export default {
 				'pulse-glow': {
 					'0%, 100%': { boxShadow: '0 0 20px hsl(var(--primary) / 0.3)' },
 					'50%': { boxShadow: '0 0 40px hsl(var(--primary) / 0.6)' }
+				},
+				'opacity': {
+					'0%': { opacity: '0' },
+					'100%': { opacity: '1' }
 				}
 			},
 			animation: {
