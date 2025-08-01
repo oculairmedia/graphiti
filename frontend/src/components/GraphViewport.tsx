@@ -96,10 +96,16 @@ const GraphViewportComponent = forwardRef<GraphCanvasHandle, GraphViewportProps>
         <GraphitiSearch
           graphCanvasRef={ref as React.RefObject<GraphCanvasHandle>}
           onNodeSelect={(node: NodeResult) => {
+            console.log('GraphitiSearch: Node selected:', node);
+            console.log('GraphitiSearch: Looking for node with ID:', node.uuid);
             // Find the corresponding GraphNode by UUID
             const graphNode = nodes.find(n => n.id === node.uuid);
+            console.log('GraphitiSearch: Found graph node:', graphNode);
             if (graphNode) {
               stableOnNodeClick(graphNode);
+            } else {
+              console.warn('GraphitiSearch: No graph node found with UUID:', node.uuid);
+              console.log('Available node IDs:', nodes.slice(0, 5).map(n => n.id));
             }
           }}
         />
