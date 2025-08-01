@@ -3,27 +3,29 @@
 Quick test of gemma3:1b for edge extraction
 """
 
-import json
 import asyncio
-import httpx
+import json
 import time
 
+import httpx
+
+
 async def test_gemma3_1b():
-    model = "gemma3:1b"
-    base_url = "http://100.81.139.20:11434"
-    
+    model = 'gemma3:1b'
+    base_url = 'http://100.81.139.20:11434'
+
     test_texts = [
-        "John Smith is the CEO of Microsoft and married to Jane Doe.",
-        "Apple acquired Beats Electronics for $3 billion. Tim Cook announced the deal."
+        'John Smith is the CEO of Microsoft and married to Jane Doe.',
+        'Apple acquired Beats Electronics for $3 billion. Tim Cook announced the deal.',
     ]
-    
-    print(f"Testing {model} for edge extraction")
-    print("=" * 60)
-    
+
+    print(f'Testing {model} for edge extraction')
+    print('=' * 60)
+
     async with httpx.AsyncClient(timeout=60.0) as client:
         for i, text in enumerate(test_texts):
-            print(f"\nTest {i+1}: {text}")
-            
+            print(f'\nTest {i + 1}: {text}')
+
             prompt = f"""Extract ALL relationships from this text as a JSON array.
 
 Text: "{text}"
@@ -33,53 +35,51 @@ Format each relationship as: {{"source": "entity1", "relation": "RELATION_TYPE",
 Return ONLY the JSON array, no other text. Example:
 [{{"source": "John", "relation": "WORKS_AT", "target": "Google"}}]"""
 
-            print("Extracting...", end="", flush=True)
+            print('Extracting...', end='', flush=True)
             start = time.time()
-            
+
             response = await client.post(
-                f"{base_url}/api/chat",
+                f'{base_url}/api/chat',
                 json={
-                    "model": model,
-                    "messages": [{"role": "user", "content": prompt}],
-                    "stream": False,
-                    "options": {
-                        "temperature": 1.0,
-                        "top_k": 64,
-                        "top_p": 0.95
-                    }
-                }
+                    'model': model,
+                    'messages': [{'role': 'user', 'content': prompt}],
+                    'stream': False,
+                    'options': {'temperature': 1.0, 'top_k': 64, 'top_p': 0.95},
+                },
             )
-            
+
             elapsed = time.time() - start
             content = response.json()['message']['content']
-            
-            print(f" Done! ({elapsed:.1f}s)")
-            print(f"Raw output: {content[:300]}...")
-            
+
+            print(f' Done! ({elapsed:.1f}s)')
+            print(f'Raw output: {content[:300]}...')
+
             # Try to parse
             try:
                 # Direct parse
                 edges = json.loads(content)
                 if isinstance(edges, list):
-                    print(f"Extracted {len(edges)} edges:")
+                    print(f'Extracted {len(edges)} edges:')
                     for edge in edges:
-                        print(f"  - {edge}")
+                        print(f'  - {edge}')
                 else:
-                    print(f"Got object instead of array: {edges}")
+                    print(f'Got object instead of array: {edges}')
             except json.JSONDecodeError:
                 # Try to find JSON in text
                 import re
+
                 match = re.search(r'\[.*?\]', content, re.DOTALL)
                 if match:
                     try:
                         edges = json.loads(match.group())
-                        print(f"Extracted {len(edges)} edges from text:")
+                        print(f'Extracted {len(edges)} edges from text:')
                         for edge in edges:
-                            print(f"  - {edge}")
+                            print(f'  - {edge}')
                     except:
-                        print("Could not parse JSON from text")
+                        print('Could not parse JSON from text')
                 else:
-                    print("No JSON array found in output")
+                    print('No JSON array found in output')
 
-if __name__ == "__main__":
+
+if __name__ == '__main__':
     asyncio.run(test_gemma3_1b())

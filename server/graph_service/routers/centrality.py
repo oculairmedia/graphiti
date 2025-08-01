@@ -17,9 +17,6 @@ limitations under the License.
 from typing import Dict, Optional
 
 from fastapi import APIRouter, status
-from pydantic import BaseModel, Field
-
-from graph_service.zep_graphiti import ZepGraphitiDep
 from graphiti_core.utils.maintenance import (
     calculate_all_centralities,
     calculate_betweenness_centrality,
@@ -27,50 +24,51 @@ from graphiti_core.utils.maintenance import (
     calculate_pagerank,
     store_centrality_scores,
 )
+from pydantic import BaseModel, Field
 
-router = APIRouter(prefix="/centrality", tags=["centrality"])
+from graph_service.zep_graphiti import ZepGraphitiDep
+
+router = APIRouter(prefix='/centrality', tags=['centrality'])
 
 
 class PageRankRequest(BaseModel):
-    group_id: Optional[str] = Field(None, description="Optional group ID to filter nodes")
-    damping_factor: float = Field(0.85, description="PageRank damping factor")
-    iterations: int = Field(20, description="Number of iterations for convergence")
-    store_results: bool = Field(True, description="Whether to store results in database")
+    group_id: Optional[str] = Field(None, description='Optional group ID to filter nodes')
+    damping_factor: float = Field(0.85, description='PageRank damping factor')
+    iterations: int = Field(20, description='Number of iterations for convergence')
+    store_results: bool = Field(True, description='Whether to store results in database')
 
 
 class DegreeRequest(BaseModel):
-    group_id: Optional[str] = Field(None, description="Optional group ID to filter nodes")
-    direction: str = Field("both", description="Direction: 'in', 'out', or 'both'")
-    store_results: bool = Field(True, description="Whether to store results in database")
+    group_id: Optional[str] = Field(None, description='Optional group ID to filter nodes')
+    direction: str = Field('both', description="Direction: 'in', 'out', or 'both'")
+    store_results: bool = Field(True, description='Whether to store results in database')
 
 
 class BetweennessRequest(BaseModel):
-    group_id: Optional[str] = Field(None, description="Optional group ID to filter nodes")
-    sample_size: Optional[int] = Field(
-        None, description="Number of nodes to sample (None for all)"
-    )
-    store_results: bool = Field(True, description="Whether to store results in database")
+    group_id: Optional[str] = Field(None, description='Optional group ID to filter nodes')
+    sample_size: Optional[int] = Field(None, description='Number of nodes to sample (None for all)')
+    store_results: bool = Field(True, description='Whether to store results in database')
 
 
 class AllCentralitiesRequest(BaseModel):
-    group_id: Optional[str] = Field(None, description="Optional group ID to filter nodes")
-    store_results: bool = Field(True, description="Whether to store results in database")
+    group_id: Optional[str] = Field(None, description='Optional group ID to filter nodes')
+    store_results: bool = Field(True, description='Whether to store results in database')
 
 
 class CentralityResponse(BaseModel):
-    scores: Dict[str, float] = Field(..., description="Node UUID to score mapping")
-    metric: str = Field(..., description="The centrality metric calculated")
-    nodes_processed: int = Field(..., description="Number of nodes processed")
+    scores: Dict[str, float] = Field(..., description='Node UUID to score mapping')
+    metric: str = Field(..., description='The centrality metric calculated')
+    nodes_processed: int = Field(..., description='Number of nodes processed')
 
 
 class AllCentralitiesResponse(BaseModel):
     scores: Dict[str, Dict[str, float]] = Field(
-        ..., description="Node UUID to all centrality scores mapping"
+        ..., description='Node UUID to all centrality scores mapping'
     )
-    nodes_processed: int = Field(..., description="Number of nodes processed")
+    nodes_processed: int = Field(..., description='Number of nodes processed')
 
 
-@router.post("/pagerank", status_code=status.HTTP_200_OK)
+@router.post('/pagerank', status_code=status.HTTP_200_OK)
 async def calculate_pagerank_endpoint(
     request: PageRankRequest,
     graphiti: ZepGraphitiDep,
@@ -85,19 +83,19 @@ async def calculate_pagerank_endpoint(
         iterations=request.iterations,
         group_id=request.group_id,
     )
-    
+
     if request.store_results:
-        formatted_scores = {uuid: {"pagerank": score} for uuid, score in scores.items()}
+        formatted_scores = {uuid: {'pagerank': score} for uuid, score in scores.items()}
         await store_centrality_scores(graphiti.driver, formatted_scores)
-    
+
     return CentralityResponse(
         scores=scores,
-        metric="pagerank",
+        metric='pagerank',
         nodes_processed=len(scores),
     )
 
 
-@router.post("/degree", status_code=status.HTTP_200_OK)
+@router.post('/degree', status_code=status.HTTP_200_OK)
 async def calculate_degree_endpoint(
     request: DegreeRequest,
     graphiti: ZepGraphitiDep,
@@ -111,29 +109,29 @@ async def calculate_degree_endpoint(
         direction=request.direction,
         group_id=request.group_id,
     )
-    
+
     # Flatten the degree dictionary for response
     scores = {}
     for uuid, degree_dict in degrees.items():
-        if request.direction == "both":
-            scores[uuid] = float(degree_dict.get("total", 0))
-        elif request.direction == "in":
-            scores[uuid] = float(degree_dict.get("in", 0))
+        if request.direction == 'both':
+            scores[uuid] = float(degree_dict.get('total', 0))
+        elif request.direction == 'in':
+            scores[uuid] = float(degree_dict.get('in', 0))
         else:  # out
-            scores[uuid] = float(degree_dict.get("out", 0))
-    
+            scores[uuid] = float(degree_dict.get('out', 0))
+
     if request.store_results:
-        formatted_scores = {uuid: {"degree": score} for uuid, score in scores.items()}
+        formatted_scores = {uuid: {'degree': score} for uuid, score in scores.items()}
         await store_centrality_scores(graphiti.driver, formatted_scores)
-    
+
     return CentralityResponse(
         scores=scores,
-        metric=f"degree_{request.direction}",
+        metric=f'degree_{request.direction}',
         nodes_processed=len(scores),
     )
 
 
-@router.post("/betweenness", status_code=status.HTTP_200_OK)
+@router.post('/betweenness', status_code=status.HTTP_200_OK)
 async def calculate_betweenness_endpoint(
     request: BetweennessRequest,
     graphiti: ZepGraphitiDep,
@@ -147,19 +145,19 @@ async def calculate_betweenness_endpoint(
         sample_size=request.sample_size,
         group_id=request.group_id,
     )
-    
+
     if request.store_results:
-        formatted_scores = {uuid: {"betweenness": score} for uuid, score in scores.items()}
+        formatted_scores = {uuid: {'betweenness': score} for uuid, score in scores.items()}
         await store_centrality_scores(graphiti.driver, formatted_scores)
-    
+
     return CentralityResponse(
         scores=scores,
-        metric="betweenness",
+        metric='betweenness',
         nodes_processed=len(scores),
     )
 
 
-@router.post("/all", status_code=status.HTTP_200_OK)
+@router.post('/all', status_code=status.HTTP_200_OK)
 async def calculate_all_centralities_endpoint(
     request: AllCentralitiesRequest,
     graphiti: ZepGraphitiDep,
@@ -173,7 +171,7 @@ async def calculate_all_centralities_endpoint(
         group_id=request.group_id,
         store_results=request.store_results,
     )
-    
+
     return AllCentralitiesResponse(
         scores=scores,
         nodes_processed=len(scores),

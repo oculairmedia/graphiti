@@ -187,8 +187,12 @@ async def resolve_extracted_nodes(
     llm_client = clients.llm_client
     driver = clients.driver
 
-    # First, check for exact name matches in the database for each extracted node
-    exact_match_candidates: list[EntityNode] = []
+    resolved_nodes: list[EntityNode] = []
+    uuid_map: dict[str, str] = {}
+    node_duplicates: list[tuple[EntityNode, EntityNode]] = []
+    nodes_needing_llm_resolution: list[EntityNode] = []
+
+    # First, handle exact name matches programmatically
     if existing_nodes_override is None:
         for node in extracted_nodes:
             # Query for exact name matches
@@ -196,28 +200,51 @@ async def resolve_extracted_nodes(
             MATCH (n:Entity)
             WHERE n.name = $name AND n.group_id = $group_id
             RETURN n
+            ORDER BY n.created_at
+            LIMIT 1
             """
             records, _, _ = await driver.execute_query(
-                exact_query,
-                name=node.name,
-                group_id=node.group_id
+                exact_query, name=node.name, group_id=node.group_id
             )
-            
-            for record in records:
-                n = record.get('n')
+
+            if records and len(records) > 0:
+                # Found exact match - use the existing node
+                n = records[0].get('n')
                 if n and hasattr(n, 'properties'):
                     props = n.properties
-                    exact_node = EntityNode(
+                    existing_node = EntityNode(
                         uuid=props.get('uuid'),
                         name=props.get('name'),
                         labels=props.get('labels', ['Entity']),
                         group_id=props.get('group_id'),
                         summary=props.get('summary'),
                         name_embedding=props.get('name_embedding'),
-                        created_at=props.get('created_at')
+                        created_at=props.get('created_at'),
                     )
-                    exact_match_candidates.append(exact_node)
+                    resolved_nodes.append(existing_node)
+                    uuid_map[node.uuid] = existing_node.uuid
+                    node_duplicates.append((node, existing_node))
+                    logger.debug(
+                        f"Found exact match for '{node.name}' - using existing node {existing_node.uuid}"
+                    )
+                else:
+                    # Couldn't parse existing node, add to LLM resolution
+                    nodes_needing_llm_resolution.append(node)
+            else:
+                # No exact match found, needs LLM resolution
+                nodes_needing_llm_resolution.append(node)
+    else:
+        # If override is provided, all nodes need LLM resolution
+        nodes_needing_llm_resolution = extracted_nodes
 
+    # If all nodes were resolved by exact matching, return early
+    if not nodes_needing_llm_resolution:
+        new_node_duplicates: list[
+            tuple[EntityNode, EntityNode]
+        ] = await filter_existing_duplicate_of_edges(driver, node_duplicates)
+        return resolved_nodes, uuid_map, new_node_duplicates
+
+    # For remaining nodes, use the existing LLM-based resolution
     search_results: list[SearchResults] = await semaphore_gather(
         *[
             search(
@@ -227,7 +254,7 @@ async def resolve_extracted_nodes(
                 search_filter=SearchFilters(),
                 config=NODE_HYBRID_SEARCH_RRF,
             )
-            for node in extracted_nodes
+            for node in nodes_needing_llm_resolution
         ]
     )
 
@@ -236,10 +263,6 @@ async def resolve_extracted_nodes(
         if existing_nodes_override is None
         else existing_nodes_override
     )
-    
-    # Add exact matches to candidates (they might not be returned by search)
-    if existing_nodes_override is None:
-        candidate_nodes.extend(exact_match_candidates)
 
     existing_nodes_dict: dict[str, EntityNode] = {node.uuid: node for node in candidate_nodes}
 
@@ -272,7 +295,7 @@ async def resolve_extracted_nodes(
             ).__doc__
             or 'Default Entity Type',
         }
-        for i, node in enumerate(extracted_nodes)
+        for i, node in enumerate(nodes_needing_llm_resolution)
     ]
 
     context = {
@@ -291,21 +314,19 @@ async def resolve_extracted_nodes(
 
     node_resolutions: list = llm_response.get('entity_resolutions', [])
 
-    resolved_nodes: list[EntityNode] = []
-    uuid_map: dict[str, str] = {}
-    node_duplicates: list[tuple[EntityNode, EntityNode]] = []
+    # Process LLM resolutions for nodes that needed it
     for resolution in node_resolutions:
         resolution_id: int = resolution.get('id', -1)
         duplicate_idx: int = resolution.get('duplicate_idx', -1)
 
         # Validate resolution_id is within bounds
-        if not (0 <= resolution_id < len(extracted_nodes)):
+        if not (0 <= resolution_id < len(nodes_needing_llm_resolution)):
             logger.warning(
-                f"Invalid resolution_id {resolution_id} for extracted_nodes of length {len(extracted_nodes)}. Skipping resolution."
+                f'Invalid resolution_id {resolution_id} for nodes_needing_llm_resolution of length {len(nodes_needing_llm_resolution)}. Skipping resolution.'
             )
             continue
 
-        extracted_node = extracted_nodes[resolution_id]
+        extracted_node = nodes_needing_llm_resolution[resolution_id]
 
         resolved_node = (
             existing_nodes[duplicate_idx]
@@ -325,7 +346,7 @@ async def resolve_extracted_nodes(
             # Validate idx is within bounds
             if not (0 <= idx < len(existing_nodes)):
                 logger.warning(
-                    f"Invalid duplicate index {idx} for existing_nodes of length {len(existing_nodes)}. Using resolved_node instead."
+                    f'Invalid duplicate index {idx} for existing_nodes of length {len(existing_nodes)}. Using resolved_node instead.'
                 )
                 existing_node = resolved_node
             else:

@@ -46,17 +46,13 @@ class GetMemoryResponse(BaseModel):
 
 
 class NodeSearchQuery(BaseModel):
-    group_ids: list[str] | None = Field(
-        None, description='The group ids for the nodes to search'
-    )
+    group_ids: list[str] | None = Field(None, description='The group ids for the nodes to search')
     query: str
     max_nodes: int = Field(default=10, description='The maximum number of nodes to retrieve')
     center_node_uuid: str | None = Field(
         None, description='Optional UUID of a node to center the search around'
     )
-    entity: str = Field(
-        default='', description='Optional entity type to filter results'
-    )
+    entity: str = Field(default='', description='Optional entity type to filter results')
 
 
 class NodeResult(BaseModel):
@@ -78,9 +74,5 @@ class NodeSearchResults(BaseModel):
 
 class EdgesByNodeResponse(BaseModel):
     edges: list[FactResult]
-    source_edges: list[FactResult] = Field(
-        ..., description='Edges where this node is the source'
-    )
-    target_edges: list[FactResult] = Field(
-        ..., description='Edges where this node is the target'
-    )
+    source_edges: list[FactResult] = Field(..., description='Edges where this node is the source')
+    target_edges: list[FactResult] = Field(..., description='Edges where this node is the target')

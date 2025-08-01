@@ -15,6 +15,7 @@ limitations under the License.
 """
 
 from neo4j import Neo4jDriver
+
 from .falkordb_driver import FalkorDriver
 
 __all__ = ['Neo4jDriver', 'FalkorDriver']

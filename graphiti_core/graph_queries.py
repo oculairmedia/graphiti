@@ -88,7 +88,7 @@ def get_fulltext_indices(db_type: str = 'neo4j') -> list[LiteralString]:
 
 def get_nodes_query(db_type: str = 'neo4j', name: str = '', query: str | None = None) -> str:
     if db_type == 'falkordb':
-        label = NEO4J_TO_FALKORDB_MAPPING[name] 
+        label = NEO4J_TO_FALKORDB_MAPPING[name]
         # FalkorDB uses different procedure names for fulltext search
         return f"CALL db.idx.fulltext.queryNodes('{label}', {query})"
     else:
@@ -106,7 +106,7 @@ def get_vector_cosine_func_query(vec1, vec2, db_type: str = 'neo4j') -> str:
 def get_relationships_query(name: str, db_type: str = 'neo4j') -> str:
     if db_type == 'falkordb':
         label = NEO4J_TO_FALKORDB_MAPPING[name]
-        # FalkorDB uses different procedure names for fulltext search  
+        # FalkorDB uses different procedure names for fulltext search
         return f"CALL db.idx.fulltext.queryRelationships('{label}', $query)"
     else:
         return f'CALL db.index.fulltext.queryRelationships("{name}", $query, {{limit: $limit}})'

@@ -8,17 +8,18 @@ This module tests the graph centrality analysis functionality including:
 - Combined centrality operations
 """
 
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 from datetime import datetime, timezone
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
+
+import pytest
 
 from graphiti_core.driver.neo4j_driver import Neo4jDriver
 from graphiti_core.utils.maintenance.centrality_operations import (
-    calculate_pagerank,
-    calculate_degree_centrality,
-    calculate_betweenness_centrality,
     calculate_all_centralities,
+    calculate_betweenness_centrality,
+    calculate_degree_centrality,
+    calculate_pagerank,
     store_centrality_scores,
 )
 
@@ -42,22 +43,22 @@ class TestCentralityOperations:
                 'name': 'Node A',
                 'pagerank': 0.15,
                 'degree_centrality': 0.4,
-                'betweenness_centrality': 0.1
+                'betweenness_centrality': 0.1,
             },
             {
                 'uuid': str(uuid4()),
                 'name': 'Node B',
                 'pagerank': 0.25,
                 'degree_centrality': 0.6,
-                'betweenness_centrality': 0.3
+                'betweenness_centrality': 0.3,
             },
             {
                 'uuid': str(uuid4()),
                 'name': 'Node C',
                 'pagerank': 0.10,
                 'degree_centrality': 0.2,
-                'betweenness_centrality': 0.05
-            }
+                'betweenness_centrality': 0.05,
+            },
         ]
 
     @pytest.mark.asyncio
@@ -72,12 +73,12 @@ class TestCentralityOperations:
         # Verify the query was called
         mock_driver.execute_query.assert_called_once()
         query_args = mock_driver.execute_query.call_args[0]
-        
+
         # Check that the query contains PageRank algorithm
         assert 'gds.pageRank' in query_args[0]
         assert 'damping_factor: $damping_factor' in query_args[0]
         assert 'max_iterations: $max_iterations' in query_args[0]
-        
+
         # Check parameters
         params = mock_driver.execute_query.call_args[1]['parameters']
         assert params['damping_factor'] == 0.85
@@ -94,10 +95,7 @@ class TestCentralityOperations:
 
         # Execute with custom parameters
         result = await calculate_pagerank(
-            mock_driver,
-            damping_factor=0.75,
-            max_iterations=50,
-            node_ids=['node1', 'node2']
+            mock_driver, damping_factor=0.75, max_iterations=50, node_ids=['node1', 'node2']
         )
 
         # Check parameters
@@ -127,11 +125,7 @@ class TestCentralityOperations:
         mock_driver.execute_query.return_value = sample_nodes
 
         node_ids = [str(uuid4()), str(uuid4())]
-        result = await calculate_degree_centrality(
-            mock_driver,
-            node_ids=node_ids,
-            direction='in'
-        )
+        result = await calculate_degree_centrality(mock_driver, node_ids=node_ids, direction='in')
 
         # Check that node IDs were passed
         params = mock_driver.execute_query.call_args[1]['parameters']
@@ -160,10 +154,7 @@ class TestCentralityOperations:
         """Test betweenness centrality with sampling."""
         mock_driver.execute_query.return_value = sample_nodes
 
-        result = await calculate_betweenness_centrality(
-            mock_driver,
-            sample_size=100
-        )
+        result = await calculate_betweenness_centrality(mock_driver, sample_size=100)
 
         # Check sample size parameter
         params = mock_driver.execute_query.call_args[1]['parameters']
@@ -177,14 +168,14 @@ class TestCentralityOperations:
                 'uuid': 'node1',
                 'pagerank': 0.15,
                 'degree_centrality': 0.4,
-                'betweenness_centrality': 0.1
+                'betweenness_centrality': 0.1,
             },
             {
                 'uuid': 'node2',
                 'pagerank': 0.25,
                 'degree_centrality': 0.6,
-                'betweenness_centrality': 0.3
-            }
+                'betweenness_centrality': 0.3,
+            },
         ]
 
         await store_centrality_scores(mock_driver, scores)
@@ -192,7 +183,7 @@ class TestCentralityOperations:
         # Verify the update query was called
         mock_driver.execute_query.assert_called_once()
         query = mock_driver.execute_query.call_args[0][0]
-        
+
         # Check that all centrality properties are being set
         assert 'n.pagerank = score.pagerank' in query
         assert 'n.degree_centrality = score.degree_centrality' in query
@@ -212,14 +203,14 @@ class TestCentralityOperations:
             sample_nodes,  # PageRank
             sample_nodes,  # Degree centrality
             sample_nodes,  # Betweenness centrality
-            None           # Store operation
+            None,  # Store operation
         ]
 
         result = await calculate_all_centralities(mock_driver)
 
         # Should have called execute_query 4 times
         assert mock_driver.execute_query.call_count == 4
-        
+
         # Verify result structure
         assert 'pagerank' in result
         assert 'degree' in result
@@ -234,19 +225,15 @@ class TestCentralityOperations:
     async def test_calculate_all_centralities_with_node_ids(self, mock_driver, sample_nodes):
         """Test calculating centralities for specific nodes."""
         node_ids = ['node1', 'node2']
-        
+
         mock_driver.execute_query.side_effect = [
             sample_nodes[:2],  # PageRank
             sample_nodes[:2],  # Degree centrality
             sample_nodes[:2],  # Betweenness centrality
-            None               # Store operation
+            None,  # Store operation
         ]
 
-        result = await calculate_all_centralities(
-            mock_driver,
-            node_ids=node_ids,
-            recalculate=True
-        )
+        result = await calculate_all_centralities(mock_driver, node_ids=node_ids, recalculate=True)
 
         # Verify node IDs were passed to each calculation
         for i in range(3):  # First 3 calls are calculations
@@ -259,12 +246,12 @@ class TestCentralityOperations:
     async def test_calculate_all_centralities_error_handling(self, mock_driver):
         """Test error handling in centrality calculations."""
         # Mock a database error
-        mock_driver.execute_query.side_effect = Exception("Database connection error")
+        mock_driver.execute_query.side_effect = Exception('Database connection error')
 
         with pytest.raises(Exception) as exc_info:
             await calculate_all_centralities(mock_driver)
-        
-        assert "Database connection error" in str(exc_info.value)
+
+        assert 'Database connection error' in str(exc_info.value)
 
     @pytest.mark.asyncio
     async def test_empty_graph_handling(self, mock_driver):
@@ -272,7 +259,7 @@ class TestCentralityOperations:
         mock_driver.execute_query.return_value = []
 
         result = await calculate_pagerank(mock_driver)
-        
+
         assert result == []
         assert len(result) == 0
 
@@ -286,10 +273,10 @@ class TestCentralityIntegration:
         """Test PageRank on a real graph structure."""
         # This test would require a real Neo4j instance
         # Skip if not in integration test mode
-        pytest.skip("Requires Neo4j instance")
+        pytest.skip('Requires Neo4j instance')
 
     @pytest.mark.integration
     @pytest.mark.asyncio
     async def test_centrality_persistence(self, neo4j_driver):
         """Test that centrality scores are properly persisted."""
-        pytest.skip("Requires Neo4j instance")
+        pytest.skip('Requires Neo4j instance')
