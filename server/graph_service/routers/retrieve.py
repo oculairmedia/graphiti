@@ -14,6 +14,7 @@ from graph_service.dto import (
     SearchResults,
 )
 from graph_service.zep_graphiti import ZepGraphitiDep, get_fact_result_from_edge
+from graph_service.webhooks import webhook_service
 
 router = APIRouter()
 
@@ -26,6 +27,24 @@ async def search(query: SearchQuery, graphiti: ZepGraphitiDep):
         num_results=query.max_facts,
     )
     facts = [get_fact_result_from_edge(edge) for edge in relevant_edges]
+    
+    # Extract unique node IDs from the edges
+    node_ids = set()
+    for edge in relevant_edges:
+        if hasattr(edge, 'source_node_uuid') and edge.source_node_uuid:
+            node_ids.add(edge.source_node_uuid)
+        if hasattr(edge, 'target_node_uuid') and edge.target_node_uuid:
+            node_ids.add(edge.target_node_uuid)
+    
+    # Emit webhook event for accessed nodes
+    if node_ids:
+        await webhook_service.emit_node_access(
+            node_ids=list(node_ids),
+            access_type="search",
+            query=query.query,
+            metadata={"group_ids": query.group_ids}
+        )
+    
     return SearchResults(
         facts=facts,
     )
@@ -62,6 +81,7 @@ async def search_nodes(query: NodeSearchQuery, graphiti: ZepGraphitiDep):
 
     # Format the results
     nodes = []
+    node_ids = []
     for node in search_results.nodes:
         nodes.append(
             NodeResult(
@@ -73,6 +93,20 @@ async def search_nodes(query: NodeSearchQuery, graphiti: ZepGraphitiDep):
                 created_at=node.created_at,
                 attributes=getattr(node, 'attributes', {}),
             )
+        )
+        node_ids.append(node.uuid)
+    
+    # Emit webhook event for accessed nodes
+    if node_ids:
+        await webhook_service.emit_node_access(
+            node_ids=node_ids,
+            access_type="node_search",
+            query=query.query,
+            metadata={
+                "group_ids": query.group_ids,
+                "center_node_uuid": query.center_node_uuid,
+                "entity": query.entity
+            }
         )
 
     return NodeSearchResults(nodes=nodes)

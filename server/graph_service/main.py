@@ -1,19 +1,26 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 
 from graph_service.config import get_settings
 from graph_service.routers import centrality, ingest, nodes, retrieve
 from graph_service.zep_graphiti import initialize_graphiti
+from graph_service.websocket_manager import manager
+from graph_service.webhooks import webhook_service
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     settings = get_settings()
     await initialize_graphiti(settings)
+    
+    # Connect WebSocket manager to webhook service
+    webhook_service.add_internal_handler(manager.broadcast_node_access)
+    
     yield
     # Shutdown
+    await webhook_service.close()
     # No need to close Graphiti here, as it's handled per-request
 
 
@@ -29,3 +36,15 @@ app.include_router(nodes.router)
 @app.get('/healthcheck')
 async def healthcheck():
     return JSONResponse(content={'status': 'healthy'}, status_code=200)
+
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    """WebSocket endpoint for real-time updates."""
+    await manager.connect(websocket)
+    try:
+        while True:
+            data = await websocket.receive_text()
+            await manager.handle_client_message(websocket, data)
+    except WebSocketDisconnect:
+        await manager.disconnect(websocket)
