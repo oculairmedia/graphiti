@@ -226,21 +226,18 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
             
             {/* Search Tab */}
             <TabsContent value="search" className="mt-0">
-              <div className="space-y-4">
-                <h3 className="text-sm font-medium text-muted-foreground">Knowledge Search</h3>
-                {graphCanvasRef && onNodeSelect && (
-                  <GraphitiSearch
-                    graphCanvasRef={graphCanvasRef}
-                    onNodeSelect={(node: NodeResult) => {
-                      // Find the corresponding GraphNode by UUID
-                      const graphNode = nodes.find(n => n.id === node.uuid);
-                      if (graphNode) {
-                        onNodeSelect(graphNode);
-                      }
-                    }}
-                  />
-                )}
-              </div>
+              {graphCanvasRef && onNodeSelect && (
+                <GraphitiSearch
+                  graphCanvasRef={graphCanvasRef}
+                  onNodeSelect={(node: NodeResult) => {
+                    // Find the corresponding GraphNode by UUID
+                    const graphNode = nodes.find(n => n.id === node.uuid);
+                    if (graphNode) {
+                      onNodeSelect(graphNode);
+                    }
+                  }}
+                />
+              )}
             </TabsContent>
             
             {/* Query Controls Tab */}
