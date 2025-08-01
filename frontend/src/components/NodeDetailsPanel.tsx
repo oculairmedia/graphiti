@@ -19,12 +19,14 @@ import { useToast } from '@/hooks/use-toast';
 
 interface NodeDetailsPanelProps {
   node: GraphNode;
+  connections?: number;
   onClose: () => void;
   onShowNeighbors?: (nodeId: string) => void;
 }
 
 const NodeDetailsPanelComponent: React.FC<NodeDetailsPanelProps> = ({ 
   node, 
+  connections,
   onClose,
   onShowNeighbors
 }) => {
@@ -162,7 +164,7 @@ const NodeDetailsPanelComponent: React.FC<NodeDetailsPanelProps> = ({
       created: node.created_at || deferredProperties?.created || new Date().toISOString(),
       updated: node.updated_at || deferredProperties?.updated || new Date().toISOString()
     },
-    connections: deferredProperties?.degree || deferredProperties?.connections || 0
+    connections: connections !== undefined ? connections : (deferredProperties?.degree || deferredProperties?.connections || 0)
   };
 
   return (
@@ -419,8 +421,9 @@ const NodeDetailsPanelComponent: React.FC<NodeDetailsPanelProps> = ({
 
 // Export memoized component to prevent unnecessary re-renders
 export const NodeDetailsPanel = React.memo(NodeDetailsPanelComponent, (prevProps, nextProps) => {
-  // Only re-render if node ID changes or callbacks change
+  // Only re-render if node ID changes, connections change, or callbacks change
   return prevProps.node.id === nextProps.node.id &&
+         prevProps.connections === nextProps.connections &&
          prevProps.onClose === nextProps.onClose &&
          prevProps.onShowNeighbors === nextProps.onShowNeighbors;
 });
