@@ -24,12 +24,35 @@ interface WebSocketProviderProps {
 
 export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ 
   children, 
-  url = import.meta.env.VITE_WEBSOCKET_URL || 
-    (window.location.protocol === 'https:' ? 'wss://' : 'ws://') + 
-    window.location.host + '/ws' 
+  url 
 }) => {
+  // Handle relative URLs and construct full WebSocket URL
+  const wsUrl = React.useMemo(() => {
+    const envUrl = import.meta.env.VITE_WEBSOCKET_URL;
+    
+    // If url prop is provided, use it
+    if (url) {
+      return url;
+    }
+    
+    // If environment URL is provided
+    if (envUrl) {
+      // If it's a relative URL, construct the full URL
+      if (envUrl.startsWith('/')) {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        return `${protocol}//${window.location.host}${envUrl}`;
+      }
+      // If it's already a full URL, use it as is
+      return envUrl;
+    }
+    
+    // Default fallback
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    return `${protocol}//${window.location.host}/ws`;
+  }, [url]);
+  
   console.log('WebSocketProvider - Environment URL:', import.meta.env.VITE_WEBSOCKET_URL);
-  console.log('WebSocketProvider - Using URL:', url);
+  console.log('WebSocketProvider - Using URL:', wsUrl);
   const [handlers, setHandlers] = useState<Set<(event: NodeAccessEvent) => void>>(new Set());
   const [lastNodeAccessEvent, setLastNodeAccessEvent] = useState<NodeAccessEvent | null>(null);
 
@@ -51,7 +74,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
   }, []);
 
   const { isConnected } = useWebSocket({
-    url,
+    url: wsUrl,
     onMessage: handleMessage,
     onConnect: () => console.log('WebSocket provider connected'),
     onDisconnect: () => console.log('WebSocket provider disconnected'),
