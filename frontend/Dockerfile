@@ -1,4 +1,5 @@
 # Multi-stage build for production-ready React frontend
+# Updated to trigger new build with .gitmodules fix
 FROM node:18-alpine AS builder
 
 # Install build dependencies
