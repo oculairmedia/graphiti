@@ -1,3 +1,5 @@
+@import './styles/node-glow.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

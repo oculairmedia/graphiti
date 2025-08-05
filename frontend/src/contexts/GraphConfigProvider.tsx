@@ -228,7 +228,13 @@ export function GraphConfigProvider({ children }: { children: ReactNode }) {
         setStableConfig(prev => ({ ...prev, ...loadedStable }));
       }
       if (Object.keys(loadedDynamic).length > 0) {
-        setDynamicConfig(prev => ({ ...prev, ...loadedDynamic }));
+        // Always use 'entire_graph' for initial load regardless of persisted value
+        const { queryType, ...otherDynamicConfig } = loadedDynamic;
+        setDynamicConfig(prev => ({ 
+          ...prev, 
+          ...otherDynamicConfig,
+          queryType: 'entire_graph' // Always start with entire graph
+        }));
       }
     } else {
       console.log('GraphConfigProvider: No persisted config found, using defaults');

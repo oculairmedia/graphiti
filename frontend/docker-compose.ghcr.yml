@@ -1,0 +1,13 @@
+# Docker Compose override to use GitHub Container Registry image
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.ghcr.yml up -d
+
+version: '3.8'
+
+services:
+  frontend:
+    # Override the build section to use pre-built image from GitHub
+    image: ghcr.io/oculairmedia/graphiti-frontend:feature-real-time-node-glow
+    build:
+      # Disable local building
+      context: null
+      dockerfile: null

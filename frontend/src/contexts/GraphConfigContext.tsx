@@ -99,6 +99,7 @@ const defaultConfig: GraphConfig = {
   // Node colors by type - now dynamic, empty by default
   nodeTypeColors: {},
   nodeTypeVisibility: {},
+  nodeAccessHighlightColor: 'rgba(99, 102, 241, 0.9)', // Bright indigo glow
   
   // Labels
   renderLabels: true,

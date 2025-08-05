@@ -1,43 +1,67 @@
 # Multi-stage build for production-ready React frontend
+# Updated to trigger new build with .gitmodules fix
 FROM node:18-alpine AS builder
 
-# Set working directory
+# Install build dependencies
+RUN apk add --no-cache python3 make g++ libc6-compat
+
 WORKDIR /app
 
-# Copy package files
+# Copy package files first
 COPY package*.json ./
+COPY .npmrc ./
 
-# Install dependencies - skip postinstall scripts that fail
-RUN npm install --force --ignore-scripts && \
-    npm rebuild --ignore-scripts || true
+# Install dependencies with a more robust approach
+# First try with ci, then fallback to install
+RUN npm ci --legacy-peer-deps --no-audit --no-fund 2>&1 || \
+    (echo "npm ci failed, trying npm install..." && \
+     rm -rf node_modules package-lock.json && \
+     npm install --legacy-peer-deps --no-audit --no-fund) || \
+    (echo "Both attempts failed, trying with --ignore-scripts..." && \
+     rm -rf node_modules && \
+     npm install --legacy-peer-deps --no-audit --no-fund --ignore-scripts)
 
 # Copy source code
 COPY . .
 
+# Set NODE_ENV for production build
+ENV NODE_ENV=production
+
+# Copy environment file before build
+COPY .env.production .env.production
+
+# Debug: Show current directory and key files
+RUN echo "=== Build environment debug ===" && \
+    echo "Current directory: $(pwd)" && \
+    echo "Directory contents:" && \
+    ls -la && \
+    echo "Checking for src directory:" && \
+    (ls -la src/ 2>/dev/null || echo "src/ directory not found") && \
+    echo "Checking for lib directory:" && \
+    (ls -la src/lib/ 2>/dev/null || echo "src/lib/ directory not found") && \
+    echo "lib/utils.ts contents:" && \
+    (ls -la src/lib/utils.ts 2>/dev/null || echo "src/lib/utils.ts not found") && \
+    echo "Vite config:" && \
+    cat vite.config.ts | grep -A5 resolve || echo "vite.config.ts not found"
+
+# Ensure vite is executable
+RUN chmod +x node_modules/.bin/vite 2>/dev/null || true
+
 # Build the application
 RUN npm run build
 
-# Production stage with Nginx
-FROM nginx:alpine AS production
+# Production stage
+FROM nginx:alpine
 
-# Install curl for health checks
 RUN apk add --no-cache curl
 
-# Copy custom nginx configuration
 COPY nginx.conf /etc/nginx/nginx.conf
-
-# Copy built assets from builder stage
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Create health endpoint
-RUN echo '<!DOCTYPE html><html><head><title>Health Check</title></head><body><h1>OK</h1></body></html>' > /usr/share/nginx/html/health
+RUN echo "OK" > /usr/share/nginx/html/health
 
-# Add health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:80/health || exit 1
+  CMD curl -f http://localhost/health || exit 1
 
-# Expose port
 EXPOSE 80
-
-# Start Nginx
 CMD ["nginx", "-g", "daemon off;"]

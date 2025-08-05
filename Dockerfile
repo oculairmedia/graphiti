@@ -58,11 +58,15 @@ RUN chmod +x /app/scripts/deduplication_cron.sh /app/scripts/entity_extraction_c
 RUN crontab /app/scripts/graphiti-crontab
 RUN touch /var/log/graphiti_dedupe.log /var/log/graphiti_entity_extraction.log
 
-# Create a startup script that runs both cron and uvicorn
+# Copy websockets install script
+COPY ./server/install_websockets.sh /app/
+
+# Create a startup script that runs cron, installs websockets, and starts uvicorn
 RUN echo '#!/bin/bash\n\
 service cron start\n\
 echo "[$(date)] Cron service started" >> /var/log/graphiti_dedupe.log\n\
 echo "[$(date)] Cron service started" >> /var/log/graphiti_entity_extraction.log\n\
+cd /app/server && uv pip install websockets>=14.1\n\
 exec /app/server/.venv/bin/python -m uvicorn graph_service.main:app --host 0.0.0.0 --port 8000' > /app/start.sh && \
 chmod +x /app/start.sh
 
