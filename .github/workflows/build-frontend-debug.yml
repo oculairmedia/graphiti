@@ -1,0 +1,77 @@
+name: Debug Frontend Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ feature/real-time-node-glow ]
+    paths:
+      - '.github/workflows/build-frontend-debug.yml'
+
+jobs:
+  debug-npm:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
+
+    - name: Debug environment
+      working-directory: frontend
+      run: |
+        echo "=== System info ==="
+        uname -a
+        echo "=== Node version ==="
+        node --version
+        echo "=== NPM version ==="
+        npm --version
+        echo "=== NPM config ==="
+        npm config list
+        echo "=== Directory contents ==="
+        ls -la
+        echo "=== Package.json first 30 lines ==="
+        head -30 package.json
+
+    - name: Try npm ci with verbose logging
+      working-directory: frontend
+      run: |
+        echo "=== Attempting npm ci ==="
+        npm ci --loglevel verbose 2>&1 | tee npm-ci.log || echo "npm ci failed"
+        if [ -f npm-ci.log ]; then
+          echo "=== Last 50 lines of npm ci log ==="
+          tail -50 npm-ci.log
+        fi
+
+    - name: Try npm install as fallback
+      working-directory: frontend
+      if: failure()
+      run: |
+        echo "=== Attempting npm install ==="
+        npm install --loglevel verbose 2>&1 | tee npm-install.log || echo "npm install failed"
+        if [ -f npm-install.log ]; then
+          echo "=== Last 50 lines of npm install log ==="
+          tail -50 npm-install.log
+        fi
+
+    - name: Test minimal Dockerfile
+      working-directory: frontend
+      run: |
+        echo "=== Testing minimal Dockerfile ==="
+        docker build -f Dockerfile.minimal -t test-minimal . 2>&1 | tee docker-minimal.log || true
+        echo "=== Last 100 lines of Docker build log ==="
+        tail -100 docker-minimal.log
+
+    - name: Upload logs
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: debug-logs
+        path: |
+          frontend/npm-ci.log
+          frontend/npm-install.log
+          frontend/docker-minimal.log

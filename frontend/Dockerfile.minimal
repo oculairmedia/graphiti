@@ -1,0 +1,28 @@
+# Minimal test Dockerfile to debug build issues
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Test 1: Basic setup
+RUN echo "=== Node version ===" && node --version && \
+    echo "=== NPM version ===" && npm --version && \
+    echo "=== System info ===" && uname -a
+
+# Test 2: Copy only package.json first
+COPY package.json ./
+
+# Test 3: Try minimal npm install with maximum verbosity
+RUN echo "=== Testing npm install ===" && \
+    npm config set loglevel silly && \
+    npm config set registry https://registry.npmjs.org/ && \
+    npm install --verbose 2>&1 | tee /tmp/npm-install.log || \
+    (echo "=== NPM install failed, showing last 100 lines of log ===" && \
+     tail -100 /tmp/npm-install.log && \
+     exit 1)
+
+# If we get here, npm install worked
+RUN echo "=== Success! npm install completed ===" && \
+    echo "=== Node modules count ===" && \
+    find node_modules -maxdepth 1 -type d | wc -l
+
+CMD ["echo", "Minimal build successful"]
