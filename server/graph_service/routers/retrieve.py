@@ -196,6 +196,27 @@ async def get_memory(
         num_results=request.max_facts,
     )
     facts = [get_fact_result_from_edge(edge) for edge in result]
+    
+    # Emit webhook event for accessed nodes (for Letta integration)
+    node_ids = set()
+    for edge in result:
+        if edge.source_node_uuid:
+            node_ids.add(edge.source_node_uuid)
+        if edge.target_node_uuid:
+            node_ids.add(edge.target_node_uuid)
+    
+    if node_ids:
+        print(f"[GET_MEMORY] Emitting node access for {len(node_ids)} nodes")
+        await webhook_service.emit_node_access(
+            node_ids=list(node_ids),
+            access_type="letta_memory_retrieval",
+            query=combined_query,
+            metadata={
+                "group_id": request.group_id,
+                "messages_count": len(request.messages)
+            }
+        )
+    
     return GetMemoryResponse(facts=facts)
 
 
