@@ -4,7 +4,7 @@ Webhook service for emitting events when nodes are accessed.
 
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional
 import httpx
 from pydantic import BaseModel
@@ -29,13 +29,15 @@ class WebhookService:
     def __init__(self, webhook_url: Optional[str] = None):
         self.webhook_url = webhook_url or os.getenv("GRAPHITI_WEBHOOK_URL")
         self.internal_handlers = []
+        self._handlers_lock = asyncio.Lock()
         self.client = httpx.AsyncClient(timeout=5.0)
         self._enabled = bool(self.webhook_url or self.internal_handlers)
     
-    def add_internal_handler(self, handler):
+    async def add_internal_handler(self, handler):
         """Add an internal handler for webhook events (e.g., WebSocket broadcast)."""
-        self.internal_handlers.append(handler)
-        self._enabled = True
+        async with self._handlers_lock:
+            self.internal_handlers.append(handler)
+            self._enabled = True
     
     async def emit_node_access(
         self,
@@ -50,7 +52,7 @@ class WebhookService:
         
         event = NodeAccessEvent(
             node_ids=node_ids,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             access_type=access_type,
             query=query,
             metadata=metadata
@@ -64,7 +66,10 @@ class WebhookService:
             tasks.append(self._send_webhook(event))
         
         # Internal handlers (e.g., WebSocket)
-        for handler in self.internal_handlers:
+        async with self._handlers_lock:
+            handlers_copy = self.internal_handlers.copy()
+        
+        for handler in handlers_copy:
             tasks.append(self._call_handler(handler, event))
         
         # Run all tasks concurrently
