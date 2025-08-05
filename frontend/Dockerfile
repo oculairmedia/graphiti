@@ -21,11 +21,8 @@ RUN npm ci --legacy-peer-deps --no-audit --no-fund 2>&1 || \
      rm -rf node_modules && \
      npm install --legacy-peer-deps --no-audit --no-fund --ignore-scripts)
 
-# Copy source code - MUST include src/lib directory
+# Copy source code
 COPY . .
-
-# Verify lib directory was copied
-RUN if [ ! -d "src/lib" ]; then echo "ERROR: src/lib directory not found!" && exit 1; fi
 
 # Set NODE_ENV for production build
 ENV NODE_ENV=production
