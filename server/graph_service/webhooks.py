@@ -47,7 +47,9 @@ class WebhookService:
         metadata: Optional[dict] = None
     ):
         """Emit a node access event."""
+        logger.info(f"emit_node_access called: enabled={self._enabled}, node_ids={len(node_ids) if node_ids else 0}, handlers={len(self.internal_handlers)}")
         if not self._enabled or not node_ids:
+            logger.warning(f"Skipping emit: enabled={self._enabled}, has_nodes={bool(node_ids)}")
             return
         
         event = NodeAccessEvent(
@@ -74,7 +76,13 @@ class WebhookService:
         
         # Run all tasks concurrently
         if tasks:
-            await asyncio.gather(*tasks, return_exceptions=True)
+            logger.info(f"Running {len(tasks)} webhook tasks")
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            for i, result in enumerate(results):
+                if isinstance(result, Exception):
+                    logger.error(f"Task {i} failed: {result}")
+                else:
+                    logger.info(f"Task {i} completed successfully")
     
     async def _send_webhook(self, event: NodeAccessEvent):
         """Send webhook to external URL."""
