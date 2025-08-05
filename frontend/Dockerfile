@@ -19,9 +19,9 @@ RUN echo "=== Network diagnostics ===" && \
     echo "=== DNS resolution test ===" && \
     nslookup registry.npmjs.org || echo "DNS lookup failed"
 
-# Try to install dependencies with detailed error reporting
-RUN echo "=== Starting npm ci ===" && \
-    npm ci --no-audit --no-fund 2>&1 | tee /tmp/npm.log || \
+# Try to install dependencies with legacy peer deps
+RUN echo "=== Starting npm ci with legacy peer deps ===" && \
+    npm ci --no-audit --no-fund --legacy-peer-deps 2>&1 | tee /tmp/npm.log || \
     (echo "=== npm ci failed, trying npm install ===" && \
      rm -rf node_modules package-lock.json && \
      npm cache clean --force && \
