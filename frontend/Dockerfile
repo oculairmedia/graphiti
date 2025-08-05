@@ -11,9 +11,15 @@ WORKDIR /app
 COPY package*.json ./
 COPY .npmrc ./
 
-# Install dependencies with legacy peer deps, skipping postinstall scripts
-RUN npm ci --legacy-peer-deps --no-audit --no-fund --ignore-scripts || \
-    npm install --legacy-peer-deps --no-audit --no-fund --ignore-scripts
+# Install dependencies with a more robust approach
+# First try with ci, then fallback to install
+RUN npm ci --legacy-peer-deps --no-audit --no-fund 2>&1 || \
+    (echo "npm ci failed, trying npm install..." && \
+     rm -rf node_modules package-lock.json && \
+     npm install --legacy-peer-deps --no-audit --no-fund) || \
+    (echo "Both attempts failed, trying with --ignore-scripts..." && \
+     rm -rf node_modules && \
+     npm install --legacy-peer-deps --no-audit --no-fund --ignore-scripts)
 
 # Copy source code
 COPY . .
@@ -21,16 +27,11 @@ COPY . .
 # Set NODE_ENV for production build
 ENV NODE_ENV=production
 
-# Build the application with error handling
-RUN npm run build || \
-    (echo "Build failed. Debug info:" && \
-     echo "Node version:" && node --version && \
-     echo "NPM version:" && npm --version && \
-     echo "Working directory:" && pwd && \
-     echo "Files in directory:" && ls -la && \
-     echo "Checking vite binary:" && ls -la node_modules/.bin/ | grep vite || true && \
-     echo "Package.json scripts:" && cat package.json | grep -A5 '"scripts"' && \
-     exit 1)
+# Ensure vite is executable
+RUN chmod +x node_modules/.bin/vite 2>/dev/null || true
+
+# Build the application
+RUN npm run build
 
 # Production stage
 FROM nginx:alpine
