@@ -1,0 +1,3 @@
+[submodule "cosmos-graph"]
+	path = cosmos-graph
+	url = https://github.com/cosmograph-org/cosmos.git
