@@ -30,10 +30,14 @@ ENV NODE_ENV=production
 # Debug: Show current directory and key files
 RUN echo "=== Build environment debug ===" && \
     echo "Current directory: $(pwd)" && \
-    echo "Source files present:" && \
-    ls -la src/lib/ && \
+    echo "Directory contents:" && \
+    ls -la && \
+    echo "Checking for src directory:" && \
+    (ls -la src/ 2>/dev/null || echo "src/ directory not found") && \
+    echo "Checking for lib directory:" && \
+    (ls -la src/lib/ 2>/dev/null || echo "src/lib/ directory not found") && \
     echo "Vite config:" && \
-    cat vite.config.ts | grep -A5 resolve
+    cat vite.config.ts | grep -A5 resolve || echo "vite.config.ts not found"
 
 # Ensure vite is executable
 RUN chmod +x node_modules/.bin/vite 2>/dev/null || true
