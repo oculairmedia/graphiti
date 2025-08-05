@@ -1,5 +1,6 @@
 """
 WebSocket connection manager for broadcasting real-time events.
+Handles client connections and broadcasts node access events.
 """
 
 import json
