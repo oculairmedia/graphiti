@@ -1,0 +1,43 @@
+/* Node glow effect styles */
+
+@keyframes node-glow-pulse {
+  0% {
+    filter: brightness(1) drop-shadow(0 0 10px rgba(99, 102, 241, 0.4));
+    transform: scale(1);
+  }
+  50% {
+    filter: brightness(1.3) drop-shadow(0 0 20px rgba(99, 102, 241, 0.8));
+    transform: scale(1.1);
+  }
+  100% {
+    filter: brightness(1) drop-shadow(0 0 10px rgba(99, 102, 241, 0.4));
+    transform: scale(1);
+  }
+}
+
+.node-glow {
+  animation: node-glow-pulse 2s ease-in-out;
+  transition: all 0.3s ease-in-out;
+}
+
+.node-glow-enter {
+  opacity: 0;
+  transform: scale(0.8);
+}
+
+.node-glow-enter-active {
+  opacity: 1;
+  transform: scale(1);
+  transition: all 0.3s ease-in-out;
+}
+
+.node-glow-exit {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.node-glow-exit-active {
+  opacity: 0;
+  transform: scale(0.9);
+  transition: all 0.3s ease-in-out;
+}

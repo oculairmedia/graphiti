@@ -6,7 +6,7 @@ import json
 import logging
 from typing import List, Set
 from fastapi import WebSocket, WebSocketDisconnect
-from datetime import datetime
+from datetime import datetime, timezone
 import asyncio
 
 from graph_service.webhooks import NodeAccessEvent
@@ -37,7 +37,10 @@ class ConnectionManager:
     async def send_personal_message(self, message: str, websocket: WebSocket):
         """Send a message to a specific WebSocket."""
         try:
-            await websocket.send_text(message)
+            await asyncio.wait_for(websocket.send_text(message), timeout=5.0)
+        except asyncio.TimeoutError:
+            logger.error("Timeout sending message to client - slow consumer")
+            await self.disconnect(websocket)
         except Exception as e:
             logger.error(f"Error sending message to client: {e}")
             await self.disconnect(websocket)
@@ -51,23 +54,31 @@ class ConnectionManager:
         async with self._lock:
             connections = list(self.active_connections)
         
-        # Send to all connections concurrently
+        # Send to all connections concurrently with timeout
         disconnected = []
         tasks = []
         for connection in connections:
             try:
-                tasks.append(connection.send_text(message))
+                # Wrap each send in a timeout
+                task = asyncio.create_task(
+                    asyncio.wait_for(connection.send_text(message), timeout=5.0)
+                )
+                tasks.append((connection, task))
             except Exception as e:
                 logger.error(f"Error preparing broadcast: {e}")
                 disconnected.append(connection)
         
         # Execute all sends concurrently
         if tasks:
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-            for i, result in enumerate(results):
-                if isinstance(result, Exception):
-                    logger.error(f"Error broadcasting to client: {result}")
-                    disconnected.append(connections[i])
+            for connection, task in tasks:
+                try:
+                    await task
+                except asyncio.TimeoutError:
+                    logger.warning(f"Timeout broadcasting to client - slow consumer")
+                    disconnected.append(connection)
+                except Exception as e:
+                    logger.error(f"Error broadcasting to client: {e}")
+                    disconnected.append(connection)
         
         # Clean up disconnected clients
         for connection in disconnected:
@@ -96,7 +107,7 @@ class ConnectionManager:
             if message_type == "ping":
                 # Respond to ping with pong
                 await self.send_personal_message(
-                    json.dumps({"type": "pong", "timestamp": datetime.utcnow().isoformat()}),
+                    json.dumps({"type": "pong", "timestamp": datetime.now(timezone.utc).isoformat()}),
                     websocket
                 )
             elif message_type == "subscribe":
@@ -107,7 +118,7 @@ class ConnectionManager:
                     json.dumps({
                         "type": "subscription_confirmed",
                         "client_id": client_id,
-                        "timestamp": datetime.utcnow().isoformat()
+                        "timestamp": datetime.now(timezone.utc).isoformat()
                     }),
                     websocket
                 )

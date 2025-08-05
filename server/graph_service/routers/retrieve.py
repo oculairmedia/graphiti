@@ -115,6 +115,21 @@ async def search_nodes(query: NodeSearchQuery, graphiti: ZepGraphitiDep):
 @router.get('/entity-edge/{uuid}', status_code=status.HTTP_200_OK)
 async def get_entity_edge(uuid: str, graphiti: ZepGraphitiDep):
     entity_edge = await graphiti.get_entity_edge(uuid)
+    
+    # Emit webhook event for accessed nodes
+    node_ids = []
+    if hasattr(entity_edge, 'source_node_uuid') and entity_edge.source_node_uuid:
+        node_ids.append(entity_edge.source_node_uuid)
+    if hasattr(entity_edge, 'target_node_uuid') and entity_edge.target_node_uuid:
+        node_ids.append(entity_edge.target_node_uuid)
+    
+    if node_ids:
+        await webhook_service.emit_node_access(
+            node_ids=node_ids,
+            access_type="direct_edge_access",
+            metadata={"edge_uuid": uuid}
+        )
+    
     return get_fact_result_from_edge(entity_edge)
 
 
@@ -138,6 +153,21 @@ async def get_edges_by_node(node_uuid: str, graphiti: ZepGraphitiDep):
 
     # All edges (some may appear in both lists if it's a self-referential edge)
     all_edge_facts = [get_fact_result_from_edge(edge) for edge in all_edges]
+    
+    # Emit webhook event for the accessed node and connected nodes
+    node_ids = {node_uuid}  # Include the queried node
+    for edge in all_edges:
+        if edge.source_node_uuid and edge.source_node_uuid != node_uuid:
+            node_ids.add(edge.source_node_uuid)
+        if edge.target_node_uuid and edge.target_node_uuid != node_uuid:
+            node_ids.add(edge.target_node_uuid)
+    
+    if node_ids:
+        await webhook_service.emit_node_access(
+            node_ids=list(node_ids),
+            access_type="node_edges_access",
+            metadata={"center_node_uuid": node_uuid}
+        )
 
     return EdgesByNodeResponse(
         edges=all_edge_facts, source_edges=source_edges, target_edges=target_edges

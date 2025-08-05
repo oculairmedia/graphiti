@@ -24,21 +24,29 @@ interface WebSocketProviderProps {
 
 export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ 
   children, 
-  url = import.meta.env.VITE_WEBSOCKET_URL || 'ws://localhost:8003/ws' 
+  url = import.meta.env.VITE_WEBSOCKET_URL || 
+    (window.location.protocol === 'https:' ? 'wss://' : 'ws://') + 
+    window.location.host + '/graphiti/ws' 
 }) => {
   const [handlers, setHandlers] = useState<Set<(event: NodeAccessEvent) => void>>(new Set());
   const [lastNodeAccessEvent, setLastNodeAccessEvent] = useState<NodeAccessEvent | null>(null);
 
+  const handlersRef = useRef<Set<(event: NodeAccessEvent) => void>>(new Set());
+  
+  useEffect(() => {
+    handlersRef.current = handlers;
+  }, [handlers]);
+  
   const handleMessage = useCallback((event: NodeAccessEvent) => {
     setLastNodeAccessEvent(event);
-    handlers.forEach(handler => {
+    handlersRef.current.forEach(handler => {
       try {
         handler(event);
       } catch (error) {
         console.error('Error in WebSocket event handler:', error);
       }
     });
-  }, [handlers]);
+  }, []);
 
   const { isConnected } = useWebSocket({
     url,

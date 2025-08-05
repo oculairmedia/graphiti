@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 
 from graph_service.config import get_settings
 from graph_service.routers import centrality, ingest, nodes, retrieve
@@ -16,7 +17,7 @@ async def lifespan(_: FastAPI):
     await initialize_graphiti(settings)
     
     # Connect WebSocket manager to webhook service
-    webhook_service.add_internal_handler(manager.broadcast_node_access)
+    await webhook_service.add_internal_handler(manager.broadcast_node_access)
     
     yield
     # Shutdown
@@ -26,6 +27,14 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
+# Configure CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In production, replace with specific origins
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.include_router(retrieve.router)
 app.include_router(ingest.router)
