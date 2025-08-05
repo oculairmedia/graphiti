@@ -31,6 +31,17 @@ jobs:
         fetch-depth: 1
         submodules: false
 
+    - name: Debug - List frontend directory contents
+      run: |
+        echo "=== Frontend directory structure ==="
+        ls -la frontend/
+        echo "=== Frontend src directory ==="
+        ls -la frontend/src/
+        echo "=== Frontend src/lib directory ==="
+        ls -la frontend/src/lib/
+        echo "=== Dockerignore files ==="
+        find . -name "*.dockerignore" -o -name ".dockerignore"
+        
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
 
