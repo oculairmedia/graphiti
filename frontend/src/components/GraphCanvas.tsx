@@ -14,6 +14,7 @@ import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { useColorUtils } from '../hooks/useColorUtils';
 import { searchIndex } from '../utils/searchIndex';
 import { GraphConfigContext } from '../contexts/useGraphConfig';
+import { useWebSocketContext } from '../contexts/WebSocketProvider';
 
 const dataKitCoordinator = DataKitCoordinator.getInstance();
 
@@ -166,6 +167,10 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     const [isDataPreparing, setIsDataPreparing] = useState(false);
     const { config, setCosmographRef } = useGraphConfig();
     
+    // Glowing nodes state for real-time visualization
+    const [glowingNodes, setGlowingNodes] = useState<Map<string, number>>(new Map());
+    const { subscribe: subscribeToWebSocket } = useWebSocketContext();
+    
     // Track current data for incremental updates
     const [currentNodes, setCurrentNodes] = useState<GraphNode[]>([]);
     const [currentLinks, setCurrentLinks] = useState<GraphLink[]>([]);
@@ -234,6 +239,102 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       onDeselectAll: handleDeselectAll,
       cosmographRef
     });
+    
+    // Subscribe to WebSocket node access events
+    const glowTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    
+    useEffect(() => {
+      const unsubscribe = subscribeToWebSocket((event) => {
+        if (event.type === 'node_access' && event.node_ids) {
+          console.log('[GraphCanvas] Node access event received:', {
+            nodeIds: event.node_ids,
+            nodeCount: event.node_ids.length,
+            firstNodeId: event.node_ids[0]
+          });
+          
+          // Cancel any existing glow timeout
+          if (glowTimeoutRef.current) {
+            clearTimeout(glowTimeoutRef.current);
+          }
+          
+          const now = Date.now();
+          setGlowingNodes(() => {
+            // Create a fresh map with only the new nodes
+            const updated = new Map<string, number>();
+            event.node_ids.forEach(nodeId => {
+              updated.set(nodeId, now);
+            });
+            console.log('[GraphCanvas] Glowing nodes updated:', {
+              totalGlowing: updated.size,
+              glowingIds: Array.from(updated.keys()).slice(0, 3)
+            });
+            return updated;
+          });
+          
+          // Log that we're ready to apply glow
+          console.log('[GraphCanvas] Ready to apply glow effect, functions should be called now');
+          
+          // No need to force update - the animation loop will handle it
+          
+          // Remove glow after 2 seconds
+          glowTimeoutRef.current = setTimeout(() => {
+            setGlowingNodes(() => new Map());
+            console.log('[GraphCanvas] Glow effect cleared');
+          }, 2000);
+        }
+      });
+      
+      return () => {
+        unsubscribe();
+        if (glowTimeoutRef.current) {
+          clearTimeout(glowTimeoutRef.current);
+        }
+      };
+    }, [subscribeToWebSocket]);
+    
+    // Animation loop for smooth color transitions
+    useEffect(() => {
+      if (glowingNodes.size === 0) return;
+      
+      let animationFrameId: number;
+      let lastUpdate = Date.now();
+      
+      const animate = () => {
+        const now = Date.now();
+        
+        // Update at 60fps (every ~16ms)
+        if (now - lastUpdate >= 16 && cosmographRef.current && glowingNodes.size > 0) {
+          lastUpdate = now;
+          
+          // Check if any nodes are still animating
+          let hasActiveAnimations = false;
+          glowingNodes.forEach((startTime) => {
+            if (now - startTime < 2000) { // 2 second fade duration
+              hasActiveAnimations = true;
+            }
+          });
+          
+          if (hasActiveAnimations && cosmographRef.current.start) {
+            // Call start() to trigger a single frame update
+            cosmographRef.current.start();
+          }
+        }
+        
+        // Continue animation if there are still glowing nodes
+        if (glowingNodes.size > 0) {
+          animationFrameId = requestAnimationFrame(animate);
+        }
+      };
+      
+      // Start animation loop
+      animationFrameId = requestAnimationFrame(animate);
+      
+      return () => {
+        if (animationFrameId) {
+          cancelAnimationFrame(animationFrameId);
+        }
+      };
+    }, [glowingNodes]);
     
     // Search functionality using indexed search
     const performSearch = useCallback(() => {
@@ -747,32 +848,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       };
     }, [config.linkColorScheme, config.linkColor, config.nodeTypeColors, currentLinks, currentNodes]);
 
-    // Memoize point color function
-    const pointColorFn = React.useCallback((node: GraphNode) => {
-      const isHighlighted = highlightedNodes.includes(node.id);
-      if (isHighlighted) {
-        return 'rgba(255, 215, 0, 0.9)';
-      }
-      
-      if (config.colorScheme !== 'by-type') {
-        return undefined;
-      }
-      
-      return undefined;
-    }, [highlightedNodes, config.colorScheme]);
-    
-    // Memoize point size function
-    const pointSizeFn = React.useCallback((node: GraphNode) => {
-      // Handle uniform size mapping
-      if (config.sizeMapping === 'uniform') {
-        return (config.minNodeSize + config.maxNodeSize) / 2 * config.sizeMultiplier;
-      }
-      const isHighlighted = highlightedNodes.includes(node.id);
-      if (isHighlighted) {
-        return undefined;
-      }
-      return undefined;
-    }, [highlightedNodes, config.minNodeSize, config.maxNodeSize, config.sizeMapping, config.sizeMultiplier]);
+    // Note: We don't need these separate functions anymore since we're using inline functions in the props
     
     // Improved throttling for mouse move with requestAnimationFrame
     const lastHoverTimeRef = useRef<number>(0);
@@ -2021,19 +2097,82 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             backgroundColor={config.backgroundColor}
             
             // Use Cosmograph v2.0 built-in color strategies
-            pointColorStrategy={pointColorStrategy}
+            // When glowing, set strategy to undefined to allow pointColorByFn to work
+            pointColorStrategy={glowingNodes.size > 0 ? undefined : pointColorStrategy}
             pointColorPalette={pointColorPalette}
             pointColorByMap={config.nodeTypeColors}
             
-            // Use Cosmograph v2.0 built-in size strategies  
+            // Use pointColorByFn when glowing (only works when pointColorStrategy is undefined)
+            pointColorByFn={glowingNodes.size > 0 ? (value, index) => {
+              // Get the node from cosmograph data
+              if (!cosmographData || !cosmographData.points[index]) {
+                return config.nodeTypeColors[value] || '#94a3b8';
+              }
+              
+              const point = cosmographData.points[index];
+              const nodeId = point.id;
+              const glowStartTime = glowingNodes.get(nodeId);
+              
+              if (glowStartTime) {
+                // Calculate fade progress (0 to 1, where 1 is fully faded back to normal)
+                const elapsed = Date.now() - glowStartTime;
+                const fadeDuration = 2000; // 2 seconds total
+                const fadeProgress = Math.min(elapsed / fadeDuration, 1);
+                
+                // Extract base color and highlight color components
+                const baseColor = config.nodeTypeColors[value] || '#94a3b8';
+                const highlightColor = config.nodeAccessHighlightColor;
+                
+                // Parse colors to RGB
+                const parseColor = (color: string): [number, number, number, number] => {
+                  if (color.startsWith('rgba')) {
+                    const match = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+),?\s*([\d.]+)?\)/);
+                    if (match) {
+                      return [
+                        parseInt(match[1]), 
+                        parseInt(match[2]), 
+                        parseInt(match[3]), 
+                        parseFloat(match[4] || '1')
+                      ];
+                    }
+                  } else if (color.startsWith('#')) {
+                    const hex = color.slice(1);
+                    return [
+                      parseInt(hex.slice(0, 2), 16),
+                      parseInt(hex.slice(2, 4), 16),
+                      parseInt(hex.slice(4, 6), 16),
+                      1
+                    ];
+                  }
+                  return [148, 163, 184, 1]; // Default color
+                };
+                
+                const [baseR, baseG, baseB, baseA] = parseColor(baseColor);
+                const [highlightR, highlightG, highlightB, highlightA] = parseColor(highlightColor);
+                
+                // Use easing function for smooth transition (ease-in-out)
+                const easeInOut = (t: number) => t < 0.5 
+                  ? 2 * t * t 
+                  : -1 + (4 - 2 * t) * t;
+                
+                const easedProgress = easeInOut(fadeProgress);
+                
+                // Interpolate between highlight and base color
+                const r = Math.round(highlightR + (baseR - highlightR) * easedProgress);
+                const g = Math.round(highlightG + (baseG - highlightG) * easedProgress);
+                const b = Math.round(highlightB + (baseB - highlightB) * easedProgress);
+                const a = highlightA + (baseA - highlightA) * easedProgress;
+                
+                return `rgba(${r}, ${g}, ${b}, ${a})`;
+              }
+              
+              // Return normal color for non-glowing nodes
+              return config.nodeTypeColors[value] || '#94a3b8';
+            } : undefined}
+            
+            // Size configuration - keep normal sizing always
             pointSizeStrategy={'auto'}
             pointSizeRange={[config.minNodeSize * config.sizeMultiplier, config.maxNodeSize * config.sizeMultiplier]}
-            
-            
-            // Use pointColor only for highlighting
-            pointColor={pointColorFn}
-            
-            pointSize={pointSizeFn}
             
             // Interaction
             enableDrag={true}

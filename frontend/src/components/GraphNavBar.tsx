@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { GraphSearch } from './GraphSearch';
 import { GraphNode } from '../api/types';
+import { WebSocketStatus } from './WebSocketStatus';
 
 interface GraphNavBarProps {
   totalNodes: number;
@@ -148,6 +149,9 @@ export const GraphNavBar: React.FC<GraphNavBarProps> = ({
         >
           <Maximize2 className="h-4 w-4" />
         </Button>
+        <div className="ml-4 pl-4 border-l border-border/20">
+          <WebSocketStatus />
+        </div>
       </div>
     </div>
   );
