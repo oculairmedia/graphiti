@@ -38,6 +38,7 @@ async def search(query: SearchQuery, graphiti: ZepGraphitiDep):
     
     # Emit webhook event for accessed nodes
     if node_ids:
+        print(f"[SEARCH] Emitting node access for {len(node_ids)} nodes")
         await webhook_service.emit_node_access(
             node_ids=list(node_ids),
             access_type="search",
@@ -98,6 +99,7 @@ async def search_nodes(query: NodeSearchQuery, graphiti: ZepGraphitiDep):
     
     # Emit webhook event for accessed nodes
     if node_ids:
+        print(f"[NODE_SEARCH] Emitting node access for {len(node_ids)} nodes")
         await webhook_service.emit_node_access(
             node_ids=node_ids,
             access_type="node_search",

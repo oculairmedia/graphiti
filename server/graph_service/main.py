@@ -9,6 +9,11 @@ from graph_service.routers import centrality, ingest, nodes, retrieve
 from graph_service.zep_graphiti import initialize_graphiti
 from graph_service.websocket_manager import manager
 from graph_service.webhooks import webhook_service
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -17,7 +22,9 @@ async def lifespan(_: FastAPI):
     await initialize_graphiti(settings)
     
     # Connect WebSocket manager to webhook service
+    logger.info("Registering WebSocket broadcast handler with webhook service")
     await webhook_service.add_internal_handler(manager.broadcast_node_access)
+    logger.info(f"WebSocket handler registered. Total handlers: {len(webhook_service.internal_handlers)}")
     
     yield
     # Shutdown

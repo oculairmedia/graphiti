@@ -26,8 +26,10 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
   children, 
   url = import.meta.env.VITE_WEBSOCKET_URL || 
     (window.location.protocol === 'https:' ? 'wss://' : 'ws://') + 
-    window.location.host + '/graphiti/ws' 
+    window.location.host + '/ws' 
 }) => {
+  console.log('WebSocketProvider - Environment URL:', import.meta.env.VITE_WEBSOCKET_URL);
+  console.log('WebSocketProvider - Using URL:', url);
   const [handlers, setHandlers] = useState<Set<(event: NodeAccessEvent) => void>>(new Set());
   const [lastNodeAccessEvent, setLastNodeAccessEvent] = useState<NodeAccessEvent | null>(null);
 

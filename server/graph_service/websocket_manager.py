@@ -96,6 +96,7 @@ class ConnectionManager:
             "access_type": event.access_type,
             "query": event.query
         }
+        logger.info(f"Broadcasting node access event: {len(event.node_ids)} nodes, type: {event.access_type}, query: {event.query}")
         await self.broadcast(json.dumps(message))
     
     async def handle_client_message(self, websocket: WebSocket, data: str):

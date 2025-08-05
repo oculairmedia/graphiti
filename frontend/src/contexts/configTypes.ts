@@ -91,6 +91,7 @@ export interface DynamicConfig {
   // Dynamic node configuration
   nodeTypeColors: Record<string, string>;
   nodeTypeVisibility: Record<string, boolean>;
+  nodeAccessHighlightColor: string;
   sizeMapping: string;
   
   // Clustering configuration

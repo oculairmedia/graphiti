@@ -20,6 +20,7 @@ interface NodeStylingTabProps {
   config: {
     nodeTypeColors: Record<string, string>;
     nodeTypeVisibility: Record<string, boolean>;
+    nodeAccessHighlightColor: string;
     colorScheme: string;
     gradientHighColor: string;
     gradientLowColor: string;
@@ -89,6 +90,24 @@ export const NodeStylingTab: React.FC<NodeStylingTabProps> = ({
               </div>
             );
           })}
+          
+          {/* Node Access Highlight Color */}
+          <div className="mt-4 pt-4 border-t border-border/30">
+            <ColorPicker
+              color={config.nodeAccessHighlightColor}
+              onChange={(color) => onConfigUpdate({ nodeAccessHighlightColor: color })}
+              label="Real-time Access Highlight"
+              swatches={[
+                '#6366f1', '#99f6e4', '#fbbf24', '#f87171', '#a78bfa',
+                '#60a5fa', '#34d399', '#fbbf24', '#fb923c', '#e879f9',
+                '#22d3ee', '#94a3b8', '#f472b6', '#818cf8', '#10b981'
+              ]}
+              className="w-full"
+            />
+            <p className="text-xs text-muted-foreground mt-2">
+              Color used to highlight nodes when they are accessed in real-time
+            </p>
+          </div>
         </CardContent>
       </Card>
 
