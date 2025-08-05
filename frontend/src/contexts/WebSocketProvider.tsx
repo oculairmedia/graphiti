@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useCallback, useEffect, useState } from 'react';
+import React, { createContext, useContext, useCallback, useEffect, useState, useRef } from 'react';
 import { useWebSocket, NodeAccessEvent } from '../hooks/useWebSocket';
 
 interface WebSocketContextValue {
