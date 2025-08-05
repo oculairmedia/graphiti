@@ -1,8 +1,8 @@
+@import './styles/node-glow.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-@import './styles/node-glow.css';
 
 /* Graphiti Knowledge Graph Design System - Dark theme with glass-morphism */
 
