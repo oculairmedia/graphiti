@@ -1,71 +1,66 @@
 # Multi-stage build for production-ready React frontend
 FROM node:18-alpine AS builder
 
-# Install dependencies including git
-RUN apk add --no-cache git python3 make g++
+# Install only essential build dependencies (no git)
+RUN apk add --no-cache python3 make g++ && \
+    echo "=== Build dependencies installed ==="
 
-# Configure git to handle directory permissions
-RUN git config --global --add safe.directory /app
-
-# Set working directory
 WORKDIR /app
 
-# Copy package files first for better caching
-COPY package.json package-lock.json ./
+# Copy package files
+COPY package*.json ./
+COPY .npmrc ./
 
-# Create .npmrc for CI builds
-RUN echo "registry=https://registry.npmjs.org/" > .npmrc && \
-    echo "strict-ssl=false" >> .npmrc && \
-    echo "fetch-retries=5" >> .npmrc && \
-    echo "fetch-retry-mintimeout=20000" >> .npmrc && \
-    echo "fetch-retry-maxtimeout=120000" >> .npmrc
+# Debug network and npm configuration
+RUN echo "=== Network diagnostics ===" && \
+    ping -c 1 registry.npmjs.org || echo "Cannot ping npm registry" && \
+    echo "=== NPM configuration ===" && \
+    npm config list && \
+    echo "=== DNS resolution test ===" && \
+    nslookup registry.npmjs.org || echo "DNS lookup failed"
 
-# Install dependencies using npm ci for reproducible builds
-RUN npm ci --no-audit --no-fund || \
+# Try to install dependencies with detailed error reporting
+RUN echo "=== Starting npm ci ===" && \
+    npm ci --no-audit --no-fund 2>&1 | tee /tmp/npm.log || \
     (echo "=== npm ci failed, trying npm install ===" && \
-     npm install --no-audit --no-fund --legacy-peer-deps) || \
-    (echo "=== Both npm ci and install failed ===" && \
-     echo "=== Showing npm debug log ===" && \
-     cat /root/.npm/_logs/* 2>/dev/null || true && \
-     echo "=== Showing package.json ===" && \
-     cat package.json && \
+     rm -rf node_modules package-lock.json && \
+     npm cache clean --force && \
+     npm install --no-audit --no-fund --legacy-peer-deps 2>&1 | tee -a /tmp/npm.log) || \
+    (echo "=== Both npm commands failed ===" && \
+     echo "=== Full npm log ===" && \
+     cat /tmp/npm.log && \
+     echo "=== NPM cache directory ===" && \
+     ls -la ~/.npm || true && \
+     echo "=== System resources ===" && \
+     free -h || true && \
+     df -h || true && \
      exit 1)
 
-# Copy application source
+# Copy source code
 COPY . .
 
 # Build the application
-RUN echo "=== Starting build ===" && \
+RUN echo "=== Building application ===" && \
     npm run build || \
-    (echo "=== Build failed, debugging info ===" && \
-     echo "=== Node version ===" && node --version && \
-     echo "=== NPM version ===" && npm --version && \
-     echo "=== Directory contents ===" && ls -la && \
+    (echo "=== Build failed ===" && \
      echo "=== Checking node_modules ===" && \
      ls -la node_modules/ | head -20 && \
+     echo "=== Checking for vite ===" && \
+     ls -la node_modules/.bin/vite || true && \
      exit 1)
 
 # Production stage
 FROM nginx:alpine
 
-# Install curl for health checks
 RUN apk add --no-cache curl
 
-# Copy nginx configuration
 COPY nginx.conf /etc/nginx/nginx.conf
-
-# Copy built application
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Create health check endpoint
 RUN echo "OK" > /usr/share/nginx/html/health
 
-# Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD curl -f http://localhost/health || exit 1
 
-# Expose port
 EXPOSE 80
-
-# Start nginx
 CMD ["nginx", "-g", "daemon off;"]
