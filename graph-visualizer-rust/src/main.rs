@@ -743,4 +743,4 @@ async fn update_node_summary(
             ))
         }
     }
-}// Force rebuild Sat Jul 26 09:13:22 PM EDT 2025
+}// Force rebuild for CI/CD workflow
