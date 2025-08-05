@@ -1,24 +1,34 @@
 # Multi-stage build for production-ready React frontend
 FROM node:18-alpine AS builder
 
+# Install build dependencies
+RUN apk add --no-cache python3 make g++ git
+
 # Set working directory
 WORKDIR /app
 
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies with verbose output
-RUN npm install --force --loglevel verbose || (echo "npm install failed" && exit 1)
+# Clean npm cache and install dependencies
+RUN npm cache clean --force && \
+    npm config set registry https://registry.npmjs.org/ && \
+    npm install --legacy-peer-deps --no-audit --no-fund || \
+    (echo "=== npm install failed, showing error log ===" && \
+     cat /root/.npm/_logs/*.log 2>/dev/null || true && \
+     exit 1)
 
 # Copy source code
 COPY . .
 
-# List files to debug
-RUN echo "=== Directory contents ===" && ls -la && \
-    echo "=== Node modules check ===" && ls -la node_modules/@cosmograph || true
-
-# Build the application with verbose output
-RUN npm run build || (echo "Build failed. Showing package.json:" && cat package.json && exit 1)
+# Build the application
+RUN npm run build || \
+    (echo "=== Build failed ===" && \
+     echo "=== Checking for common issues ===" && \
+     ls -la node_modules/.bin/ && \
+     echo "=== Package.json scripts ===" && \
+     cat package.json | grep -A 10 '"scripts"' && \
+     exit 1)
 
 # Production stage with Nginx
 FROM nginx:alpine AS production
