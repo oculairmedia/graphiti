@@ -11,9 +11,9 @@ WORKDIR /app
 COPY package*.json ./
 COPY .npmrc ./
 
-# Install dependencies with legacy peer deps
-RUN npm ci --legacy-peer-deps --no-audit --no-fund || \
-    npm install --legacy-peer-deps --no-audit --no-fund
+# Install dependencies with legacy peer deps, skipping postinstall scripts
+RUN npm ci --legacy-peer-deps --no-audit --no-fund --ignore-scripts || \
+    npm install --legacy-peer-deps --no-audit --no-fund --ignore-scripts
 
 # Copy source code
 COPY . .

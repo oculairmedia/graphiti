@@ -15,7 +15,7 @@ COPY package.json package-lock.json ./
 RUN echo "=== Testing npm install ===" && \
     npm config set loglevel silly && \
     npm config set registry https://registry.npmjs.org/ && \
-    npm ci --verbose --legacy-peer-deps 2>&1 | tee /tmp/npm-install.log || \
+    npm ci --verbose --legacy-peer-deps --ignore-scripts 2>&1 | tee /tmp/npm-install.log || \
     (echo "=== NPM install failed, showing last 100 lines of log ===" && \
      tail -100 /tmp/npm-install.log && \
      exit 1)
