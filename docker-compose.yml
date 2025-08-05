@@ -98,13 +98,11 @@ services:
       - homepage.href=http://192.168.50.90:3000
       - homepage.description=High-performance Rust-based graph visualization
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile.simple
+    image: ghcr.io/oculairmedia/graphiti-frontend:feature-real-time-node-glow-4761ea2
     container_name: graphiti-frontend-app
     restart: unless-stopped
     expose:
-      - 3000
+      - 80
     environment:
       - NODE_ENV=production
     depends_on:

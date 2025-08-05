@@ -27,6 +27,9 @@ COPY . .
 # Set NODE_ENV for production build
 ENV NODE_ENV=production
 
+# Copy environment file before build
+COPY .env.production .env.production
+
 # Debug: Show current directory and key files
 RUN echo "=== Build environment debug ===" && \
     echo "Current directory: $(pwd)" && \
