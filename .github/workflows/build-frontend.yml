@@ -30,6 +30,18 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
+      with:
+        # Ensure we have a proper git directory
+        fetch-depth: 0
+
+    - name: Debug - List frontend directory
+      run: |
+        echo "=== Frontend directory contents ==="
+        ls -la
+        echo "=== Package.json contents ==="
+        cat package.json
+        echo "=== Checking for git directory ==="
+        git status || echo "Git not available"
 
     - name: Log in to the Container registry
       uses: docker/login-action@v3
