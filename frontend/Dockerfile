@@ -27,6 +27,14 @@ COPY . .
 # Set NODE_ENV for production build
 ENV NODE_ENV=production
 
+# Debug: Show current directory and key files
+RUN echo "=== Build environment debug ===" && \
+    echo "Current directory: $(pwd)" && \
+    echo "Source files present:" && \
+    ls -la src/lib/ && \
+    echo "Vite config:" && \
+    cat vite.config.ts | grep -A5 resolve
+
 # Ensure vite is executable
 RUN chmod +x node_modules/.bin/vite 2>/dev/null || true
 
