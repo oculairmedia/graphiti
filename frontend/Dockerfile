@@ -7,7 +7,7 @@ RUN apk add --no-cache python3 make g++ libc6-compat
 
 WORKDIR /app
 
-# Copy package files and npmrc
+# Copy package files first
 COPY package*.json ./
 COPY .npmrc ./
 
@@ -21,8 +21,11 @@ RUN npm ci --legacy-peer-deps --no-audit --no-fund 2>&1 || \
      rm -rf node_modules && \
      npm install --legacy-peer-deps --no-audit --no-fund --ignore-scripts)
 
-# Copy source code
+# Copy source code - MUST include src/lib directory
 COPY . .
+
+# Verify lib directory was copied
+RUN if [ ! -d "src/lib" ]; then echo "ERROR: src/lib directory not found!" && exit 1; fi
 
 # Set NODE_ENV for production build
 ENV NODE_ENV=production
@@ -36,6 +39,8 @@ RUN echo "=== Build environment debug ===" && \
     (ls -la src/ 2>/dev/null || echo "src/ directory not found") && \
     echo "Checking for lib directory:" && \
     (ls -la src/lib/ 2>/dev/null || echo "src/lib/ directory not found") && \
+    echo "lib/utils.ts contents:" && \
+    (ls -la src/lib/utils.ts 2>/dev/null || echo "src/lib/utils.ts not found") && \
     echo "Vite config:" && \
     cat vite.config.ts | grep -A5 resolve || echo "vite.config.ts not found"
 

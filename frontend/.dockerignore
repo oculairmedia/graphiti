@@ -37,6 +37,12 @@ docker-compose*.yml
 README.md
 *.md
 
+# Explicitly include src/lib directory
+!src/
+!src/**
+!src/lib/
+!src/lib/**
+
 # Logs
 logs
 *.log
