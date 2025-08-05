@@ -7,15 +7,18 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies - skip postinstall scripts that fail
-RUN npm install --force --ignore-scripts && \
-    npm rebuild --ignore-scripts || true
+# Install dependencies with verbose output
+RUN npm install --force --loglevel verbose || (echo "npm install failed" && exit 1)
 
 # Copy source code
 COPY . .
 
-# Build the application
-RUN npm run build
+# List files to debug
+RUN echo "=== Directory contents ===" && ls -la && \
+    echo "=== Node modules check ===" && ls -la node_modules/@cosmograph || true
+
+# Build the application with verbose output
+RUN npm run build || (echo "Build failed. Showing package.json:" && cat package.json && exit 1)
 
 # Production stage with Nginx
 FROM nginx:alpine AS production
