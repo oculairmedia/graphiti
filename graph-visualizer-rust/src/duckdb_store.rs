@@ -62,6 +62,8 @@ impl DuckDBStore {
             Field::new("color", DataType::Utf8, true),
             Field::new("size", DataType::Float64, true),
             Field::new("created_at_timestamp", DataType::Float64, true), // For timeline
+            Field::new("cluster", DataType::Utf8, true), // For clustering
+            Field::new("clusterStrength", DataType::Float64, true), // Clustering strength
         ]));
         
         // Create edge schema for Arrow
@@ -88,7 +90,9 @@ impl DuckDBStore {
                 y DOUBLE,
                 color VARCHAR,
                 size DOUBLE,
-                created_at_timestamp DOUBLE
+                created_at_timestamp DOUBLE,
+                cluster VARCHAR,
+                clusterStrength DOUBLE
             )",
             params![],
         )?;
@@ -130,8 +134,8 @@ impl DuckDBStore {
         let tx = conn.transaction()?;
         
         // Insert nodes with indices
-        let stmt_node = "INSERT INTO nodes (id, idx, label, node_type, summary, degree_centrality, x, y, color, size, created_at_timestamp) 
-                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        let stmt_node = "INSERT INTO nodes (id, idx, label, node_type, summary, degree_centrality, x, y, color, size, created_at_timestamp, cluster, clusterStrength) 
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         
         let mut node_to_idx = HashMap::new();
         
@@ -142,6 +146,10 @@ impl DuckDBStore {
             
             let color = self.get_node_color(&node.node_type);
             let size = 4.0 + (degree * 20.0); // Size based on centrality
+            
+            // Default clustering by node_type with strength 0.7
+            let cluster = node.node_type.clone();
+            let cluster_strength = 0.7;
             
             // Use real timestamp from created_at if available, otherwise generate synthetic one
             let timestamp = if let Some(created_str) = node.properties.get("created_at")
@@ -171,7 +179,9 @@ impl DuckDBStore {
                     Option::<f64>::None, // y - will be computed by layout
                     color,
                     size,
-                    timestamp
+                    timestamp,
+                    cluster,
+                    cluster_strength
                 ],
             )?;
             
@@ -213,7 +223,7 @@ impl DuckDBStore {
         let conn = self.conn.lock().unwrap();
         
         let mut stmt = conn.prepare(
-            "SELECT id, idx, label, node_type, summary, degree_centrality, x, y, color, size, created_at_timestamp 
+            "SELECT id, idx, label, node_type, summary, degree_centrality, x, y, color, size, created_at_timestamp, cluster, clusterStrength 
              FROM nodes 
              ORDER BY idx"
         )?;
@@ -229,6 +239,8 @@ impl DuckDBStore {
         let mut colors = Vec::new();
         let mut sizes = Vec::new();
         let mut timestamps = Vec::new();
+        let mut clusters = Vec::new();
+        let mut cluster_strengths = Vec::new();
         
         let rows = stmt.query_map(params![], |row| {
             Ok((
@@ -243,11 +255,13 @@ impl DuckDBStore {
                 row.get::<_, Option<String>>(8)?, // color
                 row.get::<_, Option<f64>>(9)?,    // size
                 row.get::<_, Option<f64>>(10)?,   // created_at_timestamp
+                row.get::<_, Option<String>>(11)?, // cluster
+                row.get::<_, Option<f64>>(12)?,   // clusterStrength
             ))
         })?;
         
         for row in rows {
-            let (id, idx, label, node_type, summary, degree, x, y, color, size, timestamp) = row?;
+            let (id, idx, label, node_type, summary, degree, x, y, color, size, timestamp, cluster, cluster_strength) = row?;
             ids.push(id);
             indices.push(idx);
             labels.push(label);
@@ -259,6 +273,8 @@ impl DuckDBStore {
             colors.push(color);
             sizes.push(size);
             timestamps.push(timestamp);
+            clusters.push(cluster);
+            cluster_strengths.push(cluster_strength);
         }
         
         let batch = RecordBatch::try_new(
@@ -275,6 +291,8 @@ impl DuckDBStore {
                 Arc::new(StringArray::from(colors)) as ArrayRef,
                 Arc::new(Float64Array::from(sizes)) as ArrayRef,
                 Arc::new(Float64Array::from(timestamps)) as ArrayRef,
+                Arc::new(StringArray::from(clusters)) as ArrayRef,
+                Arc::new(Float64Array::from(cluster_strengths)) as ArrayRef,
             ],
         )?;
         
@@ -396,6 +414,10 @@ impl DuckDBStore {
                 let color = self.get_node_color(&node.node_type);
                 let size = 4.0 + (degree * 20.0);
                 
+                // Default clustering by node_type with strength 0.7
+                let cluster = node.node_type.clone();
+                let cluster_strength = 0.7;
+                
                 // Parse real timestamp from created_at if available
                 let timestamp = if let Some(created_str) = node.properties.get("created_at")
                     .and_then(|v| v.as_str()) {
@@ -407,8 +429,8 @@ impl DuckDBStore {
                 };
 
                 tx.execute(
-                    "INSERT INTO nodes (id, idx, label, node_type, summary, degree_centrality, x, y, color, size, created_at_timestamp) 
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "INSERT INTO nodes (id, idx, label, node_type, summary, degree_centrality, x, y, color, size, created_at_timestamp, cluster, clusterStrength) 
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     params![
                         &node.id,
                         start_idx,
@@ -420,7 +442,9 @@ impl DuckDBStore {
                         Option::<f64>::None,
                         color,
                         size,
-                        timestamp
+                        timestamp,
+                        cluster,
+                        cluster_strength
                     ],
                 )?;
                 
