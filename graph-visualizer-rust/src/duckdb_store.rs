@@ -179,7 +179,7 @@ impl DuckDBStore {
         }
         
         // Insert edges with indices
-        let stmt_edge = "INSERT INTO edges (source, sourceidx, target, targetidx, edge_type, weight, color) 
+        let stmt_edge = "INSERT OR IGNORE INTO edges (source, sourceidx, target, targetidx, edge_type, weight, color) 
                          VALUES (?, ?, ?, ?, ?, ?, ?)";
         
         for edge in edges.iter() {
