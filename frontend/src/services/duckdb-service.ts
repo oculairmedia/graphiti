@@ -142,12 +142,8 @@ export class DuckDBService {
       
       console.log(`[DuckDB] Loaded ${nodesTable.numRows} nodes and ${edgesTable.numRows} edges`);
       
-      // Cache for next time
-      await graphCache.setCachedData('arrow-data', {
-        nodes: Array.from(new Uint8Array(nodes)),
-        edges: Array.from(new Uint8Array(edges)),
-        metadata: { format: 'arrow', timestamp: Date.now() }
-      });
+      // Skip caching ArrayBuffer data to avoid conversion issues
+      // The preloader already handles caching in memory
     } catch (error) {
       console.error('[DuckDB] Failed to load prefetched data:', error);
     }
