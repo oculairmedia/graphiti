@@ -15,6 +15,7 @@ import { useColorUtils } from '../hooks/useColorUtils';
 import { searchIndex } from '../utils/searchIndex';
 import { GraphConfigContext } from '../contexts/useGraphConfig';
 import { useWebSocketContext } from '../contexts/WebSocketProvider';
+import { useDuckDB } from '../contexts/DuckDBProvider';
 
 const dataKitCoordinator = DataKitCoordinator.getInstance();
 
@@ -167,6 +168,9 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     const [isDataPreparing, setIsDataPreparing] = useState(false);
     const { config, setCosmographRef } = useGraphConfig();
     
+    // Get DuckDB connection
+    const { service: duckdbService, isInitialized: isDuckDBInitialized, getDuckDBConnection } = useDuckDB();
+    
     // Glowing nodes state for real-time visualization
     const [glowingNodes, setGlowingNodes] = useState<Map<string, number>>(new Map());
     const { subscribe: subscribeToWebSocket } = useWebSocketContext();
@@ -174,6 +178,9 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     // Track current data for incremental updates
     const [currentNodes, setCurrentNodes] = useState<GraphNode[]>([]);
     const [currentLinks, setCurrentLinks] = useState<GraphLink[]>([]);
+    
+    // DuckDB data state
+    const [duckDBData, setDuckDBData] = useState<{ points: any; links: any } | null>(null);
     
     // Simulation control state
     const [keepRunning, setKeepRunning] = useState(false);
@@ -188,6 +195,35 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     
     // Add component ID for debugging multiple instances
     const componentId = useRef(Math.random().toString(36).substr(2, 9));
+    
+    // Determine whether to use DuckDB table names or prepared data
+    const useDuckDBTables = isDuckDBInitialized && duckdbService;
+    
+    // Fetch DuckDB tables when available - moved here to maintain hook order
+    React.useEffect(() => {
+      if (useDuckDBTables && duckdbService) {
+        const fetchTables = async () => {
+          try {
+            const [nodesTable, edgesTable] = await Promise.all([
+              duckdbService.getNodesTable(),
+              duckdbService.getEdgesTable()
+            ]);
+            
+            if (nodesTable && edgesTable) {
+              // Convert Arrow tables to arrays for Cosmograph
+              setDuckDBData({
+                points: nodesTable.toArray(),
+                links: edgesTable.toArray()
+              });
+            }
+          } catch (error) {
+            logger.error('Failed to fetch DuckDB tables:', error);
+          }
+        };
+        
+        fetchTables();
+      }
+    }, [useDuckDBTables, duckdbService]);
     
     // Update current data tracking and search index when props change
     useEffect(() => {
@@ -440,6 +476,12 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     
     // Data Kit preparation effect
     useEffect(() => {
+      // Skip if using DuckDB tables directly
+      if (isDuckDBInitialized && duckdbService) {
+        logger.log('GraphCanvas: Using DuckDB tables directly, skipping data preparation');
+        return;
+      }
+      
       // Skip reprocessing if we're in the middle of an incremental update
       if (isIncrementalUpdateRef.current) {
         return;
@@ -591,7 +633,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       return () => {
         cancelled = true;
       };
-    }, [nodes, links, dataKitConfig]);
+    }, [nodes, links, dataKitConfig, isDuckDBInitialized, duckdbService]);
 
     // Log when simulation should be ready
     useEffect(() => {
@@ -2051,12 +2093,26 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       );
     }
 
-    // Don't render if no data is available
-    if (!cosmographData) {
+    // Don't render if no data is available and DuckDB is not initialized
+    if (!cosmographData && !isDuckDBInitialized) {
       return (
         <div className={`relative overflow-hidden ${className} flex items-center justify-center`}>
           <div className="text-muted-foreground text-center">
             <p className="text-sm">No graph data available</p>
+          </div>
+        </div>
+      );
+    }
+
+    
+    const pointsData = useDuckDBTables ? duckDBData?.points : cosmographData?.points;
+    const linksData = useDuckDBTables ? duckDBData?.links : cosmographData?.links;
+
+    if (!pointsData) {
+      return (
+        <div className={`relative overflow-hidden ${className} flex items-center justify-center`}>
+          <div className="text-muted-foreground text-center">
+            <p className="text-sm">Waiting for data...</p>
           </div>
         </div>
       );
@@ -2068,22 +2124,22 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       >
           <Cosmograph
             ref={cosmographRef}
-            // Use prepared data directly
-            points={cosmographData.points}
-            links={cosmographData.links}
-            // Point configuration
+            // Use DuckDB table names or prepared data
+            points={pointsData}
+            links={linksData}
+            // Point configuration - use DuckDB column names when using DuckDB
             pointIdBy="id"
-            pointIndexBy="index"
+            pointIndexBy={useDuckDBTables ? "idx" : "index"}
             pointLabelBy="label"
-            pointColorBy={pointColorBy}
-            pointSizeBy={pointSizeBy}
+            pointColorBy={useDuckDBTables ? "node_type" : pointColorBy}
+            pointSizeBy={useDuckDBTables ? "size" : pointSizeBy}
             pointClusterBy={config.clusteringEnabled ? config.pointClusterBy : undefined}  // Group nodes by their cluster assignment
             pointClusterStrengthBy={config.clusteringEnabled ? config.pointClusterStrengthBy : undefined}  // Control clustering attraction strength
-            // Link configuration
+            // Link configuration - use DuckDB column names when using DuckDB
             linkSourceBy="source"
-            linkSourceIndexBy="sourceIndex"
+            linkSourceIndexBy={useDuckDBTables ? "sourceidx" : "sourceIndex"}
             linkTargetBy="target"
-            linkTargetIndexBy="targetIndex"
+            linkTargetIndexBy={useDuckDBTables ? "targetidx" : "targetIndex"}
             // linkColorBy="edge_type"  // Disabled to let config color take over
             linkWidthBy={config.linkWidthBy || "weight"}
             

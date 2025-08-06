@@ -60,6 +60,7 @@ impl DuckDBStore {
             Field::new("y", DataType::Float64, true),
             Field::new("color", DataType::Utf8, true),
             Field::new("size", DataType::Float64, true),
+            Field::new("created_at_timestamp", DataType::Float64, true), // For timeline
         ]));
         
         // Create edge schema for Arrow
@@ -85,7 +86,8 @@ impl DuckDBStore {
                 x DOUBLE,
                 y DOUBLE,
                 color VARCHAR,
-                size DOUBLE
+                size DOUBLE,
+                created_at_timestamp DOUBLE
             )",
             params![],
         )?;
@@ -127,8 +129,8 @@ impl DuckDBStore {
         let tx = conn.transaction()?;
         
         // Insert nodes with indices
-        let stmt_node = "INSERT INTO nodes (id, idx, label, node_type, summary, degree_centrality, x, y, color, size) 
-                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        let stmt_node = "INSERT INTO nodes (id, idx, label, node_type, summary, degree_centrality, x, y, color, size, created_at_timestamp) 
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         
         let mut node_to_idx = HashMap::new();
         
@@ -139,6 +141,9 @@ impl DuckDBStore {
             
             let color = self.get_node_color(&node.node_type);
             let size = 4.0 + (degree * 20.0); // Size based on centrality
+            
+            // Generate a timestamp - using index as a simple temporal value for now
+            let timestamp = (idx as f64) * 86400000.0; // Spread nodes across days in milliseconds
             
             tx.execute(
                 stmt_node,
@@ -152,7 +157,8 @@ impl DuckDBStore {
                     Option::<f64>::None, // x - will be computed by layout
                     Option::<f64>::None, // y - will be computed by layout
                     color,
-                    size
+                    size,
+                    timestamp
                 ],
             )?;
             
@@ -194,7 +200,7 @@ impl DuckDBStore {
         let conn = self.conn.lock().unwrap();
         
         let mut stmt = conn.prepare(
-            "SELECT id, idx, label, node_type, summary, degree_centrality, x, y, color, size 
+            "SELECT id, idx, label, node_type, summary, degree_centrality, x, y, color, size, created_at_timestamp 
              FROM nodes 
              ORDER BY idx"
         )?;
@@ -209,6 +215,7 @@ impl DuckDBStore {
         let mut ys = Vec::new();
         let mut colors = Vec::new();
         let mut sizes = Vec::new();
+        let mut timestamps = Vec::new();
         
         let rows = stmt.query_map(params![], |row| {
             Ok((
@@ -222,11 +229,12 @@ impl DuckDBStore {
                 row.get::<_, Option<f64>>(7)?,    // y
                 row.get::<_, Option<String>>(8)?, // color
                 row.get::<_, Option<f64>>(9)?,    // size
+                row.get::<_, Option<f64>>(10)?,   // created_at_timestamp
             ))
         })?;
         
         for row in rows {
-            let (id, idx, label, node_type, summary, degree, x, y, color, size) = row?;
+            let (id, idx, label, node_type, summary, degree, x, y, color, size, timestamp) = row?;
             ids.push(id);
             indices.push(idx);
             labels.push(label);
@@ -237,6 +245,7 @@ impl DuckDBStore {
             ys.push(y);
             colors.push(color);
             sizes.push(size);
+            timestamps.push(timestamp);
         }
         
         let batch = RecordBatch::try_new(
@@ -252,6 +261,7 @@ impl DuckDBStore {
                 Arc::new(Float64Array::from(ys)) as ArrayRef,
                 Arc::new(StringArray::from(colors)) as ArrayRef,
                 Arc::new(Float64Array::from(sizes)) as ArrayRef,
+                Arc::new(Float64Array::from(timestamps)) as ArrayRef,
             ],
         )?;
         
@@ -374,8 +384,8 @@ impl DuckDBStore {
                 let size = 4.0 + (degree * 20.0);
                 
                 tx.execute(
-                    "INSERT INTO nodes (id, idx, label, node_type, summary, degree_centrality, x, y, color, size) 
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "INSERT INTO nodes (id, idx, label, node_type, summary, degree_centrality, x, y, color, size, created_at_timestamp) 
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     params![
                         &node.id,
                         start_idx,
@@ -386,7 +396,8 @@ impl DuckDBStore {
                         Option::<f64>::None,
                         Option::<f64>::None,
                         color,
-                        size
+                        size,
+                        (start_idx as f64) * 86400000.0 // Simple timestamp based on index
                     ],
                 )?;
                 
