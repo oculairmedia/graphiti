@@ -806,8 +806,89 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       };
     }, [config.colorScheme, config.nodeTypeColors, allNodeTypes]);
     
-    // Memoize link color function based on scheme
+    // Memoize link color function based on scheme and glowing nodes
     const linkColorFn = React.useMemo(() => {
+      // If nodes are glowing, override the color scheme to highlight connected edges
+      if (glowingNodes.size > 0) {
+        return (linkValue: GraphLink, linkIndex: number) => {
+          // Get the correct data source
+          const dataSource = useDuckDBTables ? duckDBData : cosmographData;
+          if (!dataSource || !dataSource.links || !dataSource.links[linkIndex]) {
+            return config.linkColor;
+          }
+          
+          const link = dataSource.links[linkIndex];
+          const sourceId = String(link.source);
+          const targetId = String(link.target);
+          
+          // Check if either source or target node is glowing
+          const sourceGlowTime = glowingNodes.get(sourceId);
+          const targetGlowTime = glowingNodes.get(targetId);
+          
+          if (sourceGlowTime || targetGlowTime) {
+            // Use the earlier glow time if both nodes are glowing
+            const glowStartTime = sourceGlowTime && targetGlowTime 
+              ? Math.min(sourceGlowTime, targetGlowTime)
+              : sourceGlowTime || targetGlowTime;
+            
+            // Calculate fade progress (0 to 1, where 1 is fully faded back to normal)
+            const elapsed = Date.now() - glowStartTime;
+            const fadeDuration = 2000; // 2 seconds total, same as nodes
+            const fadeProgress = Math.min(elapsed / fadeDuration, 1);
+            
+            // Use the same highlight color as nodes for consistency
+            const highlightColor = config.nodeAccessHighlightColor;
+            const baseColor = config.linkColor;
+            
+            // Parse colors to RGB
+            const parseColor = (color: string): [number, number, number, number] => {
+              if (color.startsWith('rgba')) {
+                const match = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+),?\s*([\d.]+)?\)/);
+                if (match) {
+                  return [
+                    parseInt(match[1]), 
+                    parseInt(match[2]), 
+                    parseInt(match[3]), 
+                    parseFloat(match[4] || '1')
+                  ];
+                }
+              } else if (color.startsWith('#')) {
+                const hex = color.slice(1);
+                return [
+                  parseInt(hex.slice(0, 2), 16),
+                  parseInt(hex.slice(2, 4), 16),
+                  parseInt(hex.slice(4, 6), 16),
+                  1
+                ];
+              }
+              return [102, 102, 102, 0.5]; // Default gray color
+            };
+            
+            const [baseR, baseG, baseB, baseA] = parseColor(baseColor);
+            const [highlightR, highlightG, highlightB, highlightA] = parseColor(highlightColor);
+            
+            // Use easing function for smooth transition (ease-in-out)
+            const easeInOut = (t: number) => t < 0.5 
+              ? 2 * t * t 
+              : -1 + (4 - 2 * t) * t;
+            
+            const easedProgress = easeInOut(fadeProgress);
+            
+            // Interpolate between highlight and base color
+            const r = Math.round(highlightR + (baseR - highlightR) * easedProgress);
+            const g = Math.round(highlightG + (baseG - highlightG) * easedProgress);
+            const b = Math.round(highlightB + (baseB - highlightB) * easedProgress);
+            const a = highlightA + (baseA - highlightA) * easedProgress;
+            
+            return `rgba(${r}, ${g}, ${b}, ${a})`;
+          }
+          
+          // Return normal color for non-connected edges
+          return config.linkColor;
+        };
+      }
+      
+      // Original color scheme logic when not glowing
       if (!config.linkColorScheme || config.linkColorScheme === 'uniform') {
         return undefined; // Use default link color
       }
@@ -888,7 +969,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             return config.linkColor;
         }
       };
-    }, [config.linkColorScheme, config.linkColor, config.nodeTypeColors, currentLinks, currentNodes]);
+    }, [config.linkColorScheme, config.linkColor, config.nodeTypeColors, config.nodeAccessHighlightColor, currentLinks, currentNodes, glowingNodes, useDuckDBTables, duckDBData, cosmographData]);
 
     // Note: We don't need these separate functions anymore since we're using inline functions in the props
     
