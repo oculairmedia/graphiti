@@ -51,7 +51,7 @@ export const ParallelInitProvider: React.FC<ParallelInitProviderProps> = ({
   rustServerUrl = import.meta.env.VITE_RUST_SERVER_URL || 'http://192.168.50.90:3000'
 }) => {
   return (
-    <LoadingCoordinatorProvider requiredStages={['services', 'data']}>
+    <LoadingCoordinatorProvider requiredStages={['services', 'data', 'dataPreparation', 'canvas']}>
       <ParallelInitContent 
         queryClient={queryClient}
         rustServerUrl={rustServerUrl}
@@ -258,34 +258,23 @@ const ParallelInitContent: React.FC<ParallelInitProviderProps> = ({
     getDuckDBConnection
   };
 
-  // Show unified loading screen until everything is ready
-  if (!loadingCoordinator.isFullyLoaded) {
-    return (
-      <>
-        <UnifiedLoadingScreen />
-        {/* Keep context provider alive but hide children */}
-        <div style={{ display: 'none' }}>
-          <ParallelInitContext.Provider value={contextValue}>
-            <QueryClientProvider client={client}>
-              <GraphConfigProvider>
-                <WebSocketProvider>
-                  {/* Children hidden until loading complete */}
-                </WebSocketProvider>
-              </GraphConfigProvider>
-            </QueryClientProvider>
-          </ParallelInitContext.Provider>
-        </div>
-      </>
-    );
-  }
-
-  // Render providers and children once everything is ready
+  // Always render providers and children, but show loading screen on top
   return (
     <ParallelInitContext.Provider value={contextValue}>
       <QueryClientProvider client={client}>
         <GraphConfigProvider>
           <WebSocketProvider>
-            {children}
+            {/* Show loading screen on top if not fully loaded */}
+            {!loadingCoordinator.isFullyLoaded && <UnifiedLoadingScreen />}
+            
+            {/* Render children but hide them until fully loaded */}
+            <div style={{ 
+              display: loadingCoordinator.isFullyLoaded ? 'block' : 'none',
+              height: '100%',
+              width: '100%'
+            }}>
+              {children}
+            </div>
           </WebSocketProvider>
         </GraphConfigProvider>
       </QueryClientProvider>

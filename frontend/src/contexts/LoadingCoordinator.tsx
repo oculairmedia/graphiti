@@ -53,7 +53,7 @@ interface LoadingCoordinatorProviderProps {
 
 export const LoadingCoordinatorProvider: React.FC<LoadingCoordinatorProviderProps> = ({ 
   children,
-  requiredStages = ['services', 'data']
+  requiredStages = ['services', 'data', 'dataPreparation', 'canvas']
 }) => {
   const [state, setState] = useState<LoadingCoordinatorState>({
     stages: new Map(),
@@ -208,6 +208,8 @@ export const LoadingCoordinatorProvider: React.FC<LoadingCoordinatorProviderProp
       const labels: Record<string, string> = {
         'services': 'Initializing services',
         'data': 'Loading graph data',
+        'dataPreparation': 'Preparing visualization',
+        'canvas': 'Rendering canvas',
         'config': 'Loading configuration',
         'websocket': 'Connecting to server'
       };
