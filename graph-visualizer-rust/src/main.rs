@@ -175,12 +175,12 @@ async fn main() -> anyhow::Result<()> {
         let mut nodes = Vec::new();
         
         while let Some(row) = nodes_result.data.next() {
-            if let Some(id) = row.get(0).and_then(|v| v.as_str()) {
+            if let Some(id) = row.get(0).and_then(|v| v.as_string()) {
                 node_ids.push(format!("'{}'", id));
                 nodes.push(Node {
                     id: id.to_string(),
-                    label: row.get(1).and_then(|v| v.as_str()).unwrap_or("").to_string(),
-                    node_type: row.get(2).and_then(|v| v.as_str()).unwrap_or("Unknown").to_string(),
+                    label: row.get(1).and_then(|v| v.as_string()).map_or("", |v| v).to_string(),
+                    node_type: row.get(2).and_then(|v| v.as_string()).map_or("Unknown", |v| v).to_string(),
                     summary: None,
                     properties: HashMap::new(),
                 });
@@ -200,10 +200,10 @@ async fn main() -> anyhow::Result<()> {
         
         while let Some(row) = edges_result.data.next() {
             edges.push(Edge {
-                from: row.get(0).and_then(|v| v.as_str()).unwrap_or("").to_string(),
-                to: row.get(2).and_then(|v| v.as_str()).unwrap_or("").to_string(),
-                edge_type: row.get(1).and_then(|v| v.as_str()).unwrap_or("").to_string(),
-                weight: row.get(3).and_then(|v| v.as_f64()).unwrap_or(1.0),
+                from: row.get(0).and_then(|v| v.as_string()).map_or("", |v| v).to_string(),
+                to: row.get(2).and_then(|v| v.as_string()).map_or("", |v| v).to_string(),
+                edge_type: row.get(1).and_then(|v| v.as_string()).map_or("", |v| v).to_string(),
+                weight: row.get(3).and_then(|v| v.to_f64()).unwrap_or(1.0),
             });
         }
         
