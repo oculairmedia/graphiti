@@ -158,32 +158,20 @@ export class DuckDBService {
       await this.conn.insertArrowTable(nodesTable, { name: 'nodes' });
       await this.conn.insertArrowTable(edgesTable, { name: 'edges' });
       
-      // Cache the data for next time - store as ArrayBuffer, not array
-      // Only cache if size is reasonable
-      if (nodesArrayBuffer.byteLength < 10000000 && edgesArrayBuffer.byteLength < 10000000) {
-        // Get actual counts for metadata
-        const nodeCount = await this.conn.query('SELECT COUNT(*) as count FROM nodes');
-        const edgeCount = await this.conn.query('SELECT COUNT(*) as count FROM edges');
-        
-        await graphCache.setCachedData(
-          Array.from(new Uint8Array(nodesArrayBuffer)) as any,
-          Array.from(new Uint8Array(edgesArrayBuffer)) as any,
-          'arrow-data',
-          {
-            nodeCount: nodeCount.get(0)?.count || 0,
-            edgeCount: edgeCount.get(0)?.count || 0,
-            format: 'arrow'
-          }
-        );
-      } else {
-        console.log(`[DuckDB] Data too large to cache (${(nodesArrayBuffer.byteLength / 1048576).toFixed(2)}MB nodes, ${(edgesArrayBuffer.byteLength / 1048576).toFixed(2)}MB edges), skipping cache storage`);
-      }
-
       // Get stats
       const nodeCount = await this.conn.query('SELECT COUNT(*) as count FROM nodes');
       const edgeCount = await this.conn.query('SELECT COUNT(*) as count FROM edges');
       
       console.log(`Loaded ${nodeCount.get(0)?.count} nodes and ${edgeCount.get(0)?.count} edges into DuckDB`);
+      
+      // For now, skip caching Arrow format data to avoid the byte array issue
+      // TODO: Implement proper binary data caching if needed
+      console.log(`[DuckDB] Arrow format data (${(nodesArrayBuffer.byteLength / 1048576).toFixed(2)}MB nodes, ${(edgesArrayBuffer.byteLength / 1048576).toFixed(2)}MB edges) - caching disabled for binary format`);
+      
+      // Note: We could implement binary caching in the future by:
+      // 1. Storing ArrayBuffers directly in IndexedDB (supported)
+      // 2. Or parsing Arrow format to JavaScript objects before caching
+      // For now, we rely on the browser's disk cache for the Arrow files
     } catch (error) {
       console.error('Failed to load initial data:', error);
       throw error;
