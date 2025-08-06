@@ -18,6 +18,14 @@ import type { GraphCanvasHandle, GraphVizProps } from '../types/components';
 import { getErrorMessage } from '../types/errors';
 
 export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
+  // Debug component lifecycle
+  useEffect(() => {
+    console.log('[GraphViz] Component mounted');
+    return () => {
+      console.log('[GraphViz] Component unmounting');
+    };
+  }, []);
+  
   const { applyLayout, zoomIn, zoomOut, fitView } = useGraphConfig();
   
   // UI State
@@ -28,6 +36,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
   const [showLayoutPanel, setShowLayoutPanel] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isSimulationRunning, setIsSimulationRunning] = useState(true);
+  
 
   // Refs
   const graphCanvasRef = useRef<GraphCanvasHandle>(null);
@@ -46,7 +55,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
     isGraphInitialized,
     stableDataRef,
   } = useGraphDataQuery();
-
+  
   const {
     selectedNodes,
     selectedNode,
@@ -280,7 +289,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
               onToggleCollapse={() => setLeftPanelCollapsed(!leftPanelCollapsed)}
               onLayoutChange={handleLayoutChange}
               graphCanvasRef={graphCanvasRef}
-              nodes={dataToUse.nodes}
+              nodes={transformedData.nodes}
               onNodeSelect={handleNodeClick}
             />
           </div>
@@ -313,6 +322,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
             <LayoutPanel 
               collapsed={rightPanelCollapsed}
               onToggleCollapse={() => setRightPanelCollapsed(!rightPanelCollapsed)}
+              graphData={transformedData}
             />
           </div>
         </div>
@@ -335,7 +345,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
         )}
         
         {/* Timeline at the bottom */}
-        {data && (
+        {dataToUse && dataToUse.nodes.length > 0 && (
           <div className={`fixed bottom-0 z-50 transition-all duration-300`}
             style={{
               left: leftPanelCollapsed ? '48px' : '320px',

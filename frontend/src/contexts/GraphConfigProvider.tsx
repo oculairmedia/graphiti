@@ -101,7 +101,7 @@ const defaultStableConfig: StableConfig = {
   // Link Visibility
   linkVisibilityDistance: [50, 200],
   linkVisibilityMinTransparency: 0.05,
-  linkArrows: false,
+  linkArrows: true,
   linkArrowsSizeScale: 1,
   
   // Curved Links

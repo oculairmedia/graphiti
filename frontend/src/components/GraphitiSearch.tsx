@@ -17,7 +17,7 @@ interface GraphitiSearchProps {
   onNodeSelect?: (node: NodeResult) => void;
 }
 
-export const GraphitiSearch: React.FC<GraphitiSearchProps> = ({
+export const GraphitiSearch: React.FC<GraphitiSearchProps> = React.memo(({
   graphCanvasRef,
   className,
   onNodeSelect,
@@ -40,7 +40,8 @@ export const GraphitiSearch: React.FC<GraphitiSearchProps> = ({
     graphCanvasRef,
     onNodeSelect: (node) => {
       onNodeSelect?.(node);
-      setIsExpanded(false);
+      // Don't collapse the search panel - let user control it or click elsewhere
+      // This prevents the component from unmounting and triggering re-renders
     },
   });
 
@@ -150,7 +151,12 @@ export const GraphitiSearch: React.FC<GraphitiSearchProps> = ({
                             'cursor-pointer transition-all p-2 rounded-md border bg-secondary/30 hover:bg-secondary/50',
                             selectedNodeId === node.uuid && 'ring-1 ring-primary'
                           )}
-                          onClick={() => selectNode(node)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            console.log('[GraphitiSearch] Selecting node:', node.uuid);
+                            selectNode(node);
+                          }}
                         >
                           {/* Node Name and Type */}
                           <div className="flex items-start justify-between gap-1 mb-1">
@@ -204,4 +210,4 @@ export const GraphitiSearch: React.FC<GraphitiSearchProps> = ({
         </CardContent>
       </Card>
   );
-};
+});

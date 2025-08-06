@@ -15,6 +15,7 @@ import { useColorUtils } from '../hooks/useColorUtils';
 import { searchIndex } from '../utils/searchIndex';
 import { GraphConfigContext } from '../contexts/useGraphConfig';
 import { useWebSocketContext } from '../contexts/WebSocketProvider';
+import { useDuckDB } from '../contexts/DuckDBProvider';
 
 const dataKitCoordinator = DataKitCoordinator.getInstance();
 
@@ -167,6 +168,9 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     const [isDataPreparing, setIsDataPreparing] = useState(false);
     const { config, setCosmographRef } = useGraphConfig();
     
+    // Get DuckDB connection
+    const { service: duckdbService, isInitialized: isDuckDBInitialized, getDuckDBConnection } = useDuckDB();
+    
     // Glowing nodes state for real-time visualization
     const [glowingNodes, setGlowingNodes] = useState<Map<string, number>>(new Map());
     const { subscribe: subscribeToWebSocket } = useWebSocketContext();
@@ -174,6 +178,9 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     // Track current data for incremental updates
     const [currentNodes, setCurrentNodes] = useState<GraphNode[]>([]);
     const [currentLinks, setCurrentLinks] = useState<GraphLink[]>([]);
+    
+    // DuckDB data state - keep Arrow tables in native format
+    const [duckDBData, setDuckDBData] = useState<{ points: any; links: any } | null>(null);
     
     // Simulation control state
     const [keepRunning, setKeepRunning] = useState(false);
@@ -188,6 +195,36 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     
     // Add component ID for debugging multiple instances
     const componentId = useRef(Math.random().toString(36).substr(2, 9));
+    
+    // Determine whether to use DuckDB table names or prepared data
+    const useDuckDBTables = isDuckDBInitialized && duckdbService;
+    
+    // Fetch DuckDB tables when available - moved here to maintain hook order
+    React.useEffect(() => {
+      if (useDuckDBTables && duckdbService) {
+        const fetchTables = async () => {
+          try {
+            const [nodesTable, edgesTable] = await Promise.all([
+              duckdbService.getNodesTable(),
+              duckdbService.getEdgesTable()
+            ]);
+            
+            if (nodesTable && edgesTable) {
+              // Keep Arrow tables in native format for Cosmograph
+              // Cosmograph v2.0 can handle Arrow tables directly
+              setDuckDBData({
+                points: nodesTable,
+                links: edgesTable
+              });
+            }
+          } catch (error) {
+            logger.error('Failed to fetch DuckDB tables:', error);
+          }
+        };
+        
+        fetchTables();
+      }
+    }, [useDuckDBTables, duckdbService]);
     
     // Update current data tracking and search index when props change
     useEffect(() => {
@@ -438,8 +475,49 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     // Track previous data to prevent unnecessary reprocessing
     const prevDataRef = useRef<{ nodeCount: number; linkCount: number }>({ nodeCount: 0, linkCount: 0 });
     
+    // Memoize expensive node transformations
+    const memoizedNodes = React.useMemo(() => {
+      if (!nodes || nodes.length === 0) return [];
+      
+      return nodes.map((node, index) => ({
+        id: String(node.id),
+        index: index,
+        label: String(node.label || node.id),
+        node_type: String(node.node_type || 'Unknown'),
+        centrality: Number(node.properties?.degree_centrality || node.properties?.pagerank_centrality || node.size || 1),
+        cluster: String(node.node_type || 'Unknown'),
+        clusterStrength: 0.7,
+        degree_centrality: Number(node.properties?.degree_centrality || 0),
+        pagerank_centrality: Number(node.properties?.pagerank_centrality || 0),
+        betweenness_centrality: Number(node.properties?.betweenness_centrality || 0),
+        eigenvector_centrality: Number(node.properties?.eigenvector_centrality || 0),
+        created_at: node.properties?.created_at || node.created_at || null,
+        created_at_timestamp: node.properties?.created_at ? new Date(node.properties?.created_at).getTime() : null
+      }));
+    }, [nodes]);
+    
+    // Memoize link transformations
+    const memoizedLinks = React.useMemo(() => {
+      if (!links || links.length === 0) return [];
+      
+      return links.map(link => ({
+        source: String(link.source),
+        target: String(link.target),
+        edge_type: String(link.edge_type || 'default'),
+        weight: Number(link.weight || 1),
+        created_at: link.created_at,
+        updated_at: link.updated_at
+      }));
+    }, [links]);
+    
     // Data Kit preparation effect
     useEffect(() => {
+      // Skip if using DuckDB tables directly
+      if (isDuckDBInitialized && duckdbService) {
+        logger.log('GraphCanvas: Using DuckDB tables directly, skipping data preparation');
+        return;
+      }
+      
       // Skip reprocessing if we're in the middle of an incremental update
       if (isIncrementalUpdateRef.current) {
         return;
@@ -468,43 +546,8 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             setIsDataPreparing(true);
             setDataKitError(null);
             
-          
-          // Transform data to match Data Kit expectations with consistent types
-          const transformedNodes = nodes.map((node, index) => {
-            // Extract created_at from properties if it exists there
-            const createdAt = node.properties?.created_at || node.created_at || node.properties?.created || null;
-            
-            
-            const degree = Number(node.properties?.degree_centrality || 0);
-            
-            const nodeData = {
-              id: String(node.id), // Ensure string type
-              index: index, // Required for v2.0: ordinal index
-              label: String(node.label || node.id), // Ensure string type
-              node_type: String(node.node_type || 'Unknown'), // Ensure string type
-              centrality: Number(node.properties?.degree_centrality || node.properties?.pagerank_centrality || node.size || 1), // Ensure number type
-              // Add cluster assignment based on node type for more meaningful clustering
-              cluster: String(node.node_type || 'Unknown'),
-              // Add cluster strength - entities of the same type will be attracted to each other
-              clusterStrength: 0.7, // Strong clustering by type (0-1 range)
-              // Add other commonly used properties with type safety
-              degree_centrality: degree,
-              pagerank_centrality: Number(node.properties?.pagerank_centrality || 0),
-              betweenness_centrality: Number(node.properties?.betweenness_centrality || 0),
-              eigenvector_centrality: Number(node.properties?.eigenvector_centrality || 0),
-              // Include temporal data for timeline - keep as string (timeline can parse ISO dates)
-              created_at: createdAt,
-              // Also include as timestamp for timeline
-              created_at_timestamp: createdAt ? new Date(createdAt).getTime() : null
-            };
-            
-            // Validate that all required fields are present and valid
-            if (!nodeData.id || nodeData.id === 'undefined') {
-              logger.warn('Invalid node ID found:', node);
-            }
-            
-            return nodeData;
-          }).filter(node => node.id && node.id !== 'undefined'); // Remove invalid nodes
+          // Use memoized data instead of re-transforming
+          const transformedNodes = memoizedNodes.filter(node => node.id && node.id !== 'undefined');
 
           // Create a map for quick node index lookup
           const nodeIndexMap = new Map<string, number>();
@@ -512,9 +555,10 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             nodeIndexMap.set(node.id, index);
           });
 
-          logger.log('GraphCanvas: Processing links:', links.length, 'nodes in map:', nodeIndexMap.size);
+          logger.log('GraphCanvas: Processing links:', memoizedLinks.length, 'nodes in map:', nodeIndexMap.size);
           
-          const transformedLinks = links.map(link => {
+          // Use memoized links
+          const transformedLinks = memoizedLinks.map(link => {
             const sourceIndex = nodeIndexMap.get(String(link.source));
             const targetIndex = nodeIndexMap.get(String(link.target));
             
@@ -591,7 +635,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       return () => {
         cancelled = true;
       };
-    }, [nodes, links, dataKitConfig]);
+    }, [nodes, links, dataKitConfig, isDuckDBInitialized, duckdbService]);
 
     // Log when simulation should be ready
     useEffect(() => {
@@ -764,8 +808,100 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       };
     }, [config.colorScheme, config.nodeTypeColors, allNodeTypes]);
     
-    // Memoize link color function based on scheme
+    // Memoize link color function based on scheme and glowing nodes
     const linkColorFn = React.useMemo(() => {
+      // If nodes are glowing, override the color scheme to highlight connected edges
+      if (glowingNodes.size > 0) {
+        return (linkValue: GraphLink, linkIndex: number) => {
+          // Get the correct data source
+          const dataSource = useDuckDBTables ? duckDBData : cosmographData;
+          if (!dataSource || !dataSource.links) {
+            return config.linkColor;
+          }
+          
+          // Handle Arrow table vs array data
+          let link: any;
+          if (useDuckDBTables && duckDBData?.links?.get) {
+            // Arrow table - use get method
+            link = duckDBData.links.get(linkIndex);
+            if (!link) return config.linkColor;
+          } else if (cosmographData?.links?.[linkIndex]) {
+            // JavaScript array
+            link = cosmographData.links[linkIndex];
+          } else {
+            return config.linkColor;
+          }
+          const sourceId = String(link.source);
+          const targetId = String(link.target);
+          
+          // Check if either source or target node is glowing
+          const sourceGlowTime = glowingNodes.get(sourceId);
+          const targetGlowTime = glowingNodes.get(targetId);
+          
+          if (sourceGlowTime || targetGlowTime) {
+            // Use the earlier glow time if both nodes are glowing
+            const glowStartTime = sourceGlowTime && targetGlowTime 
+              ? Math.min(sourceGlowTime, targetGlowTime)
+              : sourceGlowTime || targetGlowTime;
+            
+            // Calculate fade progress (0 to 1, where 1 is fully faded back to normal)
+            const elapsed = Date.now() - glowStartTime;
+            const fadeDuration = 2000; // 2 seconds total, same as nodes
+            const fadeProgress = Math.min(elapsed / fadeDuration, 1);
+            
+            // Use the same highlight color as nodes for consistency
+            const highlightColor = config.nodeAccessHighlightColor;
+            const baseColor = config.linkColor;
+            
+            // Parse colors to RGB
+            const parseColor = (color: string): [number, number, number, number] => {
+              if (color.startsWith('rgba')) {
+                const match = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+),?\s*([\d.]+)?\)/);
+                if (match) {
+                  return [
+                    parseInt(match[1]), 
+                    parseInt(match[2]), 
+                    parseInt(match[3]), 
+                    parseFloat(match[4] || '1')
+                  ];
+                }
+              } else if (color.startsWith('#')) {
+                const hex = color.slice(1);
+                return [
+                  parseInt(hex.slice(0, 2), 16),
+                  parseInt(hex.slice(2, 4), 16),
+                  parseInt(hex.slice(4, 6), 16),
+                  1
+                ];
+              }
+              return [102, 102, 102, 0.5]; // Default gray color
+            };
+            
+            const [baseR, baseG, baseB, baseA] = parseColor(baseColor);
+            const [highlightR, highlightG, highlightB, highlightA] = parseColor(highlightColor);
+            
+            // Use easing function for smooth transition (ease-in-out)
+            const easeInOut = (t: number) => t < 0.5 
+              ? 2 * t * t 
+              : -1 + (4 - 2 * t) * t;
+            
+            const easedProgress = easeInOut(fadeProgress);
+            
+            // Interpolate between highlight and base color
+            const r = Math.round(highlightR + (baseR - highlightR) * easedProgress);
+            const g = Math.round(highlightG + (baseG - highlightG) * easedProgress);
+            const b = Math.round(highlightB + (baseB - highlightB) * easedProgress);
+            const a = highlightA + (baseA - highlightA) * easedProgress;
+            
+            return `rgba(${r}, ${g}, ${b}, ${a})`;
+          }
+          
+          // Return normal color for non-connected edges
+          return config.linkColor;
+        };
+      }
+      
+      // Original color scheme logic when not glowing
       if (!config.linkColorScheme || config.linkColorScheme === 'uniform') {
         return undefined; // Use default link color
       }
@@ -846,7 +982,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             return config.linkColor;
         }
       };
-    }, [config.linkColorScheme, config.linkColor, config.nodeTypeColors, currentLinks, currentNodes]);
+    }, [config.linkColorScheme, config.linkColor, config.nodeTypeColors, config.nodeAccessHighlightColor, currentLinks, currentNodes, glowingNodes, useDuckDBTables, duckDBData, cosmographData]);
 
     // Note: We don't need these separate functions anymore since we're using inline functions in the props
     
@@ -1159,10 +1295,8 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       if (!cosmographRef.current) return;
       
       try {
-        // Ensure simulation is running for smooth zoom animation
-        if (typeof cosmographRef.current.start === 'function') {
-          cosmographRef.current.start(0.1); // Start with low energy just for the zoom
-        }
+        // Don't restart simulation - just zoom to the point
+        // The simulation can continue running at its current state
         
         // Use the Cosmograph v2.0 zoomToPoint method with config defaults
         const actualDuration = duration !== undefined ? duration : config.fitViewDuration;
@@ -2051,12 +2185,27 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       );
     }
 
-    // Don't render if no data is available
-    if (!cosmographData) {
+    // Don't render if no data is available and DuckDB is not initialized
+    if (!cosmographData && !isDuckDBInitialized) {
       return (
         <div className={`relative overflow-hidden ${className} flex items-center justify-center`}>
           <div className="text-muted-foreground text-center">
             <p className="text-sm">No graph data available</p>
+          </div>
+        </div>
+      );
+    }
+
+    
+    // Pass Arrow tables directly to Cosmograph when using DuckDB
+    const pointsData = useDuckDBTables ? duckDBData?.points : cosmographData?.points;
+    const linksData = useDuckDBTables ? duckDBData?.links : cosmographData?.links;
+
+    if (!pointsData) {
+      return (
+        <div className={`relative overflow-hidden ${className} flex items-center justify-center`}>
+          <div className="text-muted-foreground text-center">
+            <p className="text-sm">Waiting for data...</p>
           </div>
         </div>
       );
@@ -2068,22 +2217,22 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       >
           <Cosmograph
             ref={cosmographRef}
-            // Use prepared data directly
-            points={cosmographData.points}
-            links={cosmographData.links}
-            // Point configuration
+            // Use DuckDB table names or prepared data
+            points={pointsData}
+            links={linksData}
+            // Point configuration - use DuckDB column names when using DuckDB
             pointIdBy="id"
-            pointIndexBy="index"
+            pointIndexBy={useDuckDBTables ? "idx" : "index"}
             pointLabelBy="label"
-            pointColorBy={pointColorBy}
-            pointSizeBy={pointSizeBy}
+            pointColorBy={useDuckDBTables ? "node_type" : pointColorBy}
+            pointSizeBy={useDuckDBTables ? "size" : pointSizeBy}
             pointClusterBy={config.clusteringEnabled ? config.pointClusterBy : undefined}  // Group nodes by their cluster assignment
             pointClusterStrengthBy={config.clusteringEnabled ? config.pointClusterStrengthBy : undefined}  // Control clustering attraction strength
-            // Link configuration
+            // Link configuration - use DuckDB column names when using DuckDB
             linkSourceBy="source"
-            linkSourceIndexBy="sourceIndex"
+            linkSourceIndexBy={useDuckDBTables ? "sourceidx" : "sourceIndex"}
             linkTargetBy="target"
-            linkTargetIndexBy="targetIndex"
+            linkTargetIndexBy={useDuckDBTables ? "targetidx" : "targetIndex"}
             // linkColorBy="edge_type"  // Disabled to let config color take over
             linkWidthBy={config.linkWidthBy || "weight"}
             
@@ -2104,13 +2253,25 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             
             // Use pointColorByFn when glowing (only works when pointColorStrategy is undefined)
             pointColorByFn={glowingNodes.size > 0 ? (value, index) => {
-              // Get the node from cosmograph data
-              if (!cosmographData || !cosmographData.points[index]) {
+              // Get the node from the correct data source
+              const dataSource = useDuckDBTables ? duckDBData : cosmographData;
+              if (!dataSource || !dataSource.points) {
                 return config.nodeTypeColors[value] || '#94a3b8';
               }
               
-              const point = cosmographData.points[index];
-              const nodeId = point.id;
+              // Handle Arrow table vs array data
+              let nodeId: string;
+              if (useDuckDBTables && duckDBData?.points?.get) {
+                // Arrow table - use get method
+                const row = duckDBData.points.get(index);
+                nodeId = row?.id || String(index);
+              } else if (cosmographData?.points?.[index]) {
+                // JavaScript array
+                const point = cosmographData.points[index];
+                nodeId = point.id;
+              } else {
+                return config.nodeTypeColors[value] || '#94a3b8';
+              }
               const glowStartTime = glowingNodes.get(nodeId);
               
               if (glowStartTime) {
@@ -2332,4 +2493,4 @@ export const GraphCanvas = React.memo(GraphCanvasComponent, (prevProps, nextProp
   return !shouldRerender;
 });
 
-GraphCanvas.displayName = 'GraphCanvas';
+GraphCanvas.displayName = 'GraphCanvas';// Trigger rebuild with all changes Wed Aug  6 01:00:43 AM EDT 2025
