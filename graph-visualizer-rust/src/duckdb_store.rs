@@ -156,7 +156,7 @@ impl DuckDBStore {
             } else {
                 debug!("Node {} has no created_at, using synthetic timestamp", node.id);
                 (idx as f64) * 86400000.0 // Fallback to synthetic timestamp
-            }
+            };
             
             tx.execute(
                 stmt_node,

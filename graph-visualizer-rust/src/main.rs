@@ -993,7 +993,7 @@ async fn get_nodes_arrow(State(state): State<AppState>) -> Result<Response<Body>
                     
                     // Update cache if we have edges too
                     let mut cache = state.arrow_cache.write().await;
-                    if let Some(mut cached) = cache.as_mut() {
+                    if let Some(cached) = cache.as_mut() {
                         cached.nodes_batch = batch;
                         cached.nodes_bytes = bytes.clone();
                         cached.timestamp = std::time::Instant::now();
@@ -1057,7 +1057,7 @@ async fn get_edges_arrow(State(state): State<AppState>) -> Result<Response<Body>
                     
                     // Update cache if we have nodes too
                     let mut cache = state.arrow_cache.write().await;
-                    if let Some(mut cached) = cache.as_mut() {
+                    if let Some(cached) = cache.as_mut() {
                         cached.edges_batch = batch;
                         cached.edges_bytes = bytes.clone();
                         cached.timestamp = std::time::Instant::now();
