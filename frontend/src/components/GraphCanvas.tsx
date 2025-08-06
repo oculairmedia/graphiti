@@ -588,6 +588,9 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           transformedNodes = memoizedNodes.filter(node => node.id && node.id !== 'undefined');
 
           // Apply clustering if enabled
+          let clusterAssignments: (string | number)[] = [];
+          let clusterStrengths: number[] = [];
+          
           if (config.clusteringEnabled && config.clusteringMethod !== 'none') {
             const clusteringConfig: ClusteringConfig = {
               method: config.clusteringMethod,
@@ -598,7 +601,17 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             const { nodes: clusteredNodes, clusterMapping, clusterPositions } = 
               applyClusteringToGraphData(transformedNodes, clusteringConfig);
             
-            transformedNodes = clusteredNodes;
+            // If using DuckDB, we need to update the table; otherwise update the nodes
+            if (useDuckDBTables && duckdbService) {
+              // Extract cluster data for DuckDB update
+              clusterAssignments = clusteredNodes.map(node => node.cluster || 'none');
+              clusterStrengths = clusteredNodes.map(node => node.clusterStrength || 0);
+              
+              // We'll update DuckDB after data preparation is complete
+            } else {
+              // For non-DuckDB mode, use the clustered nodes directly
+              transformedNodes = clusteredNodes;
+            }
             
             // Update dynamic config with cluster mapping
             config.updateConfig({ 
@@ -609,7 +622,8 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             logger.log('GraphCanvas: Applied clustering', {
               method: config.clusteringMethod,
               numClusters: clusterMapping.size,
-              numNodes: transformedNodes.length
+              numNodes: transformedNodes.length,
+              mode: useDuckDBTables ? 'DuckDB' : 'JavaScript'
             });
           }
 
@@ -673,6 +687,16 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           logger.log('GraphCanvas: Bypassing Data Kit, using direct data');
           
           if (!cancelled) {
+            // If using DuckDB and clustering is enabled, update the DuckDB table
+            if (useDuckDBTables && duckdbService && clusterAssignments.length > 0) {
+              try {
+                await duckdbService.updateClusterData(clusterAssignments, clusterStrengths);
+                logger.log('GraphCanvas: Updated DuckDB table with cluster data');
+              } catch (error) {
+                logger.error('GraphCanvas: Failed to update DuckDB cluster data:', error);
+              }
+            }
+            
             setCosmographData({
               points: transformedNodes,
               links: transformedLinks,
@@ -692,6 +716,15 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             setDataKitError(errorMessage);
             
             // Fallback to direct data passing
+            // Still try to update DuckDB if needed
+            if (useDuckDBTables && duckdbService && clusterAssignments.length > 0) {
+              try {
+                await duckdbService.updateClusterData(clusterAssignments, clusterStrengths);
+              } catch (err) {
+                logger.error('GraphCanvas: Failed to update DuckDB cluster data in fallback:', err);
+              }
+            }
+            
             setCosmographData({
               points: transformedNodes,
               links: transformedLinks,
@@ -727,7 +760,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         cancelled = true;
         clearTimeout(dataPreparationTimeout);
       };
-    }, [nodes, links, dataKitConfig, isDuckDBInitialized, duckdbService]);
+    }, [nodes, links, dataKitConfig, isDuckDBInitialized, duckdbService, useDuckDBTables, config.clusteringEnabled, config.clusteringMethod, config.centralityMetric, config.clusterStrength]);
 
     // Mark canvas complete when Cosmograph data is loaded
     // This is more reliable than polling for canvas element when hidden

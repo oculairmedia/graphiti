@@ -358,6 +358,47 @@ export class DuckDBService {
     return result;
   }
 
+  async updateClusterData(clusterAssignments: (string | number)[], clusterStrengths: number[]): Promise<void> {
+    if (!this.conn) throw new Error('DuckDB connection not initialized');
+    
+    try {
+      // First check if cluster columns exist, if not add them
+      const tableInfo = await this.conn.query(`PRAGMA table_info('nodes')`);
+      const columns = new Set<string>();
+      for (let i = 0; i < tableInfo.numRows; i++) {
+        columns.add(tableInfo.get(i)?.name as string);
+      }
+      
+      // Add cluster columns if they don't exist
+      if (!columns.has('cluster')) {
+        console.log('[DuckDB] Adding cluster column to nodes table');
+        await this.conn.query(`ALTER TABLE nodes ADD COLUMN cluster VARCHAR`);
+      }
+      if (!columns.has('clusterStrength')) {
+        console.log('[DuckDB] Adding clusterStrength column to nodes table');
+        await this.conn.query(`ALTER TABLE nodes ADD COLUMN clusterStrength DOUBLE`);
+      }
+      
+      // Update cluster data for each node
+      const updateStmt = await this.conn.prepare(
+        `UPDATE nodes SET cluster = ?, clusterStrength = ? WHERE idx = ?`
+      );
+      
+      for (let i = 0; i < clusterAssignments.length; i++) {
+        await updateStmt.run(
+          String(clusterAssignments[i]),
+          clusterStrengths[i],
+          i
+        );
+      }
+      
+      console.log(`[DuckDB] Updated cluster data for ${clusterAssignments.length} nodes`);
+    } catch (error) {
+      console.error('[DuckDB] Failed to update cluster data:', error);
+      throw error;
+    }
+  }
+
   async getStats(): Promise<{ nodes: number; edges: number }> {
     if (!this.conn) throw new Error('DuckDB connection not initialized');
     
