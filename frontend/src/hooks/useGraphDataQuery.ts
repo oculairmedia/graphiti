@@ -41,6 +41,7 @@ export function useGraphDataQuery() {
   
   // Flag to prevent re-fetching after initial load
   const hasFetchedDuckDBRef = useRef(false);
+  const lastFetchTimeRef = useRef(0);
   
   // Skip JSON fetch if using DuckDB (Arrow format is faster)
   const skipJsonFetch = true; // Always use Arrow format for better performance
@@ -73,6 +74,12 @@ export function useGraphDataQuery() {
         return;
       }
       
+      // Throttle fetches to prevent rapid re-fetching (minimum 1 second between fetches)
+      const now = Date.now();
+      if (now - lastFetchTimeRef.current < 1000) {
+        return;
+      }
+      
       const connection = getDuckDBConnection();
       if (!connection?.connection) {
         // If no connection yet, don't mark as fetched so we can retry
@@ -82,6 +89,7 @@ export function useGraphDataQuery() {
       
       // Mark as fetching to prevent concurrent fetches
       hasFetchedDuckDBRef.current = true;
+      lastFetchTimeRef.current = now;
       setIsDuckDBLoading(true);
       
       try {
@@ -130,15 +138,37 @@ export function useGraphDataQuery() {
             updated_at: e.updated_at
           }));
           
-          setDuckDBData({ nodes, edges });
-          setHasInitialData(true); // Mark that we have loaded data at least once
-          logger.log('Loaded UI data from DuckDB:', nodes.length, 'nodes,', edges.length, 'edges');
-          console.log('[useGraphDataQuery] DuckDB data loaded:', { 
-            nodeCount: nodes.length, 
-            edgeCount: edges.length,
-            firstNode: nodes[0],
-            firstEdge: edges[0]
+          // Only update if data has actually changed
+          setDuckDBData(prevData => {
+            // Check if data is the same
+            if (prevData && 
+                prevData.nodes.length === nodes.length && 
+                prevData.edges.length === edges.length) {
+              // Do a quick check on first few items to see if it's the same data
+              const sameNodes = prevData.nodes[0]?.id === nodes[0]?.id && 
+                               prevData.nodes[1]?.id === nodes[1]?.id;
+              const sameEdges = prevData.edges[0]?.id === edges[0]?.id && 
+                               prevData.edges[1]?.id === edges[1]?.id;
+              
+              if (sameNodes && sameEdges) {
+                // Data hasn't changed, return previous reference
+                return prevData;
+              }
+            }
+            
+            // Data has changed, update it
+            logger.log('Loaded UI data from DuckDB:', nodes.length, 'nodes,', edges.length, 'edges');
+            console.log('[useGraphDataQuery] DuckDB data loaded:', { 
+              nodeCount: nodes.length, 
+              edgeCount: edges.length,
+              firstNode: nodes[0],
+              firstEdge: edges[0]
+            });
+            
+            return { nodes, edges };
           });
+          
+          setHasInitialData(true); // Mark that we have loaded data at least once
         }
       } catch (error) {
         logger.error('Failed to query DuckDB for UI data:', error);
@@ -147,32 +177,51 @@ export function useGraphDataQuery() {
       }
     };
     
-    // Fetch immediately without delay - retry every 100ms if connection not ready
-    const intervalId = setInterval(() => {
-      if (!hasFetchedDuckDBRef.current) {
-        fetchDuckDBData();
-      } else {
+    // Initial fetch attempt
+    fetchDuckDBData();
+    
+    // Only set up retry interval if we haven't fetched yet
+    let intervalId: NodeJS.Timeout | null = null;
+    if (!hasFetchedDuckDBRef.current) {
+      intervalId = setInterval(() => {
+        if (!hasFetchedDuckDBRef.current) {
+          fetchDuckDBData();
+        } else if (intervalId) {
+          clearInterval(intervalId);
+          intervalId = null;
+        }
+      }, 500); // Reduced frequency from 100ms to 500ms
+    }
+    
+    return () => {
+      if (intervalId) {
         clearInterval(intervalId);
       }
-    }, 100);
-    
-    return () => clearInterval(intervalId);
+    };
   }, [getDuckDBConnection]); // getDuckDBConnection is now stable thanks to useCallback
   
   // Use DuckDB data if available, otherwise fall back to JSON data
-  const data = duckDBData || jsonData || { nodes: [], edges: [] };
+  // Memoize the data to prevent unnecessary recalculations
+  const data = useMemo(() => {
+    return duckDBData || jsonData || { nodes: [], edges: [] };
+  }, [duckDBData, jsonData]);
+  
   // Consider loading if we're fetching data OR haven't loaded initial data yet
   const isLoading = (isDuckDBLoading || isJsonLoading) || (!hasInitialData && !duckDBData && !jsonData);
   
-  // Debug logging
-  console.log('[useGraphDataQuery] Final data:', {
-    hasDuckDBData: !!duckDBData,
-    hasJsonData: !!jsonData,
-    nodeCount: data?.nodes?.length || 0,
-    edgeCount: data?.edges?.length || 0,
-    isDuckDBLoading,
-    isJsonLoading
-  });
+  // Debug logging only when data actually changes
+  useEffect(() => {
+    if (data && (data.nodes.length > 0 || data.edges.length > 0)) {
+      console.log('[useGraphDataQuery] Data updated:', {
+        hasDuckDBData: !!duckDBData,
+        hasJsonData: !!jsonData,
+        nodeCount: data?.nodes?.length || 0,
+        edgeCount: data?.edges?.length || 0,
+        isDuckDBLoading,
+        isJsonLoading
+      });
+    }
+  }, [data?.nodes?.length, data?.edges?.length]); // Only log when counts change
 
   // Use data diffing to detect changes
   const dataDiff = useGraphDataDiff(data || null);
