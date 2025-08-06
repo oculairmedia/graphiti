@@ -7,31 +7,22 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { useGraphConfig } from '../contexts/GraphConfigProvider';
-import { useQuery } from '@tanstack/react-query';
-import { graphClient } from '@/api/graphClient';
+// Removed duplicate imports - data will be passed as props
 
 interface LayoutPanelProps {
   collapsed: boolean;
   onToggleCollapse: () => void;
+  graphData?: { nodes: any[]; edges: any[] };
 }
 
 export const LayoutPanel: React.FC<LayoutPanelProps> = ({ 
   collapsed, 
-  onToggleCollapse 
+  onToggleCollapse,
+  graphData 
 }) => {
   const { config, updateConfig, applyLayout, isApplyingLayout } = useGraphConfig();
   
-  // Get current graph data for layout operations
-  const { data: graphData } = useQuery({
-    queryKey: ['graphData', config.queryType, config.nodeLimit],
-    queryFn: () => graphClient.getGraphData({
-      query_type: config.queryType,
-      limit: config.nodeLimit
-    }),
-    staleTime: 30000,
-    refetchOnWindowFocus: false
-  });
-  
+  // Use passed graph data instead of fetching separately
   const nodes = graphData?.nodes || [];
   const edges = graphData?.edges || [];
   
