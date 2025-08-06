@@ -96,7 +96,7 @@ services:
       - homepage.href=http://192.168.50.90:3000
       - homepage.description=High-performance Rust-based graph visualization
   frontend:
-    image: ghcr.io/oculairmedia/graphiti-frontend:feature-duckdb-realtime-updates-e0602c2
+    image: ghcr.io/oculairmedia/graphiti-frontend:feature-duckdb-realtime-updates-5c21a69
     container_name: graphiti-frontend-app
     restart: unless-stopped
     expose:
