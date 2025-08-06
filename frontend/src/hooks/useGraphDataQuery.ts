@@ -66,15 +66,15 @@ export function useGraphDataQuery() {
   
   // Query DuckDB tables for UI data when connection is ready
   useEffect(() => {
-    // Skip if already fetched to prevent re-loading
-    if (hasFetchedDuckDBRef.current) {
-      return;
-    }
-    
     const fetchDuckDBData = async () => {
+      // Skip if already fetched to prevent re-loading
+      if (hasFetchedDuckDBRef.current) {
+        return;
+      }
+      
       const connection = getDuckDBConnection();
       if (!connection?.connection) {
-        // If no connection yet, retry
+        // If no connection yet, don't mark as fetched so we can retry
         return;
       }
       

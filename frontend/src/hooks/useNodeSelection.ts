@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useMemo, useOptimistic } from 'react';
+import { useState, useCallback, useRef, useMemo, useOptimistic, startTransition } from 'react';
 import { GraphNode } from '../api/types';
 import { GraphLink } from '../types/graph';
 
@@ -44,8 +44,10 @@ export function useNodeSelection(
   const [hoveredConnectedNodes, setHoveredConnectedNodes] = useState<string[]>([]);
 
   const handleNodeSelect = useCallback(async (nodeId: string) => {
-    // Optimistically update the selection immediately
-    addOptimisticSelectedNode(nodeId);
+    // Wrap optimistic update in startTransition to avoid React 19 warning
+    startTransition(() => {
+      addOptimisticSelectedNode(nodeId);
+    });
     
     // Simulate async operation (e.g., API call, graph update)
     await new Promise(resolve => setTimeout(resolve, 100));
@@ -63,8 +65,10 @@ export function useNodeSelection(
   const handleNodeClick = useCallback(async (node: GraphNode) => {
     console.log('[useNodeSelection] handleNodeClick called with node:', node.id);
     
-    // Optimistically update immediately
-    setOptimisticSelectedNode(node);
+    // Wrap optimistic update in startTransition to avoid React 19 warning
+    startTransition(() => {
+      setOptimisticSelectedNode(node);
+    });
     
     // Simulate async operation
     await new Promise(resolve => setTimeout(resolve, 50));
