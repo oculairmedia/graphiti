@@ -152,6 +152,10 @@ interface GraphCanvasComponentProps extends GraphCanvasProps {
   links: GraphLink[];
 }
 
+// Module-level initialization flag to prevent double initialization in React dev mode
+// This persists across component mount/unmount cycles
+let hasCosmographInitialized = false;
+
 const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
   ({ onNodeClick, onNodeSelect, onSelectNodes, onClearSelection, onNodeHover, selectedNodes, highlightedNodes, className, stats, nodes, links }, ref) => {
     const cosmographRef = useRef<CosmographRef | null>(null);
@@ -678,12 +682,16 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       };
     }, []);
     
-    // Track if this effect has already initialized to prevent double initialization
-    const hasInitializedRef = useRef(false);
-    
     useEffect(() => {
       // Prevent double initialization in React development mode
-      if (hasInitializedRef.current) {
+      // Use module-level flag that persists across mount/unmount cycles
+      if (hasCosmographInitialized) {
+        // If already initialized, just check if we still have the ref
+        if (cosmographRef.current) {
+          setCosmographRef(cosmographRef);
+          setIsReady(true);
+          setIsCanvasReady(!!cosmographRef.current?._canvasElement);
+        }
         return;
       }
       
@@ -696,7 +704,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         if (cosmographRef.current) {
           try {
             // Mark as initialized before setting anything to prevent race conditions
-            hasInitializedRef.current = true;
+            hasCosmographInitialized = true;
             
             // Set the ref for use in GraphConfigProvider
             console.log('GraphCanvas: Setting cosmographRef');
@@ -737,8 +745,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             // Start canvas polling immediately
             pollCanvas();
           } catch (error) {
-            // Canvas setup error - reset initialization flag on error
-            hasInitializedRef.current = false;
+            // Canvas setup error - don't reset the module flag to prevent double init
           }
         } else {
           // Keep polling for cosmographRef with exponential backoff for up to 3 seconds
@@ -769,8 +776,8 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         if (webglCleanup) {
           webglCleanup();
         }
-        // Reset the initialization flag on unmount
-        hasInitializedRef.current = false;
+        // Don't reset the module flag - it should persist across mount/unmount cycles
+        // This prevents double initialization in React dev mode
       };
     }, [setCosmographRef, setupWebGLContextRecovery]);
 
