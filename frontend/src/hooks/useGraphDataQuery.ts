@@ -36,7 +36,8 @@ export function useGraphDataQuery() {
   
   // State for DuckDB-sourced UI data
   const [duckDBData, setDuckDBData] = useState<{ nodes: GraphNode[], edges: GraphLink[] } | null>(null);
-  const [isDuckDBLoading, setIsDuckDBLoading] = useState(false);
+  const [isDuckDBLoading, setIsDuckDBLoading] = useState(true); // Start with loading true
+  const [hasInitialData, setHasInitialData] = useState(false); // Track if we've ever loaded data
   
   // Flag to prevent re-fetching after initial load
   const hasFetchedDuckDBRef = useRef(false);
@@ -75,6 +76,7 @@ export function useGraphDataQuery() {
       const connection = getDuckDBConnection();
       if (!connection?.connection) {
         // If no connection yet, don't mark as fetched so we can retry
+        // Keep loading state true until we can actually fetch
         return;
       }
       
@@ -129,6 +131,7 @@ export function useGraphDataQuery() {
           }));
           
           setDuckDBData({ nodes, edges });
+          setHasInitialData(true); // Mark that we have loaded data at least once
           logger.log('Loaded UI data from DuckDB:', nodes.length, 'nodes,', edges.length, 'edges');
           console.log('[useGraphDataQuery] DuckDB data loaded:', { 
             nodeCount: nodes.length, 
@@ -144,14 +147,22 @@ export function useGraphDataQuery() {
       }
     };
     
-    // Delay to ensure DuckDB is initialized
-    const timer = setTimeout(fetchDuckDBData, 1500);
-    return () => clearTimeout(timer);
+    // Fetch immediately without delay - retry every 100ms if connection not ready
+    const intervalId = setInterval(() => {
+      if (!hasFetchedDuckDBRef.current) {
+        fetchDuckDBData();
+      } else {
+        clearInterval(intervalId);
+      }
+    }, 100);
+    
+    return () => clearInterval(intervalId);
   }, [getDuckDBConnection]); // getDuckDBConnection is now stable thanks to useCallback
   
   // Use DuckDB data if available, otherwise fall back to JSON data
   const data = duckDBData || jsonData || { nodes: [], edges: [] };
-  const isLoading = isDuckDBLoading || isJsonLoading;
+  // Consider loading if we're fetching data OR haven't loaded initial data yet
+  const isLoading = (isDuckDBLoading || isJsonLoading) || (!hasInitialData && !duckDBData && !jsonData);
   
   // Debug logging
   console.log('[useGraphDataQuery] Final data:', {

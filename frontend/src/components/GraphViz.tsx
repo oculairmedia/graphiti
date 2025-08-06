@@ -229,8 +229,8 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
     return transformedData || { nodes: [], links: [] };
   }, [isIncrementalUpdate, transformedData]);
 
-  // Handle loading state
-  if (isLoading) {
+  // Handle loading state - show loading if still loading OR if we have no data at all
+  if (isLoading || (!data?.nodes?.length && !error)) {
     return (
       <div className={`h-screen w-full flex items-center justify-center bg-background ${className}`}>
         <div className="text-muted-foreground text-center">
@@ -250,6 +250,17 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
           <p className="text-sm text-muted-foreground mt-2">
             Make sure the Rust server is running at localhost:3000
           </p>
+        </div>
+      </div>
+    );
+  }
+  
+  // Handle empty data state after loading
+  if (!data?.nodes?.length) {
+    return (
+      <div className={`h-screen w-full flex items-center justify-center bg-background ${className}`}>
+        <div className="text-muted-foreground text-center">
+          <p>No graph data available</p>
         </div>
       </div>
     );
