@@ -551,6 +551,9 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       
       const prepareData = async () => {
         await dataKitCoordinator.executeDataKit(async () => {
+          let transformedNodes: any[] = [];
+          let transformedLinks: any[] = [];
+          
           try {
             setIsDataPreparing(true);
             setDataKitError(null);
@@ -562,7 +565,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             });
             
           // Use memoized data instead of re-transforming
-          const transformedNodes = memoizedNodes.filter(node => node.id && node.id !== 'undefined');
+          transformedNodes = memoizedNodes.filter(node => node.id && node.id !== 'undefined');
 
           // Create a map for quick node index lookup
           const nodeIndexMap = new Map<string, number>();
@@ -579,7 +582,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           });
           
           // Use memoized links
-          const transformedLinks = memoizedLinks.map(link => {
+          transformedLinks = memoizedLinks.map(link => {
             const sourceIndex = nodeIndexMap.get(String(link.source));
             const targetIndex = nodeIndexMap.get(String(link.target));
             
@@ -648,10 +651,26 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
               links: transformedLinks,
               cosmographConfig: {}
             });
+            
+            // Still mark as complete even with error (we have fallback data)
+            loadingCoordinator.setStageComplete('dataPreparation', {
+              nodesCount: transformedNodes.length,
+              linksCount: transformedLinks.length,
+              hadError: true
+            });
           }
           } finally {
             if (!cancelled) {
               setIsDataPreparing(false);
+              
+              // Ensure dataPreparation is marked complete in all cases
+              if (loadingCoordinator.getStageStatus('dataPreparation') !== 'complete') {
+                loadingCoordinator.setStageComplete('dataPreparation', {
+                  nodesCount: transformedNodes.length || 0,
+                  linksCount: transformedLinks.length || 0,
+                  finally: true
+                });
+              }
             }
           }
         });
@@ -664,10 +683,16 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       };
     }, [nodes, links, dataKitConfig, isDuckDBInitialized, duckdbService]);
 
-    // Log when simulation should be ready
+    // Log when simulation should be ready and mark canvas as complete
     useEffect(() => {
       if (cosmographData && isCanvasReady) {
         logger.log('GraphCanvas: Data loaded and canvas ready, simulation should start automatically');
+        
+        // Ensure canvas stage is marked complete when both data and canvas are ready
+        loadingCoordinator.setStageComplete('canvas', {
+          canvasReady: true,
+          hasData: true
+        });
       }
     }, [cosmographData, isCanvasReady]);
 
@@ -713,6 +738,17 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       // Report canvas initialization started
       loadingCoordinator.updateStage('canvas', { status: 'loading', progress: 10 });
       
+      // Fallback timeout to ensure canvas completes even if detection fails
+      const fallbackTimeout = setTimeout(() => {
+        if (loadingCoordinator.getStageStatus('canvas') !== 'complete') {
+          console.warn('GraphCanvas: Canvas detection timeout, marking as complete');
+          loadingCoordinator.setStageComplete('canvas', {
+            canvasReady: true,
+            fallback: true
+          });
+        }
+      }, 3000); // 3 seconds should be enough for canvas to initialize
+      
       const pollCosmographRef = () => {
         
         if (cosmographRef.current) {
@@ -744,6 +780,12 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             setCosmographRef(cosmographRef);
             setIsReady(true);
             
+            // Report significant canvas progress
+            loadingCoordinator.updateStage('canvas', { 
+              status: 'loading', 
+              progress: 50 
+            });
+            
             // Set up WebGL context loss recovery
             webglCleanup = setupWebGLContextRecovery();
             
@@ -753,18 +795,10 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
               
               setIsCanvasReady(prevReady => {
                 if (hasCanvas !== prevReady && hasCanvas) {
-                  // Canvas is now ready
-                  loadingCoordinator.updateStage('canvas', { 
-                    status: 'loading', 
-                    progress: 80 
+                  // Canvas is now ready - immediately mark as complete
+                  loadingCoordinator.setStageComplete('canvas', {
+                    canvasReady: true
                   });
-                  
-                  // Mark canvas as complete after a brief delay to ensure rendering
-                  setTimeout(() => {
-                    loadingCoordinator.setStageComplete('canvas', {
-                      canvasReady: true
-                    });
-                  }, 100);
                 }
                 return hasCanvas;
               });
@@ -817,6 +851,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           clearTimeout(intervalRef.current);
           intervalRef.current = null;
         }
+        clearTimeout(fallbackTimeout);
         if (webglCleanup) {
           webglCleanup();
         }
