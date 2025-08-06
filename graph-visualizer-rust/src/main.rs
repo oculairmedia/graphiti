@@ -1,6 +1,6 @@
 use axum::{
     extract::{Path, Query, State, WebSocketUpgrade},
-    http::{StatusCode, HeaderMap, header},
+    http::{StatusCode, header},
     response::{IntoResponse, Json, Response},
     routing::{get, patch, post},
     Router,
@@ -169,17 +169,19 @@ async fn main() -> anyhow::Result<()> {
         // Step 1: Load nodes first (much more efficient)
         let nodes_query = "MATCH (n) WHERE EXISTS(n.degree_centrality) AND n.degree_centrality > 0.001 RETURN n.uuid as id, n.name as name, COALESCE(n.type, labels(n)[0]) as label, n.degree_centrality as degree, n.created_at as created ORDER BY n.degree_centrality DESC LIMIT 1500";
         
-        let nodes_result = state.client.graph_query(&graph_name, nodes_query).await?;
+        let mut graph = state.client.select_graph(&graph_name);
+        let mut nodes_result = graph.query(nodes_query).execute().await?;
         let mut node_ids = Vec::new();
         let mut nodes = Vec::new();
         
-        for row in nodes_result {
+        while let Some(row) = nodes_result.data.next() {
             if let Some(id) = row.get(0).and_then(|v| v.as_str()) {
                 node_ids.push(format!("'{}'", id));
                 nodes.push(Node {
                     id: id.to_string(),
                     label: row.get(1).and_then(|v| v.as_str()).unwrap_or("").to_string(),
                     node_type: row.get(2).and_then(|v| v.as_str()).unwrap_or("Unknown").to_string(),
+                    summary: None,
                     properties: HashMap::new(),
                 });
             }
@@ -192,19 +194,30 @@ async fn main() -> anyhow::Result<()> {
             node_ids.join(",")
         );
         
-        let edges_result = state.client.graph_query(&graph_name, &edges_query).await?;
+        let mut graph = state.client.select_graph(&graph_name);
+        let mut edges_result = graph.query(&edges_query).execute().await?;
         let mut edges = Vec::new();
         
-        for row in edges_result {
+        while let Some(row) = edges_result.data.next() {
             edges.push(Edge {
-                source: row.get(0).and_then(|v| v.as_str()).unwrap_or("").to_string(),
-                target: row.get(2).and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                from: row.get(0).and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                to: row.get(2).and_then(|v| v.as_str()).unwrap_or("").to_string(),
                 edge_type: row.get(1).and_then(|v| v.as_str()).unwrap_or("").to_string(),
-                weight: row.get(3).and_then(|v| v.as_f64()).unwrap_or(1.0) as f32,
+                weight: row.get(3).and_then(|v| v.as_f64()).unwrap_or(1.0),
             });
         }
         
-        let initial_data = GraphData { nodes, edges };
+        let initial_data = GraphData { 
+            nodes: nodes.clone(),
+            edges: edges.clone(),
+            stats: GraphStats {
+                total_nodes: nodes.len(),
+                total_edges: edges.len(),
+                node_types: HashMap::new(),
+                avg_degree: 0.0,
+                max_degree: 0.0,
+            }
+        };
         
         duckdb_store.load_initial_data(initial_data.nodes.clone(), initial_data.edges.clone()).await?;
         info!("Initial data loaded: {} nodes, {} edges", initial_data.nodes.len(), initial_data.edges.len());
