@@ -70,6 +70,7 @@ const ParallelInitContent: React.FC<ParallelInitProviderProps> = ({
 }) => {
   const loadingCoordinator = useLoadingCoordinator();
   const [showUI, setShowUI] = useState(false);
+  const [readyToFade, setReadyToFade] = useState(false);
   const [state, setState] = useState<ParallelInitState>({
     isDuckDBReady: false,
     isWebSocketReady: false,
@@ -84,16 +85,21 @@ const ParallelInitContent: React.FC<ParallelInitProviderProps> = ({
   const duckDBServiceRef = useRef<DuckDBService | null>(null);
   const initStartedRef = useRef(false);
   
-  // Add 2-second delay after everything is loaded before showing UI
+  // Add 500ms delay after everything is loaded before starting fade
   useEffect(() => {
     if (loadingCoordinator.isFullyLoaded && !state.initError) {
       const timer = setTimeout(() => {
-        setShowUI(true);
-      }, 2000);
+        setReadyToFade(true);
+      }, 500);
       
       return () => clearTimeout(timer);
     }
   }, [loadingCoordinator.isFullyLoaded, state.initError]);
+  
+  // Handle fade completion callback from loading screen
+  const handleFadeComplete = () => {
+    setShowUI(true);
+  };
 
   // Create query client if not provided
   const client = queryClient || new QueryClient({
@@ -276,15 +282,22 @@ const ParallelInitContent: React.FC<ParallelInitProviderProps> = ({
       <QueryClientProvider client={client}>
         <GraphConfigProvider>
           <WebSocketProvider>
-            {/* Show loading screen until showUI is true (includes 2s delay) */}
-            {!showUI && <UnifiedLoadingScreen />}
+            {/* Show loading screen until fade completes */}
+            {!showUI && (
+              <UnifiedLoadingScreen 
+                onFadeComplete={handleFadeComplete}
+              />
+            )}
             
-            {/* Render children but hide them until showUI is true */}
-            <div style={{ 
-              display: showUI ? 'block' : 'none',
-              height: '100%',
-              width: '100%'
-            }}>
+            {/* Render children with fade-in effect */}
+            <div 
+              className={`transition-opacity duration-500 ${showUI ? 'opacity-100' : 'opacity-0'}`}
+              style={{ 
+                visibility: showUI ? 'visible' : 'hidden',
+                height: '100%',
+                width: '100%'
+              }}
+            >
               {children}
             </div>
           </WebSocketProvider>

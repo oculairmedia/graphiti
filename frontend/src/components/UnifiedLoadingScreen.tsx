@@ -3,16 +3,17 @@
  * Shows progress across all loading stages with smooth transitions
  */
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useLoadingCoordinator } from '../contexts/LoadingCoordinator';
 import { Progress } from './ui/progress';
 import { CheckCircle2, Circle, Loader2, AlertCircle } from 'lucide-react';
 
 interface UnifiedLoadingScreenProps {
   className?: string;
+  onFadeComplete?: () => void;
 }
 
-export const UnifiedLoadingScreen: React.FC<UnifiedLoadingScreenProps> = ({ className = '' }) => {
+export const UnifiedLoadingScreen: React.FC<UnifiedLoadingScreenProps> = ({ className = '', onFadeComplete }) => {
   const {
     stages,
     isFullyLoaded,
@@ -21,6 +22,24 @@ export const UnifiedLoadingScreen: React.FC<UnifiedLoadingScreenProps> = ({ clas
     loadTime,
     error
   } = useLoadingCoordinator();
+  
+  const [isFading, setIsFading] = useState(false);
+  
+  // Start fading when fully loaded
+  useEffect(() => {
+    if (isFullyLoaded && !error) {
+      // Start fade after a short delay to show completion message
+      const fadeTimer = setTimeout(() => {
+        setIsFading(true);
+        // Notify parent after fade completes
+        if (onFadeComplete) {
+          setTimeout(onFadeComplete, 500); // Match transition duration
+        }
+      }, 500); // Show "complete" message for 500ms before fading
+      
+      return () => clearTimeout(fadeTimer);
+    }
+  }, [isFullyLoaded, error, onFadeComplete]);
 
   // Get sorted stages for display
   const sortedStages = useMemo(() => {
@@ -53,7 +72,7 @@ export const UnifiedLoadingScreen: React.FC<UnifiedLoadingScreenProps> = ({ clas
   }, [stages, currentStage, isFullyLoaded, error]);
 
   return (
-    <div className={`fixed inset-0 z-50 flex items-center justify-center bg-background ${className}`}>
+    <div className={`fixed inset-0 z-50 flex items-center justify-center bg-background transition-opacity duration-500 ${isFading ? 'opacity-0' : 'opacity-100'} ${className}`}>
       <div className="w-full max-w-md px-8">
         {/* Main loading indicator */}
         <div className="flex flex-col items-center mb-8">
@@ -153,12 +172,6 @@ export const UnifiedLoadingScreen: React.FC<UnifiedLoadingScreenProps> = ({ clas
           </div>
         )}
 
-        {/* Loading time display */}
-        {loadTime && (
-          <p className="text-xs text-muted-foreground text-center mt-4">
-            Loaded in {(loadTime / 1000).toFixed(2)}s
-          </p>
-        )}
       </div>
     </div>
   );

@@ -84,7 +84,7 @@ services:
       - FALKORDB_PORT=6379
       - GRAPH_NAME=graphiti_migration
       - RUST_LOG=graph_visualizer=debug,tower_http=debug
-      - NODE_LIMIT=${NODE_LIMIT:-5000}
+      - NODE_LIMIT=${NODE_LIMIT:-10000}
       - EDGE_LIMIT=${EDGE_LIMIT:-20000}
       - MIN_DEGREE_CENTRALITY=${MIN_DEGREE_CENTRALITY:-0.0}
     depends_on:
@@ -115,7 +115,6 @@ services:
       - homepage.name=Graphiti Frontend App
       - homepage.icon=si-react
       - homepage.description=React frontend application
-  
   nginx:
     image: nginx:alpine
     container_name: graphiti-nginx
