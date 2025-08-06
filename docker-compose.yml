@@ -74,7 +74,7 @@ services:
       - homepage.href=http://192.168.50.90:3100
       - homepage.description=FalkorDB graph database
   graph-visualizer-rust:
-    image: ghcr.io/oculairmedia/graphiti-rust-visualizer:feature-duckdb-realtime-updates-4c56ad0
+    image: ghcr.io/oculairmedia/graphiti-rust-visualizer:feature-duckdb-realtime-updates
     container_name: graphiti-visualizer-rust
     restart: unless-stopped
     ports:
