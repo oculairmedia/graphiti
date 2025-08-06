@@ -234,17 +234,8 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
     return transformedData || { nodes: [], links: [] };
   }, [isIncrementalUpdate, transformedData]);
 
-  // Handle loading state - show loading if still loading OR if we have no data at all
-  if (isLoading || (!data?.nodes?.length && !error)) {
-    return (
-      <div className={`h-screen w-full flex items-center justify-center bg-background ${className}`}>
-        <div className="text-muted-foreground text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4 mx-auto"></div>
-          <p>Loading graph data...</p>
-        </div>
-      </div>
-    );
-  }
+  // Note: Loading is now handled by UnifiedLoadingScreen in ParallelInitProvider
+  // This is only for edge cases where data might be loading after initial load
 
   // Handle error state
   if (error) {
