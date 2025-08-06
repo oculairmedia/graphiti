@@ -69,6 +69,7 @@ const ParallelInitContent: React.FC<ParallelInitProviderProps> = ({
   rustServerUrl = import.meta.env.VITE_RUST_SERVER_URL || 'http://192.168.50.90:3000'
 }) => {
   const loadingCoordinator = useLoadingCoordinator();
+  const [showUI, setShowUI] = useState(false);
   const [state, setState] = useState<ParallelInitState>({
     isDuckDBReady: false,
     isWebSocketReady: false,
@@ -82,6 +83,17 @@ const ParallelInitContent: React.FC<ParallelInitProviderProps> = ({
 
   const duckDBServiceRef = useRef<DuckDBService | null>(null);
   const initStartedRef = useRef(false);
+  
+  // Add 2-second delay after everything is loaded before showing UI
+  useEffect(() => {
+    if (loadingCoordinator.isFullyLoaded && !state.initError) {
+      const timer = setTimeout(() => {
+        setShowUI(true);
+      }, 2000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [loadingCoordinator.isFullyLoaded, state.initError]);
 
   // Create query client if not provided
   const client = queryClient || new QueryClient({
@@ -264,12 +276,12 @@ const ParallelInitContent: React.FC<ParallelInitProviderProps> = ({
       <QueryClientProvider client={client}>
         <GraphConfigProvider>
           <WebSocketProvider>
-            {/* Show loading screen on top if not fully loaded */}
-            {!loadingCoordinator.isFullyLoaded && <UnifiedLoadingScreen />}
+            {/* Show loading screen until showUI is true (includes 2s delay) */}
+            {!showUI && <UnifiedLoadingScreen />}
             
-            {/* Render children but hide them until fully loaded */}
+            {/* Render children but hide them until showUI is true */}
             <div style={{ 
-              display: loadingCoordinator.isFullyLoaded ? 'block' : 'none',
+              display: showUI ? 'block' : 'none',
               height: '100%',
               width: '100%'
             }}>
