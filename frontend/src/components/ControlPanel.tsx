@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, memo } from 'react';
 import { ChevronLeft, ChevronRight, Database, Settings2, Palette, Zap, Paintbrush, Layers, Search } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
@@ -147,6 +147,23 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
       // Query error handled silently to not interrupt UI flow
     }
   };
+  
+  // Stable callback for search node selection to prevent re-renders
+  const handleSearchNodeSelect = useCallback((node: NodeResult) => {
+    console.log('[ControlPanel] GraphitiSearch node selected:', node.uuid);
+    console.log('[ControlPanel] Total nodes available:', nodes.length);
+    
+    // Find the corresponding GraphNode by UUID
+    const graphNode = nodes.find(n => n.id === node.uuid);
+    
+    if (graphNode) {
+      console.log('[ControlPanel] Found matching GraphNode:', graphNode.id);
+      onNodeSelect?.(graphNode);
+    } else {
+      console.warn('[ControlPanel] No matching GraphNode found for UUID:', node.uuid);
+      console.log('[ControlPanel] First few node IDs:', nodes.slice(0, 5).map(n => n.id));
+    }
+  }, [nodes, onNodeSelect]);
 
   if (collapsed) {
     return (
@@ -230,13 +247,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
                 <GraphitiSearch
                   graphCanvasRef={graphCanvasRef}
                   className="h-full"
-                  onNodeSelect={(node: NodeResult) => {
-                    // Find the corresponding GraphNode by UUID
-                    const graphNode = nodes.find(n => n.id === node.uuid);
-                    if (graphNode) {
-                      onNodeSelect(graphNode);
-                    }
-                  }}
+                  onNodeSelect={handleSearchNodeSelect}
                 />
               )}
             </TabsContent>

@@ -68,25 +68,22 @@ export function useGraphitiSearch(options: UseGraphitiSearchOptions = {}) {
 
   // Focus on a specific node
   const focusNode = useCallback((nodeId: string) => {
-    console.log('useGraphitiSearch: Focusing on node:', nodeId);
+    console.log('[useGraphitiSearch] Focusing on node:', nodeId);
     if (graphCanvasRef?.current) {
-      console.log('useGraphitiSearch: GraphCanvas ref is available');
-      // First, select the node
-      if (graphCanvasRef.current.selectNodes) {
-        graphCanvasRef.current.selectNodes([nodeId]);
-      }
+      console.log('[useGraphitiSearch] GraphCanvas ref is available');
+      // Note: selectNodes expects GraphNode objects, not IDs
+      // But we only have the UUID here, so we should use focusOnNodes instead
+      // which internally finds the node by ID
       
-      // Then focus on it
-      setTimeout(() => {
-        if (graphCanvasRef.current?.focusOnNodes) {
-          console.log('useGraphitiSearch: Calling focusOnNodes');
-          graphCanvasRef.current.focusOnNodes([nodeId]);
-        } else {
-          console.warn('useGraphitiSearch: focusOnNodes method not available');
-        }
-      }, 100);
+      // Focus on the node by ID
+      if (graphCanvasRef.current?.focusOnNodes) {
+        console.log('[useGraphitiSearch] Calling focusOnNodes');
+        graphCanvasRef.current.focusOnNodes([nodeId]);
+      } else {
+        console.warn('[useGraphitiSearch] focusOnNodes method not available');
+      }
     } else {
-      console.warn('useGraphitiSearch: GraphCanvas ref not available');
+      console.warn('[useGraphitiSearch] GraphCanvas ref not available');
     }
     
     setSelectedNodeId(nodeId);
