@@ -149,11 +149,23 @@ const defaultDynamicConfig: DynamicConfig = {
   // Dynamic node configuration
   nodeTypeColors: {},
   nodeTypeVisibility: {},
+  nodeAccessHighlightColor: '#FFD700',
   sizeMapping: 'degree',
+  
+  // Clustering configuration
+  clusteringEnabled: false,
+  pointClusterBy: 'node_type',
+  pointClusterStrengthBy: 'clusterStrength',
+  clusteringMethod: 'none',
+  centralityMetric: 'pagerank',
+  clusterStrength: 0.5,
+  clusterPositions: undefined,
+  clusterMapping: undefined,
   
   // Query
   queryType: 'entire_graph',
   nodeLimit: 100000,
+  searchTerm: '',
   
   // Layout
   layout: 'force',
@@ -161,6 +173,29 @@ const defaultDynamicConfig: DynamicConfig = {
   radialCenter: 'most_connected',
   circularOrdering: 'degree',
   clusterBy: 'community',
+  
+  // Advanced rendering options
+  renderLabels: false,
+  edgeArrows: false,
+  edgeArrowScale: 1,
+  pointsOnEdge: false,
+  advancedOptionsEnabled: false,
+  pixelationThreshold: 100000,
+  renderSelectedNodesOnTop: true,
+  performanceMode: false,
+  
+  // Display settings
+  showFPS: false,
+  showNodeCount: true,
+  showDebugInfo: false,
+  
+  // Interaction settings
+  enableHoverEffects: true,
+  enablePanOnDrag: true,
+  enableZoomOnScroll: true,
+  enableClickSelection: true,
+  enableDoubleClickFocus: true,
+  enableKeyboardShortcuts: true,
   
   // Filters
   filteredNodeTypes: [],

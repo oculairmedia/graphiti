@@ -98,6 +98,11 @@ export interface DynamicConfig {
   clusteringEnabled: boolean;
   pointClusterBy: string;
   pointClusterStrengthBy: string;
+  clusteringMethod: 'nodeType' | 'centrality' | 'custom' | 'none';
+  centralityMetric: 'degree' | 'pagerank' | 'betweenness' | 'eigenvector';
+  clusterStrength: number; // 0-1 range
+  clusterPositions?: Record<string, { x: number; y: number }>; // Manual cluster positions
+  clusterMapping?: Map<unknown, number>; // Cluster value to index mapping
   
   // Current focus
   focusedPointIndex?: number;
