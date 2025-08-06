@@ -7,6 +7,8 @@ import React, { createContext, useContext, useEffect, useState, useRef, ReactNod
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GraphConfigProvider } from './GraphConfigProvider';
 import { WebSocketProvider } from './WebSocketProvider';
+import { LoadingCoordinatorProvider, useLoadingCoordinator } from './LoadingCoordinator';
+import { UnifiedLoadingScreen } from '../components/UnifiedLoadingScreen';
 import { DuckDBService } from '../services/duckdb-service';
 import * as duckdb from '@duckdb/duckdb-wasm';
 import { logger } from '../utils/logger';
@@ -42,11 +44,31 @@ interface ParallelInitProviderProps {
   rustServerUrl?: string;
 }
 
+// Main provider that wraps everything with LoadingCoordinator
 export const ParallelInitProvider: React.FC<ParallelInitProviderProps> = ({ 
   children,
   queryClient,
   rustServerUrl = import.meta.env.VITE_RUST_SERVER_URL || 'http://192.168.50.90:3000'
 }) => {
+  return (
+    <LoadingCoordinatorProvider requiredStages={['services', 'data']}>
+      <ParallelInitContent 
+        queryClient={queryClient}
+        rustServerUrl={rustServerUrl}
+      >
+        {children}
+      </ParallelInitContent>
+    </LoadingCoordinatorProvider>
+  );
+};
+
+// Internal component that uses LoadingCoordinator
+const ParallelInitContent: React.FC<ParallelInitProviderProps> = ({ 
+  children,
+  queryClient,
+  rustServerUrl = import.meta.env.VITE_RUST_SERVER_URL || 'http://192.168.50.90:3000'
+}) => {
+  const loadingCoordinator = useLoadingCoordinator();
   const [state, setState] = useState<ParallelInitState>({
     isDuckDBReady: false,
     isWebSocketReady: false,
@@ -84,12 +106,17 @@ export const ParallelInitProvider: React.FC<ParallelInitProviderProps> = ({
       logger.log('[ParallelInit] Starting parallel initialization...');
 
       try {
+        // Update loading stages
+        loadingCoordinator.updateStage('services', { status: 'loading', progress: 0 });
+        
         // Start all initializations in parallel
         const initPromises = [
-          // 1. Initialize DuckDB
+          // 1. Initialize DuckDB with data loading
           (async () => {
             try {
               logger.log('[ParallelInit] Initializing DuckDB...');
+              loadingCoordinator.updateStage('services', { status: 'loading', progress: 30 });
+              
               const service = new DuckDBService({ rustServerUrl });
               
               // Start initialization with parallel data prefetch
@@ -97,6 +124,14 @@ export const ParallelInitProvider: React.FC<ParallelInitProviderProps> = ({
               
               duckDBServiceRef.current = service;
               const connection = service.getDuckDBConnection();
+              
+              // Get data stats for loading screen
+              const stats = await service.getStats();
+              loadingCoordinator.updateStage('data', { 
+                status: 'loading', 
+                progress: 50,
+                metadata: { nodeCount: stats?.nodes, edgeCount: stats?.edges }
+              });
               
               setState(prev => ({
                 ...prev,
@@ -106,9 +141,16 @@ export const ParallelInitProvider: React.FC<ParallelInitProviderProps> = ({
                 initProgress: prev.initProgress + 33
               }));
               
-              logger.log('[ParallelInit] DuckDB ready');
+              // Mark data as complete
+              loadingCoordinator.setStageComplete('data', { 
+                nodeCount: stats?.nodes, 
+                edgeCount: stats?.edges 
+              });
+              
+              logger.log('[ParallelInit] DuckDB ready with data');
               return { type: 'duckdb', success: true };
             } catch (error) {
+              loadingCoordinator.setStageError('services', error as Error);
               logger.error('[ParallelInit] DuckDB initialization failed:', error);
               return { type: 'duckdb', success: false, error };
             }
@@ -180,6 +222,9 @@ export const ParallelInitProvider: React.FC<ParallelInitProviderProps> = ({
         
         logger.log(`[ParallelInit] All services initialized in ${duration.toFixed(2)}ms`);
         
+        // Mark services stage as complete
+        loadingCoordinator.setStageComplete('services');
+        
         setState(prev => ({
           ...prev,
           isAllReady: true,
@@ -213,52 +258,28 @@ export const ParallelInitProvider: React.FC<ParallelInitProviderProps> = ({
     getDuckDBConnection
   };
 
-  // Show loading state while initializing
-  if (!state.isAllReady && !state.initError) {
+  // Show unified loading screen until everything is ready
+  if (!loadingCoordinator.isFullyLoaded) {
     return (
-      <div className="h-screen w-full flex items-center justify-center bg-background">
-        <div className="text-center">
-          <div className="mb-4">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-          </div>
-          <p className="text-muted-foreground">Initializing application...</p>
-          <div className="mt-4 w-64 mx-auto">
-            <div className="bg-secondary rounded-full h-2 overflow-hidden">
-              <div 
-                className="bg-primary h-full transition-all duration-300"
-                style={{ width: `${state.initProgress}%` }}
-              />
-            </div>
-            <p className="text-xs text-muted-foreground mt-2">
-              {state.isDuckDBReady && '✓ Database ready '}
-              {state.isWebSocketReady && '✓ WebSocket ready '}
-              {state.isConfigReady && '✓ Config loaded'}
-            </p>
-          </div>
+      <>
+        <UnifiedLoadingScreen />
+        {/* Keep context provider alive but hide children */}
+        <div style={{ display: 'none' }}>
+          <ParallelInitContext.Provider value={contextValue}>
+            <QueryClientProvider client={client}>
+              <GraphConfigProvider>
+                <WebSocketProvider>
+                  {/* Children hidden until loading complete */}
+                </WebSocketProvider>
+              </GraphConfigProvider>
+            </QueryClientProvider>
+          </ParallelInitContext.Provider>
         </div>
-      </div>
+      </>
     );
   }
 
-  // Show error state
-  if (state.initError) {
-    return (
-      <div className="h-screen w-full flex items-center justify-center bg-background">
-        <div className="text-center">
-          <p className="text-destructive mb-2">Initialization Error</p>
-          <p className="text-sm text-muted-foreground">{state.initError.message}</p>
-          <button 
-            onClick={() => window.location.reload()}
-            className="mt-4 px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90"
-          >
-            Reload Page
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // Render providers in parallel once everything is ready
+  // Render providers and children once everything is ready
   return (
     <ParallelInitContext.Provider value={contextValue}>
       <QueryClientProvider client={client}>
