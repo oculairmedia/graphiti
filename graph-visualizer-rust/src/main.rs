@@ -177,14 +177,34 @@ async fn main() -> anyhow::Result<()> {
     
     // Load initial data into DuckDB with optimized separate queries
     {
-        info!("Loading initial graph data into DuckDB...");
+        // Read limits from environment variables
+        let node_limit = std::env::var("NODE_LIMIT")
+            .unwrap_or_else(|_| "1500".to_string())
+            .parse::<usize>()
+            .unwrap_or(1500);
+        
+        let edge_limit = std::env::var("EDGE_LIMIT")
+            .unwrap_or_else(|_| "5000".to_string())
+            .parse::<usize>()
+            .unwrap_or(5000);
+        
+        let min_degree = std::env::var("MIN_DEGREE_CENTRALITY")
+            .unwrap_or_else(|_| "0.001".to_string())
+            .parse::<f64>()
+            .unwrap_or(0.001);
+        
+        info!("Loading initial graph data into DuckDB with limits - Nodes: {}, Edges: {}, Min Degree: {}", 
+              node_limit, edge_limit, min_degree);
         let prerender_start = std::time::Instant::now();
         
         // Step 1: Load nodes first (much more efficient)
-        let nodes_query = "MATCH (n) WHERE EXISTS(n.degree_centrality) AND n.degree_centrality > 0.001 RETURN n.uuid as id, n.name as name, COALESCE(n.type, labels(n)[0]) as label, n.degree_centrality as degree, n.created_at as created_at ORDER BY n.degree_centrality DESC LIMIT 1500";
+        let nodes_query = format!(
+            "MATCH (n) WHERE EXISTS(n.degree_centrality) AND n.degree_centrality > {} RETURN n.uuid as id, n.name as name, COALESCE(n.type, labels(n)[0]) as label, n.degree_centrality as degree, n.created_at as created_at ORDER BY n.degree_centrality DESC LIMIT {}",
+            min_degree, node_limit
+        );
         
         let mut graph = state.client.select_graph(&graph_name);
-        let mut nodes_result = graph.query(nodes_query).execute().await?;
+        let mut nodes_result = graph.query(&nodes_query).execute().await?;
         let mut node_ids = Vec::new();
         let mut nodes = Vec::new();
         
@@ -217,9 +237,10 @@ async fn main() -> anyhow::Result<()> {
         
         // Step 2: Load edges only for loaded nodes
         let edges_query = format!(
-            "MATCH (n)-[r]->(m) WHERE n.uuid IN [{}] AND m.uuid IN [{}] RETURN n.uuid, type(r), m.uuid, r.weight LIMIT 5000",
+            "MATCH (n)-[r]->(m) WHERE n.uuid IN [{}] AND m.uuid IN [{}] RETURN n.uuid, type(r), m.uuid, r.weight LIMIT {}",
             node_ids.join(","),
-            node_ids.join(",")
+            node_ids.join(","),
+            edge_limit
         );
         
         let mut graph = state.client.select_graph(&graph_name);
