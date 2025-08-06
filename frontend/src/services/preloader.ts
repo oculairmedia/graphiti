@@ -49,6 +49,12 @@ class PreloaderService {
    * Call this as early as possible (e.g., in index.html)
    */
   startPreloading(): void {
+    // Prevent duplicate preloading
+    if (this.preloadPromises.size > 0) {
+      console.log('[Preloader] Already preloading, skipping duplicate call');
+      return;
+    }
+    
     console.log('[Preloader] Starting resource preloading...');
     const startTime = performance.now();
     
@@ -65,15 +71,9 @@ class PreloaderService {
       'arrayBuffer'
     );
     
-    // Preload configuration
-    const configPromise = this.preloadResource(
-      'config',
-      `${this.rustServerUrl}/api/config`,
-      'json'
-    ).catch(() => {
-      // Config endpoint might not exist, use defaults
-      return { defaultConfig: true };
-    });
+    // Skip config preload as endpoint doesn't exist
+    // Can be re-enabled when config endpoint is implemented
+    const configPromise = Promise.resolve({ defaultConfig: true });
     
     // Store promises for later retrieval
     this.preloadPromises.set('nodes', nodesPromise);
@@ -229,12 +229,18 @@ class PreloaderService {
 // Export singleton instance
 export const preloader = PreloaderService.getInstance();
 
-// Auto-start preloading if this script is loaded early
-if (typeof window !== 'undefined' && document.readyState === 'loading') {
-  // Start preloading immediately
-  preloader.startPreloading();
-} else if (typeof window !== 'undefined') {
-  // If document is already loaded, still try to preload
-  // This helps even if React hasn't initialized yet
-  setTimeout(() => preloader.startPreloading(), 0);
+// Auto-start preloading only once when script is first loaded
+if (typeof window !== 'undefined' && !preloader.isPreloaded('nodes')) {
+  if (document.readyState === 'loading') {
+    // Start preloading immediately if document is still loading
+    preloader.startPreloading();
+  } else {
+    // If document is already loaded, start on next tick
+    // This helps even if React hasn't initialized yet
+    setTimeout(() => {
+      if (!preloader.isPreloaded('nodes')) {
+        preloader.startPreloading();
+      }
+    }, 0);
+  }
 }

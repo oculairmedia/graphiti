@@ -20,8 +20,8 @@
     <link rel="preconnect" href="http://192.168.50.90:3000" crossorigin>
     <link rel="dns-prefetch" href="http://192.168.50.90:3000">
     
-    <!-- Preload critical resources -->
-    <link rel="preload" href="/src/services/preloader.ts" as="script" type="module" crossorigin>
+    <!-- Module preloading (removed unsupported type attribute) -->
+    <link rel="modulepreload" href="/src/services/preloader.ts">
     
     <!-- Server configuration for preloader -->
     <meta name="rust-server-url" content="http://192.168.50.90:3000" />
