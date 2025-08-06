@@ -32,16 +32,24 @@ interface TransformedData {
 export function useGraphDataQuery() {
   const { config, updateNodeTypeConfigurations } = useGraphConfig();
   
+  // Skip JSON fetch if using DuckDB (Arrow format is faster)
+  const skipJsonFetch = true; // Always use Arrow format for better performance
+  
   // Fetch graph data from Rust server
   const { data, isLoading, error } = useQuery({
     queryKey: ['graphData', config.queryType, config.nodeLimit],
     queryFn: async () => {
+      if (skipJsonFetch) {
+        // Return empty data - we'll use Arrow format from DuckDB instead
+        return { nodes: [], edges: [] };
+      }
       const result = await graphClient.getGraphData({ 
         query_type: config.queryType,
         limit: config.nodeLimit 
       });
       return result;
     },
+    enabled: !skipJsonFetch, // Disable JSON fetch when using Arrow
   });
 
   // Use data diffing to detect changes

@@ -907,13 +907,12 @@ async fn get_nodes_arrow(State(state): State<AppState>) -> Result<Response<Body>
         Ok(batch) => {
             match ArrowConverter::record_batch_to_bytes(&batch) {
                 Ok(bytes) => {
-                    let mut headers = HeaderMap::new();
-                    headers.insert(header::CONTENT_TYPE, "application/vnd.apache.arrow.stream".parse().unwrap());
-                    headers.insert("X-Arrow-Schema", "nodes".parse().unwrap());
-                    
+                    // Note: Compression is handled by CompressionLayer middleware
+                    // The layer will automatically compress based on Accept-Encoding header
                     Ok(Response::builder()
                         .status(StatusCode::OK)
                         .header(header::CONTENT_TYPE, "application/vnd.apache.arrow.stream")
+                        .header("X-Arrow-Schema", "nodes")
                         .body(Body::from(bytes))
                         .unwrap())
                 }
@@ -945,13 +944,11 @@ async fn get_edges_arrow(State(state): State<AppState>) -> Result<Response<Body>
         Ok(batch) => {
             match ArrowConverter::record_batch_to_bytes(&batch) {
                 Ok(bytes) => {
-                    let mut headers = HeaderMap::new();
-                    headers.insert(header::CONTENT_TYPE, "application/vnd.apache.arrow.stream".parse().unwrap());
-                    headers.insert("X-Arrow-Schema", "edges".parse().unwrap());
-                    
+                    // Note: Compression is handled by CompressionLayer middleware
                     Ok(Response::builder()
                         .status(StatusCode::OK)
                         .header(header::CONTENT_TYPE, "application/vnd.apache.arrow.stream")
+                        .header("X-Arrow-Schema", "edges")
                         .body(Body::from(bytes))
                         .unwrap())
                 }

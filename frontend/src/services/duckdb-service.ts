@@ -18,7 +18,7 @@ export class DuckDBService {
     this.rustServerUrl = config.rustServerUrl;
   }
 
-  async initialize(): Promise<void> {
+  async initialize(skipDataLoad: boolean = false): Promise<void> {
     if (this.initialized) return;
 
     try {
@@ -48,8 +48,11 @@ export class DuckDBService {
       // Create tables to mirror Rust server structure
       await this.createTables();
       
-      // Load initial data from Rust server
-      await this.loadInitialData();
+      // Skip loading data if we're going to load from JSON instead
+      if (!skipDataLoad) {
+        // Load initial data from Rust server
+        await this.loadInitialData();
+      }
       
       this.initialized = true;
       console.log('DuckDB service initialized successfully');
@@ -112,31 +115,34 @@ export class DuckDBService {
         }
       }
       
-      // Fetch from server
-      console.log('[DuckDB] Cache miss or cleared, fetching from server...');
+      // Fetch from server - PARALLEL loading for speed
+      console.log('[DuckDB] Cache miss or cleared, fetching from server (parallel)...');
       
-      // Fetch nodes data from Rust server
-      const nodesResponse = await fetch(`${this.rustServerUrl}/api/arrow/nodes`);
+      // Fetch nodes and edges in PARALLEL
+      const [nodesResponse, edgesResponse] = await Promise.all([
+        fetch(`${this.rustServerUrl}/api/arrow/nodes`),
+        fetch(`${this.rustServerUrl}/api/arrow/edges`)
+      ]);
+      
       if (!nodesResponse.ok) {
         throw new Error(`Failed to fetch nodes: ${nodesResponse.statusText}`);
       }
-      
-      const nodesArrayBuffer = await nodesResponse.arrayBuffer();
-      const nodesTable = arrow.tableFromIPC(new Uint8Array(nodesArrayBuffer));
-      
-      // Insert nodes into DuckDB
-      await this.conn.insertArrowTable(nodesTable, { name: 'nodes' });
-
-      // Fetch edges data from Rust server
-      const edgesResponse = await fetch(`${this.rustServerUrl}/api/arrow/edges`);
       if (!edgesResponse.ok) {
         throw new Error(`Failed to fetch edges: ${edgesResponse.statusText}`);
       }
       
-      const edgesArrayBuffer = await edgesResponse.arrayBuffer();
+      // Process responses in PARALLEL
+      const [nodesArrayBuffer, edgesArrayBuffer] = await Promise.all([
+        nodesResponse.arrayBuffer(),
+        edgesResponse.arrayBuffer()
+      ]);
+      
+      // Convert to Arrow tables
+      const nodesTable = arrow.tableFromIPC(new Uint8Array(nodesArrayBuffer));
       const edgesTable = arrow.tableFromIPC(new Uint8Array(edgesArrayBuffer));
       
-      // Insert edges into DuckDB
+      // Insert both tables (can't parallelize DuckDB inserts)
+      await this.conn.insertArrowTable(nodesTable, { name: 'nodes' });
       await this.conn.insertArrowTable(edgesTable, { name: 'edges' });
       
       // Cache the data for next time - store as ArrayBuffer, not array
