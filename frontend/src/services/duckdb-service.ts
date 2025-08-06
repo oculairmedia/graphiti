@@ -29,12 +29,15 @@ export class DuckDBService {
     }
 
     try {
-      console.log('[DuckDB] Starting initialization...');
-      // Initialize DuckDB-WASM
-      const JSDELIVR_BUNDLES = duckdb.getJsDelivrBundles();
+      console.log('[DuckDB] Starting parallel initialization...');
       
-      // Select a bundle based on browser checks
-      const bundle = await duckdb.selectBundle(JSDELIVR_BUNDLES);
+      // Parallel initialization - start all async operations simultaneously
+      const [bundle, dataPromise] = await Promise.all([
+        // 1. Select DuckDB bundle
+        duckdb.selectBundle(duckdb.getJsDelivrBundles()),
+        // 2. Start prefetching data while DuckDB initializes
+        skipDataLoad ? Promise.resolve(null) : this.prefetchData()
+      ]);
       
       const worker_url = URL.createObjectURL(
         new Blob([`importScripts("${bundle.mainWorker}");`], {
@@ -56,17 +59,85 @@ export class DuckDBService {
       // Create tables to mirror Rust server structure
       await this.createTables();
       
-      // Skip loading data if we're going to load from JSON instead
-      if (!skipDataLoad) {
-        // Load initial data from Rust server
-        await this.loadInitialData();
+      // Load the prefetched data if available
+      if (dataPromise) {
+        await this.loadPrefetchedData(dataPromise);
       }
       
       this._initialized = true;
-      console.log('[DuckDB] Service initialized successfully');
+      console.log('[DuckDB] Service initialized successfully with parallel loading');
     } catch (error) {
       console.error('Failed to initialize DuckDB:', error);
       throw error;
+    }
+  }
+  
+  private async prefetchData(): Promise<{ nodes: ArrayBuffer; edges: ArrayBuffer } | null> {
+    try {
+      // Check cache first
+      const cached = await graphCache.getCachedData('arrow-data');
+      if (cached && cached.nodes && cached.edges) {
+        const isValidCache = cached.metadata?.format === 'arrow' 
+          ? cached.nodes.length < 50000000 && cached.edges.length < 50000000
+          : cached.nodes.length < 100000 && cached.edges.length < 200000;
+        
+        if (isValidCache) {
+          console.log('[DuckDB] Using cached data');
+          return { 
+            nodes: new Uint8Array(cached.nodes).buffer,
+            edges: new Uint8Array(cached.edges).buffer
+          };
+        }
+      }
+      
+      // Prefetch from server in parallel
+      console.log('[DuckDB] Prefetching data from server...');
+      const [nodesResponse, edgesResponse] = await Promise.all([
+        fetch(`${this.rustServerUrl}/api/arrow/nodes`),
+        fetch(`${this.rustServerUrl}/api/arrow/edges`)
+      ]);
+      
+      if (!nodesResponse.ok || !edgesResponse.ok) {
+        throw new Error('Failed to fetch data');
+      }
+      
+      const [nodesBuffer, edgesBuffer] = await Promise.all([
+        nodesResponse.arrayBuffer(),
+        edgesResponse.arrayBuffer()
+      ]);
+      
+      return { nodes: nodesBuffer, edges: edgesBuffer };
+    } catch (error) {
+      console.error('[DuckDB] Prefetch failed:', error);
+      return null;
+    }
+  }
+  
+  private async loadPrefetchedData(dataPromise: { nodes: ArrayBuffer; edges: ArrayBuffer } | null): Promise<void> {
+    if (!dataPromise || !this.conn) return;
+    
+    try {
+      const { nodes, edges } = dataPromise;
+      
+      // Convert to Arrow tables and insert
+      const nodesTable = arrow.tableFromIPC(new Uint8Array(nodes));
+      const edgesTable = arrow.tableFromIPC(new Uint8Array(edges));
+      
+      await Promise.all([
+        this.conn.insertArrowTable(nodesTable, { name: 'nodes' }),
+        this.conn.insertArrowTable(edgesTable, { name: 'edges' })
+      ]);
+      
+      console.log(`[DuckDB] Loaded ${nodesTable.numRows} nodes and ${edgesTable.numRows} edges`);
+      
+      // Cache for next time
+      await graphCache.setCachedData('arrow-data', {
+        nodes: Array.from(new Uint8Array(nodes)),
+        edges: Array.from(new Uint8Array(edges)),
+        metadata: { format: 'arrow', timestamp: Date.now() }
+      });
+    } catch (error) {
+      console.error('[DuckDB] Failed to load prefetched data:', error);
     }
   }
 
