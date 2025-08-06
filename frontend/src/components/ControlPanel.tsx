@@ -1,5 +1,5 @@
 import React, { useState, useCallback, memo } from 'react';
-import { ChevronLeft, ChevronRight, Database, Settings2, Palette, Zap, Paintbrush, Layers, Search } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Database, Settings2, Palette, Zap, Paintbrush, Layers, Search, BarChart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useGraphConfig } from '@/contexts/GraphConfigProvider';
@@ -14,6 +14,7 @@ import { NodeStylingTab } from './ControlPanel/NodeStylingTab';
 import { PhysicsControlsTab } from './ControlPanel/PhysicsControlsTab';
 import { RenderControlsTab } from './ControlPanel/RenderControlsTab';
 import { SettingsTab } from './ControlPanel/SettingsTab';
+import { CentralityControlsTab } from './ControlPanel/CentralityControlsTab';
 
 interface GraphCanvasHandle {
   clearSelection: () => void;
@@ -184,6 +185,9 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
           <Button variant="ghost" size="sm" className="p-2 hover:bg-primary/10" title="Physics">
             <Zap className="h-4 w-4" />
           </Button>
+          <Button variant="ghost" size="sm" className="p-2 hover:bg-primary/10" title="Centrality">
+            <BarChart className="h-4 w-4" />
+          </Button>
           <Button variant="ghost" size="sm" className="p-2 hover:bg-primary/10" title="Rendering">
             <Layers className="h-4 w-4" />
           </Button>
@@ -213,7 +217,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
       {/* Scrollable Content with Tabs */}
       <div className="flex-1 flex flex-col min-h-0">
         <Tabs defaultValue="search" className="flex-1 flex flex-col min-h-0">
-          <TabsList className="grid grid-cols-6 m-4 mb-2 glass">
+          <TabsList className="grid grid-cols-7 m-4 mb-2 glass">
             <TabsTrigger value="search" className="text-xs">
               <Search className="h-3 w-3" />
             </TabsTrigger>
@@ -225,6 +229,9 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
             </TabsTrigger>
             <TabsTrigger value="physics" className="text-xs">
               <Zap className="h-3 w-3" />
+            </TabsTrigger>
+            <TabsTrigger value="centrality" className="text-xs">
+              <BarChart className="h-3 w-3" />
             </TabsTrigger>
             <TabsTrigger value="render" className="text-xs">
               <Layers className="h-3 w-3" />
@@ -277,6 +284,17 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
                 config={config}
                 onConfigUpdate={updateConfig}
                 onResetToDefaults={handleResetToDefaults}
+              />
+            </TabsContent>
+
+            {/* Centrality Tab */}
+            <TabsContent value="centrality" className="mt-0">
+              <CentralityControlsTab
+                onCentralityUpdate={() => {
+                  // Trigger a refresh of the graph data
+                  // This will be handled by the parent component
+                  console.log('Centrality updated, refresh graph data');
+                }}
               />
             </TabsContent>
 
