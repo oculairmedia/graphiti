@@ -10,7 +10,10 @@ use dashmap::DashMap;
 use falkordb::{FalkorClientBuilder, FalkorConnectionInfo, FalkorValue, FalkorAsyncClient};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, sync::Arc};
-use tower_http::cors::CorsLayer;
+use tower_http::{
+    cors::CorsLayer,
+    compression::CompressionLayer,
+};
 use tracing::{error, info, debug};
 use tokio::sync::broadcast;
 
@@ -162,7 +165,8 @@ async fn main() -> anyhow::Result<()> {
     // Load initial data into DuckDB
     {
         info!("Loading initial graph data into DuckDB...");
-        let initial_data = execute_graph_query(&state.client, &graph_name, "MATCH (n) OPTIONAL MATCH (n)-[r]->(m) RETURN DISTINCT n.uuid as source_id, n.name as source_name, type(r) as rel_type, m.uuid as target_id, m.name as target_name, COALESCE(n.type, labels(n)[0]) as source_label, COALESCE(m.type, labels(m)[0]) as target_label, n.degree_centrality as source_degree, m.degree_centrality as target_degree, properties(n) as source_props, properties(m) as target_props LIMIT 50000").await?;
+        // Load only essential data for initial render - fetch more on demand
+        let initial_data = execute_graph_query(&state.client, &graph_name, "MATCH (n) OPTIONAL MATCH (n)-[r]->(m) RETURN DISTINCT n.uuid as source_id, n.name as source_name, type(r) as rel_type, m.uuid as target_id, m.name as target_name, COALESCE(n.type, labels(n)[0]) as source_label, COALESCE(m.type, labels(m)[0]) as target_label, n.degree_centrality as source_degree, m.degree_centrality as target_degree, n.created_at as source_created, m.created_at as target_created LIMIT 2000").await?;
         
         duckdb_store.load_initial_data(initial_data.nodes.clone(), initial_data.edges.clone()).await?;
         info!("Initial data loaded: {} nodes, {} edges", initial_data.nodes.len(), initial_data.edges.len());
@@ -196,6 +200,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/arrow/edges", get(get_edges_arrow))
         .route("/api/duckdb/stats", get(get_duckdb_stats))
         .route("/ws", get(websocket_handler))
+        .layer(CompressionLayer::new())  // Add gzip/brotli compression
         .layer(CorsLayer::permissive())
         .with_state(state);
 
