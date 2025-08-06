@@ -524,6 +524,13 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       // Skip if using DuckDB tables directly
       if (isDuckDBInitialized && duckdbService) {
         logger.log('GraphCanvas: Using DuckDB tables directly, skipping data preparation');
+        // Mark dataPreparation as complete since we're using DuckDB directly
+        loadingCoordinator.setStageComplete('dataPreparation', {
+          skipped: true,
+          reason: 'Using DuckDB directly',
+          nodesCount: nodes?.length || 0,
+          linksCount: links?.length || 0
+        });
         return;
       }
       
