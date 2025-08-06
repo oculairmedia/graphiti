@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { ControlSlider } from '@/components/ui/ControlSlider';
 import { ControlGroup } from '@/components/ui/ControlGroup';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface PhysicsControlsTabProps {
   config: {
@@ -25,6 +26,9 @@ interface PhysicsControlsTabProps {
     clusteringEnabled: boolean;
     pointClusterBy: string;
     pointClusterStrengthBy: string;
+    clusteringMethod: 'nodeType' | 'centrality' | 'custom' | 'none';
+    centralityMetric: 'degree' | 'pagerank' | 'betweenness' | 'eigenvector';
+    clusterStrength: number;
   };
   onConfigUpdate: (updates: Record<string, unknown>) => void;
   onResetToDefaults: () => void;
@@ -192,13 +196,62 @@ export const PhysicsControlsTab: React.FC<PhysicsControlsTabProps> = ({
             </Label>
           </div>
           {config.clusteringEnabled && (
-            <p className="text-xs text-muted-foreground">
-              Nodes will cluster based on their type or other properties
-            </p>
+            <>
+              <div className="space-y-2">
+                <Label className="text-sm">Clustering Method</Label>
+                <Select
+                  value={config.clusteringMethod}
+                  onValueChange={(value) => onConfigUpdate({ clusteringMethod: value })}
+                >
+                  <SelectTrigger className="h-8">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    <SelectItem value="nodeType">By Node Type</SelectItem>
+                    <SelectItem value="centrality">By Centrality</SelectItem>
+                    <SelectItem value="custom">Custom</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {config.clusteringMethod === 'centrality' && (
+                <div className="space-y-2">
+                  <Label className="text-sm">Centrality Metric</Label>
+                  <Select
+                    value={config.centralityMetric}
+                    onValueChange={(value) => onConfigUpdate({ centralityMetric: value })}
+                  >
+                    <SelectTrigger className="h-8">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="degree">Degree</SelectItem>
+                      <SelectItem value="pagerank">PageRank</SelectItem>
+                      <SelectItem value="betweenness">Betweenness</SelectItem>
+                      <SelectItem value="eigenvector">Eigenvector</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              <ControlSlider
+                label="Cluster Strength"
+                value={config.clusterStrength}
+                min={0}
+                max={1}
+                step={0.01}
+                onChange={(value) => onConfigUpdate({ clusterStrength: value })}
+                formatValue={(v) => (v * 100).toFixed(0) + '%'}
+              />
+              <p className="text-xs text-muted-foreground -mt-2">
+                Strength of attraction to cluster centers
+              </p>
+            </>
           )}
 
           <ControlSlider
-            label="Cluster Force"
+            label="Simulation Cluster Force"
             value={config.simulationCluster}
             min={0}
             max={5}
@@ -206,7 +259,7 @@ export const PhysicsControlsTab: React.FC<PhysicsControlsTabProps> = ({
             onChange={(value) => onConfigUpdate({ simulationCluster: value })}
             disabled={!config.clusteringEnabled}
           />
-          <p className="text-xs text-muted-foreground -mt-2">Clustering attraction between similar nodes</p>
+          <p className="text-xs text-muted-foreground -mt-2">Overall clustering force in simulation</p>
 
           <ControlSlider
             label="Mouse Repulsion"
