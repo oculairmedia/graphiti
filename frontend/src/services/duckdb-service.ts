@@ -74,7 +74,19 @@ export class DuckDBService {
   
   private async prefetchData(): Promise<{ nodes: ArrayBuffer; edges: ArrayBuffer } | null> {
     try {
-      // Check cache first
+      // First check if preloader has already fetched the data
+      const { preloader } = await import('./preloader');
+      const preloadedData = await preloader.getAllPreloadedData();
+      
+      if (preloadedData.nodes && preloadedData.edges) {
+        console.log('[DuckDB] Using preloaded data from preloader service');
+        return { 
+          nodes: preloadedData.nodes,
+          edges: preloadedData.edges
+        };
+      }
+      
+      // Check cache next
       const cached = await graphCache.getCachedData('arrow-data');
       if (cached && cached.nodes && cached.edges) {
         const isValidCache = cached.metadata?.format === 'arrow' 
@@ -144,9 +156,11 @@ export class DuckDBService {
   private async createTables(): Promise<void> {
     if (!this.conn) throw new Error('DuckDB connection not initialized');
 
-    // Drop existing tables if they exist to ensure clean state
-    await this.conn.query(`DROP TABLE IF EXISTS edges`);
-    await this.conn.query(`DROP TABLE IF EXISTS nodes`);
+    // Drop existing tables in parallel to ensure clean state
+    await Promise.all([
+      this.conn.query(`DROP TABLE IF EXISTS edges`),
+      this.conn.query(`DROP TABLE IF EXISTS nodes`)
+    ]);
     
     // Note: We don't create the tables here anymore
     // They will be created automatically when we insert Arrow data
