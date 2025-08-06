@@ -9,6 +9,12 @@ interface GraphCacheDB extends DBSchema {
       edges: any[];
       timestamp: number;
       version: string;
+      // Add metadata for proper validation
+      metadata?: {
+        nodeCount?: number;
+        edgeCount?: number;
+        format?: 'arrow' | 'json';
+      };
     };
   };
 }
@@ -67,13 +73,31 @@ class GraphCache {
       }
       
       // Check for suspiciously large cache (corruption indicator)
-      if (cached.nodes.length > 100000 || cached.edges.length > 200000) {
-        console.error(`[GraphCache] Cache appears corrupted: ${cached.nodes.length} nodes, ${cached.edges.length} edges. Clearing cache.`);
-        await this.clearCache();
-        return null;
+      // For arrow format, nodes/edges are byte arrays, not actual node arrays
+      if (cached.metadata?.format === 'arrow') {
+        // For Arrow format, check metadata counts or byte size
+        const nodeBytesSize = cached.nodes.length;
+        const edgeBytesSize = cached.edges.length;
+        // 10MB limit per array for Arrow format
+        if (nodeBytesSize > 10000000 || edgeBytesSize > 10000000) {
+          console.error(`[GraphCache] Arrow cache too large: ${(nodeBytesSize / 1048576).toFixed(2)}MB nodes, ${(edgeBytesSize / 1048576).toFixed(2)}MB edges. Clearing cache.`);
+          await this.clearCache();
+          return null;
+        }
+      } else {
+        // For JSON format, check actual node/edge count
+        if (cached.nodes.length > 100000 || cached.edges.length > 200000) {
+          console.error(`[GraphCache] Cache appears corrupted: ${cached.nodes.length} nodes, ${cached.edges.length} edges. Clearing cache.`);
+          await this.clearCache();
+          return null;
+        }
       }
       
-      console.log(`[GraphCache] Loaded cached data: ${cached.nodes.length} nodes, ${cached.edges.length} edges (age: ${Math.round(age / 1000)}s)`);
+      if (cached.metadata?.format === 'arrow') {
+        console.log(`[GraphCache] Loaded Arrow cached data: ${(cached.nodes.length / 1048576).toFixed(2)}MB nodes, ${(cached.edges.length / 1048576).toFixed(2)}MB edges (age: ${Math.round(age / 1000)}s)`);
+      } else {
+        console.log(`[GraphCache] Loaded cached data: ${cached.nodes.length} nodes, ${cached.edges.length} edges (age: ${Math.round(age / 1000)}s)`);
+      }
       return cached;
     } catch (error) {
       console.error('Failed to get cached data:', error);
@@ -83,7 +107,7 @@ class GraphCache {
     }
   }
 
-  async setCachedData(nodes: any[], edges: any[], key: string = 'default') {
+  async setCachedData(nodes: any[], edges: any[], key: string = 'default', metadata?: { nodeCount?: number; edgeCount?: number; format?: 'arrow' | 'json' }) {
     if (!this.db) await this.initialize();
     if (!this.db) return;
 
@@ -117,10 +141,15 @@ class GraphCache {
         nodes,
         edges,
         timestamp: Date.now(),
-        version: CACHE_VERSION
+        version: CACHE_VERSION,
+        metadata: metadata || { format: 'json' }
       }, key);
       
-      console.log(`[GraphCache] Cached ${nodes.length} nodes and ${edges.length} edges`);
+      if (metadata?.format === 'arrow') {
+        console.log(`[GraphCache] Cached Arrow data: ${(nodes.length / 1048576).toFixed(2)}MB nodes, ${(edges.length / 1048576).toFixed(2)}MB edges`);
+      } else {
+        console.log(`[GraphCache] Cached ${nodes.length} nodes and ${edges.length} edges`);
+      }
     } catch (error) {
       console.error('Failed to cache data:', error);
       // Don't clear cache here, just skip this cache operation

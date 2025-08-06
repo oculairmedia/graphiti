@@ -81,9 +81,14 @@ export class DuckDBService {
       const cached = await graphCache.getCachedData('arrow-data');
       
       if (cached && cached.nodes && cached.edges) {
-        // Validate cache size to prevent corruption
-        if (cached.nodes.length > 1000000 || cached.edges.length > 1000000) {
-          console.warn('[DuckDB] Cache appears corrupted (too large), clearing and fetching fresh data');
+        // For Arrow format cache, nodes and edges are byte arrays
+        // Don't validate based on array length, that's byte count not node count
+        const isValidCache = cached.metadata?.format === 'arrow' 
+          ? cached.nodes.length < 50000000 && cached.edges.length < 50000000  // 50MB limit for arrow data
+          : cached.nodes.length < 100000 && cached.edges.length < 200000;      // Node/edge count limit for JSON
+        
+        if (!isValidCache) {
+          console.warn('[DuckDB] Cache appears invalid, clearing and fetching fresh data');
           await graphCache.clearCache();
         } else {
           // Load from cache
@@ -148,10 +153,19 @@ export class DuckDBService {
       // Cache the data for next time - store as ArrayBuffer, not array
       // Only cache if size is reasonable
       if (nodesArrayBuffer.byteLength < 10000000 && edgesArrayBuffer.byteLength < 10000000) {
+        // Get actual counts for metadata
+        const nodeCount = await this.conn.query('SELECT COUNT(*) as count FROM nodes');
+        const edgeCount = await this.conn.query('SELECT COUNT(*) as count FROM edges');
+        
         await graphCache.setCachedData(
           Array.from(new Uint8Array(nodesArrayBuffer)) as any,
           Array.from(new Uint8Array(edgesArrayBuffer)) as any,
-          'arrow-data'
+          'arrow-data',
+          {
+            nodeCount: nodeCount.get(0)?.count || 0,
+            edgeCount: edgeCount.get(0)?.count || 0,
+            format: 'arrow'
+          }
         );
       } else {
         console.log(`[DuckDB] Data too large to cache (${(nodesArrayBuffer.byteLength / 1048576).toFixed(2)}MB nodes, ${(edgesArrayBuffer.byteLength / 1048576).toFixed(2)}MB edges), skipping cache storage`);
