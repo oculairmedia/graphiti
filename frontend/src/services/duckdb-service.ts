@@ -441,6 +441,88 @@ export class DuckDBService {
     }
   }
 
+  /**
+   * Stream query results for progressive loading
+   */
+  async streamQuery(query: string, onChunk: (chunk: any[]) => void, batchSize = 1000): Promise<void> {
+    if (!this.db || !this.conn) {
+      throw new Error('Database not initialized');
+    }
+
+    try {
+      console.log('[DuckDBService] Starting streaming query:', query);
+      
+      // Execute query and get result
+      const result = await this.conn.query(query);
+      
+      if (!result) {
+        console.warn('[DuckDBService] Query returned no results');
+        return;
+      }
+
+      // Process in batches
+      const totalRows = result.numRows;
+      let processedRows = 0;
+      
+      while (processedRows < totalRows) {
+        const endRow = Math.min(processedRows + batchSize, totalRows);
+        const batch: any[] = [];
+        
+        // Extract batch of rows
+        for (let i = processedRows; i < endRow; i++) {
+          const row = result.get(i);
+          if (row) {
+            batch.push(row.toJSON ? row.toJSON() : row);
+          }
+        }
+        
+        // Send batch to callback
+        if (batch.length > 0) {
+          onChunk(batch);
+        }
+        
+        processedRows = endRow;
+        
+        // Yield to prevent blocking
+        await new Promise(resolve => setTimeout(resolve, 0));
+      }
+      
+      console.log('[DuckDBService] Streaming completed:', processedRows, 'rows processed');
+    } catch (error) {
+      console.error('[DuckDBService] Streaming query failed:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get Arrow buffer for streaming
+   */
+  async getArrowBuffer(query: string): Promise<ArrayBuffer | null> {
+    if (!this.db || !this.conn) {
+      console.error('[DuckDBService] Database not initialized');
+      return null;
+    }
+
+    try {
+      console.log('[DuckDBService] Getting Arrow buffer for:', query);
+      const result = await this.conn.query(query);
+      
+      if (!result) {
+        return null;
+      }
+
+      // Convert to Arrow IPC format
+      const table = result;
+      const buffer = table.serialize();
+      
+      console.log('[DuckDBService] Arrow buffer size:', buffer.byteLength);
+      return buffer;
+    } catch (error) {
+      console.error('[DuckDBService] Failed to get Arrow buffer:', error);
+      return null;
+    }
+  }
+
   async close(): Promise<void> {
     if (this.conn) {
       await this.conn.close();
