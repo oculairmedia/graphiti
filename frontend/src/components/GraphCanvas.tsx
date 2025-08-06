@@ -678,7 +678,15 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       };
     }, []);
     
+    // Track if this effect has already initialized to prevent double initialization
+    const hasInitializedRef = useRef(false);
+    
     useEffect(() => {
+      // Prevent double initialization in React development mode
+      if (hasInitializedRef.current) {
+        return;
+      }
+      
       // Set up continuous polling to check for cosmographRef availability
       let checkCount = 0;
       let webglCleanup: (() => void) | undefined;
@@ -687,6 +695,9 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         
         if (cosmographRef.current) {
           try {
+            // Mark as initialized before setting anything to prevent race conditions
+            hasInitializedRef.current = true;
+            
             // Set the ref for use in GraphConfigProvider
             console.log('GraphCanvas: Setting cosmographRef');
             setCosmographRef(cosmographRef);
@@ -726,7 +737,8 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             // Start canvas polling immediately
             pollCanvas();
           } catch (error) {
-            // Canvas setup error
+            // Canvas setup error - reset initialization flag on error
+            hasInitializedRef.current = false;
           }
         } else {
           // Keep polling for cosmographRef with exponential backoff for up to 3 seconds
@@ -757,6 +769,8 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         if (webglCleanup) {
           webglCleanup();
         }
+        // Reset the initialization flag on unmount
+        hasInitializedRef.current = false;
       };
     }, [setCosmographRef, setupWebGLContextRecovery]);
 
