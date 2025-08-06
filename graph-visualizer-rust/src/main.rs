@@ -162,11 +162,49 @@ async fn main() -> anyhow::Result<()> {
         update_tx: update_tx.clone(),
     };
     
-    // Load initial data into DuckDB
+    // Load initial data into DuckDB with optimized separate queries
     {
         info!("Loading initial graph data into DuckDB...");
-        // Load only essential data for initial render - fetch more on demand
-        let initial_data = execute_graph_query(&state.client, &graph_name, "MATCH (n) OPTIONAL MATCH (n)-[r]->(m) RETURN DISTINCT n.uuid as source_id, n.name as source_name, type(r) as rel_type, m.uuid as target_id, m.name as target_name, COALESCE(n.type, labels(n)[0]) as source_label, COALESCE(m.type, labels(m)[0]) as target_label, n.degree_centrality as source_degree, m.degree_centrality as target_degree, n.created_at as source_created, m.created_at as target_created LIMIT 2000").await?;
+        
+        // Step 1: Load nodes first (much more efficient)
+        let nodes_query = "MATCH (n) WHERE EXISTS(n.degree_centrality) AND n.degree_centrality > 0.001 RETURN n.uuid as id, n.name as name, COALESCE(n.type, labels(n)[0]) as label, n.degree_centrality as degree, n.created_at as created ORDER BY n.degree_centrality DESC LIMIT 1500";
+        
+        let nodes_result = state.client.graph_query(&graph_name, nodes_query).await?;
+        let mut node_ids = Vec::new();
+        let mut nodes = Vec::new();
+        
+        for row in nodes_result {
+            if let Some(id) = row.get(0).and_then(|v| v.as_str()) {
+                node_ids.push(format!("'{}'", id));
+                nodes.push(Node {
+                    id: id.to_string(),
+                    label: row.get(1).and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                    node_type: row.get(2).and_then(|v| v.as_str()).unwrap_or("Unknown").to_string(),
+                    properties: HashMap::new(),
+                });
+            }
+        }
+        
+        // Step 2: Load edges only for loaded nodes
+        let edges_query = format!(
+            "MATCH (n)-[r]->(m) WHERE n.uuid IN [{}] AND m.uuid IN [{}] RETURN n.uuid, type(r), m.uuid, r.weight LIMIT 5000",
+            node_ids.join(","),
+            node_ids.join(",")
+        );
+        
+        let edges_result = state.client.graph_query(&graph_name, &edges_query).await?;
+        let mut edges = Vec::new();
+        
+        for row in edges_result {
+            edges.push(Edge {
+                source: row.get(0).and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                target: row.get(2).and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                edge_type: row.get(1).and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                weight: row.get(3).and_then(|v| v.as_f64()).unwrap_or(1.0) as f32,
+            });
+        }
+        
+        let initial_data = GraphData { nodes, edges };
         
         duckdb_store.load_initial_data(initial_data.nodes.clone(), initial_data.edges.clone()).await?;
         info!("Initial data loaded: {} nodes, {} edges", initial_data.nodes.len(), initial_data.edges.len());
