@@ -2470,4 +2470,4 @@ export const GraphCanvas = React.memo(GraphCanvasComponent, (prevProps, nextProp
   return !shouldRerender;
 });
 
-GraphCanvas.displayName = 'GraphCanvas';
+GraphCanvas.displayName = 'GraphCanvas';// Trigger rebuild with all changes Wed Aug  6 01:00:43 AM EDT 2025
