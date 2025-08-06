@@ -2160,12 +2160,13 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             
             // Use pointColorByFn when glowing (only works when pointColorStrategy is undefined)
             pointColorByFn={glowingNodes.size > 0 ? (value, index) => {
-              // Get the node from cosmograph data
-              if (!cosmographData || !cosmographData.points[index]) {
+              // Get the node from the correct data source (DuckDB or Cosmograph)
+              const dataSource = useDuckDBTables ? duckDBData : cosmographData;
+              if (!dataSource || !dataSource.points[index]) {
                 return config.nodeTypeColors[value] || '#94a3b8';
               }
               
-              const point = cosmographData.points[index];
+              const point = dataSource.points[index];
               const nodeId = point.id;
               const glowStartTime = glowingNodes.get(nodeId);
               
