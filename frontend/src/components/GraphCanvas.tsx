@@ -549,20 +549,32 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
 
       let cancelled = false;
       
+      // Fallback timeout to ensure dataPreparation completes
+      const dataPreparationTimeout = setTimeout(() => {
+        if (loadingCoordinator.getStageStatus('dataPreparation') !== 'complete') {
+          console.warn('GraphCanvas: Data preparation timeout, marking as complete');
+          loadingCoordinator.setStageComplete('dataPreparation', {
+            nodesCount: memoizedNodes.length,
+            linksCount: memoizedLinks.length,
+            fallback: true
+          });
+        }
+      }, 2000); // 2 seconds should be enough for data preparation
+      
       const prepareData = async () => {
-        await dataKitCoordinator.executeDataKit(async () => {
-          let transformedNodes: any[] = [];
-          let transformedLinks: any[] = [];
+        // Execute data preparation directly without DataKitCoordinator wrapper
+        let transformedNodes: any[] = [];
+        let transformedLinks: any[] = [];
+        
+        try {
+          setIsDataPreparing(true);
+          setDataKitError(null);
           
-          try {
-            setIsDataPreparing(true);
-            setDataKitError(null);
-            
-            // Report data preparation started
-            loadingCoordinator.updateStage('dataPreparation', { 
-              status: 'loading', 
-              progress: 10 
-            });
+          // Report data preparation started
+          loadingCoordinator.updateStage('dataPreparation', { 
+            status: 'loading', 
+            progress: 10 
+          });
             
           // Use memoized data instead of re-transforming
           transformedNodes = memoizedNodes.filter(node => node.id && node.id !== 'undefined');
@@ -659,7 +671,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
               hadError: true
             });
           }
-          } finally {
+        } finally {
             if (!cancelled) {
               setIsDataPreparing(false);
               
@@ -672,14 +684,14 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
                 });
               }
             }
-          }
-        });
+        }
       };
 
       prepareData();
       
       return () => {
         cancelled = true;
+        clearTimeout(dataPreparationTimeout);
       };
     }, [nodes, links, dataKitConfig, isDuckDBInitialized, duckdbService]);
 
