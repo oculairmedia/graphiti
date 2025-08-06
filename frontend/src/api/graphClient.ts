@@ -121,18 +121,108 @@ export class GraphClient {
 
   // Centrality endpoints
   async getNodeCentrality(nodeId: string): Promise<CentralityMetrics> {
-    return this.fetchWithError<CentralityMetrics>(`${this.baseUrl}/centrality/${nodeId}`);
+    // For now, calculate centrality for a single node by calling the all endpoint
+    const response = await this.fetchWithError<any>(`${this.baseUrl}/centrality/all`, {
+      method: 'POST',
+      body: JSON.stringify({ 
+        store_results: false 
+      }),
+    });
+    
+    // Extract metrics for the specific node
+    const metrics = response.scores?.[nodeId];
+    if (!metrics) {
+      throw new Error(`No centrality data found for node ${nodeId}`);
+    }
+    
+    return {
+      degree: metrics.degree || 0,
+      betweenness: metrics.betweenness || 0,
+      pagerank: metrics.pagerank || 0,
+      eigenvector: metrics.eigenvector || 0,
+    };
   }
 
   async getBulkCentrality(nodeIds: string[]): Promise<BulkCentralityResponse> {
-    return this.fetchWithError<BulkCentralityResponse>(`${this.baseUrl}/centrality/bulk`, {
+    // Calculate centrality for all nodes and filter results
+    const response = await this.fetchWithError<any>(`${this.baseUrl}/centrality/all`, {
       method: 'POST',
-      body: JSON.stringify({ node_ids: nodeIds }),
+      body: JSON.stringify({ 
+        store_results: false 
+      }),
     });
+    
+    // Filter results to only requested nodes
+    const result: BulkCentralityResponse = {};
+    for (const nodeId of nodeIds) {
+      if (response.scores?.[nodeId]) {
+        result[nodeId] = {
+          degree: response.scores[nodeId].degree || 0,
+          betweenness: response.scores[nodeId].betweenness || 0,
+          pagerank: response.scores[nodeId].pagerank || 0,
+          eigenvector: response.scores[nodeId].eigenvector || 0,
+        };
+      }
+    }
+    
+    return result;
   }
 
   async getCentralityStats(): Promise<CentralityStats> {
     return this.fetchWithError<CentralityStats>(`${this.baseUrl}/centrality/stats`);
+  }
+  
+  // Additional centrality calculation methods
+  async calculatePageRank(options: {
+    damping_factor?: number;
+    iterations?: number;
+    store_results?: boolean;
+  } = {}): Promise<any> {
+    return this.fetchWithError<any>(`${this.baseUrl}/centrality/pagerank`, {
+      method: 'POST',
+      body: JSON.stringify({
+        damping_factor: options.damping_factor || 0.85,
+        iterations: options.iterations || 20,
+        store_results: options.store_results || false,
+      }),
+    });
+  }
+  
+  async calculateDegreeCentrality(options: {
+    direction?: 'in' | 'out' | 'both';
+    store_results?: boolean;
+  } = {}): Promise<any> {
+    return this.fetchWithError<any>(`${this.baseUrl}/centrality/degree`, {
+      method: 'POST',
+      body: JSON.stringify({
+        direction: options.direction || 'both',
+        store_results: options.store_results || false,
+      }),
+    });
+  }
+  
+  async calculateBetweennessCentrality(options: {
+    sample_size?: number;
+    store_results?: boolean;
+  } = {}): Promise<any> {
+    return this.fetchWithError<any>(`${this.baseUrl}/centrality/betweenness`, {
+      method: 'POST',
+      body: JSON.stringify({
+        sample_size: options.sample_size,
+        store_results: options.store_results || false,
+      }),
+    });
+  }
+  
+  async calculateAllCentralities(options: {
+    store_results?: boolean;
+  } = {}): Promise<any> {
+    return this.fetchWithError<any>(`${this.baseUrl}/centrality/all`, {
+      method: 'POST',
+      body: JSON.stringify({
+        store_results: options.store_results || false,
+      }),
+    });
   }
 
   async updateNodeSummary(nodeId: string, summary: string): Promise<{ uuid: string; name: string; summary: string }> {

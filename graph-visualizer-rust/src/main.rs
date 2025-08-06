@@ -33,6 +33,8 @@ struct AppState {
     duckdb_store: Arc<DuckDBStore>,
     update_tx: broadcast::Sender<GraphUpdate>,
     arrow_cache: Arc<RwLock<Option<ArrowCache>>>,
+    http_client: Arc<reqwest::Client>,
+    centrality_url: String,
 }
 
 #[derive(Clone)]
@@ -166,6 +168,11 @@ async fn main() -> anyhow::Result<()> {
     // Create update channel for real-time updates
     let (update_tx, _) = broadcast::channel::<GraphUpdate>(100);
     
+    // Set up HTTP client for centrality service proxy
+    let http_client = Arc::new(reqwest::Client::new());
+    let centrality_url = std::env::var("CENTRALITY_SERVICE_URL")
+        .unwrap_or_else(|_| "http://graphiti-centrality-rs:3003".to_string());
+    
     let state = AppState {
         client: Arc::new(client),
         graph_name: graph_name.clone(),
@@ -173,6 +180,8 @@ async fn main() -> anyhow::Result<()> {
         duckdb_store: duckdb_store.clone(),
         update_tx: update_tx.clone(),
         arrow_cache: Arc::new(RwLock::new(None)),
+        http_client,
+        centrality_url,
     };
     
     // Load initial data into DuckDB with optimized separate queries
@@ -323,6 +332,13 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/arrow/edges", get(get_edges_arrow))
         .route("/api/duckdb/stats", get(get_duckdb_stats))
         .route("/api/arrow/refresh", post(refresh_arrow_cache))
+        // Centrality proxy endpoints
+        .route("/api/centrality/health", get(proxy_centrality_health))
+        .route("/api/centrality/stats", get(proxy_centrality_stats))
+        .route("/api/centrality/pagerank", post(proxy_centrality_pagerank))
+        .route("/api/centrality/degree", post(proxy_centrality_degree))
+        .route("/api/centrality/betweenness", post(proxy_centrality_betweenness))
+        .route("/api/centrality/all", post(proxy_centrality_all))
         .route("/ws", get(websocket_handler))
         .layer(CompressionLayer::new())  // Add gzip/brotli compression
         .layer(CorsLayer::permissive())
@@ -910,6 +926,170 @@ fn escape_cypher_string(s: &str) -> String {
         .replace('\n', "\\n")
         .replace('\r', "\\r")
         .replace('\t', "\\t")
+}
+
+// ==================== Centrality Proxy Handlers ====================
+
+async fn proxy_centrality_health(State(state): State<AppState>) -> Response {
+    let url = format!("{}/health", state.centrality_url);
+    match state.http_client.get(&url).send().await {
+        Ok(resp) => {
+            let status = StatusCode::from_u16(resp.status().as_u16()).unwrap_or(StatusCode::OK);
+            let body = resp.bytes().await.unwrap_or_default();
+            Response::builder()
+                .status(status)
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap()
+        }
+        Err(e) => {
+            error!("Failed to proxy health check: {}", e);
+            (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(serde_json::json!({
+                    "error": "Centrality service unavailable",
+                    "details": e.to_string()
+                }))
+            ).into_response()
+        }
+    }
+}
+
+async fn proxy_centrality_stats(State(state): State<AppState>) -> Response {
+    let url = format!("{}/stats", state.centrality_url);
+    match state.http_client.get(&url).send().await {
+        Ok(resp) => {
+            let status = StatusCode::from_u16(resp.status().as_u16()).unwrap_or(StatusCode::OK);
+            let body = resp.bytes().await.unwrap_or_default();
+            Response::builder()
+                .status(status)
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap()
+        }
+        Err(e) => {
+            error!("Failed to proxy stats: {}", e);
+            (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(serde_json::json!({
+                    "error": "Centrality service unavailable",
+                    "details": e.to_string()
+                }))
+            ).into_response()
+        }
+    }
+}
+
+async fn proxy_centrality_pagerank(
+    State(state): State<AppState>,
+    Json(payload): Json<serde_json::Value>,
+) -> Response {
+    let url = format!("{}/centrality/pagerank", state.centrality_url);
+    match state.http_client.post(&url).json(&payload).send().await {
+        Ok(resp) => {
+            let status = StatusCode::from_u16(resp.status().as_u16()).unwrap_or(StatusCode::OK);
+            let body = resp.bytes().await.unwrap_or_default();
+            Response::builder()
+                .status(status)
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap()
+        }
+        Err(e) => {
+            error!("Failed to proxy PageRank: {}", e);
+            (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(serde_json::json!({
+                    "error": "Centrality service unavailable",
+                    "details": e.to_string()
+                }))
+            ).into_response()
+        }
+    }
+}
+
+async fn proxy_centrality_degree(
+    State(state): State<AppState>,
+    Json(payload): Json<serde_json::Value>,
+) -> Response {
+    let url = format!("{}/centrality/degree", state.centrality_url);
+    match state.http_client.post(&url).json(&payload).send().await {
+        Ok(resp) => {
+            let status = StatusCode::from_u16(resp.status().as_u16()).unwrap_or(StatusCode::OK);
+            let body = resp.bytes().await.unwrap_or_default();
+            Response::builder()
+                .status(status)
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap()
+        }
+        Err(e) => {
+            error!("Failed to proxy degree centrality: {}", e);
+            (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(serde_json::json!({
+                    "error": "Centrality service unavailable",
+                    "details": e.to_string()
+                }))
+            ).into_response()
+        }
+    }
+}
+
+async fn proxy_centrality_betweenness(
+    State(state): State<AppState>,
+    Json(payload): Json<serde_json::Value>,
+) -> Response {
+    let url = format!("{}/centrality/betweenness", state.centrality_url);
+    match state.http_client.post(&url).json(&payload).send().await {
+        Ok(resp) => {
+            let status = StatusCode::from_u16(resp.status().as_u16()).unwrap_or(StatusCode::OK);
+            let body = resp.bytes().await.unwrap_or_default();
+            Response::builder()
+                .status(status)
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap()
+        }
+        Err(e) => {
+            error!("Failed to proxy betweenness centrality: {}", e);
+            (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(serde_json::json!({
+                    "error": "Centrality service unavailable",
+                    "details": e.to_string()
+                }))
+            ).into_response()
+        }
+    }
+}
+
+async fn proxy_centrality_all(
+    State(state): State<AppState>,
+    Json(payload): Json<serde_json::Value>,
+) -> Response {
+    let url = format!("{}/centrality/all", state.centrality_url);
+    match state.http_client.post(&url).json(&payload).send().await {
+        Ok(resp) => {
+            let status = StatusCode::from_u16(resp.status().as_u16()).unwrap_or(StatusCode::OK);
+            let body = resp.bytes().await.unwrap_or_default();
+            Response::builder()
+                .status(status)
+                .header("content-type", "application/json")
+                .body(Body::from(body))
+                .unwrap()
+        }
+        Err(e) => {
+            error!("Failed to proxy all centralities: {}", e);
+            (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(serde_json::json!({
+                    "error": "Centrality service unavailable",
+                    "details": e.to_string()
+                }))
+            ).into_response()
+        }
+    }
 }
 
 async fn update_node_summary(
