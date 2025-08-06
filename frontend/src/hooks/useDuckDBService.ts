@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { DuckDBService } from '../services/duckdb-service';
 import { useWebSocketContext } from '../contexts/WebSocketProvider';
 import { logger } from '../utils/logger';
@@ -92,12 +92,17 @@ export function useDuckDBService(options: UseDuckDBServiceOptions = {}) {
     return unsubscribe;
   }, [isInitialized, subscribeToGraphUpdate]);
 
+  // Stable function reference to prevent re-renders
+  const getDuckDBConnection = useCallback(() => {
+    return serviceRef.current?.getDuckDBConnection() || null;
+  }, []);
+
   return {
     service: serviceRef.current,
     isInitialized,
     isLoading,
     error,
     stats,
-    getDuckDBConnection: () => serviceRef.current?.getDuckDBConnection() || null,
+    getDuckDBConnection,
   };
 }

@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useStableCallback } from '../hooks/useStableCallback';
 import { CosmographProvider } from '@cosmograph/react';
 import { useGraphConfig } from '../contexts/GraphConfigProvider';
-import { useDuckDB } from '../contexts/DuckDBProvider';
 import { ControlPanel } from './ControlPanel';
 import { GraphViewport } from './GraphViewport';
 import { LayoutPanel } from './LayoutPanel';
@@ -19,8 +18,15 @@ import type { GraphCanvasHandle, GraphVizProps } from '../types/components';
 import { getErrorMessage } from '../types/errors';
 
 export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
+  // Debug component lifecycle
+  useEffect(() => {
+    console.log('[GraphViz] Component mounted');
+    return () => {
+      console.log('[GraphViz] Component unmounting');
+    };
+  }, []);
+  
   const { applyLayout, zoomIn, zoomOut, fitView } = useGraphConfig();
-  const { getDuckDBConnection } = useDuckDB();
   
   // UI State
   const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);
@@ -30,6 +36,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
   const [showLayoutPanel, setShowLayoutPanel] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isSimulationRunning, setIsSimulationRunning] = useState(true);
+  
 
   // Refs
   const graphCanvasRef = useRef<GraphCanvasHandle>(null);
@@ -48,7 +55,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
     isGraphInitialized,
     stableDataRef,
   } = useGraphDataQuery();
-
+  
   const {
     selectedNodes,
     selectedNode,
@@ -338,7 +345,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
         )}
         
         {/* Timeline at the bottom */}
-        {data && (
+        {dataToUse && dataToUse.nodes.length > 0 && (
           <div className={`fixed bottom-0 z-50 transition-all duration-300`}
             style={{
               left: leftPanelCollapsed ? '48px' : '320px',

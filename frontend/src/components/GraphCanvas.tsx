@@ -179,7 +179,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     const [currentNodes, setCurrentNodes] = useState<GraphNode[]>([]);
     const [currentLinks, setCurrentLinks] = useState<GraphLink[]>([]);
     
-    // DuckDB data state
+    // DuckDB data state - keep Arrow tables in native format
     const [duckDBData, setDuckDBData] = useState<{ points: any; links: any } | null>(null);
     
     // Simulation control state
@@ -210,10 +210,11 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             ]);
             
             if (nodesTable && edgesTable) {
-              // Convert Arrow tables to arrays for Cosmograph
+              // Keep Arrow tables in native format for Cosmograph
+              // Cosmograph v2.0 can handle Arrow tables directly
               setDuckDBData({
-                points: nodesTable.toArray(),
-                links: edgesTable.toArray()
+                points: nodesTable,
+                links: edgesTable
               });
             }
           } catch (error) {
@@ -814,11 +815,22 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         return (linkValue: GraphLink, linkIndex: number) => {
           // Get the correct data source
           const dataSource = useDuckDBTables ? duckDBData : cosmographData;
-          if (!dataSource || !dataSource.links || !dataSource.links[linkIndex]) {
+          if (!dataSource || !dataSource.links) {
             return config.linkColor;
           }
           
-          const link = dataSource.links[linkIndex];
+          // Handle Arrow table vs array data
+          let link: any;
+          if (useDuckDBTables && duckDBData?.links?.get) {
+            // Arrow table - use get method
+            link = duckDBData.links.get(linkIndex);
+            if (!link) return config.linkColor;
+          } else if (cosmographData?.links?.[linkIndex]) {
+            // JavaScript array
+            link = cosmographData.links[linkIndex];
+          } else {
+            return config.linkColor;
+          }
           const sourceId = String(link.source);
           const targetId = String(link.target);
           
@@ -1283,10 +1295,8 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       if (!cosmographRef.current) return;
       
       try {
-        // Ensure simulation is running for smooth zoom animation
-        if (typeof cosmographRef.current.start === 'function') {
-          cosmographRef.current.start(0.1); // Start with low energy just for the zoom
-        }
+        // Don't restart simulation - just zoom to the point
+        // The simulation can continue running at its current state
         
         // Use the Cosmograph v2.0 zoomToPoint method with config defaults
         const actualDuration = duration !== undefined ? duration : config.fitViewDuration;
@@ -2187,6 +2197,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     }
 
     
+    // Pass Arrow tables directly to Cosmograph when using DuckDB
     const pointsData = useDuckDBTables ? duckDBData?.points : cosmographData?.points;
     const linksData = useDuckDBTables ? duckDBData?.links : cosmographData?.links;
 
@@ -2242,14 +2253,25 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             
             // Use pointColorByFn when glowing (only works when pointColorStrategy is undefined)
             pointColorByFn={glowingNodes.size > 0 ? (value, index) => {
-              // Get the node from the correct data source (DuckDB or Cosmograph)
+              // Get the node from the correct data source
               const dataSource = useDuckDBTables ? duckDBData : cosmographData;
-              if (!dataSource || !dataSource.points[index]) {
+              if (!dataSource || !dataSource.points) {
                 return config.nodeTypeColors[value] || '#94a3b8';
               }
               
-              const point = dataSource.points[index];
-              const nodeId = point.id;
+              // Handle Arrow table vs array data
+              let nodeId: string;
+              if (useDuckDBTables && duckDBData?.points?.get) {
+                // Arrow table - use get method
+                const row = duckDBData.points.get(index);
+                nodeId = row?.id || String(index);
+              } else if (cosmographData?.points?.[index]) {
+                // JavaScript array
+                const point = cosmographData.points[index];
+                nodeId = point.id;
+              } else {
+                return config.nodeTypeColors[value] || '#94a3b8';
+              }
               const glowStartTime = glowingNodes.get(nodeId);
               
               if (glowStartTime) {

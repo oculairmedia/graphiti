@@ -10,18 +10,26 @@ export class DuckDBService {
   private db: duckdb.AsyncDuckDB | null = null;
   private conn: duckdb.AsyncDuckDBConnection | null = null;
   private rustServerUrl: string;
-  private initialized = false;
+  private _initialized = false;
   public readonly nodesTableName = 'nodes';
   public readonly edgesTableName = 'edges';
+  
+  get initialized(): boolean {
+    return this._initialized;
+  }
 
   constructor(config: DuckDBConfig) {
     this.rustServerUrl = config.rustServerUrl;
   }
 
   async initialize(skipDataLoad: boolean = false): Promise<void> {
-    if (this.initialized) return;
+    if (this.initialized) {
+      console.log('[DuckDB] Already initialized, skipping');
+      return;
+    }
 
     try {
+      console.log('[DuckDB] Starting initialization...');
       // Initialize DuckDB-WASM
       const JSDELIVR_BUNDLES = duckdb.getJsDelivrBundles();
       
@@ -54,8 +62,8 @@ export class DuckDBService {
         await this.loadInitialData();
       }
       
-      this.initialized = true;
-      console.log('DuckDB service initialized successfully');
+      this._initialized = true;
+      console.log('[DuckDB] Service initialized successfully');
     } catch (error) {
       console.error('Failed to initialize DuckDB:', error);
       throw error;
@@ -293,6 +301,56 @@ export class DuckDBService {
     };
   }
 
+  async getNodesForUI(limit?: number): Promise<any[]> {
+    if (!this.conn) throw new Error('DuckDB connection not initialized');
+    
+    try {
+      const query = limit 
+        ? `SELECT * FROM nodes ORDER BY degree_centrality DESC LIMIT ${limit}`
+        : 'SELECT * FROM nodes';
+      const result = await this.conn.query(query);
+      return result ? result.toArray() : [];
+    } catch (error) {
+      console.error('Failed to get nodes for UI:', error);
+      return [];
+    }
+  }
+  
+  async getEdgesForUI(nodeIds?: string[]): Promise<any[]> {
+    if (!this.conn) throw new Error('DuckDB connection not initialized');
+    
+    try {
+      let query = 'SELECT * FROM edges';
+      if (nodeIds && nodeIds.length > 0) {
+        const nodeIdList = nodeIds.map(id => `'${id}'`).join(',');
+        query = `SELECT * FROM edges WHERE source IN (${nodeIdList}) AND target IN (${nodeIdList})`;
+      }
+      const result = await this.conn.query(query);
+      return result ? result.toArray() : [];
+    } catch (error) {
+      console.error('Failed to get edges for UI:', error);
+      return [];
+    }
+  }
+  
+  async searchNodes(searchTerm: string, limit: number = 100): Promise<any[]> {
+    if (!this.conn) throw new Error('DuckDB connection not initialized');
+    
+    try {
+      const query = `
+        SELECT * FROM nodes 
+        WHERE LOWER(label) LIKE LOWER('%${searchTerm}%') 
+        OR LOWER(id) LIKE LOWER('%${searchTerm}%')
+        LIMIT ${limit}
+      `;
+      const result = await this.conn.query(query);
+      return result ? result.toArray() : [];
+    } catch (error) {
+      console.error('Failed to search nodes:', error);
+      return [];
+    }
+  }
+
   getDuckDBConnection(): { duckdb: duckdb.AsyncDuckDB; connection: duckdb.AsyncDuckDBConnection } | null {
     if (!this.db || !this.conn) return null;
     return { duckdb: this.db, connection: this.conn };
@@ -333,6 +391,6 @@ export class DuckDBService {
       await this.db.terminate();
       this.db = null;
     }
-    this.initialized = false;
+    this._initialized = false;
   }
 }

@@ -5,6 +5,7 @@ import { GraphNode } from '../api/types';
 import { GraphLink } from '../types/graph';
 import { useGraphDataDiff } from './useGraphDataDiff';
 import { useGraphConfig } from '../contexts/GraphConfigProvider';
+import { useDuckDB } from '../contexts/DuckDBProvider';
 import { logger } from '../utils/logger';
 
 interface FilterConfig {
@@ -31,26 +32,120 @@ interface TransformedData {
 
 export function useGraphDataQuery() {
   const { config, updateNodeTypeConfigurations } = useGraphConfig();
+  const { getDuckDBConnection } = useDuckDB();
+  
+  // State for DuckDB-sourced UI data
+  const [duckDBData, setDuckDBData] = useState<{ nodes: GraphNode[], edges: GraphLink[] } | null>(null);
+  const [isDuckDBLoading, setIsDuckDBLoading] = useState(false);
+  
+  // Flag to prevent re-fetching after initial load
+  const hasFetchedDuckDBRef = useRef(false);
   
   // Skip JSON fetch if using DuckDB (Arrow format is faster)
   const skipJsonFetch = true; // Always use Arrow format for better performance
   
-  // Fetch graph data from Rust server
-  const { data, isLoading, error } = useQuery({
-    queryKey: ['graphData', config.queryType, config.nodeLimit],
+  // Fetch graph data from Rust server (disabled when using Arrow)
+  const { data: jsonData, isLoading: isJsonLoading, error } = useQuery({
+    queryKey: ['graphData'], // Remove config dependencies to prevent refetches on config changes
     queryFn: async () => {
       if (skipJsonFetch) {
         // Return empty data - we'll use Arrow format from DuckDB instead
         return { nodes: [], edges: [] };
       }
+      // Always fetch entire graph to maintain stability
       const result = await graphClient.getGraphData({ 
-        query_type: config.queryType,
-        limit: config.nodeLimit 
+        query_type: 'entire_graph',
+        limit: 100000 
       });
       return result;
     },
     enabled: !skipJsonFetch, // Disable JSON fetch when using Arrow
+    staleTime: 5 * 60 * 1000, // Consider data fresh for 5 minutes
+    cacheTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
   });
+  
+  // Query DuckDB tables for UI data when connection is ready
+  useEffect(() => {
+    // Skip if already fetched to prevent re-loading
+    if (hasFetchedDuckDBRef.current) {
+      return;
+    }
+    
+    const fetchDuckDBData = async () => {
+      const connection = getDuckDBConnection();
+      if (!connection?.connection) {
+        // If no connection yet, retry
+        return;
+      }
+      
+      // Mark as fetching to prevent concurrent fetches
+      hasFetchedDuckDBRef.current = true;
+      setIsDuckDBLoading(true);
+      
+      try {
+        // Query nodes and edges from DuckDB
+        const [nodesResult, edgesResult] = await Promise.all([
+          connection.connection.query('SELECT * FROM nodes'),
+          connection.connection.query('SELECT * FROM edges')
+        ]);
+        
+        if (nodesResult && edgesResult) {
+          // Convert Arrow tables to JavaScript arrays
+          const nodesArray = nodesResult.toArray();
+          const edgesArray = edgesResult.toArray();
+          
+          // Transform to GraphNode format
+          const nodes: GraphNode[] = nodesArray.map((n: any) => ({
+            id: n.id,
+            label: n.label || n.id,
+            name: n.label || n.id,
+            node_type: n.node_type || 'Unknown',
+            size: n.degree_centrality || 1,
+            created_at: n.created_at,
+            properties: {
+              degree_centrality: n.degree_centrality || 0,
+              pagerank_centrality: n.pagerank_centrality || n.pagerank || 0,
+              betweenness_centrality: n.betweenness_centrality || 0,
+              eigenvector_centrality: n.eigenvector_centrality || 0,
+              degree: n.degree || 0,
+              connections: n.connections || n.degree || 0,
+              created: n.created_at,
+              date: n.created_at,
+              ...n // Include all other properties
+            }
+          }));
+          
+          // Transform to GraphLink format
+          const edges: GraphLink[] = edgesArray.map((e: any) => ({
+            id: `${e.source}-${e.target}`,
+            source: e.source,
+            target: e.target || e.targetidx,
+            from: e.source,
+            to: e.target || e.targetidx,
+            edge_type: e.edge_type || '',
+            weight: e.weight || 1,
+            created_at: e.created_at,
+            updated_at: e.updated_at
+          }));
+          
+          setDuckDBData({ nodes, edges });
+          logger.log('Loaded UI data from DuckDB:', nodes.length, 'nodes,', edges.length, 'edges');
+        }
+      } catch (error) {
+        logger.error('Failed to query DuckDB for UI data:', error);
+      } finally {
+        setIsDuckDBLoading(false);
+      }
+    };
+    
+    // Delay to ensure DuckDB is initialized
+    const timer = setTimeout(fetchDuckDBData, 1500);
+    return () => clearTimeout(timer);
+  }, [getDuckDBConnection]); // getDuckDBConnection is now stable thanks to useCallback
+  
+  // Use DuckDB data if available, otherwise fall back to JSON data
+  const data = duckDBData || jsonData || { nodes: [], edges: [] };
+  const isLoading = isDuckDBLoading || isJsonLoading;
 
   // Use data diffing to detect changes
   const dataDiff = useGraphDataDiff(data || null);

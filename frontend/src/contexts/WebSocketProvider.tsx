@@ -54,8 +54,6 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
     return `${protocol}//${window.location.host}/ws`;
   }, [url]);
   
-  console.log('WebSocketProvider - Environment URL:', import.meta.env.VITE_WEBSOCKET_URL);
-  console.log('WebSocketProvider - Using URL:', wsUrl);
   const [handlers, setHandlers] = useState<Set<(event: WebSocketEvent) => void>>(new Set());
   const [nodeAccessHandlers, setNodeAccessHandlers] = useState<Set<(event: NodeAccessEvent) => void>>(new Set());
   const [graphUpdateHandlers, setGraphUpdateHandlers] = useState<Set<(event: GraphUpdateEvent) => void>>(new Set());
@@ -65,6 +63,12 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
   const handlersRef = useRef<Set<(event: WebSocketEvent) => void>>(new Set());
   const nodeAccessHandlersRef = useRef<Set<(event: NodeAccessEvent) => void>>(new Set());
   const graphUpdateHandlersRef = useRef<Set<(event: GraphUpdateEvent) => void>>(new Set());
+  
+  // Log WebSocket URL only once on mount
+  useEffect(() => {
+    console.log('WebSocketProvider - Environment URL:', import.meta.env.VITE_WEBSOCKET_URL);
+    console.log('WebSocketProvider - Using URL:', wsUrl);
+  }, []); // Empty deps - log only once
   
   useEffect(() => {
     handlersRef.current = handlers;
