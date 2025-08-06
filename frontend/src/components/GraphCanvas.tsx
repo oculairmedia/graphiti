@@ -16,6 +16,7 @@ import { searchIndex } from '../utils/searchIndex';
 import { GraphConfigContext } from '../contexts/useGraphConfig';
 import { useWebSocketContext } from '../contexts/WebSocketProvider';
 import { useDuckDB } from '../contexts/DuckDBProvider';
+import { useLoadingCoordinator } from '../contexts/LoadingCoordinator';
 
 const dataKitCoordinator = DataKitCoordinator.getInstance();
 
@@ -167,6 +168,10 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     });
     const [isReady, setIsReady] = useState(false);
     const [isCanvasReady, setIsCanvasReady] = useState(false);
+    
+    // Get loading coordinator - will always be available since we're inside ParallelInitProvider
+    const loadingCoordinator = useLoadingCoordinator();
+    
     const [cosmographData, setCosmographData] = useState<{ nodes: GraphNode[], links: GraphLink[] } | null>(null);
     const [dataKitError, setDataKitError] = useState<string | null>(null);
     const [isDataPreparing, setIsDataPreparing] = useState(false);
@@ -550,6 +555,12 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             setIsDataPreparing(true);
             setDataKitError(null);
             
+            // Report data preparation started
+            loadingCoordinator.updateStage('dataPreparation', { 
+              status: 'loading', 
+              progress: 10 
+            });
+            
           // Use memoized data instead of re-transforming
           const transformedNodes = memoizedNodes.filter(node => node.id && node.id !== 'undefined');
 
@@ -560,6 +571,12 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           });
 
           logger.log('GraphCanvas: Processing links:', memoizedLinks.length, 'nodes in map:', nodeIndexMap.size);
+          
+          // Report progress
+          loadingCoordinator.updateStage('dataPreparation', { 
+            status: 'loading', 
+            progress: 50 
+          });
           
           // Use memoized links
           const transformedLinks = memoizedLinks.map(link => {
@@ -611,6 +628,12 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
               points: transformedNodes,
               links: transformedLinks,
               cosmographConfig: dataKitConfig
+            });
+            
+            // Mark data preparation as complete
+            loadingCoordinator.setStageComplete('dataPreparation', {
+              nodesCount: transformedNodes.length,
+              linksCount: transformedLinks.length
             });
           }
         } catch (error) {
@@ -687,6 +710,9 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       let checkCount = 0;
       let webglCleanup: (() => void) | undefined;
       
+      // Report canvas initialization started
+      loadingCoordinator.updateStage('canvas', { status: 'loading', progress: 10 });
+      
       const pollCosmographRef = () => {
         
         if (cosmographRef.current) {
@@ -699,6 +725,12 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
               setCosmographRef(cosmographRef);
               setIsReady(true);
               setIsCanvasReady(true);
+              
+              // Report canvas ready
+              loadingCoordinator.setStageComplete('canvas', {
+                canvasReady: true
+              });
+              
               return;
             }
             
@@ -720,8 +752,19 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
               const hasCanvas = !!cosmographRef.current?._canvasElement;
               
               setIsCanvasReady(prevReady => {
-                if (hasCanvas !== prevReady) {
-                  // State change detected, no additional action needed
+                if (hasCanvas !== prevReady && hasCanvas) {
+                  // Canvas is now ready
+                  loadingCoordinator.updateStage('canvas', { 
+                    status: 'loading', 
+                    progress: 80 
+                  });
+                  
+                  // Mark canvas as complete after a brief delay to ensure rendering
+                  setTimeout(() => {
+                    loadingCoordinator.setStageComplete('canvas', {
+                      canvasReady: true
+                    });
+                  }, 100);
                 }
                 return hasCanvas;
               });
@@ -2182,16 +2225,10 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       }
     };
 
-    // Show loading state while data is being prepared
+    // Don't show individual loading state - unified loading screen handles it
+    // Just render empty div while preparing to maintain layout
     if (isDataPreparing) {
-      return (
-        <div className={`relative overflow-hidden ${className} flex items-center justify-center`}>
-          <div className="text-muted-foreground text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mb-2 mx-auto"></div>
-            <p className="text-sm">Preparing graph data...</p>
-          </div>
-        </div>
-      );
+      return <div className={`relative overflow-hidden ${className}`} />;
     }
 
     // Show error state if Data Kit failed (with fallback)
