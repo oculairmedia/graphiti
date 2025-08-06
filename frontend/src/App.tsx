@@ -3,17 +3,17 @@ import { prefetchDNS, preconnect } from 'react-dom';
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { GraphConfigProvider } from "@/contexts/GraphConfigProvider";
-import { WebSocketProvider } from "@/contexts/WebSocketProvider";
+import { ParallelInitProvider } from "@/contexts/ParallelInitProvider";
 import { DuckDBProvider } from "@/contexts/DuckDBProvider";
 import ErrorBoundary from "./components/ErrorBoundary";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import { memoryMonitor } from "@/utils/memoryMonitor";
-import { clearAllCaches } from "@/utils/clearAllCaches";
+import { preloader } from "@/services/preloader";
 
+// Create query client once
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -30,6 +30,12 @@ const queryClient = new QueryClient({
 const App = () => {
   // Preload resources for better performance
   React.useEffect(() => {
+    // Start preloading if not already started
+    if (!preloader.isPreloaded('nodes')) {
+      console.log('[App] Starting data preload...');
+      preloader.startPreloading();
+    }
+    
     // Preconnect to API endpoints if configured
     const apiUrl = import.meta.env.VITE_API_URL;
     if (apiUrl) {
@@ -38,8 +44,9 @@ const App = () => {
       preconnect(url.origin);
     }
     
-    // Note: Font preloading removed - font files not present in public directory
-    // If adding custom fonts, ensure they exist in public/fonts/ first
+    // Log preloader stats
+    const stats = preloader.getStats();
+    console.log('[App] Preloader stats:', stats);
     
     // Cleanup memory monitor on app unmount
     return () => {
@@ -49,25 +56,21 @@ const App = () => {
 
   return (
     <ErrorBoundary>
-      <QueryClientProvider client={queryClient}>
-        <GraphConfigProvider>
-          <WebSocketProvider>
-            <DuckDBProvider>
-              <TooltipProvider>
-                <Toaster />
-                <Sonner />
-                <BrowserRouter>
-                  <Routes>
-                    <Route path="/" element={<Index />} />
-                    {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-                    <Route path="*" element={<NotFound />} />
-                  </Routes>
-                </BrowserRouter>
-              </TooltipProvider>
-            </DuckDBProvider>
-          </WebSocketProvider>
-        </GraphConfigProvider>
-      </QueryClientProvider>
+      <ParallelInitProvider queryClient={queryClient}>
+        <DuckDBProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Sonner />
+            <BrowserRouter>
+              <Routes>
+                <Route path="/" element={<Index />} />
+                {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </BrowserRouter>
+          </TooltipProvider>
+        </DuckDBProvider>
+      </ParallelInitProvider>
     </ErrorBoundary>
   );
 };

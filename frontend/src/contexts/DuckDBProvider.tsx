@@ -1,7 +1,8 @@
-import React, { createContext, useContext, ReactNode } from 'react';
+import React, { createContext, useContext, ReactNode, useMemo } from 'react';
 import { useDuckDBService } from '../hooks/useDuckDBService';
 import { DuckDBService } from '../services/duckdb-service';
 import * as duckdb from '@duckdb/duckdb-wasm';
+import { useParallelInit } from './ParallelInitProvider';
 
 interface DuckDBContextValue {
   service: DuckDBService | null;
@@ -31,13 +32,40 @@ export const DuckDBProvider: React.FC<DuckDBProviderProps> = ({
   children, 
   rustServerUrl 
 }) => {
-  const duckdbService = useDuckDBService({
+  // Try to get DuckDB from ParallelInitProvider first
+  let parallelInit: ReturnType<typeof useParallelInit> | null = null;
+  try {
+    parallelInit = useParallelInit();
+  } catch (e) {
+    // Not inside ParallelInitProvider, use standalone mode
+  }
+
+  // Use parallel init if available, otherwise use standalone service
+  const standaloneService = useDuckDBService({
     rustServerUrl,
-    autoInitialize: true
+    autoInitialize: !parallelInit // Only auto-initialize if not using parallel init
   });
 
+  // Combine the context values
+  const contextValue = useMemo<DuckDBContextValue>(() => {
+    if (parallelInit?.isDuckDBReady && parallelInit.duckDBService) {
+      // Use the parallel initialized service
+      return {
+        service: parallelInit.duckDBService,
+        isInitialized: true,
+        isLoading: false,
+        error: parallelInit.initError,
+        stats: null, // TODO: Get stats from service
+        getDuckDBConnection: parallelInit.getDuckDBConnection
+      };
+    } else {
+      // Use standalone service
+      return standaloneService;
+    }
+  }, [parallelInit, standaloneService]);
+
   return (
-    <DuckDBContext.Provider value={duckdbService}>
+    <DuckDBContext.Provider value={contextValue}>
       {children}
     </DuckDBContext.Provider>
   );

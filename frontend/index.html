@@ -15,6 +15,29 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:site" content="@lovable_dev" />
     <meta name="twitter:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
+    
+    <!-- Resource hints for faster loading -->
+    <link rel="preconnect" href="http://192.168.50.90:3000" crossorigin>
+    <link rel="dns-prefetch" href="http://192.168.50.90:3000">
+    
+    <!-- Preload critical resources -->
+    <link rel="preload" href="/src/services/preloader.ts" as="script" type="module" crossorigin>
+    
+    <!-- Server configuration for preloader -->
+    <meta name="rust-server-url" content="http://192.168.50.90:3000" />
+    
+    <!-- Start preloading immediately -->
+    <script type="module">
+      // Start fetching critical data before React loads
+      import('/src/services/preloader.ts').then(module => {
+        if (module.preloader && !module.preloader.isPreloaded('nodes')) {
+          console.log('[Index] Starting early data preload...');
+          module.preloader.startPreloading();
+        }
+      }).catch(err => {
+        console.warn('[Index] Preloader not available:', err);
+      });
+    </script>
   </head>
 
   <body>
