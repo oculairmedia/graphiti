@@ -6,6 +6,7 @@ import { useGraphConfig } from '../contexts/GraphConfigProvider';
 import { generateNodeTypeColor } from '../utils/nodeTypeColors';
 import { logger } from '../utils/logger';
 import { hexToRgba, generateHSLColor } from '../utils/colorCache';
+import { applyClusteringToGraphData, type ClusteringConfig } from '../utils/clustering';
 import { DataKitCoordinator } from '../utils/DataKitCoordinator';
 import { useGraphZoom } from '../hooks/useGraphZoom';
 import { useGraphEvents } from '../hooks/useGraphEvents';
@@ -585,6 +586,32 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             
           // Use memoized data instead of re-transforming
           transformedNodes = memoizedNodes.filter(node => node.id && node.id !== 'undefined');
+
+          // Apply clustering if enabled
+          if (config.clusteringEnabled && config.clusteringMethod !== 'none') {
+            const clusteringConfig: ClusteringConfig = {
+              method: config.clusteringMethod,
+              centralityMetric: config.centralityMetric,
+              clusterStrength: config.clusterStrength
+            };
+            
+            const { nodes: clusteredNodes, clusterMapping, clusterPositions } = 
+              applyClusteringToGraphData(transformedNodes, clusteringConfig);
+            
+            transformedNodes = clusteredNodes;
+            
+            // Update dynamic config with cluster mapping
+            config.updateConfig({ 
+              clusterMapping,
+              clusterPositions 
+            });
+            
+            logger.log('GraphCanvas: Applied clustering', {
+              method: config.clusteringMethod,
+              numClusters: clusterMapping.size,
+              numNodes: transformedNodes.length
+            });
+          }
 
           // Create a map for quick node index lookup
           const nodeIndexMap = new Map<string, number>();
@@ -2340,8 +2367,8 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             pointLabelBy="label"
             pointColorBy={useDuckDBTables ? "node_type" : pointColorBy}
             pointSizeBy={useDuckDBTables ? "size" : pointSizeBy}
-            pointClusterBy={config.clusteringEnabled ? config.pointClusterBy : undefined}  // Group nodes by their cluster assignment
-            pointClusterStrengthBy={config.clusteringEnabled ? config.pointClusterStrengthBy : undefined}  // Control clustering attraction strength
+            pointClusterBy={config.clusteringEnabled ? "cluster" : undefined}  // Use the cluster field we added to nodes
+            pointClusterStrengthBy={config.clusteringEnabled ? "clusterStrength" : undefined}  // Use the clusterStrength field we added
             // Link configuration - use DuckDB column names when using DuckDB
             linkSourceBy="source"
             linkSourceIndexBy={useDuckDBTables ? "sourceidx" : "sourceIndex"}
