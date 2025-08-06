@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useMemo, useOptimistic } from 'react';
+import { useState, useCallback, useRef, useMemo, useOptimistic, startTransition } from 'react';
 import { GraphNode } from '../api/types';
 import { GraphLink } from '../types/graph';
 
@@ -44,8 +44,10 @@ export function useNodeSelection(
   const [hoveredConnectedNodes, setHoveredConnectedNodes] = useState<string[]>([]);
 
   const handleNodeSelect = useCallback(async (nodeId: string) => {
-    // Optimistically update the selection immediately
-    addOptimisticSelectedNode(nodeId);
+    // Wrap optimistic update in startTransition to avoid React 19 warning
+    startTransition(() => {
+      addOptimisticSelectedNode(nodeId);
+    });
     
     // Simulate async operation (e.g., API call, graph update)
     await new Promise(resolve => setTimeout(resolve, 100));
@@ -61,8 +63,12 @@ export function useNodeSelection(
   }, [addOptimisticSelectedNode]);
 
   const handleNodeClick = useCallback(async (node: GraphNode) => {
-    // Optimistically update immediately
-    setOptimisticSelectedNode(node);
+    console.log('[useNodeSelection] handleNodeClick called with node:', node.id);
+    
+    // Wrap optimistic update in startTransition to avoid React 19 warning
+    startTransition(() => {
+      setOptimisticSelectedNode(node);
+    });
     
     // Simulate async operation
     await new Promise(resolve => setTimeout(resolve, 50));
@@ -72,6 +78,11 @@ export function useNodeSelection(
   }, [setOptimisticSelectedNode]);
 
   const handleNodeSelectWithCosmograph = useCallback(async (node: GraphNode) => {
+    // Check if this is the same node to prevent duplicate animations
+    if (selectedNode?.id === node.id) {
+      return; // Node is already selected, no need to re-select
+    }
+    
     // Optimistically update immediately
     setOptimisticSelectedNode(node);
     addOptimisticSelectedNode(node.id);
@@ -81,10 +92,13 @@ export function useNodeSelection(
       graphCanvasRef.current.selectNode(node);
     }
     
-    // Actually update the state after async operation
-    await handleNodeSelect(node.id);
-    setSelectedNode(node);
-  }, [handleNodeSelect, graphCanvasRef, setOptimisticSelectedNode, addOptimisticSelectedNode]);
+    // Update both the selected nodes list and the selected node
+    // Use Promise.all to ensure both complete before continuing
+    await Promise.all([
+      handleNodeSelect(node.id),
+      handleNodeClick(node)
+    ]);
+  }, [selectedNode, handleNodeSelect, handleNodeClick, graphCanvasRef, setOptimisticSelectedNode, addOptimisticSelectedNode]);
 
   const handleHighlightNodes = useCallback(async (nodes: GraphNode[]) => {
     const nodeIds = nodes.map(node => node.id);

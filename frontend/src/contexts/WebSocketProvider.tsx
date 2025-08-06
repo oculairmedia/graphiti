@@ -1,10 +1,13 @@
 import React, { createContext, useContext, useCallback, useEffect, useState, useRef } from 'react';
-import { useWebSocket, NodeAccessEvent } from '../hooks/useWebSocket';
+import { useWebSocket, NodeAccessEvent, GraphUpdateEvent, WebSocketEvent } from '../hooks/useWebSocket';
 
 interface WebSocketContextValue {
   isConnected: boolean;
-  subscribe: (handler: (event: NodeAccessEvent) => void) => () => void;
+  subscribe: (handler: (event: WebSocketEvent) => void) => () => void;
+  subscribeToNodeAccess: (handler: (event: NodeAccessEvent) => void) => () => void;
+  subscribeToGraphUpdate: (handler: (event: GraphUpdateEvent) => void) => () => void;
   lastNodeAccessEvent: NodeAccessEvent | null;
+  lastGraphUpdateEvent: GraphUpdateEvent | null;
 }
 
 const WebSocketContext = createContext<WebSocketContextValue | null>(null);
@@ -51,19 +54,51 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
     return `${protocol}//${window.location.host}/ws`;
   }, [url]);
   
-  console.log('WebSocketProvider - Environment URL:', import.meta.env.VITE_WEBSOCKET_URL);
-  console.log('WebSocketProvider - Using URL:', wsUrl);
-  const [handlers, setHandlers] = useState<Set<(event: NodeAccessEvent) => void>>(new Set());
+  const [handlers, setHandlers] = useState<Set<(event: WebSocketEvent) => void>>(new Set());
+  const [nodeAccessHandlers, setNodeAccessHandlers] = useState<Set<(event: NodeAccessEvent) => void>>(new Set());
+  const [graphUpdateHandlers, setGraphUpdateHandlers] = useState<Set<(event: GraphUpdateEvent) => void>>(new Set());
   const [lastNodeAccessEvent, setLastNodeAccessEvent] = useState<NodeAccessEvent | null>(null);
+  const [lastGraphUpdateEvent, setLastGraphUpdateEvent] = useState<GraphUpdateEvent | null>(null);
 
-  const handlersRef = useRef<Set<(event: NodeAccessEvent) => void>>(new Set());
+  const handlersRef = useRef<Set<(event: WebSocketEvent) => void>>(new Set());
+  const nodeAccessHandlersRef = useRef<Set<(event: NodeAccessEvent) => void>>(new Set());
+  const graphUpdateHandlersRef = useRef<Set<(event: GraphUpdateEvent) => void>>(new Set());
+  
+  // Log WebSocket URL only once on mount
+  useEffect(() => {
+    console.log('WebSocketProvider - Environment URL:', import.meta.env.VITE_WEBSOCKET_URL);
+    console.log('WebSocketProvider - Using URL:', wsUrl);
+  }, []); // Empty deps - log only once
   
   useEffect(() => {
     handlersRef.current = handlers;
-  }, [handlers]);
+    nodeAccessHandlersRef.current = nodeAccessHandlers;
+    graphUpdateHandlersRef.current = graphUpdateHandlers;
+  }, [handlers, nodeAccessHandlers, graphUpdateHandlers]);
   
-  const handleMessage = useCallback((event: NodeAccessEvent) => {
-    setLastNodeAccessEvent(event);
+  const handleMessage = useCallback((event: WebSocketEvent) => {
+    // Handle specific event types
+    if (event.type === 'node_access') {
+      setLastNodeAccessEvent(event as NodeAccessEvent);
+      nodeAccessHandlersRef.current.forEach(handler => {
+        try {
+          handler(event as NodeAccessEvent);
+        } catch (error) {
+          console.error('Error in NodeAccess event handler:', error);
+        }
+      });
+    } else if (event.type === 'graph:update') {
+      setLastGraphUpdateEvent(event as GraphUpdateEvent);
+      graphUpdateHandlersRef.current.forEach(handler => {
+        try {
+          handler(event as GraphUpdateEvent);
+        } catch (error) {
+          console.error('Error in GraphUpdate event handler:', error);
+        }
+      });
+    }
+    
+    // Call generic handlers
     handlersRef.current.forEach(handler => {
       try {
         handler(event);
@@ -81,7 +116,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
     onError: (error) => console.error('WebSocket provider error:', error)
   });
 
-  const subscribe = useCallback((handler: (event: NodeAccessEvent) => void) => {
+  const subscribe = useCallback((handler: (event: WebSocketEvent) => void) => {
     setHandlers(prev => new Set(prev).add(handler));
     
     // Return unsubscribe function
@@ -94,10 +129,39 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
     };
   }, []);
 
+  const subscribeToNodeAccess = useCallback((handler: (event: NodeAccessEvent) => void) => {
+    setNodeAccessHandlers(prev => new Set(prev).add(handler));
+    
+    // Return unsubscribe function
+    return () => {
+      setNodeAccessHandlers(prev => {
+        const next = new Set(prev);
+        next.delete(handler);
+        return next;
+      });
+    };
+  }, []);
+
+  const subscribeToGraphUpdate = useCallback((handler: (event: GraphUpdateEvent) => void) => {
+    setGraphUpdateHandlers(prev => new Set(prev).add(handler));
+    
+    // Return unsubscribe function
+    return () => {
+      setGraphUpdateHandlers(prev => {
+        const next = new Set(prev);
+        next.delete(handler);
+        return next;
+      });
+    };
+  }, []);
+
   const value: WebSocketContextValue = {
     isConnected,
     subscribe,
-    lastNodeAccessEvent
+    subscribeToNodeAccess,
+    subscribeToGraphUpdate,
+    lastNodeAccessEvent,
+    lastGraphUpdateEvent
   };
 
   return (

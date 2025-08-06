@@ -2,7 +2,7 @@ name: Build and Push Rust Server Container
 
 on:
   push:
-    branches: [ main, feature/rust-server-ci ]
+    branches: [ main, feature/rust-server-ci, feature/duckdb-realtime-updates ]
     paths:
       - 'graph-visualizer-rust/**'
       - '.github/workflows/build-rust-server.yml'

@@ -78,7 +78,7 @@ const defaultConfig: GraphConfig = {
   linkVisibilityMinTransparency: 0.25,
   linkArrows: true,
   linkArrowsSizeScale: 1.0,
-  edgeArrows: false,
+  edgeArrows: true,
   edgeArrowScale: 1.0,
   pointsOnEdge: false,
   

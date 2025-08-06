@@ -1,22 +1,35 @@
 use axum::{
     extract::{Path, Query, State, WebSocketUpgrade},
-    http::StatusCode,
-    response::{IntoResponse, Json},
+    http::{StatusCode, header},
+    response::{IntoResponse, Json, Response},
     routing::{get, patch, post},
     Router,
+    body::Body,
 };
 use dashmap::DashMap;
 use falkordb::{FalkorClientBuilder, FalkorConnectionInfo, FalkorValue, FalkorAsyncClient};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, sync::Arc};
-use tower_http::cors::CorsLayer;
-use tracing::{error, info};
+use tower_http::{
+    cors::CorsLayer,
+    compression::CompressionLayer,
+};
+use tracing::{error, info, debug};
+use tokio::sync::broadcast;
+
+mod duckdb_store;
+mod arrow_converter;
+
+use duckdb_store::{DuckDBStore, GraphUpdate};
+use arrow_converter::ArrowConverter;
 
 #[derive(Clone)]
 struct AppState {
     client: Arc<FalkorAsyncClient>,
     graph_name: String,
     graph_cache: Arc<DashMap<String, GraphData>>,
+    duckdb_store: Arc<DuckDBStore>,
+    update_tx: broadcast::Sender<GraphUpdate>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -135,11 +148,94 @@ async fn main() -> anyhow::Result<()> {
         .await
         .expect("Failed to build FalkorDB client");
     
+    // Initialize DuckDB store
+    let duckdb_store = Arc::new(DuckDBStore::new().expect("Failed to create DuckDB store"));
+    
+    // Create update channel for real-time updates
+    let (update_tx, _) = broadcast::channel::<GraphUpdate>(100);
+    
     let state = AppState {
         client: Arc::new(client),
-        graph_name,
+        graph_name: graph_name.clone(),
         graph_cache: Arc::new(DashMap::new()),
+        duckdb_store: duckdb_store.clone(),
+        update_tx: update_tx.clone(),
     };
+    
+    // Load initial data into DuckDB with optimized separate queries
+    {
+        info!("Loading initial graph data into DuckDB...");
+        
+        // Step 1: Load nodes first (much more efficient)
+        let nodes_query = "MATCH (n) WHERE EXISTS(n.degree_centrality) AND n.degree_centrality > 0.001 RETURN n.uuid as id, n.name as name, COALESCE(n.type, labels(n)[0]) as label, n.degree_centrality as degree, n.created_at as created ORDER BY n.degree_centrality DESC LIMIT 1500";
+        
+        let mut graph = state.client.select_graph(&graph_name);
+        let mut nodes_result = graph.query(nodes_query).execute().await?;
+        let mut node_ids = Vec::new();
+        let mut nodes = Vec::new();
+        
+        while let Some(row) = nodes_result.data.next() {
+            if let Some(id) = row.get(0).and_then(|v| v.as_string()) {
+                node_ids.push(format!("'{}'", id));
+                nodes.push(Node {
+                    id: id.to_string(),
+                    label: row.get(1).and_then(|v| v.as_string()).map_or("", |v| v).to_string(),
+                    node_type: row.get(2).and_then(|v| v.as_string()).map_or("Unknown", |v| v).to_string(),
+                    summary: None,
+                    properties: HashMap::new(),
+                });
+            }
+        }
+        
+        // Step 2: Load edges only for loaded nodes
+        let edges_query = format!(
+            "MATCH (n)-[r]->(m) WHERE n.uuid IN [{}] AND m.uuid IN [{}] RETURN n.uuid, type(r), m.uuid, r.weight LIMIT 5000",
+            node_ids.join(","),
+            node_ids.join(",")
+        );
+        
+        let mut graph = state.client.select_graph(&graph_name);
+        let mut edges_result = graph.query(&edges_query).execute().await?;
+        let mut edges = Vec::new();
+        
+        while let Some(row) = edges_result.data.next() {
+            edges.push(Edge {
+                from: row.get(0).and_then(|v| v.as_string()).map_or("", |v| v).to_string(),
+                to: row.get(2).and_then(|v| v.as_string()).map_or("", |v| v).to_string(),
+                edge_type: row.get(1).and_then(|v| v.as_string()).map_or("", |v| v).to_string(),
+                weight: row.get(3).and_then(|v| v.to_f64()).unwrap_or(1.0),
+            });
+        }
+        
+        let initial_data = GraphData { 
+            nodes: nodes.clone(),
+            edges: edges.clone(),
+            stats: GraphStats {
+                total_nodes: nodes.len(),
+                total_edges: edges.len(),
+                node_types: HashMap::new(),
+                avg_degree: 0.0,
+                max_degree: 0.0,
+            }
+        };
+        
+        duckdb_store.load_initial_data(initial_data.nodes.clone(), initial_data.edges.clone()).await?;
+        info!("Initial data loaded: {} nodes, {} edges", initial_data.nodes.len(), initial_data.edges.len());
+    }
+    
+    // Spawn background task for processing updates
+    let store_clone = duckdb_store.clone();
+    let tx_clone = update_tx.clone();
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(tokio::time::Duration::from_millis(100));
+        loop {
+            interval.tick().await;
+            
+            if let Ok(Some(update)) = store_clone.process_updates().await {
+                let _ = tx_clone.send(update);
+            }
+        }
+    });
 
     // Build router - cleaned up for React frontend only
     let app = Router::new()
@@ -149,7 +245,13 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/cache/clear", post(clear_cache))
         .route("/api/cache/stats", get(get_cache_stats))
         .route("/api/nodes/:id/summary", patch(update_node_summary))
+        // DuckDB endpoints
+        .route("/api/duckdb/info", get(get_duckdb_info))
+        .route("/api/arrow/nodes", get(get_nodes_arrow))
+        .route("/api/arrow/edges", get(get_edges_arrow))
+        .route("/api/duckdb/stats", get(get_duckdb_stats))
         .route("/ws", get(websocket_handler))
+        .layer(CompressionLayer::new())  // Add gzip/brotli compression
         .layer(CorsLayer::permissive())
         .with_state(state);
 
@@ -251,9 +353,63 @@ async fn websocket_handler(
     ws.on_upgrade(move |socket| handle_socket(socket, state))
 }
 
-async fn handle_socket(_socket: axum::extract::ws::WebSocket, _state: AppState) {
-    // TODO: Implement WebSocket streaming for large graph updates
+async fn handle_socket(mut socket: axum::extract::ws::WebSocket, state: AppState) {
+    use axum::extract::ws::Message;
+    
     info!("WebSocket connection established");
+    
+    // Subscribe to update channel
+    let mut update_rx = state.update_tx.subscribe();
+    
+    // Send initial connection confirmation
+    let _ = socket.send(Message::Text(
+        serde_json::to_string(&serde_json::json!({
+            "type": "connected",
+            "timestamp": std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_millis()
+        })).unwrap()
+    )).await;
+    
+    // Handle incoming messages and broadcast updates
+    loop {
+        tokio::select! {
+            // Handle incoming WebSocket messages
+            Some(msg) = socket.recv() => {
+                match msg {
+                    Ok(Message::Text(text)) => {
+                        // Handle any incoming commands if needed
+                        debug!("Received WebSocket message: {}", text);
+                    }
+                    Ok(Message::Close(_)) => {
+                        info!("WebSocket connection closed by client");
+                        break;
+                    }
+                    Err(e) => {
+                        error!("WebSocket error: {}", e);
+                        break;
+                    }
+                    _ => {}
+                }
+            }
+            
+            // Broadcast graph updates
+            Ok(update) = update_rx.recv() => {
+                let msg = serde_json::json!({
+                    "type": "graph:update",
+                    "data": update
+                });
+                
+                if let Err(e) = socket.send(Message::Text(serde_json::to_string(&msg).unwrap())).await {
+                    error!("Failed to send update: {}", e);
+                    break;
+                }
+            }
+        }
+    }
+    
+    info!("WebSocket connection closed");
 }
 
 // Cache management endpoints
@@ -293,7 +449,7 @@ fn build_query(query_type: &str, limit: usize, offset: usize, search: Option<&st
             MATCH (n) 
             WHERE EXISTS(n.degree_centrality) AND n.degree_centrality > 0.001
             WITH n ORDER BY n.degree_centrality DESC SKIP {} LIMIT {}
-            MATCH (n)-[r]-(m) 
+            MATCH (n)-[r]->(m) 
             WHERE EXISTS(m.degree_centrality) AND m.degree_centrality > 0.0005
             RETURN DISTINCT 
                 n.uuid as source_id, n.name as source_name, 
@@ -312,7 +468,7 @@ fn build_query(query_type: &str, limit: usize, offset: usize, search: Option<&st
             MATCH (n) 
             WHERE n.name CONTAINS 'Agent' 
             WITH n SKIP {} LIMIT {}
-            MATCH (n)-[r]-(m)
+            MATCH (n)-[r]->(m)
             RETURN DISTINCT 
                 n.uuid as source_id, n.name as source_name, 
                 type(r) as rel_type, 
@@ -743,4 +899,113 @@ async fn update_node_summary(
             ))
         }
     }
-}// Force rebuild for CI/CD workflow
+}
+
+// DuckDB endpoint handlers
+async fn get_duckdb_info(State(_state): State<AppState>) -> Result<Json<serde_json::Value>, StatusCode> {
+    Ok(Json(serde_json::json!({
+        "status": "ready",
+        "type": "in-memory",
+        "tables": ["nodes", "edges"],
+        "features": {
+            "arrow_export": true,
+            "incremental_updates": true,
+            "real_time_sync": true
+        }
+    })))
+}
+
+async fn get_nodes_arrow(State(state): State<AppState>) -> Result<Response<Body>, (StatusCode, Json<ErrorResponse>)> {
+    match state.duckdb_store.get_nodes_as_arrow().await {
+        Ok(batch) => {
+            match ArrowConverter::record_batch_to_bytes(&batch) {
+                Ok(bytes) => {
+                    // Note: Compression is handled by CompressionLayer middleware
+                    // The layer will automatically compress based on Accept-Encoding header
+                    Ok(Response::builder()
+                        .status(StatusCode::OK)
+                        .header(header::CONTENT_TYPE, "application/vnd.apache.arrow.stream")
+                        .header("X-Arrow-Schema", "nodes")
+                        .body(Body::from(bytes))
+                        .unwrap())
+                }
+                Err(e) => {
+                    error!("Failed to convert nodes to Arrow: {}", e);
+                    Err((
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(ErrorResponse {
+                            error: format!("Failed to convert to Arrow: {}", e),
+                        }),
+                    ))
+                }
+            }
+        }
+        Err(e) => {
+            error!("Failed to get nodes from DuckDB: {}", e);
+            Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: format!("Failed to retrieve nodes: {}", e),
+                }),
+            ))
+        }
+    }
+}
+
+async fn get_edges_arrow(State(state): State<AppState>) -> Result<Response<Body>, (StatusCode, Json<ErrorResponse>)> {
+    match state.duckdb_store.get_edges_as_arrow().await {
+        Ok(batch) => {
+            match ArrowConverter::record_batch_to_bytes(&batch) {
+                Ok(bytes) => {
+                    // Note: Compression is handled by CompressionLayer middleware
+                    Ok(Response::builder()
+                        .status(StatusCode::OK)
+                        .header(header::CONTENT_TYPE, "application/vnd.apache.arrow.stream")
+                        .header("X-Arrow-Schema", "edges")
+                        .body(Body::from(bytes))
+                        .unwrap())
+                }
+                Err(e) => {
+                    error!("Failed to convert edges to Arrow: {}", e);
+                    Err((
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(ErrorResponse {
+                            error: format!("Failed to convert to Arrow: {}", e),
+                        }),
+                    ))
+                }
+            }
+        }
+        Err(e) => {
+            error!("Failed to get edges from DuckDB: {}", e);
+            Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: format!("Failed to retrieve edges: {}", e),
+                }),
+            ))
+        }
+    }
+}
+
+async fn get_duckdb_stats(State(state): State<AppState>) -> Result<Json<serde_json::Value>, StatusCode> {
+    match state.duckdb_store.get_stats().await {
+        Ok((node_count, edge_count)) => {
+            Ok(Json(serde_json::json!({
+                "nodes": node_count,
+                "edges": edge_count,
+                "last_updated": std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_millis()
+            })))
+        }
+        Err(e) => {
+            error!("Failed to get DuckDB stats: {}", e);
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
+}
+
+// Force rebuild for CI/CD workflow
+// Trigger rebuild Wed Aug  6 01:14:42 AM EDT 2025
