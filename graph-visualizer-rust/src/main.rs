@@ -955,3 +955,4 @@ async fn get_duckdb_stats(State(state): State<AppState>) -> Result<Json<serde_js
 }
 
 // Force rebuild for CI/CD workflow
+// Trigger rebuild Wed Aug  6 01:14:42 AM EDT 2025
