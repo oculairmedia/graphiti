@@ -1,9 +1,10 @@
-import React, { forwardRef, useMemo } from 'react';
+import React, { forwardRef, useMemo, useState, useEffect } from 'react';
 import { GraphNode } from '../api/types';
 import { GraphLink } from '../types/graph';
 import { GraphCanvas, type GraphCanvasRef as GraphCanvasHandle } from './GraphCanvas';
 import { NodeDetailsPanel } from './NodeDetailsPanel';
 import { QuickActions } from './QuickActions';
+import { GraphOverlays } from './GraphOverlays';
 import GraphErrorBoundary from './GraphErrorBoundary';
 import { useStableCallback } from '../hooks/useStableCallback';
 import type { GraphStats } from '../types/components';
@@ -59,6 +60,37 @@ const GraphViewportComponent = forwardRef<GraphCanvasHandle, GraphViewportProps>
   onFitView,
   onScreenshot,
 }, ref) => {
+  // FPS tracking
+  const [fps, setFps] = useState<number>(60);
+  
+  useEffect(() => {
+    let frameCount = 0;
+    let lastTime = performance.now();
+    let rafId: number;
+    
+    const measureFPS = () => {
+      frameCount++;
+      const currentTime = performance.now();
+      
+      // Update FPS every second
+      if (currentTime >= lastTime + 1000) {
+        setFps(Math.round((frameCount * 1000) / (currentTime - lastTime)));
+        frameCount = 0;
+        lastTime = currentTime;
+      }
+      
+      rafId = requestAnimationFrame(measureFPS);
+    };
+    
+    rafId = requestAnimationFrame(measureFPS);
+    
+    return () => {
+      if (rafId) {
+        cancelAnimationFrame(rafId);
+      }
+    };
+  }, []);
+  
   // Use stable callbacks to prevent child re-renders
   const stableOnNodeClick = useStableCallback(onNodeClick);
   const stableOnNodeSelect = useStableCallback(onNodeSelect);
@@ -103,6 +135,15 @@ const GraphViewportComponent = forwardRef<GraphCanvasHandle, GraphViewportProps>
           className="h-full w-full"
         />
       </GraphErrorBoundary>
+      
+      {/* Graph Overlays - Node count, FPS, Debug info */}
+      <GraphOverlays
+        nodeCount={nodes.length}
+        edgeCount={links.length}
+        visibleNodes={nodes.length} // All nodes are visible in current implementation
+        selectedNodes={selectedNodes.length}
+        fps={fps}
+      />
       
       {/* Node Details Panel Overlay */}
       {selectedNode && (
