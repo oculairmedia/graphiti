@@ -34,6 +34,9 @@ thiserror = "1.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
+# Date/Time
+chrono = { version = "0.4", features = ["serde"] }
+
 # Graph processing
 petgraph = "0.6"
 rayon = "1.7"

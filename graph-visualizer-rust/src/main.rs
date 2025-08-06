@@ -15,7 +15,9 @@ use tower_http::{
     compression::CompressionLayer,
 };
 use tracing::{error, info, debug};
-use tokio::sync::broadcast;
+use tokio::sync::{broadcast, RwLock};
+use arrow::record_batch::RecordBatch;
+use bytes::Bytes;
 
 mod duckdb_store;
 mod arrow_converter;
@@ -30,6 +32,16 @@ struct AppState {
     graph_cache: Arc<DashMap<String, GraphData>>,
     duckdb_store: Arc<DuckDBStore>,
     update_tx: broadcast::Sender<GraphUpdate>,
+    arrow_cache: Arc<RwLock<Option<ArrowCache>>>,
+}
+
+#[derive(Clone)]
+struct ArrowCache {
+    nodes_batch: RecordBatch,
+    edges_batch: RecordBatch,
+    nodes_bytes: Bytes,
+    edges_bytes: Bytes,
+    timestamp: std::time::Instant,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -160,14 +172,16 @@ async fn main() -> anyhow::Result<()> {
         graph_cache: Arc::new(DashMap::new()),
         duckdb_store: duckdb_store.clone(),
         update_tx: update_tx.clone(),
+        arrow_cache: Arc::new(RwLock::new(None)),
     };
     
     // Load initial data into DuckDB with optimized separate queries
     {
         info!("Loading initial graph data into DuckDB...");
+        let prerender_start = std::time::Instant::now();
         
         // Step 1: Load nodes first (much more efficient)
-        let nodes_query = "MATCH (n) WHERE EXISTS(n.degree_centrality) AND n.degree_centrality > 0.001 RETURN n.uuid as id, n.name as name, COALESCE(n.type, labels(n)[0]) as label, n.degree_centrality as degree, n.created_at as created ORDER BY n.degree_centrality DESC LIMIT 1500";
+        let nodes_query = "MATCH (n) WHERE EXISTS(n.degree_centrality) AND n.degree_centrality > 0.001 RETURN n.uuid as id, n.name as name, COALESCE(n.type, labels(n)[0]) as label, n.degree_centrality as degree, n.created_at as created_at ORDER BY n.degree_centrality DESC LIMIT 1500";
         
         let mut graph = state.client.select_graph(&graph_name);
         let mut nodes_result = graph.query(nodes_query).execute().await?;
@@ -177,12 +191,26 @@ async fn main() -> anyhow::Result<()> {
         while let Some(row) = nodes_result.data.next() {
             if let Some(id) = row.get(0).and_then(|v| v.as_string()) {
                 node_ids.push(format!("'{}'", id));
+                
+                // Build properties map with real data
+                let mut properties = HashMap::new();
+                
+                // Add degree centrality
+                if let Some(degree) = row.get(3).and_then(|v| v.to_f64()) {
+                    properties.insert("degree_centrality".to_string(), serde_json::Value::from(degree));
+                }
+                
+                // Add created_at timestamp
+                if let Some(created) = row.get(4).and_then(|v| v.as_string()) {
+                    properties.insert("created_at".to_string(), serde_json::Value::String(created.to_string()));
+                }
+                
                 nodes.push(Node {
                     id: id.to_string(),
                     label: row.get(1).and_then(|v| v.as_string()).map_or("", |v| v).to_string(),
                     node_type: row.get(2).and_then(|v| v.as_string()).map_or("Unknown", |v| v).to_string(),
                     summary: None,
-                    properties: HashMap::new(),
+                    properties,
                 });
             }
         }
@@ -221,6 +249,29 @@ async fn main() -> anyhow::Result<()> {
         
         duckdb_store.load_initial_data(initial_data.nodes.clone(), initial_data.edges.clone()).await?;
         info!("Initial data loaded: {} nodes, {} edges", initial_data.nodes.len(), initial_data.edges.len());
+        
+        // Prerender Arrow format for faster initial load
+        info!("Prerendering Arrow format for instant load...");
+        if let (Ok(nodes_batch), Ok(edges_batch)) = (
+            duckdb_store.get_nodes_as_arrow().await,
+            duckdb_store.get_edges_as_arrow().await
+        ) {
+            if let (Ok(nodes_bytes), Ok(edges_bytes)) = (
+                ArrowConverter::record_batch_to_bytes(&nodes_batch),
+                ArrowConverter::record_batch_to_bytes(&edges_batch)
+            ) {
+                let cache = ArrowCache {
+                    nodes_batch: nodes_batch.clone(),
+                    edges_batch: edges_batch.clone(),
+                    nodes_bytes: Bytes::from(nodes_bytes),
+                    edges_bytes: Bytes::from(edges_bytes),
+                    timestamp: std::time::Instant::now(),
+                };
+                
+                *state.arrow_cache.write().await = Some(cache);
+                info!("Arrow cache prerendered in {:?}. Initial load will be instant!", prerender_start.elapsed());
+            }
+        }
     }
     
     // Spawn background task for processing updates
@@ -250,6 +301,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/arrow/nodes", get(get_nodes_arrow))
         .route("/api/arrow/edges", get(get_edges_arrow))
         .route("/api/duckdb/stats", get(get_duckdb_stats))
+        .route("/api/arrow/refresh", post(refresh_arrow_cache))
         .route("/ws", get(websocket_handler))
         .layer(CompressionLayer::new())  // Add gzip/brotli compression
         .layer(CorsLayer::permissive())
@@ -916,16 +968,43 @@ async fn get_duckdb_info(State(_state): State<AppState>) -> Result<Json<serde_js
 }
 
 async fn get_nodes_arrow(State(state): State<AppState>) -> Result<Response<Body>, (StatusCode, Json<ErrorResponse>)> {
+    // Check cache first
+    let cache = state.arrow_cache.read().await;
+    if let Some(ref cached) = *cache {
+        // Cache is valid for 5 seconds
+        if cached.timestamp.elapsed() < std::time::Duration::from_secs(5) {
+            debug!("Serving nodes from Arrow cache");
+            return Ok(Response::builder()
+                .status(StatusCode::OK)
+                .header(header::CONTENT_TYPE, "application/vnd.apache.arrow.stream")
+                .header("X-Arrow-Schema", "nodes")
+                .header("X-Cache-Hit", "true")
+                .body(Body::from(cached.nodes_bytes.clone()))
+                .unwrap());
+        }
+    }
+    drop(cache); // Release read lock
+
     match state.duckdb_store.get_nodes_as_arrow().await {
         Ok(batch) => {
             match ArrowConverter::record_batch_to_bytes(&batch) {
                 Ok(bytes) => {
+                    let bytes = Bytes::from(bytes);
+                    
+                    // Update cache if we have edges too
+                    let mut cache = state.arrow_cache.write().await;
+                    if let Some(mut cached) = cache.as_mut() {
+                        cached.nodes_batch = batch;
+                        cached.nodes_bytes = bytes.clone();
+                        cached.timestamp = std::time::Instant::now();
+                    }
+                    
                     // Note: Compression is handled by CompressionLayer middleware
-                    // The layer will automatically compress based on Accept-Encoding header
                     Ok(Response::builder()
                         .status(StatusCode::OK)
                         .header(header::CONTENT_TYPE, "application/vnd.apache.arrow.stream")
                         .header("X-Arrow-Schema", "nodes")
+                        .header("X-Cache-Hit", "false")
                         .body(Body::from(bytes))
                         .unwrap())
                 }
@@ -953,15 +1032,43 @@ async fn get_nodes_arrow(State(state): State<AppState>) -> Result<Response<Body>
 }
 
 async fn get_edges_arrow(State(state): State<AppState>) -> Result<Response<Body>, (StatusCode, Json<ErrorResponse>)> {
+    // Check cache first
+    let cache = state.arrow_cache.read().await;
+    if let Some(ref cached) = *cache {
+        // Cache is valid for 5 seconds
+        if cached.timestamp.elapsed() < std::time::Duration::from_secs(5) {
+            debug!("Serving edges from Arrow cache");
+            return Ok(Response::builder()
+                .status(StatusCode::OK)
+                .header(header::CONTENT_TYPE, "application/vnd.apache.arrow.stream")
+                .header("X-Arrow-Schema", "edges")
+                .header("X-Cache-Hit", "true")
+                .body(Body::from(cached.edges_bytes.clone()))
+                .unwrap());
+        }
+    }
+    drop(cache); // Release read lock
+
     match state.duckdb_store.get_edges_as_arrow().await {
         Ok(batch) => {
             match ArrowConverter::record_batch_to_bytes(&batch) {
                 Ok(bytes) => {
+                    let bytes = Bytes::from(bytes);
+                    
+                    // Update cache if we have nodes too
+                    let mut cache = state.arrow_cache.write().await;
+                    if let Some(mut cached) = cache.as_mut() {
+                        cached.edges_batch = batch;
+                        cached.edges_bytes = bytes.clone();
+                        cached.timestamp = std::time::Instant::now();
+                    }
+                    
                     // Note: Compression is handled by CompressionLayer middleware
                     Ok(Response::builder()
                         .status(StatusCode::OK)
                         .header(header::CONTENT_TYPE, "application/vnd.apache.arrow.stream")
                         .header("X-Arrow-Schema", "edges")
+                        .header("X-Cache-Hit", "false")
                         .body(Body::from(bytes))
                         .unwrap())
                 }
@@ -1002,6 +1109,54 @@ async fn get_duckdb_stats(State(state): State<AppState>) -> Result<Json<serde_js
         }
         Err(e) => {
             error!("Failed to get DuckDB stats: {}", e);
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
+}
+
+async fn refresh_arrow_cache(State(state): State<AppState>) -> Result<Json<serde_json::Value>, StatusCode> {
+    info!("Refreshing Arrow cache...");
+    let start = std::time::Instant::now();
+    
+    match (
+        state.duckdb_store.get_nodes_as_arrow().await,
+        state.duckdb_store.get_edges_as_arrow().await
+    ) {
+        (Ok(nodes_batch), Ok(edges_batch)) => {
+            match (
+                ArrowConverter::record_batch_to_bytes(&nodes_batch),
+                ArrowConverter::record_batch_to_bytes(&edges_batch)
+            ) {
+                (Ok(nodes_bytes), Ok(edges_bytes)) => {
+                    let cache = ArrowCache {
+                        nodes_batch,
+                        edges_batch,
+                        nodes_bytes: Bytes::from(nodes_bytes),
+                        edges_bytes: Bytes::from(edges_bytes),
+                        timestamp: std::time::Instant::now(),
+                    };
+                    
+                    *state.arrow_cache.write().await = Some(cache);
+                    let elapsed = start.elapsed();
+                    info!("Arrow cache refreshed in {:?}", elapsed);
+                    
+                    Ok(Json(serde_json::json!({
+                        "status": "success",
+                        "refresh_time_ms": elapsed.as_millis(),
+                        "timestamp": std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap()
+                            .as_millis()
+                    })))
+                }
+                _ => {
+                    error!("Failed to convert to Arrow format");
+                    Err(StatusCode::INTERNAL_SERVER_ERROR)
+                }
+            }
+        }
+        _ => {
+            error!("Failed to get data from DuckDB");
             Err(StatusCode::INTERNAL_SERVER_ERROR)
         }
     }
