@@ -148,7 +148,7 @@ export class DuckDBService {
           'arrow-data'
         );
       } else {
-        console.log('[DuckDB] Data too large to cache, skipping cache storage');
+        console.log(`[DuckDB] Data too large to cache (${(nodesArrayBuffer.byteLength / 1048576).toFixed(2)}MB nodes, ${(edgesArrayBuffer.byteLength / 1048576).toFixed(2)}MB edges), skipping cache storage`);
       }
 
       // Get stats

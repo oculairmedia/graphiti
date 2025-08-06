@@ -96,7 +96,12 @@ class GraphCache {
       
       // Don't cache suspiciously large data
       if (nodes.length > 50000 || edges.length > 100000) {
-        console.warn(`[GraphCache] Data too large to cache: ${nodes.length} nodes, ${edges.length} edges`);
+        // Check if this is actually byte length being passed as array length
+        if (nodes.length > 1000000 || edges.length > 1000000) {
+          console.warn(`[GraphCache] Data appears to be byte array, not nodes/edges array: ${(nodes.length / 1048576).toFixed(2)}MB nodes, ${(edges.length / 1048576).toFixed(2)}MB edges`);
+        } else {
+          console.warn(`[GraphCache] Data too large to cache: ${nodes.length} items in nodes array, ${edges.length} items in edges array`);
+        }
         return;
       }
       
