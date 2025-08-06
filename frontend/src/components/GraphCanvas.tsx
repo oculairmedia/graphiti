@@ -474,6 +474,41 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     // Track previous data to prevent unnecessary reprocessing
     const prevDataRef = useRef<{ nodeCount: number; linkCount: number }>({ nodeCount: 0, linkCount: 0 });
     
+    // Memoize expensive node transformations
+    const memoizedNodes = React.useMemo(() => {
+      if (!nodes || nodes.length === 0) return [];
+      
+      return nodes.map((node, index) => ({
+        id: String(node.id),
+        index: index,
+        label: String(node.label || node.id),
+        node_type: String(node.node_type || 'Unknown'),
+        centrality: Number(node.properties?.degree_centrality || node.properties?.pagerank_centrality || node.size || 1),
+        cluster: String(node.node_type || 'Unknown'),
+        clusterStrength: 0.7,
+        degree_centrality: Number(node.properties?.degree_centrality || 0),
+        pagerank_centrality: Number(node.properties?.pagerank_centrality || 0),
+        betweenness_centrality: Number(node.properties?.betweenness_centrality || 0),
+        eigenvector_centrality: Number(node.properties?.eigenvector_centrality || 0),
+        created_at: node.properties?.created_at || node.created_at || null,
+        created_at_timestamp: node.properties?.created_at ? new Date(node.properties?.created_at).getTime() : null
+      }));
+    }, [nodes]);
+    
+    // Memoize link transformations
+    const memoizedLinks = React.useMemo(() => {
+      if (!links || links.length === 0) return [];
+      
+      return links.map(link => ({
+        source: String(link.source),
+        target: String(link.target),
+        edge_type: String(link.edge_type || 'default'),
+        weight: Number(link.weight || 1),
+        created_at: link.created_at,
+        updated_at: link.updated_at
+      }));
+    }, [links]);
+    
     // Data Kit preparation effect
     useEffect(() => {
       // Skip if using DuckDB tables directly
@@ -510,43 +545,8 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             setIsDataPreparing(true);
             setDataKitError(null);
             
-          
-          // Transform data to match Data Kit expectations with consistent types
-          const transformedNodes = nodes.map((node, index) => {
-            // Extract created_at from properties if it exists there
-            const createdAt = node.properties?.created_at || node.created_at || node.properties?.created || null;
-            
-            
-            const degree = Number(node.properties?.degree_centrality || 0);
-            
-            const nodeData = {
-              id: String(node.id), // Ensure string type
-              index: index, // Required for v2.0: ordinal index
-              label: String(node.label || node.id), // Ensure string type
-              node_type: String(node.node_type || 'Unknown'), // Ensure string type
-              centrality: Number(node.properties?.degree_centrality || node.properties?.pagerank_centrality || node.size || 1), // Ensure number type
-              // Add cluster assignment based on node type for more meaningful clustering
-              cluster: String(node.node_type || 'Unknown'),
-              // Add cluster strength - entities of the same type will be attracted to each other
-              clusterStrength: 0.7, // Strong clustering by type (0-1 range)
-              // Add other commonly used properties with type safety
-              degree_centrality: degree,
-              pagerank_centrality: Number(node.properties?.pagerank_centrality || 0),
-              betweenness_centrality: Number(node.properties?.betweenness_centrality || 0),
-              eigenvector_centrality: Number(node.properties?.eigenvector_centrality || 0),
-              // Include temporal data for timeline - keep as string (timeline can parse ISO dates)
-              created_at: createdAt,
-              // Also include as timestamp for timeline
-              created_at_timestamp: createdAt ? new Date(createdAt).getTime() : null
-            };
-            
-            // Validate that all required fields are present and valid
-            if (!nodeData.id || nodeData.id === 'undefined') {
-              logger.warn('Invalid node ID found:', node);
-            }
-            
-            return nodeData;
-          }).filter(node => node.id && node.id !== 'undefined'); // Remove invalid nodes
+          // Use memoized data instead of re-transforming
+          const transformedNodes = memoizedNodes.filter(node => node.id && node.id !== 'undefined');
 
           // Create a map for quick node index lookup
           const nodeIndexMap = new Map<string, number>();
@@ -554,9 +554,10 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             nodeIndexMap.set(node.id, index);
           });
 
-          logger.log('GraphCanvas: Processing links:', links.length, 'nodes in map:', nodeIndexMap.size);
+          logger.log('GraphCanvas: Processing links:', memoizedLinks.length, 'nodes in map:', nodeIndexMap.size);
           
-          const transformedLinks = links.map(link => {
+          // Use memoized links
+          const transformedLinks = memoizedLinks.map(link => {
             const sourceIndex = nodeIndexMap.get(String(link.source));
             const targetIndex = nodeIndexMap.get(String(link.target));
             
