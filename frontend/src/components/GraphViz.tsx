@@ -5,10 +5,15 @@ import { useGraphConfig } from '../contexts/GraphConfigProvider';
 import { ControlPanel } from './ControlPanel';
 import { GraphViewport } from './GraphViewport';
 import { LayoutPanel } from './LayoutPanel';
-import { FilterPanel } from './FilterPanel';
-import { StatsPanel } from './StatsPanel';
-import { GraphTimeline, GraphTimelineHandle } from './GraphTimeline';
+
+// Lazy load modal panels
+const FilterPanel = React.lazy(() => import('./FilterPanel').then(m => ({ default: m.FilterPanel })));
+const StatsPanel = React.lazy(() => import('./StatsPanel').then(m => ({ default: m.StatsPanel })));
 import { GraphNavBar } from './GraphNavBar';
+
+// Lazy load heavy components
+const GraphTimeline = React.lazy(() => import('./GraphTimeline').then(m => ({ default: m.GraphTimeline })));
+type GraphTimelineHandle = any; // Type will be resolved at runtime
 import { useGraphDataQuery } from '../hooks/useGraphDataQuery';
 import { useNodeSelection } from '../hooks/useNodeSelection';
 import { useIncrementalUpdates } from '../hooks/useIncrementalUpdates';
@@ -340,27 +345,31 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
 
         {/* Modal Panels */}
         {showFilterPanel && (
-          <FilterPanel 
-            isOpen={showFilterPanel}
-            onClose={() => setShowFilterPanel(false)}
-            data={data}
-          />
+          <React.Suspense fallback={<div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>}>
+            <FilterPanel 
+              isOpen={showFilterPanel}
+              onClose={() => setShowFilterPanel(false)}
+              data={data}
+            />
+          </React.Suspense>
         )}
 
         {showStatsPanel && (
-          <StatsPanel 
-            isOpen={showStatsPanel}
-            onClose={() => setShowStatsPanel(false)}
-            data={data ? {
-              ...data,
-              edges: data.edges || transformedData.links?.map(link => ({
-                source: link.source,
-                target: link.target,
-                edge_type: link.edge_type || '',
-                weight: link.weight || 1
-              })) || []
-            } : undefined}
-          />
+          <React.Suspense fallback={<div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>}>
+            <StatsPanel 
+              isOpen={showStatsPanel}
+              onClose={() => setShowStatsPanel(false)}
+              data={data ? {
+                ...data,
+                edges: data.edges || transformedData.links?.map(link => ({
+                  source: link.source,
+                  target: link.target,
+                  edge_type: link.edge_type || '',
+                  weight: link.weight || 1
+                })) || []
+              } : undefined}
+            />
+          </React.Suspense>
         )}
         
         {/* Timeline at the bottom */}
@@ -371,13 +380,15 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
               right: rightPanelCollapsed ? '48px' : '320px'
             }}
           >
-            <GraphTimeline 
-              ref={timelineRef}
-              onTimeRangeChange={(range) => {
-                // Handle timeline range changes
-              }}
-              className=""
-            />
+            <React.Suspense fallback={<div className="h-20 bg-background/80 backdrop-blur-sm" />}>
+              <GraphTimeline 
+                ref={timelineRef}
+                onTimeRangeChange={(range) => {
+                  // Handle timeline range changes
+                }}
+                className=""
+              />
+            </React.Suspense>
           </div>
         )}
       </div>
