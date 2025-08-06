@@ -35,7 +35,7 @@ export const UnifiedLoadingScreen: React.FC<UnifiedLoadingScreenProps> = ({ clas
   // Get current stage label
   const currentStageLabel = useMemo(() => {
     if (error) return 'Error loading application';
-    if (isFullyLoaded) return 'Ready!';
+    if (isFullyLoaded) return 'Loading complete! Preparing interface...';
     
     const current = stages.get(currentStage || '');
     if (current) {
@@ -51,11 +51,6 @@ export const UnifiedLoadingScreen: React.FC<UnifiedLoadingScreenProps> = ({ clas
     
     return 'Initializing...';
   }, [stages, currentStage, isFullyLoaded, error]);
-
-  // Don't show if fully loaded
-  if (isFullyLoaded) {
-    return null;
-  }
 
   return (
     <div className={`fixed inset-0 z-50 flex items-center justify-center bg-background ${className}`}>
@@ -92,8 +87,8 @@ export const UnifiedLoadingScreen: React.FC<UnifiedLoadingScreenProps> = ({ clas
             </div>
           )}
           
-          {/* Current stage label */}
-          <h2 className="text-lg font-medium text-foreground mb-2">
+          {/* Current stage label - single line with ellipsis if too long */}
+          <h2 className="text-lg font-medium text-foreground mb-2 whitespace-nowrap overflow-hidden text-ellipsis max-w-full px-4">
             {currentStageLabel}
           </h2>
           
