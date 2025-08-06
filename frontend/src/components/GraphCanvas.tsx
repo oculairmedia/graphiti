@@ -702,18 +702,20 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       };
     }, [nodes, links, dataKitConfig, isDuckDBInitialized, duckdbService]);
 
-    // Log when simulation should be ready and mark canvas as complete
+    // Mark canvas complete when Cosmograph data is loaded
+    // This is more reliable than polling for canvas element when hidden
     useEffect(() => {
-      if (cosmographData && isCanvasReady) {
-        logger.log('GraphCanvas: Data loaded and canvas ready, simulation should start automatically');
+      if (cosmographData) {
+        logger.log('GraphCanvas: Cosmograph data loaded, marking canvas as complete');
         
-        // Ensure canvas stage is marked complete when both data and canvas are ready
+        // Mark canvas stage as complete when data is loaded
+        // Cosmograph will handle the actual rendering
         loadingCoordinator.setStageComplete('canvas', {
           canvasReady: true,
           hasData: true
         });
       }
-    }, [cosmographData, isCanvasReady]);
+    }, [cosmographData]);
 
     // Canvas readiness tracking with single polling mechanism and WebGL context loss recovery
     const intervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -766,7 +768,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             fallback: true
           });
         }
-      }, 3000); // 3 seconds should be enough for canvas to initialize
+      }, 1500); // 1.5 seconds fallback, since we mark complete when data loads
       
       const pollCosmographRef = () => {
         
