@@ -20,24 +20,8 @@
     <link rel="preconnect" href="http://192.168.50.90:3000" crossorigin>
     <link rel="dns-prefetch" href="http://192.168.50.90:3000">
     
-    <!-- Module preloading (removed unsupported type attribute) -->
-    <link rel="modulepreload" href="/src/services/preloader.ts">
-    
     <!-- Server configuration for preloader -->
     <meta name="rust-server-url" content="http://192.168.50.90:3000" />
-    
-    <!-- Start preloading immediately -->
-    <script type="module">
-      // Start fetching critical data before React loads
-      import('/src/services/preloader.ts').then(module => {
-        if (module.preloader && !module.preloader.isPreloaded('nodes')) {
-          console.log('[Index] Starting early data preload...');
-          module.preloader.startPreloading();
-        }
-      }).catch(err => {
-        console.warn('[Index] Preloader not available:', err);
-      });
-    </script>
   </head>
 
   <body>
