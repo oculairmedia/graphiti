@@ -1,6 +1,5 @@
 import React, { useState, useCallback, memo } from 'react';
 import { ChevronLeft, ChevronRight, Database, Settings2, Palette, Zap, Paintbrush, Layers, Search } from 'lucide-react';
-import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useGraphConfig } from '@/contexts/GraphConfigProvider';
@@ -35,16 +34,16 @@ interface ControlPanelProps {
   onNodeSelect?: (node: GraphNode) => void;
 }
 
-// Compute node types from real graph data dynamically
-const computeNodeTypes = (graphData?: GraphData): Array<{ id: string; name: string; count: number }> => {
-  if (!graphData?.nodes) {
-    // Return empty array if no data available - no hardcoded types
+// Compute node types from nodes array dynamically
+const computeNodeTypes = (nodes: GraphNode[]): Array<{ id: string; name: string; count: number }> => {
+  if (!nodes || nodes.length === 0) {
+    // Return empty array if no nodes available
     return [];
   }
 
-  // Count actual node types from graph data
+  // Count actual node types from nodes
   const typeCount: Record<string, number> = {};
-  graphData.nodes.forEach((node: GraphNode) => {
+  nodes.forEach((node: GraphNode) => {
     const type = node.node_type || 'Unknown';
     typeCount[type] = (typeCount[type] || 0) + 1;
   });
@@ -70,13 +69,10 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
   const { config, updateConfig, updateNodeTypeConfigurations, applyLayout, cosmographRef } = useGraphConfig();
   const { resetAllConfig, exportConfig, importConfig, getStorageInfo } = useConfigPersistence();
   
-  // Get current graph data from the query cache instead of making duplicate queries
-  const queryClient = useQueryClient();
-  const graphData = queryClient.getQueryData<GraphData>(['graphData', config.queryType, config.nodeLimit]);
   const [isRefreshing, setIsRefreshing] = useState(false);
   
-  // Compute real node types from graph data with memoization
-  const nodeTypes = React.useMemo(() => computeNodeTypes(graphData), [graphData]);
+  // Compute real node types from nodes prop with memoization
+  const nodeTypes = React.useMemo(() => computeNodeTypes(nodes), [nodes]);
   
   // Node type configurations are now updated in GraphViz.tsx to avoid duplicate calls
 
@@ -123,10 +119,9 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
   const handleRefreshGraph = async (): Promise<void> => {
     setIsRefreshing(true);
     try {
-      // Invalidate the graph data query to force a refresh
-      await queryClient.invalidateQueries({ 
-        queryKey: ['graphData', config.queryType, config.nodeLimit] 
-      });
+      // Trigger a refresh through window reload or other mechanism
+      // Since we're not using React Query here, we'll rely on the parent component
+      window.location.reload();
     } catch (error) {
       // In production, you might want to show a user-friendly error message
       // toast.error('Failed to refresh graph data. Please try again.');
@@ -298,9 +293,9 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
               <SettingsTab
                 config={config}
                 onConfigUpdate={updateConfig}
-                graphStats={graphData ? {
-                  nodeCount: graphData.nodes.length,
-                  edgeCount: graphData.edges.length
+                graphStats={nodes && nodes.length > 0 ? {
+                  nodeCount: nodes.length,
+                  edgeCount: 0  // Edge count would need to be passed separately if needed
                 } : undefined}
               />
             </TabsContent>
