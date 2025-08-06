@@ -78,51 +78,77 @@ export class DuckDBService {
       const cached = await graphCache.getCachedData('arrow-data');
       
       if (cached && cached.nodes && cached.edges) {
-        // Load from cache
-        console.log('[DuckDB] Loading from cache...');
-        
-        // Convert cached data back to Arrow tables and insert
-        const nodesTable = arrow.tableFromIPC(new Uint8Array(cached.nodes));
-        await this.conn.insertArrowTable(nodesTable, { name: 'nodes' });
-        
-        const edgesTable = arrow.tableFromIPC(new Uint8Array(cached.edges));
-        await this.conn.insertArrowTable(edgesTable, { name: 'edges' });
-        
-        console.log('[DuckDB] Loaded from cache successfully');
-      } else {
-        // Fetch from server
-        console.log('[DuckDB] Cache miss, fetching from server...');
-        
-        // Fetch nodes data from Rust server
-        const nodesResponse = await fetch(`${this.rustServerUrl}/api/arrow/nodes`);
-        if (!nodesResponse.ok) {
-          throw new Error(`Failed to fetch nodes: ${nodesResponse.statusText}`);
+        // Validate cache size to prevent corruption
+        if (cached.nodes.length > 1000000 || cached.edges.length > 1000000) {
+          console.warn('[DuckDB] Cache appears corrupted (too large), clearing and fetching fresh data');
+          await graphCache.clearCache();
+        } else {
+          // Load from cache
+          console.log('[DuckDB] Loading from cache...');
+          
+          // Convert cached data back to Arrow tables and insert
+          const nodesTable = arrow.tableFromIPC(new Uint8Array(cached.nodes));
+          await this.conn.insertArrowTable(nodesTable, { name: 'nodes' });
+          
+          const edgesTable = arrow.tableFromIPC(new Uint8Array(cached.edges));
+          await this.conn.insertArrowTable(edgesTable, { name: 'edges' });
+          
+          console.log('[DuckDB] Loaded from cache successfully');
+          
+          // Get stats to verify
+          const nodeCount = await this.conn.query('SELECT COUNT(*) as count FROM nodes');
+          const edgeCount = await this.conn.query('SELECT COUNT(*) as count FROM edges');
+          console.log(`[DuckDB] Verified: ${nodeCount.get(0)?.count} nodes and ${edgeCount.get(0)?.count} edges`);
+          
+          // If counts are suspicious, clear cache
+          if (nodeCount.get(0)?.count > 50000 || edgeCount.get(0)?.count > 100000) {
+            console.warn('[DuckDB] Suspicious data size detected, clearing cache');
+            await graphCache.clearCache();
+            // Reload
+            await this.loadInitialData();
+            return;
+          }
+          return;
         }
-        
-        const nodesArrayBuffer = await nodesResponse.arrayBuffer();
-        const nodesTable = arrow.tableFromIPC(new Uint8Array(nodesArrayBuffer));
-        
-        // Insert nodes into DuckDB
-        await this.conn.insertArrowTable(nodesTable, { name: 'nodes' });
+      }
+      
+      // Fetch from server
+      console.log('[DuckDB] Cache miss or cleared, fetching from server...');
+      
+      // Fetch nodes data from Rust server
+      const nodesResponse = await fetch(`${this.rustServerUrl}/api/arrow/nodes`);
+      if (!nodesResponse.ok) {
+        throw new Error(`Failed to fetch nodes: ${nodesResponse.statusText}`);
+      }
+      
+      const nodesArrayBuffer = await nodesResponse.arrayBuffer();
+      const nodesTable = arrow.tableFromIPC(new Uint8Array(nodesArrayBuffer));
+      
+      // Insert nodes into DuckDB
+      await this.conn.insertArrowTable(nodesTable, { name: 'nodes' });
 
-        // Fetch edges data from Rust server
-        const edgesResponse = await fetch(`${this.rustServerUrl}/api/arrow/edges`);
-        if (!edgesResponse.ok) {
-          throw new Error(`Failed to fetch edges: ${edgesResponse.statusText}`);
-        }
-        
-        const edgesArrayBuffer = await edgesResponse.arrayBuffer();
-        const edgesTable = arrow.tableFromIPC(new Uint8Array(edgesArrayBuffer));
-        
-        // Insert edges into DuckDB
-        await this.conn.insertArrowTable(edgesTable, { name: 'edges' });
-        
-        // Cache the data for next time
+      // Fetch edges data from Rust server
+      const edgesResponse = await fetch(`${this.rustServerUrl}/api/arrow/edges`);
+      if (!edgesResponse.ok) {
+        throw new Error(`Failed to fetch edges: ${edgesResponse.statusText}`);
+      }
+      
+      const edgesArrayBuffer = await edgesResponse.arrayBuffer();
+      const edgesTable = arrow.tableFromIPC(new Uint8Array(edgesArrayBuffer));
+      
+      // Insert edges into DuckDB
+      await this.conn.insertArrowTable(edgesTable, { name: 'edges' });
+      
+      // Cache the data for next time - store as ArrayBuffer, not array
+      // Only cache if size is reasonable
+      if (nodesArrayBuffer.byteLength < 10000000 && edgesArrayBuffer.byteLength < 10000000) {
         await graphCache.setCachedData(
           Array.from(new Uint8Array(nodesArrayBuffer)) as any,
           Array.from(new Uint8Array(edgesArrayBuffer)) as any,
           'arrow-data'
         );
+      } else {
+        console.log('[DuckDB] Data too large to cache, skipping cache storage');
       }
 
       // Get stats
