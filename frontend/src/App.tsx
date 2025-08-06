@@ -12,6 +12,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import { memoryMonitor } from "@/utils/memoryMonitor";
+import { clearAllCaches } from "@/utils/clearAllCaches";
 
 const queryClient = new QueryClient({
   defaultOptions: {
