@@ -340,7 +340,15 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
           <StatsPanel 
             isOpen={showStatsPanel}
             onClose={() => setShowStatsPanel(false)}
-            data={data}
+            data={data ? {
+              ...data,
+              edges: data.edges || transformedData.links?.map(link => ({
+                source: link.source,
+                target: link.target,
+                edge_type: link.edge_type || '',
+                weight: link.weight || 1
+              })) || []
+            } : undefined}
           />
         )}
         
