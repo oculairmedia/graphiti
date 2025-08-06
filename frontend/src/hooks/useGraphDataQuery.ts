@@ -130,6 +130,12 @@ export function useGraphDataQuery() {
           
           setDuckDBData({ nodes, edges });
           logger.log('Loaded UI data from DuckDB:', nodes.length, 'nodes,', edges.length, 'edges');
+          console.log('[useGraphDataQuery] DuckDB data loaded:', { 
+            nodeCount: nodes.length, 
+            edgeCount: edges.length,
+            firstNode: nodes[0],
+            firstEdge: edges[0]
+          });
         }
       } catch (error) {
         logger.error('Failed to query DuckDB for UI data:', error);
@@ -146,6 +152,16 @@ export function useGraphDataQuery() {
   // Use DuckDB data if available, otherwise fall back to JSON data
   const data = duckDBData || jsonData || { nodes: [], edges: [] };
   const isLoading = isDuckDBLoading || isJsonLoading;
+  
+  // Debug logging
+  console.log('[useGraphDataQuery] Final data:', {
+    hasDuckDBData: !!duckDBData,
+    hasJsonData: !!jsonData,
+    nodeCount: data?.nodes?.length || 0,
+    edgeCount: data?.edges?.length || 0,
+    isDuckDBLoading,
+    isJsonLoading
+  });
 
   // Use data diffing to detect changes
   const dataDiff = useGraphDataDiff(data || null);

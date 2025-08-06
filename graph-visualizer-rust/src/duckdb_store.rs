@@ -2,12 +2,13 @@ use anyhow::Result;
 use arrow::array::{ArrayRef, Float64Array, RecordBatch, StringArray, UInt32Array};
 use arrow::datatypes::{DataType, Field, Schema};
 use arrow_schema::SchemaRef;
+use chrono::DateTime;
 use duckdb::{params, Connection};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use tokio::sync::RwLock;
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 
 use crate::{Edge, Node};
 
@@ -142,8 +143,20 @@ impl DuckDBStore {
             let color = self.get_node_color(&node.node_type);
             let size = 4.0 + (degree * 20.0); // Size based on centrality
             
-            // Generate a timestamp - using index as a simple temporal value for now
-            let timestamp = (idx as f64) * 86400000.0; // Spread nodes across days in milliseconds
+            // Use real timestamp from created_at if available, otherwise generate synthetic one
+            let timestamp = if let Some(created_str) = node.properties.get("created_at")
+                .and_then(|v| v.as_str()) {
+                // Parse ISO date to milliseconds
+                DateTime::parse_from_rfc3339(created_str)
+                    .map(|dt| dt.timestamp_millis() as f64)
+                    .unwrap_or_else(|e| {
+                        warn!("Failed to parse created_at '{}': {}", created_str, e);
+                        (idx as f64) * 86400000.0 // Fallback to synthetic
+                    })
+            } else {
+                debug!("Node {} has no created_at, using synthetic timestamp", node.id);
+                (idx as f64) * 86400000.0 // Fallback to synthetic timestamp
+            }
             
             tx.execute(
                 stmt_node,
@@ -383,6 +396,16 @@ impl DuckDBStore {
                 let color = self.get_node_color(&node.node_type);
                 let size = 4.0 + (degree * 20.0);
                 
+                // Parse real timestamp from created_at if available
+                let timestamp = if let Some(created_str) = node.properties.get("created_at")
+                    .and_then(|v| v.as_str()) {
+                    DateTime::parse_from_rfc3339(created_str)
+                        .map(|dt| dt.timestamp_millis() as f64)
+                        .unwrap_or((start_idx as f64) * 86400000.0)
+                } else {
+                    (start_idx as f64) * 86400000.0
+                };
+
                 tx.execute(
                     "INSERT INTO nodes (id, idx, label, node_type, summary, degree_centrality, x, y, color, size, created_at_timestamp) 
                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -397,7 +420,7 @@ impl DuckDBStore {
                         Option::<f64>::None,
                         color,
                         size,
-                        (start_idx as f64) * 86400000.0 // Simple timestamp based on index
+                        timestamp
                     ],
                 )?;
                 

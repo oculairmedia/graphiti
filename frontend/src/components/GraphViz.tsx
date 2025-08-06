@@ -345,7 +345,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
         )}
         
         {/* Timeline at the bottom */}
-        {dataToUse && dataToUse.nodes.length > 0 && (
+        {data && data.nodes && data.nodes.length > 0 && (
           <div className={`fixed bottom-0 z-50 transition-all duration-300`}
             style={{
               left: leftPanelCollapsed ? '48px' : '320px',
