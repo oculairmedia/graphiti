@@ -162,7 +162,7 @@ async fn main() -> anyhow::Result<()> {
     // Load initial data into DuckDB
     {
         info!("Loading initial graph data into DuckDB...");
-        let initial_data = execute_graph_query(&state.client, &graph_name, "MATCH (n) OPTIONAL MATCH (n)-[r]-(m) RETURN DISTINCT n.uuid as source_id, n.name as source_name, type(r) as rel_type, m.uuid as target_id, m.name as target_name, COALESCE(n.type, labels(n)[0]) as source_label, COALESCE(m.type, labels(m)[0]) as target_label, n.degree_centrality as source_degree, m.degree_centrality as target_degree, properties(n) as source_props, properties(m) as target_props LIMIT 50000").await?;
+        let initial_data = execute_graph_query(&state.client, &graph_name, "MATCH (n) OPTIONAL MATCH (n)-[r]->(m) RETURN DISTINCT n.uuid as source_id, n.name as source_name, type(r) as rel_type, m.uuid as target_id, m.name as target_name, COALESCE(n.type, labels(n)[0]) as source_label, COALESCE(m.type, labels(m)[0]) as target_label, n.degree_centrality as source_degree, m.degree_centrality as target_degree, properties(n) as source_props, properties(m) as target_props LIMIT 50000").await?;
         
         duckdb_store.load_initial_data(initial_data.nodes.clone(), initial_data.edges.clone()).await?;
         info!("Initial data loaded: {} nodes, {} edges", initial_data.nodes.len(), initial_data.edges.len());
@@ -393,7 +393,7 @@ fn build_query(query_type: &str, limit: usize, offset: usize, search: Option<&st
             MATCH (n) 
             WHERE EXISTS(n.degree_centrality) AND n.degree_centrality > 0.001
             WITH n ORDER BY n.degree_centrality DESC SKIP {} LIMIT {}
-            MATCH (n)-[r]-(m) 
+            MATCH (n)-[r]->(m) 
             WHERE EXISTS(m.degree_centrality) AND m.degree_centrality > 0.0005
             RETURN DISTINCT 
                 n.uuid as source_id, n.name as source_name, 
@@ -412,7 +412,7 @@ fn build_query(query_type: &str, limit: usize, offset: usize, search: Option<&st
             MATCH (n) 
             WHERE n.name CONTAINS 'Agent' 
             WITH n SKIP {} LIMIT {}
-            MATCH (n)-[r]-(m)
+            MATCH (n)-[r]->(m)
             RETURN DISTINCT 
                 n.uuid as source_id, n.name as source_name, 
                 type(r) as rel_type, 

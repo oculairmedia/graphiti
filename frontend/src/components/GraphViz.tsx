@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useStableCallback } from '../hooks/useStableCallback';
 import { CosmographProvider } from '@cosmograph/react';
 import { useGraphConfig } from '../contexts/GraphConfigProvider';
+import { useDuckDB } from '../contexts/DuckDBProvider';
 import { ControlPanel } from './ControlPanel';
 import { GraphViewport } from './GraphViewport';
 import { LayoutPanel } from './LayoutPanel';
@@ -19,6 +20,7 @@ import { getErrorMessage } from '../types/errors';
 
 export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
   const { applyLayout, zoomIn, zoomOut, fitView } = useGraphConfig();
+  const { getDuckDBConnection } = useDuckDB();
   
   // UI State
   const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);

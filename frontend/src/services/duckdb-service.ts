@@ -1,5 +1,5 @@
 import * as duckdb from '@duckdb/duckdb-wasm';
-import { Table } from 'apache-arrow';
+import * as arrow from 'apache-arrow';
 
 export interface DuckDBConfig {
   rustServerUrl: string;
@@ -10,6 +10,8 @@ export class DuckDBService {
   private conn: duckdb.AsyncDuckDBConnection | null = null;
   private rustServerUrl: string;
   private initialized = false;
+  public readonly nodesTableName = 'nodes';
+  public readonly edgesTableName = 'edges';
 
   constructor(config: DuckDBConfig) {
     this.rustServerUrl = config.rustServerUrl;
@@ -59,35 +61,12 @@ export class DuckDBService {
   private async createTables(): Promise<void> {
     if (!this.conn) throw new Error('DuckDB connection not initialized');
 
-    // Create nodes table
-    await this.conn.query(`
-      CREATE TABLE IF NOT EXISTS nodes (
-        id VARCHAR PRIMARY KEY,
-        idx INTEGER NOT NULL,
-        label VARCHAR NOT NULL,
-        node_type VARCHAR NOT NULL,
-        summary VARCHAR,
-        degree_centrality DOUBLE,
-        x DOUBLE,
-        y DOUBLE,
-        color VARCHAR,
-        size DOUBLE
-      )
-    `);
-
-    // Create edges table
-    await this.conn.query(`
-      CREATE TABLE IF NOT EXISTS edges (
-        source VARCHAR NOT NULL,
-        sourceidx INTEGER NOT NULL,
-        target VARCHAR NOT NULL,
-        targetidx INTEGER NOT NULL,
-        edge_type VARCHAR NOT NULL,
-        weight DOUBLE NOT NULL DEFAULT 1.0,
-        color VARCHAR,
-        PRIMARY KEY (source, target, edge_type)
-      )
-    `);
+    // Drop existing tables if they exist to ensure clean state
+    await this.conn.query(`DROP TABLE IF EXISTS edges`);
+    await this.conn.query(`DROP TABLE IF EXISTS nodes`);
+    
+    // Note: We don't create the tables here anymore
+    // They will be created automatically when we insert Arrow data
   }
 
   private async loadInitialData(): Promise<void> {
@@ -101,7 +80,7 @@ export class DuckDBService {
       }
       
       const nodesArrayBuffer = await nodesResponse.arrayBuffer();
-      const nodesTable = Table.from(new Uint8Array(nodesArrayBuffer));
+      const nodesTable = arrow.tableFromIPC(new Uint8Array(nodesArrayBuffer));
       
       // Insert nodes into DuckDB
       await this.conn.insertArrowTable(nodesTable, { name: 'nodes' });
@@ -113,7 +92,7 @@ export class DuckDBService {
       }
       
       const edgesArrayBuffer = await edgesResponse.arrayBuffer();
-      const edgesTable = Table.from(new Uint8Array(edgesArrayBuffer));
+      const edgesTable = arrow.tableFromIPC(new Uint8Array(edgesArrayBuffer));
       
       // Insert edges into DuckDB
       await this.conn.insertArrowTable(edgesTable, { name: 'edges' });
@@ -214,18 +193,18 @@ export class DuckDBService {
     }
   }
 
-  async getNodesTable(): Promise<Table | null> {
+  async getNodesTable(): Promise<arrow.Table | null> {
     if (!this.conn) throw new Error('DuckDB connection not initialized');
     
     const result = await this.conn.query('SELECT * FROM nodes ORDER BY idx');
-    return result.getChild('nodes');
+    return result;
   }
 
-  async getEdgesTable(): Promise<Table | null> {
+  async getEdgesTable(): Promise<arrow.Table | null> {
     if (!this.conn) throw new Error('DuckDB connection not initialized');
     
     const result = await this.conn.query('SELECT * FROM edges ORDER BY sourceidx, targetidx');
-    return result.getChild('edges');
+    return result;
   }
 
   async getStats(): Promise<{ nodes: number; edges: number }> {
