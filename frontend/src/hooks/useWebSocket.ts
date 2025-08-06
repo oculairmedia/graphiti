@@ -8,16 +8,29 @@ export interface NodeAccessEvent {
   query?: string;
 }
 
+export interface GraphUpdateEvent {
+  type: 'graph:update';
+  data: {
+    operation: 'add_nodes' | 'add_edges' | 'update_nodes' | 'delete_nodes' | 'delete_edges';
+    nodes?: any[];
+    edges?: any[];
+    timestamp: number;
+  };
+}
+
 export interface WebSocketMessage {
   type: string;
+  data?: any;
   [key: string]: any;
 }
+
+export type WebSocketEvent = NodeAccessEvent | GraphUpdateEvent;
 
 interface UseWebSocketOptions {
   url: string;
   reconnectInterval?: number;
   maxReconnectAttempts?: number;
-  onMessage?: (event: NodeAccessEvent) => void;
+  onMessage?: (event: WebSocketEvent) => void;
   onConnect?: () => void;
   onDisconnect?: () => void;
   onError?: (error: Event) => void;
@@ -87,10 +100,15 @@ export const useWebSocket = ({
           if (data.type === 'node_access' && onMessageRef.current) {
             console.log('Node access event:', data);
             onMessageRef.current(data as NodeAccessEvent);
+          } else if (data.type === 'graph:update' && onMessageRef.current) {
+            console.log('Graph update event:', data);
+            onMessageRef.current(data as GraphUpdateEvent);
           } else if (data.type === 'subscription_confirmed') {
             console.log('WebSocket subscription confirmed');
           } else if (data.type === 'pong') {
             console.log('Pong received');
+          } else if (data.type === 'connected') {
+            console.log('WebSocket connected confirmation');
           } else {
             console.log('Unknown message type:', data.type);
           }
