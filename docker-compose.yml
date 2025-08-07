@@ -84,7 +84,7 @@ services:
       - homepage.href=http://192.168.50.90:3100
       - homepage.description=FalkorDB graph database
   graph-visualizer-rust:
-    image: ghcr.io/oculairmedia/graphiti-rust-visualizer:main-33aced2
+    image: graphiti-rust-visualizer-local
     container_name: graphiti-visualizer-rust
     restart: unless-stopped
     ports:
@@ -98,8 +98,8 @@ services:
       - EDGE_LIMIT=${EDGE_LIMIT:-100000}
       - MIN_DEGREE_CENTRALITY=${MIN_DEGREE_CENTRALITY:-0.0}
       - CACHE_ENABLED=${CACHE_ENABLED:-true}
-      - CACHE_TTL_SECONDS=${CACHE_TTL_SECONDS:-300}
-      - CACHE_STRATEGY=${CACHE_STRATEGY:-moderate}
+      - CACHE_TTL_SECONDS=${CACHE_TTL_SECONDS:-30}
+      - CACHE_STRATEGY=${CACHE_STRATEGY:-aggressive}
       - FORCE_FRESH_DATA=${FORCE_FRESH_DATA:-false}
     depends_on:
       falkordb:

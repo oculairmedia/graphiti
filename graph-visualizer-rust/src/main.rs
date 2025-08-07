@@ -425,6 +425,85 @@ async fn main() -> anyhow::Result<()> {
             }
         }
     });
+    
+    // Spawn background task for monitoring database changes
+    let client_clone = state.client.clone();
+    let cache_clone = state.graph_cache.clone();
+    let arrow_cache_clone = state.arrow_cache.clone();
+    let update_tx_clone = update_tx.clone();
+    let cache_config_clone = state.cache_config.clone();
+    let graph_name_clone = graph_name.clone();
+    
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(5));
+        let mut last_node_count = 0;
+        let mut last_edge_count = 0;
+        
+        loop {
+            interval.tick().await;
+            
+            // Check database for changes
+            {
+                // Get node count first
+                let current_node_count = {
+                    let mut graph = client_clone.select_graph(&graph_name_clone);
+                    let node_count_query = "MATCH (n) RETURN count(n) as count";
+                    if let Ok(mut node_result) = graph.query(node_count_query).execute().await {
+                        if let Some(row) = node_result.data.next() {
+                            if let Some(value) = row.get(0) {
+                                value_to_usize(value)
+                            } else { 0 }
+                        } else { 0 }
+                    } else { 0 }
+                };
+                
+                // Get edge count
+                let current_edge_count = {
+                    let mut graph = client_clone.select_graph(&graph_name_clone);
+                    let edge_count_query = "MATCH ()-[e]->() RETURN count(e) as count";
+                    if let Ok(mut edge_result) = graph.query(edge_count_query).execute().await {
+                        if let Some(row) = edge_result.data.next() {
+                            if let Some(value) = row.get(0) {
+                                value_to_usize(value)
+                            } else { 0 }
+                        } else { 0 }
+                    } else { 0 }
+                };
+                
+                // Detect changes
+                if last_node_count > 0 && (current_node_count != last_node_count || current_edge_count != last_edge_count) {
+                    info!("Graph changed: nodes {} -> {}, edges {} -> {}", 
+                          last_node_count, current_node_count,
+                          last_edge_count, current_edge_count);
+                    
+                    // Clear caches if cache invalidation is enabled
+                    if cache_config_clone.enabled {
+                        cache_clone.clear();
+                        let mut arrow_cache_guard = arrow_cache_clone.write().await;
+                        *arrow_cache_guard = None;
+                        drop(arrow_cache_guard);
+                        info!("Caches cleared due to graph changes");
+                    }
+                    
+                    // Broadcast cache invalidation message as a special GraphUpdate
+                    // We'll use the UpdateNodes operation with empty nodes to signal cache invalidation
+                    let cache_invalidation = duckdb_store::GraphUpdate {
+                        operation: duckdb_store::UpdateOperation::UpdateNodes,
+                        nodes: Some(vec![]), // Empty nodes signals cache invalidation
+                        edges: None,
+                        timestamp: std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap()
+                            .as_secs(),
+                    };
+                    let _ = update_tx_clone.send(cache_invalidation);
+                }
+                
+                last_node_count = current_node_count;
+                last_edge_count = current_edge_count;
+            }
+        }
+    });
 
     // Build router - cleaned up for React frontend only
     let app = Router::new()
@@ -559,6 +638,10 @@ async fn handle_socket(mut socket: axum::extract::ws::WebSocket, state: AppState
     let mut update_rx = state.update_tx.subscribe();
     let mut delta_rx = state.delta_tx.subscribe();
     
+    // Track client ID for logging
+    let client_id = uuid::Uuid::new_v4().to_string();
+    info!("Client {} connected", client_id);
+    
     // Send initial connection confirmation with delta support flag
     let _ = socket.send(Message::Text(
         serde_json::to_string(&serde_json::json!({
@@ -605,6 +688,24 @@ async fn handle_socket(mut socket: axum::extract::ws::WebSocket, state: AppState
                                         let _ = socket.send(Message::Text(
                                             serde_json::to_string(&serde_json::json!({
                                                 "type": "pong",
+                                                "timestamp": std::time::SystemTime::now()
+                                                    .duration_since(std::time::UNIX_EPOCH)
+                                                    .unwrap()
+                                                    .as_millis()
+                                            })).unwrap()
+                                        )).await;
+                                    }
+                                    "clear_cache" => {
+                                        // Client requested cache clear
+                                        info!("Client {} requested cache clear", client_id);
+                                        state.graph_cache.clear();
+                                        let mut arrow_cache = state.arrow_cache.write().await;
+                                        *arrow_cache = None;
+                                        drop(arrow_cache);
+                                        
+                                        let _ = socket.send(Message::Text(
+                                            serde_json::to_string(&serde_json::json!({
+                                                "type": "cache_cleared",
                                                 "timestamp": std::time::SystemTime::now()
                                                     .duration_since(std::time::UNIX_EPOCH)
                                                     .unwrap()
@@ -663,7 +764,7 @@ async fn handle_socket(mut socket: axum::extract::ws::WebSocket, state: AppState
         }
     }
     
-    info!("WebSocket connection closed");
+    info!("WebSocket connection closed for client {}", client_id);
 }
 
 // Cache management endpoints
