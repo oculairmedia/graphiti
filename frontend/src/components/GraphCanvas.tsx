@@ -1139,11 +1139,21 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             return config.linkColor;
           }
             
+          case 'by-source-node': {
+            // Color from source (originating) node
+            const sourceNode = currentNodes.find(n => n.id === link.source);
+            if (sourceNode) {
+              const sourceNodeColor = config.nodeTypeColors[sourceNode.node_type] || config.linkColor;
+              return sourceNodeColor;
+            }
+            return config.linkColor;
+          }
+          
           case 'gradient': {
-            // Gradient from source to target node colors
+            // Gradient from source to target node colors (future: true gradient)
             const sourceNodeColor = config.nodeTypeColors[currentNodes.find(n => n.id === link.source)?.node_type || ''];
             const targetNodeColor = config.nodeTypeColors[currentNodes.find(n => n.id === link.target)?.node_type || ''];
-            // For simplicity, use source node color (true gradient would require custom shader)
+            // For now, blend the colors simply
             return sourceNodeColor || config.linkColor;
           }
             
