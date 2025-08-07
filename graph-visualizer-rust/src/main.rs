@@ -1198,14 +1198,16 @@ async fn get_nodes_arrow(State(state): State<AppState>) -> Result<Response<Body>
     // Check cache first
     let cache = state.arrow_cache.read().await;
     if let Some(ref cached) = *cache {
-        // Cache is valid for 5 seconds
-        if cached.timestamp.elapsed() < std::time::Duration::from_secs(5) {
+        // Cache is valid for 30 seconds
+        if cached.timestamp.elapsed() < std::time::Duration::from_secs(30) {
             debug!("Serving nodes from Arrow cache");
             return Ok(Response::builder()
                 .status(StatusCode::OK)
                 .header(header::CONTENT_TYPE, "application/vnd.apache.arrow.stream")
                 .header("X-Arrow-Schema", "nodes")
                 .header("X-Cache-Hit", "true")
+                .header("Cache-Control", "public, max-age=300")
+                .header("Vary", "Accept-Encoding")
                 .body(Body::from(cached.nodes_bytes.clone()))
                 .unwrap());
         }
@@ -1232,6 +1234,8 @@ async fn get_nodes_arrow(State(state): State<AppState>) -> Result<Response<Body>
                         .header(header::CONTENT_TYPE, "application/vnd.apache.arrow.stream")
                         .header("X-Arrow-Schema", "nodes")
                         .header("X-Cache-Hit", "false")
+                        .header("Cache-Control", "public, max-age=300")
+                        .header("Vary", "Accept-Encoding")
                         .body(Body::from(bytes))
                         .unwrap())
                 }
@@ -1262,14 +1266,16 @@ async fn get_edges_arrow(State(state): State<AppState>) -> Result<Response<Body>
     // Check cache first
     let cache = state.arrow_cache.read().await;
     if let Some(ref cached) = *cache {
-        // Cache is valid for 5 seconds
-        if cached.timestamp.elapsed() < std::time::Duration::from_secs(5) {
+        // Cache is valid for 30 seconds
+        if cached.timestamp.elapsed() < std::time::Duration::from_secs(30) {
             debug!("Serving edges from Arrow cache");
             return Ok(Response::builder()
                 .status(StatusCode::OK)
                 .header(header::CONTENT_TYPE, "application/vnd.apache.arrow.stream")
                 .header("X-Arrow-Schema", "edges")
                 .header("X-Cache-Hit", "true")
+                .header("Cache-Control", "public, max-age=300")
+                .header("Vary", "Accept-Encoding")
                 .body(Body::from(cached.edges_bytes.clone()))
                 .unwrap());
         }
@@ -1296,6 +1302,8 @@ async fn get_edges_arrow(State(state): State<AppState>) -> Result<Response<Body>
                         .header(header::CONTENT_TYPE, "application/vnd.apache.arrow.stream")
                         .header("X-Arrow-Schema", "edges")
                         .header("X-Cache-Hit", "false")
+                        .header("Cache-Control", "public, max-age=300")
+                        .header("Vary", "Accept-Encoding")
                         .body(Body::from(bytes))
                         .unwrap())
                 }
