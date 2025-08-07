@@ -43,11 +43,19 @@ services:
       - homepage.href=http://192.168.50.90:8000
       - homepage.description=Knowledge graph API service
   falkordb:
-    build:
-      context: .
-      dockerfile: Dockerfile.falkordb-custom
-    # command removed as it's handled in the custom entrypoint
-    mem_limit: 4g
+    image: falkordb/falkordb:latest
+    command: >
+      redis-server
+      --loadmodule /var/lib/falkordb/bin/falkordb.so
+      --protected-mode no
+      --bind 0.0.0.0
+      --save 60 1
+      --dir /data
+      --dbfilename falkordb.rdb
+      --loglevel warning
+      --maxmemory 2gb
+      --maxmemory-policy allkeys-lru
+    mem_limit: 3g
     mem_reservation: 1g
     healthcheck:
       test:
@@ -202,8 +210,39 @@ services:
       - homepage.href=http://192.168.50.90:3003
       - homepage.description=High-performance centrality calculations with
         native FalkorDB algorithms
+  # Automated backup service for FalkorDB
+  falkordb-backup:
+    build:
+      context: .
+      dockerfile: Dockerfile.backup
+    container_name: graphiti-falkordb-backup
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro  # Docker socket for container access
+      - falkordb_backups:/backups/falkordb            # Backup storage volume
+      - ./scripts:/scripts:ro                         # Backup scripts
+    environment:
+      - FALKORDB_CONTAINER_NAME=graphiti-falkordb-1
+      - BACKUP_DIR=/backups/falkordb
+      - BACKUP_RETENTION_DAYS=${BACKUP_RETENTION_DAYS:-7}
+      - BACKUP_RETENTION_WEEKLY=${BACKUP_RETENTION_WEEKLY:-4}
+      - BACKUP_RETENTION_MONTHLY=${BACKUP_RETENTION_MONTHLY:-3}
+      - BACKUP_WEBHOOK_URL=${BACKUP_WEBHOOK_URL:-}
+      - RUN_INITIAL_BACKUP=${RUN_INITIAL_BACKUP:-true}
+    depends_on:
+      falkordb:
+        condition: service_healthy
+    networks:
+      - graphiti_network
+    labels:
+      - homepage.group=Knowledge Management
+      - homepage.name=FalkorDB Backup Service
+      - homepage.icon=si-databricks
+      - homepage.description=Automated backup service for FalkorDB
+
 networks:
   graphiti_network:
     driver: bridge
 volumes:
   falkordb_data: null
+  falkordb_backups: null

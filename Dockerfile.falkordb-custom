@@ -17,7 +17,7 @@ RUN echo '#!/bin/bash' > /startup.sh && \
     echo '    --dir /data \\' >> /startup.sh && \
     echo '    --dbfilename falkordb.rdb \\' >> /startup.sh && \
     echo '    --loglevel warning \\' >> /startup.sh && \
-    echo '    --maxmemory 3gb \\' >> /startup.sh && \
+    echo '    --maxmemory 2gb \\' >> /startup.sh && \
     echo '    --maxmemory-policy allkeys-lru' >> /startup.sh && \
     chmod +x /startup.sh
 

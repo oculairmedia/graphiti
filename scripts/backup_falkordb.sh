@@ -6,12 +6,12 @@
 
 set -e
 
-# Configuration
-CONTAINER_NAME="graphiti-falkordb"
-BACKUP_DIR="/backups/falkordb"
-BACKUP_RETENTION_DAYS=30
-BACKUP_RETENTION_WEEKLY=12  # Keep 12 weekly backups
-BACKUP_RETENTION_MONTHLY=12 # Keep 12 monthly backups
+# Configuration (can be overridden by environment variables)
+CONTAINER_NAME="${CONTAINER_NAME:-graphiti-falkordb}"
+BACKUP_DIR="${BACKUP_DIR:-/backups/falkordb}"
+BACKUP_RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-7}"
+BACKUP_RETENTION_WEEKLY="${BACKUP_RETENTION_WEEKLY:-4}"  # Keep 4 weekly backups
+BACKUP_RETENTION_MONTHLY="${BACKUP_RETENTION_MONTHLY:-3}" # Keep 3 monthly backups
 
 # Logging
 LOG_FILE="/var/log/falkordb-backup.log"
@@ -66,9 +66,25 @@ backup_rdb() {
     docker exec "$CONTAINER_NAME" redis-cli BGSAVE
     
     # Wait for BGSAVE to complete
-    while docker exec "$CONTAINER_NAME" redis-cli LASTSAVE | xargs -I {} test {} -eq "$(docker exec "$CONTAINER_NAME" redis-cli LASTSAVE)"; do
+    local initial_save=$(docker exec "$CONTAINER_NAME" redis-cli LASTSAVE | tr -d '\r\n')
+    sleep 2  # Give BGSAVE time to start
+    
+    # Maximum wait time (30 seconds)
+    local max_wait=30
+    local waited=0
+    
+    while [ $waited -lt $max_wait ]; do
+        local current_save=$(docker exec "$CONTAINER_NAME" redis-cli LASTSAVE | tr -d '\r\n')
+        if [[ "$current_save" != "$initial_save" ]]; then
+            break
+        fi
         sleep 1
+        ((waited++))
     done
+    
+    if [ $waited -eq $max_wait ]; then
+        log "WARNING: BGSAVE may not have completed within $max_wait seconds"
+    fi
     
     # Copy the RDB file
     docker cp "$CONTAINER_NAME:/data/falkordb.rdb" "$backup_path"
