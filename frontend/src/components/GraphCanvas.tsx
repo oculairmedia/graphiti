@@ -325,29 +325,66 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           });
           
           // Convert node IDs to indices for Cosmograph
-          setGlowingNodeIndices(() => {
-            if (!event.node_ids || event.node_ids.length === 0) {
-              return [];
+          const indices: number[] = [];
+          
+          if (!event.node_ids || event.node_ids.length === 0) {
+            console.log('[GraphCanvas] No node IDs to glow');
+            setGlowingNodeIndices([]);
+            // Clear selection in Cosmograph
+            if (cosmographRef.current) {
+              cosmographRef.current.unselectAllPoints();
             }
-            
-            // Get the current data source
-            const dataSource = currentNodes;
-            if (!dataSource || dataSource.length === 0) {
-              return [];
+            return;
+          }
+          
+          // Try DuckDB data first
+          if (useDuckDBTables && duckDBData?.points) {
+            console.log('[GraphCanvas] Using DuckDB data for indices, numRows:', duckDBData.points.numRows);
+            const numRows = duckDBData.points.numRows || 0;
+            for (let i = 0; i < numRows; i++) {
+              const row = duckDBData.points.get(i);
+              if (row && event.node_ids.includes(row.id)) {
+                indices.push(i);
+                console.log('[GraphCanvas] Found glowing node at index:', i, 'id:', row.id);
+              }
             }
-            
-            const indices: number[] = [];
-            
-            // Find indices for each glowing node ID
-            dataSource.forEach((node: GraphNode, index: number) => {
-              if (event.node_ids.includes(node.id)) {
+          } 
+          // Try Cosmograph data
+          else if (cosmographData?.points && Array.isArray(cosmographData.points)) {
+            console.log('[GraphCanvas] Using cosmographData for indices, length:', cosmographData.points.length);
+            cosmographData.points.forEach((point: any, index: number) => {
+              if (event.node_ids.includes(point.id)) {
                 indices.push(index);
+                console.log('[GraphCanvas] Found glowing node at index:', index, 'id:', point.id);
               }
             });
+          }
+          // Fallback to transformedData which should match what Cosmograph is rendering
+          else if (transformedData.nodes && transformedData.nodes.length > 0) {
+            console.log('[GraphCanvas] Using transformedData.nodes for indices, length:', transformedData.nodes.length);
+            transformedData.nodes.forEach((node: any, index: number) => {
+              if (event.node_ids.includes(node.id)) {
+                indices.push(index);
+                console.log('[GraphCanvas] Found glowing node at index:', index, 'id:', node.id);
+              }
+            });
+          } else {
+            console.log('[GraphCanvas] No data source available for finding indices');
+          }
+          
+          console.log('[GraphCanvas] Final glowing node indices:', indices, 'for IDs:', event.node_ids);
+          setGlowingNodeIndices(indices);
+          
+          // Use Cosmograph's selectPoints method to highlight the nodes
+          if (cosmographRef.current && indices.length > 0) {
+            console.log('[GraphCanvas] Calling cosmographRef.selectPoints with', indices.length, 'indices');
+            cosmographRef.current.selectPoints(indices, false);
             
-            console.log('[GraphCanvas] Glowing node indices:', indices);
-            return indices;
-          });
+            // If only one node, also set it as focused
+            if (indices.length === 1) {
+              cosmographRef.current.setFocusedPoint(indices[0]);
+            }
+          }
           
           // Log that we're ready to apply glow
           console.log('[GraphCanvas] Ready to apply glow effect, functions should be called now');
@@ -360,6 +397,10 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           glowTimeoutRef.current = setTimeout(() => {
             setGlowingNodes(() => new Map());
             setGlowingNodeIndices([]);
+            // Clear selection in Cosmograph
+            if (cosmographRef.current) {
+              cosmographRef.current.unselectAllPoints();
+            }
             console.log('[GraphCanvas] Glow effect cleared');
           }, 2000);
         }
@@ -981,8 +1022,13 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
 
     // Simplified data transformation for legacy compatibility
     const transformedData = React.useMemo(() => {
+      // Use the actual data that's being rendered by Cosmograph
+      if (cosmographData?.points && cosmographData?.links) {
+        return { nodes: cosmographData.points, links: cosmographData.links };
+      }
+      // Fallback to original data if cosmographData isn't ready
       return { nodes, links };
-    }, [nodes, links]);
+    }, [nodes, links, cosmographData]);
     
     // Handle popup for glowing nodes (search results)
     useEffect(() => {
@@ -2714,15 +2760,11 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             renderHoveredPointRing={config.renderHoveredPointRing}
             hoveredPointRingColor={config.hoveredPointRingColor}
             
-            // Use glowing nodes for focus effect
+            // Selection ring colors for when nodes are selected via API
             focusedPointRingColor={config.nodeAccessHighlightColor}
-            focusedPointIndex={glowingNodeIndices.length === 1 ? glowingNodeIndices[0] : undefined}
-            renderFocusedPointRing={glowingNodeIndices.length === 1}
-            
-            // For multiple glowing nodes, use selected points
-            selectedPointIndices={glowingNodeIndices.length > 1 ? glowingNodeIndices : undefined}
             selectedPointRingColor={config.nodeAccessHighlightColor}
-            renderSelectedPointRing={glowingNodeIndices.length > 1}
+            renderFocusedPointRing={true}
+            renderSelectedPointRing={true}
             renderLinks={config.renderLinks}
             
             // Zoom event handlers (debugging disabled for now)
