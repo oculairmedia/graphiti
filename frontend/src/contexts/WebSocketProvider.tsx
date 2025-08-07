@@ -1,13 +1,47 @@
-import React, { createContext, useContext, useCallback, useEffect, useState, useRef } from 'react';
-import { useWebSocket, NodeAccessEvent, GraphUpdateEvent, WebSocketEvent } from '../hooks/useWebSocket';
+import React, { createContext, useContext, useCallback, useEffect, useState, useRef, useReducer } from 'react';
+import { useWebSocket, NodeAccessEvent, GraphUpdateEvent, DeltaUpdateEvent, CacheInvalidateEvent, WebSocketEvent } from '../hooks/useWebSocket';
 
 interface WebSocketContextValue {
   isConnected: boolean;
+  connectionQuality: 'excellent' | 'good' | 'poor';
+  latency: number;
   subscribe: (handler: (event: WebSocketEvent) => void) => () => void;
   subscribeToNodeAccess: (handler: (event: NodeAccessEvent) => void) => () => void;
   subscribeToGraphUpdate: (handler: (event: GraphUpdateEvent) => void) => () => void;
+  subscribeToDeltaUpdate: (handler: (event: DeltaUpdateEvent) => void) => () => void;
+  subscribeToCacheInvalidate: (handler: (event: CacheInvalidateEvent) => void) => () => void;
   lastNodeAccessEvent: NodeAccessEvent | null;
   lastGraphUpdateEvent: GraphUpdateEvent | null;
+  lastDeltaUpdateEvent: DeltaUpdateEvent | null;
+  updateStats: UpdateStats;
+}
+
+interface UpdateStats {
+  totalUpdates: number;
+  deltaUpdates: number;
+  cacheInvalidations: number;
+  lastUpdateTime: number | null;
+}
+
+type StatsAction = 
+  | { type: 'INCREMENT_DELTA' }
+  | { type: 'INCREMENT_CACHE' }
+  | { type: 'INCREMENT_TOTAL' }
+  | { type: 'UPDATE_TIME' };
+
+function statsReducer(state: UpdateStats, action: StatsAction): UpdateStats {
+  switch (action.type) {
+    case 'INCREMENT_DELTA':
+      return { ...state, deltaUpdates: state.deltaUpdates + 1, totalUpdates: state.totalUpdates + 1, lastUpdateTime: Date.now() };
+    case 'INCREMENT_CACHE':
+      return { ...state, cacheInvalidations: state.cacheInvalidations + 1, lastUpdateTime: Date.now() };
+    case 'INCREMENT_TOTAL':
+      return { ...state, totalUpdates: state.totalUpdates + 1, lastUpdateTime: Date.now() };
+    case 'UPDATE_TIME':
+      return { ...state, lastUpdateTime: Date.now() };
+    default:
+      return state;
+  }
 }
 
 const WebSocketContext = createContext<WebSocketContextValue | null>(null);
@@ -57,12 +91,24 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
   const [handlers, setHandlers] = useState<Set<(event: WebSocketEvent) => void>>(new Set());
   const [nodeAccessHandlers, setNodeAccessHandlers] = useState<Set<(event: NodeAccessEvent) => void>>(new Set());
   const [graphUpdateHandlers, setGraphUpdateHandlers] = useState<Set<(event: GraphUpdateEvent) => void>>(new Set());
+  const [deltaUpdateHandlers, setDeltaUpdateHandlers] = useState<Set<(event: DeltaUpdateEvent) => void>>(new Set());
+  const [cacheInvalidateHandlers, setCacheInvalidateHandlers] = useState<Set<(event: CacheInvalidateEvent) => void>>(new Set());
   const [lastNodeAccessEvent, setLastNodeAccessEvent] = useState<NodeAccessEvent | null>(null);
   const [lastGraphUpdateEvent, setLastGraphUpdateEvent] = useState<GraphUpdateEvent | null>(null);
+  const [lastDeltaUpdateEvent, setLastDeltaUpdateEvent] = useState<DeltaUpdateEvent | null>(null);
+  
+  const [updateStats, dispatchStats] = useReducer(statsReducer, {
+    totalUpdates: 0,
+    deltaUpdates: 0,
+    cacheInvalidations: 0,
+    lastUpdateTime: null
+  });
 
   const handlersRef = useRef<Set<(event: WebSocketEvent) => void>>(new Set());
   const nodeAccessHandlersRef = useRef<Set<(event: NodeAccessEvent) => void>>(new Set());
   const graphUpdateHandlersRef = useRef<Set<(event: GraphUpdateEvent) => void>>(new Set());
+  const deltaUpdateHandlersRef = useRef<Set<(event: DeltaUpdateEvent) => void>>(new Set());
+  const cacheInvalidateHandlersRef = useRef<Set<(event: CacheInvalidateEvent) => void>>(new Set());
   
   // Log WebSocket URL only once on mount
   useEffect(() => {
@@ -74,12 +120,15 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
     handlersRef.current = handlers;
     nodeAccessHandlersRef.current = nodeAccessHandlers;
     graphUpdateHandlersRef.current = graphUpdateHandlers;
-  }, [handlers, nodeAccessHandlers, graphUpdateHandlers]);
+    deltaUpdateHandlersRef.current = deltaUpdateHandlers;
+    cacheInvalidateHandlersRef.current = cacheInvalidateHandlers;
+  }, [handlers, nodeAccessHandlers, graphUpdateHandlers, deltaUpdateHandlers, cacheInvalidateHandlers]);
   
   const handleMessage = useCallback((event: WebSocketEvent) => {
     // Handle specific event types
     if (event.type === 'node_access') {
       setLastNodeAccessEvent(event as NodeAccessEvent);
+      dispatchStats({ type: 'INCREMENT_TOTAL' });
       nodeAccessHandlersRef.current.forEach(handler => {
         try {
           handler(event as NodeAccessEvent);
@@ -89,11 +138,31 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
       });
     } else if (event.type === 'graph:update') {
       setLastGraphUpdateEvent(event as GraphUpdateEvent);
+      dispatchStats({ type: 'INCREMENT_TOTAL' });
       graphUpdateHandlersRef.current.forEach(handler => {
         try {
           handler(event as GraphUpdateEvent);
         } catch (error) {
           console.error('Error in GraphUpdate event handler:', error);
+        }
+      });
+    } else if (event.type === 'graph:delta') {
+      setLastDeltaUpdateEvent(event as DeltaUpdateEvent);
+      dispatchStats({ type: 'INCREMENT_DELTA' });
+      deltaUpdateHandlersRef.current.forEach(handler => {
+        try {
+          handler(event as DeltaUpdateEvent);
+        } catch (error) {
+          console.error('Error in DeltaUpdate event handler:', error);
+        }
+      });
+    } else if (event.type === 'cache:invalidate') {
+      dispatchStats({ type: 'INCREMENT_CACHE' });
+      cacheInvalidateHandlersRef.current.forEach(handler => {
+        try {
+          handler(event as CacheInvalidateEvent);
+        } catch (error) {
+          console.error('Error in CacheInvalidate event handler:', error);
         }
       });
     }
@@ -108,12 +177,14 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
     });
   }, []);
 
-  const { isConnected } = useWebSocket({
+  const { isConnected, connectionQuality, latency } = useWebSocket({
     url: wsUrl,
     onMessage: handleMessage,
     onConnect: () => console.log('WebSocket provider connected'),
     onDisconnect: () => console.log('WebSocket provider disconnected'),
-    onError: (error) => console.error('WebSocket provider error:', error)
+    onError: (error) => console.error('WebSocket provider error:', error),
+    batchInterval: 100,
+    maxBatchSize: 50
   });
 
   const subscribe = useCallback((handler: (event: WebSocketEvent) => void) => {
@@ -154,14 +225,46 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
       });
     };
   }, []);
+  
+  const subscribeToDeltaUpdate = useCallback((handler: (event: DeltaUpdateEvent) => void) => {
+    setDeltaUpdateHandlers(prev => new Set(prev).add(handler));
+    
+    // Return unsubscribe function
+    return () => {
+      setDeltaUpdateHandlers(prev => {
+        const next = new Set(prev);
+        next.delete(handler);
+        return next;
+      });
+    };
+  }, []);
+  
+  const subscribeToCacheInvalidate = useCallback((handler: (event: CacheInvalidateEvent) => void) => {
+    setCacheInvalidateHandlers(prev => new Set(prev).add(handler));
+    
+    // Return unsubscribe function
+    return () => {
+      setCacheInvalidateHandlers(prev => {
+        const next = new Set(prev);
+        next.delete(handler);
+        return next;
+      });
+    };
+  }, []);
 
   const value: WebSocketContextValue = {
     isConnected,
+    connectionQuality,
+    latency,
     subscribe,
     subscribeToNodeAccess,
     subscribeToGraphUpdate,
+    subscribeToDeltaUpdate,
+    subscribeToCacheInvalidate,
     lastNodeAccessEvent,
-    lastGraphUpdateEvent
+    lastGraphUpdateEvent,
+    lastDeltaUpdateEvent,
+    updateStats
   };
 
   return (

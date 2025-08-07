@@ -18,13 +18,34 @@ export interface GraphUpdateEvent {
   };
 }
 
+export interface DeltaUpdateEvent {
+  type: 'graph:delta';
+  data: {
+    operation: 'add' | 'update' | 'delete';
+    nodes?: Partial<any>[];
+    edges?: Partial<any>[];
+    timestamp: number;
+    version?: string;
+    batch_id?: string;
+  };
+}
+
+export interface CacheInvalidateEvent {
+  type: 'cache:invalidate';
+  data: {
+    keys: string[];
+    version?: string;
+    timestamp: number;
+  };
+}
+
 export interface WebSocketMessage {
   type: string;
   data?: any;
   [key: string]: any;
 }
 
-export type WebSocketEvent = NodeAccessEvent | GraphUpdateEvent;
+export type WebSocketEvent = NodeAccessEvent | GraphUpdateEvent | DeltaUpdateEvent | CacheInvalidateEvent;
 
 interface UseWebSocketOptions {
   url: string;
@@ -34,6 +55,8 @@ interface UseWebSocketOptions {
   onConnect?: () => void;
   onDisconnect?: () => void;
   onError?: (error: Event) => void;
+  batchInterval?: number;
+  maxBatchSize?: number;
 }
 
 export const useWebSocket = ({
@@ -43,13 +66,22 @@ export const useWebSocket = ({
   onMessage,
   onConnect,
   onDisconnect,
-  onError
+  onError,
+  batchInterval = 100,
+  maxBatchSize = 50
 }: UseWebSocketOptions) => {
   const [isConnected, setIsConnected] = useState(false);
+  const [connectionQuality, setConnectionQuality] = useState<'excellent' | 'good' | 'poor'>('good');
   const reconnectAttemptRef = useRef(0);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const clientIdRef = useRef<string>(`client-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`);
+  
+  // Batch processing state
+  const batchQueueRef = useRef<WebSocketEvent[]>([]);
+  const batchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastPingRef = useRef<number>(Date.now());
+  const pingLatencyRef = useRef<number>(0);
 
   // Store callbacks in refs to avoid recreating connect function
   const onMessageRef = useRef(onMessage);
@@ -97,18 +129,56 @@ export const useWebSocket = ({
           const data = JSON.parse(event.data) as WebSocketMessage;
           console.log('Parsed message:', data);
           
-          if (data.type === 'node_access' && onMessageRef.current) {
-            console.log('Node access event:', data);
-            onMessageRef.current(data as NodeAccessEvent);
-          } else if (data.type === 'graph:update' && onMessageRef.current) {
-            console.log('Graph update event:', data);
-            onMessageRef.current(data as GraphUpdateEvent);
-          } else if (data.type === 'subscription_confirmed') {
-            console.log('WebSocket subscription confirmed');
-          } else if (data.type === 'pong') {
-            console.log('Pong received');
-          } else if (data.type === 'connected') {
-            console.log('WebSocket connected confirmation');
+          // Handle pong for latency calculation
+          if (data.type === 'pong') {
+            const latency = Date.now() - lastPingRef.current;
+            pingLatencyRef.current = latency;
+            
+            // Update connection quality based on latency
+            if (latency < 50) {
+              setConnectionQuality('excellent');
+            } else if (latency < 200) {
+              setConnectionQuality('good');
+            } else {
+              setConnectionQuality('poor');
+            }
+            console.log(`Pong received, latency: ${latency}ms`);
+            return;
+          }
+          
+          // Handle system messages
+          if (data.type === 'subscription_confirmed' || data.type === 'connected') {
+            console.log(`WebSocket ${data.type}`);
+            return;
+          }
+          
+          // Handle data events
+          if (data.type === 'node_access' || 
+              data.type === 'graph:update' || 
+              data.type === 'graph:delta' || 
+              data.type === 'cache:invalidate') {
+            
+            // Check if this is part of a batch
+            if ((data as any).batch_id) {
+              // Add to batch queue
+              batchQueueRef.current.push(data as WebSocketEvent);
+              
+              // Process batch if size limit reached
+              if (batchQueueRef.current.length >= maxBatchSize) {
+                processBatch();
+              } else {
+                // Schedule batch processing
+                if (!batchTimeoutRef.current) {
+                  batchTimeoutRef.current = setTimeout(() => {
+                    processBatch();
+                  }, batchInterval);
+                }
+              }
+            } else {
+              // Process immediately if not batched
+              console.log(`Processing ${data.type} event`);
+              onMessageRef.current?.(data as WebSocketEvent);
+            }
           } else {
             console.log('Unknown message type:', data.type);
           }
@@ -170,7 +240,27 @@ export const useWebSocket = ({
     }
   }, []);
 
+  const processBatch = useCallback(() => {
+    if (batchQueueRef.current.length === 0) return;
+    
+    const batch = [...batchQueueRef.current];
+    batchQueueRef.current = [];
+    
+    if (batchTimeoutRef.current) {
+      clearTimeout(batchTimeoutRef.current);
+      batchTimeoutRef.current = null;
+    }
+    
+    console.log(`Processing batch of ${batch.length} events`);
+    
+    // Process all events in the batch
+    batch.forEach(event => {
+      onMessageRef.current?.(event);
+    });
+  }, []);
+  
   const sendPing = useCallback(() => {
+    lastPingRef.current = Date.now();
     sendMessage({ type: 'ping' });
   }, [sendMessage]);
 
@@ -215,6 +305,8 @@ export const useWebSocket = ({
 
   return {
     isConnected,
+    connectionQuality,
+    latency: pingLatencyRef.current,
     sendMessage,
     disconnect,
     reconnect: connect

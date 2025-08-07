@@ -184,7 +184,11 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     // Glowing nodes state for real-time visualization
     const [glowingNodes, setGlowingNodes] = useState<Map<string, number>>(new Map());
     const [glowingNodeIndices, setGlowingNodeIndices] = useState<number[]>([]);
-    const { subscribe: subscribeToWebSocket } = useWebSocketContext();
+    const { 
+      subscribe: subscribeToWebSocket,
+      subscribeToDeltaUpdate,
+      subscribeToGraphUpdate 
+    } = useWebSocketContext();
     
     // Track current data for incremental updates
     const [currentNodes, setCurrentNodes] = useState<GraphNode[]>([]);
@@ -417,6 +421,100 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         // CosmographPopup cleanup removed - not available in v2
       };
     }, [subscribeToWebSocket]);
+    
+    // Subscribe to delta updates for incremental graph changes
+    useEffect(() => {
+      const unsubscribeDelta = subscribeToDeltaUpdate((event) => {
+        console.log('[GraphCanvas] Delta update received:', event.data);
+        
+        if (!cosmographData) {
+          console.log('[GraphCanvas] No existing data to apply delta to');
+          return;
+        }
+        
+        const { operation, nodes: deltaNodes, edges: deltaEdges } = event.data;
+        
+        // Create a copy of current data
+        let updatedNodes = [...(cosmographData.points || [])];
+        let updatedLinks = [...(cosmographData.links || [])];
+        
+        // Apply delta operations
+        if (operation === 'add') {
+          if (deltaNodes && deltaNodes.length > 0) {
+            updatedNodes = [...updatedNodes, ...deltaNodes];
+            console.log(`[GraphCanvas] Added ${deltaNodes.length} nodes`);
+          }
+          if (deltaEdges && deltaEdges.length > 0) {
+            updatedLinks = [...updatedLinks, ...deltaEdges];
+            console.log(`[GraphCanvas] Added ${deltaEdges.length} edges`);
+          }
+        } else if (operation === 'update') {
+          if (deltaNodes && deltaNodes.length > 0) {
+            const nodeMap = new Map(updatedNodes.map(n => [n.id, n]));
+            deltaNodes.forEach(update => {
+              const existing = nodeMap.get(update.id);
+              if (existing) {
+                Object.assign(existing, update);
+              }
+            });
+            updatedNodes = Array.from(nodeMap.values());
+            console.log(`[GraphCanvas] Updated ${deltaNodes.length} nodes`);
+          }
+          if (deltaEdges && deltaEdges.length > 0) {
+            const edgeMap = new Map(updatedLinks.map(e => [e.id || `${e.source}-${e.target}`, e]));
+            deltaEdges.forEach(update => {
+              const id = update.id || `${update.source}-${update.target}`;
+              const existing = edgeMap.get(id);
+              if (existing) {
+                Object.assign(existing, update);
+              }
+            });
+            updatedLinks = Array.from(edgeMap.values());
+            console.log(`[GraphCanvas] Updated ${deltaEdges.length} edges`);
+          }
+        } else if (operation === 'delete') {
+          if (deltaNodes && deltaNodes.length > 0) {
+            const deleteIds = new Set(deltaNodes.map(n => n.id));
+            updatedNodes = updatedNodes.filter(n => !deleteIds.has(n.id));
+            console.log(`[GraphCanvas] Deleted ${deltaNodes.length} nodes`);
+          }
+          if (deltaEdges && deltaEdges.length > 0) {
+            const deleteIds = new Set(deltaEdges.map(e => e.id || `${e.source}-${e.target}`));
+            updatedLinks = updatedLinks.filter(e => {
+              const id = e.id || `${e.source}-${e.target}`;
+              return !deleteIds.has(id);
+            });
+            console.log(`[GraphCanvas] Deleted ${deltaEdges.length} edges`);
+          }
+        }
+        
+        // Update cosmograph data
+        setCosmographData({
+          points: updatedNodes,
+          links: updatedLinks
+        });
+        
+        // Update current data tracking
+        setCurrentNodes(updatedNodes);
+        setCurrentLinks(updatedLinks);
+        
+        // Trigger re-render if simulation is running
+        if (cosmographRef.current && keepRunning) {
+          cosmographRef.current.restart();
+        }
+      });
+      
+      const unsubscribeGraph = subscribeToGraphUpdate((event) => {
+        console.log('[GraphCanvas] Graph update received:', event.data);
+        // Handle full graph updates if needed
+        // This could trigger a full data reload from DuckDB
+      });
+      
+      return () => {
+        unsubscribeDelta();
+        unsubscribeGraph();
+      };
+    }, [subscribeToDeltaUpdate, subscribeToGraphUpdate, cosmographData, keepRunning]);
     
     // Animation loop for smooth color transitions
     useEffect(() => {
