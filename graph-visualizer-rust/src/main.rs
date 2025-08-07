@@ -208,7 +208,7 @@ async fn main() -> anyhow::Result<()> {
         
         // Step 1: Load nodes first (much more efficient)
         let nodes_query = format!(
-            "MATCH (n) WHERE EXISTS(n.degree_centrality) AND n.degree_centrality > {} RETURN n.uuid as id, n.name as name, COALESCE(n.type, labels(n)[0]) as label, n.degree_centrality as degree, n.created_at as created_at ORDER BY n.degree_centrality DESC LIMIT {}",
+            "MATCH (n) WHERE EXISTS(n.degree_centrality) AND n.degree_centrality > {} RETURN n.uuid as id, n.name as name, COALESCE(n.type, labels(n)[0]) as label, n.degree_centrality as degree, n.created_at as created_at, n.summary as summary, n.pagerank_centrality as pagerank, n.betweenness_centrality as betweenness, n.eigenvector_centrality as eigenvector ORDER BY n.degree_centrality DESC LIMIT {}",
             min_degree, node_limit
         );
         
@@ -234,11 +234,29 @@ async fn main() -> anyhow::Result<()> {
                     properties.insert("created_at".to_string(), serde_json::Value::String(created.to_string()));
                 }
                 
+                // Get summary from row index 5
+                let summary = row.get(5).and_then(|v| v.as_string()).map(|s| s.to_string());
+                
+                // Add pagerank centrality from row index 6
+                if let Some(pagerank) = row.get(6).and_then(|v| v.to_f64()) {
+                    properties.insert("pagerank_centrality".to_string(), serde_json::Value::from(pagerank));
+                }
+                
+                // Add betweenness centrality from row index 7
+                if let Some(betweenness) = row.get(7).and_then(|v| v.to_f64()) {
+                    properties.insert("betweenness_centrality".to_string(), serde_json::Value::from(betweenness));
+                }
+                
+                // Add eigenvector centrality from row index 8
+                if let Some(eigenvector) = row.get(8).and_then(|v| v.to_f64()) {
+                    properties.insert("eigenvector_centrality".to_string(), serde_json::Value::from(eigenvector));
+                }
+                
                 nodes.push(Node {
                     id: id.to_string(),
                     label: row.get(1).and_then(|v| v.as_string()).map_or("", |v| v).to_string(),
                     node_type: row.get(2).and_then(|v| v.as_string()).map_or("Unknown", |v| v).to_string(),
-                    summary: None,
+                    summary,
                     properties,
                 });
             }
