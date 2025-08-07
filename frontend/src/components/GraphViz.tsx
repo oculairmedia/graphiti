@@ -5,6 +5,7 @@ import { useGraphConfig } from '../contexts/GraphConfigProvider';
 import { ControlPanel } from './ControlPanel';
 import { GraphViewport } from './GraphViewport';
 import { LayoutPanel } from './LayoutPanel';
+import { logger } from '../utils/logger';
 
 // Lazy load modal panels
 const FilterPanel = React.lazy(() => import('./FilterPanel').then(m => ({ default: m.FilterPanel })));
@@ -47,6 +48,40 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
   const graphCanvasRef = useRef<GraphCanvasHandle>(null);
   const timelineRef = useRef<GraphTimelineHandle>(null);
   const stableGraphPropsRef = useRef<{ nodes: GraphNode[], links: GraphLink[] } | null>(null);
+  
+  // Timeline visibility state
+  const [isTimelineVisible, setIsTimelineVisible] = useState(() => {
+    // Load from localStorage
+    const saved = localStorage.getItem('graphiti.timeline.visible');
+    return saved !== null ? saved === 'true' : true;
+  });
+
+  // Handle timeline visibility change
+  const handleTimelineVisibilityChange = useCallback((visible: boolean) => {
+    setIsTimelineVisible(visible);
+    localStorage.setItem('graphiti.timeline.visible', String(visible));
+  }, []);
+
+  // Toggle timeline visibility
+  const toggleTimeline = useCallback(() => {
+    const newVisibility = !isTimelineVisible;
+    setIsTimelineVisible(newVisibility);
+    localStorage.setItem('graphiti.timeline.visible', String(newVisibility));
+  }, [isTimelineVisible]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl/Cmd + T to toggle timeline
+      if ((e.ctrlKey || e.metaKey) && e.key === 't') {
+        e.preventDefault();
+        toggleTimeline();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [toggleTimeline]);
 
   // Custom hooks
   const {
@@ -322,6 +357,8 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
             onZoomOut={handleZoomOut}
             onFitView={handleFitView}
             onScreenshot={handleCaptureScreenshot}
+            onToggleTimeline={toggleTimeline}
+            isTimelineVisible={isTimelineVisible}
           />
 
           {/* Right Layout Panel */}
@@ -374,8 +411,11 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
             <React.Suspense fallback={<div className="h-20 bg-background/80 backdrop-blur-sm" />}>
               <GraphTimeline 
                 ref={timelineRef}
+                isVisible={isTimelineVisible}
+                onVisibilityChange={handleTimelineVisibilityChange}
                 onTimeRangeChange={(range) => {
                   // Handle timeline range changes
+                  logger.log('Timeline range changed:', range);
                 }}
                 className=""
               />

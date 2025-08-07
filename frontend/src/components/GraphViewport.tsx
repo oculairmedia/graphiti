@@ -38,6 +38,8 @@ interface GraphViewportProps {
   onZoomOut: () => void;
   onFitView: () => void;
   onScreenshot: () => void;
+  onToggleTimeline?: () => void;
+  isTimelineVisible?: boolean;
 }
 
 const GraphViewportComponent = forwardRef<GraphCanvasHandle, GraphViewportProps>(({
@@ -59,6 +61,8 @@ const GraphViewportComponent = forwardRef<GraphCanvasHandle, GraphViewportProps>
   onZoomOut,
   onFitView,
   onScreenshot,
+  onToggleTimeline,
+  isTimelineVisible,
 }, ref) => {
   // FPS tracking
   const [fps, setFps] = useState<number>(60);
@@ -180,6 +184,8 @@ const GraphViewportComponent = forwardRef<GraphCanvasHandle, GraphViewportProps>
           onZoomIn={stableOnZoomIn}
           onZoomOut={stableOnZoomOut}
           onScreenshot={stableOnScreenshot}
+          onToggleTimeline={onToggleTimeline}
+          isTimelineVisible={isTimelineVisible}
         />
       </div>
     </div>

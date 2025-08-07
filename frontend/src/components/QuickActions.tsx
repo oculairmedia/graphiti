@@ -1,5 +1,5 @@
 import React from 'react';
-import { Maximize2, ZoomIn, ZoomOut, Camera, Trash2, Pin, Eye, Download, Move } from 'lucide-react';
+import { Maximize2, ZoomIn, ZoomOut, Camera, Trash2, Pin, Eye, Download, Move, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 
@@ -10,6 +10,8 @@ interface QuickActionsProps {
   onZoomIn: () => void;
   onZoomOut: () => void;
   onScreenshot: () => void;
+  onToggleTimeline?: () => void;
+  isTimelineVisible?: boolean;
 }
 
 const QuickActionsComponent: React.FC<QuickActionsProps> = ({
@@ -18,7 +20,9 @@ const QuickActionsComponent: React.FC<QuickActionsProps> = ({
   onFitToScreen,
   onZoomIn,
   onZoomOut,
-  onScreenshot
+  onScreenshot,
+  onToggleTimeline,
+  isTimelineVisible = true
 }) => {
   return (
     <div className="glass-panel rounded-full px-4 py-2 flex items-center space-x-2 animate-fade-in">
@@ -80,6 +84,17 @@ const QuickActionsComponent: React.FC<QuickActionsProps> = ({
         >
           <Camera className="h-3 w-3" />
         </Button>
+        {onToggleTimeline && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onToggleTimeline}
+            className={`h-8 px-2 hover:bg-primary/10 ${isTimelineVisible ? 'bg-primary/10' : ''}`}
+            title={`${isTimelineVisible ? 'Hide' : 'Show'} Timeline (Ctrl+T)`}
+          >
+            <Clock className="h-3 w-3" />
+          </Button>
+        )}
       </div>
 
       {/* Zoom Controls */}
