@@ -1,6 +1,6 @@
 use axum::{
     extract::{Path, Query, State, WebSocketUpgrade},
-    http::{StatusCode, header},
+    http::{StatusCode, header, HeaderMap},
     response::{IntoResponse, Json, Response},
     routing::{get, patch, post},
     Router,
@@ -18,12 +18,16 @@ use tracing::{error, info, debug};
 use tokio::sync::{broadcast, RwLock};
 use arrow::record_batch::RecordBatch;
 use bytes::Bytes;
+use sha2::{Sha256, Digest};
+use base64::{Engine as _, engine::general_purpose};
 
 mod duckdb_store;
 mod arrow_converter;
+mod delta_tracker;
 
 use duckdb_store::{DuckDBStore, GraphUpdate};
 use arrow_converter::ArrowConverter;
+use delta_tracker::{DeltaTracker, GraphDelta};
 
 #[derive(Clone)]
 struct AppState {
@@ -32,7 +36,9 @@ struct AppState {
     graph_cache: Arc<DashMap<String, GraphData>>,
     duckdb_store: Arc<DuckDBStore>,
     update_tx: broadcast::Sender<GraphUpdate>,
+    delta_tx: broadcast::Sender<GraphDelta>,
     arrow_cache: Arc<RwLock<Option<ArrowCache>>>,
+    delta_tracker: Arc<DeltaTracker>,
     http_client: Arc<reqwest::Client>,
     centrality_url: String,
 }
@@ -43,7 +49,18 @@ struct ArrowCache {
     edges_batch: RecordBatch,
     nodes_bytes: Bytes,
     edges_bytes: Bytes,
+    nodes_etag: String,
+    edges_etag: String,
     timestamp: std::time::Instant,
+}
+
+impl ArrowCache {
+    fn generate_etag(data: &[u8]) -> String {
+        let mut hasher = Sha256::new();
+        hasher.update(data);
+        let hash = hasher.finalize();
+        format!("W/\"{}\"", general_purpose::URL_SAFE_NO_PAD.encode(&hash[..8]))
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -167,6 +184,10 @@ async fn main() -> anyhow::Result<()> {
     
     // Create update channel for real-time updates
     let (update_tx, _) = broadcast::channel::<GraphUpdate>(100);
+    let (delta_tx, _) = broadcast::channel::<GraphDelta>(100);
+    
+    // Initialize delta tracker
+    let delta_tracker = Arc::new(DeltaTracker::new());
     
     // Set up HTTP client for centrality service proxy
     let http_client = Arc::new(reqwest::Client::new());
@@ -179,7 +200,9 @@ async fn main() -> anyhow::Result<()> {
         graph_cache: Arc::new(DashMap::new()),
         duckdb_store: duckdb_store.clone(),
         update_tx: update_tx.clone(),
+        delta_tx: delta_tx.clone(),
         arrow_cache: Arc::new(RwLock::new(None)),
+        delta_tracker: delta_tracker.clone(),
         http_client,
         centrality_url,
     };
@@ -306,6 +329,10 @@ async fn main() -> anyhow::Result<()> {
         duckdb_store.load_initial_data(initial_data.nodes.clone(), initial_data.edges.clone()).await?;
         info!("Initial data loaded: {} nodes, {} edges", initial_data.nodes.len(), initial_data.edges.len());
         
+        // Initialize delta tracker with initial data
+        let initial_delta = delta_tracker.compute_delta(initial_data.nodes.clone(), initial_data.edges.clone()).await;
+        info!("Delta tracker initialized with sequence: {}", initial_delta.sequence);
+        
         // Prerender Arrow format for faster initial load
         info!("Prerendering Arrow format for instant load...");
         if let (Ok(nodes_batch), Ok(edges_batch)) = (
@@ -316,11 +343,15 @@ async fn main() -> anyhow::Result<()> {
                 ArrowConverter::record_batch_to_bytes(&nodes_batch),
                 ArrowConverter::record_batch_to_bytes(&edges_batch)
             ) {
+                let nodes_bytes = Bytes::from(nodes_bytes);
+                let edges_bytes = Bytes::from(edges_bytes);
                 let cache = ArrowCache {
                     nodes_batch: nodes_batch.clone(),
                     edges_batch: edges_batch.clone(),
-                    nodes_bytes: Bytes::from(nodes_bytes),
-                    edges_bytes: Bytes::from(edges_bytes),
+                    nodes_etag: ArrowCache::generate_etag(&nodes_bytes),
+                    edges_etag: ArrowCache::generate_etag(&edges_bytes),
+                    nodes_bytes,
+                    edges_bytes,
                     timestamp: std::time::Instant::now(),
                 };
                 
@@ -473,19 +504,28 @@ async fn handle_socket(mut socket: axum::extract::ws::WebSocket, state: AppState
     
     info!("WebSocket connection established");
     
-    // Subscribe to update channel
+    // Subscribe to channels
     let mut update_rx = state.update_tx.subscribe();
+    let mut delta_rx = state.delta_tx.subscribe();
     
-    // Send initial connection confirmation
+    // Send initial connection confirmation with delta support flag
     let _ = socket.send(Message::Text(
         serde_json::to_string(&serde_json::json!({
             "type": "connected",
             "timestamp": std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
-                .as_millis()
+                .as_millis(),
+            "features": {
+                "delta_updates": true,
+                "compression": true,
+                "batch_updates": true
+            }
         })).unwrap()
     )).await;
+    
+    // Track client preferences
+    let mut use_deltas = false;
     
     // Handle incoming messages and broadcast updates
     loop {
@@ -494,8 +534,39 @@ async fn handle_socket(mut socket: axum::extract::ws::WebSocket, state: AppState
             Some(msg) = socket.recv() => {
                 match msg {
                     Ok(Message::Text(text)) => {
-                        // Handle any incoming commands if needed
-                        debug!("Received WebSocket message: {}", text);
+                        // Parse client commands
+                        if let Ok(cmd) = serde_json::from_str::<serde_json::Value>(&text) {
+                            if let Some(cmd_type) = cmd.get("type").and_then(|t| t.as_str()) {
+                                match cmd_type {
+                                    "subscribe:deltas" => {
+                                        use_deltas = true;
+                                        let _ = socket.send(Message::Text(
+                                            serde_json::to_string(&serde_json::json!({
+                                                "type": "subscribed:deltas",
+                                                "status": "ok"
+                                            })).unwrap()
+                                        )).await;
+                                    }
+                                    "unsubscribe:deltas" => {
+                                        use_deltas = false;
+                                    }
+                                    "ping" => {
+                                        let _ = socket.send(Message::Text(
+                                            serde_json::to_string(&serde_json::json!({
+                                                "type": "pong",
+                                                "timestamp": std::time::SystemTime::now()
+                                                    .duration_since(std::time::UNIX_EPOCH)
+                                                    .unwrap()
+                                                    .as_millis()
+                                            })).unwrap()
+                                        )).await;
+                                    }
+                                    _ => {
+                                        debug!("Unknown command: {}", cmd_type);
+                                    }
+                                }
+                            }
+                        }
                     }
                     Ok(Message::Close(_)) => {
                         info!("WebSocket connection closed by client");
@@ -509,16 +580,33 @@ async fn handle_socket(mut socket: axum::extract::ws::WebSocket, state: AppState
                 }
             }
             
-            // Broadcast graph updates
+            // Broadcast delta updates (preferred)
+            Ok(delta) = delta_rx.recv() => {
+                if use_deltas {
+                    let msg = serde_json::json!({
+                        "type": "graph:delta",
+                        "data": delta
+                    });
+                    
+                    if let Err(e) = socket.send(Message::Text(serde_json::to_string(&msg).unwrap())).await {
+                        error!("Failed to send delta: {}", e);
+                        break;
+                    }
+                }
+            }
+            
+            // Broadcast full updates (fallback)
             Ok(update) = update_rx.recv() => {
-                let msg = serde_json::json!({
-                    "type": "graph:update",
-                    "data": update
-                });
-                
-                if let Err(e) = socket.send(Message::Text(serde_json::to_string(&msg).unwrap())).await {
-                    error!("Failed to send update: {}", e);
-                    break;
+                if !use_deltas {
+                    let msg = serde_json::json!({
+                        "type": "graph:update",
+                        "data": update
+                    });
+                    
+                    if let Err(e) = socket.send(Message::Text(serde_json::to_string(&msg).unwrap())).await {
+                        error!("Failed to send update: {}", e);
+                        break;
+                    }
                 }
             }
         }
@@ -1194,10 +1282,28 @@ async fn get_duckdb_info(State(_state): State<AppState>) -> Result<Json<serde_js
     })))
 }
 
-async fn get_nodes_arrow(State(state): State<AppState>) -> Result<Response<Body>, (StatusCode, Json<ErrorResponse>)> {
+async fn get_nodes_arrow(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Response<Body>, (StatusCode, Json<ErrorResponse>)> {
     // Check cache first
     let cache = state.arrow_cache.read().await;
     if let Some(ref cached) = *cache {
+        // Check if client has the same version (ETag)
+        if let Some(if_none_match) = headers.get(header::IF_NONE_MATCH) {
+            if let Ok(client_etag) = if_none_match.to_str() {
+                if client_etag == cached.nodes_etag {
+                    debug!("Client has current version (ETag match)");
+                    return Ok(Response::builder()
+                        .status(StatusCode::NOT_MODIFIED)
+                        .header(header::ETAG, &cached.nodes_etag)
+                        .header("Cache-Control", "public, max-age=300")
+                        .body(Body::empty())
+                        .unwrap());
+                }
+            }
+        }
+        
         // Cache is valid for 30 seconds
         if cached.timestamp.elapsed() < std::time::Duration::from_secs(30) {
             debug!("Serving nodes from Arrow cache");
@@ -1206,6 +1312,7 @@ async fn get_nodes_arrow(State(state): State<AppState>) -> Result<Response<Body>
                 .header(header::CONTENT_TYPE, "application/vnd.apache.arrow.stream")
                 .header("X-Arrow-Schema", "nodes")
                 .header("X-Cache-Hit", "true")
+                .header(header::ETAG, &cached.nodes_etag)
                 .header("Cache-Control", "public, max-age=300")
                 .header("Vary", "Accept-Encoding")
                 .body(Body::from(cached.nodes_bytes.clone()))
@@ -1220,11 +1327,15 @@ async fn get_nodes_arrow(State(state): State<AppState>) -> Result<Response<Body>
                 Ok(bytes) => {
                     let bytes = Bytes::from(bytes);
                     
+                    // Generate ETag for new data
+                    let etag = ArrowCache::generate_etag(&bytes);
+                    
                     // Update cache if we have edges too
                     let mut cache = state.arrow_cache.write().await;
                     if let Some(cached) = cache.as_mut() {
                         cached.nodes_batch = batch;
                         cached.nodes_bytes = bytes.clone();
+                        cached.nodes_etag = etag.clone();
                         cached.timestamp = std::time::Instant::now();
                     }
                     
@@ -1234,6 +1345,7 @@ async fn get_nodes_arrow(State(state): State<AppState>) -> Result<Response<Body>
                         .header(header::CONTENT_TYPE, "application/vnd.apache.arrow.stream")
                         .header("X-Arrow-Schema", "nodes")
                         .header("X-Cache-Hit", "false")
+                        .header(header::ETAG, etag)
                         .header("Cache-Control", "public, max-age=300")
                         .header("Vary", "Accept-Encoding")
                         .body(Body::from(bytes))
@@ -1262,10 +1374,28 @@ async fn get_nodes_arrow(State(state): State<AppState>) -> Result<Response<Body>
     }
 }
 
-async fn get_edges_arrow(State(state): State<AppState>) -> Result<Response<Body>, (StatusCode, Json<ErrorResponse>)> {
+async fn get_edges_arrow(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Response<Body>, (StatusCode, Json<ErrorResponse>)> {
     // Check cache first
     let cache = state.arrow_cache.read().await;
     if let Some(ref cached) = *cache {
+        // Check if client has the same version (ETag)
+        if let Some(if_none_match) = headers.get(header::IF_NONE_MATCH) {
+            if let Ok(client_etag) = if_none_match.to_str() {
+                if client_etag == cached.edges_etag {
+                    debug!("Client has current version (ETag match)");
+                    return Ok(Response::builder()
+                        .status(StatusCode::NOT_MODIFIED)
+                        .header(header::ETAG, &cached.edges_etag)
+                        .header("Cache-Control", "public, max-age=300")
+                        .body(Body::empty())
+                        .unwrap());
+                }
+            }
+        }
+        
         // Cache is valid for 30 seconds
         if cached.timestamp.elapsed() < std::time::Duration::from_secs(30) {
             debug!("Serving edges from Arrow cache");
@@ -1274,6 +1404,7 @@ async fn get_edges_arrow(State(state): State<AppState>) -> Result<Response<Body>
                 .header(header::CONTENT_TYPE, "application/vnd.apache.arrow.stream")
                 .header("X-Arrow-Schema", "edges")
                 .header("X-Cache-Hit", "true")
+                .header(header::ETAG, &cached.edges_etag)
                 .header("Cache-Control", "public, max-age=300")
                 .header("Vary", "Accept-Encoding")
                 .body(Body::from(cached.edges_bytes.clone()))
@@ -1288,11 +1419,15 @@ async fn get_edges_arrow(State(state): State<AppState>) -> Result<Response<Body>
                 Ok(bytes) => {
                     let bytes = Bytes::from(bytes);
                     
+                    // Generate ETag for new data
+                    let etag = ArrowCache::generate_etag(&bytes);
+                    
                     // Update cache if we have nodes too
                     let mut cache = state.arrow_cache.write().await;
                     if let Some(cached) = cache.as_mut() {
                         cached.edges_batch = batch;
                         cached.edges_bytes = bytes.clone();
+                        cached.edges_etag = etag.clone();
                         cached.timestamp = std::time::Instant::now();
                     }
                     
@@ -1302,6 +1437,7 @@ async fn get_edges_arrow(State(state): State<AppState>) -> Result<Response<Body>
                         .header(header::CONTENT_TYPE, "application/vnd.apache.arrow.stream")
                         .header("X-Arrow-Schema", "edges")
                         .header("X-Cache-Hit", "false")
+                        .header(header::ETAG, etag)
                         .header("Cache-Control", "public, max-age=300")
                         .header("Vary", "Accept-Encoding")
                         .body(Body::from(bytes))
@@ -1363,11 +1499,15 @@ async fn refresh_arrow_cache(State(state): State<AppState>) -> Result<Json<serde
                 ArrowConverter::record_batch_to_bytes(&edges_batch)
             ) {
                 (Ok(nodes_bytes), Ok(edges_bytes)) => {
+                    let nodes_bytes = Bytes::from(nodes_bytes);
+                    let edges_bytes = Bytes::from(edges_bytes);
                     let cache = ArrowCache {
                         nodes_batch,
                         edges_batch,
-                        nodes_bytes: Bytes::from(nodes_bytes),
-                        edges_bytes: Bytes::from(edges_bytes),
+                        nodes_etag: ArrowCache::generate_etag(&nodes_bytes),
+                        edges_etag: ArrowCache::generate_etag(&edges_bytes),
+                        nodes_bytes,
+                        edges_bytes,
                         timestamp: std::time::Instant::now(),
                     };
                     
