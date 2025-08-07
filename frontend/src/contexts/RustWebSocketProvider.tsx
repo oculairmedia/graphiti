@@ -61,21 +61,23 @@ export function RustWebSocketProvider({ children }: { children: React.ReactNode 
         setIsConnected(true);
         reconnectCountRef.current = 0;
         
-        // Subscribe to delta updates
-        ws.send(JSON.stringify({
-          type: 'subscribe',
-          client_id: `rust-client-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-          use_deltas: true
-        }));
+        // Don't subscribe to deltas - Rust server only sends to update_tx, not delta_tx
+        // By not subscribing to deltas, we'll receive full updates instead
+        console.log('[RustWebSocketProvider] Connected, ready to receive updates');
       };
 
       ws.onmessage = (event) => {
         try {
           const message = JSON.parse(event.data);
-          console.log('[RustWebSocketProvider] Message received:', message.type);
+          console.log('[RustWebSocketProvider] Message received:', message.type, message);
+          
+          // Handle subscription confirmation
+          if (message.type === 'subscribed:deltas') {
+            console.log('[RustWebSocketProvider] Delta subscription confirmed');
+          }
           
           // Handle both graph:delta and graph:update message types
-          if (message.type === 'graph:delta' || message.type === 'graph:update') {
+          else if (message.type === 'graph:delta' || message.type === 'graph:update') {
             console.log('[RustWebSocketProvider] Delta/Update data:', message);
             
             // Transform graph:update to delta format if needed
@@ -94,7 +96,9 @@ export function RustWebSocketProvider({ children }: { children: React.ReactNode 
             }
             
             // Notify all subscribers
+            console.log('[RustWebSocketProvider] Notifying subscribers, count:', subscribersRef.current.size);
             subscribersRef.current.forEach(callback => {
+              console.log('[RustWebSocketProvider] Calling subscriber callback');
               callback(deltaMessage);
             });
           }
@@ -144,9 +148,14 @@ export function RustWebSocketProvider({ children }: { children: React.ReactNode 
   }, [connect]);
 
   const subscribe = useCallback((callback: (update: DeltaUpdate) => void) => {
+    console.log('[RustWebSocketProvider] Adding subscriber, current count:', subscribersRef.current.size);
     subscribersRef.current.add(callback);
+    console.log('[RustWebSocketProvider] After adding, subscriber count:', subscribersRef.current.size);
+    
     return () => {
+      console.log('[RustWebSocketProvider] Removing subscriber');
       subscribersRef.current.delete(callback);
+      console.log('[RustWebSocketProvider] After removing, subscriber count:', subscribersRef.current.size);
     };
   }, []);
 
