@@ -328,6 +328,23 @@ async def add_messages(
 
             # Invalidate cache after successful data operation
             await invalidate_cache()
+            
+            # Emit webhook for data ingestion
+            if result and (result.nodes or result.edges):
+                from graph_service.webhooks import webhook_service
+                await webhook_service.emit_data_ingestion(
+                    operation="add_episode",
+                    nodes=result.nodes if result.nodes else [],
+                    edges=result.edges if result.edges else [],
+                    episode=result.episode if result.episode else None,
+                    group_id=request.group_id,
+                    metadata={
+                        "message_uuid": m.uuid,
+                        "message_name": m.name,
+                        "source": m.source_description
+                    }
+                )
+                logger.info(f"Data ingestion webhook sent for episode {result.episode.uuid if result and result.episode else 'None'}")
 
             # Trigger centrality calculation for new data
             await trigger_centrality_calculation(request.group_id)
@@ -363,6 +380,23 @@ async def add_entity_node(
     )
     # Invalidate cache after successful data operation
     await invalidate_cache()
+    
+    # Emit webhook for entity node creation
+    if node:
+        from graph_service.webhooks import webhook_service
+        await webhook_service.emit_data_ingestion(
+            operation="add_entity",
+            nodes=[node],
+            edges=[],
+            episode=None,
+            group_id=request.group_id,
+            metadata={
+                "entity_uuid": request.uuid,
+                "entity_name": request.name
+            }
+        )
+        logger.info(f"Data ingestion webhook sent for entity node {node.uuid}")
+    
     # Trigger centrality calculation for new node
     await trigger_centrality_calculation(request.group_id)
     return node

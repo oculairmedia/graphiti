@@ -1,11 +1,11 @@
 """
-Webhook service for emitting events when nodes are accessed.
+Webhook service for emitting events when nodes are accessed or data is ingested.
 """
 
 import asyncio
 import logging
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 import httpx
 from pydantic import BaseModel
 import os
@@ -21,6 +21,23 @@ class NodeAccessEvent(BaseModel):
     access_type: str  # "search", "direct", etc.
     query: Optional[str] = None
     metadata: Optional[dict] = None
+
+
+class DataIngestionEvent(BaseModel):
+    """Event emitted when data is ingested into the graph."""
+    event_type: str = "data_ingestion"
+    operation: str  # "add_episode", "add_entity", "update_entity", "bulk_ingest"
+    timestamp: datetime
+    group_id: Optional[str] = None
+    episode: Optional[Dict[str, Any]] = None  # Serialized EpisodicNode
+    nodes: List[Dict[str, Any]] = []  # Serialized EntityNodes
+    edges: List[Dict[str, Any]] = []  # Serialized EntityEdges
+    metadata: Optional[dict] = None
+    
+    class Config:
+        json_encoders = {
+            datetime: lambda v: v.isoformat()
+        }
 
 
 class WebhookService:
@@ -84,6 +101,77 @@ class WebhookService:
                 else:
                     logger.info(f"Task {i} completed successfully")
     
+    async def emit_data_ingestion(
+        self,
+        operation: str,
+        nodes: List[Any],
+        edges: List[Any],
+        episode: Optional[Any] = None,
+        group_id: Optional[str] = None,
+        metadata: Optional[dict] = None
+    ):
+        """Emit a data ingestion event when new data is added to the graph."""
+        # Get data webhook URLs from environment
+        data_webhook_urls = os.getenv("GRAPHITI_DATA_WEBHOOK_URLS", "")
+        
+        if not data_webhook_urls:
+            logger.debug("No data webhook URLs configured, skipping data ingestion webhook")
+            return
+        
+        # Serialize entities to dictionaries
+        serialized_nodes = []
+        for node in nodes:
+            if hasattr(node, 'model_dump'):
+                serialized_nodes.append(node.model_dump(mode='json'))
+            elif hasattr(node, 'dict'):
+                serialized_nodes.append(node.dict())
+            else:
+                serialized_nodes.append(dict(node))
+        
+        serialized_edges = []
+        for edge in edges:
+            if hasattr(edge, 'model_dump'):
+                serialized_edges.append(edge.model_dump(mode='json'))
+            elif hasattr(edge, 'dict'):
+                serialized_edges.append(edge.dict())
+            else:
+                serialized_edges.append(dict(edge))
+        
+        serialized_episode = None
+        if episode:
+            if hasattr(episode, 'model_dump'):
+                serialized_episode = episode.model_dump(mode='json')
+            elif hasattr(episode, 'dict'):
+                serialized_episode = episode.dict()
+            else:
+                serialized_episode = dict(episode)
+        
+        event = DataIngestionEvent(
+            operation=operation,
+            timestamp=datetime.now(timezone.utc),
+            group_id=group_id,
+            episode=serialized_episode,
+            nodes=serialized_nodes,
+            edges=serialized_edges,
+            metadata=metadata
+        )
+        
+        # Send to each configured webhook URL
+        webhook_urls = [url.strip() for url in data_webhook_urls.split(',') if url.strip()]
+        tasks = []
+        
+        for url in webhook_urls:
+            tasks.append(self._send_data_webhook(url, event))
+        
+        if tasks:
+            logger.info(f"Sending data ingestion webhooks to {len(tasks)} endpoints")
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            for i, result in enumerate(results):
+                if isinstance(result, Exception):
+                    logger.error(f"Data webhook to {webhook_urls[i]} failed: {result}")
+                else:
+                    logger.info(f"Data webhook to {webhook_urls[i]} succeeded")
+    
     async def _send_webhook(self, event: NodeAccessEvent):
         """Send webhook to external URL."""
         try:
@@ -96,6 +184,25 @@ class WebhookService:
                 logger.error(f"Webhook failed with status {response.status_code}: {response.text}")
         except Exception as e:
             logger.error(f"Failed to send webhook: {e}")
+    
+    async def _send_data_webhook(self, url: str, event: DataIngestionEvent):
+        """Send data ingestion webhook to a specific URL."""
+        try:
+            response = await self.client.post(
+                url,
+                json=event.model_dump(mode='json'),
+                headers={"Content-Type": "application/json"}
+            )
+            if response.status_code >= 400:
+                logger.error(f"Data webhook to {url} failed with status {response.status_code}: {response.text}")
+                raise Exception(f"HTTP {response.status_code}")
+            logger.debug(f"Data webhook sent successfully to {url}")
+        except httpx.TimeoutException:
+            logger.error(f"Data webhook to {url} timed out")
+            raise
+        except Exception as e:
+            logger.error(f"Failed to send data webhook to {url}: {e}")
+            raise
     
     async def _call_handler(self, handler, event: NodeAccessEvent):
         """Call an internal handler."""

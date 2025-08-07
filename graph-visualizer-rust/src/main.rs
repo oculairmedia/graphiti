@@ -25,7 +25,7 @@ mod duckdb_store;
 mod arrow_converter;
 mod delta_tracker;
 
-use duckdb_store::{DuckDBStore, GraphUpdate};
+use duckdb_store::{DuckDBStore, GraphUpdate, UpdateOperation};
 use arrow_converter::ArrowConverter;
 use delta_tracker::{DeltaTracker, GraphDelta};
 
@@ -527,6 +527,9 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/updates/nodes", post(add_nodes))
         .route("/api/updates/edges", post(add_edges))
         .route("/api/updates/batch", post(batch_update))
+        // Webhook and data sync endpoints
+        .route("/api/webhooks/data-ingestion", post(webhook_data_ingestion))
+        .route("/api/data/reload", post(reload_duckdb_from_falkordb))
         // Centrality proxy endpoints
         .route("/api/centrality/health", get(proxy_centrality_health))
         .route("/api/centrality/stats", get(proxy_centrality_stats))
@@ -1872,6 +1875,210 @@ async fn batch_update(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
                     error: format!("Failed to process batch update: {}", e),
+                }),
+            ))
+        }
+    }
+}
+
+// Webhook structures for receiving data ingestion events from Graphiti
+#[derive(Debug, Deserialize)]
+struct DataIngestionWebhook {
+    event_type: String,
+    operation: String,
+    timestamp: String,
+    group_id: Option<String>,
+    episode: Option<serde_json::Value>,
+    nodes: Vec<GraphitiNode>,
+    edges: Vec<GraphitiEdge>,
+    metadata: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Deserialize)]
+struct GraphitiNode {
+    uuid: String,
+    name: String,
+    group_id: Option<String>,
+    created_at: Option<String>,
+    summary: Option<String>,
+    labels: Vec<String>,
+    attributes: Option<HashMap<String, serde_json::Value>>,
+}
+
+#[derive(Debug, Deserialize)]
+struct GraphitiEdge {
+    uuid: String,
+    source_node_uuid: String,
+    target_node_uuid: String,
+    name: String,
+    fact: Option<String>,
+    episodes: Vec<String>,
+    created_at: Option<String>,
+}
+
+// Transform Graphiti entities to Rust format
+fn transform_graphiti_nodes(graphiti_nodes: Vec<GraphitiNode>) -> Vec<Node> {
+    graphiti_nodes.into_iter().map(|gn| {
+        let mut properties = HashMap::new();
+        
+        // Add all attributes as properties
+        if let Some(attrs) = gn.attributes {
+            for (key, value) in attrs {
+                properties.insert(key, value);
+            }
+        }
+        
+        // Add standard fields to properties
+        properties.insert("name".to_string(), serde_json::Value::String(gn.name.clone()));
+        if let Some(group_id) = gn.group_id {
+            properties.insert("group_id".to_string(), serde_json::Value::String(group_id));
+        }
+        if let Some(created_at) = gn.created_at {
+            properties.insert("created_at".to_string(), serde_json::Value::String(created_at));
+        }
+        
+        Node {
+            id: gn.uuid,
+            label: gn.name,
+            node_type: gn.labels.first().unwrap_or(&"Unknown".to_string()).clone(),
+            summary: gn.summary,
+            properties,
+        }
+    }).collect()
+}
+
+fn transform_graphiti_edges(graphiti_edges: Vec<GraphitiEdge>) -> Vec<Edge> {
+    graphiti_edges.into_iter().map(|ge| Edge {
+        from: ge.source_node_uuid,
+        to: ge.target_node_uuid,
+        edge_type: ge.name,
+        weight: 1.0, // Default weight, could be calculated from episodes count
+    }).collect()
+}
+
+// Webhook receiver endpoint for data ingestion events
+async fn webhook_data_ingestion(
+    State(state): State<AppState>,
+    Json(webhook): Json<DataIngestionWebhook>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<ErrorResponse>)> {
+    info!("Received data ingestion webhook: operation={}, nodes={}, edges={}", 
+        webhook.operation, webhook.nodes.len(), webhook.edges.len());
+    
+    // Transform entities to Rust format
+    let rust_nodes = transform_graphiti_nodes(webhook.nodes);
+    let rust_edges = transform_graphiti_edges(webhook.edges);
+    
+    // Queue updates for processing
+    if !rust_nodes.is_empty() {
+        state.duckdb_store.queue_nodes(rust_nodes.clone()).await;
+    }
+    
+    if !rust_edges.is_empty() {
+        state.duckdb_store.queue_edges(rust_edges.clone()).await;
+    }
+    
+    // Process updates immediately
+    match state.duckdb_store.process_updates().await {
+        Ok(Some(update)) => {
+            // Broadcast update to WebSocket clients
+            let _ = state.update_tx.send(update.clone());
+            
+            // Clear caches to ensure fresh data
+            state.graph_cache.clear();
+            let mut arrow_cache = state.arrow_cache.write().await;
+            *arrow_cache = None;
+            drop(arrow_cache);
+            
+            info!("Webhook data processed: {} nodes, {} edges added", 
+                rust_nodes.len(), rust_edges.len());
+            
+            Ok(Json(serde_json::json!({
+                "status": "success",
+                "operation": webhook.operation,
+                "nodes_processed": rust_nodes.len(),
+                "edges_processed": rust_edges.len(),
+                "timestamp": update.timestamp
+            })))
+        }
+        Ok(None) => {
+            Ok(Json(serde_json::json!({
+                "status": "no_updates",
+                "message": "No updates to process"
+            })))
+        }
+        Err(e) => {
+            error!("Failed to process webhook data: {}", e);
+            Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: format!("Failed to process webhook data: {}", e),
+                }),
+            ))
+        }
+    }
+}
+
+// Full reload endpoint - reload all data from FalkorDB
+async fn reload_duckdb_from_falkordb(
+    State(state): State<AppState>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<ErrorResponse>)> {
+    info!("Starting full DuckDB reload from FalkorDB");
+    
+    // Fetch fresh data from FalkorDB using the entire_graph query
+    let query = build_query("entire_graph", 100000, 0, None);
+    let graph_data = match execute_graph_query(&state.client, &state.graph_name, &query).await {
+        Ok(data) => data,
+        Err(e) => {
+            error!("Failed to fetch data from FalkorDB: {}", e);
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: format!("Failed to fetch data from FalkorDB: {}", e),
+                }),
+            ));
+        }
+    };
+    
+    info!("Fetched {} nodes and {} edges from FalkorDB", 
+        graph_data.nodes.len(), graph_data.edges.len());
+    
+    // Clear and reload DuckDB
+    // Note: This is a simplified version - in production you'd want atomic swap
+    match state.duckdb_store.load_initial_data(graph_data.nodes.clone(), graph_data.edges.clone()).await {
+        Ok(_) => {
+            // Clear caches
+            state.graph_cache.clear();
+            let mut arrow_cache = state.arrow_cache.write().await;
+            *arrow_cache = None;
+            drop(arrow_cache);
+            
+            // Broadcast full reload event
+            let update = GraphUpdate {
+                operation: UpdateOperation::AddNodes, // Could add FullReload variant
+                nodes: Some(graph_data.nodes.clone()),
+                edges: Some(graph_data.edges.clone()),
+                timestamp: std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_millis() as u64,
+            };
+            let _ = state.update_tx.send(update);
+            
+            info!("DuckDB reload completed successfully");
+            
+            Ok(Json(serde_json::json!({
+                "status": "success",
+                "nodes_loaded": graph_data.nodes.len(),
+                "edges_loaded": graph_data.edges.len(),
+                "stats": graph_data.stats
+            })))
+        }
+        Err(e) => {
+            error!("Failed to reload DuckDB: {}", e);
+            Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: format!("Failed to reload DuckDB: {}", e),
                 }),
             ))
         }
