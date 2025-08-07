@@ -88,6 +88,11 @@ export interface DynamicConfig {
   showLabels: boolean;
   showHoveredNodeLabel: boolean;
   
+  // Label optimization settings
+  showDynamicLabels: boolean;
+  showTopLabels: boolean;
+  showTopLabelsLimit: number;
+  
   // Dynamic node configuration
   nodeTypeColors: Record<string, string>;
   nodeTypeVisibility: Record<string, boolean>;

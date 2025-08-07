@@ -143,8 +143,13 @@ const defaultDynamicConfig: DynamicConfig = {
   // Frequently toggled
   disableSimulation: false,
   renderLinks: true,
-  showLabels: false,
+  showLabels: true,
   showHoveredNodeLabel: true,
+  
+  // Label optimization settings
+  showDynamicLabels: true,
+  showTopLabels: true,
+  showTopLabelsLimit: 100,
   
   // Dynamic node configuration
   nodeTypeColors: {},
@@ -175,7 +180,7 @@ const defaultDynamicConfig: DynamicConfig = {
   clusterBy: 'community',
   
   // Advanced rendering options
-  renderLabels: false,
+  renderLabels: true,
   edgeArrows: false,
   edgeArrowScale: 1,
   pointsOnEdge: false,

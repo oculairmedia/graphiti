@@ -55,6 +55,9 @@ export interface PersistedGraphConfig {
   renderLabels?: boolean;
   showLabels?: boolean;
   showHoveredNodeLabel?: boolean;
+  showDynamicLabels?: boolean;
+  showTopLabels?: boolean;
+  showTopLabelsLimit?: number;
   labelColor?: string;
   hoveredLabelColor?: string;
   labelSize?: number;
