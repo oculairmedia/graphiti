@@ -78,6 +78,11 @@ export interface PersistedGraphConfig {
   circularOrdering?: string;
   clusterBy?: string;
   
+  // Clustering
+  clusteringEnabled?: boolean;
+  clusteringMethod?: string;
+  centralityMetric?: string;
+  
   // Query
   queryType?: string;
   nodeLimit?: number;
