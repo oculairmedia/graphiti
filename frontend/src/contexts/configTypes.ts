@@ -150,9 +150,6 @@ export interface DynamicConfig {
   enableKeyboardShortcuts: boolean;
   followSelectedNode: boolean;
   
-  // Performance
-  performanceMode: boolean;
-  
   // Filters
   filteredNodeTypes: string[];
   minDegree: number;
