@@ -2676,22 +2676,24 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
               // Get the node from the correct data source
               const dataSource = useDuckDBTables ? duckDBData : cosmographData;
               if (!dataSource || !dataSource.points) {
-                return config.nodeTypeColors[value] || '#94a3b8';
+                return undefined; // Let Cosmograph handle default color
               }
               
-              // Handle Arrow table vs array data
+              // Handle Arrow table vs array data to get node ID and value
               let nodeId: string;
+              let nodeData: any;
               if (useDuckDBTables && duckDBData?.points?.get) {
                 // Arrow table - use get method
-                const row = duckDBData.points.get(index);
-                nodeId = row?.id || String(index);
+                nodeData = duckDBData.points.get(index);
+                nodeId = nodeData?.id || String(index);
               } else if (cosmographData?.points?.[index]) {
                 // JavaScript array
-                const point = cosmographData.points[index];
-                nodeId = point.id;
+                nodeData = cosmographData.points[index];
+                nodeId = nodeData.id;
               } else {
-                return config.nodeTypeColors[value] || '#94a3b8';
+                return undefined; // Let Cosmograph handle default color
               }
+              
               const glowStartTime = glowingNodes.get(nodeId);
               
               if (glowStartTime) {
@@ -2700,8 +2702,72 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
                 const fadeDuration = 2000; // 2 seconds total
                 const fadeProgress = Math.min(elapsed / fadeDuration, 1);
                 
-                // Extract base color and highlight color components
-                const baseColor = config.nodeTypeColors[value] || '#94a3b8';
+                // Determine base color based on current color scheme
+                let baseColor: string;
+                
+                switch (config.colorScheme) {
+                  case 'by-type': {
+                    // Use node type colors
+                    const nodeType = nodeData?.node_type || value;
+                    baseColor = config.nodeTypeColors[nodeType] || '#94a3b8';
+                    break;
+                  }
+                  
+                  case 'by-centrality': {
+                    // Use degree centrality gradient (blue to red)
+                    const centrality = nodeData?.degree_centrality || 0;
+                    const normalized = Math.min(Math.max(centrality, 0), 1);
+                    const r = Math.round(255 * normalized);
+                    const g = Math.round(100 * (1 - normalized) + 100 * normalized);
+                    const b = Math.round(255 * (1 - normalized));
+                    baseColor = `rgb(${r}, ${g}, ${b})`;
+                    break;
+                  }
+                  
+                  case 'by-pagerank': {
+                    // Use pagerank gradient (green to purple)
+                    const pagerank = nodeData?.pagerank_centrality || 0;
+                    const normalized = Math.min(Math.max(pagerank, 0), 1);
+                    const r = Math.round(139 * normalized);
+                    const g = Math.round(195 * (1 - normalized) + 92 * normalized);
+                    const b = Math.round(74 * (1 - normalized) + 246 * normalized);
+                    baseColor = `rgb(${r}, ${g}, ${b})`;
+                    break;
+                  }
+                  
+                  case 'by-degree': {
+                    // Use degree for color (orange gradient)
+                    const degree = nodeData?.degree_centrality || 0;
+                    const normalized = Math.min(Math.max(degree, 0), 1);
+                    const r = 255;
+                    const g = Math.round(165 * (1 - normalized) + 69 * normalized);
+                    const b = Math.round(0 + 69 * normalized);
+                    baseColor = `rgb(${r}, ${g}, ${b})`;
+                    break;
+                  }
+                  
+                  case 'by-community': {
+                    // Use cluster/community colors
+                    const communityColors = [
+                      '#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6',
+                      '#ec4899', '#14b8a6', '#f97316', '#6366f1', '#84cc16',
+                      '#22d3ee', '#f87171', '#34d399', '#fbbf24', '#a78bfa'
+                    ];
+                    const cluster = nodeData?.cluster || value;
+                    const clusterIndex = typeof cluster === 'string' ? 
+                      parseInt(cluster.replace(/\D/g, '')) || 0 : 
+                      Number(cluster) || 0;
+                    baseColor = communityColors[clusterIndex % communityColors.length];
+                    break;
+                  }
+                  
+                  default:
+                    // Default to node type colors or fallback
+                    const nodeType = nodeData?.node_type || value;
+                    baseColor = config.nodeTypeColors[nodeType] || '#94a3b8';
+                }
+                
+                // Apply highlight glow effect
                 const highlightColor = config.nodeAccessHighlightColor;
                 
                 // Parse colors to RGB
@@ -2714,6 +2780,16 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
                         parseInt(match[2]), 
                         parseInt(match[3]), 
                         parseFloat(match[4] || '1')
+                      ];
+                    }
+                  } else if (color.startsWith('rgb')) {
+                    const match = color.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+                    if (match) {
+                      return [
+                        parseInt(match[1]), 
+                        parseInt(match[2]), 
+                        parseInt(match[3]), 
+                        1
                       ];
                     }
                   } else if (color.startsWith('#')) {
@@ -2747,8 +2823,8 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
                 return `rgba(${r}, ${g}, ${b}, ${a})`;
               }
               
-              // Return normal color for non-glowing nodes
-              return config.nodeTypeColors[value] || '#94a3b8';
+              // No glow - return undefined to use default color scheme
+              return undefined;
             } : undefined}
             
             // Size configuration - keep normal sizing always
