@@ -18,12 +18,16 @@ export BACKUP_RETENTION_WEEKLY="${BACKUP_RETENTION_WEEKLY:-4}"
 export BACKUP_RETENTION_MONTHLY="${BACKUP_RETENTION_MONTHLY:-3}"
 export BACKUP_WEBHOOK_URL="${BACKUP_WEBHOOK_URL:-}"
 
-# Export environment variables for the backup script to use
-export CONTAINER_NAME
-export BACKUP_DIR
-export BACKUP_RETENTION_DAYS
-export BACKUP_RETENTION_WEEKLY
-export BACKUP_RETENTION_MONTHLY
+# Write environment variables to a file that can be sourced by cron jobs
+cat > /etc/environment <<EOF
+export CONTAINER_NAME=$CONTAINER_NAME
+export BACKUP_DIR=$BACKUP_DIR
+export BACKUP_RETENTION_DAYS=$BACKUP_RETENTION_DAYS
+export BACKUP_RETENTION_WEEKLY=$BACKUP_RETENTION_WEEKLY
+export BACKUP_RETENTION_MONTHLY=$BACKUP_RETENTION_MONTHLY
+export BACKUP_WEBHOOK_URL=$BACKUP_WEBHOOK_URL
+export STATUS_FILE=$STATUS_FILE
+EOF
 
 # Ensure backup directories exist
 log "Creating backup directories..."
@@ -69,11 +73,26 @@ if [ $retry_count -eq $max_retries ]; then
     log "⚠️  Warning: Could not connect to FalkorDB container. Backups will fail until container is available."
 fi
 
+# Initialize status file for dashboard
+export STATUS_FILE="/var/log/backup_status.json"
+echo '{"backups": {}}' > "$STATUS_FILE"
+
+# Start monitoring dashboard in background
+if [ "${ENABLE_DASHBOARD:-true}" = "true" ]; then
+    log "Starting monitoring dashboard on port 8080..."
+    python3 /scripts/backup_dashboard.py &
+    DASHBOARD_PID=$!
+    log "Dashboard started with PID: $DASHBOARD_PID"
+fi
+
 # Run initial backup on startup (snapshot)
 if [ "${RUN_INITIAL_BACKUP:-true}" = "true" ]; then
     log "Running initial snapshot backup..."
     /scripts/backup_falkordb.sh snapshot || log "Initial backup failed (this is normal if FalkorDB is still starting)"
 fi
+
+# Trap to ensure dashboard stops when container stops
+trap "kill $DASHBOARD_PID 2>/dev/null" EXIT
 
 # Start cron daemon in foreground
 log "Starting cron daemon..."

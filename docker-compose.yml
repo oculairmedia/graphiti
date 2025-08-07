@@ -220,10 +220,12 @@ services:
       dockerfile: Dockerfile.backup
     container_name: graphiti-falkordb-backup
     restart: unless-stopped
+    ports:
+      - 8091:8080  # Monitoring dashboard
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro  # Docker socket for container access
       - falkordb_backups:/backups/falkordb            # Backup storage volume
-      - ./scripts:/scripts:ro                         # Backup scripts
+      - backup_status:/var/log                        # Status files for dashboard
     environment:
       - FALKORDB_CONTAINER_NAME=graphiti-falkordb-1
       - BACKUP_DIR=/backups/falkordb
@@ -232,16 +234,25 @@ services:
       - BACKUP_RETENTION_MONTHLY=${BACKUP_RETENTION_MONTHLY:-3}
       - BACKUP_WEBHOOK_URL=${BACKUP_WEBHOOK_URL:-}
       - RUN_INITIAL_BACKUP=${RUN_INITIAL_BACKUP:-true}
+      - ENABLE_DASHBOARD=${ENABLE_DASHBOARD:-true}
+      - STATUS_FILE=/var/log/backup_status.json
     depends_on:
       falkordb:
         condition: service_healthy
     networks:
       - graphiti_network
+    healthcheck:
+      test: ["CMD", "sh", "-c", "pgrep crond && curl -f http://localhost:8080/health || exit 1"]
+      interval: 60s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
     labels:
       - homepage.group=Knowledge Management
       - homepage.name=FalkorDB Backup Service
       - homepage.icon=si-databricks
-      - homepage.description=Automated backup service for FalkorDB
+      - homepage.href=http://192.168.50.90:8091
+      - homepage.description=Automated backup service with monitoring dashboard
 
 networks:
   graphiti_network:
@@ -249,3 +260,4 @@ networks:
 volumes:
   falkordb_data: null
   falkordb_backups: null
+  backup_status: null

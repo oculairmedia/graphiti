@@ -59,14 +59,17 @@ backup_rdb() {
     local timestamp=$(date +%Y%m%d_%H%M%S)
     local backup_name="falkordb_${backup_type}_${timestamp}.rdb"
     local backup_path="$BACKUP_DIR/$backup_type/$backup_name"
+    local backup_start_time=$(date +%s)
     
     log "Starting $backup_type backup: $backup_name"
+    
+    # Get initial LASTSAVE before triggering BGSAVE
+    local initial_save=$(docker exec "$CONTAINER_NAME" redis-cli LASTSAVE | tr -d '\r\n')
     
     # Trigger background save
     docker exec "$CONTAINER_NAME" redis-cli BGSAVE
     
     # Wait for BGSAVE to complete
-    local initial_save=$(docker exec "$CONTAINER_NAME" redis-cli LASTSAVE | tr -d '\r\n')
     sleep 2  # Give BGSAVE time to start
     
     # Maximum wait time (30 seconds)
@@ -91,7 +94,10 @@ backup_rdb() {
     
     # Verify backup
     if [[ -f "$backup_path" && -s "$backup_path" ]]; then
+        local size_bytes=$(stat -c%s "$backup_path" 2>/dev/null || stat -f%z "$backup_path" 2>/dev/null || echo 0)
         local size=$(du -h "$backup_path" | cut -f1)
+        local duration=$(($(date +%s) - ${backup_start_time:-$(date +%s)}))
+        
         log "✅ $backup_type backup completed: $backup_name ($size)"
         
         # Create metadata file
@@ -106,8 +112,19 @@ backup_rdb() {
 }
 EOF
         
+        # Update backup status
+        if [[ -x "/scripts/backup_status.sh" ]]; then
+            /scripts/backup_status.sh update "$backup_type" "success" "$backup_path" "$size_bytes" "$duration" "" || true
+        fi
+        
     else
         log "❌ $backup_type backup failed: $backup_name"
+        
+        # Update backup status for failure
+        if [[ -x "/scripts/backup_status.sh" ]]; then
+            /scripts/backup_status.sh update "$backup_type" "error" "" "0" "0" "Backup file creation failed" || true
+        fi
+        
         exit 1
     fi
 }
