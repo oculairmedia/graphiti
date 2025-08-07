@@ -2702,69 +2702,70 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
                 const fadeDuration = 2000; // 2 seconds total
                 const fadeProgress = Math.min(elapsed / fadeDuration, 1);
                 
-                // Determine base color based on current color scheme
+                // Get the actual current color of the node based on active color scheme
+                // This ensures we're using the exact color that would be rendered
                 let baseColor: string;
                 
-                switch (config.colorScheme) {
-                  case 'by-type': {
-                    // Use node type colors
-                    const nodeType = nodeData?.node_type || value;
-                    baseColor = config.nodeTypeColors[nodeType] || '#94a3b8';
+                // First, get the color value based on the current pointColorBy field
+                const colorValue = nodeData[pointColorBy || 'node_type'] || value;
+                
+                switch (pointColorStrategy) {
+                  case 'map': {
+                    // Direct mapping (e.g., by-type)
+                    baseColor = config.nodeTypeColors[colorValue] || '#94a3b8';
                     break;
                   }
                   
-                  case 'by-centrality': {
-                    // Use degree centrality gradient (blue to red)
-                    const centrality = nodeData?.degree_centrality || 0;
-                    const normalized = Math.min(Math.max(centrality, 0), 1);
-                    const r = Math.round(255 * normalized);
-                    const g = Math.round(100 * (1 - normalized) + 100 * normalized);
-                    const b = Math.round(255 * (1 - normalized));
-                    baseColor = `rgb(${r}, ${g}, ${b})`;
+                  case 'interpolatePalette': {
+                    // Gradient interpolation (by-centrality, by-pagerank)
+                    const normalizedValue = Math.min(Math.max(Number(colorValue) || 0, 0), 1);
+                    
+                    // Use the same palette that Cosmograph uses
+                    if (config.colorScheme === 'by-pagerank') {
+                      // Purple to yellow gradient for PageRank
+                      const r = Math.round(147 + (255 - 147) * normalizedValue);
+                      const g = Math.round(51 + (235 - 51) * normalizedValue);
+                      const b = Math.round(234 + (59 - 234) * normalizedValue);
+                      baseColor = `rgb(${r}, ${g}, ${b})`;
+                    } else {
+                      // Blue to red gradient for centrality
+                      const r = Math.round(59 + (239 - 59) * normalizedValue);
+                      const g = Math.round(130 + (68 - 130) * normalizedValue);
+                      const b = Math.round(246 + (68 - 246) * normalizedValue);
+                      baseColor = `rgb(${r}, ${g}, ${b})`;
+                    }
                     break;
                   }
                   
-                  case 'by-pagerank': {
-                    // Use pagerank gradient (green to purple)
-                    const pagerank = nodeData?.pagerank_centrality || 0;
-                    const normalized = Math.min(Math.max(pagerank, 0), 1);
-                    const r = Math.round(139 * normalized);
-                    const g = Math.round(195 * (1 - normalized) + 92 * normalized);
-                    const b = Math.round(74 * (1 - normalized) + 246 * normalized);
-                    baseColor = `rgb(${r}, ${g}, ${b})`;
-                    break;
-                  }
-                  
-                  case 'by-degree': {
-                    // Use degree for color (orange gradient)
+                  case 'degree': {
+                    // Degree-based coloring
                     const degree = nodeData?.degree_centrality || 0;
                     const normalized = Math.min(Math.max(degree, 0), 1);
-                    const r = 255;
-                    const g = Math.round(165 * (1 - normalized) + 69 * normalized);
-                    const b = Math.round(0 + 69 * normalized);
+                    // Orange gradient
+                    const r = Math.round(251 + (239 - 251) * normalized);
+                    const g = Math.round(146 + (68 - 146) * normalized);
+                    const b = Math.round(60 + (68 - 60) * normalized);
                     baseColor = `rgb(${r}, ${g}, ${b})`;
                     break;
                   }
                   
-                  case 'by-community': {
-                    // Use cluster/community colors
-                    const communityColors = [
+                  case 'palette': {
+                    // Community/cluster palette
+                    const communityColors = pointColorPalette || [
                       '#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6',
                       '#ec4899', '#14b8a6', '#f97316', '#6366f1', '#84cc16',
                       '#22d3ee', '#f87171', '#34d399', '#fbbf24', '#a78bfa'
                     ];
-                    const cluster = nodeData?.cluster || value;
-                    const clusterIndex = typeof cluster === 'string' ? 
-                      parseInt(cluster.replace(/\D/g, '')) || 0 : 
-                      Number(cluster) || 0;
+                    const clusterIndex = typeof colorValue === 'string' ? 
+                      parseInt(colorValue.replace(/\D/g, '')) || 0 : 
+                      Number(colorValue) || 0;
                     baseColor = communityColors[clusterIndex % communityColors.length];
                     break;
                   }
                   
                   default:
-                    // Default to node type colors or fallback
-                    const nodeType = nodeData?.node_type || value;
-                    baseColor = config.nodeTypeColors[nodeType] || '#94a3b8';
+                    // Fallback - should not reach here if strategy is set correctly
+                    baseColor = '#94a3b8';
                 }
                 
                 // Apply highlight glow effect
