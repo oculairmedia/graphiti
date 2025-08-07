@@ -44,6 +44,13 @@ export const GraphTimeline = forwardRef<GraphTimelineHandle, GraphTimelineProps>
     // Show timeline when component mounts
     useEffect(() => {
       setHasTemporalData(true);
+      
+      // Cleanup interval on unmount
+      return () => {
+        if (tickCheckInterval.current) {
+          clearInterval(tickCheckInterval.current);
+        }
+      };
     }, []);
 
     // Handle timeline selection
@@ -86,7 +93,12 @@ export const GraphTimeline = forwardRef<GraphTimelineHandle, GraphTimelineProps>
     const handleStop = useCallback(() => {
       if (!timelineRef.current) return;
       
-      animationStoppedManually.current = true;
+      // Clear the tick monitoring
+      if (tickCheckInterval.current) {
+        clearInterval(tickCheckInterval.current);
+        tickCheckInterval.current = null;
+      }
+      
       timelineRef.current.stopAnimation();
       timelineRef.current.setSelection(undefined);
       setCurrentTimeWindow('');
@@ -99,32 +111,43 @@ export const GraphTimeline = forwardRef<GraphTimelineHandle, GraphTimelineProps>
       setCurrentTimeWindow('');
     }, []);
 
-    // Track if animation was manually stopped
-    const animationStoppedManually = useRef(false);
+    // Track last animation tick time to detect when animation ends
+    const lastTickTime = useRef<number>(0);
+    const tickCheckInterval = useRef<NodeJS.Timeout | null>(null);
 
     // Animation callbacks
     const handleAnimationPlay = useCallback((isRunning: boolean, selection?: (number | Date)[]) => {
       logger.log('Animation play callback:', { isRunning, selection, isLooping });
+      setIsAnimating(isRunning);
       
-      if (isRunning) {
-        // Animation started
-        setIsAnimating(true);
-        animationStoppedManually.current = false;
-      } else {
-        // Animation ended
-        setIsAnimating(false);
+      if (isRunning && isLooping) {
+        // Start monitoring for animation end when looping is enabled
+        lastTickTime.current = Date.now();
         
-        // If looping is enabled and animation wasn't manually stopped, restart from beginning
-        if (isLooping && !animationStoppedManually.current && timelineRef.current) {
-          logger.log('Looping animation - restarting from beginning');
-          setTimeout(() => {
-            // Clear the current selection to reset to beginning
-            timelineRef.current?.setSelection(undefined);
-            // Small delay before restarting to ensure clean reset
-            setTimeout(() => {
-              timelineRef.current?.playAnimation();
-            }, 100);
-          }, 200);
+        // Clear any existing interval
+        if (tickCheckInterval.current) {
+          clearInterval(tickCheckInterval.current);
+        }
+        
+        // Check every 500ms if animation has stopped (no ticks for 1 second)
+        tickCheckInterval.current = setInterval(() => {
+          const timeSinceLastTick = Date.now() - lastTickTime.current;
+          if (timeSinceLastTick > 1000 && timelineRef.current) {
+            logger.log('Animation appears to have ended, restarting for loop');
+            // Clear interval
+            if (tickCheckInterval.current) {
+              clearInterval(tickCheckInterval.current);
+              tickCheckInterval.current = null;
+            }
+            // Restart animation
+            timelineRef.current.playAnimation();
+          }
+        }, 500);
+      } else if (!isRunning) {
+        // Clear interval when animation stops
+        if (tickCheckInterval.current) {
+          clearInterval(tickCheckInterval.current);
+          tickCheckInterval.current = null;
         }
       }
     }, [isLooping]);
@@ -132,12 +155,18 @@ export const GraphTimeline = forwardRef<GraphTimelineHandle, GraphTimelineProps>
     const handleAnimationPause = useCallback((isRunning: boolean) => {
       logger.log('Animation pause callback:', { isRunning });
       setIsAnimating(isRunning);
-      if (!isRunning) {
-        animationStoppedManually.current = true;
+      
+      // Clear the tick monitoring when paused
+      if (!isRunning && tickCheckInterval.current) {
+        clearInterval(tickCheckInterval.current);
+        tickCheckInterval.current = null;
       }
     }, []);
 
     const handleAnimationTick = useCallback((selection?: (number | Date)[]) => {
+      // Update last tick time for loop detection
+      lastTickTime.current = Date.now();
+      
       if (selection && selection.length === 2) {
         const start = selection[0] instanceof Date ? selection[0] : new Date(selection[0]);
         const end = selection[1] instanceof Date ? selection[1] : new Date(selection[1]);
