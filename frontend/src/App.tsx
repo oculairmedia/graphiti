@@ -7,6 +7,7 @@ import { QueryClient } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ParallelInitProvider } from "@/contexts/ParallelInitProvider";
 import { DuckDBProvider } from "@/contexts/DuckDBProvider";
+import { RustWebSocketProvider } from "@/contexts/RustWebSocketProvider";
 import ErrorBoundary from "./components/ErrorBoundary";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
@@ -58,17 +59,19 @@ const App = () => {
     <ErrorBoundary>
       <ParallelInitProvider queryClient={queryClient}>
         <DuckDBProvider>
-          <TooltipProvider>
-            <Toaster />
-            <Sonner />
-            <BrowserRouter>
-              <Routes>
-                <Route path="/" element={<Index />} />
-                {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-            </BrowserRouter>
-          </TooltipProvider>
+          <RustWebSocketProvider>
+            <TooltipProvider>
+              <Toaster />
+              <Sonner />
+              <BrowserRouter>
+                <Routes>
+                  <Route path="/" element={<Index />} />
+                  {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </BrowserRouter>
+            </TooltipProvider>
+          </RustWebSocketProvider>
         </DuckDBProvider>
       </ParallelInitProvider>
     </ErrorBoundary>
