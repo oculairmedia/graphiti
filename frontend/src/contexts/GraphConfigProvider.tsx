@@ -203,6 +203,7 @@ const defaultDynamicConfig: DynamicConfig = {
   enableClickSelection: true,
   enableDoubleClickFocus: true,
   enableKeyboardShortcuts: true,
+  followSelectedNode: false,
   
   // Filters
   filteredNodeTypes: [],

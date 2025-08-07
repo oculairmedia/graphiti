@@ -126,6 +126,7 @@ export interface PersistedGraphConfig {
   enableClickSelection?: boolean;
   enableDoubleClickFocus?: boolean;
   enableKeyboardShortcuts?: boolean;
+  followSelectedNode?: boolean;
   
   // Performance
   performanceMode?: boolean;

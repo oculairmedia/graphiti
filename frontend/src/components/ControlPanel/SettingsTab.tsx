@@ -18,6 +18,7 @@ interface SettingsTabProps {
     enableKeyboardShortcuts: boolean;
     showDebugInfo: boolean;
     performanceMode: boolean;
+    followSelectedNode?: boolean;
   };
   onConfigUpdate: (updates: Record<string, unknown>) => void;
   graphStats?: {
@@ -108,6 +109,17 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
             <Checkbox
               checked={config.enableDoubleClickFocus}
               onCheckedChange={(checked) => onConfigUpdate({ enableDoubleClickFocus: !!checked })}
+            />
+          </div>
+          <Separator className="my-2" />
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label className="text-sm">Follow Selected Node</Label>
+              <p className="text-xs text-muted-foreground">Camera follows node during simulation</p>
+            </div>
+            <Checkbox
+              checked={config.followSelectedNode ?? false}
+              onCheckedChange={(checked) => onConfigUpdate({ followSelectedNode: !!checked })}
             />
           </div>
         </CardContent>

@@ -26,8 +26,10 @@ export interface StableConfig {
   // Static appearance settings
   linkWidth: number;
   linkWidthBy: string;
+  linkWidthScheme: string;
   linkWidthScale: number;
   linkOpacity: number;
+  linkOpacityScheme: string;
   linkGreyoutOpacity: number;
   linkColor: string;
   linkColorScheme: string;
@@ -146,6 +148,10 @@ export interface DynamicConfig {
   enableClickSelection: boolean;
   enableDoubleClickFocus: boolean;
   enableKeyboardShortcuts: boolean;
+  followSelectedNode: boolean;
+  
+  // Performance
+  performanceMode: boolean;
   
   // Filters
   filteredNodeTypes: string[];
@@ -173,8 +179,8 @@ export const isStableConfigKey = (key: string): boolean => {
     'simulationDecay', 'simulationRepulsionTheta', 'simulationCluster',
     'simulationClusterStrength', 'simulationImpulse', 'spaceSize',
     'randomSeed', 'useQuadtree', 'useClassicQuadtree', 'quadtreeLevels',
-    'linkWidth', 'linkWidthBy', 'linkWidthScale', 'linkOpacity',
-    'linkGreyoutOpacity', 'linkColor', 'linkColorScheme', 'scaleLinksOnZoom',
+    'linkWidth', 'linkWidthBy', 'linkWidthScheme', 'linkWidthScale', 'linkOpacity',
+    'linkOpacityScheme', 'linkGreyoutOpacity', 'linkColor', 'linkColorScheme', 'scaleLinksOnZoom',
     'backgroundColor', 'linkVisibilityDistance', 'linkVisibilityMinTransparency',
     'linkArrows', 'linkArrowsSizeScale', 'curvedLinks', 'curvedLinkSegments',
     'curvedLinkWeight', 'curvedLinkControlPointDistance', 'minNodeSize',
