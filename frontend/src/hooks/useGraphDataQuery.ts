@@ -44,7 +44,7 @@ export function useGraphDataQuery() {
   const lastFetchTimeRef = useRef(0);
   
   // Skip JSON fetch if using DuckDB (Arrow format is faster)
-  const skipJsonFetch = true; // Always use Arrow format for better performance
+  const skipJsonFetch = false; // Use JSON fetch as fallback when Arrow data is not available
   
   // Fetch graph data from Rust server (disabled when using Arrow)
   const { data: jsonData, isLoading: isJsonLoading, error } = useQuery({
@@ -56,7 +56,7 @@ export function useGraphDataQuery() {
       }
       // Always fetch entire graph to maintain stability
       const result = await graphClient.getGraphData({ 
-        query_type: 'entire_graph',
+        query_type: 'full',
         limit: 100000 
       });
       return result;
