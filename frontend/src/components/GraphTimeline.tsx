@@ -86,6 +86,7 @@ export const GraphTimeline = forwardRef<GraphTimelineHandle, GraphTimelineProps>
     const handleStop = useCallback(() => {
       if (!timelineRef.current) return;
       
+      animationStoppedManually.current = true;
       timelineRef.current.stopAnimation();
       timelineRef.current.setSelection(undefined);
       setCurrentTimeWindow('');
@@ -98,19 +99,42 @@ export const GraphTimeline = forwardRef<GraphTimelineHandle, GraphTimelineProps>
       setCurrentTimeWindow('');
     }, []);
 
+    // Track if animation was manually stopped
+    const animationStoppedManually = useRef(false);
+
     // Animation callbacks
     const handleAnimationPlay = useCallback((isRunning: boolean, selection?: (number | Date)[]) => {
-      setIsAnimating(isRunning);
-      if (isLooping && !isRunning && selection) {
-        // Restart animation if looping is enabled
-        setTimeout(() => {
-          timelineRef.current?.playAnimation();
-        }, 100);
+      logger.log('Animation play callback:', { isRunning, selection, isLooping });
+      
+      if (isRunning) {
+        // Animation started
+        setIsAnimating(true);
+        animationStoppedManually.current = false;
+      } else {
+        // Animation ended
+        setIsAnimating(false);
+        
+        // If looping is enabled and animation wasn't manually stopped, restart from beginning
+        if (isLooping && !animationStoppedManually.current && timelineRef.current) {
+          logger.log('Looping animation - restarting from beginning');
+          setTimeout(() => {
+            // Clear the current selection to reset to beginning
+            timelineRef.current?.setSelection(undefined);
+            // Small delay before restarting to ensure clean reset
+            setTimeout(() => {
+              timelineRef.current?.playAnimation();
+            }, 100);
+          }, 200);
+        }
       }
     }, [isLooping]);
 
     const handleAnimationPause = useCallback((isRunning: boolean) => {
+      logger.log('Animation pause callback:', { isRunning });
       setIsAnimating(isRunning);
+      if (!isRunning) {
+        animationStoppedManually.current = true;
+      }
     }, []);
 
     const handleAnimationTick = useCallback((selection?: (number | Date)[]) => {
