@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useCallback, useEffect, useState, useRef, useReducer } from 'react';
+import React, { createContext, useContext, useCallback, useEffect, useState, useRef, useReducer, useMemo } from 'react';
 import { useWebSocket, NodeAccessEvent, GraphUpdateEvent, DeltaUpdateEvent, CacheInvalidateEvent, WebSocketEvent } from '../hooks/useWebSocket';
 
 interface WebSocketContextValue {
@@ -88,11 +88,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
     return `${protocol}//${window.location.host}/ws`;
   }, [url]);
   
-  const [handlers, setHandlers] = useState<Set<(event: WebSocketEvent) => void>>(new Set());
-  const [nodeAccessHandlers, setNodeAccessHandlers] = useState<Set<(event: NodeAccessEvent) => void>>(new Set());
-  const [graphUpdateHandlers, setGraphUpdateHandlers] = useState<Set<(event: GraphUpdateEvent) => void>>(new Set());
-  const [deltaUpdateHandlers, setDeltaUpdateHandlers] = useState<Set<(event: DeltaUpdateEvent) => void>>(new Set());
-  const [cacheInvalidateHandlers, setCacheInvalidateHandlers] = useState<Set<(event: CacheInvalidateEvent) => void>>(new Set());
+  // State for last events only (for UI display)
   const [lastNodeAccessEvent, setLastNodeAccessEvent] = useState<NodeAccessEvent | null>(null);
   const [lastGraphUpdateEvent, setLastGraphUpdateEvent] = useState<GraphUpdateEvent | null>(null);
   const [lastDeltaUpdateEvent, setLastDeltaUpdateEvent] = useState<DeltaUpdateEvent | null>(null);
@@ -104,6 +100,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
     lastUpdateTime: null
   });
 
+  // Use refs for handlers to avoid re-renders on subscription changes
   const handlersRef = useRef<Set<(event: WebSocketEvent) => void>>(new Set());
   const nodeAccessHandlersRef = useRef<Set<(event: NodeAccessEvent) => void>>(new Set());
   const graphUpdateHandlersRef = useRef<Set<(event: GraphUpdateEvent) => void>>(new Set());
@@ -115,14 +112,6 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
     console.log('WebSocketProvider - Environment URL:', import.meta.env.VITE_WEBSOCKET_URL);
     console.log('WebSocketProvider - Using URL:', wsUrl);
   }, []); // Empty deps - log only once
-  
-  useEffect(() => {
-    handlersRef.current = handlers;
-    nodeAccessHandlersRef.current = nodeAccessHandlers;
-    graphUpdateHandlersRef.current = graphUpdateHandlers;
-    deltaUpdateHandlersRef.current = deltaUpdateHandlers;
-    cacheInvalidateHandlersRef.current = cacheInvalidateHandlers;
-  }, [handlers, nodeAccessHandlers, graphUpdateHandlers, deltaUpdateHandlers, cacheInvalidateHandlers]);
   
   const handleMessage = useCallback((event: WebSocketEvent) => {
     // Handle specific event types
@@ -188,71 +177,51 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
   });
 
   const subscribe = useCallback((handler: (event: WebSocketEvent) => void) => {
-    setHandlers(prev => new Set(prev).add(handler));
+    handlersRef.current.add(handler);
     
     // Return unsubscribe function
     return () => {
-      setHandlers(prev => {
-        const next = new Set(prev);
-        next.delete(handler);
-        return next;
-      });
+      handlersRef.current.delete(handler);
     };
   }, []);
 
   const subscribeToNodeAccess = useCallback((handler: (event: NodeAccessEvent) => void) => {
-    setNodeAccessHandlers(prev => new Set(prev).add(handler));
+    nodeAccessHandlersRef.current.add(handler);
     
     // Return unsubscribe function
     return () => {
-      setNodeAccessHandlers(prev => {
-        const next = new Set(prev);
-        next.delete(handler);
-        return next;
-      });
+      nodeAccessHandlersRef.current.delete(handler);
     };
   }, []);
 
   const subscribeToGraphUpdate = useCallback((handler: (event: GraphUpdateEvent) => void) => {
-    setGraphUpdateHandlers(prev => new Set(prev).add(handler));
+    graphUpdateHandlersRef.current.add(handler);
     
     // Return unsubscribe function
     return () => {
-      setGraphUpdateHandlers(prev => {
-        const next = new Set(prev);
-        next.delete(handler);
-        return next;
-      });
+      graphUpdateHandlersRef.current.delete(handler);
     };
   }, []);
   
   const subscribeToDeltaUpdate = useCallback((handler: (event: DeltaUpdateEvent) => void) => {
-    setDeltaUpdateHandlers(prev => new Set(prev).add(handler));
+    deltaUpdateHandlersRef.current.add(handler);
     
     // Return unsubscribe function
     return () => {
-      setDeltaUpdateHandlers(prev => {
-        const next = new Set(prev);
-        next.delete(handler);
-        return next;
-      });
+      deltaUpdateHandlersRef.current.delete(handler);
     };
   }, []);
   
   const subscribeToCacheInvalidate = useCallback((handler: (event: CacheInvalidateEvent) => void) => {
-    setCacheInvalidateHandlers(prev => new Set(prev).add(handler));
+    cacheInvalidateHandlersRef.current.add(handler);
     
     // Return unsubscribe function
     return () => {
-      setCacheInvalidateHandlers(prev => {
-        const next = new Set(prev);
-        next.delete(handler);
-        return next;
-      });
+      cacheInvalidateHandlersRef.current.delete(handler);
     };
   }, []);
 
-  const value: WebSocketContextValue = {
+  const value: WebSocketContextValue = useMemo(() => ({
     isConnected,
     connectionQuality,
     latency,
@@ -265,7 +234,20 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
     lastGraphUpdateEvent,
     lastDeltaUpdateEvent,
     updateStats
-  };
+  }), [
+    isConnected,
+    connectionQuality,
+    latency,
+    subscribe,
+    subscribeToNodeAccess,
+    subscribeToGraphUpdate,
+    subscribeToDeltaUpdate,
+    subscribeToCacheInvalidate,
+    lastNodeAccessEvent,
+    lastGraphUpdateEvent,
+    lastDeltaUpdateEvent,
+    updateStats
+  ]);
 
   return (
     <WebSocketContext.Provider value={value}>
