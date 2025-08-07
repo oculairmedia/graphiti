@@ -429,13 +429,13 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       };
     }, [subscribeToWebSocket]);
     
-    // Process batched delta updates
-    const processDeltaBatch = useCallback(() => {
+    // Process batched delta updates using Cosmograph API
+    const processDeltaBatch = useCallback(async () => {
       if (deltaQueueRef.current.length === 0) return;
       
-      const currentData = cosmographDataRef.current;
-      if (!currentData) {
-        deltaQueueRef.current = [];
+      // Check if Cosmograph is ready
+      if (!cosmographRef.current) {
+        console.warn('[GraphCanvas] Cosmograph not ready for delta updates');
         return;
       }
       
@@ -443,71 +443,137 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       const deltas = [...deltaQueueRef.current];
       deltaQueueRef.current = [];
       
-      let updatedNodes = [...(currentData.points || [])];
-      let updatedLinks = [...(currentData.links || [])];
-      
-      // Apply all deltas
-      deltas.forEach(delta => {
-        const { operation, nodes: deltaNodes, edges: deltaEdges } = delta;
+      try {
+        // Group operations by type for efficiency
+        const pointsToAdd: any[] = [];
+        const linksToAdd: any[] = [];
+        const pointIdsToDelete: string[] = [];
+        const linkPairsToDelete: [string, string][] = [];
+        const pointsToUpdate: Map<string, any> = new Map();
         
-        // Apply delta operations
-        if (operation === 'add') {
-          if (deltaNodes && deltaNodes.length > 0) {
-            updatedNodes = [...updatedNodes, ...deltaNodes];
-          }
-          if (deltaEdges && deltaEdges.length > 0) {
-            updatedLinks = [...updatedLinks, ...deltaEdges];
-          }
-        } else if (operation === 'update') {
-          if (deltaNodes && deltaNodes.length > 0) {
-            const nodeMap = new Map(updatedNodes.map(n => [n.id, n]));
-            deltaNodes.forEach(update => {
-              const existing = nodeMap.get(update.id);
-              if (existing) {
-                Object.assign(existing, update);
-              }
-            });
-            updatedNodes = Array.from(nodeMap.values());
-          }
-          if (deltaEdges && deltaEdges.length > 0) {
-            const edgeMap = new Map(updatedLinks.map(e => [e.id || `${e.source}-${e.target}`, e]));
-            deltaEdges.forEach(update => {
-              const id = update.id || `${update.source}-${update.target}`;
-              const existing = edgeMap.get(id);
-              if (existing) {
-                Object.assign(existing, update);
-              }
-            });
-            updatedLinks = Array.from(edgeMap.values());
-          }
-        } else if (operation === 'delete') {
-          if (deltaNodes && deltaNodes.length > 0) {
-            const deleteIds = new Set(deltaNodes.map(n => n.id));
-            updatedNodes = updatedNodes.filter(n => !deleteIds.has(n.id));
-          }
-          if (deltaEdges && deltaEdges.length > 0) {
-            const deleteIds = new Set(deltaEdges.map(e => e.id || `${e.source}-${e.target}`));
-            updatedLinks = updatedLinks.filter(e => {
-              const id = e.id || `${e.source}-${e.target}`;
-              return !deleteIds.has(id);
-            });
+        // Process all deltas to group operations
+        for (const delta of deltas) {
+          const { operation, nodes: deltaNodes, edges: deltaEdges } = delta;
+          
+          if (operation === 'add') {
+            if (deltaNodes && deltaNodes.length > 0) {
+              deltaNodes.forEach(node => {
+                pointsToAdd.push({
+                  id: node.id,
+                  label: node.label || node.id,
+                  node_type: node.node_type || 'Unknown',
+                  size: node.size || 1,
+                  ...node.properties
+                });
+              });
+            }
+            if (deltaEdges && deltaEdges.length > 0) {
+              deltaEdges.forEach(edge => {
+                linksToAdd.push({
+                  source: edge.source || edge.from,
+                  target: edge.target || edge.to,
+                  weight: edge.weight || 1,
+                  ...edge
+                });
+              });
+            }
+          } else if (operation === 'update') {
+            if (deltaNodes && deltaNodes.length > 0) {
+              // For updates, we need to remove and re-add nodes
+              deltaNodes.forEach(node => {
+                pointsToUpdate.set(node.id, {
+                  id: node.id,
+                  label: node.label || node.id,
+                  node_type: node.node_type || 'Unknown',
+                  size: node.size || 1,
+                  ...node.properties,
+                  ...node
+                });
+              });
+            }
+            if (deltaEdges && deltaEdges.length > 0) {
+              // For edge updates, remove and re-add
+              deltaEdges.forEach(edge => {
+                const source = edge.source || edge.from;
+                const target = edge.target || edge.to;
+                linkPairsToDelete.push([source, target]);
+                linksToAdd.push({
+                  source,
+                  target,
+                  weight: edge.weight || 1,
+                  ...edge
+                });
+              });
+            }
+          } else if (operation === 'delete') {
+            if (deltaNodes && deltaNodes.length > 0) {
+              deltaNodes.forEach(node => {
+                pointIdsToDelete.push(node.id);
+              });
+            }
+            if (deltaEdges && deltaEdges.length > 0) {
+              deltaEdges.forEach(edge => {
+                linkPairsToDelete.push([
+                  edge.source || edge.from,
+                  edge.target || edge.to
+                ]);
+              });
+            }
           }
         }
-      });
-      
-      // Update cosmograph data once after all deltas are applied
-      setCosmographData({
-        points: updatedNodes,
-        links: updatedLinks
-      });
-      
-      // Update current data tracking
-      setCurrentNodes(updatedNodes);
-      setCurrentLinks(updatedLinks);
-      
-      // Trigger re-render if simulation is running
-      if (cosmographRef.current && keepRunning) {
-        cosmographRef.current.restart();
+        
+        // Apply all operations to Cosmograph
+        const promises: Promise<void>[] = [];
+        
+        // Handle updates (remove then add)
+        if (pointsToUpdate.size > 0) {
+          const updateIds = Array.from(pointsToUpdate.keys());
+          promises.push(
+            cosmographRef.current.removePointsByIds(updateIds).then(() => {
+              return cosmographRef.current!.addPoints(Array.from(pointsToUpdate.values()));
+            })
+          );
+        }
+        
+        // Handle deletions
+        if (pointIdsToDelete.length > 0) {
+          promises.push(cosmographRef.current.removePointsByIds(pointIdsToDelete));
+        }
+        
+        if (linkPairsToDelete.length > 0) {
+          promises.push(cosmographRef.current.removeLinksByPointIdPairs(linkPairsToDelete));
+        }
+        
+        // Handle additions
+        if (pointsToAdd.length > 0) {
+          promises.push(cosmographRef.current.addPoints(pointsToAdd));
+        }
+        
+        if (linksToAdd.length > 0) {
+          promises.push(cosmographRef.current.addLinks(linksToAdd));
+        }
+        
+        // Wait for all operations to complete
+        await Promise.all(promises);
+        
+        // Trigger a render update if needed
+        if (promises.length > 0) {
+          console.log('[GraphCanvas] Applied delta updates:', {
+            pointsAdded: pointsToAdd.length,
+            linksAdded: linksToAdd.length,
+            pointsDeleted: pointIdsToDelete.length,
+            pointsUpdated: pointsToUpdate.size,
+            linksDeleted: linkPairsToDelete.length
+          });
+          
+          // Optional: restart simulation with low energy for smooth transition
+          if (keepRunning && cosmographRef.current) {
+            cosmographRef.current.restart();
+          }
+        }
+        
+      } catch (error) {
+        console.error('[GraphCanvas] Error applying delta updates:', error);
       }
     }, [keepRunning]);
       
