@@ -2666,17 +2666,17 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             backgroundColor={config.backgroundColor}
             
             // Use Cosmograph v2.0 built-in color strategies
-            // When glowing, set strategy to undefined to allow pointColorByFn to work
-            pointColorStrategy={glowingNodes.size > 0 ? undefined : pointColorStrategy}
+            // Switch to 'direct' strategy when glowing to allow pointColorByFn to work
+            pointColorStrategy={glowingNodes.size > 0 ? 'direct' : pointColorStrategy}
             pointColorPalette={pointColorPalette}
             pointColorByMap={config.nodeTypeColors}
             
-            // Use pointColorByFn when glowing (only works when pointColorStrategy is undefined)
+            // Use pointColorByFn to handle colors when glowing
             pointColorByFn={glowingNodes.size > 0 ? (value, index) => {
               // Get the node from the correct data source
               const dataSource = useDuckDBTables ? duckDBData : cosmographData;
               if (!dataSource || !dataSource.points) {
-                return undefined; // Let Cosmograph handle default color
+                return config.nodeColor || '#94a3b8'; // Return default color
               }
               
               // Handle Arrow table vs array data to get node ID and value
@@ -2691,32 +2691,28 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
                 nodeData = cosmographData.points[index];
                 nodeId = nodeData.id;
               } else {
-                return undefined; // Let Cosmograph handle default color
+                return config.nodeColor || '#94a3b8'; // Return default color
               }
               
+              // First, get the color value based on the current pointColorBy field
+              const colorValue = nodeData[pointColorBy || 'node_type'] || value;
+              
+              // Calculate base color based on the original color strategy
+              let baseColor: string;
+              
+              // Check if node is glowing
               const glowStartTime = glowingNodes.get(nodeId);
               
-              if (glowStartTime) {
-                // Calculate fade progress (0 to 1, where 1 is fully faded back to normal)
-                const elapsed = Date.now() - glowStartTime;
-                const fadeDuration = 2000; // 2 seconds total
-                const fadeProgress = Math.min(elapsed / fadeDuration, 1);
+              // Determine base color using the same logic as the original strategy
+              switch (config.colorScheme) {
+                case 'by-type': {
+                  // Direct mapping
+                  baseColor = config.nodeTypeColors[colorValue] || '#94a3b8';
+                  break;
+                }
                 
-                // Get the actual current color of the node based on active color scheme
-                // This ensures we're using the exact color that would be rendered
-                let baseColor: string;
-                
-                // First, get the color value based on the current pointColorBy field
-                const colorValue = nodeData[pointColorBy || 'node_type'] || value;
-                
-                switch (pointColorStrategy) {
-                  case 'map': {
-                    // Direct mapping (e.g., by-type)
-                    baseColor = config.nodeTypeColors[colorValue] || '#94a3b8';
-                    break;
-                  }
-                  
-                  case 'interpolatePalette': {
+                case 'by-centrality':
+                case 'by-pagerank': {
                     // Gradient interpolation (by-centrality, by-pagerank)
                     const normalizedValue = Math.min(Math.max(Number(colorValue) || 0, 0), 1);
                     
@@ -2737,7 +2733,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
                     break;
                   }
                   
-                  case 'degree': {
+                case 'by-degree': {
                     // Degree-based coloring
                     const degree = nodeData?.degree_centrality || 0;
                     const normalized = Math.min(Math.max(degree, 0), 1);
@@ -2749,7 +2745,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
                     break;
                   }
                   
-                  case 'palette': {
+                case 'by-community': {
                     // Community/cluster palette
                     const communityColors = pointColorPalette || [
                       '#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6',
@@ -2763,13 +2759,28 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
                     break;
                   }
                   
-                  default:
-                    // Fallback - should not reach here if strategy is set correctly
-                    baseColor = '#94a3b8';
-                }
-                
-                // Apply highlight glow effect
-                const highlightColor = config.nodeAccessHighlightColor;
+                default:
+                  // Fallback to type colors
+                  baseColor = config.nodeTypeColors[colorValue] || '#94a3b8';
+              }
+              
+              // If node is not glowing, return the base color directly
+              if (!glowStartTime) {
+                return baseColor;
+              }
+              
+              // Calculate fade progress for glowing nodes
+              const elapsed = Date.now() - glowStartTime;
+              const fadeDuration = 2000; // 2 seconds total
+              const fadeProgress = Math.min(elapsed / fadeDuration, 1);
+              
+              // If fully faded, return base color
+              if (fadeProgress >= 1) {
+                return baseColor;
+              }
+              
+              // Apply highlight glow effect
+              const highlightColor = config.nodeAccessHighlightColor;
                 
                 // Parse colors to RGB
                 const parseColor = (color: string): [number, number, number, number] => {
@@ -2822,10 +2833,6 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
                 const a = highlightA + (baseA - highlightA) * easedProgress;
                 
                 return `rgba(${r}, ${g}, ${b}, ${a})`;
-              }
-              
-              // No glow - return undefined to use default color scheme
-              return undefined;
             } : undefined}
             
             // Size configuration - keep normal sizing always
