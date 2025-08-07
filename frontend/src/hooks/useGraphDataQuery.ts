@@ -56,7 +56,7 @@ export function useGraphDataQuery() {
       }
       // Always fetch entire graph to maintain stability
       const result = await graphClient.getGraphData({ 
-        query_type: 'full',
+        query_type: 'entire_graph',
         limit: 100000 
       });
       return result;
@@ -108,7 +108,7 @@ export function useGraphDataQuery() {
           const nodes: GraphNode[] = nodesArray.map((n: any) => ({
             id: n.id,
             label: n.label || n.id,
-            name: n.label || n.id,
+            name: n.properties?.name || n.name || n.label || n.id,  // Use name from properties or direct field
             node_type: n.node_type || 'Unknown',
             summary: n.summary || null,
             size: n.degree_centrality || 1,

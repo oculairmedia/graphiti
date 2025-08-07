@@ -334,9 +334,13 @@ async fn main() -> anyhow::Result<()> {
                     properties.insert("eigenvector_centrality".to_string(), serde_json::Value::from(eigenvector));
                 }
                 
+                // Add name to properties so frontend can access it
+                let name = row.get(1).and_then(|v| v.as_string()).map_or("", |v| v).to_string();
+                properties.insert("name".to_string(), serde_json::Value::String(name.clone()));
+                
                 nodes.push(Node {
                     id: id.to_string(),
-                    label: row.get(1).and_then(|v| v.as_string()).map_or("", |v| v).to_string(),
+                    label: name, // Use name as the display label
                     node_type: row.get(2).and_then(|v| v.as_string()).map_or("Unknown", |v| v).to_string(),
                     summary,
                     properties,
