@@ -16,6 +16,7 @@ import { useColorUtils } from '../hooks/useColorUtils';
 import { searchIndex } from '../utils/searchIndex';
 import { GraphConfigContext } from '../contexts/useGraphConfig';
 import { useWebSocketContext } from '../contexts/WebSocketProvider';
+import { useRustWebSocket } from '../contexts/RustWebSocketProvider';
 import { useDuckDB } from '../contexts/DuckDBProvider';
 import { useLoadingCoordinator } from '../contexts/LoadingCoordinator';
 
@@ -578,11 +579,15 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     }, [keepRunning]);
       
     
-    // Subscribe to delta updates with batching
+    // Use Rust WebSocket for delta updates
+    const { subscribe: subscribeToRust } = useRustWebSocket();
+    
     useEffect(() => {
-      const unsubscribeDelta = subscribeToDeltaUpdate((event) => {
+      const unsubscribe = subscribeToRust((update) => {
+        console.log('[GraphCanvas] Received delta update from Rust server:', update);
+        
         // Queue the delta update
-        deltaQueueRef.current.push(event.data);
+        deltaQueueRef.current.push(update.data);
         
         // Clear existing timeout
         if (deltaTimeoutRef.current) {
@@ -596,9 +601,19 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         }, 50);
       });
       
+      return unsubscribe;
+    }, [subscribeToRust, processDeltaBatch]);
+    
+    // Keep existing Python WebSocket subscription for other events
+    useEffect(() => {
+      const unsubscribeDelta = subscribeToDeltaUpdate((event) => {
+        // This is for Python server delta updates if any
+        console.log('[GraphCanvas] Python server delta update:', event);
+      });
+      
       const unsubscribeGraph = subscribeToGraphUpdate((event) => {
         // Handle full graph updates if needed
-        // This could trigger a full data reload from DuckDB
+        console.log('[GraphCanvas] Graph update event:', event);
       });
       
       return () => {
@@ -608,7 +623,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           clearTimeout(deltaTimeoutRef.current);
         }
       };
-    }, [subscribeToDeltaUpdate, subscribeToGraphUpdate, processDeltaBatch]);
+    }, [subscribeToDeltaUpdate, subscribeToGraphUpdate]);
     
     // Keep ref in sync with state
     useEffect(() => {
