@@ -153,7 +153,7 @@ const defaultDynamicConfig: DynamicConfig = {
   sizeMapping: 'degree',
   
   // Clustering configuration
-  clusteringEnabled: false,
+  clusteringEnabled: true,
   pointClusterBy: 'node_type',
   pointClusterStrengthBy: 'clusterStrength',
   clusteringMethod: 'none',
