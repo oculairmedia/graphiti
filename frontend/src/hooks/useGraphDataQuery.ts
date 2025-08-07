@@ -110,6 +110,7 @@ export function useGraphDataQuery() {
             label: n.label || n.id,
             name: n.label || n.id,
             node_type: n.node_type || 'Unknown',
+            summary: n.summary || null,
             size: n.degree_centrality || 1,
             created_at: n.created_at,
             properties: {

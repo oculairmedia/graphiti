@@ -109,44 +109,94 @@ impl FalkorClient {
         Ok(stats)
     }
 
-    /// Store centrality scores back to the database
+    /// Store centrality scores back to the database using batch updates
     pub async fn store_centrality_scores(
         &self,
         scores: &HashMap<String, HashMap<String, f64>>,
     ) -> Result<()> {
-        info!("Storing centrality scores for {} nodes", scores.len());
+        info!("Storing centrality scores for {} nodes using batch updates", scores.len());
 
-        for (node_uuid, node_scores) in scores {
-            let mut set_clauses = Vec::new();
-
-            for (score_name, score_value) in node_scores {
-                // Convert score names to match frontend expectations
-                let property_name = match score_name.as_str() {
-                    "pagerank" => "pagerank_centrality",
-                    "degree" => "degree_centrality", 
-                    "betweenness" => "betweenness_centrality",
-                    "importance" => "eigenvector_centrality", // Map importance to eigenvector
-                    _ => &format!("{}_centrality", score_name),
-                };
-                set_clauses.push(format!("n.{} = {}", property_name, score_value));
+        // Process in batches of 500 nodes for optimal performance
+        const BATCH_SIZE: usize = 500;
+        let mut processed = 0;
+        
+        // Convert scores to a vector for easier batching
+        let score_entries: Vec<(&String, &HashMap<String, f64>)> = scores.iter().collect();
+        
+        for chunk in score_entries.chunks(BATCH_SIZE) {
+            // Build batch update data
+            let mut batch_data = Vec::new();
+            
+            for (node_uuid, node_scores) in chunk {
+                // Extract all centrality values with defaults
+                let pagerank = node_scores.get("pagerank").copied().unwrap_or(0.0);
+                let degree = node_scores.get("degree").copied().unwrap_or(0.0);
+                let betweenness = node_scores.get("betweenness").copied().unwrap_or(0.0);
+                let eigenvector = node_scores.get("importance").copied().unwrap_or(0.0);
+                
+                batch_data.push(format!(
+                    "{{uuid: '{}', pagerank: {}, degree: {}, betweenness: {}, eigenvector: {}}}",
+                    node_uuid, pagerank, degree, betweenness, eigenvector
+                ));
             }
-
-            if !set_clauses.is_empty() {
-                // Use direct query without parameters
-                let query = format!(
-                    "MATCH (n {{uuid: '{}'}}) SET {}",
-                    node_uuid,
-                    set_clauses.join(", ")
-                );
-
-                if let Err(e) = self.execute_query(&query, None).await {
-                    warn!("Failed to store scores for node {}: {}", node_uuid, e);
-                    // Continue with other nodes rather than failing completely
+            
+            // Use UNWIND for batch updates - much more efficient than individual queries
+            let batch_query = format!(
+                "UNWIND [{}] AS nodeData
+                 MATCH (n {{uuid: nodeData.uuid}})
+                 SET n.pagerank_centrality = nodeData.pagerank,
+                     n.degree_centrality = nodeData.degree,
+                     n.betweenness_centrality = nodeData.betweenness,
+                     n.eigenvector_centrality = nodeData.eigenvector",
+                batch_data.join(", ")
+            );
+            
+            // Execute batch update
+            match self.execute_query(&batch_query, None).await {
+                Ok(_) => {
+                    processed += chunk.len();
+                    debug!("Batch update completed for {} nodes (total: {})", chunk.len(), processed);
                 }
+                Err(e) => {
+                    warn!("Failed to store batch of {} scores: {}", chunk.len(), e);
+                    // Try individual updates as fallback for this batch
+                    for (node_uuid, node_scores) in chunk {
+                        let mut set_clauses = Vec::new();
+                        for (score_name, score_value) in node_scores.iter() {
+                            let property_name = match score_name.as_str() {
+                                "pagerank" => "pagerank_centrality",
+                                "degree" => "degree_centrality", 
+                                "betweenness" => "betweenness_centrality",
+                                "importance" => "eigenvector_centrality",
+                                _ => &format!("{}_centrality", score_name),
+                            };
+                            set_clauses.push(format!("n.{} = {}", property_name, score_value));
+                        }
+                        
+                        if !set_clauses.is_empty() {
+                            let fallback_query = format!(
+                                "MATCH (n {{uuid: '{}'}}) SET {}",
+                                node_uuid,
+                                set_clauses.join(", ")
+                            );
+                            
+                            if let Err(e) = self.execute_query(&fallback_query, None).await {
+                                warn!("Fallback update also failed for node {}: {}", node_uuid, e);
+                            } else {
+                                processed += 1;
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Log progress for large datasets
+            if scores.len() > 1000 && processed % 1000 == 0 {
+                info!("Stored centrality scores for {}/{} nodes", processed, scores.len());
             }
         }
 
-        info!("Centrality scores stored successfully");
+        info!("Centrality scores stored successfully for {} nodes", processed);
         Ok(())
     }
 

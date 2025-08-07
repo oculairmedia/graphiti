@@ -15,17 +15,19 @@ import {
 export class GraphClient {
   private baseUrl = '/api';
   private readonly DEFAULT_TIMEOUT = 30000; // 30 seconds
+  private readonly CENTRALITY_TIMEOUT = 120000; // 120 seconds for centrality operations
   private readonly MAX_RETRIES = 3;
   private readonly RETRY_DELAY = 1000; // 1 second
 
-  private async fetchWithError<T>(url: string, options?: RequestInit): Promise<T> {
-    return this.fetchWithRetry<T>(url, options, 0);
+  private async fetchWithError<T>(url: string, options?: RequestInit, timeout?: number): Promise<T> {
+    return this.fetchWithRetry<T>(url, options, 0, timeout);
   }
 
-  private async fetchWithRetry<T>(url: string, options?: RequestInit, attempt: number = 0): Promise<T> {
+  private async fetchWithRetry<T>(url: string, options?: RequestInit, attempt: number = 0, timeout?: number): Promise<T> {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), this.DEFAULT_TIMEOUT);
+      const timeoutMs = timeout || this.DEFAULT_TIMEOUT;
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
       const response = await fetch(url, {
         ...options,
@@ -48,7 +50,7 @@ export class GraphClient {
       // Retry on network errors or timeouts
       if (attempt < this.MAX_RETRIES && this.isRetryableError(error)) {
         await this.delay(this.RETRY_DELAY * Math.pow(2, attempt)); // Exponential backoff
-        return this.fetchWithRetry<T>(url, options, attempt + 1);
+        return this.fetchWithRetry<T>(url, options, attempt + 1, timeout);
       }
       
       // Re-throw with enhanced error information
@@ -127,7 +129,7 @@ export class GraphClient {
       body: JSON.stringify({ 
         store_results: false 
       }),
-    });
+    }, this.CENTRALITY_TIMEOUT);
     
     // Extract metrics for the specific node
     const metrics = response.scores?.[nodeId];
@@ -150,7 +152,7 @@ export class GraphClient {
       body: JSON.stringify({ 
         store_results: false 
       }),
-    });
+    }, this.CENTRALITY_TIMEOUT);
     
     // Filter results to only requested nodes
     const result: BulkCentralityResponse = {};
@@ -185,7 +187,7 @@ export class GraphClient {
         iterations: options.iterations || 20,
         store_results: options.store_results || false,
       }),
-    });
+    }, this.CENTRALITY_TIMEOUT);
   }
   
   async calculateDegreeCentrality(options: {
@@ -198,7 +200,7 @@ export class GraphClient {
         direction: options.direction || 'both',
         store_results: options.store_results || false,
       }),
-    });
+    }, this.CENTRALITY_TIMEOUT);
   }
   
   async calculateBetweennessCentrality(options: {
@@ -211,7 +213,7 @@ export class GraphClient {
         sample_size: options.sample_size,
         store_results: options.store_results || false,
       }),
-    });
+    }, this.CENTRALITY_TIMEOUT);
   }
   
   async calculateAllCentralities(options: {
@@ -222,7 +224,7 @@ export class GraphClient {
       body: JSON.stringify({
         store_results: options.store_results || false,
       }),
-    });
+    }, this.CENTRALITY_TIMEOUT);
   }
 
   async updateNodeSummary(nodeId: string, summary: string): Promise<{ uuid: string; name: string; summary: string }> {
