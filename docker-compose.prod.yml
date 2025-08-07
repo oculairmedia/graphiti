@@ -1,6 +1,10 @@
+# Production Docker Compose using published images
+# This file uses pre-built images from GitHub Container Registry
+# No local builds required - faster deployment
+
 services:
   graph:
-    image: ghcr.io/oculairmedia/graphiti-api:feature-real-time-node-glow-e45467a
+    image: ghcr.io/oculairmedia/graphiti-api:main
     ports:
       - 8003:8000
     healthcheck:
@@ -42,6 +46,7 @@ services:
       - homepage.icon=si-graphql
       - homepage.href=http://192.168.50.90:8000
       - homepage.description=Knowledge graph API service
+
   falkordb:
     image: falkordb/falkordb:latest
     command: >
@@ -67,7 +72,7 @@ services:
       retries: 10
       start_period: 3s
     ports:
-      - 6389:6379 # Redis/FalkorDB port (changed from 6379)
+      - 6389:6379 # Redis/FalkorDB port
       - 3100:3000 # FalkorDB UI
     volumes:
       - falkordb_data:/data
@@ -83,8 +88,9 @@ services:
       - homepage.icon=si-redis
       - homepage.href=http://192.168.50.90:3100
       - homepage.description=FalkorDB graph database
+
   graph-visualizer-rust:
-    image: ghcr.io/oculairmedia/graphiti-rust-visualizer:main-33aced2
+    image: ghcr.io/oculairmedia/graphiti-rust-visualizer:main
     container_name: graphiti-visualizer-rust
     restart: unless-stopped
     ports:
@@ -108,6 +114,7 @@ services:
       - homepage.icon=si-rust
       - homepage.href=http://192.168.50.90:3000
       - homepage.description=High-performance Rust-based graph visualization
+
   frontend:
     image: ghcr.io/oculairmedia/graphiti-frontend:main
     container_name: graphiti-frontend-app
@@ -125,6 +132,7 @@ services:
       - homepage.name=Graphiti Frontend App
       - homepage.icon=si-react
       - homepage.description=React frontend application
+
   nginx:
     image: nginx:alpine
     container_name: graphiti-nginx
@@ -144,45 +152,13 @@ services:
       - homepage.icon=si-nginx
       - homepage.href=http://192.168.50.90:8088
       - homepage.description=Reverse proxy for Graphiti services
-  # graphiti-mcp:
-  #   build:
-  #     context: ./mcp_server
-  #     dockerfile: Dockerfile
-  #   container_name: graphiti-mcp
-  #   restart: unless-stopped
-  #   ports:
-  #     - "8001:8000" # MCP Server HTTP endpoint
-  #   environment:
-  #     - GRAPHITI_API_URL=http://graph:8000
-  #     - NEO4J_URI=bolt://falkordb:6379
-  #     - NEO4J_USER=default
-  #     - NEO4J_PASSWORD=
-  #     - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-  #     - MODEL_NAME=${MODEL_NAME:-qwen2.5:32b}
-  #     - SMALL_MODEL_NAME=${SMALL_MODEL_NAME:-qwen2.5:7b}
-  #     - OPENAI_BASE_URL=${OPENAI_BASE_URL:-http://host.docker.internal:11434/v1}
-  #     - SEMAPHORE_LIMIT=${SEMAPHORE_LIMIT:-5}
-  #   depends_on:
-  #     graph:
-  #       condition: service_healthy
-  #   networks:
-  #     - graphiti_network
-  #   labels:
-  #     - "homepage.group=AI Services"
-  #     - "homepage.name=Graphiti MCP Server"
-  #     - "homepage.icon=si-openai"
-  #     - "homepage.href=http://192.168.50.90:8001"
-  #     - "homepage.description=Model Context Protocol server for AI assistants"
-  #   command: ["uv", "run", "graphiti_mcp_server.py", "--transport", "sse"]
 
   graphiti-centrality-rs:
-    build:
-      context: ./graphiti-centrality-rs
-      dockerfile: Dockerfile
+    image: ghcr.io/oculairmedia/graphiti-centrality-rs:main
     container_name: graphiti-centrality-rs
     restart: unless-stopped
     ports:
-      - 3003:3003 # Rust centrality service
+      - 3003:3003
     environment:
       - FALKORDB_HOST=falkordb
       - FALKORDB_PORT=6379
@@ -208,22 +184,17 @@ services:
       - homepage.name=Centrality Service (Rust)
       - homepage.icon=si-rust
       - homepage.href=http://192.168.50.90:3003
-      - homepage.description=High-performance centrality calculations with
-        native FalkorDB algorithms
+      - homepage.description=High-performance centrality calculations
+
   # Automated backup service for FalkorDB
   falkordb-backup:
-    # Use published image (uncomment after first GitHub Actions build):
-    # image: ghcr.io/oculairmedia/graphiti-backup:latest
-    # Or build locally (default):
-    build:
-      context: .
-      dockerfile: Dockerfile.backup
+    image: ghcr.io/oculairmedia/graphiti-backup:latest
     container_name: graphiti-falkordb-backup
     restart: unless-stopped
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro  # Docker socket for container access
-      - falkordb_backups:/backups/falkordb            # Backup storage volume
-      - ./scripts:/scripts:ro                         # Backup scripts
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - falkordb_backups:/backups/falkordb
+      - ./scripts:/scripts:ro
     environment:
       - FALKORDB_CONTAINER_NAME=graphiti-falkordb-1
       - BACKUP_DIR=/backups/falkordb
@@ -246,6 +217,7 @@ services:
 networks:
   graphiti_network:
     driver: bridge
+
 volumes:
   falkordb_data: null
   falkordb_backups: null
