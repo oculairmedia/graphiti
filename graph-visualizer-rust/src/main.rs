@@ -519,6 +519,10 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/arrow/edges", get(get_edges_arrow))
         .route("/api/duckdb/stats", get(get_duckdb_stats))
         .route("/api/arrow/refresh", post(refresh_arrow_cache))
+        // Real-time update endpoints
+        .route("/api/updates/nodes", post(add_nodes))
+        .route("/api/updates/edges", post(add_edges))
+        .route("/api/updates/batch", post(batch_update))
         // Centrality proxy endpoints
         .route("/api/centrality/health", get(proxy_centrality_health))
         .route("/api/centrality/stats", get(proxy_centrality_stats))
@@ -1698,6 +1702,174 @@ async fn refresh_arrow_cache(State(state): State<AppState>) -> Result<Json<serde
         _ => {
             error!("Failed to get data from DuckDB");
             Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
+}
+
+// Real-time update handlers
+#[derive(Debug, Deserialize)]
+struct AddNodesRequest {
+    nodes: Vec<Node>,
+}
+
+#[derive(Debug, Deserialize)]
+struct AddEdgesRequest {
+    edges: Vec<Edge>,
+}
+
+#[derive(Debug, Deserialize)]
+struct BatchUpdateRequest {
+    nodes: Option<Vec<Node>>,
+    edges: Option<Vec<Edge>>,
+}
+
+async fn add_nodes(
+    State(state): State<AppState>,
+    Json(request): Json<AddNodesRequest>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<ErrorResponse>)> {
+    info!("Adding {} new nodes", request.nodes.len());
+    
+    // Queue nodes for processing
+    state.duckdb_store.queue_nodes(request.nodes.clone()).await;
+    
+    // Process updates immediately
+    match state.duckdb_store.process_updates().await {
+        Ok(Some(update)) => {
+            // Broadcast update to WebSocket clients
+            let _ = state.update_tx.send(update.clone());
+            
+            // Clear caches to ensure fresh data
+            state.graph_cache.clear();
+            let mut arrow_cache = state.arrow_cache.write().await;
+            *arrow_cache = None;
+            drop(arrow_cache);
+            
+            info!("Nodes added successfully, caches cleared");
+            
+            Ok(Json(serde_json::json!({
+                "status": "success",
+                "nodes_added": request.nodes.len(),
+                "timestamp": update.timestamp
+            })))
+        }
+        Ok(None) => {
+            Ok(Json(serde_json::json!({
+                "status": "no_updates",
+                "message": "No updates to process"
+            })))
+        }
+        Err(e) => {
+            error!("Failed to add nodes: {}", e);
+            Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: format!("Failed to add nodes: {}", e),
+                }),
+            ))
+        }
+    }
+}
+
+async fn add_edges(
+    State(state): State<AppState>,
+    Json(request): Json<AddEdgesRequest>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<ErrorResponse>)> {
+    info!("Adding {} new edges", request.edges.len());
+    
+    // Queue edges for processing
+    state.duckdb_store.queue_edges(request.edges.clone()).await;
+    
+    // Process updates immediately
+    match state.duckdb_store.process_updates().await {
+        Ok(Some(update)) => {
+            // Broadcast update to WebSocket clients
+            let _ = state.update_tx.send(update.clone());
+            
+            // Clear caches to ensure fresh data
+            state.graph_cache.clear();
+            let mut arrow_cache = state.arrow_cache.write().await;
+            *arrow_cache = None;
+            drop(arrow_cache);
+            
+            info!("Edges added successfully, caches cleared");
+            
+            Ok(Json(serde_json::json!({
+                "status": "success",
+                "edges_added": request.edges.len(),
+                "timestamp": update.timestamp
+            })))
+        }
+        Ok(None) => {
+            Ok(Json(serde_json::json!({
+                "status": "no_updates",
+                "message": "No updates to process"
+            })))
+        }
+        Err(e) => {
+            error!("Failed to add edges: {}", e);
+            Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: format!("Failed to add edges: {}", e),
+                }),
+            ))
+        }
+    }
+}
+
+async fn batch_update(
+    State(state): State<AppState>,
+    Json(request): Json<BatchUpdateRequest>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<ErrorResponse>)> {
+    let node_count = request.nodes.as_ref().map(|n| n.len()).unwrap_or(0);
+    let edge_count = request.edges.as_ref().map(|e| e.len()).unwrap_or(0);
+    
+    info!("Batch update: {} nodes, {} edges", node_count, edge_count);
+    
+    // Queue updates
+    if let Some(nodes) = request.nodes {
+        state.duckdb_store.queue_nodes(nodes).await;
+    }
+    
+    if let Some(edges) = request.edges {
+        state.duckdb_store.queue_edges(edges).await;
+    }
+    
+    // Process updates immediately
+    match state.duckdb_store.process_updates().await {
+        Ok(Some(update)) => {
+            // Broadcast update to WebSocket clients
+            let _ = state.update_tx.send(update.clone());
+            
+            // Clear caches to ensure fresh data
+            state.graph_cache.clear();
+            let mut arrow_cache = state.arrow_cache.write().await;
+            *arrow_cache = None;
+            drop(arrow_cache);
+            
+            info!("Batch update successful, caches cleared");
+            
+            Ok(Json(serde_json::json!({
+                "status": "success",
+                "nodes_added": node_count,
+                "edges_added": edge_count,
+                "timestamp": update.timestamp
+            })))
+        }
+        Ok(None) => {
+            Ok(Json(serde_json::json!({
+                "status": "no_updates",
+                "message": "No updates to process"
+            })))
+        }
+        Err(e) => {
+            error!("Failed to process batch update: {}", e);
+            Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: format!("Failed to process batch update: {}", e),
+                }),
+            ))
         }
     }
 }
