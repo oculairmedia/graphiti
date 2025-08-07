@@ -14,7 +14,9 @@ interface RenderControlsTabProps {
   config: {
     linkWidth: number;
     linkWidthBy: string;
+    linkWidthScheme: string;
     linkOpacity: number;
+    linkOpacityScheme: string;
     linkColor: string;
     backgroundColor: string;
     linkColorScheme: string;
@@ -76,6 +78,25 @@ export const RenderControlsTab: React.FC<RenderControlsTabProps> = ({
           />
 
           <div>
+            <Label className="text-xs text-muted-foreground">Link Width Scheme</Label>
+            <Select 
+              value={config.linkWidthScheme} 
+              onValueChange={(value) => onConfigUpdate({ linkWidthScheme: value })}
+            >
+              <SelectTrigger className="h-8 bg-secondary/30">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="glass">
+                <SelectItem value="uniform">➖ Uniform Width</SelectItem>
+                <SelectItem value="by-weight">⚖️ By Edge Weight</SelectItem>
+                <SelectItem value="by-source-centrality">📊 By Source Centrality</SelectItem>
+                <SelectItem value="by-source-pagerank">📈 By Source PageRank</SelectItem>
+                <SelectItem value="by-source-betweenness">🔀 By Source Betweenness</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div>
             <Label className="text-xs text-muted-foreground">Link Width Column</Label>
             <Input
               value={config.linkWidthBy}
@@ -95,6 +116,23 @@ export const RenderControlsTab: React.FC<RenderControlsTabProps> = ({
             onChange={(value) => onConfigUpdate({ linkOpacity: value / 100 })}
             formatValue={(v) => `${Math.round(v)}%`}
           />
+
+          <div>
+            <Label className="text-xs text-muted-foreground">Link Opacity Scheme</Label>
+            <Select 
+              value={config.linkOpacityScheme} 
+              onValueChange={(value) => onConfigUpdate({ linkOpacityScheme: value })}
+            >
+              <SelectTrigger className="h-8 bg-secondary/30">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="glass">
+                <SelectItem value="uniform">➖ Uniform Opacity</SelectItem>
+                <SelectItem value="by-source-centrality">📊 By Source Centrality</SelectItem>
+                <SelectItem value="by-distance">📏 By Distance</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
           <ColorPicker
             color={config.linkColor}

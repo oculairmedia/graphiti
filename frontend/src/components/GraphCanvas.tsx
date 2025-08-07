@@ -988,6 +988,28 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       };
     }, [config.colorScheme, config.nodeTypeColors, allNodeTypes]);
     
+    // Helper function to apply opacity to a color
+    const applyOpacityToColor = (color: string, opacity: number): string => {
+      if (color.startsWith('rgba')) {
+        const match = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+),?\s*([\d.]+)?\)/);
+        if (match) {
+          return `rgba(${match[1]}, ${match[2]}, ${match[3]}, ${opacity})`;
+        }
+      } else if (color.startsWith('rgb')) {
+        const match = color.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+        if (match) {
+          return `rgba(${match[1]}, ${match[2]}, ${match[3]}, ${opacity})`;
+        }
+      } else if (color.startsWith('#')) {
+        const hex = color.slice(1);
+        const r = parseInt(hex.slice(0, 2), 16);
+        const g = parseInt(hex.slice(2, 4), 16);
+        const b = parseInt(hex.slice(4, 6), 16);
+        return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+      }
+      return color;
+    };
+    
     // Memoize link color function based on scheme and glowing nodes
     // linkColorByFn receives the value from linkColorBy column (edge_type) and the link index
     const linkColorFn = React.useMemo(() => {
@@ -1082,9 +1104,46 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           return config.linkColor;
         }
         
+        // Apply opacity scheme if needed
+        let opacity = 1;
+        if (config.linkOpacityScheme && config.linkOpacityScheme !== 'uniform') {
+          const link = linkIndex < currentLinks.length ? currentLinks[linkIndex] : null;
+          if (link) {
+            switch (config.linkOpacityScheme) {
+              case 'by-source-centrality': {
+                const sourceNode = currentNodes.find(n => n.id === link.source);
+                if (sourceNode) {
+                  const centrality = sourceNode.properties?.degree_centrality || 0;
+                  opacity = 0.1 + (centrality * 0.9);
+                }
+                break;
+              }
+              case 'by-distance': {
+                const sourceNode = currentNodes.find(n => n.id === link.source);
+                const targetNode = currentNodes.find(n => n.id === link.target);
+                if (sourceNode?.x !== undefined && targetNode?.x !== undefined) {
+                  const distance = Math.sqrt(
+                    Math.pow(targetNode.x - sourceNode.x, 2) + 
+                    Math.pow(targetNode.y - sourceNode.y, 2)
+                  );
+                  const maxDist = 500;
+                  const normalizedDist = Math.min(distance / maxDist, 1);
+                  opacity = 0.1 + (1 - normalizedDist) * 0.9;
+                }
+                break;
+              }
+            }
+          }
+        }
+        
         // Original color scheme logic when not glowing
         if (!config.linkColorScheme || config.linkColorScheme === 'uniform') {
-          return config.linkColor; // Return the uniform color
+          const baseColor = config.linkColor;
+          // Apply opacity if needed
+          if (opacity < 1) {
+            return applyOpacityToColor(baseColor, opacity);
+          }
+          return baseColor;
         }
         
         // Pre-calculate weight ranges for performance
@@ -1105,7 +1164,8 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             const r = Math.round(102 + (239 - 102) * normalized); // From #666 to #ef4444
             const g = Math.round(102 + (68 - 102) * normalized);
             const b = Math.round(102 + (68 - 102) * normalized);
-            return `rgb(${r}, ${g}, ${b})`;
+            const color = `rgb(${r}, ${g}, ${b})`;
+            return opacity < 1 ? applyOpacityToColor(color, opacity) : color;
           }
             
           case 'by-type': {
@@ -1118,7 +1178,8 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
               'contains': '#90CDF4',
               'default': config.linkColor
             };
-            return typeColors[edgeTypeStr] || config.linkColor;
+            const color = typeColors[edgeTypeStr] || config.linkColor;
+            return opacity < 1 ? applyOpacityToColor(color, opacity) : color;
           }
             
           case 'by-distance': {
@@ -1144,9 +1205,10 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             const sourceNode = currentNodes.find(n => n.id === link.source);
             if (sourceNode) {
               const sourceNodeColor = config.nodeTypeColors[sourceNode.node_type] || config.linkColor;
-              return sourceNodeColor;
+              return opacity < 1 ? applyOpacityToColor(sourceNodeColor, opacity) : sourceNodeColor;
             }
-            return config.linkColor;
+            const color = config.linkColor;
+            return opacity < 1 ? applyOpacityToColor(color, opacity) : color;
           }
           
           case 'gradient': {
@@ -1154,30 +1216,84 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             const sourceNodeColor = config.nodeTypeColors[currentNodes.find(n => n.id === link.source)?.node_type || ''];
             const targetNodeColor = config.nodeTypeColors[currentNodes.find(n => n.id === link.target)?.node_type || ''];
             // For now, blend the colors simply
-            return sourceNodeColor || config.linkColor;
+            const color = sourceNodeColor || config.linkColor;
+            return opacity < 1 ? applyOpacityToColor(color, opacity) : color;
           }
             
           case 'by-community': {
             // Color bridges between communities differently
             const sourceCommunity = currentNodes.find(n => n.id === link.source)?.cluster;
             const targetCommunity = currentNodes.find(n => n.id === link.target)?.cluster;
-            if (sourceCommunity !== targetCommunity) {
-              return '#FF6B6B'; // Highlight inter-community links
-            }
-            return config.linkColor;
+            const color = sourceCommunity !== targetCommunity ? '#FF6B6B' : config.linkColor;
+            return opacity < 1 ? applyOpacityToColor(color, opacity) : color;
           }
             
           default:
-            return config.linkColor;
+            return opacity < 1 ? applyOpacityToColor(config.linkColor, opacity) : config.linkColor;
         }
       };
-    }, [config.linkColorScheme, config.linkColor, config.nodeTypeColors, config.nodeAccessHighlightColor, currentLinks, currentNodes, glowingNodes, useDuckDBTables, duckDBData, cosmographData]);
+    }, [config.linkColorScheme, config.linkOpacityScheme, config.linkColor, config.nodeTypeColors, config.nodeAccessHighlightColor, currentLinks, currentNodes, glowingNodes, useDuckDBTables, duckDBData, cosmographData, applyOpacityToColor]);
+    
+    // Memoize link width function based on scheme
+    const linkWidthFn = React.useMemo(() => {
+      if (!config.linkWidthScheme || config.linkWidthScheme === 'uniform') {
+        return undefined; // Use default weight column
+      }
+      
+      return (weight: any, linkIndex: number) => {
+        const link = linkIndex < currentLinks.length ? currentLinks[linkIndex] : null;
+        if (!link) return 1;
+        
+        switch (config.linkWidthScheme) {
+          case 'by-source-centrality': {
+            // Width based on source node's degree centrality
+            const sourceNode = currentNodes.find(n => n.id === link.source);
+            if (sourceNode) {
+              const centrality = sourceNode.properties?.degree_centrality || 0;
+              // Scale centrality to reasonable width range (0.5 to 5)
+              return 0.5 + (centrality * 4.5);
+            }
+            return 1;
+          }
+          
+          case 'by-source-pagerank': {
+            // Width based on source node's PageRank
+            const sourceNode = currentNodes.find(n => n.id === link.source);
+            if (sourceNode) {
+              const pagerank = sourceNode.properties?.pagerank_centrality || sourceNode.properties?.pagerank || 0;
+              // PageRank is usually much smaller, so scale more aggressively
+              return 0.5 + (pagerank * 50);
+            }
+            return 1;
+          }
+          
+          case 'by-source-betweenness': {
+            // Width based on source node's betweenness centrality
+            const sourceNode = currentNodes.find(n => n.id === link.source);
+            if (sourceNode) {
+              const betweenness = sourceNode.properties?.betweenness_centrality || 0;
+              return 0.5 + (betweenness * 4.5);
+            }
+            return 1;
+          }
+          
+          case 'by-weight': {
+            // Use the actual weight value
+            return Number(weight || 1);
+          }
+          
+          default:
+            return Number(weight || 1);
+        }
+      };
+    }, [config.linkWidthScheme, currentLinks, currentNodes]);
     
     // Debug logging for link color scheme
     useEffect(() => {
       console.log('[GraphCanvas] Link color scheme changed:', config.linkColorScheme);
-      console.log('[GraphCanvas] Link color function:', linkColorFn ? 'defined' : 'undefined');
-    }, [config.linkColorScheme, linkColorFn]);
+      console.log('[GraphCanvas] Link width scheme changed:', config.linkWidthScheme);
+      console.log('[GraphCanvas] Link opacity scheme changed:', config.linkOpacityScheme);
+    }, [config.linkColorScheme, config.linkWidthScheme, config.linkOpacityScheme]);
 
     // Note: We don't need these separate functions anymore since we're using inline functions in the props
     
@@ -2579,12 +2695,12 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             
             // Link Properties
             linkColor={config.linkColor}
-            linkColorByFn={config.linkColorScheme === 'uniform' ? undefined : linkColorFn}
+            linkColorByFn={config.linkColorScheme === 'uniform' && config.linkOpacityScheme === 'uniform' ? undefined : linkColorFn}
             linkOpacity={config.linkOpacity}
             linkGreyoutOpacity={config.linkGreyoutOpacity}
             linkWidth={1}
             // linkWidthBy is already set above to 'weight'
-            // linkWidthBy={config.linkWidthBy}
+            linkWidthByFn={config.linkWidthScheme === 'uniform' ? undefined : linkWidthFn}
             linkWidthScale={config.linkWidth}
             linkWidthRange={[0.5, 5]} // Set link width range for auto scaling
             scaleLinksOnZoom={config.scaleLinksOnZoom}

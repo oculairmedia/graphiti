@@ -90,8 +90,10 @@ const defaultStableConfig: StableConfig = {
   // Static appearance
   linkWidth: 1,
   linkWidthBy: 'weight',
+  linkWidthScheme: 'uniform',  // New: scheme for link width
   linkWidthScale: 0.5,
   linkOpacity: 0.3,
+  linkOpacityScheme: 'uniform',  // New: scheme for link opacity
   linkGreyoutOpacity: 0.1,
   linkColor: '#E5E7EB',
   linkColorScheme: 'uniform',
