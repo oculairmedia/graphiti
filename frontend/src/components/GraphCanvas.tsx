@@ -183,6 +183,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     
     // Glowing nodes state for real-time visualization
     const [glowingNodes, setGlowingNodes] = useState<Map<string, number>>(new Map());
+    const [glowingNodeIndices, setGlowingNodeIndices] = useState<number[]>([]);
     const { subscribe: subscribeToWebSocket } = useWebSocketContext();
     
     // Track current data for incremental updates
@@ -308,6 +309,8 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           }
           
           const now = Date.now();
+          
+          // Update glowing nodes map
           setGlowingNodes(() => {
             // Create a fresh map with only the new nodes
             const updated = new Map<string, number>();
@@ -321,6 +324,31 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             return updated;
           });
           
+          // Convert node IDs to indices for Cosmograph
+          setGlowingNodeIndices(() => {
+            if (!event.node_ids || event.node_ids.length === 0) {
+              return [];
+            }
+            
+            // Get the current data source
+            const dataSource = currentNodes;
+            if (!dataSource || dataSource.length === 0) {
+              return [];
+            }
+            
+            const indices: number[] = [];
+            
+            // Find indices for each glowing node ID
+            dataSource.forEach((node: GraphNode, index: number) => {
+              if (event.node_ids.includes(node.id)) {
+                indices.push(index);
+              }
+            });
+            
+            console.log('[GraphCanvas] Glowing node indices:', indices);
+            return indices;
+          });
+          
           // Log that we're ready to apply glow
           console.log('[GraphCanvas] Ready to apply glow effect, functions should be called now');
           
@@ -331,6 +359,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           // Remove glow after 2 seconds
           glowTimeoutRef.current = setTimeout(() => {
             setGlowingNodes(() => new Map());
+            setGlowingNodeIndices([]);
             console.log('[GraphCanvas] Glow effect cleared');
           }, 2000);
         }
@@ -2666,174 +2695,9 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             backgroundColor={config.backgroundColor}
             
             // Use Cosmograph v2.0 built-in color strategies
-            // Switch to 'direct' strategy when glowing to allow pointColorByFn to work
-            pointColorStrategy={glowingNodes.size > 0 ? 'direct' : pointColorStrategy}
+            pointColorStrategy={pointColorStrategy}
             pointColorPalette={pointColorPalette}
             pointColorByMap={config.nodeTypeColors}
-            
-            // Use pointColorByFn to handle colors when glowing
-            pointColorByFn={glowingNodes.size > 0 ? (value, index) => {
-              // Get the node from the correct data source
-              const dataSource = useDuckDBTables ? duckDBData : cosmographData;
-              if (!dataSource || !dataSource.points) {
-                return config.nodeColor || '#94a3b8'; // Return default color
-              }
-              
-              // Handle Arrow table vs array data to get node ID and value
-              let nodeId: string;
-              let nodeData: any;
-              if (useDuckDBTables && duckDBData?.points?.get) {
-                // Arrow table - use get method
-                nodeData = duckDBData.points.get(index);
-                nodeId = nodeData?.id || String(index);
-              } else if (cosmographData?.points?.[index]) {
-                // JavaScript array
-                nodeData = cosmographData.points[index];
-                nodeId = nodeData.id;
-              } else {
-                return config.nodeColor || '#94a3b8'; // Return default color
-              }
-              
-              // First, get the color value based on the current pointColorBy field
-              const colorValue = nodeData[pointColorBy || 'node_type'] || value;
-              
-              // Calculate base color based on the original color strategy
-              let baseColor: string;
-              
-              // Check if node is glowing
-              const glowStartTime = glowingNodes.get(nodeId);
-              
-              // Determine base color using the same logic as the original strategy
-              switch (config.colorScheme) {
-                case 'by-type': {
-                  // Direct mapping
-                  baseColor = config.nodeTypeColors[colorValue] || '#94a3b8';
-                  break;
-                }
-                
-                case 'by-centrality':
-                case 'by-pagerank': {
-                    // Gradient interpolation (by-centrality, by-pagerank)
-                    const normalizedValue = Math.min(Math.max(Number(colorValue) || 0, 0), 1);
-                    
-                    // Use the same palette that Cosmograph uses
-                    if (config.colorScheme === 'by-pagerank') {
-                      // Purple to yellow gradient for PageRank
-                      const r = Math.round(147 + (255 - 147) * normalizedValue);
-                      const g = Math.round(51 + (235 - 51) * normalizedValue);
-                      const b = Math.round(234 + (59 - 234) * normalizedValue);
-                      baseColor = `rgb(${r}, ${g}, ${b})`;
-                    } else {
-                      // Blue to red gradient for centrality
-                      const r = Math.round(59 + (239 - 59) * normalizedValue);
-                      const g = Math.round(130 + (68 - 130) * normalizedValue);
-                      const b = Math.round(246 + (68 - 246) * normalizedValue);
-                      baseColor = `rgb(${r}, ${g}, ${b})`;
-                    }
-                    break;
-                  }
-                  
-                case 'by-degree': {
-                    // Degree-based coloring
-                    const degree = nodeData?.degree_centrality || 0;
-                    const normalized = Math.min(Math.max(degree, 0), 1);
-                    // Orange gradient
-                    const r = Math.round(251 + (239 - 251) * normalized);
-                    const g = Math.round(146 + (68 - 146) * normalized);
-                    const b = Math.round(60 + (68 - 60) * normalized);
-                    baseColor = `rgb(${r}, ${g}, ${b})`;
-                    break;
-                  }
-                  
-                case 'by-community': {
-                    // Community/cluster palette
-                    const communityColors = pointColorPalette || [
-                      '#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6',
-                      '#ec4899', '#14b8a6', '#f97316', '#6366f1', '#84cc16',
-                      '#22d3ee', '#f87171', '#34d399', '#fbbf24', '#a78bfa'
-                    ];
-                    const clusterIndex = typeof colorValue === 'string' ? 
-                      parseInt(colorValue.replace(/\D/g, '')) || 0 : 
-                      Number(colorValue) || 0;
-                    baseColor = communityColors[clusterIndex % communityColors.length];
-                    break;
-                  }
-                  
-                default:
-                  // Fallback to type colors
-                  baseColor = config.nodeTypeColors[colorValue] || '#94a3b8';
-              }
-              
-              // If node is not glowing, return the base color directly
-              if (!glowStartTime) {
-                return baseColor;
-              }
-              
-              // Calculate fade progress for glowing nodes
-              const elapsed = Date.now() - glowStartTime;
-              const fadeDuration = 2000; // 2 seconds total
-              const fadeProgress = Math.min(elapsed / fadeDuration, 1);
-              
-              // If fully faded, return base color
-              if (fadeProgress >= 1) {
-                return baseColor;
-              }
-              
-              // Apply highlight glow effect
-              const highlightColor = config.nodeAccessHighlightColor;
-                
-                // Parse colors to RGB
-                const parseColor = (color: string): [number, number, number, number] => {
-                  if (color.startsWith('rgba')) {
-                    const match = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+),?\s*([\d.]+)?\)/);
-                    if (match) {
-                      return [
-                        parseInt(match[1]), 
-                        parseInt(match[2]), 
-                        parseInt(match[3]), 
-                        parseFloat(match[4] || '1')
-                      ];
-                    }
-                  } else if (color.startsWith('rgb')) {
-                    const match = color.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
-                    if (match) {
-                      return [
-                        parseInt(match[1]), 
-                        parseInt(match[2]), 
-                        parseInt(match[3]), 
-                        1
-                      ];
-                    }
-                  } else if (color.startsWith('#')) {
-                    const hex = color.slice(1);
-                    return [
-                      parseInt(hex.slice(0, 2), 16),
-                      parseInt(hex.slice(2, 4), 16),
-                      parseInt(hex.slice(4, 6), 16),
-                      1
-                    ];
-                  }
-                  return [148, 163, 184, 1]; // Default color
-                };
-                
-                const [baseR, baseG, baseB, baseA] = parseColor(baseColor);
-                const [highlightR, highlightG, highlightB, highlightA] = parseColor(highlightColor);
-                
-                // Use easing function for smooth transition (ease-in-out)
-                const easeInOut = (t: number) => t < 0.5 
-                  ? 2 * t * t 
-                  : -1 + (4 - 2 * t) * t;
-                
-                const easedProgress = easeInOut(fadeProgress);
-                
-                // Interpolate between highlight and base color
-                const r = Math.round(highlightR + (baseR - highlightR) * easedProgress);
-                const g = Math.round(highlightG + (baseG - highlightG) * easedProgress);
-                const b = Math.round(highlightB + (baseB - highlightB) * easedProgress);
-                const a = highlightA + (baseA - highlightA) * easedProgress;
-                
-                return `rgba(${r}, ${g}, ${b}, ${a})`;
-            } : undefined}
             
             // Size configuration - keep normal sizing always
             pointSizeStrategy={'auto'}
@@ -2849,8 +2713,16 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             hoveredPointCursor={config.hoveredPointCursor}
             renderHoveredPointRing={config.renderHoveredPointRing}
             hoveredPointRingColor={config.hoveredPointRingColor}
-            focusedPointRingColor={config.focusedPointRingColor}
-            focusedPointIndex={config.focusedPointIndex}
+            
+            // Use glowing nodes for focus effect
+            focusedPointRingColor={config.nodeAccessHighlightColor}
+            focusedPointIndex={glowingNodeIndices.length === 1 ? glowingNodeIndices[0] : undefined}
+            renderFocusedPointRing={glowingNodeIndices.length === 1}
+            
+            // For multiple glowing nodes, use selected points
+            selectedPointIndices={glowingNodeIndices.length > 1 ? glowingNodeIndices : undefined}
+            selectedPointRingColor={config.nodeAccessHighlightColor}
+            renderSelectedPointRing={glowingNodeIndices.length > 1}
             renderLinks={config.renderLinks}
             
             // Zoom event handlers (debugging disabled for now)
@@ -2864,7 +2736,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             //   console.log('Zoom ended', { userDriven, transform: e.transform });
             // }}
             
-            nodeGreyoutOpacity={selectedNodes.length > 0 || highlightedNodes.length > 0 ? 0.1 : 1}
+            nodeGreyoutOpacity={selectedNodes.length > 0 || highlightedNodes.length > 0 || glowingNodeIndices.length > 0 ? 0.1 : 1}
             
             // Performance
             pixelRatio={config.performanceMode ? 1.0 : (currentNodes.length > 10000 ? 1.5 : 2.5)}
