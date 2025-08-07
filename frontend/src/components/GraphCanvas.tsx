@@ -449,12 +449,69 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       }
       
       // Check if Cosmograph is ready
-      if (!cosmographRef.current || !cosmographRef.current.dataManager) {
-        console.warn('[GraphCanvas] Cosmograph or dataManager not ready for delta updates');
+      if (!cosmographRef.current) {
+        console.warn('[GraphCanvas] Cosmograph ref not ready');
         return;
       }
       
-      console.log('[GraphCanvas] Processing delta batch with Cosmograph dataManager:', !!cosmographRef.current.dataManager);
+      // Log available properties for debugging
+      console.log('[GraphCanvas] Cosmograph ref properties:', Object.keys(cosmographRef.current));
+      console.log('[GraphCanvas] Checking for dataManager:', !!cosmographRef.current.dataManager);
+      
+      if (!cosmographRef.current.dataManager) {
+        console.warn('[GraphCanvas] dataManager not available, attempting fallback to setData');
+        
+        // Fallback: Use setData for full replacement if dataManager is not available
+        // This is less efficient but ensures updates work
+        const deltas = [...deltaQueueRef.current];
+        deltaQueueRef.current = [];
+        
+        try {
+          // Get current data and apply deltas
+          const currentNodesMap = new Map(currentNodes.map(n => [n.id, n]));
+          const currentLinksMap = new Map(currentLinks.map(l => [`${l.source}-${l.target}`, l]));
+          
+          for (const delta of deltas) {
+            const { operation, nodes: deltaNodes, edges: deltaEdges } = delta;
+            
+            if (operation === 'add') {
+              // Add new nodes
+              deltaNodes?.forEach(node => {
+                currentNodesMap.set(node.id, {
+                  ...node,
+                  index: currentNodesMap.size
+                });
+              });
+              
+              // Add new edges
+              deltaEdges?.forEach(edge => {
+                const key = `${edge.source || edge.from}-${edge.target || edge.to}`;
+                currentLinksMap.set(key, edge);
+              });
+            }
+            // Handle other operations as needed
+          }
+          
+          // Convert back to arrays and update
+          const updatedNodes = Array.from(currentNodesMap.values());
+          const updatedLinks = Array.from(currentLinksMap.values());
+          
+          console.log('[GraphCanvas] Fallback update - nodes:', updatedNodes.length, 'links:', updatedLinks.length);
+          
+          // Use setData to update the graph
+          if (cosmographRef.current.setData) {
+            cosmographRef.current.setData(updatedNodes, updatedLinks);
+            setCurrentNodes(updatedNodes);
+            setCurrentLinks(updatedLinks);
+          }
+        } catch (error) {
+          console.error('[GraphCanvas] Error in fallback update:', error);
+        }
+        
+        return;
+      }
+      
+      console.log('[GraphCanvas] Processing delta batch with Cosmograph dataManager');
       
       // Process all queued deltas at once
       const deltas = [...deltaQueueRef.current];
@@ -2979,11 +3036,29 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           <Cosmograph
             ref={cosmographRef}
             onMount={(cosmograph) => {
-              console.log('[GraphCanvas] Cosmograph mounted, checking for dataManager:', !!cosmograph);
-              // Store the actual Cosmograph instance which has the internal API
+              console.log('[GraphCanvas] Cosmograph mounted, checking internals');
+              // Store the actual Cosmograph instance
               if (cosmograph) {
                 cosmographRef.current = cosmograph as any;
-                console.log('[GraphCanvas] Cosmograph dataManager available:', !!(cosmograph as any).dataManager);
+                
+                // Try to access internal API directly or through a property
+                const internalApi = (cosmograph as any)._internalApi || 
+                                   (cosmograph as any).internal ||
+                                   (cosmograph as any).api ||
+                                   cosmograph;
+                
+                // Check if dataManager is available through various paths
+                const dataManager = internalApi?.dataManager || 
+                                   (cosmograph as any).dataManager ||
+                                   (cosmograph as any).getDataManager?.();
+                
+                if (dataManager) {
+                  console.log('[GraphCanvas] ✅ Found dataManager, storing reference');
+                  (cosmographRef.current as any).dataManager = dataManager;
+                } else {
+                  console.log('[GraphCanvas] ⚠️ dataManager not found, available properties:', Object.keys(cosmograph));
+                  console.log('[GraphCanvas] Cosmograph prototype:', Object.getOwnPropertyNames(Object.getPrototypeOf(cosmograph)));
+                }
               }
             }}
             // Use DuckDB table names or prepared data
