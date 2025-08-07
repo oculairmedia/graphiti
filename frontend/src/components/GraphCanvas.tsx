@@ -323,69 +323,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           // Log that we're ready to apply glow
           console.log('[GraphCanvas] Ready to apply glow effect, functions should be called now');
           
-          // Show popup for the first accessed node
-          if (cosmographRef.current && event.node_ids.length > 0) {
-            // Find the index of the first node
-            const firstNodeId = event.node_ids[0];
-            const nodeIndex = transformedData.nodes.findIndex(n => n.id === firstNodeId);
-            
-            if (nodeIndex >= 0) {
-              // Clear existing popup timeout
-              if (popupTimeoutRef.current) {
-                clearTimeout(popupTimeoutRef.current);
-              }
-              
-              // Remove existing popup if any
-              if (popupRef.current) {
-                popupRef.current.remove();
-                popupRef.current = null;
-              }
-              
-              // Create new popup
-              try {
-                popupRef.current = new CosmographPopup(cosmographRef.current, {
-                  content: `
-                    <div style="
-                      background: rgba(255, 215, 0, 0.95);
-                      color: #000;
-                      padding: 8px 12px;
-                      border-radius: 6px;
-                      font-size: 14px;
-                      font-weight: 500;
-                      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-                      max-width: 200px;
-                    ">
-                      <div style="margin-bottom: 4px;">🔍 Search Result</div>
-                      <div style="font-size: 12px; opacity: 0.8;">
-                        ${event.node_ids.length} node${event.node_ids.length > 1 ? 's' : ''} found
-                      </div>
-                    </div>
-                  `,
-                  pointIndex: nodeIndex,
-                  offset: { x: 0, y: -20 } // Position above the node
-                });
-                
-                // Show the popup
-                popupRef.current.show();
-                
-                // Auto-hide popup after 3 seconds
-                popupTimeoutRef.current = setTimeout(() => {
-                  if (popupRef.current) {
-                    popupRef.current.hide();
-                    // Remove after fade
-                    setTimeout(() => {
-                      if (popupRef.current) {
-                        popupRef.current.remove();
-                        popupRef.current = null;
-                      }
-                    }, 300);
-                  }
-                }, 3000);
-              } catch (error) {
-                console.error('[GraphCanvas] Failed to create popup:', error);
-              }
-            }
-          }
+          // We'll handle the popup in a separate effect that has access to transformedData
           
           // No need to force update - the animation loop will handle it
           
@@ -410,7 +348,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           popupRef.current = null;
         }
       };
-    }, [subscribeToWebSocket, transformedData.nodes]);
+    }, [subscribeToWebSocket]);
     
     // Animation loop for smooth color transitions
     useEffect(() => {
@@ -1018,6 +956,72 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     const transformedData = React.useMemo(() => {
       return { nodes, links };
     }, [nodes, links]);
+    
+    // Handle popup for glowing nodes (search results)
+    useEffect(() => {
+      if (glowingNodes.size > 0 && cosmographRef.current && transformedData.nodes.length > 0) {
+        // Get the first glowing node
+        const firstGlowingNodeId = Array.from(glowingNodes.keys())[0];
+        const nodeIndex = transformedData.nodes.findIndex(n => n.id === firstGlowingNodeId);
+        
+        if (nodeIndex >= 0) {
+          // Clear existing popup timeout
+          if (popupTimeoutRef.current) {
+            clearTimeout(popupTimeoutRef.current);
+          }
+          
+          // Remove existing popup if any
+          if (popupRef.current) {
+            popupRef.current.remove();
+            popupRef.current = null;
+          }
+          
+          // Create new popup for search result
+          try {
+            popupRef.current = new CosmographPopup(cosmographRef.current, {
+              content: `
+                <div style="
+                  background: rgba(255, 215, 0, 0.95);
+                  color: #000;
+                  padding: 8px 12px;
+                  border-radius: 6px;
+                  font-size: 14px;
+                  font-weight: 500;
+                  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+                  max-width: 200px;
+                ">
+                  <div style="margin-bottom: 4px;">🔍 Search Result</div>
+                  <div style="font-size: 12px; opacity: 0.8;">
+                    ${glowingNodes.size} node${glowingNodes.size > 1 ? 's' : ''} found
+                  </div>
+                </div>
+              `,
+              pointIndex: nodeIndex,
+              offset: { x: 0, y: -20 } // Position above the node
+            });
+            
+            // Show the popup
+            popupRef.current.show();
+            
+            // Auto-hide popup after 3 seconds
+            popupTimeoutRef.current = setTimeout(() => {
+              if (popupRef.current) {
+                popupRef.current.hide();
+                // Remove after fade
+                setTimeout(() => {
+                  if (popupRef.current) {
+                    popupRef.current.remove();
+                    popupRef.current = null;
+                  }
+                }, 300);
+              }
+            }, 3000);
+          } catch (error) {
+            console.error('[GraphCanvas] Failed to create search popup:', error);
+          }
+        }
+      }
+    }, [glowingNodes, transformedData.nodes]);
     
     // Memoize node types for color generation
     const allNodeTypes = React.useMemo(() => {
