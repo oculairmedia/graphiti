@@ -61,9 +61,14 @@ export function RustWebSocketProvider({ children }: { children: React.ReactNode 
         setIsConnected(true);
         reconnectCountRef.current = 0;
         
-        // Don't subscribe to deltas - Rust server only sends to update_tx, not delta_tx
-        // By not subscribing to deltas, we'll receive full updates instead
-        console.log('[RustWebSocketProvider] Connected, ready to receive updates');
+        // Subscribe to delta updates for real-time incremental changes
+        const subscribeMessage = JSON.stringify({
+          type: 'subscribe:deltas'
+        });
+        ws.send(subscribeMessage);
+        console.log('[RustWebSocketProvider] Sent subscribe:deltas message');
+        
+        console.log('[RustWebSocketProvider] Connected, subscribed to delta updates');
       };
 
       ws.onmessage = (event) => {
@@ -80,10 +85,34 @@ export function RustWebSocketProvider({ children }: { children: React.ReactNode 
           else if (message.type === 'graph:delta' || message.type === 'graph:update') {
             console.log('[RustWebSocketProvider] Delta/Update data:', message);
             
-            // Transform graph:update to delta format if needed
+            // Transform to unified delta format
             let deltaMessage = message;
-            if (message.type === 'graph:update' && message.data) {
-              // Assume it's an add operation for new data
+            
+            // Handle GraphDelta format from Rust server
+            if (message.type === 'graph:delta' && message.data) {
+              // Transform GraphDelta to frontend format
+              const data = message.data;
+              deltaMessage = {
+                type: 'graph:delta',
+                data: {
+                  operation: 'add', // Simplified - could be 'update' based on data.operation
+                  nodes: data.nodes_added || [],
+                  edges: data.edges_added || [],
+                  timestamp: data.timestamp || Date.now()
+                }
+              };
+              
+              // If there are updates or removals, handle them separately
+              if (data.nodes_updated?.length > 0) {
+                // Could send separate update message or combine
+                console.log('[RustWebSocketProvider] Node updates present:', data.nodes_updated.length);
+              }
+              if (data.nodes_removed?.length > 0 || data.edges_removed?.length > 0) {
+                console.log('[RustWebSocketProvider] Removals present');
+              }
+            }
+            // Handle GraphUpdate format (fallback)
+            else if (message.type === 'graph:update' && message.data) {
               deltaMessage = {
                 type: 'graph:delta',
                 data: {

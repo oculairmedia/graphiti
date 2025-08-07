@@ -1983,6 +1983,21 @@ async fn webhook_data_ingestion(
             // Broadcast update to WebSocket clients
             let _ = state.update_tx.send(update.clone());
             
+            // Also send as delta for clients subscribed to deltas
+            use delta_tracker::DeltaOperation;
+            let delta = GraphDelta {
+                operation: DeltaOperation::Update,
+                nodes_added: update.nodes.clone().unwrap_or_default(),
+                nodes_updated: vec![],
+                nodes_removed: vec![],
+                edges_added: update.edges.clone().unwrap_or_default(),
+                edges_updated: vec![],
+                edges_removed: vec![],
+                timestamp: update.timestamp,
+                sequence: 0, // Will be set by delta tracker if needed
+            };
+            let _ = state.delta_tx.send(delta);
+            
             // Clear caches to ensure fresh data
             state.graph_cache.clear();
             let mut arrow_cache = state.arrow_cache.write().await;
