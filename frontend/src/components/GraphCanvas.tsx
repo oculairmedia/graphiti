@@ -2978,6 +2978,14 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       >
           <Cosmograph
             ref={cosmographRef}
+            onMount={(cosmograph) => {
+              console.log('[GraphCanvas] Cosmograph mounted, checking for dataManager:', !!cosmograph);
+              // Store the actual Cosmograph instance which has the internal API
+              if (cosmograph) {
+                cosmographRef.current = cosmograph as any;
+                console.log('[GraphCanvas] Cosmograph dataManager available:', !!(cosmograph as any).dataManager);
+              }
+            }}
             // Use DuckDB table names or prepared data
             points={pointsData}
             links={linksData}
