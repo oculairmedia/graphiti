@@ -194,6 +194,13 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     const [currentNodes, setCurrentNodes] = useState<GraphNode[]>([]);
     const [currentLinks, setCurrentLinks] = useState<GraphLink[]>([]);
     
+    // Use ref to access current data without causing re-subscriptions
+    const cosmographDataRef = useRef<typeof cosmographData>(null);
+    
+    // Batch delta updates for performance
+    const deltaQueueRef = useRef<any[]>([]);
+    const deltaTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    
     // DuckDB data state - keep Arrow tables in native format
     const [duckDBData, setDuckDBData] = useState<{ points: any; links: any } | null>(null);
     
@@ -422,31 +429,34 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       };
     }, [subscribeToWebSocket]);
     
-    // Subscribe to delta updates for incremental graph changes
-    useEffect(() => {
-      const unsubscribeDelta = subscribeToDeltaUpdate((event) => {
-        console.log('[GraphCanvas] Delta update received:', event.data);
-        
-        if (!cosmographData) {
-          console.log('[GraphCanvas] No existing data to apply delta to');
-          return;
-        }
-        
-        const { operation, nodes: deltaNodes, edges: deltaEdges } = event.data;
-        
-        // Create a copy of current data
-        let updatedNodes = [...(cosmographData.points || [])];
-        let updatedLinks = [...(cosmographData.links || [])];
+    // Process batched delta updates
+    const processDeltaBatch = useCallback(() => {
+      if (deltaQueueRef.current.length === 0) return;
+      
+      const currentData = cosmographDataRef.current;
+      if (!currentData) {
+        deltaQueueRef.current = [];
+        return;
+      }
+      
+      // Process all queued deltas at once
+      const deltas = [...deltaQueueRef.current];
+      deltaQueueRef.current = [];
+      
+      let updatedNodes = [...(currentData.points || [])];
+      let updatedLinks = [...(currentData.links || [])];
+      
+      // Apply all deltas
+      deltas.forEach(delta => {
+        const { operation, nodes: deltaNodes, edges: deltaEdges } = delta;
         
         // Apply delta operations
         if (operation === 'add') {
           if (deltaNodes && deltaNodes.length > 0) {
             updatedNodes = [...updatedNodes, ...deltaNodes];
-            console.log(`[GraphCanvas] Added ${deltaNodes.length} nodes`);
           }
           if (deltaEdges && deltaEdges.length > 0) {
             updatedLinks = [...updatedLinks, ...deltaEdges];
-            console.log(`[GraphCanvas] Added ${deltaEdges.length} edges`);
           }
         } else if (operation === 'update') {
           if (deltaNodes && deltaNodes.length > 0) {
@@ -458,7 +468,6 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
               }
             });
             updatedNodes = Array.from(nodeMap.values());
-            console.log(`[GraphCanvas] Updated ${deltaNodes.length} nodes`);
           }
           if (deltaEdges && deltaEdges.length > 0) {
             const edgeMap = new Map(updatedLinks.map(e => [e.id || `${e.source}-${e.target}`, e]));
@@ -470,13 +479,11 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
               }
             });
             updatedLinks = Array.from(edgeMap.values());
-            console.log(`[GraphCanvas] Updated ${deltaEdges.length} edges`);
           }
         } else if (operation === 'delete') {
           if (deltaNodes && deltaNodes.length > 0) {
             const deleteIds = new Set(deltaNodes.map(n => n.id));
             updatedNodes = updatedNodes.filter(n => !deleteIds.has(n.id));
-            console.log(`[GraphCanvas] Deleted ${deltaNodes.length} nodes`);
           }
           if (deltaEdges && deltaEdges.length > 0) {
             const deleteIds = new Set(deltaEdges.map(e => e.id || `${e.source}-${e.target}`));
@@ -484,28 +491,46 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
               const id = e.id || `${e.source}-${e.target}`;
               return !deleteIds.has(id);
             });
-            console.log(`[GraphCanvas] Deleted ${deltaEdges.length} edges`);
           }
-        }
-        
-        // Update cosmograph data
-        setCosmographData({
-          points: updatedNodes,
-          links: updatedLinks
-        });
-        
-        // Update current data tracking
-        setCurrentNodes(updatedNodes);
-        setCurrentLinks(updatedLinks);
-        
-        // Trigger re-render if simulation is running
-        if (cosmographRef.current && keepRunning) {
-          cosmographRef.current.restart();
         }
       });
       
+      // Update cosmograph data once after all deltas are applied
+      setCosmographData({
+        points: updatedNodes,
+        links: updatedLinks
+      });
+      
+      // Update current data tracking
+      setCurrentNodes(updatedNodes);
+      setCurrentLinks(updatedLinks);
+      
+      // Trigger re-render if simulation is running
+      if (cosmographRef.current && keepRunning) {
+        cosmographRef.current.restart();
+      }
+    }, [keepRunning]);
+      
+    
+    // Subscribe to delta updates with batching
+    useEffect(() => {
+      const unsubscribeDelta = subscribeToDeltaUpdate((event) => {
+        // Queue the delta update
+        deltaQueueRef.current.push(event.data);
+        
+        // Clear existing timeout
+        if (deltaTimeoutRef.current) {
+          clearTimeout(deltaTimeoutRef.current);
+        }
+        
+        // Process batch after 50ms of no new updates
+        deltaTimeoutRef.current = setTimeout(() => {
+          processDeltaBatch();
+          deltaTimeoutRef.current = null;
+        }, 50);
+      });
+      
       const unsubscribeGraph = subscribeToGraphUpdate((event) => {
-        console.log('[GraphCanvas] Graph update received:', event.data);
         // Handle full graph updates if needed
         // This could trigger a full data reload from DuckDB
       });
@@ -513,8 +538,16 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       return () => {
         unsubscribeDelta();
         unsubscribeGraph();
+        if (deltaTimeoutRef.current) {
+          clearTimeout(deltaTimeoutRef.current);
+        }
       };
-    }, [subscribeToDeltaUpdate, subscribeToGraphUpdate, cosmographData, keepRunning]);
+    }, [subscribeToDeltaUpdate, subscribeToGraphUpdate, processDeltaBatch]);
+    
+    // Keep ref in sync with state
+    useEffect(() => {
+      cosmographDataRef.current = cosmographData;
+    }, [cosmographData]);
     
     // Animation loop for smooth color transitions
     useEffect(() => {
