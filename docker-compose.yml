@@ -47,6 +47,8 @@ services:
       context: .
       dockerfile: Dockerfile.falkordb-custom
     # command removed as it's handled in the custom entrypoint
+    mem_limit: 4g
+    mem_reservation: 1g
     healthcheck:
       test:
         - CMD
@@ -99,7 +101,7 @@ services:
       - homepage.href=http://192.168.50.90:3000
       - homepage.description=High-performance Rust-based graph visualization
   frontend:
-    image: ghcr.io/oculairmedia/graphiti-frontend:main-963d95b
+    image: ghcr.io/oculairmedia/graphiti-frontend:main
     container_name: graphiti-frontend-app
     restart: unless-stopped
     expose:
