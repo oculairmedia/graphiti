@@ -41,6 +41,33 @@ struct AppState {
     delta_tracker: Arc<DeltaTracker>,
     http_client: Arc<reqwest::Client>,
     centrality_url: String,
+    cache_config: CacheConfig,
+}
+
+#[derive(Clone)]
+struct CacheConfig {
+    enabled: bool,
+    ttl_seconds: u64,
+    strategy: CacheStrategy,
+    force_fresh: bool,
+}
+
+#[derive(Clone, Debug)]
+enum CacheStrategy {
+    Aggressive,
+    Moderate,
+    Disabled,
+}
+
+impl CacheStrategy {
+    fn from_str(s: &str) -> Self {
+        match s.to_lowercase().as_str() {
+            "aggressive" => Self::Aggressive,
+            "moderate" => Self::Moderate,
+            "disabled" => Self::Disabled,
+            _ => Self::Moderate,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -194,6 +221,29 @@ async fn main() -> anyhow::Result<()> {
     let centrality_url = std::env::var("CENTRALITY_SERVICE_URL")
         .unwrap_or_else(|_| "http://graphiti-centrality-rs:3003".to_string());
     
+    // Load cache configuration from environment
+    let cache_config = CacheConfig {
+        enabled: std::env::var("CACHE_ENABLED")
+            .unwrap_or_else(|_| "true".to_string())
+            .parse::<bool>()
+            .unwrap_or(true),
+        ttl_seconds: std::env::var("CACHE_TTL_SECONDS")
+            .unwrap_or_else(|_| "300".to_string())
+            .parse::<u64>()
+            .unwrap_or(300),
+        strategy: CacheStrategy::from_str(
+            &std::env::var("CACHE_STRATEGY")
+                .unwrap_or_else(|_| "moderate".to_string())
+        ),
+        force_fresh: std::env::var("FORCE_FRESH_DATA")
+            .unwrap_or_else(|_| "false".to_string())
+            .parse::<bool>()
+            .unwrap_or(false),
+    };
+    
+    info!("Cache configuration: enabled={}, ttl={}s, strategy={:?}, force_fresh={}",
+          cache_config.enabled, cache_config.ttl_seconds, cache_config.strategy, cache_config.force_fresh);
+    
     let state = AppState {
         client: Arc::new(client),
         graph_name: graph_name.clone(),
@@ -205,6 +255,7 @@ async fn main() -> anyhow::Result<()> {
         delta_tracker: delta_tracker.clone(),
         http_client,
         centrality_url,
+        cache_config,
     };
     
     // Load initial data into DuckDB with optimized separate queries
@@ -620,7 +671,12 @@ async fn clear_cache(State(state): State<AppState>) -> Result<Json<CacheResponse
     let cleared_entries = state.graph_cache.len();
     state.graph_cache.clear();
     
-    info!("Cache cleared: {} entries removed", cleared_entries);
+    // Also clear arrow cache
+    let mut arrow_cache = state.arrow_cache.write().await;
+    *arrow_cache = None;
+    drop(arrow_cache);
+    
+    info!("Cache cleared: {} entries removed, arrow cache cleared", cleared_entries);
     
     Ok(Json(CacheResponse {
         message: "Cache cleared successfully".to_string(),
@@ -1286,26 +1342,27 @@ async fn get_nodes_arrow(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> Result<Response<Body>, (StatusCode, Json<ErrorResponse>)> {
-    // Check cache first
-    let cache = state.arrow_cache.read().await;
-    if let Some(ref cached) = *cache {
-        // Check if client has the same version (ETag)
-        if let Some(if_none_match) = headers.get(header::IF_NONE_MATCH) {
-            if let Ok(client_etag) = if_none_match.to_str() {
-                if client_etag == cached.nodes_etag {
-                    debug!("Client has current version (ETag match)");
-                    return Ok(Response::builder()
-                        .status(StatusCode::NOT_MODIFIED)
-                        .header(header::ETAG, &cached.nodes_etag)
-                        .header("Cache-Control", "public, max-age=300")
-                        .body(Body::empty())
-                        .unwrap());
+    // Check cache first (unless disabled or force fresh)
+    if state.cache_config.enabled && !state.cache_config.force_fresh {
+        let cache = state.arrow_cache.read().await;
+        if let Some(ref cached) = *cache {
+            // Check if client has the same version (ETag)
+            if let Some(if_none_match) = headers.get(header::IF_NONE_MATCH) {
+                if let Ok(client_etag) = if_none_match.to_str() {
+                    if client_etag == cached.nodes_etag {
+                        debug!("Client has current version (ETag match)");
+                        return Ok(Response::builder()
+                            .status(StatusCode::NOT_MODIFIED)
+                            .header(header::ETAG, &cached.nodes_etag)
+                            .header("Cache-Control", format!("public, max-age={}", state.cache_config.ttl_seconds))
+                            .body(Body::empty())
+                            .unwrap());
+                    }
                 }
             }
-        }
-        
-        // Cache is valid for 30 seconds
-        if cached.timestamp.elapsed() < std::time::Duration::from_secs(30) {
+            
+            // Check cache TTL
+            if cached.timestamp.elapsed() < std::time::Duration::from_secs(state.cache_config.ttl_seconds) {
             debug!("Serving nodes from Arrow cache");
             return Ok(Response::builder()
                 .status(StatusCode::OK)
@@ -1313,13 +1370,16 @@ async fn get_nodes_arrow(
                 .header("X-Arrow-Schema", "nodes")
                 .header("X-Cache-Hit", "true")
                 .header(header::ETAG, &cached.nodes_etag)
-                .header("Cache-Control", "public, max-age=300")
+                .header("Cache-Control", format!("public, max-age={}", state.cache_config.ttl_seconds))
                 .header("Vary", "Accept-Encoding")
                 .body(Body::from(cached.nodes_bytes.clone()))
                 .unwrap());
+            }
         }
+        drop(cache); // Release read lock
+    } else {
+        debug!("Cache disabled or force fresh data requested");
     }
-    drop(cache); // Release read lock
 
     match state.duckdb_store.get_nodes_as_arrow().await {
         Ok(batch) => {
@@ -1346,7 +1406,7 @@ async fn get_nodes_arrow(
                         .header("X-Arrow-Schema", "nodes")
                         .header("X-Cache-Hit", "false")
                         .header(header::ETAG, etag)
-                        .header("Cache-Control", "public, max-age=300")
+                        .header("Cache-Control", format!("public, max-age={}", state.cache_config.ttl_seconds))
                         .header("Vary", "Accept-Encoding")
                         .body(Body::from(bytes))
                         .unwrap())
@@ -1378,26 +1438,27 @@ async fn get_edges_arrow(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> Result<Response<Body>, (StatusCode, Json<ErrorResponse>)> {
-    // Check cache first
-    let cache = state.arrow_cache.read().await;
-    if let Some(ref cached) = *cache {
-        // Check if client has the same version (ETag)
-        if let Some(if_none_match) = headers.get(header::IF_NONE_MATCH) {
-            if let Ok(client_etag) = if_none_match.to_str() {
-                if client_etag == cached.edges_etag {
-                    debug!("Client has current version (ETag match)");
-                    return Ok(Response::builder()
-                        .status(StatusCode::NOT_MODIFIED)
-                        .header(header::ETAG, &cached.edges_etag)
-                        .header("Cache-Control", "public, max-age=300")
-                        .body(Body::empty())
-                        .unwrap());
+    // Check cache first (unless disabled or force fresh)
+    if state.cache_config.enabled && !state.cache_config.force_fresh {
+        let cache = state.arrow_cache.read().await;
+        if let Some(ref cached) = *cache {
+            // Check if client has the same version (ETag)
+            if let Some(if_none_match) = headers.get(header::IF_NONE_MATCH) {
+                if let Ok(client_etag) = if_none_match.to_str() {
+                    if client_etag == cached.edges_etag {
+                        debug!("Client has current version (ETag match)");
+                        return Ok(Response::builder()
+                            .status(StatusCode::NOT_MODIFIED)
+                            .header(header::ETAG, &cached.edges_etag)
+                            .header("Cache-Control", format!("public, max-age={}", state.cache_config.ttl_seconds))
+                            .body(Body::empty())
+                            .unwrap());
+                    }
                 }
             }
-        }
-        
-        // Cache is valid for 30 seconds
-        if cached.timestamp.elapsed() < std::time::Duration::from_secs(30) {
+            
+            // Check cache TTL
+            if cached.timestamp.elapsed() < std::time::Duration::from_secs(state.cache_config.ttl_seconds) {
             debug!("Serving edges from Arrow cache");
             return Ok(Response::builder()
                 .status(StatusCode::OK)
@@ -1405,13 +1466,16 @@ async fn get_edges_arrow(
                 .header("X-Arrow-Schema", "edges")
                 .header("X-Cache-Hit", "true")
                 .header(header::ETAG, &cached.edges_etag)
-                .header("Cache-Control", "public, max-age=300")
+                .header("Cache-Control", format!("public, max-age={}", state.cache_config.ttl_seconds))
                 .header("Vary", "Accept-Encoding")
                 .body(Body::from(cached.edges_bytes.clone()))
                 .unwrap());
+            }
         }
+        drop(cache); // Release read lock
+    } else {
+        debug!("Cache disabled or force fresh data requested");
     }
-    drop(cache); // Release read lock
 
     match state.duckdb_store.get_edges_as_arrow().await {
         Ok(batch) => {
@@ -1438,7 +1502,7 @@ async fn get_edges_arrow(
                         .header("X-Arrow-Schema", "edges")
                         .header("X-Cache-Hit", "false")
                         .header(header::ETAG, etag)
-                        .header("Cache-Control", "public, max-age=300")
+                        .header("Cache-Control", format!("public, max-age={}", state.cache_config.ttl_seconds))
                         .header("Vary", "Accept-Encoding")
                         .body(Body::from(bytes))
                         .unwrap())
