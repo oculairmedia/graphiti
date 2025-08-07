@@ -435,13 +435,13 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         case 'by-type': 
           return { pointColorStrategy: 'map', pointColorBy: 'node_type' };
         case 'by-centrality': 
-          return { pointColorStrategy: 'interpolate', pointColorBy: 'degree_centrality' };
+          return { pointColorStrategy: 'interpolatePalette', pointColorBy: 'degree_centrality' };
         case 'by-pagerank': 
-          return { pointColorStrategy: 'interpolate', pointColorBy: 'pagerank_centrality' };
+          return { pointColorStrategy: 'interpolatePalette', pointColorBy: 'pagerank_centrality' };
         case 'by-degree': 
-          return { pointColorStrategy: 'interpolate', pointColorBy: 'degree_centrality' };
+          return { pointColorStrategy: 'degree', pointColorBy: undefined }; // 'degree' strategy doesn't need pointColorBy
         case 'by-community': 
-          return { pointColorStrategy: 'auto', pointColorBy: 'cluster' };
+          return { pointColorStrategy: 'palette', pointColorBy: 'cluster' };
         default: 
           return { pointColorStrategy: 'map', pointColorBy: 'node_type' };
       }
@@ -990,9 +990,10 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     
     // Memoize link color function based on scheme and glowing nodes
     const linkColorFn = React.useMemo(() => {
-      // If nodes are glowing, override the color scheme to highlight connected edges
-      if (glowingNodes.size > 0) {
-        return (linkValue: GraphLink, linkIndex: number) => {
+      // Return a single function that handles all cases
+      return (linkValue: any, linkIndex: number) => {
+        // If nodes are glowing, override the color scheme to highlight connected edges
+        if (glowingNodes.size > 0) {
           // Get the correct data source
           const dataSource = useDuckDBTables ? duckDBData : cosmographData;
           if (!dataSource || !dataSource.links) {
@@ -1078,21 +1079,18 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           
           // Return normal color for non-connected edges
           return config.linkColor;
-        };
-      }
-      
-      // Original color scheme logic when not glowing
-      if (!config.linkColorScheme || config.linkColorScheme === 'uniform') {
-        return undefined; // Use default link color
-      }
-      
-      // Pre-calculate weight ranges for performance
-      const weights = currentLinks.map(l => l.weight || 1);
-      const maxWeight = Math.max(...weights);
-      const minWeight = Math.min(...weights);
-      const weightRange = maxWeight - minWeight || 1;
-      
-      return (linkValue: GraphLink, linkIndex: number) => {
+        }
+        
+        // Original color scheme logic when not glowing
+        if (!config.linkColorScheme || config.linkColorScheme === 'uniform') {
+          return config.linkColor; // Return the uniform color
+        }
+        
+        // Pre-calculate weight ranges for performance
+        const weights = currentLinks.map(l => l.weight || 1);
+        const maxWeight = Math.max(...weights);
+        const minWeight = Math.min(...weights);
+        const weightRange = maxWeight - minWeight || 1;
         // Get the actual link data from the current links
         const link = currentLinks[linkIndex];
         if (!link) return config.linkColor;
@@ -1140,7 +1138,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             return config.linkColor;
           }
             
-          case 'node-gradient': {
+          case 'gradient': {
             // Gradient from source to target node colors
             const sourceNodeColor = config.nodeTypeColors[currentNodes.find(n => n.id === link.source)?.node_type || ''];
             const targetNodeColor = config.nodeTypeColors[currentNodes.find(n => n.id === link.target)?.node_type || ''];
@@ -1163,6 +1161,12 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         }
       };
     }, [config.linkColorScheme, config.linkColor, config.nodeTypeColors, config.nodeAccessHighlightColor, currentLinks, currentNodes, glowingNodes, useDuckDBTables, duckDBData, cosmographData]);
+    
+    // Debug logging for link color scheme
+    useEffect(() => {
+      console.log('[GraphCanvas] Link color scheme changed:', config.linkColorScheme);
+      console.log('[GraphCanvas] Link color function:', linkColorFn ? 'defined' : 'undefined');
+    }, [config.linkColorScheme, linkColorFn]);
 
     // Note: We don't need these separate functions anymore since we're using inline functions in the props
     
