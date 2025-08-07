@@ -3,7 +3,6 @@ import { GraphNode } from '../api/types';
 import { GraphLink } from '../types/graph';
 import { GraphCanvas, type GraphCanvasRef as GraphCanvasHandle } from './GraphCanvas';
 import { NodeDetailsPanel } from './NodeDetailsPanel';
-import { QuickActions } from './QuickActions';
 import { GraphOverlays } from './GraphOverlays';
 import GraphErrorBoundary from './GraphErrorBoundary';
 import { useStableCallback } from '../hooks/useStableCallback';
@@ -161,9 +160,9 @@ const GraphViewportComponent = forwardRef<GraphCanvasHandle, GraphViewportProps>
         </div>
       )}
 
-      {/* Hover Tooltip - Positioned above viewport controls */}
+      {/* Hover Tooltip - Positioned above timeline */}
       {hoveredNode && (
-        <div className="absolute bottom-48 left-1/2 transform -translate-x-1/2 glass-panel px-4 py-2 rounded-lg text-sm font-medium text-foreground opacity-0 animate-[opacity_200ms_ease-in_forwards] pointer-events-none shadow-lg backdrop-blur-md bg-background/90 border border-border z-[60]">
+        <div className="absolute bottom-32 left-1/2 transform -translate-x-1/2 glass-panel px-4 py-2 rounded-lg text-sm font-medium text-foreground opacity-0 animate-[opacity_200ms_ease-in_forwards] pointer-events-none shadow-lg backdrop-blur-md bg-background/90 border border-border z-[60]">
           <div className="text-center">
             <div className="text-base font-semibold">{hoveredNode.label || hoveredNode.name}</div>
             {hoveredConnectedNodes.length > 0 && (
@@ -175,19 +174,6 @@ const GraphViewportComponent = forwardRef<GraphCanvasHandle, GraphViewportProps>
         </div>
       )}
 
-      {/* Quick Actions Toolbar - Positioned above timeline */}
-      <div className="absolute bottom-32 left-1/2 transform -translate-x-1/2 flex flex-col items-center space-y-2 z-50">
-        <QuickActions 
-          selectedCount={selectedNodes.length}
-          onClearSelection={stableOnClearSelection}
-          onFitToScreen={stableOnFitView}
-          onZoomIn={stableOnZoomIn}
-          onZoomOut={stableOnZoomOut}
-          onScreenshot={stableOnScreenshot}
-          onToggleTimeline={onToggleTimeline}
-          isTimelineVisible={isTimelineVisible}
-        />
-      </div>
     </div>
   );
 });

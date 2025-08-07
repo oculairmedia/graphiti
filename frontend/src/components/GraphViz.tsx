@@ -413,6 +413,10 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
                 ref={timelineRef}
                 isVisible={isTimelineVisible}
                 onVisibilityChange={handleTimelineVisibilityChange}
+                cosmographRef={graphCanvasRef}
+                selectedCount={selectedNodes.length}
+                onClearSelection={clearAllSelections}
+                onScreenshot={handleCaptureScreenshot}
                 onTimeRangeChange={(range) => {
                   // Handle timeline range changes
                   logger.log('Timeline range changed:', range);

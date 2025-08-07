@@ -1,10 +1,11 @@
 import React, { forwardRef, useImperativeHandle, useRef, useCallback, useEffect, useState } from 'react';
 import { CosmographTimeline, useCosmograph } from '@cosmograph/react';
 import type { CosmographTimelineRef } from '@cosmograph/react';
-import { Play, Pause, RotateCcw, ChevronDown, ChevronUp, SkipForward, Clock, Calendar } from 'lucide-react';
+import { Play, Pause, RotateCcw, ChevronDown, ChevronUp, SkipForward, Clock, Calendar, ZoomIn, ZoomOut, Maximize2, Camera, Trash2, Pin, Eye, Download, Move } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { logger } from '../utils/logger';
+import { useGraphZoom } from '../hooks/useGraphZoom';
 
 // Extend window for debugging
 declare global {
@@ -19,6 +20,10 @@ interface GraphTimelineProps {
   className?: string;
   isVisible?: boolean;
   onVisibilityChange?: (visible: boolean) => void;
+  cosmographRef?: React.RefObject<any>;
+  selectedCount?: number;
+  onClearSelection?: () => void;
+  onScreenshot?: () => void;
 }
 
 export interface GraphTimelineHandle {
@@ -30,10 +35,20 @@ export interface GraphTimelineHandle {
 }
 
 export const GraphTimeline = forwardRef<GraphTimelineHandle, GraphTimelineProps>(
-  ({ onTimeRangeChange, className = '', isVisible = true, onVisibilityChange }, ref) => {
+  ({ onTimeRangeChange, className = '', isVisible = true, onVisibilityChange, cosmographRef, selectedCount = 0, onClearSelection, onScreenshot }, ref) => {
     const timelineRef = useRef<CosmographTimelineRef>(null);
     const cosmograph = useCosmograph();
     const [isAnimating, setIsAnimating] = useState(false);
+    
+    // Get zoom controls from the hook
+    const { zoomIn, zoomOut, fitView } = useGraphZoom(
+      cosmographRef || { current: null },
+      {
+        fitViewDuration: 750,
+        fitViewPadding: 40,
+        zoomFactor: 1.5,
+      }
+    );
     const [selectedRange, setSelectedRange] = useState<[Date, Date] | [number, number] | undefined>();
     const [hasTemporalData, setHasTemporalData] = useState(false);
     const [isExpanded, setIsExpanded] = useState(true);
@@ -222,10 +237,55 @@ export const GraphTimeline = forwardRef<GraphTimelineHandle, GraphTimelineProps>
       <div className={`border-t border-border shadow-lg transition-all duration-300 ${className}`} 
            style={{ height: isExpanded ? '180px' : '120px' }}>
         
-        {/* Controls Bar */}
+        {/* Unified Controls Bar with all actions */}
         <div className="flex items-center justify-between px-4 py-2 bg-background/80 backdrop-blur-sm border-b border-border">
           <div className="flex items-center gap-2">
-            {/* Play/Pause Button */}
+            {/* Selection Counter and Actions */}
+            {selectedCount > 0 && (
+              <>
+                <span className="text-xs bg-secondary/50 px-2 py-1 rounded">
+                  {selectedCount} selected
+                </span>
+                <div className="flex items-center gap-1">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-8 w-8 p-0"
+                    title="Pin Selected"
+                  >
+                    <Pin className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-8 w-8 p-0"
+                    title="Hide Selected"
+                  >
+                    <Eye className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-8 w-8 p-0"
+                    title="Export Selection"
+                  >
+                    <Download className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={onClearSelection}
+                    className="h-8 w-8 p-0 hover:bg-destructive/10"
+                    title="Clear Selection"
+                  >
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                </div>
+                <div className="w-px h-5 bg-border mx-1" />
+              </>
+            )}
+
+            {/* Timeline Controls */}
             <Button
               size="sm"
               variant="ghost"
@@ -236,7 +296,6 @@ export const GraphTimeline = forwardRef<GraphTimelineHandle, GraphTimelineProps>
               {isAnimating ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
             </Button>
 
-            {/* Stop Button */}
             <Button
               size="sm"
               variant="ghost"
@@ -285,19 +344,74 @@ export const GraphTimeline = forwardRef<GraphTimelineHandle, GraphTimelineProps>
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Reset Selection */}
+            {/* Zoom Controls */}
+            <div className="flex items-center gap-1">
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={zoomOut}
+                className="h-8 w-8 p-0"
+                title="Zoom Out"
+              >
+                <ZoomOut className="h-4 w-4" />
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={fitView}
+                className="h-8 w-8 p-0"
+                title="Fit to Screen"
+              >
+                <Maximize2 className="h-4 w-4" />
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={zoomIn}
+                className="h-8 w-8 p-0"
+                title="Zoom In"
+              >
+                <ZoomIn className="h-4 w-4" />
+              </Button>
+            </div>
+
+            <div className="w-px h-5 bg-border mx-1" />
+
+            {/* View Controls */}
+            {onScreenshot && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={onScreenshot}
+                className="h-8 w-8 p-0"
+                title="Take Screenshot"
+              >
+                <Camera className="h-4 w-4" />
+              </Button>
+            )}
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-8 w-8 p-0"
+              title="Pan Mode"
+            >
+              <Move className="h-4 w-4" />
+            </Button>
+
+            <div className="w-px h-5 bg-border mx-1" />
+
+            {/* Timeline Controls */}
             <Button
               size="sm"
               variant="ghost"
               onClick={handleReset}
               className="h-8 px-2"
-              title="Clear selection"
+              title="Clear timeline selection"
               disabled={!selectedRange}
             >
               <span className="text-xs">Clear</span>
             </Button>
 
-            {/* Expand/Collapse Button */}
             <Button
               size="sm"
               variant="ghost"
