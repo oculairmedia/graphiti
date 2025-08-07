@@ -91,6 +91,15 @@ interface CosmographRef {
   deactivateRectSelection: () => void;
   activatePolygonalSelection: () => void;
   deactivatePolygonalSelection: () => void;
+  // Data manager for incremental updates (Cosmograph 2.0.0-beta.25)
+  dataManager?: {
+    addPoints: (points: any[]) => Promise<void>;
+    addLinks: (links: any[]) => Promise<void>;
+    removePointsByIds: (ids: string[]) => Promise<void>;
+    removePointsByIndices: (indices: number[]) => Promise<void>;
+    removeLinksByPointIdPairs: (pairs: [string, string][]) => Promise<void>;
+    removeLinksByPointIndicesPairs: (pairs: [number, number][]) => Promise<void>;
+  };
   selectPointsInRect: (selection: [[number, number], [number, number]] | null, addToSelection?: boolean) => void;
   selectPointsInPolygon: (polygonPoints: [number, number][], addToSelection?: boolean) => void;
   getConnectedPointIndices: (index: number) => number[] | undefined;
@@ -432,13 +441,20 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     
     // Process batched delta updates using Cosmograph API
     const processDeltaBatch = useCallback(async () => {
-      if (deltaQueueRef.current.length === 0) return;
+      console.log('[GraphCanvas] processDeltaBatch called, queue length:', deltaQueueRef.current.length);
       
-      // Check if Cosmograph is ready
-      if (!cosmographRef.current) {
-        console.warn('[GraphCanvas] Cosmograph not ready for delta updates');
+      if (deltaQueueRef.current.length === 0) {
+        console.log('[GraphCanvas] Delta queue is empty, skipping');
         return;
       }
+      
+      // Check if Cosmograph is ready
+      if (!cosmographRef.current || !cosmographRef.current.dataManager) {
+        console.warn('[GraphCanvas] Cosmograph or dataManager not ready for delta updates');
+        return;
+      }
+      
+      console.log('[GraphCanvas] Processing delta batch with Cosmograph dataManager:', !!cosmographRef.current.dataManager);
       
       // Process all queued deltas at once
       const deltas = [...deltaQueueRef.current];
@@ -530,47 +546,58 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         if (pointsToUpdate.size > 0) {
           const updateIds = Array.from(pointsToUpdate.keys());
           promises.push(
-            cosmographRef.current.removePointsByIds(updateIds).then(() => {
-              return cosmographRef.current!.addPoints(Array.from(pointsToUpdate.values()));
+            cosmographRef.current.dataManager!.removePointsByIds(updateIds).then(() => {
+              return cosmographRef.current!.dataManager!.addPoints(Array.from(pointsToUpdate.values()));
             })
           );
         }
         
         // Handle deletions
         if (pointIdsToDelete.length > 0) {
-          promises.push(cosmographRef.current.removePointsByIds(pointIdsToDelete));
+          promises.push(cosmographRef.current.dataManager!.removePointsByIds(pointIdsToDelete));
         }
         
         if (linkPairsToDelete.length > 0) {
-          promises.push(cosmographRef.current.removeLinksByPointIdPairs(linkPairsToDelete));
+          promises.push(cosmographRef.current.dataManager!.removeLinksByPointIdPairs(linkPairsToDelete));
         }
         
         // Handle additions
         if (pointsToAdd.length > 0) {
-          promises.push(cosmographRef.current.addPoints(pointsToAdd));
+          promises.push(cosmographRef.current.dataManager!.addPoints(pointsToAdd));
         }
         
         if (linksToAdd.length > 0) {
-          promises.push(cosmographRef.current.addLinks(linksToAdd));
+          promises.push(cosmographRef.current.dataManager!.addLinks(linksToAdd));
         }
         
         // Wait for all operations to complete
-        await Promise.all(promises);
-        
-        // Trigger a render update if needed
         if (promises.length > 0) {
-          console.log('[GraphCanvas] Applied delta updates:', {
-            pointsAdded: pointsToAdd.length,
-            linksAdded: linksToAdd.length,
-            pointsDeleted: pointIdsToDelete.length,
-            pointsUpdated: pointsToUpdate.size,
-            linksDeleted: linkPairsToDelete.length
-          });
-          
-          // Optional: restart simulation with low energy for smooth transition
-          if (keepRunning && cosmographRef.current) {
-            cosmographRef.current.restart();
+          console.log('[GraphCanvas] Applying updates to Cosmograph...');
+          try {
+            await Promise.all(promises);
+            console.log('[GraphCanvas] Successfully applied delta updates:', {
+              pointsAdded: pointsToAdd.length,
+              linksAdded: linksToAdd.length,
+              pointsDeleted: pointIdsToDelete.length,
+              pointsUpdated: pointsToUpdate.size,
+              linksDeleted: linkPairsToDelete.length
+            });
+            
+            // Log the actual points being added for debugging
+            if (pointsToAdd.length > 0) {
+              console.log('[GraphCanvas] Points being added:', pointsToAdd);
+            }
+            
+            // Optional: restart simulation with low energy for smooth transition
+            if (keepRunning && cosmographRef.current) {
+              console.log('[GraphCanvas] Restarting simulation...');
+              cosmographRef.current.restart();
+            }
+          } catch (error) {
+            console.error('[GraphCanvas] Error applying updates to Cosmograph:', error);
           }
+        } else {
+          console.log('[GraphCanvas] No operations to apply');
         }
         
       } catch (error) {
@@ -579,30 +606,46 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     }, [keepRunning]);
       
     
+    // Store processDeltaBatch in a ref to avoid dependency issues
+    const processDeltaBatchRef = useRef<() => Promise<void>>();
+    processDeltaBatchRef.current = processDeltaBatch;
+    
     // Use Rust WebSocket for delta updates
     const { subscribe: subscribeToRust } = useRustWebSocket();
     
     useEffect(() => {
+      console.log('[GraphCanvas] Setting up Rust WebSocket subscription');
       const unsubscribe = subscribeToRust((update) => {
         console.log('[GraphCanvas] Received delta update from Rust server:', update);
+        console.log('[GraphCanvas] Current queue length before push:', deltaQueueRef.current.length);
         
         // Queue the delta update
         deltaQueueRef.current.push(update.data);
+        console.log('[GraphCanvas] Queue length after push:', deltaQueueRef.current.length);
         
         // Clear existing timeout
         if (deltaTimeoutRef.current) {
           clearTimeout(deltaTimeoutRef.current);
+          console.log('[GraphCanvas] Cleared existing timeout');
         }
         
         // Process batch after 50ms of no new updates
+        console.log('[GraphCanvas] Setting timeout to process batch in 50ms');
         deltaTimeoutRef.current = setTimeout(() => {
-          processDeltaBatch();
+          console.log('[GraphCanvas] Timeout triggered, calling processDeltaBatch');
+          if (processDeltaBatchRef.current) {
+            processDeltaBatchRef.current();
+          }
           deltaTimeoutRef.current = null;
         }, 50);
       });
       
-      return unsubscribe;
-    }, [subscribeToRust, processDeltaBatch]);
+      console.log('[GraphCanvas] Rust WebSocket subscription setup complete');
+      return () => {
+        console.log('[GraphCanvas] Cleaning up Rust WebSocket subscription');
+        unsubscribe();
+      };
+    }, [subscribeToRust]);
     
     // Keep existing Python WebSocket subscription for other events
     useEffect(() => {
