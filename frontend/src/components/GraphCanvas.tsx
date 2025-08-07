@@ -2583,28 +2583,40 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             linkVisibilityMinTransparency={config.linkVisibilityMinTransparency}
             useClassicQuadtree={config.useClassicQuadtree}
             
-            // Selection
-            showLabelsFor={config.renderLabels ? undefined : selectedNodes.map(id => ({ id }))}
-            
-            // Label rendering
+            // Label rendering with Cosmograph's optimized features
             showLabels={config.performanceMode ? false : config.renderLabels}
-            labelVisibility={config.performanceMode ? 0 : (config.renderLabels ? 1.0 : 0)}
-            labelStyle={{
-              fontSize: config.labelSize,
-              fontWeight: config.labelFontWeight,
-              color: config.labelColor,
-              backgroundColor: config.labelBackgroundColor,
-              padding: '2px 4px',
-              borderRadius: '2px'
-            }}
-            hoveredLabelStyle={{
-              fontSize: config.hoveredLabelSize,
-              fontWeight: config.hoveredLabelFontWeight,
-              color: config.hoveredLabelColor,
-              backgroundColor: config.hoveredLabelBackgroundColor,
-              padding: '3px 6px',
-              borderRadius: '3px'
-            }}
+            showDynamicLabels={config.renderLabels && config.showDynamicLabels} // Auto-show evenly distributed visible labels
+            showTopLabels={config.renderLabels && config.showTopLabels} // Show labels for most important nodes
+            showTopLabelsLimit={config.showTopLabelsLimit || 100} // Limit to configurable number of nodes
+            showLabelsFor={!config.renderLabels ? selectedNodes : undefined} // Show labels only for selected when labels are off
+            
+            // Label appearance
+            pointLabelFontSize={config.labelSize}
+            pointLabelClassName={`
+              background: ${config.labelBackgroundColor};
+              color: ${config.labelColor};
+              font-weight: ${config.labelFontWeight};
+              padding: 2px 4px;
+              border-radius: 2px;
+              opacity: ${config.labelOpacity / 100};
+            `}
+            
+            // Hovered label
+            showHoveredPointLabel={config.showHoveredNodeLabel}
+            hoveredPointLabelClassName={`
+              background: ${config.hoveredLabelBackgroundColor};
+              color: ${config.hoveredLabelColor};
+              font-weight: ${config.hoveredLabelFontWeight};
+              font-size: ${config.hoveredLabelSize}px;
+              padding: 3px 6px;
+              border-radius: 3px;
+            `}
+            
+            // Label weights and margins
+            staticLabelWeight={0.8}
+            dynamicLabelWeight={0.7}
+            labelMargin={5}
+            labelPadding={[6.5, 4.5, 6.5, 4.5]}
           />
         
         {/* Performance Overlay */}

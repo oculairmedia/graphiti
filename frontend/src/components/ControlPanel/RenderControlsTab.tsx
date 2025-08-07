@@ -23,6 +23,9 @@ interface RenderControlsTabProps {
     hoveredPointRingColor: string;
     focusedPointRingColor: string;
     renderLabels: boolean;
+    showDynamicLabels: boolean;
+    showTopLabels: boolean;
+    showTopLabelsLimit: number;
     labelBy: string;
     labelVisibilityThreshold: number;
     labelSize: number;
@@ -261,6 +264,36 @@ export const RenderControlsTab: React.FC<RenderControlsTabProps> = ({
 
           {config.renderLabels && (
             <>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs text-muted-foreground">Dynamic Labels</Label>
+                  <Checkbox
+                    checked={config.showDynamicLabels}
+                    onCheckedChange={(checked) => onConfigUpdate({ showDynamicLabels: !!checked })}
+                  />
+                </div>
+                
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs text-muted-foreground">Top Labels</Label>
+                  <Checkbox
+                    checked={config.showTopLabels}
+                    onCheckedChange={(checked) => onConfigUpdate({ showTopLabels: !!checked })}
+                  />
+                </div>
+                
+                {config.showTopLabels && (
+                  <ControlSlider
+                    label="Max Labels"
+                    value={config.showTopLabelsLimit}
+                    min={10}
+                    max={500}
+                    step={10}
+                    onChange={(value) => onConfigUpdate({ showTopLabelsLimit: value })}
+                    formatValue={(v) => `${v} labels`}
+                  />
+                )}
+              </div>
+
               <div>
                 <Label className="text-xs text-muted-foreground">Label By</Label>
                 <Input
