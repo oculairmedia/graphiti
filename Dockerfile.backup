@@ -9,7 +9,15 @@ RUN apk add --no-cache \
     redis \
     tzdata \
     coreutils \
-    findutils
+    findutils \
+    python3 \
+    py3-pip \
+    jq
+
+# Install Python packages for monitoring dashboard
+RUN pip3 install --no-cache-dir --break-system-packages \
+    flask \
+    humanize
 
 # Set timezone to UTC
 ENV TZ=UTC
@@ -23,23 +31,28 @@ RUN mkdir -p /backups/falkordb/{daily,weekly,monthly,snapshots} \
 COPY scripts/backup_falkordb.sh /scripts/backup_falkordb.sh
 COPY scripts/restore_falkordb.sh /scripts/restore_falkordb.sh
 COPY scripts/docker-entrypoint-backup.sh /scripts/docker-entrypoint-backup.sh
+COPY scripts/backup_status.sh /scripts/backup_status.sh
+COPY scripts/backup_dashboard.py /scripts/backup_dashboard.py
 
 # Make scripts executable
 RUN chmod +x /scripts/*.sh
 
-# Set up crontab for automated backups
+# Set up crontab for automated backups with environment
 RUN echo "# FalkorDB Automated Backups" > /etc/crontabs/root && \
+    echo "# Source environment variables" >> /etc/crontabs/root && \
+    echo "SHELL=/bin/bash" >> /etc/crontabs/root && \
+    echo "" >> /etc/crontabs/root && \
     echo "# Daily backup at 3:00 AM UTC" >> /etc/crontabs/root && \
-    echo "0 3 * * * /scripts/backup_falkordb.sh daily >> /var/log/falkordb-backup-cron.log 2>&1" >> /etc/crontabs/root && \
+    echo "0 3 * * * . /etc/environment && /scripts/backup_falkordb.sh daily >> /var/log/falkordb-backup-cron.log 2>&1" >> /etc/crontabs/root && \
     echo "" >> /etc/crontabs/root && \
     echo "# Weekly backup on Sunday at 4:00 AM UTC" >> /etc/crontabs/root && \
-    echo "0 4 * * 0 /scripts/backup_falkordb.sh weekly >> /var/log/falkordb-backup-cron.log 2>&1" >> /etc/crontabs/root && \
+    echo "0 4 * * 0 . /etc/environment && /scripts/backup_falkordb.sh weekly >> /var/log/falkordb-backup-cron.log 2>&1" >> /etc/crontabs/root && \
     echo "" >> /etc/crontabs/root && \
     echo "# Monthly backup on 1st of month at 5:00 AM UTC" >> /etc/crontabs/root && \
-    echo "0 5 1 * * /scripts/backup_falkordb.sh monthly >> /var/log/falkordb-backup-cron.log 2>&1" >> /etc/crontabs/root && \
+    echo "0 5 1 * * . /etc/environment && /scripts/backup_falkordb.sh monthly >> /var/log/falkordb-backup-cron.log 2>&1" >> /etc/crontabs/root && \
     echo "" >> /etc/crontabs/root && \
     echo "# Hourly snapshot backup (for high-frequency changes)" >> /etc/crontabs/root && \
-    echo "0 * * * * /scripts/backup_falkordb.sh snapshot >> /var/log/falkordb-backup-cron.log 2>&1" >> /etc/crontabs/root
+    echo "0 * * * * . /etc/environment && /scripts/backup_falkordb.sh snapshot >> /var/log/falkordb-backup-cron.log 2>&1" >> /etc/crontabs/root
 
 # Create log files
 RUN touch /var/log/falkordb-backup.log /var/log/falkordb-backup-cron.log
@@ -47,9 +60,12 @@ RUN touch /var/log/falkordb-backup.log /var/log/falkordb-backup-cron.log
 # Set working directory
 WORKDIR /scripts
 
-# Health check to ensure cron is running
+# Expose dashboard port
+EXPOSE 8080
+
+# Health check to ensure cron and dashboard are running
 HEALTHCHECK --interval=60s --timeout=10s --start-period=30s --retries=3 \
-    CMD pgrep crond || exit 1
+    CMD pgrep crond && curl -f http://localhost:8080/health || exit 1
 
 # Use custom entrypoint
 ENTRYPOINT ["/scripts/docker-entrypoint-backup.sh"]
