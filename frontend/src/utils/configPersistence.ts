@@ -132,7 +132,9 @@ export interface PersistedGraphConfig {
   
   // Link configuration
   linkWidthBy?: string;
+  linkWidthScheme?: string;
   linkColorScheme?: string;
+  linkOpacityScheme?: string;
   
   // Additional physics properties
   linkDistRandomVariationRange?: [number, number];
