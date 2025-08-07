@@ -132,6 +132,7 @@ export const RenderControlsTab: React.FC<RenderControlsTabProps> = ({
                 <SelectItem value="uniform">➖ Uniform Color</SelectItem>
                 <SelectItem value="by-weight">⚖️ By Edge Weight</SelectItem>
                 <SelectItem value="by-type">🔗 By Edge Type</SelectItem>
+                <SelectItem value="by-source-node">🎯 By Source Node</SelectItem>
                 <SelectItem value="by-distance">📏 By Distance</SelectItem>
                 <SelectItem value="gradient">🌈 Node Color Gradient</SelectItem>
                 <SelectItem value="by-community">👥 By Community Bridge</SelectItem>
