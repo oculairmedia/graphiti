@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, forwardRef, useState, useCallback, use } from 'react';
-import { Cosmograph, prepareCosmographData, CosmographPopup } from '@cosmograph/react';
+import { Cosmograph, prepareCosmographData } from '@cosmograph/react';
 import { GraphNode } from '../api/types';
 import type { GraphData } from '../types/graph';
 import { useGraphConfig } from '../contexts/GraphConfigProvider';
