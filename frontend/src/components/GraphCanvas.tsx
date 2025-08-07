@@ -1010,9 +1010,53 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       return color;
     };
     
+    // Create node lookup maps for performance (avoid repeated array searches)
+    const nodeIdToDataMap = React.useMemo(() => {
+      const map = new Map<string, GraphNode>();
+      currentNodes.forEach(node => {
+        map.set(node.id, node);
+      });
+      return map;
+    }, [currentNodes]);
+    
+    const linkIndexToDataMap = React.useMemo(() => {
+      const map = new Map<number, GraphLink>();
+      currentLinks.forEach((link, index) => {
+        map.set(index, link);
+      });
+      return map;
+    }, [currentLinks]);
+    
+    // Pre-calculate weight stats once
+    const weightStats = React.useMemo(() => {
+      if (currentLinks.length === 0) return { min: 1, max: 1, range: 1 };
+      const weights = currentLinks.map(l => l.weight || 1);
+      const maxWeight = Math.max(...weights);
+      const minWeight = Math.min(...weights);
+      return {
+        min: minWeight,
+        max: maxWeight,
+        range: maxWeight - minWeight || 1
+      };
+    }, [currentLinks]);
+    
     // Memoize link color function based on scheme and glowing nodes
     // linkColorByFn receives the value from linkColorBy column (edge_type) and the link index
     const linkColorFn = React.useMemo(() => {
+      // Return undefined for uniform scheme to avoid function calls
+      if (config.linkColorScheme === 'uniform' && config.linkOpacityScheme === 'uniform' && glowingNodes.size === 0) {
+        return undefined;
+      }
+      
+      // Pre-cache color values for common edge types
+      const typeColorCache = new Map<string, string>([
+        ['relates_to', '#4ECDC4'],
+        ['causes', '#F6AD55'],
+        ['precedes', '#B794F6'],
+        ['contains', '#90CDF4'],
+        ['default', config.linkColor]
+      ]);
+      
       // Return a single function that handles all cases
       return (edgeType: any, linkIndex: number) => {
         // If nodes are glowing, override the color scheme to highlight connected edges
@@ -1107,11 +1151,11 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         // Apply opacity scheme if needed
         let opacity = 1;
         if (config.linkOpacityScheme && config.linkOpacityScheme !== 'uniform') {
-          const link = linkIndex < currentLinks.length ? currentLinks[linkIndex] : null;
+          const link = linkIndexToDataMap.get(linkIndex);
           if (link) {
             switch (config.linkOpacityScheme) {
               case 'by-source-centrality': {
-                const sourceNode = currentNodes.find(n => n.id === link.source);
+                const sourceNode = nodeIdToDataMap.get(link.source);
                 if (sourceNode) {
                   const centrality = sourceNode.properties?.degree_centrality || 0;
                   opacity = 0.1 + (centrality * 0.9);
@@ -1119,8 +1163,8 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
                 break;
               }
               case 'by-distance': {
-                const sourceNode = currentNodes.find(n => n.id === link.source);
-                const targetNode = currentNodes.find(n => n.id === link.target);
+                const sourceNode = nodeIdToDataMap.get(link.source);
+                const targetNode = nodeIdToDataMap.get(link.target);
                 if (sourceNode?.x !== undefined && targetNode?.x !== undefined) {
                   const distance = Math.sqrt(
                     Math.pow(targetNode.x - sourceNode.x, 2) + 
@@ -1146,20 +1190,15 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           return baseColor;
         }
         
-        // Pre-calculate weight ranges for performance
-        const weights = currentLinks.map(l => l.weight || 1);
-        const maxWeight = Math.max(...weights);
-        const minWeight = Math.min(...weights);
-        const weightRange = maxWeight - minWeight || 1;
         // Get the actual link data from the current links when needed
-        const link = linkIndex < currentLinks.length ? currentLinks[linkIndex] : null;
+        const link = linkIndexToDataMap.get(linkIndex);
         if (!link) return config.linkColor;
         
         switch (config.linkColorScheme) {
           case 'by-weight': {
             // Color by edge weight - interpolate between low and high colors
             const weight = link.weight || 1;
-            const normalized = (weight - minWeight) / weightRange;
+            const normalized = (weight - weightStats.min) / weightStats.range;
             // Interpolate between link color and a highlight color
             const r = Math.round(102 + (239 - 102) * normalized); // From #666 to #ef4444
             const g = Math.round(102 + (68 - 102) * normalized);
@@ -1171,21 +1210,14 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           case 'by-type': {
             // Color by edge type - edgeType is already passed as the first parameter
             const edgeTypeStr = String(edgeType || 'default');
-            const typeColors: Record<string, string> = {
-              'relates_to': '#4ECDC4',
-              'causes': '#F6AD55',
-              'precedes': '#B794F6',
-              'contains': '#90CDF4',
-              'default': config.linkColor
-            };
-            const color = typeColors[edgeTypeStr] || config.linkColor;
+            const color = typeColorCache.get(edgeTypeStr) || config.linkColor;
             return opacity < 1 ? applyOpacityToColor(color, opacity) : color;
           }
             
           case 'by-distance': {
             // Color by link distance/length
-            const sourceNode = currentNodes.find(n => n.id === link.source);
-            const targetNode = currentNodes.find(n => n.id === link.target);
+            const sourceNode = nodeIdToDataMap.get(link.source);
+            const targetNode = nodeIdToDataMap.get(link.target);
             if (sourceNode?.x !== undefined && targetNode?.x !== undefined) {
               const distance = Math.sqrt(
                 Math.pow(targetNode.x - sourceNode.x, 2) + 
@@ -1194,15 +1226,15 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
               const maxDist = 500; // Approximate max distance
               const normalizedDist = Math.min(distance / maxDist, 1);
               // Fade from bright to dim based on distance
-              const opacity = Math.round(255 * (1 - normalizedDist * 0.7));
-              return `rgba(102, 102, 102, ${opacity / 255})`;
+              const distOpacity = Math.round(255 * (1 - normalizedDist * 0.7));
+              return `rgba(102, 102, 102, ${distOpacity / 255})`;
             }
             return config.linkColor;
           }
             
           case 'by-source-node': {
             // Color from source (originating) node
-            const sourceNode = currentNodes.find(n => n.id === link.source);
+            const sourceNode = nodeIdToDataMap.get(link.source);
             if (sourceNode) {
               const sourceNodeColor = config.nodeTypeColors[sourceNode.node_type] || config.linkColor;
               return opacity < 1 ? applyOpacityToColor(sourceNodeColor, opacity) : sourceNodeColor;
@@ -1213,8 +1245,10 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           
           case 'gradient': {
             // Gradient from source to target node colors (future: true gradient)
-            const sourceNodeColor = config.nodeTypeColors[currentNodes.find(n => n.id === link.source)?.node_type || ''];
-            const targetNodeColor = config.nodeTypeColors[currentNodes.find(n => n.id === link.target)?.node_type || ''];
+            const sourceNode = nodeIdToDataMap.get(link.source);
+            const targetNode = nodeIdToDataMap.get(link.target);
+            const sourceNodeColor = sourceNode ? config.nodeTypeColors[sourceNode.node_type] : '';
+            const targetNodeColor = targetNode ? config.nodeTypeColors[targetNode.node_type] : '';
             // For now, blend the colors simply
             const color = sourceNodeColor || config.linkColor;
             return opacity < 1 ? applyOpacityToColor(color, opacity) : color;
@@ -1222,8 +1256,10 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             
           case 'by-community': {
             // Color bridges between communities differently
-            const sourceCommunity = currentNodes.find(n => n.id === link.source)?.cluster;
-            const targetCommunity = currentNodes.find(n => n.id === link.target)?.cluster;
+            const sourceNode = nodeIdToDataMap.get(link.source);
+            const targetNode = nodeIdToDataMap.get(link.target);
+            const sourceCommunity = sourceNode?.cluster;
+            const targetCommunity = targetNode?.cluster;
             const color = sourceCommunity !== targetCommunity ? '#FF6B6B' : config.linkColor;
             return opacity < 1 ? applyOpacityToColor(color, opacity) : color;
           }
@@ -1232,7 +1268,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             return opacity < 1 ? applyOpacityToColor(config.linkColor, opacity) : config.linkColor;
         }
       };
-    }, [config.linkColorScheme, config.linkOpacityScheme, config.linkColor, config.nodeTypeColors, config.nodeAccessHighlightColor, currentLinks, currentNodes, glowingNodes, useDuckDBTables, duckDBData, cosmographData, applyOpacityToColor]);
+    }, [config.linkColorScheme, config.linkOpacityScheme, config.linkColor, config.nodeTypeColors, config.nodeAccessHighlightColor, glowingNodes, useDuckDBTables, duckDBData, cosmographData, applyOpacityToColor, nodeIdToDataMap, linkIndexToDataMap, weightStats]);
     
     // Memoize link width function based on scheme
     const linkWidthFn = React.useMemo(() => {
@@ -1241,40 +1277,32 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       }
       
       return (weight: any, linkIndex: number) => {
-        const link = linkIndex < currentLinks.length ? currentLinks[linkIndex] : null;
+        const link = linkIndexToDataMap.get(linkIndex);
         if (!link) return 1;
+        
+        // Cache source node lookup
+        const sourceNode = nodeIdToDataMap.get(link.source);
+        if (!sourceNode) return 1;
         
         switch (config.linkWidthScheme) {
           case 'by-source-centrality': {
             // Width based on source node's degree centrality
-            const sourceNode = currentNodes.find(n => n.id === link.source);
-            if (sourceNode) {
-              const centrality = sourceNode.properties?.degree_centrality || 0;
-              // Scale centrality to reasonable width range (0.5 to 5)
-              return 0.5 + (centrality * 4.5);
-            }
-            return 1;
+            const centrality = sourceNode.properties?.degree_centrality || 0;
+            // Scale centrality to reasonable width range (0.5 to 5)
+            return 0.5 + (centrality * 4.5);
           }
           
           case 'by-source-pagerank': {
             // Width based on source node's PageRank
-            const sourceNode = currentNodes.find(n => n.id === link.source);
-            if (sourceNode) {
-              const pagerank = sourceNode.properties?.pagerank_centrality || sourceNode.properties?.pagerank || 0;
-              // PageRank is usually much smaller, so scale more aggressively
-              return 0.5 + (pagerank * 50);
-            }
-            return 1;
+            const pagerank = sourceNode.properties?.pagerank_centrality || sourceNode.properties?.pagerank || 0;
+            // PageRank is usually much smaller, so scale more aggressively
+            return 0.5 + (pagerank * 50);
           }
           
           case 'by-source-betweenness': {
             // Width based on source node's betweenness centrality
-            const sourceNode = currentNodes.find(n => n.id === link.source);
-            if (sourceNode) {
-              const betweenness = sourceNode.properties?.betweenness_centrality || 0;
-              return 0.5 + (betweenness * 4.5);
-            }
-            return 1;
+            const betweenness = sourceNode.properties?.betweenness_centrality || 0;
+            return 0.5 + (betweenness * 4.5);
           }
           
           case 'by-weight': {
@@ -1286,7 +1314,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             return Number(weight || 1);
         }
       };
-    }, [config.linkWidthScheme, currentLinks, currentNodes]);
+    }, [config.linkWidthScheme, nodeIdToDataMap, linkIndexToDataMap]);
     
     // Debug logging for link color scheme
     useEffect(() => {
@@ -2693,14 +2721,14 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             simulationDecay={config.simulationDecay}
             simulationRepulsionFromMouse={config.mouseRepulsion}
             
-            // Link Properties
+            // Link Properties - disable advanced features in performance mode
             linkColor={config.linkColor}
-            linkColorByFn={config.linkColorScheme === 'uniform' && config.linkOpacityScheme === 'uniform' ? undefined : linkColorFn}
+            linkColorByFn={config.performanceMode ? undefined : (config.linkColorScheme === 'uniform' && config.linkOpacityScheme === 'uniform' ? undefined : linkColorFn)}
             linkOpacity={config.linkOpacity}
             linkGreyoutOpacity={config.linkGreyoutOpacity}
             linkWidth={1}
             // linkWidthBy is already set above to 'weight'
-            linkWidthByFn={config.linkWidthScheme === 'uniform' ? undefined : linkWidthFn}
+            linkWidthByFn={config.performanceMode ? undefined : (config.linkWidthScheme === 'uniform' ? undefined : linkWidthFn)}
             linkWidthScale={config.linkWidth}
             linkWidthRange={[0.5, 5]} // Set link width range for auto scaling
             scaleLinksOnZoom={config.scaleLinksOnZoom}
