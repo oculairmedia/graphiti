@@ -1436,8 +1436,27 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
                 setTimeout(() => {
                   if (cosmographRef.current && typeof cosmographRef.current.fitViewByIndices === 'function') {
                     cosmographRef.current.fitViewByIndices(nodeIndices, config.fitViewDuration, config.fitViewPadding);
+                    
+                    // Track positions of all selected nodes
+                    if (typeof cosmographRef.current.trackPointPositionsByIndices === 'function') {
+                      cosmographRef.current.trackPointPositionsByIndices(nodeIndices);
+                    }
                   }
                 }, 0);
+              } else if (nodeIndices.length === 1) {
+                // For single node, set focused point
+                if (typeof cosmographRef.current.setFocusedPoint === 'function') {
+                  // Enable following if configured
+                  if (config.followSelectedNode) {
+                    cosmographRef.current.setFocusedPoint(nodeIndices[0]);
+                  } else {
+                    cosmographRef.current.setFocusedPoint(nodeIndices[0]);
+                  }
+                }
+                // Track single node position
+                if (typeof cosmographRef.current.trackPointPositionsByIndices === 'function') {
+                  cosmographRef.current.trackPointPositionsByIndices(nodeIndices);
+                }
               }
             } else {
               logger.warn('No valid node indices found for selection');
@@ -1466,11 +1485,16 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             logger.warn('No clear selection method found on Cosmograph instance');
           }
           
-          // Clear focused node using native method
+          // Clear focused node and stop tracking
           if (typeof cosmographRef.current.unfocusNode === 'function') {
             cosmographRef.current.unfocusNode();
           } else if (typeof cosmographRef.current.setFocusedPoint === 'function') {
             cosmographRef.current.setFocusedPoint();
+          }
+          
+          // Stop tracking positions
+          if (typeof cosmographRef.current.trackPointPositionsByIndices === 'function') {
+            cosmographRef.current.trackPointPositionsByIndices([]);
           }
         } catch (error) {
           logger.error('Error clearing Cosmograph selection:', error);
@@ -2452,13 +2476,19 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
                   cosmographRef.current.selectPoints([index]);
                 }
                 
-                // Focus the node (draws a ring around it)
-                if (typeof cosmographRef.current.setFocusedPoint === 'function') {
-                  cosmographRef.current.setFocusedPoint(index);
-                }
-                
-                // Track the selected node position
+                // Track the selected node position for following during simulation
                 trackPointPositionsByIndices([index]);
+                
+                // Focus the node (draws a ring around it) and optionally follow it
+                if (typeof cosmographRef.current.setFocusedPoint === 'function') {
+                  if (config.followSelectedNode) {
+                    // Enable following - camera will track this node during simulation
+                    cosmographRef.current.setFocusedPoint(index);
+                  } else {
+                    // Just highlight without following
+                    cosmographRef.current.setFocusedPoint(index);
+                  }
+                }
                 
                 // Removed automatic zoom on node selection for now
                 
@@ -2487,11 +2517,16 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             cosmographRef.current.selectPoints([]);
           }
           
-          // Clear focused node using native method
+          // Clear focused node and stop tracking
           if (typeof cosmographRef.current.unfocusNode === 'function') {
             cosmographRef.current.unfocusNode();
           } else if (typeof cosmographRef.current.setFocusedPoint === 'function') {
             cosmographRef.current.setFocusedPoint();
+          }
+          
+          // Stop tracking positions
+          if (typeof cosmographRef.current.trackPointPositionsByIndices === 'function') {
+            cosmographRef.current.trackPointPositionsByIndices([]);
           }
           
           // Removed automatic fitView on empty space for now
