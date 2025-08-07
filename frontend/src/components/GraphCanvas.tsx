@@ -989,9 +989,10 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     }, [config.colorScheme, config.nodeTypeColors, allNodeTypes]);
     
     // Memoize link color function based on scheme and glowing nodes
+    // linkColorByFn receives the value from linkColorBy column (edge_type) and the link index
     const linkColorFn = React.useMemo(() => {
       // Return a single function that handles all cases
-      return (linkValue: any, linkIndex: number) => {
+      return (edgeType: any, linkIndex: number) => {
         // If nodes are glowing, override the color scheme to highlight connected edges
         if (glowingNodes.size > 0) {
           // Get the correct data source
@@ -1091,8 +1092,8 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         const maxWeight = Math.max(...weights);
         const minWeight = Math.min(...weights);
         const weightRange = maxWeight - minWeight || 1;
-        // Get the actual link data from the current links
-        const link = currentLinks[linkIndex];
+        // Get the actual link data from the current links when needed
+        const link = linkIndex < currentLinks.length ? currentLinks[linkIndex] : null;
         if (!link) return config.linkColor;
         
         switch (config.linkColorScheme) {
@@ -1108,8 +1109,8 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           }
             
           case 'by-type': {
-            // Color by edge type
-            const edgeType = link.edge_type || 'default';
+            // Color by edge type - edgeType is already passed as the first parameter
+            const edgeTypeStr = String(edgeType || 'default');
             const typeColors: Record<string, string> = {
               'relates_to': '#4ECDC4',
               'causes': '#F6AD55',
@@ -1117,7 +1118,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
               'contains': '#90CDF4',
               'default': config.linkColor
             };
-            return typeColors[edgeType] || config.linkColor;
+            return typeColors[edgeTypeStr] || config.linkColor;
           }
             
           case 'by-distance': {
@@ -2411,7 +2412,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             linkSourceIndexBy={useDuckDBTables ? "sourceidx" : "sourceIndex"}
             linkTargetBy="target"
             linkTargetIndexBy={useDuckDBTables ? "targetidx" : "targetIndex"}
-            // linkColorBy="edge_type"  // Disabled to let config color take over
+            linkColorBy="edge_type"  // Required for linkColorByFn to work
             linkWidthBy={config.linkWidthBy || "weight"}
             
             // Override with UI-specific configurations
@@ -2568,7 +2569,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             
             // Link Properties
             linkColor={config.linkColor}
-            linkColorByFn={linkColorFn}
+            linkColorByFn={config.linkColorScheme === 'uniform' ? undefined : linkColorFn}
             linkOpacity={config.linkOpacity}
             linkGreyoutOpacity={config.linkGreyoutOpacity}
             linkWidth={1}
