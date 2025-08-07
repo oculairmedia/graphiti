@@ -1,0 +1,58 @@
+# Lightweight Alpine-based backup service for FalkorDB
+FROM alpine:3.19
+
+# Install required packages
+RUN apk add --no-cache \
+    bash \
+    docker-cli \
+    curl \
+    redis \
+    tzdata \
+    coreutils \
+    findutils
+
+# Set timezone to UTC
+ENV TZ=UTC
+
+# Create backup directories
+RUN mkdir -p /backups/falkordb/{daily,weekly,monthly,snapshots} \
+    && mkdir -p /var/log \
+    && mkdir -p /scripts
+
+# Copy backup scripts
+COPY scripts/backup_falkordb.sh /scripts/backup_falkordb.sh
+COPY scripts/restore_falkordb.sh /scripts/restore_falkordb.sh
+COPY scripts/docker-entrypoint-backup.sh /scripts/docker-entrypoint-backup.sh
+
+# Make scripts executable
+RUN chmod +x /scripts/*.sh
+
+# Set up crontab for automated backups
+RUN echo "# FalkorDB Automated Backups" > /etc/crontabs/root && \
+    echo "# Daily backup at 3:00 AM UTC" >> /etc/crontabs/root && \
+    echo "0 3 * * * /scripts/backup_falkordb.sh daily >> /var/log/falkordb-backup-cron.log 2>&1" >> /etc/crontabs/root && \
+    echo "" >> /etc/crontabs/root && \
+    echo "# Weekly backup on Sunday at 4:00 AM UTC" >> /etc/crontabs/root && \
+    echo "0 4 * * 0 /scripts/backup_falkordb.sh weekly >> /var/log/falkordb-backup-cron.log 2>&1" >> /etc/crontabs/root && \
+    echo "" >> /etc/crontabs/root && \
+    echo "# Monthly backup on 1st of month at 5:00 AM UTC" >> /etc/crontabs/root && \
+    echo "0 5 1 * * /scripts/backup_falkordb.sh monthly >> /var/log/falkordb-backup-cron.log 2>&1" >> /etc/crontabs/root && \
+    echo "" >> /etc/crontabs/root && \
+    echo "# Hourly snapshot backup (for high-frequency changes)" >> /etc/crontabs/root && \
+    echo "0 * * * * /scripts/backup_falkordb.sh snapshot >> /var/log/falkordb-backup-cron.log 2>&1" >> /etc/crontabs/root
+
+# Create log files
+RUN touch /var/log/falkordb-backup.log /var/log/falkordb-backup-cron.log
+
+# Set working directory
+WORKDIR /scripts
+
+# Health check to ensure cron is running
+HEALTHCHECK --interval=60s --timeout=10s --start-period=30s --retries=3 \
+    CMD pgrep crond || exit 1
+
+# Use custom entrypoint
+ENTRYPOINT ["/scripts/docker-entrypoint-backup.sh"]
+
+# Default command runs crond in foreground
+CMD ["crond", "-f", "-l", "2"]

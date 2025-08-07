@@ -69,6 +69,57 @@ We're excited to open-source Graphiti, believing its potential reaches far beyon
     <a href="https://arxiv.org/abs/2501.13956"><img src="images/arxiv-screenshot.png" alt="Zep: A Temporal Knowledge Graph Architecture for Agent Memory" width="700px"></a>
 </p>
 
+## 🔒 Automated Backups
+
+Graphiti includes automated backup functionality for FalkorDB to prevent data loss:
+
+### Backup Schedule
+- **Daily backups**: 3:00 AM UTC (7 days retention)
+- **Weekly backups**: Sundays at 4:00 AM UTC (4 weeks retention)
+- **Monthly backups**: 1st of month at 5:00 AM UTC (3 months retention)
+- **Hourly snapshots**: Every hour for recent changes
+
+### Manual Backup Operations
+
+```bash
+# Run manual backup
+docker exec graphiti-falkordb-backup /scripts/backup_falkordb.sh daily
+
+# List available backups
+docker exec graphiti-falkordb-backup ls -la /backups/falkordb/daily/
+
+# Restore from backup
+docker exec graphiti-falkordb-backup /scripts/restore_falkordb.sh /backups/falkordb/daily/falkordb_daily_20250807_030000.rdb
+
+# Check backup logs
+docker logs graphiti-falkordb-backup
+docker exec graphiti-falkordb-backup tail -f /var/log/falkordb-backup.log
+```
+
+### Backup Configuration
+
+Configure backup settings in your `.env` file:
+
+```env
+BACKUP_RETENTION_DAYS=7        # Daily backups to keep
+BACKUP_RETENTION_WEEKLY=4      # Weekly backups to keep  
+BACKUP_RETENTION_MONTHLY=3     # Monthly backups to keep
+BACKUP_WEBHOOK_URL=            # Optional webhook for notifications
+RUN_INITIAL_BACKUP=true        # Run backup on service start
+```
+
+### Backup Storage
+
+Backups are stored in a Docker volume `falkordb_backups`. To access backups from the host:
+
+```bash
+# Find volume location
+docker volume inspect graphiti_falkordb_backups
+
+# Copy backup to host
+docker cp graphiti-falkordb-backup:/backups/falkordb/daily/backup.rdb ./backup.rdb
+```
+
 ## Why Graphiti?
 
 Traditional RAG approaches often rely on batch processing and static data summarization, making them inefficient for frequently changing data. Graphiti addresses these challenges by providing:
