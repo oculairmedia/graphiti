@@ -124,7 +124,7 @@ const defaultStableConfig: StableConfig = {
   labelOpacity: 0.8,
   
   // Visual defaults
-  colorScheme: 'nodetype',
+  colorScheme: 'by-type',
   gradientHighColor: '#FF0000',
   gradientLowColor: '#0000FF',
   
