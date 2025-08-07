@@ -2590,14 +2590,9 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         // Get the original node data using the index
         let originalNode: GraphNode | undefined;
         
-        // Try to get the node from our transformed data using the index
-        if (index >= 0 && index < transformedData.nodes.length) {
-          const nodeData = transformedData.nodes[index];
-          originalNode = nodeData;
-        }
-        
-        // If we can't find the original node by index, try to query it from Cosmograph
-        if (!originalNode && typeof cosmographRef.current.getPointsByIndices === 'function') {
+        // First, try to get the actual node data from Cosmograph using the index
+        // This ensures we get the correct node regardless of filtering or ordering
+        if (typeof cosmographRef.current.getPointsByIndices === 'function') {
           try {
             const pointData = await cosmographRef.current.getPointsByIndices([index]);
             
@@ -2606,25 +2601,41 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
               const pointArray = cosmographRef.current.convertCosmographDataToObject(pointData);
               if (pointArray && pointArray.length > 0) {
                 const point = pointArray[0];
-                originalNode = {
-                  id: String(point.id || index),
-                  label: String(point.label || point.id || index),
-                  node_type: String(point.node_type || 'Unknown'),
-                  size: Number(point.centrality || 1),
-                  properties: {
-                    degree_centrality: Number(point.degree_centrality || 0),
-                    pagerank_centrality: Number(point.pagerank_centrality || 0),
-                    betweenness_centrality: Number(point.betweenness_centrality || 0),
-                    eigenvector_centrality: Number(point.eigenvector_centrality || 0),
-                    centrality: Number(point.centrality || 0),
-                    ...point // Include all other properties
-                  }
-                } as GraphNode;
+                // Use the node ID from the actual data to find the correct node in transformedData
+                const nodeId = String(point.id);
+                
+                // Find the matching node in transformedData by ID, not by index
+                originalNode = transformedData.nodes.find(n => n.id === nodeId);
+                
+                // If not found in transformedData, create from point data
+                if (!originalNode) {
+                  originalNode = {
+                    id: nodeId,
+                    label: String(point.label || point.id || index),
+                    name: String(point.name || point.label || point.id),  // Include name field
+                    node_type: String(point.node_type || 'Unknown'),
+                    summary: point.summary || null,
+                    size: Number(point.size || point.degree_centrality || 1),
+                    properties: {
+                      degree_centrality: Number(point.degree_centrality || 0),
+                      pagerank_centrality: Number(point.pagerank_centrality || 0),
+                      betweenness_centrality: Number(point.betweenness_centrality || 0),
+                      eigenvector_centrality: Number(point.eigenvector_centrality || 0),
+                      name: String(point.name || point.label || point.id),  // Include name in properties
+                      ...point // Include all other properties
+                    }
+                  } as GraphNode;
+                }
               }
             }
           } catch (error) {
             logger.error('Failed to retrieve point data from Cosmograph:', error);
           }
+        }
+        
+        // Fallback: If we still don't have the node, try by index (less reliable)
+        if (!originalNode && index >= 0 && index < transformedData.nodes.length) {
+          originalNode = transformedData.nodes[index];
         }
         
         if (originalNode) {
