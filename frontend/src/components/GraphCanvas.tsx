@@ -289,7 +289,8 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     
     // Subscribe to WebSocket node access events
     const glowTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-    const popupRef = useRef<CosmographPopup | null>(null);
+    // CosmographPopup removed - not available in @cosmograph/react v2
+    // const popupRef = useRef<CosmographPopup | null>(null);
     const popupTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     
     useEffect(() => {
@@ -343,10 +344,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         if (popupTimeoutRef.current) {
           clearTimeout(popupTimeoutRef.current);
         }
-        if (popupRef.current) {
-          popupRef.current.remove();
-          popupRef.current = null;
-        }
+        // CosmographPopup cleanup removed - not available in v2
       };
     }, [subscribeToWebSocket]);
     
@@ -970,55 +968,11 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             clearTimeout(popupTimeoutRef.current);
           }
           
-          // Remove existing popup if any
-          if (popupRef.current) {
-            popupRef.current.remove();
-            popupRef.current = null;
-          }
-          
-          // Create new popup for search result
-          try {
-            popupRef.current = new CosmographPopup(cosmographRef.current, {
-              content: `
-                <div style="
-                  background: rgba(255, 215, 0, 0.95);
-                  color: #000;
-                  padding: 8px 12px;
-                  border-radius: 6px;
-                  font-size: 14px;
-                  font-weight: 500;
-                  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-                  max-width: 200px;
-                ">
-                  <div style="margin-bottom: 4px;">🔍 Search Result</div>
-                  <div style="font-size: 12px; opacity: 0.8;">
-                    ${glowingNodes.size} node${glowingNodes.size > 1 ? 's' : ''} found
-                  </div>
-                </div>
-              `,
-              pointIndex: nodeIndex,
-              offset: { x: 0, y: -20 } // Position above the node
-            });
-            
-            // Show the popup
-            popupRef.current.show();
-            
-            // Auto-hide popup after 3 seconds
-            popupTimeoutRef.current = setTimeout(() => {
-              if (popupRef.current) {
-                popupRef.current.hide();
-                // Remove after fade
-                setTimeout(() => {
-                  if (popupRef.current) {
-                    popupRef.current.remove();
-                    popupRef.current = null;
-                  }
-                }, 300);
-              }
-            }, 3000);
-          } catch (error) {
-            console.error('[GraphCanvas] Failed to create search popup:', error);
-          }
+          // CosmographPopup not available - log search result instead
+          logger.log('Search result found:', {
+            count: glowingNodes.size,
+            nodeIndex: nodeIndex
+          });
         }
       }
     }, [glowingNodes, transformedData.nodes]);
@@ -2573,71 +2527,20 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
                 onNodeClick(originalNode);
                 onNodeSelect(originalNode.id);
                 
-                // Show a popup with node details
+                // Show node details (popup removed - using NodeDetailsPanel instead)
                 if (cosmographRef.current) {
-                  // Clear existing popup
-                  if (popupRef.current) {
-                    popupRef.current.remove();
-                    popupRef.current = null;
-                  }
+                  // Clear any existing timeouts
                   if (popupTimeoutRef.current) {
                     clearTimeout(popupTimeoutRef.current);
                   }
                   
-                  // Create node detail popup
-                  try {
-                    popupRef.current = new CosmographPopup(cosmographRef.current, {
-                      content: `
-                        <div style="
-                          background: rgba(255, 255, 255, 0.95);
-                          color: #333;
-                          padding: 10px 14px;
-                          border-radius: 8px;
-                          font-size: 13px;
-                          box-shadow: 0 4px 16px rgba(0,0,0,0.15);
-                          max-width: 250px;
-                          border: 1px solid rgba(0,0,0,0.1);
-                        ">
-                          <div style="font-weight: 600; margin-bottom: 6px; color: #000;">
-                            ${originalNode.label || originalNode.id}
-                          </div>
-                          <div style="font-size: 11px; color: #666; margin-bottom: 4px;">
-                            Type: ${originalNode.node_type}
-                          </div>
-                          ${originalNode.properties?.degree ? `
-                            <div style="font-size: 11px; color: #666;">
-                              Connections: ${originalNode.properties.degree}
-                            </div>
-                          ` : ''}
-                          ${originalNode.properties?.pagerank_centrality ? `
-                            <div style="font-size: 11px; color: #666;">
-                              PageRank: ${(originalNode.properties.pagerank_centrality * 100).toFixed(2)}%
-                            </div>
-                          ` : ''}
-                        </div>
-                      `,
-                      pointIndex: index,
-                      offset: { x: 0, y: -30 } // Position above the node
-                    });
-                    
-                    // Show the popup
-                    popupRef.current.show();
-                    
-                    // Keep popup visible longer for clicked nodes (5 seconds)
-                    popupTimeoutRef.current = setTimeout(() => {
-                      if (popupRef.current) {
-                        popupRef.current.hide();
-                        setTimeout(() => {
-                          if (popupRef.current) {
-                            popupRef.current.remove();
-                            popupRef.current = null;
-                          }
-                        }, 300);
-                      }
-                    }, 5000);
-                  } catch (error) {
-                    console.error('[GraphCanvas] Failed to create node detail popup:', error);
-                  }
+                  // CosmographPopup not available - details shown in NodeDetailsPanel
+                  logger.log('Node double-clicked:', {
+                    label: originalNode.label || originalNode.id,
+                    type: originalNode.node_type,
+                    connections: originalNode.properties?.degree,
+                    pagerank: originalNode.properties?.pagerank_centrality
+                  });
                 }
               }, 300);
             }
@@ -2651,16 +2554,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         }
       } else {
         // Empty space was clicked - clear all selections and return to default state
-        // Clear any existing popup
-        if (popupRef.current) {
-          popupRef.current.hide();
-          setTimeout(() => {
-            if (popupRef.current) {
-              popupRef.current.remove();
-              popupRef.current = null;
-            }
-          }, 300);
-        }
+        // Clear any popup timeouts
         if (popupTimeoutRef.current) {
           clearTimeout(popupTimeoutRef.current);
         }
