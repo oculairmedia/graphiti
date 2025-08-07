@@ -207,10 +207,18 @@ async fn main() -> anyhow::Result<()> {
         let prerender_start = std::time::Instant::now();
         
         // Step 1: Load nodes first (much more efficient)
-        let nodes_query = format!(
-            "MATCH (n) WHERE EXISTS(n.degree_centrality) AND n.degree_centrality > {} RETURN n.uuid as id, n.name as name, COALESCE(n.type, labels(n)[0]) as label, n.degree_centrality as degree, n.created_at as created_at, n.summary as summary, n.pagerank_centrality as pagerank, n.betweenness_centrality as betweenness, n.eigenvector_centrality as eigenvector ORDER BY n.degree_centrality DESC LIMIT {}",
-            min_degree, node_limit
-        );
+        // If min_degree is 0, load ALL nodes without filtering
+        let nodes_query = if min_degree <= 0.0 {
+            format!(
+                "MATCH (n) RETURN n.uuid as id, n.name as name, COALESCE(n.type, labels(n)[0]) as label, COALESCE(n.degree_centrality, 0.0) as degree, n.created_at as created_at, n.summary as summary, n.pagerank_centrality as pagerank, n.betweenness_centrality as betweenness, n.eigenvector_centrality as eigenvector ORDER BY COALESCE(n.degree_centrality, 0.0) DESC LIMIT {}",
+                node_limit
+            )
+        } else {
+            format!(
+                "MATCH (n) WHERE EXISTS(n.degree_centrality) AND n.degree_centrality > {} RETURN n.uuid as id, n.name as name, COALESCE(n.type, labels(n)[0]) as label, n.degree_centrality as degree, n.created_at as created_at, n.summary as summary, n.pagerank_centrality as pagerank, n.betweenness_centrality as betweenness, n.eigenvector_centrality as eigenvector ORDER BY n.degree_centrality DESC LIMIT {}",
+                min_degree, node_limit
+            )
+        };
         
         let mut graph = state.client.select_graph(&graph_name);
         let mut nodes_result = graph.query(&nodes_query).execute().await?;
