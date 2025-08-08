@@ -229,7 +229,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     const componentId = useRef(Math.random().toString(36).substr(2, 9));
     
     // Determine whether to use DuckDB table names or prepared data
-    const useDuckDBTables = isDuckDBInitialized && duckdbService;
+    const useDuckDBTables = false; // Disabled due to production DuckDB table conflicts
     
     // Fetch DuckDB tables when available - moved here to maintain hook order
     React.useEffect(() => {
