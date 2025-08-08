@@ -38,11 +38,18 @@ export function RustWebSocketProvider({ children }: { children: React.ReactNode 
     
     isConnectingRef.current = true;
     
-    // Use VITE_WS_URL for Rust server (port 3000)
-    let rustWsUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:3000/ws';
+    // Use nginx proxy for Rust server WebSocket in production
+    // Default to nginx proxy path for real-time updates
+    let rustWsUrl = 'ws://192.168.50.90:8088/rust-ws';
     
-    // If we're accessing from a browser and the URL has localhost, replace with actual host
-    if (typeof window !== 'undefined' && rustWsUrl.includes('localhost')) {
+    // If we're accessing from a browser in production, use the nginx proxy path
+    if (typeof window !== 'undefined' && import.meta.env.PROD) {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const host = window.location.host; // includes port
+      rustWsUrl = `${protocol}//${host}/rust-ws`;
+    }
+    // For development, replace localhost with actual host if needed
+    else if (typeof window !== 'undefined' && rustWsUrl.includes('localhost')) {
       const currentHost = window.location.hostname;
       if (currentHost !== 'localhost' && currentHost !== '127.0.0.1') {
         rustWsUrl = rustWsUrl.replace('localhost', currentHost);

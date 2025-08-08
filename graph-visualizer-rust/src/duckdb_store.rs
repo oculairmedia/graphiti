@@ -133,8 +133,8 @@ impl DuckDBStore {
         let mut conn = self.conn.lock().unwrap();
         let tx = conn.transaction()?;
         
-        // Insert nodes with indices
-        let stmt_node = "INSERT INTO nodes (id, idx, label, node_type, summary, degree_centrality, x, y, color, size, created_at_timestamp, cluster, clusterStrength) 
+        // Insert nodes with indices - use INSERT OR REPLACE to handle duplicates
+        let stmt_node = "INSERT OR REPLACE INTO nodes (id, idx, label, node_type, summary, degree_centrality, x, y, color, size, created_at_timestamp, cluster, clusterStrength) 
                          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         
         let mut node_to_idx = HashMap::new();
@@ -429,7 +429,7 @@ impl DuckDBStore {
                 };
 
                 tx.execute(
-                    "INSERT INTO nodes (id, idx, label, node_type, summary, degree_centrality, x, y, color, size, created_at_timestamp, cluster, clusterStrength) 
+                    "INSERT OR REPLACE INTO nodes (id, idx, label, node_type, summary, degree_centrality, x, y, color, size, created_at_timestamp, cluster, clusterStrength) 
                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     params![
                         &node.id,

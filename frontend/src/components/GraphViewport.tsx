@@ -160,19 +160,7 @@ const GraphViewportComponent = forwardRef<GraphCanvasHandle, GraphViewportProps>
         </div>
       )}
 
-      {/* Hover Tooltip - Positioned above timeline */}
-      {hoveredNode && (
-        <div className="absolute bottom-32 left-1/2 transform -translate-x-1/2 glass-panel px-4 py-2 rounded-lg text-sm font-medium text-foreground opacity-0 animate-[opacity_200ms_ease-in_forwards] pointer-events-none shadow-lg backdrop-blur-md bg-background/90 border border-border z-[60]">
-          <div className="text-center">
-            <div className="text-base font-semibold">{hoveredNode.label || hoveredNode.name}</div>
-            {hoveredConnectedNodes.length > 0 && (
-              <div className="text-xs text-muted-foreground mt-1">
-                {hoveredConnectedNodes.length} connected node{hoveredConnectedNodes.length !== 1 ? 's' : ''}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      {/* Hover Tooltip removed - was showing incorrect information */}
 
     </div>
   );
