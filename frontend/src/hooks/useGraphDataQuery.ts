@@ -93,10 +93,10 @@ export function useGraphDataQuery() {
       setIsDuckDBLoading(true);
       
       try {
-        // Query nodes and edges from DuckDB
+        // Query nodes and edges from DuckDB - MUST ORDER BY idx to match Cosmograph indices
         const [nodesResult, edgesResult] = await Promise.all([
-          connection.connection.query('SELECT * FROM nodes'),
-          connection.connection.query('SELECT * FROM edges')
+          connection.connection.query('SELECT * FROM nodes ORDER BY idx'),
+          connection.connection.query('SELECT * FROM edges ORDER BY sourceidx, targetidx')
         ]);
         
         if (nodesResult && edgesResult) {
@@ -104,9 +104,10 @@ export function useGraphDataQuery() {
           const nodesArray = nodesResult.toArray();
           const edgesArray = edgesResult.toArray();
           
-          // Transform to GraphNode format
-          const nodes: GraphNode[] = nodesArray.map((n: any) => ({
+          // Transform to GraphNode format - PRESERVE idx field for proper indexing
+          const nodes: GraphNode[] = nodesArray.map((n: any, arrayIndex) => ({
             id: n.id,
+            idx: n.idx !== undefined ? n.idx : arrayIndex,  // Preserve DuckDB idx or use array index
             label: n.label || n.id,
             name: n.properties?.name || n.name || n.label || n.id,  // Use name from properties or direct field
             node_type: n.node_type || 'Unknown',
@@ -114,6 +115,7 @@ export function useGraphDataQuery() {
             size: n.degree_centrality || 1,
             created_at: n.created_at,
             properties: {
+              idx: n.idx !== undefined ? n.idx : arrayIndex,  // Also store in properties for access
               degree_centrality: n.degree_centrality || 0,
               pagerank_centrality: n.pagerank_centrality || n.pagerank || 0,
               betweenness_centrality: n.betweenness_centrality || 0,
@@ -436,9 +438,14 @@ export function useGraphDataQuery() {
 
       // Sort by importance and take top N nodes
       nodesWithScore.sort((a, b) => b.importanceScore - a.importanceScore);
-      finalNodes = nodesWithScore
-        .slice(0, MAX_RENDERED_NODES)
-        .map(item => item.node);
+      const topNodes = nodesWithScore.slice(0, MAX_RENDERED_NODES).map(item => item.node);
+      
+      // CRITICAL: Sort back by original idx to preserve index mapping for Cosmograph
+      finalNodes = topNodes.sort((a, b) => {
+        const aIdx = a.idx !== undefined ? a.idx : (a.properties?.idx ?? 0);
+        const bIdx = b.idx !== undefined ? b.idx : (b.properties?.idx ?? 0);
+        return aIdx - bIdx;
+      });
     }
     
     const visibleNodeIds = new Set(finalNodes.map(n => n.id));

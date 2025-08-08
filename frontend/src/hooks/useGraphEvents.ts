@@ -112,7 +112,6 @@ export function useGraphEvents({
       
       // Always call onNodeClick to show the info panel even with modifiers
       onNodeClick(clickedNode);
-      onNodeSelect(clickedNode.id);
       return;
     }
 
@@ -146,7 +145,6 @@ export function useGraphEvents({
       
       // Show the info panel
       onNodeClick(clickedNode);
-      onNodeSelect(clickedNode.id);
     } else {
       // Single click - wait to see if it's a double click
       doubleClickTimeoutRef.current = setTimeout(() => {
@@ -161,7 +159,6 @@ export function useGraphEvents({
         
         // Show the info panel
         onNodeClick(clickedNode);
-        onNodeSelect(clickedNode.id);
       }, 300);
     }
     

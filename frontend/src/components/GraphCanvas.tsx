@@ -880,9 +880,10 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     const memoizedNodes = React.useMemo(() => {
       if (!nodes || nodes.length === 0) return [];
       
-      return nodes.map((node, index) => ({
+      return nodes.map((node, arrayIndex) => ({
         id: String(node.id),
-        index: index,
+        // Use the preserved idx from DuckDB if available, otherwise use array index
+        index: node.idx !== undefined ? node.idx : (node.properties?.idx !== undefined ? node.properties.idx : arrayIndex),
         label: String(node.label || node.id),
         node_type: String(node.node_type || 'Unknown'),
         centrality: Number(node.properties?.degree_centrality || node.properties?.pagerank_centrality || node.size || 1),
@@ -1088,10 +1089,22 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
               }
             }
             
+            // Ensure all nodes have proper index field
+            const indexedNodes = transformedNodes.map((node, idx) => ({
+              ...node,
+              index: node.index !== undefined ? node.index : idx
+            }));
+            
+            // Ensure links have proper source and target indices
+            const indexedLinks = transformedLinks.map(link => ({
+              ...link,
+              sourceIndex: link.sourceIndex !== undefined ? link.sourceIndex : -1,
+              targetIndex: link.targetIndex !== undefined ? link.targetIndex : -1
+            }));
+            
             setCosmographData({
-              points: transformedNodes,
-              links: transformedLinks,
-              cosmographConfig: dataKitConfig
+              points: indexedNodes,
+              links: indexedLinks
             });
             
             // Mark data preparation as complete
@@ -1116,10 +1129,22 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
               }
             }
             
+            // Ensure all nodes have proper index field in fallback too
+            const indexedNodes = transformedNodes.map((node, idx) => ({
+              ...node,
+              index: node.index !== undefined ? node.index : idx
+            }));
+            
+            // Ensure links have proper indices in fallback too
+            const indexedLinks = transformedLinks.map(link => ({
+              ...link,
+              sourceIndex: link.sourceIndex !== undefined ? link.sourceIndex : -1,
+              targetIndex: link.targetIndex !== undefined ? link.targetIndex : -1
+            }));
+            
             setCosmographData({
-              points: transformedNodes,
-              links: transformedLinks,
-              cosmographConfig: {}
+              points: indexedNodes,
+              links: indexedLinks
             });
             
             // Still mark as complete even with error (we have fallback data)
@@ -1754,61 +1779,100 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       if (index === lastHoveredIndexRef.current) {
         return;
       }
-      
+
       // Store pending hover
       pendingHoverRef.current = { index };
-      
+
       // Cancel previous animation frame
       if (hoverAnimationFrameRef.current) {
         cancelAnimationFrame(hoverAnimationFrameRef.current);
       }
-      
+
+      // Helper to resolve a node by Cosmograph index using ID mapping for correctness
+      const resolveNodeByIndex = async (idx: number) => {
+        // Try to use Cosmograph API to get the actual point by index, then map by id
+        if (cosmographRef.current && typeof cosmographRef.current.getPointsByIndices === 'function') {
+          try {
+            const points = await cosmographRef.current.getPointsByIndices([idx]);
+            const point = points && points[0];
+            const nodeId = point?.id != null ? String(point.id) : undefined;
+            if (nodeId) {
+              const nodeById = transformedData.nodes.find(n => n.id === nodeId);
+              if (nodeById) return nodeById;
+            }
+          } catch (e) {
+            // Swallow and use fallbacks below
+          }
+        }
+        // Fallbacks: try transformedData by index first (more aligned with Cosmograph), then currentNodes
+        if (idx >= 0 && idx < transformedData.nodes.length) {
+          return transformedData.nodes[idx];
+        }
+        if (idx >= 0 && idx < currentNodes.length) {
+          return currentNodes[idx];
+        }
+        return undefined;
+      };
+
       // Schedule update on next animation frame
       hoverAnimationFrameRef.current = requestAnimationFrame(() => {
         const now = Date.now();
-        
+
         // Throttle to max 30fps (33ms) for better performance
         if (now - lastHoverTimeRef.current < 33) {
           // Reschedule for next frame
-          hoverAnimationFrameRef.current = requestAnimationFrame(() => {
+          hoverAnimationFrameRef.current = requestAnimationFrame(async () => {
             if (pendingHoverRef.current) {
               const { index } = pendingHoverRef.current;
               lastHoverTimeRef.current = now;
               lastHoveredIndexRef.current = index;
-              
+
               if (index !== undefined && index >= 0) {
-                const hoveredNode = currentNodes[index];
-                if (hoveredNode) {
-                  onNodeHover?.(hoveredNode);
+                const hoveredNode = await resolveNodeByIndex(index);
+                // Ensure still relevant (no newer hover superseded this)
+                if (lastHoveredIndexRef.current === index) {
+                  if (hoveredNode) {
+                    console.log('[GraphCanvas] Hover resolved - index:', index, 'nodeId:', hoveredNode.id, 'label:', hoveredNode.label);
+                  } else {
+                    console.warn('[GraphCanvas] Failed to resolve node for hover index:', index);
+                  }
+                  onNodeHover?.(hoveredNode ?? null);
                 }
               } else {
                 onNodeHover?.(null);
               }
-              
+
               pendingHoverRef.current = null;
             }
           });
           return;
         }
-        
+
         if (pendingHoverRef.current) {
           const { index } = pendingHoverRef.current;
           lastHoverTimeRef.current = now;
           lastHoveredIndexRef.current = index;
-          
+
           if (index !== undefined && index >= 0) {
-            const hoveredNode = currentNodes[index];
-            if (hoveredNode) {
-              onNodeHover?.(hoveredNode);
-            }
+            // Resolve node accurately by index -> id mapping
+            resolveNodeByIndex(index).then(hoveredNode => {
+              if (lastHoveredIndexRef.current === index) {
+                if (hoveredNode) {
+                  console.log('[GraphCanvas] Hover resolved (fallback) - index:', index, 'nodeId:', hoveredNode.id, 'label:', hoveredNode.label);
+                } else {
+                  console.warn('[GraphCanvas] Failed to resolve node for hover index (fallback):', index);
+                }
+                onNodeHover?.(hoveredNode ?? null);
+              }
+            });
           } else {
             onNodeHover?.(null);
           }
-          
+
           pendingHoverRef.current = null;
         }
       });
-    }, [currentNodes, onNodeHover]);
+    }, [currentNodes, transformedData.nodes, onNodeHover]);
 
     // Method to select a single node in Cosmograph
     const selectCosmographNode = useCallback((node: GraphNode) => {
@@ -2863,7 +2927,6 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             
             // Always call onNodeClick to show the info panel even with modifiers
             onNodeClick(originalNode);
-            onNodeSelect(originalNode.id);
           } else {
             // Handle single click or double click
             if (isDoubleClick) {
@@ -2892,7 +2955,6 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
               
               // Show the info panel
               onNodeClick(originalNode);
-              onNodeSelect(originalNode.id);
             } else {
               // Single click - wait to see if it's a double click
               doubleClickTimeoutRef.current = setTimeout(() => {
@@ -2923,7 +2985,6 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
                 
                 // Show the info panel
                 onNodeClick(originalNode);
-                onNodeSelect(originalNode.id);
                 
                 // Show node details (popup removed - using NodeDetailsPanel instead)
                 if (cosmographRef.current) {
@@ -2947,6 +3008,9 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           // Update click tracking using refs (no re-render)
           lastClickTimeRef.current = currentTime;
           lastClickedNodeRef.current = originalNode;
+          
+          // Debug logging for click issues
+          console.log('[GraphCanvas] Click handled - index:', index, 'nodeId:', originalNode.id, 'label:', originalNode.label);
         } else {
           logger.warn('Could not find or create node data for index:', index);
         }
@@ -3016,8 +3080,9 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
 
     
     // Pass Arrow tables directly to Cosmograph when using DuckDB
-    const pointsData = useDuckDBTables ? duckDBData?.points : cosmographData?.points;
-    const linksData = useDuckDBTables ? duckDBData?.links : cosmographData?.links;
+    // When not using DuckDB, cosmographData contains the points and links arrays directly
+    const pointsData = useDuckDBTables ? duckDBData?.points : (cosmographData ? cosmographData.points : memoizedNodes);
+    const linksData = useDuckDBTables ? duckDBData?.links : (cosmographData ? cosmographData.links : memoizedLinks);
 
     if (!pointsData) {
       return (
