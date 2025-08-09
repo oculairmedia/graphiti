@@ -51,12 +51,12 @@ unsafe fn cosine_similarity_avx2(a: &[f32], b: &[f32]) -> f32 {
     let mut norm_b_sum = f32x8::splat(0.0);
 
     let chunks = a.len() / 8;
-    
+
     for i in 0..chunks {
         let offset = i * 8;
         let va = f32x8::load(&a[offset]);
         let vb = f32x8::load(&b[offset]);
-        
+
         dot_sum = dot_sum + (va * vb);
         norm_a_sum = norm_a_sum + (va * va);
         norm_b_sum = norm_b_sum + (vb * vb);
@@ -100,7 +100,7 @@ pub fn batch_cosine_similarity(
     threshold: Option<f32>,
 ) -> Vec<(usize, f32)> {
     let query = Arc::new(query_vector.to_vec());
-    
+
     let results: Vec<(usize, f32)> = vectors
         .par_iter()
         .enumerate()
@@ -184,6 +184,6 @@ mod tests {
 
         let results = batch_cosine_similarity(&query, &vectors, Some(0.5));
         assert_eq!(results.len(), 2); // Should filter out the negative similarity
-        assert_eq!(results[0].0, 0);  // First vector should be most similar
+        assert_eq!(results[0].0, 0); // First vector should be most similar
     }
 }

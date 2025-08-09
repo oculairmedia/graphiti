@@ -25,8 +25,7 @@ impl Config {
             falkor_port: env::var("FALKORDB_PORT")
                 .unwrap_or_else(|_| "6379".to_string())
                 .parse()?,
-            graph_name: env::var("GRAPH_NAME")
-                .unwrap_or_else(|_| "graphiti_migration".to_string()),
+            graph_name: env::var("GRAPH_NAME").unwrap_or_else(|_| "graphiti_migration".to_string()),
             redis_url: env::var("REDIS_URL")
                 .unwrap_or_else(|_| "redis://localhost:6379".to_string()),
             max_connections: env::var("MAX_CONNECTIONS")
