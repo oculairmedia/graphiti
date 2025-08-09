@@ -2,7 +2,7 @@ use anyhow::Result;
 use arrow::array::{ArrayRef, Float64Array, RecordBatch, StringArray, UInt32Array};
 use arrow::datatypes::{DataType, Field, Schema};
 use arrow_schema::SchemaRef;
-use chrono::DateTime;
+use chrono::{DateTime, Utc};
 use duckdb::{params, Connection};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -20,11 +20,20 @@ pub struct DuckDBStore {
     update_queue: Arc<RwLock<UpdateQueue>>,
 }
 
+#[derive(Debug, Clone)]
+struct PendingEdge {
+    edge: Edge,
+    retry_count: u32,
+    first_seen: chrono::DateTime<Utc>,
+    last_retry: chrono::DateTime<Utc>,
+}
+
 #[derive(Default)]
 struct UpdateQueue {
     nodes_to_add: Vec<Node>,
     edges_to_add: Vec<Edge>,
     nodes_to_update: HashMap<String, Node>,
+    pending_edges: Vec<PendingEdge>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -375,7 +384,8 @@ impl DuckDBStore {
         
         if queue.nodes_to_add.is_empty() && 
            queue.edges_to_add.is_empty() && 
-           queue.nodes_to_update.is_empty() {
+           queue.nodes_to_update.is_empty() &&
+           queue.pending_edges.is_empty() {
             return Ok(None);
         }
         
@@ -474,13 +484,16 @@ impl DuckDBStore {
             }
         }
         
-        // Process new edges
+        // Process new edges with validation
+        let mut validated_edges = Vec::new();
+        let now = Utc::now();
+        
         if !queue.edges_to_add.is_empty() {
             debug!("Processing {} new edges", queue.edges_to_add.len());
             
             let new_edges = queue.edges_to_add.drain(..).collect::<Vec<_>>();
             
-            for edge in &new_edges {
+            for edge in new_edges {
                 // Get indices for source and target
                 let source_idx: Option<u32> = tx.query_row(
                     "SELECT idx FROM nodes WHERE id = ?",
@@ -510,16 +523,108 @@ impl DuckDBStore {
                             color
                         ],
                     )?;
+                    
+                    validated_edges.push(edge.clone());
+                } else {
+                    // Buffer edge for later retry
+                    warn!("Edge references unknown nodes, buffering: {} -> {} (source_idx: {:?}, target_idx: {:?})",
+                          edge.from, edge.to, source_idx, target_idx);
+                    queue.pending_edges.push(PendingEdge {
+                        edge: edge.clone(),
+                        retry_count: 0,
+                        first_seen: now,
+                        last_retry: now,
+                    });
+                }
+            }
+        }
+        
+        // Process pending edges (retry buffered edges)
+        if !queue.pending_edges.is_empty() {
+            debug!("Processing {} pending edges", queue.pending_edges.len());
+            
+            let mut still_pending = Vec::new();
+            let max_retries = 10;
+            let stale_threshold = chrono::Duration::minutes(5);
+            
+            for mut pending in queue.pending_edges.drain(..) {
+                // Check if edge is too old
+                if now.signed_duration_since(pending.first_seen) > stale_threshold {
+                    warn!("Dropping stale pending edge after 5 minutes: {} -> {}", 
+                          pending.edge.from, pending.edge.to);
+                    continue;
+                }
+                
+                // Check if max retries exceeded
+                if pending.retry_count >= max_retries {
+                    warn!("Dropping pending edge after {} retries: {} -> {}", 
+                          max_retries, pending.edge.from, pending.edge.to);
+                    continue;
+                }
+                
+                // Try to process the edge again
+                let source_idx: Option<u32> = tx.query_row(
+                    "SELECT idx FROM nodes WHERE id = ?",
+                    params![&pending.edge.from],
+                    |row| row.get(0)
+                ).ok();
+                
+                let target_idx: Option<u32> = tx.query_row(
+                    "SELECT idx FROM nodes WHERE id = ?",
+                    params![&pending.edge.to],
+                    |row| row.get(0)
+                ).ok();
+                
+                if let (Some(src_idx), Some(tgt_idx)) = (source_idx, target_idx) {
+                    let color = self.get_edge_color(&pending.edge.edge_type);
+                    
+                    tx.execute(
+                        "INSERT OR IGNORE INTO edges (source, sourceidx, target, targetidx, edge_type, weight, color) 
+                         VALUES (?, ?, ?, ?, ?, ?, ?)",
+                        params![
+                            &pending.edge.from,
+                            src_idx,
+                            &pending.edge.to,
+                            tgt_idx,
+                            &pending.edge.edge_type,
+                            pending.edge.weight,
+                            color
+                        ],
+                    )?;
+                    
+                    info!("Successfully resolved pending edge after {} retries: {} -> {}", 
+                          pending.retry_count, pending.edge.from, pending.edge.to);
+                    validated_edges.push(pending.edge);
+                } else {
+                    // Still missing nodes, keep in pending
+                    pending.retry_count += 1;
+                    pending.last_retry = now;
+                    still_pending.push(pending);
                 }
             }
             
+            // Put still-pending edges back in queue
+            queue.pending_edges = still_pending;
+            
+            if !queue.pending_edges.is_empty() {
+                debug!("{} edges still pending", queue.pending_edges.len());
+            }
+        }
+        
+        // Only set edges in update if we have validated edges
+        if !validated_edges.is_empty() {
             if update.nodes.is_none() {
                 update.operation = UpdateOperation::AddEdges;
             }
-            update.edges = Some(new_edges);
+            update.edges = Some(validated_edges);
         }
         
         tx.commit()?;
+        
+        // Return None if update has no actual data
+        if update.nodes.is_none() && update.edges.is_none() {
+            return Ok(None);
+        }
         
         Ok(Some(update))
     }
