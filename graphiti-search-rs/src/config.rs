@@ -29,7 +29,7 @@ impl Config {
             redis_url: env::var("REDIS_URL")
                 .unwrap_or_else(|_| "redis://localhost:6379".to_string()),
             max_connections: env::var("MAX_CONNECTIONS")
-                .unwrap_or_else(|_| "32".to_string())
+                .unwrap_or_else(|_| "200".to_string())  // Increased from 32 for better throughput
                 .parse()?,
             cache_ttl: env::var("CACHE_TTL")
                 .unwrap_or_else(|_| "300".to_string())
