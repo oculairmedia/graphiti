@@ -36,7 +36,6 @@ fn cosine_similarity_scalar(a: &[f32], b: &[f32]) -> f32 {
     dot_product / (norm_a.sqrt() * norm_b.sqrt())
 }
 
-
 /// Batch cosine similarity calculation with parallelization
 pub fn batch_cosine_similarity(
     query_vector: &[f32],
