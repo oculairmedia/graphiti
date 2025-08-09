@@ -10,6 +10,7 @@ from graph_service.routers import centrality, ingest, nodes, retrieve
 from graph_service.zep_graphiti import initialize_graphiti
 from graph_service.websocket_manager import manager
 from graph_service.webhooks import webhook_service
+from graph_service.async_webhooks import startup_webhook_dispatcher, shutdown_webhook_dispatcher, dispatcher
 import logging
 
 # Configure logging
@@ -22,13 +23,22 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
     await initialize_graphiti(settings)
     
-    # Connect WebSocket manager to webhook service
-    logger.info("Registering WebSocket broadcast handler with webhook service")
+    # Start async webhook dispatcher
+    logger.info("Starting async webhook dispatcher")
+    await startup_webhook_dispatcher()
+    
+    # Connect WebSocket manager to async dispatcher
+    logger.info("Registering WebSocket broadcast handler with async dispatcher")
+    await dispatcher.add_internal_handler(manager.broadcast_node_access)
+    
+    # Keep old webhook service for backward compatibility (will migrate gradually)
     await webhook_service.add_internal_handler(manager.broadcast_node_access)
-    logger.info(f"WebSocket handler registered. Total handlers: {len(webhook_service.internal_handlers)}")
     
     yield
+    
     # Shutdown
+    logger.info("Shutting down async webhook dispatcher")
+    await shutdown_webhook_dispatcher()
     await webhook_service.close()
     # No need to close Graphiti here, as it's handled per-request
 
@@ -53,6 +63,13 @@ app.include_router(nodes.router)
 @app.get('/healthcheck')
 async def healthcheck() -> JSONResponse:
     return JSONResponse(content={'status': 'healthy'}, status_code=200)
+
+
+@app.get('/metrics/webhooks')
+async def webhook_metrics() -> JSONResponse:
+    """Get webhook dispatcher metrics for monitoring."""
+    metrics = dispatcher.get_metrics()
+    return JSONResponse(content=metrics, status_code=200)
 
 
 @app.websocket("/ws")
