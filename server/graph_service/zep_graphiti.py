@@ -133,43 +133,18 @@ class ZepGraphiti(Graphiti):
 
 
 async def get_graphiti(settings: ZepEnvDep) -> Any:  # Returns generator
-    # Check if we should use Ollama
-    llm_client = None
-    embedder = None
-    if os.getenv('USE_OLLAMA', '').lower() == 'true':
-        from graphiti_core.embedder import OpenAIEmbedder, OpenAIEmbedderConfig
-        from graphiti_core.llm_client import LLMConfig, OpenAIClient
-        from openai import AsyncOpenAI
-
-        ollama_base_url = os.getenv('OLLAMA_BASE_URL', 'http://localhost:11434/v1')
-        ollama_model = os.getenv('OLLAMA_MODEL', 'mistral:latest')
-        ollama_embed_model = os.getenv('OLLAMA_EMBEDDING_MODEL', 'mxbai-embed-large:latest')
-
-        logger.info(
-            f'Using Ollama at {ollama_base_url} with LLM model {ollama_model} and embedding model {ollama_embed_model}'
-        )
-
-        # Create Ollama client
-        openai_client = AsyncOpenAI(base_url=ollama_base_url, api_key='ollama')
-
-        # Configure LLM
-        config = LLMConfig(
-            model=ollama_model, small_model=ollama_model, temperature=0.7, max_tokens=2000
-        )
-
-        llm_client = OpenAIClient(config=config, client=openai_client)
-
-        # Configure Embedder
-        embed_config = OpenAIEmbedderConfig(embedding_model=ollama_embed_model)
-        embedder = OpenAIEmbedder(config=embed_config, client=openai_client)
-        logger.info(f'Created Ollama embedder with model: {embed_config.embedding_model}')
+    from graph_service.factories import create_llm_client, create_embedder_client, configure_non_ollama_clients
+    
+    # Delegate client creation to factories
+    llm_client = create_llm_client(settings)
+    embedder = create_embedder_client(settings)
 
     client = ZepGraphiti(
         uri=settings.database_uri,
         user=settings.database_user,
         password=settings.database_password,
-        llm_client=llm_client,  # Will be None if not using Ollama
-        embedder=embedder,  # Will be None if not using Ollama
+        llm_client=llm_client,
+        embedder=embedder,
         use_falkordb=settings.use_falkordb or bool(settings.falkordb_uri or settings.falkordb_host),
     )
 
@@ -177,14 +152,8 @@ async def get_graphiti(settings: ZepEnvDep) -> Any:  # Returns generator
         f'ZepGraphiti embedder model: {client.embedder.config.embedding_model if client.embedder else "None"}'
     )
 
-    # Only configure OpenAI settings if not using Ollama
-    if not llm_client:
-        if settings.openai_base_url is not None:
-            client.llm_client.config.base_url = settings.openai_base_url
-        if settings.openai_api_key is not None:
-            client.llm_client.config.api_key = settings.openai_api_key
-        if settings.model_name is not None:
-            client.llm_client.model = settings.model_name
+    # Configure non-Ollama clients if needed
+    configure_non_ollama_clients(client, settings)
 
     try:
         yield client
@@ -193,42 +162,18 @@ async def get_graphiti(settings: ZepEnvDep) -> Any:  # Returns generator
 
 
 async def initialize_graphiti(settings: ZepEnvDep) -> None:
-    # Check if we should use Ollama
-    llm_client = None
-    embedder = None
-    if os.getenv('USE_OLLAMA', '').lower() == 'true':
-        from graphiti_core.embedder import OpenAIEmbedder, OpenAIEmbedderConfig
-        from graphiti_core.llm_client import LLMConfig, OpenAIClient
-        from openai import AsyncOpenAI
-
-        ollama_base_url = os.getenv('OLLAMA_BASE_URL', 'http://localhost:11434/v1')
-        ollama_model = os.getenv('OLLAMA_MODEL', 'mistral:latest')
-        ollama_embed_model = os.getenv('OLLAMA_EMBEDDING_MODEL', 'mxbai-embed-large:latest')
-
-        logger.info(
-            f'Using Ollama at {ollama_base_url} with LLM model {ollama_model} and embedding model {ollama_embed_model}'
-        )
-
-        # Create Ollama client
-        openai_client = AsyncOpenAI(base_url=ollama_base_url, api_key='ollama')
-
-        # Configure LLM
-        config = LLMConfig(
-            model=ollama_model, small_model=ollama_model, temperature=0.7, max_tokens=2000
-        )
-
-        llm_client = OpenAIClient(config=config, client=openai_client)
-
-        # Configure Embedder
-        embed_config = OpenAIEmbedderConfig(embedding_model=ollama_embed_model)
-        embedder = OpenAIEmbedder(config=embed_config, client=openai_client)
+    from graph_service.factories import create_llm_client, create_embedder_client
+    
+    # Delegate client creation to factories
+    llm_client = create_llm_client(settings)
+    embedder = create_embedder_client(settings)
 
     client = ZepGraphiti(
         uri=settings.database_uri,
         user=settings.database_user,
         password=settings.database_password,
-        llm_client=llm_client,  # Will be None if not using Ollama
-        embedder=embedder,  # Will be None if not using Ollama
+        llm_client=llm_client,
+        embedder=embedder,
         use_falkordb=settings.use_falkordb or bool(settings.falkordb_uri or settings.falkordb_host),
     )
     await client.build_indices_and_constraints()
