@@ -1,14 +1,14 @@
-pub mod fulltext;
-pub mod similarity;
 pub mod bfs;
+pub mod fulltext;
 pub mod reranking;
+pub mod similarity;
 
 use crate::error::SearchResult;
-use crate::models::{
-    Edge, Episode, Node, Community, SearchRequest, SearchResults, SearchFilters,
-    SearchMethod, EdgeSearchConfig, NodeSearchConfig,
-};
 use crate::falkor::FalkorConnection;
+use crate::models::{
+    Community, Edge, EdgeSearchConfig, Episode, Node, NodeSearchConfig, SearchFilters,
+    SearchMethod, SearchRequest, SearchResults,
+};
 use deadpool_redis::Pool as RedisPool;
 use std::collections::HashMap;
 use std::time::Instant;
@@ -30,7 +30,7 @@ impl SearchEngine {
     #[instrument(skip(self))]
     pub async fn search(&mut self, request: SearchRequest) -> SearchResult<SearchResults> {
         let start = Instant::now();
-        
+
         let mut edges = Vec::new();
         let mut nodes = Vec::new();
         let mut episodes = Vec::new();
@@ -38,41 +38,45 @@ impl SearchEngine {
 
         // Execute edge search if configured
         if let Some(edge_config) = &request.config.edge_config {
-            edges = self.search_edges(
-                &request.query,
-                edge_config,
-                &request.filters,
-                request.query_vector.as_deref(),
-            ).await?;
+            edges = self
+                .search_edges(
+                    &request.query,
+                    edge_config,
+                    &request.filters,
+                    request.query_vector.as_deref(),
+                )
+                .await?;
         }
 
         // Execute node search if configured
         if let Some(node_config) = &request.config.node_config {
-            nodes = self.search_nodes(
-                &request.query,
-                node_config,
-                &request.filters,
-                request.query_vector.as_deref(),
-            ).await?;
+            nodes = self
+                .search_nodes(
+                    &request.query,
+                    node_config,
+                    &request.filters,
+                    request.query_vector.as_deref(),
+                )
+                .await?;
         }
 
         // Execute episode search if configured
         if request.config.episode_config.is_some() {
-            episodes = self.search_episodes(
-                &request.query,
-                &request.filters,
-                request.config.limit,
-            ).await?;
+            episodes = self
+                .search_episodes(&request.query, &request.filters, request.config.limit)
+                .await?;
         }
 
         // Execute community search if configured
         if let Some(community_config) = &request.config.community_config {
-            communities = self.search_communities(
-                &request.query,
-                community_config,
-                &request.filters,
-                request.query_vector.as_deref(),
-            ).await?;
+            communities = self
+                .search_communities(
+                    &request.query,
+                    community_config,
+                    &request.filters,
+                    request.query_vector.as_deref(),
+                )
+                .await?;
         }
 
         let latency_ms = start.elapsed().as_millis() as u64;
@@ -108,7 +112,8 @@ impl SearchEngine {
                         query_vector.unwrap(),
                         config.sim_min_score,
                         100,
-                    ).await?
+                    )
+                    .await?
                 }
                 SearchMethod::Bfs => {
                     // BFS requires origin nodes, skip if not provided
@@ -116,7 +121,7 @@ impl SearchEngine {
                 }
                 _ => vec![],
             };
-            
+
             method_results.push(edges);
         }
 
@@ -151,7 +156,8 @@ impl SearchEngine {
                         query_vector.unwrap(),
                         config.sim_min_score,
                         100,
-                    ).await?
+                    )
+                    .await?
                 }
                 SearchMethod::Bfs => {
                     // BFS requires origin nodes, skip if not provided
@@ -159,7 +165,7 @@ impl SearchEngine {
                 }
                 _ => vec![],
             };
-            
+
             method_results.push(nodes);
         }
 
@@ -197,7 +203,8 @@ impl SearchEngine {
                 embedding,
                 config.sim_min_score,
                 50,
-            ).await
+            )
+            .await
         } else {
             Ok(vec![])
         }

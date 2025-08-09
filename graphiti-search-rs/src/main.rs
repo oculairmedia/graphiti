@@ -77,7 +77,10 @@ async fn main() -> Result<()> {
         .route("/search/edges", post(handlers::edge_search_handler))
         .route("/search/nodes", post(handlers::node_search_handler))
         .route("/search/episodes", post(handlers::episode_search_handler))
-        .route("/search/communities", post(handlers::community_search_handler))
+        .route(
+            "/search/communities",
+            post(handlers::community_search_handler),
+        )
         .layer(CompressionLayer::new())
         .layer(CorsLayer::permissive())
         .layer(TraceLayer::new_for_http())

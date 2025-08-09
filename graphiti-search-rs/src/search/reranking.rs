@@ -17,7 +17,7 @@ pub fn reciprocal_rank_fusion<T: Clone>(
         for (rank, item) in list.into_iter().enumerate() {
             let id = get_id(&item);
             let score = 1.0 / (k + rank as f32 + 1.0);
-            
+
             scores
                 .entry(id)
                 .and_modify(|e| e.1 += score)
@@ -52,14 +52,14 @@ pub fn maximal_marginal_relevance<T: Clone>(
             .map(|(_, item)| {
                 if let Some(item_emb) = get_embedding(item) {
                     let relevance = cosine_similarity_simd(query, item_emb);
-                    
+
                     let max_similarity = selected
                         .iter()
                         .filter_map(|s: &T| get_embedding(s))
                         .map(|s_emb| cosine_similarity_simd(item_emb, s_emb))
                         .max_by(|a, b| a.partial_cmp(b).unwrap())
                         .unwrap_or(0.0);
-                    
+
                     lambda * relevance - (1.0 - lambda) * max_similarity
                 } else {
                     0.0
@@ -104,7 +104,10 @@ pub fn node_distance_rerank<T>(
         items_with_distance.sort_by_key(|&(_, dist)| std::cmp::Reverse(dist));
     }
 
-    items_with_distance.into_iter().map(|(item, _)| item).collect()
+    items_with_distance
+        .into_iter()
+        .map(|(item, _)| item)
+        .collect()
 }
 
 #[instrument(skip(method_results, query_vector))]
@@ -115,13 +118,9 @@ pub fn rerank_edges(
     mmr_lambda: f32,
 ) -> SearchResult<Vec<Edge>> {
     match reranker {
-        EdgeReranker::Rrf => {
-            Ok(reciprocal_rank_fusion(
-                method_results,
-                60.0,
-                |edge| edge.uuid.to_string(),
-            ))
-        }
+        EdgeReranker::Rrf => Ok(reciprocal_rank_fusion(method_results, 60.0, |edge| {
+            edge.uuid.to_string()
+        })),
         EdgeReranker::Mmr => {
             let all_edges: Vec<Edge> = method_results.into_iter().flatten().collect();
             Ok(maximal_marginal_relevance(
@@ -168,13 +167,9 @@ pub fn rerank_nodes(
     mmr_lambda: f32,
 ) -> SearchResult<Vec<Node>> {
     match reranker {
-        NodeReranker::Rrf => {
-            Ok(reciprocal_rank_fusion(
-                method_results,
-                60.0,
-                |node| node.uuid.to_string(),
-            ))
-        }
+        NodeReranker::Rrf => Ok(reciprocal_rank_fusion(method_results, 60.0, |node| {
+            node.uuid.to_string()
+        })),
         NodeReranker::Mmr => {
             let all_nodes: Vec<Node> = method_results.into_iter().flatten().collect();
             Ok(maximal_marginal_relevance(
@@ -217,11 +212,7 @@ mod tests {
         let list2 = vec!["b", "c", "d"];
         let list3 = vec!["c", "d", "e"];
 
-        let result = reciprocal_rank_fusion(
-            vec![list1, list2, list3],
-            60.0,
-            |s| s.to_string(),
-        );
+        let result = reciprocal_rank_fusion(vec![list1, list2, list3], 60.0, |s| s.to_string());
 
         // "c" should rank highest as it appears in all lists
         assert_eq!(result[0], "c");

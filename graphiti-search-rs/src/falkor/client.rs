@@ -19,7 +19,7 @@ impl FalkorClient {
         let url = format!("redis://{}:{}", config.falkor_host, config.falkor_port);
         let client = Client::open(url)?;
         let conn = client.get_async_connection().await?;
-        
+
         Ok(Self {
             client,
             conn,
@@ -33,11 +33,7 @@ impl FalkorClient {
     }
 
     #[instrument(skip(self))]
-    pub async fn fulltext_search_nodes(
-        &mut self,
-        query: &str,
-        limit: usize,
-    ) -> Result<Vec<Node>> {
+    pub async fn fulltext_search_nodes(&mut self, query: &str, limit: usize) -> Result<Vec<Node>> {
         let cypher = format!(
             "CALL db.idx.fulltext.queryNodes('node_name_index', $query) 
              YIELD node, score 
@@ -46,7 +42,7 @@ impl FalkorClient {
              LIMIT {}",
             limit
         );
-        
+
         let results: Vec<Vec<redis::Value>> = redis::cmd("GRAPH.QUERY")
             .arg(&self.graph_name)
             .arg(&cypher)
@@ -125,11 +121,7 @@ impl FalkorClient {
     }
 
     #[instrument(skip(self))]
-    pub async fn fulltext_search_edges(
-        &mut self,
-        query: &str,
-        limit: usize,
-    ) -> Result<Vec<Edge>> {
+    pub async fn fulltext_search_edges(&mut self, query: &str, limit: usize) -> Result<Vec<Edge>> {
         let cypher = format!(
             "MATCH (a:Entity)-[r:RELATES_TO]->(b:Entity)
              WHERE r.fact CONTAINS $query

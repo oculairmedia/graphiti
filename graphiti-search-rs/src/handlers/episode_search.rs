@@ -27,26 +27,27 @@ pub async fn episode_search_handler(
     Json(request): Json<EpisodeSearchRequest>,
 ) -> SearchResult<Json<EpisodeSearchResponse>> {
     let start = std::time::Instant::now();
-    
+
     // Get database connection
-    let falkor_conn = state.falkor_pool.get().await
-        .map_err(|e| crate::error::SearchError::Database(
-            format!("Failed to get database connection: {}", e)
-        ))?;
+    let falkor_conn = state.falkor_pool.get().await.map_err(|e| {
+        crate::error::SearchError::Database(format!("Failed to get database connection: {}", e))
+    })?;
 
     // Create search engine
     let mut engine = SearchEngine::new(falkor_conn, state.redis_pool.clone());
-    
+
     // Execute episode search
-    let episodes = engine.search_episodes(
-        &request.query,
-        &request.filters.unwrap_or_default(),
-        request.limit.unwrap_or(100),
-    ).await?;
-    
+    let episodes = engine
+        .search_episodes(
+            &request.query,
+            &request.filters.unwrap_or_default(),
+            request.limit.unwrap_or(100),
+        )
+        .await?;
+
     let total = episodes.len();
     let latency_ms = start.elapsed().as_millis() as u64;
-    
+
     Ok(Json(EpisodeSearchResponse {
         episodes,
         total,

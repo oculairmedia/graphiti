@@ -50,18 +50,23 @@ impl Manager for FalkorManager {
 impl FalkorPool {
     pub async fn new(config: &Config) -> SearchResult<Self> {
         let manager = FalkorManager::new(config);
-        
+
         let pool = Pool::builder(manager)
             .max_size(config.max_connections)
             .build()
             .map_err(|e| SearchError::Database(format!("Failed to create pool: {}", e)))?;
 
         // Test connection
-        let conn = pool.get().await
+        let conn = pool
+            .get()
+            .await
             .map_err(|e| SearchError::Database(format!("Failed to get connection: {}", e)))?;
         drop(conn);
-        
-        info!("FalkorDB connection pool created with {} connections", config.max_connections);
+
+        info!(
+            "FalkorDB connection pool created with {} connections",
+            config.max_connections
+        );
         Ok(pool)
     }
 }

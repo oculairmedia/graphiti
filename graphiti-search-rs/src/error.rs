@@ -10,25 +10,25 @@ use thiserror::Error;
 pub enum SearchError {
     #[error("Database error: {0}")]
     Database(String),
-    
+
     #[error("Cache error: {0}")]
     Cache(String),
-    
+
     #[error("Invalid query: {0}")]
     InvalidQuery(String),
-    
+
     #[error("Serialization error: {0}")]
     Serialization(#[from] serde_json::Error),
-    
+
     #[error("Vector operation error: {0}")]
     VectorOperation(String),
-    
+
     #[error("Reranking error: {0}")]
     Reranking(String),
-    
+
     #[error("Configuration error: {0}")]
     Configuration(String),
-    
+
     #[error("Internal error: {0}")]
     Internal(#[from] anyhow::Error),
 }
@@ -40,7 +40,10 @@ impl IntoResponse for SearchError {
             SearchError::Database(msg) => (StatusCode::SERVICE_UNAVAILABLE, msg),
             SearchError::Cache(msg) => {
                 tracing::warn!("Cache error (non-fatal): {}", msg);
-                (StatusCode::OK, "Cache miss, proceeding without cache".to_string())
+                (
+                    StatusCode::OK,
+                    "Cache miss, proceeding without cache".to_string(),
+                )
             }
             _ => (StatusCode::INTERNAL_SERVER_ERROR, self.to_string()),
         };
