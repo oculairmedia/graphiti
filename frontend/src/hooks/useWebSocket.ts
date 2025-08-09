@@ -124,10 +124,10 @@ export const useWebSocket = ({
       };
 
       ws.onmessage = (event) => {
-        console.log('WebSocket message received:', event.data);
+        // Silenced: WebSocket message received
         try {
           const data = JSON.parse(event.data) as WebSocketMessage;
-          console.log('Parsed message:', data);
+          // Silenced: Parsed message
           
           // Handle pong for latency calculation
           if (data.type === 'pong') {
@@ -142,7 +142,7 @@ export const useWebSocket = ({
             } else {
               setConnectionQuality('poor');
             }
-            console.log(`Pong received, latency: ${latency}ms`);
+            // Silenced: Pong received, latency logging
             return;
           }
           
