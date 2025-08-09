@@ -2,7 +2,7 @@ name: Build and Push API Server Container
 
 on:
   push:
-    branches: [ main, feature/real-time-node-glow, feature/strict-type-safety ]
+    branches: [ main, feature/graph-service-performance ]
     paths:
       - 'server/**'
       - 'Dockerfile'
