@@ -66,4 +66,39 @@ docstring-code-format = true
 [tool.pyright]
 include = ["."]
 pythonVersion = "3.10"
-typeCheckingMode = "standard"
+typeCheckingMode = "strict"
+stubPath = "typings"
+
+[tool.mypy]
+python_version = "3.10"
+mypy_path = "typings"
+namespace_packages = true
+explicit_package_bases = true
+
+# Strict type checking flags
+warn_return_any = true
+warn_unused_configs = true
+warn_unused_ignores = true
+disallow_untyped_defs = true
+disallow_any_unimported = true
+no_implicit_optional = true
+check_untyped_defs = true
+disallow_incomplete_defs = true
+disallow_subclassing_any = true
+strict_equality = true
+warn_redundant_casts = true
+warn_unreachable = true
+
+# Error output
+show_error_codes = true
+show_column_numbers = true
+pretty = true
+
+# Import discovery
+follow_imports = "normal"
+ignore_missing_imports = false
+
+# Per-module options
+[[tool.mypy.overrides]]
+module = "graphiti_core.*"
+ignore_missing_imports = false  # We have stubs now!

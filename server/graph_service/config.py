@@ -3,7 +3,7 @@ from typing import Annotated
 
 from fastapi import Depends
 from pydantic import Field
-from pydantic_settings import BaseSettings, SettingsConfigDict  # type: ignore
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -68,7 +68,7 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings():
-    return Settings()  # type: ignore[call-arg]
+    return Settings()
 
 
 ZepEnvDep = Annotated[Settings, Depends(get_settings)]

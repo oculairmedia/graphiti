@@ -6,8 +6,8 @@ from functools import partial
 
 import httpx
 from fastapi import APIRouter, FastAPI, status
-from graphiti_core.nodes import EpisodeType  # type: ignore
-from graphiti_core.utils.maintenance.graph_data_operations import clear_data  # type: ignore
+from graphiti_core.nodes import EpisodeType
+from graphiti_core.utils.maintenance.graph_data_operations import clear_data
 
 from graph_service.config import get_settings
 from graph_service.dto import AddEntityNodeRequest, AddMessagesRequest, Message, Result
@@ -21,7 +21,7 @@ _centrality_groups = set()
 _centrality_lock = asyncio.Lock()
 
 
-async def trigger_centrality_calculation(group_id: str = None):
+async def trigger_centrality_calculation(group_id: str | None = None):
     """Trigger centrality calculation after data changes with debouncing"""
     global _centrality_timer, _centrality_groups
 
