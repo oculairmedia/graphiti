@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from graph_service.config import get_settings
 from graph_service.routers import centrality, ingest, nodes, retrieve
-from graph_service.routers import cached_retrieve
+from graph_service.routers import cached_retrieve, metrics
 from graph_service.zep_graphiti import initialize_graphiti
 from graph_service.websocket_manager import manager
 from graph_service.webhooks import webhook_service
@@ -69,6 +69,7 @@ app.include_router(cached_retrieve.router)  # Add cached endpoints
 app.include_router(ingest.router)
 app.include_router(centrality.router)
 app.include_router(nodes.router)
+app.include_router(metrics.router)  # Add metrics endpoints
 
 
 @app.get('/healthcheck')
