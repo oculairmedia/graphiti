@@ -1,25 +1,20 @@
 use crate::error::{SearchError, SearchResult};
 use crate::falkor::FalkorConnection;
 use crate::models::{Community, Edge, Node};
-use ndarray::{Array1, ArrayView1};
 use rayon::prelude::*;
-use simdeez::prelude::*;
 use std::sync::Arc;
 use tracing::instrument;
 
-/// Calculate cosine similarity between two vectors using SIMD operations
+/// Calculate cosine similarity between two vectors
 #[inline]
 pub fn cosine_similarity_simd(a: &[f32], b: &[f32]) -> f32 {
     if a.len() != b.len() {
         return 0.0;
     }
 
-    // Use SIMD if available and vectors are large enough
-    if a.len() >= 32 && is_x86_feature_detected!("avx2") {
-        unsafe { cosine_similarity_avx2(a, b) }
-    } else {
-        cosine_similarity_scalar(a, b)
-    }
+    // For now, use scalar implementation
+    // TODO: Add SIMD optimization later
+    cosine_similarity_scalar(a, b)
 }
 
 /// Scalar fallback for cosine similarity
@@ -41,57 +36,6 @@ fn cosine_similarity_scalar(a: &[f32], b: &[f32]) -> f32 {
     dot_product / (norm_a.sqrt() * norm_b.sqrt())
 }
 
-/// AVX2-optimized cosine similarity
-#[target_feature(enable = "avx2")]
-unsafe fn cosine_similarity_avx2(a: &[f32], b: &[f32]) -> f32 {
-    use simdeez::avx2::*;
-
-    let mut dot_sum = f32x8::splat(0.0);
-    let mut norm_a_sum = f32x8::splat(0.0);
-    let mut norm_b_sum = f32x8::splat(0.0);
-
-    let chunks = a.len() / 8;
-
-    for i in 0..chunks {
-        let offset = i * 8;
-        let va = f32x8::load(&a[offset]);
-        let vb = f32x8::load(&b[offset]);
-
-        dot_sum = dot_sum + (va * vb);
-        norm_a_sum = norm_a_sum + (va * va);
-        norm_b_sum = norm_b_sum + (vb * vb);
-    }
-
-    // Sum the vector elements
-    let dot_product = dot_sum.horizontal_add();
-    let norm_a = norm_a_sum.horizontal_add();
-    let norm_b = norm_b_sum.horizontal_add();
-
-    // Handle remaining elements
-    let remainder = a.len() % 8;
-    let mut dot_remainder = 0.0;
-    let mut norm_a_remainder = 0.0;
-    let mut norm_b_remainder = 0.0;
-
-    if remainder > 0 {
-        let start = chunks * 8;
-        for i in start..a.len() {
-            dot_remainder += a[i] * b[i];
-            norm_a_remainder += a[i] * a[i];
-            norm_b_remainder += b[i] * b[i];
-        }
-    }
-
-    let total_dot = dot_product + dot_remainder;
-    let total_norm_a = norm_a + norm_a_remainder;
-    let total_norm_b = norm_b + norm_b_remainder;
-
-    if total_norm_a == 0.0 || total_norm_b == 0.0 {
-        return 0.0;
-    }
-
-    total_dot / (total_norm_a.sqrt() * total_norm_b.sqrt())
-}
 
 /// Batch cosine similarity calculation with parallelization
 pub fn batch_cosine_similarity(

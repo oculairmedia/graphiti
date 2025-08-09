@@ -1,4 +1,4 @@
-use crate::error::{SearchError, SearchResult};
+use crate::error::SearchResult;
 use crate::models::{Edge, EdgeReranker, Node, NodeReranker};
 use crate::search::similarity::cosine_similarity_simd;
 use rayon::prelude::*;
@@ -48,7 +48,7 @@ pub fn maximal_marginal_relevance<T: Clone>(
 
     while selected.len() < limit && !remaining.is_empty() {
         let scores: Vec<f32> = remaining
-            .par_iter()
+            .iter()
             .map(|(_, item)| {
                 if let Some(item_emb) = get_embedding(item) {
                     let relevance = cosine_similarity_simd(query, item_emb);

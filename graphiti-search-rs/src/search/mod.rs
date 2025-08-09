@@ -6,11 +6,10 @@ pub mod similarity;
 use crate::error::SearchResult;
 use crate::falkor::FalkorConnection;
 use crate::models::{
-    Community, Edge, EdgeSearchConfig, Episode, Node, NodeSearchConfig, SearchFilters,
-    SearchMethod, SearchRequest, SearchResults,
+    Community, CommunitySearchConfig, Edge, EdgeSearchConfig, Episode, Node, NodeSearchConfig, 
+    SearchFilters, SearchMethod, SearchRequest, SearchResults,
 };
 use deadpool_redis::Pool as RedisPool;
-use std::collections::HashMap;
 use std::time::Instant;
 use tracing::{debug, instrument};
 
@@ -91,14 +90,13 @@ impl SearchEngine {
         })
     }
 
-    async fn search_edges(
+    pub async fn search_edges(
         &mut self,
         query: &str,
         config: &EdgeSearchConfig,
         filters: &SearchFilters,
         query_vector: Option<&[f32]>,
     ) -> SearchResult<Vec<Edge>> {
-        let mut all_edges = HashMap::new();
         let mut method_results = Vec::new();
 
         for method in &config.search_methods {
@@ -136,7 +134,7 @@ impl SearchEngine {
         Ok(reranked)
     }
 
-    async fn search_nodes(
+    pub async fn search_nodes(
         &mut self,
         query: &str,
         config: &NodeSearchConfig,
@@ -180,7 +178,7 @@ impl SearchEngine {
         Ok(reranked)
     }
 
-    async fn search_episodes(
+    pub async fn search_episodes(
         &mut self,
         query: &str,
         filters: &SearchFilters,
@@ -189,7 +187,7 @@ impl SearchEngine {
         fulltext::search_episodes(&mut self.falkor_conn, query, limit).await
     }
 
-    async fn search_communities(
+    pub async fn search_communities(
         &mut self,
         query: &str,
         config: &CommunitySearchConfig,
