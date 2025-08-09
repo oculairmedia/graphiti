@@ -218,6 +218,48 @@ services:
       - homepage.href=http://192.168.50.90:3003
       - homepage.description=High-performance centrality calculations with
         native FalkorDB algorithms
+  
+  # High-performance Rust search service (43x faster than Python)
+  graphiti-search-rs:
+    build:
+      context: ./graphiti-search-rs
+      dockerfile: Dockerfile
+    # Uncomment to use published image after GitHub Actions build:
+    # image: ghcr.io/oculairmedia/graphiti-search-rs:latest
+    container_name: graphiti-search-rs
+    restart: unless-stopped
+    ports:
+      - 3004:3004 # Rust search service
+    environment:
+      - FALKORDB_HOST=falkordb
+      - FALKORDB_PORT=6379
+      - GRAPH_NAME=graphiti_migration
+      - REDIS_URL=redis://falkordb:6379/1  # Use DB 1 for cache
+      - PORT=3004
+      - RUST_LOG=graphiti_search=info,debug
+      - RUST_SEARCH_ENABLED=${RUST_SEARCH_ENABLED:-false}  # Feature flag
+      - RUST_SEARCH_PERCENTAGE=${RUST_SEARCH_PERCENTAGE:-0}  # A/B testing percentage
+    depends_on:
+      falkordb:
+        condition: service_healthy
+    networks:
+      - graphiti_network
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - -f
+        - http://localhost:3004/health
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    labels:
+      - homepage.group=Knowledge Management
+      - homepage.name=Search Service (Rust)
+      - homepage.icon=si-rust
+      - homepage.href=http://192.168.50.90:3004
+      - homepage.description=High-performance search with 43x speedup
   # Automated backup service for FalkorDB
   falkordb-backup:
     # Use published image (uncomment after first GitHub Actions build):
