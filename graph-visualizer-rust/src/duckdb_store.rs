@@ -148,7 +148,12 @@ impl DuckDBStore {
         
         let mut node_to_idx = HashMap::new();
         
-        for (idx, node) in nodes.iter().enumerate() {
+        // Sort nodes by UUID for deterministic index assignment
+        // This ensures the same UUID always gets the same index across reloads
+        let mut sorted_nodes = nodes.clone();
+        sorted_nodes.sort_by(|a, b| a.id.cmp(&b.id));
+        
+        for (idx, node) in sorted_nodes.iter().enumerate() {
             let degree = node.properties.get("degree_centrality")
                 .and_then(|v| v.as_f64())
                 .unwrap_or(0.0);
@@ -414,7 +419,10 @@ impl DuckDBStore {
             )?;
             
             let mut start_idx = (max_idx + 1).max(0) as u32;
-            let new_nodes = queue.nodes_to_add.drain(..).collect::<Vec<_>>();
+            let mut new_nodes = queue.nodes_to_add.drain(..).collect::<Vec<_>>();
+            
+            // Sort new nodes by UUID for consistent index assignment
+            new_nodes.sort_by(|a, b| a.id.cmp(&b.id));
             
             for node in &new_nodes {
                 let degree = node.properties.get("degree_centrality")
