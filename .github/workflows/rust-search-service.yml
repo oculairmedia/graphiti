@@ -39,13 +39,14 @@ jobs:
           override: true
           components: rustfmt, clippy
       
-      - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0.0.3
-      
-      - name: Configure sccache
-        run: |
-          echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
-          echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+      # Skip sccache for now - it's having issues with GitHub Actions
+      # - name: Setup sccache
+      #   uses: mozilla-actions/sccache-action@v0.0.3
+      # 
+      # - name: Configure sccache
+      #   run: |
+      #     echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
+      #     echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
       
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
@@ -134,13 +135,14 @@ jobs:
           profile: minimal
           override: true
       
-      - name: Setup sccache
-        uses: mozilla-actions/sccache-action@v0.0.3
-      
-      - name: Configure sccache
-        run: |
-          echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
-          echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+      # Skip sccache for now - it's having issues with GitHub Actions
+      # - name: Setup sccache
+      #   uses: mozilla-actions/sccache-action@v0.0.3
+      # 
+      # - name: Configure sccache
+      #   run: |
+      #     echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
+      #     echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
       
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
