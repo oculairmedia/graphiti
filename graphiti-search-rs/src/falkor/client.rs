@@ -1,9 +1,7 @@
 use anyhow::Result;
 use redis::aio::Connection;
-use redis::{AsyncCommands, Client};
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use tracing::{debug, instrument};
+use redis::Client;
+use tracing::instrument;
 
 use crate::config::Config;
 use crate::models::{Edge, Episode, Node};
@@ -28,26 +26,26 @@ impl FalkorClient {
     }
 
     pub async fn ping(&mut self) -> Result<()> {
-        redis::cmd("PING").query_async(&mut self.conn).await?;
+        redis::cmd("PING").query_async::<_, ()>(&mut self.conn).await?;
         Ok(())
     }
 
     #[instrument(skip(self))]
     pub async fn fulltext_search_nodes(&mut self, query: &str, limit: usize) -> Result<Vec<Node>> {
+        // For now, embed the query directly in the Cypher string
+        // FalkorDB parameter binding needs specific format
         let cypher = format!(
-            "CALL db.idx.fulltext.queryNodes('node_name_index', $query) 
-             YIELD node, score 
-             RETURN node, score 
-             ORDER BY score DESC 
+            "MATCH (n) 
+             WHERE n.name CONTAINS '{}' 
+             RETURN n 
              LIMIT {}",
+            query.replace("'", "\\'"), // Escape single quotes
             limit
         );
 
         let results: Vec<Vec<redis::Value>> = redis::cmd("GRAPH.QUERY")
             .arg(&self.graph_name)
             .arg(&cypher)
-            .arg("query")
-            .arg(query)
             .query_async(&mut self.conn)
             .await?;
 
@@ -122,20 +120,20 @@ impl FalkorClient {
 
     #[instrument(skip(self))]
     pub async fn fulltext_search_edges(&mut self, query: &str, limit: usize) -> Result<Vec<Edge>> {
+        // For now, embed the query directly in the Cypher string
         let cypher = format!(
-            "MATCH (a:Entity)-[r:RELATES_TO]->(b:Entity)
-             WHERE r.fact CONTAINS $query
-             RETURN a.uuid, r, b.uuid, r.fact
-             ORDER BY r.created_at DESC
+            "MATCH (a)-[r]->(b)
+             WHERE r.fact CONTAINS '{}' OR r.name CONTAINS '{}'
+             RETURN a, r, b
              LIMIT {}",
+            query.replace("'", "\\'"),
+            query.replace("'", "\\'"),
             limit
         );
 
         let results: Vec<Vec<redis::Value>> = redis::cmd("GRAPH.QUERY")
             .arg(&self.graph_name)
             .arg(&cypher)
-            .arg("query")
-            .arg(query)
             .query_async(&mut self.conn)
             .await?;
 
@@ -148,20 +146,20 @@ impl FalkorClient {
         query: &str,
         limit: usize,
     ) -> Result<Vec<Episode>> {
+        // For now, embed the query directly in the Cypher string
         let cypher = format!(
-            "MATCH (e:Episode)
-             WHERE e.content CONTAINS $query
+            "MATCH (e)
+             WHERE e.content CONTAINS '{}' OR e.name CONTAINS '{}'
              RETURN e
-             ORDER BY e.created_at DESC
              LIMIT {}",
+            query.replace("'", "\\'"),
+            query.replace("'", "\\'"),
             limit
         );
 
         let results: Vec<Vec<redis::Value>> = redis::cmd("GRAPH.QUERY")
             .arg(&self.graph_name)
             .arg(&cypher)
-            .arg("query")
-            .arg(query)
             .query_async(&mut self.conn)
             .await?;
 

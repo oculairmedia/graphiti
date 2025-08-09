@@ -5,7 +5,7 @@ use axum::{
 };
 use std::net::SocketAddr;
 use tower_http::{compression::CompressionLayer, cors::CorsLayer, trace::TraceLayer};
-use tracing::{info, Level};
+use tracing::info;
 use tracing_subscriber::{filter::EnvFilter, FmtSubscriber};
 
 mod config;
@@ -16,7 +16,7 @@ mod models;
 mod search;
 
 use crate::config::Config;
-use crate::falkor::FalkorPool;
+use crate::falkor::{create_falkor_pool, FalkorPool};
 use crate::handlers::{health_check, search_handler};
 
 #[derive(Clone)]
@@ -48,18 +48,11 @@ async fn main() -> Result<()> {
     info!("Configuration loaded");
 
     // Initialize FalkorDB connection pool
-    let falkor_pool = FalkorPool::new(&config).await?;
+    let falkor_pool = create_falkor_pool(&config).await?;
     info!("FalkorDB connection pool initialized");
 
     // Initialize Redis connection pool
-    let redis_config = deadpool_redis::Config {
-        url: Some(config.redis_url.clone()),
-        pool: Some(deadpool_redis::PoolConfig {
-            max_size: 32,
-            ..Default::default()
-        }),
-        ..Default::default()
-    };
+    let redis_config = deadpool_redis::Config::from_url(config.redis_url.clone());
     let redis_pool = redis_config.create_pool(Some(deadpool_redis::Runtime::Tokio1))?;
     info!("Redis connection pool initialized");
 

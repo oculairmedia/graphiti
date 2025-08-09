@@ -1,0 +1,47 @@
+{
+  "timestamp": "2025-08-09T14:28:18.466609",
+  "config": {
+    "num_requests": 100,
+    "num_workers": 10,
+    "warmup_requests": 10
+  },
+  "python_results": {},
+  "rust_results": {
+    "edge_search": {
+      "success_rate": 100.0,
+      "avg_latency": 8.864293321967125,
+      "median_latency": 8.460310054942966,
+      "min_latency": 7.536984980106354,
+      "max_latency": 12.03014503698796,
+      "p95_latency": 11.394199857022613,
+      "p99_latency": 11.907904807012528,
+      "std_dev": 1.1167442771067817,
+      "throughput": 385.1104693130267,
+      "errors": []
+    },
+    "node_search": {
+      "success_rate": 100.0,
+      "avg_latency": 2.7308222092688084,
+      "median_latency": 2.5976215256378055,
+      "min_latency": 1.9177549984306097,
+      "max_latency": 11.694116052240133,
+      "p95_latency": 3.2486014359164983,
+      "p99_latency": 7.975398795679231,
+      "std_dev": 1.1102615431727558,
+      "throughput": 666.8585488731675,
+      "errors": []
+    },
+    "combined_search": {
+      "success_rate": 100.0,
+      "avg_latency": 9.830946470610797,
+      "median_latency": 9.475624014157802,
+      "min_latency": 8.506756974384189,
+      "max_latency": 15.581554034724832,
+      "p95_latency": 12.02537685749121,
+      "p99_latency": 13.096465002745402,
+      "std_dev": 1.165862626723382,
+      "throughput": 444.7860618881137,
+      "errors": []
+    }
+  }
+}
