@@ -40,7 +40,11 @@ impl Manager for FalkorManager {
             .map_err(|e| SearchError::Database(format!("Failed to create connection: {}", e)))
     }
 
-    async fn recycle(&self, conn: &mut FalkorClient, _metrics: &deadpool::managed::Metrics) -> RecycleResult<Self::Error> {
+    async fn recycle(
+        &self,
+        conn: &mut FalkorClient,
+        _metrics: &deadpool::managed::Metrics,
+    ) -> RecycleResult<Self::Error> {
         conn.ping()
             .await
             .map_err(|e| SearchError::Database(format!("Connection ping failed: {}", e)))?;

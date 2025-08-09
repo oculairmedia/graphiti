@@ -9,12 +9,12 @@ use crate::models::{Edge, Episode, Node};
 /// Structure: [[["id", id], ["labels", [labels]], ["properties", [[key, val], ...]]]]
 pub fn parse_nodes_from_falkor(results: Vec<Vec<Value>>) -> Result<Vec<Node>> {
     let mut nodes = Vec::new();
-    
+
     // FalkorDB returns: [headers, data_rows, stats]
     if results.len() < 2 {
         return Ok(nodes);
     }
-    
+
     // Process data rows (index 1)
     // Each row is a list of columns, each column is a node/edge/etc
     for row in &results[1] {
@@ -28,7 +28,7 @@ pub fn parse_nodes_from_falkor(results: Vec<Vec<Value>>) -> Result<Vec<Node>> {
             }
         }
     }
-    
+
     Ok(nodes)
 }
 
@@ -39,7 +39,7 @@ fn parse_single_node(node_data: &Value) -> Result<Option<Node>> {
         Value::Bulk(fields) => fields,
         _ => return Ok(None),
     };
-    
+
     let mut uuid_str = String::new();
     let mut name = String::new();
     let mut node_type = String::new();
@@ -47,13 +47,13 @@ fn parse_single_node(node_data: &Value) -> Result<Option<Node>> {
     let mut group_id = None;
     let mut created_at = Utc::now();
     let mut centrality = None;
-    
+
     // Process each field in the node data
     for field in fields {
         if let Value::Bulk(ref field_data) = field {
             if field_data.len() >= 2 {
                 let key = extract_string(&field_data[0]).unwrap_or_default();
-                
+
                 match key.as_str() {
                     "id" => {
                         if let Value::Int(id) = &field_data[1] {
@@ -63,16 +63,17 @@ fn parse_single_node(node_data: &Value) -> Result<Option<Node>> {
                     "labels" => {
                         if let Value::Bulk(ref labels) = &field_data[1] {
                             if let Some(first_label) = labels.first() {
-                                node_type = extract_string(first_label).unwrap_or_else(|| "Entity".to_string());
+                                node_type = extract_string(first_label)
+                                    .unwrap_or_else(|| "Entity".to_string());
                             }
                         }
                     }
                     "properties" => {
                         if let Value::Bulk(ref props) = &field_data[1] {
                             parse_node_properties(
-                                props, 
-                                &mut uuid_str, 
-                                &mut name, 
+                                props,
+                                &mut uuid_str,
+                                &mut name,
                                 &mut node_type,
                                 &mut summary,
                                 &mut group_id,
@@ -86,7 +87,7 @@ fn parse_single_node(node_data: &Value) -> Result<Option<Node>> {
             }
         }
     }
-    
+
     // Only return a node if we have a valid UUID
     if !uuid_str.is_empty() {
         // Try to parse UUID, fallback to generated one if invalid
@@ -98,7 +99,7 @@ fn parse_single_node(node_data: &Value) -> Result<Option<Node>> {
                 Uuid::new_v4()
             }
         });
-        
+
         Ok(Some(Node {
             uuid,
             name,
@@ -129,7 +130,7 @@ fn parse_node_properties(
         if let Value::Bulk(ref prop_data) = prop {
             if prop_data.len() >= 2 {
                 let key = extract_string(&prop_data[0]).unwrap_or_default();
-                
+
                 match key.as_str() {
                     "uuid" => {
                         if let Some(val) = extract_string(&prop_data[1]) {
@@ -159,8 +160,10 @@ fn parse_node_properties(
                             }
                         }
                     }
-                    "degree_centrality" | "pagerank_centrality" | 
-                    "betweenness_centrality" | "eigenvector_centrality" => {
+                    "degree_centrality"
+                    | "pagerank_centrality"
+                    | "betweenness_centrality"
+                    | "eigenvector_centrality" => {
                         if let Some(val_str) = extract_string(&prop_data[1]) {
                             if let Ok(val) = val_str.parse::<f32>() {
                                 *centrality = Some(val);
@@ -179,11 +182,11 @@ fn parse_node_properties(
 /// Parse FalkorDB edge response format
 pub fn parse_edges_from_falkor(results: Vec<Vec<Value>>) -> Result<Vec<Edge>> {
     let mut edges = Vec::new();
-    
+
     if results.len() < 2 {
         return Ok(edges);
     }
-    
+
     // Process data rows (index 1)
     for row in &results[1] {
         // Each row should be a Bulk/Array containing [source_node, edge, target_node]
@@ -195,7 +198,7 @@ pub fn parse_edges_from_falkor(results: Vec<Vec<Value>>) -> Result<Vec<Edge>> {
             }
         }
     }
-    
+
     Ok(edges)
 }
 
@@ -212,7 +215,7 @@ fn parse_single_edge(
     let mut created_at = Utc::now();
     let mut group_id = None;
     let mut weight = 1.0;
-    
+
     // Extract source node UUID
     if let Value::Bulk(ref node_fields) = source_node {
         for field in node_fields {
@@ -228,7 +231,8 @@ fn parse_single_edge(
                             for prop in props {
                                 if let Value::Bulk(ref prop_data) = prop {
                                     if prop_data.len() >= 2 {
-                                        let prop_key = extract_string(&prop_data[0]).unwrap_or_default();
+                                        let prop_key =
+                                            extract_string(&prop_data[0]).unwrap_or_default();
                                         if prop_key == "uuid" {
                                             if let Some(val) = extract_string(&prop_data[1]) {
                                                 source_uuid_str = val;
@@ -243,7 +247,7 @@ fn parse_single_edge(
             }
         }
     }
-    
+
     // Extract target node UUID
     if let Value::Bulk(ref node_fields) = target_node {
         for field in node_fields {
@@ -259,7 +263,8 @@ fn parse_single_edge(
                             for prop in props {
                                 if let Value::Bulk(ref prop_data) = prop {
                                     if prop_data.len() >= 2 {
-                                        let prop_key = extract_string(&prop_data[0]).unwrap_or_default();
+                                        let prop_key =
+                                            extract_string(&prop_data[0]).unwrap_or_default();
                                         if prop_key == "uuid" {
                                             if let Some(val) = extract_string(&prop_data[1]) {
                                                 target_uuid_str = val;
@@ -274,14 +279,14 @@ fn parse_single_edge(
             }
         }
     }
-    
+
     // Extract edge properties
     if let Value::Bulk(ref edge_fields) = edge_data {
         for field in edge_fields {
             if let Value::Bulk(ref field_data) = field {
                 if field_data.len() >= 2 {
                     let key = extract_string(&field_data[0]).unwrap_or_default();
-                    
+
                     match key.as_str() {
                         "id" => {
                             if let Value::Int(id) = &field_data[1] {
@@ -306,12 +311,12 @@ fn parse_single_edge(
             }
         }
     }
-    
+
     // Create UUIDs
     let uuid = create_uuid(&uuid_str);
     let source_node_uuid = create_uuid(&source_uuid_str);
     let target_node_uuid = create_uuid(&target_uuid_str);
-    
+
     Ok(Some(Edge {
         uuid,
         source_node_uuid,
@@ -337,7 +342,7 @@ fn parse_edge_properties(
         if let Value::Bulk(ref prop_data) = prop {
             if prop_data.len() >= 2 {
                 let key = extract_string(&prop_data[0]).unwrap_or_default();
-                
+
                 match key.as_str() {
                     "uuid" => {
                         if let Some(val) = extract_string(&prop_data[1]) {
@@ -378,11 +383,11 @@ fn parse_edge_properties(
 /// Parse FalkorDB episode response format
 pub fn parse_episodes_from_falkor(results: Vec<Vec<Value>>) -> Result<Vec<Episode>> {
     let mut episodes = Vec::new();
-    
+
     if results.len() < 2 {
         return Ok(episodes);
     }
-    
+
     // Process data rows (index 1)
     for row in &results[1] {
         // Each row should be a Bulk/Array containing columns
@@ -394,7 +399,7 @@ pub fn parse_episodes_from_falkor(results: Vec<Vec<Value>>) -> Result<Vec<Episod
             }
         }
     }
-    
+
     Ok(episodes)
 }
 
@@ -405,18 +410,18 @@ fn parse_single_episode(episode_data: &Value) -> Result<Option<Episode>> {
         Value::Bulk(fields) => fields,
         _ => return Ok(None),
     };
-    
+
     let mut uuid_str = String::new();
     let mut content = String::new();
     let mut created_at = Utc::now();
     let mut group_id = None;
     let mut timestamp = None;
-    
+
     for field in fields {
         if let Value::Bulk(ref field_data) = field {
             if field_data.len() >= 2 {
                 let key = extract_string(&field_data[0]).unwrap_or_default();
-                
+
                 match key.as_str() {
                     "id" => {
                         if let Value::Int(id) = &field_data[1] {
@@ -428,8 +433,9 @@ fn parse_single_episode(episode_data: &Value) -> Result<Option<Episode>> {
                             for prop in props {
                                 if let Value::Bulk(ref prop_data) = prop {
                                     if prop_data.len() >= 2 {
-                                        let prop_key = extract_string(&prop_data[0]).unwrap_or_default();
-                                        
+                                        let prop_key =
+                                            extract_string(&prop_data[0]).unwrap_or_default();
+
                                         match prop_key.as_str() {
                                             "uuid" => {
                                                 if let Some(val) = extract_string(&prop_data[1]) {
@@ -445,15 +451,23 @@ fn parse_single_episode(episode_data: &Value) -> Result<Option<Episode>> {
                                                 group_id = extract_string(&prop_data[1]);
                                             }
                                             "created_at" => {
-                                                if let Some(date_str) = extract_string(&prop_data[1]) {
-                                                    if let Ok(dt) = DateTime::parse_from_rfc3339(&date_str) {
+                                                if let Some(date_str) =
+                                                    extract_string(&prop_data[1])
+                                                {
+                                                    if let Ok(dt) =
+                                                        DateTime::parse_from_rfc3339(&date_str)
+                                                    {
                                                         created_at = dt.with_timezone(&Utc);
                                                     }
                                                 }
                                             }
                                             "timestamp" | "valid_at" => {
-                                                if let Some(date_str) = extract_string(&prop_data[1]) {
-                                                    if let Ok(dt) = DateTime::parse_from_rfc3339(&date_str) {
+                                                if let Some(date_str) =
+                                                    extract_string(&prop_data[1])
+                                                {
+                                                    if let Ok(dt) =
+                                                        DateTime::parse_from_rfc3339(&date_str)
+                                                    {
                                                         timestamp = Some(dt.with_timezone(&Utc));
                                                     }
                                                 }
@@ -470,9 +484,9 @@ fn parse_single_episode(episode_data: &Value) -> Result<Option<Episode>> {
             }
         }
     }
-    
+
     let uuid = create_uuid(&uuid_str);
-    
+
     Ok(Some(Episode {
         uuid,
         content,
@@ -498,10 +512,13 @@ fn create_uuid(uuid_str: &str) -> Uuid {
     if uuid_str.is_empty() {
         return Uuid::new_v4();
     }
-    
+
     Uuid::parse_str(uuid_str).unwrap_or_else(|_| {
         // Generate deterministic UUID for FalkorDB IDs
-        if uuid_str.starts_with("node-") || uuid_str.starts_with("edge-") || uuid_str.starts_with("episode-") {
+        if uuid_str.starts_with("node-")
+            || uuid_str.starts_with("edge-")
+            || uuid_str.starts_with("episode-")
+        {
             Uuid::new_v5(&Uuid::NAMESPACE_OID, uuid_str.as_bytes())
         } else {
             Uuid::new_v4()

@@ -6,7 +6,7 @@ pub mod similarity;
 use crate::error::SearchResult;
 use crate::falkor::FalkorConnection;
 use crate::models::{
-    Community, CommunitySearchConfig, Edge, EdgeSearchConfig, Episode, Node, NodeSearchConfig, 
+    Community, CommunitySearchConfig, Edge, EdgeSearchConfig, Episode, Node, NodeSearchConfig,
     SearchFilters, SearchMethod, SearchRequest, SearchResults,
 };
 use deadpool_redis::Pool as RedisPool;

@@ -27,7 +27,9 @@ impl FalkorClient {
     }
 
     pub async fn ping(&mut self) -> Result<()> {
-        redis::cmd("PING").query_async::<_, ()>(&mut self.conn).await?;
+        redis::cmd("PING")
+            .query_async::<_, ()>(&mut self.conn)
+            .await?;
         Ok(())
     }
 
