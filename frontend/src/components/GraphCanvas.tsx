@@ -3397,7 +3397,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             )}
             {config.showDebugInfo && (
               <>
-                {stats.density !== undefined && (
+                {stats?.density !== undefined && (
                   <div>Density: {stats.density.toFixed(4)}</div>
                 )}
                 <div>Selected: {selectedNodes.length}</div>
