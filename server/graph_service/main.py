@@ -7,11 +7,14 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from graph_service.config import get_settings
 from graph_service.routers import centrality, ingest, nodes, retrieve
+from graph_service.routers import cached_retrieve
 from graph_service.zep_graphiti import initialize_graphiti
 from graph_service.websocket_manager import manager
 from graph_service.webhooks import webhook_service
 from graph_service.async_webhooks import startup_webhook_dispatcher, shutdown_webhook_dispatcher, dispatcher
+from graph_service.cache import initialize_caches, close_caches
 import logging
+import os
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -22,6 +25,12 @@ logger = logging.getLogger(__name__)
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
     await initialize_graphiti(settings)
+    
+    # Initialize caching system
+    logger.info("Initializing cache systems")
+    # Use same Redis/FalkorDB instance for caching (different DB)
+    redis_url = os.getenv("FALKORDB_URI", "redis://falkordb:6379/2")  # Use DB 2 for cache
+    await initialize_caches(redis_url)
     
     # Start async webhook dispatcher
     logger.info("Starting async webhook dispatcher")
@@ -37,7 +46,8 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     yield
     
     # Shutdown
-    logger.info("Shutting down async webhook dispatcher")
+    logger.info("Shutting down services")
+    await close_caches()
     await shutdown_webhook_dispatcher()
     await webhook_service.close()
     # No need to close Graphiti here, as it's handled per-request
@@ -55,6 +65,7 @@ app.add_middleware(
 )
 
 app.include_router(retrieve.router)
+app.include_router(cached_retrieve.router)  # Add cached endpoints
 app.include_router(ingest.router)
 app.include_router(centrality.router)
 app.include_router(nodes.router)
