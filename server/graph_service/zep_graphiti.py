@@ -77,7 +77,7 @@ class ZepGraphiti(Graphiti):
             driver = Neo4jDriver(uri, user, password)  # type: ignore[assignment]
             logger.info(f'Using Neo4j driver with URI: {uri}')
 
-        super().__init__(driver, llm_client, embedder)
+        super().__init__(graph_driver=driver, llm_client=llm_client, embedder=embedder)
 
     async def save_entity_node(self, name: str, uuid: str, group_id: str, summary: str = '') -> EntityNode:
         new_node = EntityNode(
