@@ -8,6 +8,7 @@ use crate::config::Config;
 use crate::error::{SearchError, SearchResult};
 
 pub mod client;
+pub mod parser;
 pub mod queries;
 
 pub use self::client::FalkorClient;
