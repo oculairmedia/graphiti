@@ -11,6 +11,7 @@ use tokio::sync::RwLock;
 use tracing::{debug, instrument};
 
 /// Cache entry with access tracking for adaptive TTL
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct CacheEntry<T> {
     pub value: T,
@@ -113,6 +114,7 @@ impl<K: Clone + Eq + std::hash::Hash + Send + Sync + 'static, V: Clone + Send + 
 /// Bloom filter for negative caching
 pub struct NegativeCache {
     filter: Arc<RwLock<BloomFilter>>,
+    #[allow(dead_code)]
     false_positive_rate: f64,
 }
 
@@ -138,6 +140,7 @@ impl NegativeCache {
     }
 
     /// Clear the filter (use periodically to prevent saturation)
+    #[allow(dead_code)]
     pub async fn clear(&self) {
         let mut filter = self.filter.write().await;
         *filter = BloomFilter::with_rate(
@@ -178,11 +181,13 @@ impl AccessCounter {
     }
 
     /// Get current access count
+    #[allow(dead_code)]
     pub fn get_count(&self, key: &str) -> u32 {
         self.counts.get(key).map(|v| *v).unwrap_or(0)
     }
 
     /// Clean up old entries periodically
+    #[allow(dead_code)]
     pub async fn cleanup(&self, max_age: Duration) {
         let now = Instant::now();
         let mut lru = self.lru.write().await;
@@ -303,6 +308,7 @@ impl EnhancedCache {
     }
 
     /// Periodic maintenance task
+    #[allow(dead_code)]
     pub async fn maintenance(&self) {
         // Clean up old access counts
         self.access_counter.cleanup(Duration::from_secs(3600)).await;
