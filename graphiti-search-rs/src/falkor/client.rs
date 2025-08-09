@@ -4,6 +4,7 @@ use redis::Client;
 use tracing::instrument;
 
 use crate::config::Config;
+use crate::falkor::parser;
 use crate::models::{Edge, Episode, Node};
 
 pub struct FalkorClient {
@@ -48,6 +49,15 @@ impl FalkorClient {
             .arg(&cypher)
             .query_async(&mut self.conn)
             .await?;
+
+        // Debug logging
+        tracing::debug!("FalkorDB query result length: {}", results.len());
+        if results.len() > 1 {
+            tracing::debug!("Data rows count: {}", results[1].len());
+            if !results[1].is_empty() {
+                tracing::debug!("First row type: {:?}", results[1][0]);
+            }
+        }
 
         self.parse_nodes(results)
     }
@@ -167,18 +177,14 @@ impl FalkorClient {
     }
 
     fn parse_nodes(&self, results: Vec<Vec<redis::Value>>) -> Result<Vec<Node>> {
-        // TODO: Implement proper parsing of FalkorDB results
-        // This is a simplified version
-        Ok(vec![])
+        parser::parse_nodes_from_falkor(results)
     }
 
     fn parse_edges(&self, results: Vec<Vec<redis::Value>>) -> Result<Vec<Edge>> {
-        // TODO: Implement proper parsing of FalkorDB results
-        Ok(vec![])
+        parser::parse_edges_from_falkor(results)
     }
 
     fn parse_episodes(&self, results: Vec<Vec<redis::Value>>) -> Result<Vec<Episode>> {
-        // TODO: Implement proper parsing of FalkorDB results
-        Ok(vec![])
+        parser::parse_episodes_from_falkor(results)
     }
 }

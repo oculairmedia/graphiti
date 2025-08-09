@@ -24,10 +24,10 @@ fn sanitize_lucene_query(query: &str) -> String {
         result.push(ch);
     }
 
-    // Add wildcard for partial matching if not in quotes
-    if !in_quotes && !result.contains('*') && !result.contains('?') {
-        result.push('*');
-    }
+    // Don't add wildcard - FalkorDB CONTAINS already does partial matching
+    // if !in_quotes && !result.contains('*') && !result.contains('?') {
+    //     result.push('*');
+    // }
 
     result
 }
