@@ -39,16 +39,19 @@ jobs:
           override: true
           components: rustfmt, clippy
       
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.3
+      
+      - name: Configure sccache
+        run: |
+          echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
+          echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+      
       - name: Cache Rust dependencies
-        uses: actions/cache@v4
+        uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            ./graphiti-search-rs/target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-
+          workspaces: "./graphiti-search-rs -> target"
+          cache-on-failure: true
       
       - name: Check formatting
         run: cargo fmt -- --check
@@ -104,8 +107,12 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: |
+            type=gha
+            type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache
+          cache-to: |
+            type=gha,mode=max
+            type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache,mode=max
           platforms: linux/amd64,linux/arm64
 
   benchmark:
@@ -127,17 +134,20 @@ jobs:
           profile: minimal
           override: true
       
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.3
+      
+      - name: Configure sccache
+        run: |
+          echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
+          echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+      
       - name: Cache Rust dependencies
-        uses: actions/cache@v4
+        uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            ./graphiti-search-rs/target
-          key: ${{ runner.os }}-cargo-bench-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-bench-
-            ${{ runner.os }}-cargo-
+          workspaces: "./graphiti-search-rs -> target"
+          cache-on-failure: true
+          key: "bench"
       
       - name: Run benchmarks
         run: |

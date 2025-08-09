@@ -1,27 +1,27 @@
-# Build stage  
-FROM rust:latest as builder
-
+# Use cargo-chef for better caching
+FROM lukemathwalker/cargo-chef:latest-rust-1 AS chef
 WORKDIR /app
 
-# Copy manifests
+# Plan stage - prepare recipe
+FROM chef AS planner
 COPY Cargo.toml Cargo.lock ./
-
-# Create dummy main file for dependency caching
-RUN mkdir src && echo "fn main() {}" > src/main.rs
-
-# Build dependencies only
-RUN cargo build --release
-RUN rm -rf src
-
-# Copy source code
 COPY src ./src
+RUN cargo chef prepare --recipe-path recipe.json
 
-# Build for release
-RUN touch src/main.rs
+# Build stage - cook dependencies first
+FROM chef AS builder
+
+# Build dependencies - this layer is cached unless dependencies change!
+COPY --from=planner /app/recipe.json recipe.json
+RUN cargo chef cook --release --recipe-path recipe.json
+
+# Copy source code and build application
+COPY Cargo.toml Cargo.lock ./
+COPY src ./src
 RUN cargo build --release
 
-# Runtime stage
-FROM debian:bookworm-slim
+# Runtime stage - minimal image
+FROM debian:bookworm-slim AS runtime
 
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y \
