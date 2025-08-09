@@ -3,6 +3,7 @@ import logging
 from contextlib import asynccontextmanager
 from datetime import datetime
 from functools import partial
+from typing import Any, Callable, Optional, Set, AsyncIterator
 
 import httpx
 from fastapi import APIRouter, FastAPI, status
@@ -16,12 +17,12 @@ from graph_service.zep_graphiti import ZepGraphitiDep
 logger = logging.getLogger(__name__)
 
 # Centrality calculation debouncing
-_centrality_timer = None
-_centrality_groups = set()
+_centrality_timer: Optional[asyncio.Task[None]] = None
+_centrality_groups: Set[str] = set()
 _centrality_lock = asyncio.Lock()
 
 
-async def trigger_centrality_calculation(group_id: str | None = None):
+async def trigger_centrality_calculation(group_id: str | None = None) -> None:
     """Trigger centrality calculation after data changes with debouncing"""
     global _centrality_timer, _centrality_groups
 
@@ -38,7 +39,7 @@ async def trigger_centrality_calculation(group_id: str | None = None):
         _centrality_timer = asyncio.create_task(_delayed_centrality_calculation())
 
 
-async def _delayed_centrality_calculation():
+async def _delayed_centrality_calculation() -> None:
     """Execute centrality calculation after debounce delay"""
     global _centrality_groups
 
@@ -131,7 +132,7 @@ async def _delayed_centrality_calculation():
         # Don't fail the main operation if centrality calculation fails
 
 
-async def invalidate_cache():
+async def invalidate_cache() -> None:
     """Invalidate the Rust server cache after data changes"""
     print(f'=== CACHE_INVALIDATION_DEBUG: Function called at {datetime.now()} ===', flush=True)
 
@@ -209,11 +210,11 @@ async def invalidate_cache():
 
 
 class AsyncWorker:
-    def __init__(self):
-        self.queue = asyncio.Queue()
-        self.task = None
+    def __init__(self) -> None:
+        self.queue: asyncio.Queue[Callable[[], Any]] = asyncio.Queue()
+        self.task: Optional[asyncio.Task[None]] = None
 
-    async def worker(self):
+    async def worker(self) -> None:
         while True:
             try:
                 print(f'Got a job: (size of remaining queue: {self.queue.qsize()})', flush=True)
@@ -233,10 +234,10 @@ class AsyncWorker:
                 logger.error(f'Job processing error: {e}')
                 logger.error(f'Full traceback: {full_traceback}')
 
-    async def start(self):
+    async def start(self) -> None:
         self.task = asyncio.create_task(self.worker())
 
-    async def stop(self):
+    async def stop(self) -> None:
         if self.task:
             self.task.cancel()
             await self.task
@@ -248,7 +249,7 @@ async_worker = AsyncWorker()
 
 
 @asynccontextmanager
-async def lifespan(_: FastAPI):
+async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     await async_worker.start()
     yield
     await async_worker.stop()
@@ -261,8 +262,8 @@ router = APIRouter(lifespan=lifespan)
 async def add_messages(
     request: AddMessagesRequest,
     graphiti: ZepGraphitiDep,
-):
-    async def add_messages_task(m: Message):
+) -> Result:
+    async def add_messages_task(m: Message) -> None:
         print(
             f'=== TASK DEBUG: Processing message - group_id={request.group_id}, name={m.name} ===',
             flush=True,
@@ -371,7 +372,7 @@ async def add_messages(
 async def add_entity_node(
     request: AddEntityNodeRequest,
     graphiti: ZepGraphitiDep,
-):
+) -> Any:
     node = await graphiti.save_entity_node(
         uuid=request.uuid,
         group_id=request.group_id,
@@ -403,7 +404,7 @@ async def add_entity_node(
 
 
 @router.delete('/entity-edge/{uuid}', status_code=status.HTTP_200_OK)
-async def delete_entity_edge(uuid: str, graphiti: ZepGraphitiDep):
+async def delete_entity_edge(uuid: str, graphiti: ZepGraphitiDep) -> Result:
     await graphiti.delete_entity_edge(uuid)
     # Invalidate cache after successful data operation
     await invalidate_cache()
@@ -411,7 +412,7 @@ async def delete_entity_edge(uuid: str, graphiti: ZepGraphitiDep):
 
 
 @router.delete('/group/{group_id}', status_code=status.HTTP_200_OK)
-async def delete_group(group_id: str, graphiti: ZepGraphitiDep):
+async def delete_group(group_id: str, graphiti: ZepGraphitiDep) -> Result:
     await graphiti.delete_group(group_id)
     # Invalidate cache after successful data operation
     await invalidate_cache()
@@ -419,7 +420,7 @@ async def delete_group(group_id: str, graphiti: ZepGraphitiDep):
 
 
 @router.delete('/episode/{uuid}', status_code=status.HTTP_200_OK)
-async def delete_episode(uuid: str, graphiti: ZepGraphitiDep):
+async def delete_episode(uuid: str, graphiti: ZepGraphitiDep) -> Result:
     await graphiti.delete_episodic_node(uuid)
     # Invalidate cache after successful data operation
     await invalidate_cache()
@@ -429,7 +430,7 @@ async def delete_episode(uuid: str, graphiti: ZepGraphitiDep):
 @router.post('/clear', status_code=status.HTTP_200_OK)
 async def clear(
     graphiti: ZepGraphitiDep,
-):
+) -> Result:
     await clear_data(graphiti.driver)
     await graphiti.build_indices_and_constraints()
     # Invalidate cache after successful data operation

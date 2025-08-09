@@ -1,0 +1,139 @@
+graph_service/webhooks.py:48:9: error: Need type annotation for
+"internal_handlers" (hint: "internal_handlers: list[<type>] = ...") 
+[var-annotated]
+            self.internal_handlers = []
+            ^~~~~~~~~~~~~~~~~~~~~~
+graph_service/webhooks.py:53:5: error: Function is missing a type annotation 
+[no-untyped-def]
+        async def add_internal_handler(self, handler):
+        ^
+graph_service/webhooks.py:59:5: error: Function is missing a return type
+annotation  [no-untyped-def]
+        async def emit_node_access(
+        ^
+graph_service/webhooks.py:104:5: error: Function is missing a return type
+annotation  [no-untyped-def]
+        async def emit_data_ingestion(
+        ^
+graph_service/webhooks.py:175:5: error: Function is missing a return type
+annotation  [no-untyped-def]
+        async def _send_webhook(self, event: NodeAccessEvent):
+        ^
+graph_service/webhooks.py:179:17: error: Argument 1 to "post" of "AsyncClient"
+has incompatible type "str | None"; expected "URL | str"  [arg-type]
+                    self.webhook_url,
+                    ^~~~~~~~~~~~~~~~
+graph_service/webhooks.py:188:5: error: Function is missing a return type
+annotation  [no-untyped-def]
+        async def _send_data_webhook(self, url: str, event: DataIngestionE...
+        ^
+graph_service/webhooks.py:207:5: error: Function is missing a return type
+annotation  [no-untyped-def]
+        async def _call_handler(self, handler, event: NodeAccessEvent):
+        ^
+graph_service/webhooks.py:207:5: error: Function is missing a type annotation
+for one or more arguments  [no-untyped-def]
+        async def _call_handler(self, handler, event: NodeAccessEvent):
+        ^
+graph_service/webhooks.py:217:5: error: Function is missing a return type
+annotation  [no-untyped-def]
+        async def close(self):
+        ^
+graph_service/webhooks.py:217:5: note: Use "-> None" if function does not return a value
+graph_service/websocket_manager.py:21:5: error: Function is missing a return
+type annotation  [no-untyped-def]
+        def __init__(self):
+        ^
+graph_service/websocket_manager.py:21:5: note: Use "-> None" if function does not return a value
+graph_service/websocket_manager.py:25:5: error: Function is missing a return
+type annotation  [no-untyped-def]
+        async def connect(self, websocket: WebSocket):
+        ^
+graph_service/websocket_manager.py:32:5: error: Function is missing a return
+type annotation  [no-untyped-def]
+        async def disconnect(self, websocket: WebSocket):
+        ^
+graph_service/websocket_manager.py:38:5: error: Function is missing a return
+type annotation  [no-untyped-def]
+        async def send_personal_message(self, message: str, websocket: Web...
+        ^
+graph_service/websocket_manager.py:49:5: error: Function is missing a return
+type annotation  [no-untyped-def]
+        async def broadcast(self, message: str):
+        ^
+graph_service/websocket_manager.py:91:5: error: Function is missing a return
+type annotation  [no-untyped-def]
+        async def broadcast_node_access(self, event: NodeAccessEvent):
+        ^
+graph_service/websocket_manager.py:103:5: error: Function is missing a return
+type annotation  [no-untyped-def]
+        async def handle_client_message(self, websocket: WebSocket, data: ...
+        ^
+graph_service/config.py:70:1: error: Function is missing a return type
+annotation  [no-untyped-def]
+    def get_settings():
+    ^
+graph_service/config.py:71:12: error: Missing named argument "openai_api_key"
+for "Settings"  [call-arg]
+        return Settings()
+               ^~~~~~~~~~
+graph_service/config.py:71:12: error: Missing named argument "openai_base_url"
+for "Settings"  [call-arg]
+        return Settings()
+               ^~~~~~~~~~
+graph_service/config.py:71:12: error: Missing named argument "model_name" for
+"Settings"  [call-arg]
+        return Settings()
+               ^~~~~~~~~~
+graph_service/config.py:71:12: error: Missing named argument
+"embedding_model_name" for "Settings"  [call-arg]
+        return Settings()
+               ^~~~~~~~~~
+graph_service/config.py:71:12: error: Missing named argument "neo4j_uri" for
+"Settings"  [call-arg]
+        return Settings()
+               ^~~~~~~~~~
+graph_service/config.py:71:12: error: Missing named argument "neo4j_user" for
+"Settings"  [call-arg]
+        return Settings()
+               ^~~~~~~~~~
+graph_service/config.py:71:12: error: Missing named argument "neo4j_password"
+for "Settings"  [call-arg]
+        return Settings()
+               ^~~~~~~~~~
+graph_service/config.py:71:12: error: Missing named argument "falkordb_uri" for
+"Settings"  [call-arg]
+        return Settings()
+               ^~~~~~~~~~
+graph_service/config.py:71:12: error: Missing named argument "falkordb_host"
+for "Settings"  [call-arg]
+        return Settings()
+               ^~~~~~~~~~
+graph_service/config.py:71:12: error: Missing named argument "falkordb_port"
+for "Settings"  [call-arg]
+        return Settings()
+               ^~~~~~~~~~
+graph_service/config.py:71:12: error: Missing named argument "use_falkordb" for
+"Settings"  [call-arg]
+        return Settings()
+               ^~~~~~~~~~
+graph_service/config.py:71:12: error: Missing named argument "rust_server_url"
+for "Settings"  [call-arg]
+        return Settings()
+               ^~~~~~~~~~
+graph_service/config.py:71:12: error: Missing named argument
+"enable_cache_invalidation" for "Settings"  [call-arg]
+        return Settings()
+               ^~~~~~~~~~
+graph_service/config.py:71:12: error: Missing named argument
+"cache_invalidation_timeout" for "Settings"  [call-arg]
+        return Settings()
+               ^~~~~~~~~~
+graph_service/config.py:71:12: error: Missing named argument
+"use_rust_centrality" for "Settings"  [call-arg]
+        return Settings()
+               ^~~~~~~~~~
+graph_service/config.py:71:12: error: Missing named argument
+"rust_centrality_url" for "Settings"  [call-arg]
+        return Settings()
+               ^~~~~~~~~~

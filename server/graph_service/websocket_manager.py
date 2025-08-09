@@ -18,24 +18,24 @@ logger = logging.getLogger(__name__)
 class ConnectionManager:
     """Manages WebSocket connections and broadcasts events."""
     
-    def __init__(self):
+    def __init__(self) -> None:
         self.active_connections: Set[WebSocket] = set()
         self._lock = asyncio.Lock()
     
-    async def connect(self, websocket: WebSocket):
+    async def connect(self, websocket: WebSocket) -> None:
         """Accept a new WebSocket connection."""
         await websocket.accept()
         async with self._lock:
             self.active_connections.add(websocket)
         logger.info(f"WebSocket client connected. Total connections: {len(self.active_connections)}")
     
-    async def disconnect(self, websocket: WebSocket):
+    async def disconnect(self, websocket: WebSocket) -> None:
         """Remove a WebSocket connection."""
         async with self._lock:
             self.active_connections.discard(websocket)
         logger.info(f"WebSocket client disconnected. Total connections: {len(self.active_connections)}")
     
-    async def send_personal_message(self, message: str, websocket: WebSocket):
+    async def send_personal_message(self, message: str, websocket: WebSocket) -> None:
         """Send a message to a specific WebSocket."""
         try:
             await asyncio.wait_for(websocket.send_text(message), timeout=5.0)
@@ -46,7 +46,7 @@ class ConnectionManager:
             logger.error(f"Error sending message to client: {e}")
             await self.disconnect(websocket)
     
-    async def broadcast(self, message: str):
+    async def broadcast(self, message: str) -> None:
         """Broadcast a message to all connected clients."""
         if not self.active_connections:
             return
@@ -88,7 +88,7 @@ class ConnectionManager:
         if disconnected:
             logger.info(f"Removed {len(disconnected)} disconnected clients")
     
-    async def broadcast_node_access(self, event: NodeAccessEvent):
+    async def broadcast_node_access(self, event: NodeAccessEvent) -> None:
         """Broadcast a node access event to all connected clients."""
         message = {
             "type": "node_access",
@@ -100,7 +100,7 @@ class ConnectionManager:
         logger.info(f"Broadcasting node access event: {len(event.node_ids)} nodes, type: {event.access_type}, query: {event.query}")
         await self.broadcast(json.dumps(message))
     
-    async def handle_client_message(self, websocket: WebSocket, data: str):
+    async def handle_client_message(self, websocket: WebSocket, data: str) -> None:
         """Handle incoming messages from a client."""
         try:
             message = json.loads(data)

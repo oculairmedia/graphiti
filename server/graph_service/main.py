@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+from typing import AsyncIterator
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
@@ -17,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
-async def lifespan(_: FastAPI):
+async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
     await initialize_graphiti(settings)
     
@@ -50,12 +51,12 @@ app.include_router(nodes.router)
 
 
 @app.get('/healthcheck')
-async def healthcheck():
+async def healthcheck() -> JSONResponse:
     return JSONResponse(content={'status': 'healthy'}, status_code=200)
 
 
 @app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
+async def websocket_endpoint(websocket: WebSocket) -> None:
     """WebSocket endpoint for real-time updates."""
     await manager.connect(websocket)
     try:
