@@ -5,7 +5,7 @@ Webhook service for emitting events when nodes are accessed or data is ingested.
 import asyncio
 import logging
 from datetime import datetime, timezone
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Callable, Union, Awaitable
 import httpx
 from pydantic import BaseModel
 import os
@@ -43,14 +43,14 @@ class DataIngestionEvent(BaseModel):
 class WebhookService:
     """Service for managing and dispatching webhooks."""
     
-    def __init__(self, webhook_url: Optional[str] = None):
+    def __init__(self, webhook_url: Optional[str] = None) -> None:
         self.webhook_url = webhook_url or os.getenv("GRAPHITI_WEBHOOK_URL")
-        self.internal_handlers = []
+        self.internal_handlers: List[Callable[[NodeAccessEvent], Union[None, Awaitable[None]]]] = []
         self._handlers_lock = asyncio.Lock()
         self.client = httpx.AsyncClient(timeout=5.0)
         self._enabled = bool(self.webhook_url or self.internal_handlers)
     
-    async def add_internal_handler(self, handler):
+    async def add_internal_handler(self, handler: Callable[[NodeAccessEvent], Union[None, Awaitable[None]]]) -> None:
         """Add an internal handler for webhook events (e.g., WebSocket broadcast)."""
         async with self._handlers_lock:
             self.internal_handlers.append(handler)
@@ -62,7 +62,7 @@ class WebhookService:
         access_type: str = "search",
         query: Optional[str] = None,
         metadata: Optional[dict] = None
-    ):
+    ) -> None:
         """Emit a node access event."""
         logger.info(f"emit_node_access called: enabled={self._enabled}, node_ids={len(node_ids) if node_ids else 0}, handlers={len(self.internal_handlers)}")
         if not self._enabled or not node_ids:
@@ -109,7 +109,7 @@ class WebhookService:
         episode: Optional[Any] = None,
         group_id: Optional[str] = None,
         metadata: Optional[dict] = None
-    ):
+    ) -> None:
         """Emit a data ingestion event when new data is added to the graph."""
         # Get data webhook URLs from environment
         data_webhook_urls = os.getenv("GRAPHITI_DATA_WEBHOOK_URLS", "")
@@ -172,9 +172,11 @@ class WebhookService:
                 else:
                     logger.info(f"Data webhook to {webhook_urls[i]} succeeded")
     
-    async def _send_webhook(self, event: NodeAccessEvent):
+    async def _send_webhook(self, event: NodeAccessEvent) -> None:
         """Send webhook to external URL."""
         try:
+            if self.webhook_url is None:
+                return
             response = await self.client.post(
                 self.webhook_url,
                 json=event.model_dump(mode='json'),
@@ -185,7 +187,7 @@ class WebhookService:
         except Exception as e:
             logger.error(f"Failed to send webhook: {e}")
     
-    async def _send_data_webhook(self, url: str, event: DataIngestionEvent):
+    async def _send_data_webhook(self, url: str, event: DataIngestionEvent) -> None:
         """Send data ingestion webhook to a specific URL."""
         try:
             response = await self.client.post(
@@ -204,7 +206,7 @@ class WebhookService:
             logger.error(f"Failed to send data webhook to {url}: {e}")
             raise
     
-    async def _call_handler(self, handler, event: NodeAccessEvent):
+    async def _call_handler(self, handler: Callable[[NodeAccessEvent], Union[None, Awaitable[None]]], event: NodeAccessEvent) -> None:
         """Call an internal handler."""
         try:
             if asyncio.iscoroutinefunction(handler):
@@ -214,7 +216,7 @@ class WebhookService:
         except Exception as e:
             logger.error(f"Internal handler failed: {e}")
     
-    async def close(self):
+    async def close(self) -> None:
         """Clean up resources."""
         await self.client.aclose()
 

@@ -2,12 +2,20 @@
 
 from typing import Any, Dict, List, Optional, Tuple, TypedDict
 from datetime import datetime
-from graphiti_core.nodes import EntityNode, EpisodicNode
+from graphiti_core.nodes import EntityNode, EpisodicNode, EpisodeType
 from graphiti_core.edges import EntityEdge, EpisodicEdge
 from graphiti_core.llm_client import LLMClient, LLMConfig, OpenAIClient
 from graphiti_core.embedder import EmbedderClient, OpenAIEmbedder, OpenAIEmbedderConfig
 from graphiti_core.driver.base import BaseDriver
 from graphiti_core.search import SearchMethod, SearchConfig
+
+class AddEpisodeResults:
+    """Results from adding an episode."""
+    episode: EpisodicNode
+    nodes: List[EntityNode]
+    edges: List[EntityEdge]
+    
+    def model_dump(self, mode: str = 'json') -> Dict[str, Any]: ...
 
 class GraphitiConfig(TypedDict, total=False):
     """Configuration for Graphiti instance."""
@@ -38,12 +46,18 @@ class Graphiti:
         self,
         name: str,
         episode_body: str,
-        episode_id: str,
         source_description: str,
         reference_time: datetime,
-        group_id: str,
-        update_graph: bool = True
-    ) -> Tuple[List[EntityNode], List[EntityEdge], List[EpisodicNode], List[EpisodicEdge]]: ...
+        source: EpisodeType = ...,
+        group_id: Optional[str] = None,
+        uuid: Optional[str] = None,
+        update_communities: bool = False,
+        entity_types: Optional[Dict[str, Any]] = None,
+        excluded_entity_types: Optional[List[str]] = None,
+        previous_episode_uuids: Optional[List[str]] = None,
+        edge_types: Optional[Dict[str, Any]] = None,
+        edge_type_map: Optional[Dict[Tuple[str, str], List[str]]] = None
+    ) -> AddEpisodeResults: ...
     
     async def retrieve_episodes(
         self,

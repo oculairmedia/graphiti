@@ -1,7 +1,7 @@
 import logging
 import os
 import sys
-from typing import Annotated
+from typing import Annotated, Any, Optional, Type
 from urllib.parse import urlparse
 
 # Ensure /app is in Python path for development mode imports
@@ -34,7 +34,7 @@ try:
     logger.info('✅ Successfully imported FalkorDriver')
 except ImportError as e:
     FALKORDB_AVAILABLE = False
-    FalkorDriver = None
+    FalkorDriver: Any = None  # type: ignore[assignment]
     logger.error(f'❌ Failed to import FalkorDriver: {e}')
     import traceback
 
@@ -46,7 +46,7 @@ try:
     NEO4J_AVAILABLE = True
 except ImportError:
     NEO4J_AVAILABLE = False
-    Neo4jDriver = None
+    Neo4jDriver: Any = None  # type: ignore[assignment]
 
 
 class ZepGraphiti(Graphiti):
@@ -68,15 +68,15 @@ class ZepGraphiti(Graphiti):
             host = parsed.hostname or 'localhost'
             port = parsed.port or 6379
             database = 'graphiti_migration'  # Use same database as migration scripts
-            driver = FalkorDriver(host=host, port=port, database=database)
+            driver = FalkorDriver(host=host, port=port, database=database)  # type: ignore[misc]
             logger.info(f'Using FalkorDB driver with host: {host}:{port}, database: {database}')
         else:
             if not NEO4J_AVAILABLE:
                 raise ImportError('Neo4j driver not available. Install neo4j package.')
-            driver = Neo4jDriver(uri, user, password)
+            driver = Neo4jDriver(uri, user, password)  # type: ignore[misc]
             logger.info(f'Using Neo4j driver with URI: {uri}')
 
-        super().__init__(uri, user, password, llm_client, embedder, graph_driver=driver)
+        super().__init__(driver, llm_client, embedder)  # type: ignore[call-arg]
 
     async def save_entity_node(self, name: str, uuid: str, group_id: str, summary: str = ''):
         new_node = EntityNode(

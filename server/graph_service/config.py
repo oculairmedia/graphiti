@@ -67,8 +67,8 @@ class Settings(BaseSettings):
 
 
 @lru_cache
-def get_settings():
-    return Settings()
+def get_settings() -> Settings:
+    return Settings()  # type: ignore[call-arg]
 
 
 ZepEnvDep = Annotated[Settings, Depends(get_settings)]
