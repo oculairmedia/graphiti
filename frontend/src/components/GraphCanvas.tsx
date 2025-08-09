@@ -724,23 +724,24 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             
             // Update live stats after successful delta processing
             try {
-              if (cosmographRef.current) {
-                // Get current counts from the data that was just set
-                const nodeCount = cosmographRef.current.getNodes?.()?.length || 
-                                 cosmographRef.current.nodes?.length || 
-                                 currentNodes.length;
-                const edgeCount = cosmographRef.current.getLinks?.()?.length || 
-                                 cosmographRef.current.links?.length || 
-                                 currentLinks.length;
+              setLiveStats(prev => {
+                // Calculate new counts based on operations performed
+                const newNodeCount = prev.nodeCount + pointsToAdd.length - pointIdsToDelete.length;
+                const newEdgeCount = prev.edgeCount + linksToAdd.length - linkPairsToDelete.length;
                 
-                setLiveStats({
-                  nodeCount,
-                  edgeCount,
-                  lastUpdated: Date.now()
+                console.log('[GraphCanvas] Live stats updated:', { 
+                  nodeCount: newNodeCount, 
+                  edgeCount: newEdgeCount,
+                  added: { nodes: pointsToAdd.length, edges: linksToAdd.length },
+                  deleted: { nodes: pointIdsToDelete.length, edges: linkPairsToDelete.length }
                 });
                 
-                console.log('[GraphCanvas] Live stats updated:', { nodeCount, edgeCount });
-              }
+                return {
+                  nodeCount: newNodeCount,
+                  edgeCount: newEdgeCount,
+                  lastUpdated: Date.now()
+                };
+              });
             } catch (statsError) {
               console.warn('[GraphCanvas] Failed to update live stats:', statsError);
             }

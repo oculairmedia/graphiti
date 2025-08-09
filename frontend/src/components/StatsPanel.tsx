@@ -398,9 +398,15 @@ export const StatsPanel: React.FC<StatsPanelProps> = React.memo(({
     </div>
   );
 }, (prevProps, nextProps) => {
-  // Re-render if panel visibility changes OR if data changes
+  // Re-render if panel visibility changes
   if (prevProps.isOpen !== nextProps.isOpen) {
     return false; // Props changed, re-render
+  }
+  
+  // Check if live stats have changed
+  if (prevProps.liveStats?.nodeCount !== nextProps.liveStats?.nodeCount ||
+      prevProps.liveStats?.edgeCount !== nextProps.liveStats?.edgeCount) {
+    return false; // Live stats changed, re-render
   }
   
   // Check if data has changed (compare node/edge counts)
