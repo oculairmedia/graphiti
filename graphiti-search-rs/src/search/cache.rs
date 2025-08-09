@@ -31,11 +31,11 @@ pub struct AdaptiveTTL {
 impl Default for AdaptiveTTL {
     fn default() -> Self {
         Self {
-            hot_threshold: 100,   // >100 accesses = hot
-            warm_threshold: 10,    // 10-100 accesses = warm
-            hot_ttl: Duration::from_secs(1800),  // 30 minutes
-            warm_ttl: Duration::from_secs(300),   // 5 minutes
-            cold_ttl: Duration::from_secs(60),    // 1 minute
+            hot_threshold: 100,                 // >100 accesses = hot
+            warm_threshold: 10,                 // 10-100 accesses = warm
+            hot_ttl: Duration::from_secs(1800), // 30 minutes
+            warm_ttl: Duration::from_secs(300), // 5 minutes
+            cold_ttl: Duration::from_secs(60),  // 1 minute
         }
     }
 }
@@ -76,7 +76,7 @@ impl<K: Clone + Eq + std::hash::Hash + Send + Sync + 'static, V: Clone + Send + 
         if let Some(entry) = self.inflight.get(&key) {
             let mutex = entry.clone();
             drop(entry); // Release the dashmap read lock
-            
+
             // Wait for the in-flight request
             let guard = mutex.lock().await;
             if let Some(value) = guard.as_ref() {
@@ -91,7 +91,7 @@ impl<K: Clone + Eq + std::hash::Hash + Send + Sync + 'static, V: Clone + Send + 
 
         // Compute the value
         let value = compute().await;
-        
+
         // Store the result for other waiters
         {
             let mut guard = mutex.lock().await;
@@ -186,7 +186,7 @@ impl AccessCounter {
     pub async fn cleanup(&self, max_age: Duration) {
         let now = Instant::now();
         let mut lru = self.lru.write().await;
-        
+
         // Remove old entries from LRU
         let mut to_remove = Vec::new();
         for (key, &time) in lru.iter() {
@@ -243,13 +243,17 @@ impl EnhancedCache {
         let access_count = self.access_counter.increment(key).await;
 
         // Use request coalescing
-        let result = self.coalescer
+        let result = self
+            .coalescer
             .get_or_compute(key.to_string(), || async move {
                 // Try to get from Redis
                 if let Ok(mut conn) = self.redis_pool.get().await {
                     if let Ok(cached) = conn.get::<_, String>(key).await {
                         if let Ok(value) = serde_json::from_str::<T>(&cached) {
-                            debug!("Cache hit for key: {} (access count: {})", key, access_count);
+                            debug!(
+                                "Cache hit for key: {} (access count: {})",
+                                key, access_count
+                            );
                             return serde_json::to_string(&value).ok();
                         }
                     }
@@ -261,19 +265,21 @@ impl EnhancedCache {
                     Ok(Some(value)) => {
                         // Mark as existing in negative cache
                         self.negative_cache.mark_exists(key).await;
-                        
+
                         // Calculate adaptive TTL
                         let ttl = self.adaptive_ttl.calculate_ttl(access_count);
-                        debug!("Setting TTL {} seconds for key: {} (access count: {})", 
-                               ttl, key, access_count);
-                        
+                        debug!(
+                            "Setting TTL {} seconds for key: {} (access count: {})",
+                            ttl, key, access_count
+                        );
+
                         // Store in Redis with adaptive TTL
                         if let Ok(mut conn) = self.redis_pool.get().await {
                             if let Ok(json) = serde_json::to_string(&value) {
                                 let _ = conn.set_ex::<_, _, ()>(key, &json, ttl).await;
                             }
                         }
-                        
+
                         serde_json::to_string(&value).ok()
                     }
                     Ok(None) => {
@@ -300,7 +306,7 @@ impl EnhancedCache {
     pub async fn maintenance(&self) {
         // Clean up old access counts
         self.access_counter.cleanup(Duration::from_secs(3600)).await;
-        
+
         // Optionally clear bloom filter if it's getting too full
         // (in production, monitor false positive rate and clear when needed)
     }
