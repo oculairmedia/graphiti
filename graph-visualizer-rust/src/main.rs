@@ -568,14 +568,22 @@ async fn visualize(
 ) -> Result<Json<QueryResponse>, (StatusCode, Json<ErrorResponse>)> {
     let start = std::time::Instant::now();
     
-    // Check cache first
+    // Check cache first - but only if cache is enabled
     let cache_key = format!("{:?}", params);
-    if let Some(cached) = state.graph_cache.get(&cache_key) {
-        return Ok(Json(QueryResponse {
-            data: cached.value().clone(),
-            has_more: false,
-            execution_time_ms: 0,
-        }));
+    
+    // Check if CACHE_ENABLED environment variable is set to false
+    let cache_enabled = std::env::var("CACHE_ENABLED")
+        .unwrap_or_else(|_| "true".to_string())
+        .to_lowercase() != "false";
+    
+    if cache_enabled {
+        if let Some(cached) = state.graph_cache.get(&cache_key) {
+            return Ok(Json(QueryResponse {
+                data: cached.value().clone(),
+                has_more: false,
+                execution_time_ms: 0,
+            }));
+        }
     }
     
     let limit = if params.query_type == "entire_graph" {
@@ -589,8 +597,10 @@ async fn visualize(
     
     match execute_graph_query(&state.client, &state.graph_name, &query).await {
         Ok(data) => {
-            // Cache the result
-            state.graph_cache.insert(cache_key, data.clone());
+            // Cache the result only if cache is enabled
+            if cache_enabled {
+                state.graph_cache.insert(cache_key, data.clone());
+            }
             
             let execution_time_ms = start.elapsed().as_millis();
             Ok(Json(QueryResponse {

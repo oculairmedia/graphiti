@@ -397,13 +397,13 @@ impl DuckDBStore {
             debug!("Processing {} new nodes", queue.nodes_to_add.len());
             
             // Get current max index
-            let max_idx: u32 = tx.query_row(
+            let max_idx: i32 = tx.query_row(
                 "SELECT COALESCE(MAX(idx), -1) FROM nodes",
                 params![],
                 |row| row.get(0)
             )?;
             
-            let mut start_idx = max_idx + 1;
+            let mut start_idx = (max_idx + 1).max(0) as u32;
             let new_nodes = queue.nodes_to_add.drain(..).collect::<Vec<_>>();
             
             for node in &new_nodes {

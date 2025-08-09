@@ -75,6 +75,7 @@ interface StatsPanelProps {
   isOpen: boolean;
   onClose: () => void;
   data?: GraphData;
+  liveStats?: { nodeCount: number; edgeCount: number; lastUpdated: number } | null;
 }
 
 // Compute real statistics from graph data
@@ -154,7 +155,8 @@ const computeGraphStats = (data?: GraphData): GraphStats | null => {
 export const StatsPanel: React.FC<StatsPanelProps> = React.memo(({ 
   isOpen, 
   onClose,
-  data
+  data,
+  liveStats
 }) => {
   // Get real performance metrics
   const realPerformance = usePerformanceMonitoring();
@@ -229,15 +231,19 @@ export const StatsPanel: React.FC<StatsPanelProps> = React.memo(({
                 <div className="grid grid-cols-2 gap-4">
                   <div className="text-center p-3 rounded-lg bg-secondary/20">
                     <div className="text-2xl font-bold text-primary">
-                      {stats.overview.totalNodes.toLocaleString()}
+                      {(liveStats?.nodeCount ?? stats.overview.totalNodes).toLocaleString()}
                     </div>
-                    <div className="text-xs text-muted-foreground">Total Nodes</div>
+                    <div className="text-xs text-muted-foreground">
+                      Total Nodes {liveStats && <span className="text-green-500">(Live)</span>}
+                    </div>
                   </div>
                   <div className="text-center p-3 rounded-lg bg-secondary/20">
                     <div className="text-2xl font-bold text-accent">
-                      {stats.overview.totalEdges.toLocaleString()}
+                      {(liveStats?.edgeCount ?? stats.overview.totalEdges).toLocaleString()}
                     </div>
-                    <div className="text-xs text-muted-foreground">Total Edges</div>
+                    <div className="text-xs text-muted-foreground">
+                      Total Edges {liveStats && <span className="text-green-500">(Live)</span>}
+                    </div>
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
@@ -392,6 +398,17 @@ export const StatsPanel: React.FC<StatsPanelProps> = React.memo(({
     </div>
   );
 }, (prevProps, nextProps) => {
-  // Only re-render if panel visibility changes
-  return prevProps.isOpen === nextProps.isOpen;
+  // Re-render if panel visibility changes OR if data changes
+  if (prevProps.isOpen !== nextProps.isOpen) {
+    return false; // Props changed, re-render
+  }
+  
+  // Check if data has changed (compare node/edge counts)
+  const prevNodeCount = prevProps.data?.nodes?.length || 0;
+  const nextNodeCount = nextProps.data?.nodes?.length || 0;
+  const prevEdgeCount = prevProps.data?.edges?.length || 0;
+  const nextEdgeCount = nextProps.data?.edges?.length || 0;
+  
+  // Return true if counts are the same (skip re-render), false if different (re-render)
+  return prevNodeCount === nextNodeCount && prevEdgeCount === nextEdgeCount;
 });

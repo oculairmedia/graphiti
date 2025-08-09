@@ -43,6 +43,9 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isSimulationRunning, setIsSimulationRunning] = useState(true);
   
+  // Live stats from GraphCanvas for real-time updates
+  const [liveStats, setLiveStats] = useState<{ nodeCount: number; edgeCount: number; lastUpdated: number } | null>(null);
+  
 
   // Refs
   const graphCanvasRef = useRef<GraphCanvasHandle>(null);
@@ -68,6 +71,11 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
     setIsTimelineVisible(newVisibility);
     localStorage.setItem('graphiti.timeline.visible', String(newVisibility));
   }, [isTimelineVisible]);
+
+  // Handle stats updates from GraphCanvas
+  const handleStatsUpdate = useCallback((stats: { nodeCount: number; edgeCount: number; lastUpdated: number }) => {
+    setLiveStats(stats);
+  }, []);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -359,6 +367,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
             onScreenshot={handleCaptureScreenshot}
             onToggleTimeline={toggleTimeline}
             isTimelineVisible={isTimelineVisible}
+            onStatsUpdate={handleStatsUpdate}
           />
 
           {/* Right Layout Panel */}
@@ -396,6 +405,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
                   weight: link.weight || 1
                 })) || []
               } : undefined}
+              liveStats={liveStats}
             />
           </React.Suspense>
         )}

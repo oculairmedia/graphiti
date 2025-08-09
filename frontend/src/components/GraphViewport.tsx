@@ -39,6 +39,7 @@ interface GraphViewportProps {
   onScreenshot: () => void;
   onToggleTimeline?: () => void;
   isTimelineVisible?: boolean;
+  onStatsUpdate?: (stats: { nodeCount: number; edgeCount: number; lastUpdated: number }) => void;
 }
 
 const GraphViewportComponent = forwardRef<GraphCanvasHandle, GraphViewportProps>(({
@@ -62,9 +63,13 @@ const GraphViewportComponent = forwardRef<GraphCanvasHandle, GraphViewportProps>
   onScreenshot,
   onToggleTimeline,
   isTimelineVisible,
+  onStatsUpdate,
 }, ref) => {
   // FPS tracking
   const [fps, setFps] = useState<number>(60);
+  
+  // Live stats from GraphCanvas
+  const [liveStats, setLiveStats] = useState<{ nodeCount: number; edgeCount: number } | null>(null);
   
   useEffect(() => {
     let frameCount = 0;
@@ -93,6 +98,14 @@ const GraphViewportComponent = forwardRef<GraphCanvasHandle, GraphViewportProps>
       }
     };
   }, []);
+  
+  // Handle stats updates from GraphCanvas
+  const handleStatsUpdate = useStableCallback((stats: { nodeCount: number; edgeCount: number; lastUpdated: number }) => {
+    setLiveStats(stats);
+    if (onStatsUpdate) {
+      onStatsUpdate(stats);
+    }
+  });
   
   // Use stable callbacks to prevent child re-renders
   const stableOnNodeClick = useStableCallback(onNodeClick);
@@ -132,6 +145,7 @@ const GraphViewportComponent = forwardRef<GraphCanvasHandle, GraphViewportProps>
           onSelectNodes={stableOnSelectNodes}
           onClearSelection={stableOnClearSelection}
           onNodeHover={stableOnNodeHover}
+          onStatsUpdate={handleStatsUpdate}
           selectedNodes={selectedNodes}
           highlightedNodes={[...highlightedNodes, ...hoveredConnectedNodes]}
           stats={stats}
@@ -146,6 +160,8 @@ const GraphViewportComponent = forwardRef<GraphCanvasHandle, GraphViewportProps>
         visibleNodes={nodes.length} // All nodes are visible in current implementation
         selectedNodes={selectedNodes.length}
         fps={fps}
+        liveNodeCount={liveStats?.nodeCount}
+        liveEdgeCount={liveStats?.edgeCount}
       />
       
       {/* Node Details Panel Overlay */}

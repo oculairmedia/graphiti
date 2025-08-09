@@ -44,6 +44,8 @@ interface GraphLink {
   target: string;
   from: string;
   to: string;
+  sourceIndex?: number;
+  targetIndex?: number;
   weight?: number;
   edge_type?: string;
   [key: string]: unknown;
@@ -114,6 +116,7 @@ interface GraphCanvasProps {
   onSelectNodes?: (nodes: GraphNode[]) => void;
   onClearSelection?: () => void;
   onNodeHover?: (node: GraphNode | null) => void;
+  onStatsUpdate?: (stats: { nodeCount: number; edgeCount: number; lastUpdated: number }) => void;
   selectedNodes: string[];
   highlightedNodes: string[];
   className?: string;
@@ -134,6 +137,8 @@ interface GraphCanvasHandle {
   getTrackedPointPositionsMap: () => Map<number, [number, number]> | undefined;
   setData: (nodes: GraphNode[], links: GraphLink[], runSimulation?: boolean) => void;
   restart: () => void;
+  // Live statistics
+  getLiveStats: () => { nodeCount: number; edgeCount: number; lastUpdated: number };
   // Selection tools
   activateRectSelection: () => void;
   deactivateRectSelection: () => void;
@@ -169,7 +174,7 @@ interface GraphCanvasComponentProps extends GraphCanvasProps {
 const cosmographInitializationMap = new WeakMap<HTMLElement, boolean>();
 
 const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
-  ({ onNodeClick, onNodeSelect, onSelectNodes, onClearSelection, onNodeHover, selectedNodes, highlightedNodes, className, stats, nodes, links }, ref) => {
+  ({ onNodeClick, onNodeSelect, onSelectNodes, onClearSelection, onNodeHover, onStatsUpdate, selectedNodes, highlightedNodes, className, stats, nodes, links }, ref) => {
     const cosmographRef = useRef<CosmographRef | null>(null);
     
     // Add a stable ref for the Cosmograph instance to prevent issues in dev mode
@@ -194,11 +199,29 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     // Glowing nodes state for real-time visualization
     const [glowingNodes, setGlowingNodes] = useState<Map<string, number>>(new Map());
     const [glowingNodeIndices, setGlowingNodeIndices] = useState<number[]>([]);
+    
+    // Live statistics tracking for real-time updates
+    const [liveStats, setLiveStats] = useState<{
+      nodeCount: number;
+      edgeCount: number;
+      lastUpdated: number;
+    }>({
+      nodeCount: 0,
+      edgeCount: 0,
+      lastUpdated: Date.now()
+    });
     const { 
       subscribe: subscribeToWebSocket,
       subscribeToDeltaUpdate,
       subscribeToGraphUpdate 
     } = useWebSocketContext();
+    
+    // Call onStatsUpdate when liveStats changes
+    useEffect(() => {
+      if (onStatsUpdate) {
+        onStatsUpdate(liveStats);
+      }
+    }, [liveStats, onStatsUpdate]);
     
     // Track current data for incremental updates
     const [currentNodes, setCurrentNodes] = useState<GraphNode[]>([]);
@@ -262,6 +285,13 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     useEffect(() => {
       setCurrentNodes(nodes);
       setCurrentLinks(links);
+      
+      // Initialize/update live stats with current data
+      setLiveStats({
+        nodeCount: nodes.length,
+        edgeCount: links.length,
+        lastUpdated: Date.now()
+      });
       
       // Update search index for fast searching
       if (nodes.length > 0) {
@@ -532,36 +562,77 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           if (operation === 'add') {
             if (deltaNodes && deltaNodes.length > 0) {
               deltaNodes.forEach(node => {
+                // Use complete transformation matching setData for Cosmograph compatibility
                 pointsToAdd.push({
-                  id: node.id,
-                  label: node.label || node.id,
-                  node_type: node.node_type || 'Unknown',
-                  size: node.size || 1,
-                  ...node.properties
+                  id: String(node.id),
+                  label: String(node.label || node.id),
+                  node_type: String(node.node_type || 'Unknown'),
+                  centrality: Number(node.properties?.degree_centrality || node.properties?.pagerank_centrality || node.size || 1),
+                  cluster: String(node.node_type || 'Unknown'),
+                  clusterStrength: 0.7,
+                  degree_centrality: Number(node.properties?.degree_centrality || 0),
+                  pagerank_centrality: Number(node.properties?.pagerank_centrality || 0),
+                  betweenness_centrality: Number(node.properties?.betweenness_centrality || 0),
+                  eigenvector_centrality: Number(node.properties?.eigenvector_centrality || 0),
+                  created_at: node.properties?.created_at || node.created_at || node.properties?.created || null,
+                  created_at_timestamp: (node.properties?.created_at || node.created_at || node.properties?.created) ? 
+                    new Date(node.properties?.created_at || node.created_at || node.properties?.created).getTime() : null
                 });
               });
             }
             if (deltaEdges && deltaEdges.length > 0) {
+              // Get current nodes to build index map
+              const currentNodes = cosmographDataRef.current?.nodes || [];
+              const nodeIndexMap = new Map<string, number>();
+              
+              // Map existing nodes to their indices
+              currentNodes.forEach((node, idx) => {
+                nodeIndexMap.set(String(node.id), idx);
+              });
+              
+              // Map new nodes being added to their future indices
+              pointsToAdd.forEach((node, idx) => {
+                nodeIndexMap.set(String(node.id), currentNodes.length + idx);
+              });
+              
               deltaEdges.forEach(edge => {
-                linksToAdd.push({
-                  source: edge.source || edge.from,
-                  target: edge.target || edge.to,
-                  weight: edge.weight || 1,
-                  ...edge
-                });
+                const source = String(edge.source || edge.from || edge.source_node_uuid);
+                const target = String(edge.target || edge.to || edge.target_node_uuid);
+                const sourceIndex = nodeIndexMap.get(source);
+                const targetIndex = nodeIndexMap.get(target);
+                
+                if (sourceIndex !== undefined && targetIndex !== undefined) {
+                  linksToAdd.push({
+                    source: source,
+                    target: target,
+                    sourceIndex: sourceIndex,
+                    targetIndex: targetIndex,
+                    weight: edge.weight || 1,
+                    edge_type: edge.edge_type || edge.name || 'RELATES_TO'
+                  });
+                } else {
+                  console.warn('[GraphCanvas] Edge references unknown nodes:', source, target, 'indices:', sourceIndex, targetIndex);
+                }
               });
             }
           } else if (operation === 'update') {
             if (deltaNodes && deltaNodes.length > 0) {
-              // For updates, we need to remove and re-add nodes
+              // For updates, we need to remove and re-add nodes with complete transformation
               deltaNodes.forEach(node => {
                 pointsToUpdate.set(node.id, {
-                  id: node.id,
-                  label: node.label || node.id,
-                  node_type: node.node_type || 'Unknown',
-                  size: node.size || 1,
-                  ...node.properties,
-                  ...node
+                  id: String(node.id),
+                  label: String(node.label || node.id),
+                  node_type: String(node.node_type || 'Unknown'),
+                  centrality: Number(node.properties?.degree_centrality || node.properties?.pagerank_centrality || node.size || 1),
+                  cluster: String(node.node_type || 'Unknown'),
+                  clusterStrength: 0.7,
+                  degree_centrality: Number(node.properties?.degree_centrality || 0),
+                  pagerank_centrality: Number(node.properties?.pagerank_centrality || 0),
+                  betweenness_centrality: Number(node.properties?.betweenness_centrality || 0),
+                  eigenvector_centrality: Number(node.properties?.eigenvector_centrality || 0),
+                  created_at: node.properties?.created_at || node.created_at || node.properties?.created || null,
+                  created_at_timestamp: (node.properties?.created_at || node.created_at || node.properties?.created) ? 
+                    new Date(node.properties?.created_at || node.created_at || node.properties?.created).getTime() : null
                 });
               });
             }
@@ -649,6 +720,29 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             if (keepRunning && cosmographRef.current) {
               console.log('[GraphCanvas] Restarting simulation...');
               cosmographRef.current.restart();
+            }
+            
+            // Update live stats after successful delta processing
+            try {
+              if (cosmographRef.current) {
+                // Get current counts from the data that was just set
+                const nodeCount = cosmographRef.current.getNodes?.()?.length || 
+                                 cosmographRef.current.nodes?.length || 
+                                 currentNodes.length;
+                const edgeCount = cosmographRef.current.getLinks?.()?.length || 
+                                 cosmographRef.current.links?.length || 
+                                 currentLinks.length;
+                
+                setLiveStats({
+                  nodeCount,
+                  edgeCount,
+                  lastUpdated: Date.now()
+                });
+                
+                console.log('[GraphCanvas] Live stats updated:', { nodeCount, edgeCount });
+              }
+            } catch (statsError) {
+              console.warn('[GraphCanvas] Failed to update live stats:', statsError);
             }
           } catch (error) {
             console.error('[GraphCanvas] Error applying updates to Cosmograph:', error);
@@ -905,6 +999,8 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       return links.map(link => ({
         source: String(link.source),
         target: String(link.target),
+        sourceIndex: link.sourceIndex,  // Preserve sourceIndex from useGraphDataQuery
+        targetIndex: link.targetIndex,  // Preserve targetIndex from useGraphDataQuery
         edge_type: String(link.edge_type || 'default'),
         weight: Number(link.weight || 1),
         created_at: link.created_at,
@@ -1952,6 +2048,15 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       }
     }, [transformedData.nodes, config.fitViewDuration, config.fitViewPadding]);
 
+    // Method to get current live statistics
+    const getLiveStats = useCallback(() => {
+      return {
+        nodeCount: liveStats.nodeCount,
+        edgeCount: liveStats.edgeCount,
+        lastUpdated: liveStats.lastUpdated
+      };
+    }, [liveStats]);
+
     // Method to clear Cosmograph selection and return to default state
     const clearCosmographSelection = useCallback(() => {
       if (cosmographRef.current) {
@@ -2749,7 +2854,8 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       startSimulation,
       pauseSimulation,
       resumeSimulation,
-      keepSimulationRunning
+      keepSimulationRunning,
+      getLiveStats
     ]);
     
     // Expose methods to parent via ref with minimal dependencies
@@ -2792,6 +2898,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           cosmographRef.current.restart();
         }
       },
+      getLiveStats,
       setIncrementalUpdateFlag: (enabled: boolean) => {
         isIncrementalUpdateRef.current = enabled;
       }
@@ -2823,7 +2930,8 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       startSimulation,
       pauseSimulation,
       resumeSimulation,
-      keepSimulationRunning
+      keepSimulationRunning,
+      getLiveStats
     ]);
 
     // Handle Cosmograph events with native selection methods and multi-selection
@@ -3278,12 +3386,12 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           />
         
         {/* Performance Overlay */}
-        {(config.showNodeCount || config.showDebugInfo) && stats && (
+        {(config.showNodeCount || config.showDebugInfo) && (stats || liveStats) && (
           <div className="absolute top-4 left-4 glass text-xs text-muted-foreground p-2 rounded space-y-1">
             {config.showNodeCount && (
               <>
-                <div>Nodes: {stats.total_nodes.toLocaleString()}</div>
-                <div>Edges: {stats.total_edges.toLocaleString()}</div>
+                <div>Nodes: {(liveStats?.nodeCount ?? stats?.total_nodes ?? 0).toLocaleString()}</div>
+                <div>Edges: {(liveStats?.edgeCount ?? stats?.total_edges ?? 0).toLocaleString()}</div>
               </>
             )}
             {config.showDebugInfo && (
