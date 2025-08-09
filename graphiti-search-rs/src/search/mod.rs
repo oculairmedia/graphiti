@@ -18,6 +18,7 @@ use self::cache::EnhancedCache;
 
 pub struct SearchEngine {
     falkor_pool: FalkorPool,
+    #[allow(dead_code)]
     redis_pool: RedisPool,
     cache: EnhancedCache,
 }
@@ -247,7 +248,7 @@ impl SearchEngine {
         limit: usize,
     ) -> SearchResult<Vec<Episode>> {
         // Create cache key
-        let cache_key = format!("episodes:{}:{}", query, limit);
+        let cache_key = format!("episodes:{query}:{limit}");
 
         // Clone values needed in the closure
         let query_str = query.to_string();
@@ -287,7 +288,7 @@ impl SearchEngine {
         // Communities are typically searched via similarity
         if let Some(embedding) = query_vector {
             let mut falkor_conn = self.falkor_pool.get().await.map_err(|e| {
-                crate::error::SearchError::Database(format!("Failed to get connection: {}", e))
+                crate::error::SearchError::Database(format!("Failed to get connection: {e}"))
             })?;
 
             similarity::search_communities_by_embedding(
