@@ -1,4 +1,4 @@
-name: Pyright Type Check
+name: Type Safety Check (Pyright + Mypy)
 
 permissions:
   contents: read
@@ -10,7 +10,7 @@ on:
     branches: ["main"]
 
 jobs:
-  pyright:
+  type-check:
     runs-on: depot-ubuntu-22.04
     environment: development
     steps:
@@ -35,8 +35,19 @@ jobs:
         run: |
           cd server
           uv sync --all-extras
+          # Install type checking tools
+          uv pip install mypy pyright
       - name: Run Pyright for graph-service
         shell: bash
         run: |
           cd server
+          # Pyright will use the stubPath configured in pyproject.toml
           uv run pyright .
+      - name: Run Mypy for graph-service
+        shell: bash
+        run: |
+          cd server
+          # Mypy will use the configuration in pyproject.toml
+          MYPYPATH=typings uv run mypy graph_service --config-file pyproject.toml || true
+          # Note: Using || true temporarily to not fail builds while fixing existing type issues
+          # Remove || true once all type errors are resolved
