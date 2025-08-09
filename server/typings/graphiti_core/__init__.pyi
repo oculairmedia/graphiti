@@ -35,8 +35,8 @@ class Graphiti:
     def __init__(
         self,
         driver: BaseDriver,
-        llm_client: LLMClient,
-        embedder: EmbedderClient,
+        llm_client: Optional[LLMClient] = None,
+        embedder: Optional[EmbedderClient] = None,
         database: Optional[str] = None
     ) -> None: ...
     

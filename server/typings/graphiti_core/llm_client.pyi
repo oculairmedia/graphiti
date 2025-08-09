@@ -6,9 +6,10 @@ from pydantic import BaseModel
 
 class LLMConfig(BaseModel):
     """Configuration for LLM clients."""
-    api_key: Optional[str]
+    api_key: Optional[str] = None
     model: str
-    base_url: Optional[str]
+    small_model: Optional[str] = None
+    base_url: Optional[str] = None
     temperature: float = 0.7
     max_tokens: Optional[int] = None
 
@@ -20,6 +21,8 @@ class LLMResponse(TypedDict):
 
 class LLMClient(Protocol):
     """Protocol for LLM client implementations."""
+    config: LLMConfig
+    model: str
     
     async def generate(
         self,
@@ -39,8 +42,10 @@ class LLMClient(Protocol):
 
 class OpenAIClient(LLMClient):
     """OpenAI LLM client implementation."""
+    config: LLMConfig
+    model: str
     
-    def __init__(self, config: LLMConfig) -> None: ...
+    def __init__(self, config: LLMConfig, client: Optional[Any] = None) -> None: ...
     
     async def generate(
         self,

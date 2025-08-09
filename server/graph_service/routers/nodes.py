@@ -13,7 +13,7 @@ router = APIRouter()
 )
 async def update_node_summary(
     node_uuid: str, request: UpdateNodeSummaryRequest, graphiti: ZepGraphitiDep
-):
+) -> NodeResponse:
     """Update the summary of a specific entity node"""
     try:
         # Get the existing node
@@ -33,7 +33,7 @@ async def update_node_summary(
             summary=node.summary,
             labels=node.labels,
             created_at=node.created_at,
-            attributes=node.attributes,
+            attributes=dict(node.attributes),  # Convert to dict explicitly
         )
 
     except NodeNotFoundError:

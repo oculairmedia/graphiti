@@ -26,6 +26,8 @@ class BaseNode(BaseModel):
     name: str
     summary: Optional[str]
     
+    def __init__(self, **data: Any) -> None: ...
+    
     class Config:
         arbitrary_types_allowed = True
 
@@ -33,11 +35,32 @@ class EntityNode(BaseNode):
     """Entity node representation."""
     labels: List[str]
     attributes: NodeAttributes
+    name_embedding: Optional[List[float]]
+    
+    def __init__(self, **data: Any) -> None: ...
     
     def to_dict(self) -> Dict[str, Any]: ...
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'EntityNode': ...
+    
+    async def save(self, driver: Any) -> None: ...
+    async def generate_name_embedding(self, embedder: Any) -> None: ...
+    
+    @classmethod
+    async def get_by_uuid(cls, driver: Any, uuid: str) -> 'EntityNode': ...
+    
+    @classmethod
+    async def get_by_group_ids(cls, driver: Any, group_ids: List[str]) -> List['EntityNode']: ...
+    
+    @classmethod
+    async def get_by_uuids(cls, driver: Any, uuids: List[str]) -> List['EntityNode']: ...
+    
+    @classmethod
+    async def delete(cls, driver: Any, uuid: str) -> None: ...
+    
+    @classmethod
+    async def delete_by_group_id(cls, driver: Any, group_id: str) -> None: ...
 
 class EpisodicNode(BaseNode):
     """Episodic node representation."""

@@ -5,8 +5,8 @@ Handles client connections and broadcasts node access events.
 
 import json
 import logging
-from typing import List, Set
-from fastapi import WebSocket, WebSocketDisconnect
+from typing import Set
+from fastapi import WebSocket
 from datetime import datetime, timezone
 import asyncio
 

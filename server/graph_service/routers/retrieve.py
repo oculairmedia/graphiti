@@ -55,8 +55,8 @@ async def search(query: SearchQuery, graphiti: ZepGraphitiDep) -> SearchResults:
 @router.post('/search/nodes', status_code=status.HTTP_200_OK)
 async def search_nodes(query: NodeSearchQuery, graphiti: ZepGraphitiDep) -> NodeSearchResults:
     from graphiti_core.search.search_config_recipes import (  # type: ignore[attr-defined]
-        NODE_HYBRID_SEARCH_NODE_DISTANCE,  # type: ignore[attr-defined]
-        NODE_HYBRID_SEARCH_RRF,  # type: ignore[attr-defined]
+        NODE_HYBRID_SEARCH_NODE_DISTANCE,
+        NODE_HYBRID_SEARCH_RRF,
     )
     from graphiti_core.search.search_filters import SearchFilters
 
@@ -141,7 +141,7 @@ async def get_edges_by_node(node_uuid: str, graphiti: ZepGraphitiDep) -> EdgesBy
     from graphiti_core.edges import EntityEdge
 
     # Get all edges connected to this node
-    all_edges = await EntityEdge.get_by_node_uuid(graphiti.driver, node_uuid)  # type: ignore[attr-defined]
+    all_edges = await EntityEdge.get_by_node_uuid(graphiti.driver, node_uuid)
 
     # Separate edges by relationship to the node
     source_edges = []
@@ -224,5 +224,6 @@ async def get_memory(
 def compose_query_from_messages(messages: list[Message]) -> str:
     combined_query = ''
     for message in messages:
-        combined_query += f'{message.role_type or ""}({message.role or ""}): {message.content}\n'
+        role = message.role or ""
+        combined_query += f'{message.role_type}({role}): {message.content}\n'
     return combined_query

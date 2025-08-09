@@ -20,6 +20,8 @@ class BaseEdge(BaseModel):
     name: str
     summary: Optional[str]
     
+    def __init__(self, **data: Any) -> None: ...
+    
     class Config:
         arbitrary_types_allowed = True
 
@@ -28,11 +30,35 @@ class EntityEdge(BaseEdge):
     fact: Optional[str]
     episodes: List[str]
     attributes: EdgeAttributes
+    source_node_uuid: str  # Alias for source_uuid
+    target_node_uuid: str  # Alias for target_uuid
+    valid_at: Optional[datetime]
+    invalid_at: Optional[datetime]
+    expired_at: Optional[datetime]
+    
+    def __init__(self, **data: Any) -> None: ...
     
     def to_dict(self) -> Dict[str, Any]: ...
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'EntityEdge': ...
+    
+    @classmethod
+    async def get_by_uuid(cls, driver: Any, uuid: str) -> 'EntityEdge': ...
+    
+    @classmethod
+    async def get_by_group_ids(cls, driver: Any, group_ids: List[str]) -> List['EntityEdge']: ...
+    
+    @classmethod
+    async def get_by_node_uuid(cls, driver: Any, node_uuid: str) -> List['EntityEdge']: ...
+    
+    @classmethod
+    async def get_by_uuids(cls, driver: Any, uuids: List[str]) -> List['EntityEdge']: ...
+    
+    @classmethod
+    async def delete(cls, driver: Any, uuid: str) -> None: ...
+    
+    async def generate_embedding(self, embedder: Any) -> None: ...
 
 class EpisodicEdge(BaseEdge):
     """Episodic edge representation."""

@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from typing import Any, Dict
 
 from pydantic import BaseModel, Field
 
@@ -62,7 +63,7 @@ class NodeResult(BaseModel):
     labels: list[str]
     group_id: str
     created_at: datetime
-    attributes: dict
+    attributes: Dict[str, Any]
 
     class Config:
         json_encoders = {datetime: lambda v: v.astimezone(timezone.utc).isoformat()}
