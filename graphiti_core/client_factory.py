@@ -57,20 +57,45 @@ class GraphitiClientFactory:
         return OpenAIClient()
 
     @staticmethod
+    def _get_embedding_endpoint() -> str:
+        """Determine the appropriate embedding endpoint."""
+        use_dedicated = os.getenv('USE_DEDICATED_EMBEDDING_ENDPOINT', 'false').lower() == 'true'
+        
+        if use_dedicated:
+            dedicated_url = os.getenv('OLLAMA_EMBEDDING_BASE_URL')
+            if dedicated_url:
+                logger.info(f'Using dedicated embedding endpoint: {dedicated_url}')
+                return dedicated_url
+            elif os.getenv('EMBEDDING_ENDPOINT_FALLBACK', 'true').lower() == 'true':
+                fallback_url = os.getenv('OLLAMA_BASE_URL', 'http://localhost:11434/v1')
+                logger.warning(f'Dedicated embedding endpoint not configured, falling back to main Ollama URL: {fallback_url}')
+                return fallback_url
+            else:
+                raise ValueError('Dedicated embedding endpoint required but not configured (OLLAMA_EMBEDDING_BASE_URL not set)')
+        
+        # Use main Ollama URL for embeddings
+        main_url = os.getenv('OLLAMA_BASE_URL', 'http://localhost:11434/v1')
+        logger.debug(f'Using main Ollama endpoint for embeddings: {main_url}')
+        return main_url
+
+    @staticmethod
     def create_embedder() -> Optional[EmbedderClient]:
         """Create embedder client based on environment configuration."""
         if os.getenv('USE_OLLAMA', '').lower() == 'true':
             try:
                 from openai import AsyncOpenAI
 
-                ollama_base_url = os.getenv('OLLAMA_BASE_URL', 'http://localhost:11434/v1')
-                ollama_embed_model = os.getenv('OLLAMA_EMBED_MODEL', 'mxbai-embed-large:latest')
+                # Determine embedding endpoint with dedicated support
+                embedding_base_url = GraphitiClientFactory._get_embedding_endpoint()
+                ollama_embed_model = os.getenv('OLLAMA_EMBEDDING_MODEL', 'mxbai-embed-large:latest')
 
                 logger.info(
-                    f'Creating Ollama embedder with model {ollama_embed_model} at {ollama_base_url}'
+                    f'Creating Ollama embedder with model {ollama_embed_model} at {embedding_base_url}'
                 )
 
-                client = AsyncOpenAI(base_url=ollama_base_url, api_key='ollama')
+                # Use dedicated API key if provided, otherwise default to 'ollama'
+                embedding_api_key = os.getenv('OLLAMA_EMBEDDING_API_KEY', 'ollama')
+                client = AsyncOpenAI(base_url=embedding_base_url, api_key=embedding_api_key)
 
                 config = OpenAIEmbedderConfig(embedding_model=ollama_embed_model)
 
