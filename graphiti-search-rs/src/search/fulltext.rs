@@ -5,7 +5,8 @@ use regex::Regex;
 use tracing::instrument;
 
 lazy_static::lazy_static! {
-    static ref SPECIAL_CHARS: Regex = Regex::new(r#"[\\+\-!(){}\[\]^"~*?:/]"#).unwrap();
+    // Don't escape double quotes - we need them for exact phrase matching
+    static ref SPECIAL_CHARS: Regex = Regex::new(r#"[\\+\-!(){}\[\]^~*?:/]"#).unwrap();
 }
 
 fn sanitize_lucene_query(query: &str) -> String {
@@ -74,12 +75,14 @@ mod tests {
 
     #[test]
     fn test_sanitize_lucene_query() {
-        assert_eq!(sanitize_lucene_query("hello world"), "hello world*");
-        assert_eq!(sanitize_lucene_query("test+query"), r"test\+query*");
+        // We no longer add wildcards automatically since FalkorDB CONTAINS does partial matching
+        assert_eq!(sanitize_lucene_query("hello world"), "hello world");
+        assert_eq!(sanitize_lucene_query("test+query"), r"test\+query");
         assert_eq!(
             sanitize_lucene_query("\"exact phrase\""),
             "\"exact phrase\""
         );
-        assert_eq!(sanitize_lucene_query("wild*card"), "wild*card");
+        // Wildcards are escaped since they're special Lucene characters
+        assert_eq!(sanitize_lucene_query("wild*card"), r"wild\*card");
     }
 }
