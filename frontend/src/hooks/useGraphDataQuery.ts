@@ -6,6 +6,7 @@ import { GraphLink } from '../types/graph';
 import { useGraphDataDiff } from './useGraphDataDiff';
 import { useGraphConfig } from '../contexts/GraphConfigProvider';
 import { useDuckDB } from '../contexts/DuckDBProvider';
+import { useRustWebSocket } from '../contexts/RustWebSocketProvider';
 import { logger } from '../utils/logger';
 
 interface FilterConfig {
@@ -33,6 +34,7 @@ interface TransformedData {
 export function useGraphDataQuery() {
   const { config, updateNodeTypeConfigurations } = useGraphConfig();
   const { getDuckDBConnection } = useDuckDB();
+  const { subscribe } = useRustWebSocket();
   
   // State for DuckDB-sourced UI data
   const [duckDBData, setDuckDBData] = useState<{ nodes: GraphNode[], edges: GraphLink[] } | null>(null);
@@ -66,46 +68,45 @@ export function useGraphDataQuery() {
     cacheTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
   });
   
-  // Query DuckDB tables for UI data when connection is ready
-  useEffect(() => {
-    const fetchDuckDBData = async () => {
-      // Skip if already fetched to prevent re-loading
-      if (hasFetchedDuckDBRef.current) {
-        return;
-      }
+  // Define fetchDuckDBData as a stable callback so it can be called from multiple places
+  const fetchDuckDBData = useCallback(async (forceRefresh = false) => {
+    // Skip if already fetched (unless forcing refresh)
+    if (hasFetchedDuckDBRef.current && !forceRefresh) {
+      return;
+    }
+    
+    // Throttle fetches to prevent rapid re-fetching (minimum 1 second between fetches)
+    const now = Date.now();
+    if (now - lastFetchTimeRef.current < 1000) {
+      return;
+    }
+    
+    const connection = getDuckDBConnection();
+    if (!connection?.connection) {
+      // If no connection yet, don't mark as fetched so we can retry
+      // Keep loading state true until we can actually fetch
+      return;
+    }
+    
+    // Mark as fetching to prevent concurrent fetches
+    hasFetchedDuckDBRef.current = true;
+    lastFetchTimeRef.current = now;
+    setIsDuckDBLoading(true);
+    
+    try {
+      // Query nodes and edges from DuckDB - MUST ORDER BY idx to match Cosmograph indices
+      const [nodesResult, edgesResult] = await Promise.all([
+        connection.connection.query('SELECT * FROM nodes ORDER BY idx'),
+        connection.connection.query('SELECT * FROM edges ORDER BY sourceidx, targetidx')
+      ]);
       
-      // Throttle fetches to prevent rapid re-fetching (minimum 1 second between fetches)
-      const now = Date.now();
-      if (now - lastFetchTimeRef.current < 1000) {
-        return;
-      }
-      
-      const connection = getDuckDBConnection();
-      if (!connection?.connection) {
-        // If no connection yet, don't mark as fetched so we can retry
-        // Keep loading state true until we can actually fetch
-        return;
-      }
-      
-      // Mark as fetching to prevent concurrent fetches
-      hasFetchedDuckDBRef.current = true;
-      lastFetchTimeRef.current = now;
-      setIsDuckDBLoading(true);
-      
-      try {
-        // Query nodes and edges from DuckDB - MUST ORDER BY idx to match Cosmograph indices
-        const [nodesResult, edgesResult] = await Promise.all([
-          connection.connection.query('SELECT * FROM nodes ORDER BY idx'),
-          connection.connection.query('SELECT * FROM edges ORDER BY sourceidx, targetidx')
-        ]);
+      if (nodesResult && edgesResult) {
+        // Convert Arrow tables to JavaScript arrays
+        const nodesArray = nodesResult.toArray();
+        const edgesArray = edgesResult.toArray();
         
-        if (nodesResult && edgesResult) {
-          // Convert Arrow tables to JavaScript arrays
-          const nodesArray = nodesResult.toArray();
-          const edgesArray = edgesResult.toArray();
-          
-          // Transform to GraphNode format - PRESERVE idx field for proper indexing
-          const nodes: GraphNode[] = nodesArray.map((n: any, arrayIndex) => ({
+        // Transform to GraphNode format - PRESERVE idx field for proper indexing
+        const nodes: GraphNode[] = nodesArray.map((n: any, arrayIndex) => ({
             id: n.id,
             idx: n.idx !== undefined ? n.idx : arrayIndex,  // Preserve DuckDB idx or use array index
             label: n.label || n.id,
@@ -126,23 +127,31 @@ export function useGraphDataQuery() {
               date: n.created_at,
               ...n // Include all other properties
             }
-          }));
-          
-          // Transform to GraphLink format
-          const edges: GraphLink[] = edgesArray.map((e: any) => ({
+        }));
+        
+        // Create node index map for edge indices
+        const nodeIndexMap = new Map<string, number>();
+        nodes.forEach((node, idx) => {
+          nodeIndexMap.set(String(node.id), idx);
+        });
+        
+        // Transform to GraphLink format with indices
+        const edges: GraphLink[] = edgesArray.map((e: any) => ({
             id: `${e.source}-${e.target}`,
             source: e.source,
             target: e.target || e.targetidx,
             from: e.source,
             to: e.target || e.targetidx,
+            sourceIndex: nodeIndexMap.get(String(e.source)) ?? -1,
+            targetIndex: nodeIndexMap.get(String(e.target || e.targetidx)) ?? -1,
             edge_type: e.edge_type || '',
             weight: e.weight || 1,
             created_at: e.created_at,
             updated_at: e.updated_at
-          }));
-          
-          // Only update if data has actually changed
-          setDuckDBData(prevData => {
+        }));
+        
+        // Only update if data has actually changed
+        setDuckDBData(prevData => {
             // Check if data is the same
             if (prevData && 
                 prevData.nodes.length === nodes.length && 
@@ -169,17 +178,39 @@ export function useGraphDataQuery() {
             });
             
             return { nodes, edges };
-          });
-          
-          setHasInitialData(true); // Mark that we have loaded data at least once
-        }
-      } catch (error) {
-        logger.error('Failed to query DuckDB for UI data:', error);
-      } finally {
-        setIsDuckDBLoading(false);
+        });
+        
+        setHasInitialData(true); // Mark that we have loaded data at least once
       }
-    };
+    } catch (error) {
+      logger.error('Failed to query DuckDB for UI data:', error);
+    } finally {
+      setIsDuckDBLoading(false);
+    }
+  }, [getDuckDBConnection]);
+
+  // Refresh function that forces re-fetch
+  const refreshDuckDBData = useCallback(() => {
+    console.log('[useGraphDataQuery] Refreshing DuckDB data after WebSocket update');
+    hasFetchedDuckDBRef.current = false;
+    fetchDuckDBData(true);
+  }, [fetchDuckDBData]);
+
+  // Subscribe to WebSocket updates and refresh data
+  useEffect(() => {
+    const unsubscribe = subscribe((update) => {
+      if (update.type === 'graph:delta' && update.data) {
+        // Delay refresh slightly to ensure DuckDB has been updated
+        console.log('[useGraphDataQuery] Received delta update, scheduling refresh');
+        setTimeout(refreshDuckDBData, 100);
+      }
+    });
     
+    return unsubscribe;
+  }, [subscribe, refreshDuckDBData]);
+
+  // Initial fetch and retry logic
+  useEffect(() => {
     // Initial fetch attempt
     fetchDuckDBData();
     
@@ -201,7 +232,7 @@ export function useGraphDataQuery() {
         clearInterval(intervalId);
       }
     };
-  }, [getDuckDBConnection]); // getDuckDBConnection is now stable thanks to useCallback
+  }, [fetchDuckDBData]);
   
   // Use DuckDB data if available, otherwise fall back to JSON data
   // Memoize the data to prevent unnecessary recalculations
@@ -481,5 +512,6 @@ export function useGraphDataQuery() {
     setIsIncrementalUpdate,
     isGraphInitialized,
     stableDataRef,
+    refreshDuckDBData,
   };
 }

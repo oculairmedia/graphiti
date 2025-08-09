@@ -8,6 +8,8 @@ interface GraphOverlaysProps {
   visibleNodes?: number;
   selectedNodes?: number;
   fps?: number;
+  liveNodeCount?: number;
+  liveEdgeCount?: number;
 }
 
 export const GraphOverlays: React.FC<GraphOverlaysProps> = ({
@@ -15,7 +17,9 @@ export const GraphOverlays: React.FC<GraphOverlaysProps> = ({
   edgeCount,
   visibleNodes,
   selectedNodes,
-  fps
+  fps,
+  liveNodeCount,
+  liveEdgeCount
 }) => {
   const { config } = useGraphConfig();
   
@@ -32,11 +36,17 @@ export const GraphOverlays: React.FC<GraphOverlaysProps> = ({
           <div className="text-sm space-y-1">
             <div className="flex items-center justify-between gap-4">
               <span className="text-muted-foreground">Nodes:</span>
-              <span className="font-mono font-medium">{nodeCount.toLocaleString()}</span>
+              <span className="font-mono font-medium">
+                {(liveNodeCount ?? nodeCount).toLocaleString()}
+                {liveNodeCount !== undefined && <span className="text-xs text-green-500 ml-1">(Live)</span>}
+              </span>
             </div>
             <div className="flex items-center justify-between gap-4">
               <span className="text-muted-foreground">Edges:</span>
-              <span className="font-mono font-medium">{edgeCount.toLocaleString()}</span>
+              <span className="font-mono font-medium">
+                {(liveEdgeCount ?? edgeCount).toLocaleString()}
+                {liveEdgeCount !== undefined && <span className="text-xs text-green-500 ml-1">(Live)</span>}
+              </span>
             </div>
             {visibleNodes !== undefined && visibleNodes !== nodeCount && (
               <div className="flex items-center justify-between gap-4">

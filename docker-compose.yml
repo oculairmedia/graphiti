@@ -34,7 +34,7 @@ services:
       - RUST_CENTRALITY_URL=${RUST_CENTRALITY_URL:-http://graphiti-centrality-rs:3003}
       - RUST_SERVER_URL=http://graph-visualizer-rust:3000
       - ENABLE_CACHE_INVALIDATION=true
-      - GRAPHITI_DATA_WEBHOOK_URLS=${GRAPHITI_DATA_WEBHOOK_URLS:-http://graph-visualizer-rust:3000/api/webhooks/data-ingestion}
+      - GRAPHITI_DATA_WEBHOOK_URLS=${GRAPHITI_DATA_WEBHOOK_URLS:-http://graph-visualizer-rust:3000/api/webhooks/data-ingestion,http://host.docker.internal:3000/api/webhooks/data-ingestion}
     networks:
       - graphiti_network
     labels:

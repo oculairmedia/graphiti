@@ -38,22 +38,39 @@ export function RustWebSocketProvider({ children }: { children: React.ReactNode 
     
     isConnectingRef.current = true;
     
-    // Use nginx proxy for Rust server WebSocket in production
-    // Default to nginx proxy path for real-time updates
-    let rustWsUrl = 'ws://192.168.50.90:8088/rust-ws';
+    // Use environment variable for Rust WebSocket URL, with fallbacks
+    let rustWsUrl: string;
     
+    // Check for environment variable first and replace localhost with current hostname if needed
+    if (import.meta.env.VITE_RUST_WS_URL) {
+      rustWsUrl = import.meta.env.VITE_RUST_WS_URL;
+      // If we're not on localhost but the URL points to localhost, update it
+      if (typeof window !== 'undefined') {
+        const currentHost = window.location.hostname;
+        if (currentHost !== 'localhost' && currentHost !== '127.0.0.1' && rustWsUrl.includes('localhost')) {
+          rustWsUrl = rustWsUrl.replace('localhost', currentHost);
+        }
+      }
+    }
     // If we're accessing from a browser in production, use the nginx proxy path
-    if (typeof window !== 'undefined' && import.meta.env.PROD) {
+    else if (typeof window !== 'undefined' && import.meta.env.PROD) {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const host = window.location.host; // includes port
       rustWsUrl = `${protocol}//${host}/rust-ws`;
     }
-    // For development, replace localhost with actual host if needed
-    else if (typeof window !== 'undefined' && rustWsUrl.includes('localhost')) {
+    // For development, connect directly to Rust server (default port 3000)
+    else if (typeof window !== 'undefined') {
       const currentHost = window.location.hostname;
+      const defaultPort = import.meta.env.VITE_RUST_WS_PORT || '3000';
+      // If accessing from network IP, update the WebSocket URL
       if (currentHost !== 'localhost' && currentHost !== '127.0.0.1') {
-        rustWsUrl = rustWsUrl.replace('localhost', currentHost);
+        rustWsUrl = `ws://${currentHost}:${defaultPort}/ws`;
+      } else {
+        rustWsUrl = `ws://localhost:${defaultPort}/ws`;
       }
+    } else {
+      // Fallback
+      rustWsUrl = 'ws://localhost:3000/ws';
     }
     
     console.log('[RustWebSocketProvider] Connecting to Rust server:', rustWsUrl);
