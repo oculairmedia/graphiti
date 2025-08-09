@@ -16,9 +16,9 @@ fn sanitize_lucene_query(query: &str) -> String {
     // Handle AND/OR/NOT operators
     let mut result = String::new();
     let mut in_quotes = false;
-    let mut chars = escaped.chars().peekable();
+    let chars = escaped.chars().peekable();
 
-    while let Some(ch) = chars.next() {
+    for ch in chars {
         if ch == '"' {
             in_quotes = !in_quotes;
         }

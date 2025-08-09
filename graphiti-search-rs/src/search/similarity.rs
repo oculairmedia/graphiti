@@ -37,7 +37,7 @@ fn cosine_similarity_scalar(a: &[f32], b: &[f32]) -> f32 {
 }
 
 /// Batch cosine similarity calculation with parallelization
-pub fn batch_cosine_similarity(
+pub fn _batch_cosine_similarity(
     query_vector: &[f32],
     vectors: &[Vec<f32>],
     threshold: Option<f32>,
@@ -79,24 +79,24 @@ pub async fn search_nodes_by_embedding(
         .map_err(|e| SearchError::Database(e.to_string()))
 }
 
-#[instrument(skip(conn, embedding))]
+#[instrument(skip(_conn, _embedding))]
 pub async fn search_edges_by_embedding(
-    conn: &mut FalkorConnection,
-    embedding: &[f32],
-    min_score: f32,
-    limit: usize,
+    _conn: &mut FalkorConnection,
+    _embedding: &[f32],
+    _min_score: f32,
+    _limit: usize,
 ) -> SearchResult<Vec<Edge>> {
     // For edges, we typically search based on connected nodes' embeddings
     // This is a simplified implementation
     Ok(vec![])
 }
 
-#[instrument(skip(conn, embedding))]
+#[instrument(skip(_conn, _embedding))]
 pub async fn search_communities_by_embedding(
-    conn: &mut FalkorConnection,
-    embedding: &[f32],
-    min_score: f32,
-    limit: usize,
+    _conn: &mut FalkorConnection,
+    _embedding: &[f32],
+    _min_score: f32,
+    _limit: usize,
 ) -> SearchResult<Vec<Community>> {
     // Community search by embedding
     Ok(vec![])
@@ -125,7 +125,7 @@ mod tests {
             vec![-1.0, -2.0, -3.0], // Opposite direction
         ];
 
-        let results = batch_cosine_similarity(&query, &vectors, Some(0.5));
+        let results = _batch_cosine_similarity(&query, &vectors, Some(0.5));
         assert_eq!(results.len(), 2); // Should filter out the negative similarity
         assert_eq!(results[0].0, 0); // First vector should be most similar
     }

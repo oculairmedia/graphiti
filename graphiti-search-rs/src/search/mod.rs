@@ -15,14 +15,14 @@ use tracing::{debug, instrument};
 
 pub struct SearchEngine {
     falkor_conn: FalkorConnection,
-    redis_pool: RedisPool,
+    _redis_pool: RedisPool,
 }
 
 impl SearchEngine {
     pub fn new(falkor_conn: FalkorConnection, redis_pool: RedisPool) -> Self {
         Self {
             falkor_conn,
-            redis_pool,
+            _redis_pool: redis_pool,
         }
     }
 
@@ -94,7 +94,7 @@ impl SearchEngine {
         &mut self,
         query: &str,
         config: &EdgeSearchConfig,
-        filters: &SearchFilters,
+        _filters: &SearchFilters,
         query_vector: Option<&[f32]>,
     ) -> SearchResult<Vec<Edge>> {
         let mut method_results = Vec::new();
@@ -138,7 +138,7 @@ impl SearchEngine {
         &mut self,
         query: &str,
         config: &NodeSearchConfig,
-        filters: &SearchFilters,
+        _filters: &SearchFilters,
         query_vector: Option<&[f32]>,
     ) -> SearchResult<Vec<Node>> {
         let mut method_results = Vec::new();
@@ -181,7 +181,7 @@ impl SearchEngine {
     pub async fn search_episodes(
         &mut self,
         query: &str,
-        filters: &SearchFilters,
+        _filters: &SearchFilters,
         limit: usize,
     ) -> SearchResult<Vec<Episode>> {
         fulltext::search_episodes(&mut self.falkor_conn, query, limit).await
@@ -189,9 +189,9 @@ impl SearchEngine {
 
     pub async fn search_communities(
         &mut self,
-        query: &str,
+        _query: &str,
         config: &CommunitySearchConfig,
-        filters: &SearchFilters,
+        _filters: &SearchFilters,
         query_vector: Option<&[f32]>,
     ) -> SearchResult<Vec<Community>> {
         // Communities are typically searched via similarity

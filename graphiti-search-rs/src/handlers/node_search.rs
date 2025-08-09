@@ -31,7 +31,7 @@ pub async fn node_search_handler(
 
     // Get database connection
     let falkor_conn = state.falkor_pool.get().await.map_err(|e| {
-        crate::error::SearchError::Database(format!("Failed to get database connection: {}", e))
+        crate::error::SearchError::Database(format!("Failed to get database connection: {e}"))
     })?;
 
     // Create search engine

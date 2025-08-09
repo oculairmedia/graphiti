@@ -57,7 +57,7 @@ fn parse_single_node(node_data: &Value) -> Result<Option<Node>> {
                 match key.as_str() {
                     "id" => {
                         if let Value::Int(id) = &field_data[1] {
-                            uuid_str = format!("node-{}", id);
+                            uuid_str = format!("node-{id}");
                         }
                     }
                     "labels" => {
@@ -116,6 +116,7 @@ fn parse_single_node(node_data: &Value) -> Result<Option<Node>> {
 }
 
 /// Parse node properties from FalkorDB property list
+#[allow(clippy::too_many_arguments)]
 fn parse_node_properties(
     props: &[Value],
     uuid: &mut String,
@@ -224,7 +225,7 @@ fn parse_single_edge(
                     let key = extract_string(&field_data[0]).unwrap_or_default();
                     if key == "id" {
                         if let Value::Int(id) = &field_data[1] {
-                            source_uuid_str = format!("node-{}", id);
+                            source_uuid_str = format!("node-{id}");
                         }
                     } else if key == "properties" {
                         if let Value::Bulk(ref props) = &field_data[1] {
@@ -256,7 +257,7 @@ fn parse_single_edge(
                     let key = extract_string(&field_data[0]).unwrap_or_default();
                     if key == "id" {
                         if let Value::Int(id) = &field_data[1] {
-                            target_uuid_str = format!("node-{}", id);
+                            target_uuid_str = format!("node-{id}");
                         }
                     } else if key == "properties" {
                         if let Value::Bulk(ref props) = &field_data[1] {
@@ -290,7 +291,7 @@ fn parse_single_edge(
                     match key.as_str() {
                         "id" => {
                             if let Value::Int(id) = &field_data[1] {
-                                uuid_str = format!("edge-{}", id);
+                                uuid_str = format!("edge-{id}");
                             }
                         }
                         "properties" => {
@@ -425,7 +426,7 @@ fn parse_single_episode(episode_data: &Value) -> Result<Option<Episode>> {
                 match key.as_str() {
                     "id" => {
                         if let Value::Int(id) = &field_data[1] {
-                            uuid_str = format!("episode-{}", id);
+                            uuid_str = format!("episode-{id}");
                         }
                     }
                     "properties" => {

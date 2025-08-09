@@ -8,7 +8,7 @@ use crate::falkor::parser;
 use crate::models::{Edge, Episode, Node};
 
 pub struct FalkorClient {
-    client: Client,
+    _client: Client,
     conn: Connection,
     graph_name: String,
 }
@@ -20,7 +20,7 @@ impl FalkorClient {
         let conn = client.get_async_connection().await?;
 
         Ok(Self {
-            client,
+            _client: client,
             conn,
             graph_name: config.graph_name.clone(),
         })
@@ -80,12 +80,11 @@ impl FalkorClient {
         let cypher = format!(
             "MATCH (n:Entity) 
              WHERE n.embedding IS NOT NULL
-             WITH n, vec.cosine_similarity(n.embedding, [{}]) AS score
-             WHERE score >= {}
+             WITH n, vec.cosine_similarity(n.embedding, [{embedding_str}]) AS score
+             WHERE score >= {min_score}
              RETURN n, score 
              ORDER BY score DESC 
-             LIMIT {}",
-            embedding_str, min_score, limit
+             LIMIT {limit}"
         );
 
         let results: Vec<Vec<redis::Value>> = redis::cmd("GRAPH.QUERY")
@@ -106,19 +105,18 @@ impl FalkorClient {
     ) -> Result<Vec<Node>> {
         let uuids_str = origin_uuids
             .iter()
-            .map(|uuid| format!("'{}'", uuid))
+            .map(|uuid| format!("'{uuid}'"))
             .collect::<Vec<_>>()
             .join(",");
 
         let cypher = format!(
             "MATCH (start:Entity) 
-             WHERE start.uuid IN [{}]
-             CALL algo.BFS(start, {}, 'RELATES_TO') 
+             WHERE start.uuid IN [{uuids_str}]
+             CALL algo.BFS(start, {max_depth}, 'RELATES_TO') 
              YIELD nodes
              UNWIND nodes AS n
              RETURN DISTINCT n 
-             LIMIT {}",
-            uuids_str, max_depth, limit
+             LIMIT {limit}"
         );
 
         let results: Vec<Vec<redis::Value>> = redis::cmd("GRAPH.QUERY")

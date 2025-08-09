@@ -1,7 +1,6 @@
 use crate::error::SearchResult;
 use crate::models::{Edge, EdgeReranker, Node, NodeReranker};
 use crate::search::similarity::cosine_similarity_simd;
-use rayon::prelude::*;
 use std::collections::{HashMap, HashSet};
 use tracing::instrument;
 
@@ -25,7 +24,7 @@ pub fn reciprocal_rank_fusion<T: Clone>(
         }
     }
 
-    let mut results: Vec<(T, f32)> = scores.into_iter().map(|(_, v)| v).collect();
+    let mut results: Vec<(T, f32)> = scores.into_values().collect();
     results.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
     results.into_iter().map(|(item, _)| item).collect()
 }
@@ -72,7 +71,7 @@ pub fn maximal_marginal_relevance<T: Clone>(
             .enumerate()
             .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap())
         {
-            let (orig_idx, item) = remaining.remove(max_idx);
+            let (orig_idx, _item) = remaining.remove(max_idx);
             selected.push(items[orig_idx].clone());
         } else {
             break;
@@ -83,7 +82,7 @@ pub fn maximal_marginal_relevance<T: Clone>(
 }
 
 /// Node distance reranking based on graph distance from center node
-pub fn node_distance_rerank<T>(
+pub fn _node_distance_rerank<T>(
     items: Vec<T>,
     get_node_id: impl Fn(&T) -> String,
     distances: &HashMap<String, usize>,
@@ -204,7 +203,6 @@ pub fn rerank_nodes(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use uuid::Uuid;
 
     #[test]
     fn test_rrf() {
