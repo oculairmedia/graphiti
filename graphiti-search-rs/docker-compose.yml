@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  graphiti-search:
+    build: .
+    container_name: graphiti-search-rs
+    ports:
+      - "3004:3004"
+    environment:
+      - PORT=3004
+      - FALKORDB_HOST=falkordb
+      - FALKORDB_PORT=6379
+      - GRAPH_NAME=graphiti_migration
+      - REDIS_URL=redis://redis:6379
+      - MAX_CONNECTIONS=32
+      - CACHE_TTL=300
+      - ENABLE_SIMD=true
+      - PARALLEL_THRESHOLD=100
+      - RUST_LOG=graphiti_search=debug,info
+    depends_on:
+      - falkordb
+      - redis
+    networks:
+      - graphiti-network
+    restart: unless-stopped
+
+  falkordb:
+    image: falkordb/falkordb:latest
+    container_name: graphiti-falkordb
+    ports:
+      - "6379:6379"
+    volumes:
+      - falkordb-data:/data
+    networks:
+      - graphiti-network
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: graphiti-redis
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - graphiti-network
+    restart: unless-stopped
+
+volumes:
+  falkordb-data:
+  redis-data:
+
+networks:
+  graphiti-network:
+    driver: bridge

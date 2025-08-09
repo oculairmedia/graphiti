@@ -1,0 +1,65 @@
+[package]
+name = "graphiti-search-rs"
+version = "0.1.0"
+edition = "2021"
+authors = ["Graphiti Team"]
+description = "High-performance search service for Graphiti knowledge graphs"
+
+[dependencies]
+# Web framework
+axum = { version = "0.7", features = ["macros"] }
+tokio = { version = "1", features = ["full"] }
+tower = "0.4"
+tower-http = { version = "0.5", features = ["cors", "trace", "compression-gzip"] }
+
+# Database
+deadpool = "0.10"
+deadpool-redis = "0.14"
+redis = { version = "0.24", features = ["tokio-comp", "connection-manager", "aio"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+rkyv = { version = "0.7", features = ["validation"] }
+
+# Vector operations
+ndarray = "0.15"
+simdeez = "1.0"
+rayon = "1.8"
+
+# Utils
+anyhow = "1.0"
+thiserror = "1.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+uuid = { version = "1.6", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+async-trait = "0.1"
+futures = "0.3"
+dashmap = "5.5"
+lru = "0.12"
+bloom = "0.3"
+regex = "1.10"
+lazy_static = "1.4"
+
+# Monitoring
+prometheus = "0.13"
+opentelemetry = "0.21"
+opentelemetry-prometheus = "0.14"
+opentelemetry-otlp = { version = "0.14", features = ["tonic"] }
+
+# Config
+config = "0.13"
+dotenvy = "0.15"
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+proptest = "1.4"
+tokio-test = "0.4"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+
