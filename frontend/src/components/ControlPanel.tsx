@@ -149,15 +149,44 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
     console.log('[ControlPanel] GraphitiSearch node selected:', node.uuid);
     console.log('[ControlPanel] Total nodes available:', nodes.length);
     
-    // Find the corresponding GraphNode by UUID
-    const graphNode = nodes.find(n => n.id === node.uuid);
+    // Debug: Log the structure of first few nodes to understand the data
+    if (nodes.length > 0) {
+      console.log('[ControlPanel] Sample node structure:', nodes[0]);
+      console.log('[ControlPanel] First 5 nodes with their IDs:', nodes.slice(0, 5).map(n => ({
+        id: n.id,
+        uuid: (n as any).uuid,
+        label: n.label,
+        idx: (n as any).idx
+      })));
+    }
+    
+    // Try multiple matching strategies
+    let graphNode = nodes.find(n => n.id === node.uuid);
+    
+    if (!graphNode) {
+      // Try matching against uuid field if it exists
+      graphNode = nodes.find(n => (n as any).uuid === node.uuid);
+      if (graphNode) {
+        console.log('[ControlPanel] Found match using uuid field instead of id');
+      }
+    }
+    
+    if (!graphNode) {
+      // Try converting index to string and matching
+      const nodeIndex = nodes.findIndex(n => n.id === String(node.uuid));
+      if (nodeIndex >= 0) {
+        graphNode = nodes[nodeIndex];
+        console.log('[ControlPanel] Found match after string conversion');
+      }
+    }
     
     if (graphNode) {
-      console.log('[ControlPanel] Found matching GraphNode:', graphNode.id);
+      console.log('[ControlPanel] Found matching GraphNode:', graphNode);
       onNodeSelect?.(graphNode);
     } else {
       console.warn('[ControlPanel] No matching GraphNode found for UUID:', node.uuid);
-      console.log('[ControlPanel] First few node IDs:', nodes.slice(0, 5).map(n => n.id));
+      console.log('[ControlPanel] Search UUID:', node.uuid);
+      console.log('[ControlPanel] All node IDs (first 10):', nodes.slice(0, 10).map(n => n.id));
     }
   }, [nodes, onNodeSelect]);
 
