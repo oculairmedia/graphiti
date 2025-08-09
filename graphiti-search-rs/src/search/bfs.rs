@@ -6,7 +6,7 @@ use tracing::instrument;
 
 /// Perform breadth-first search from origin nodes
 #[instrument(skip(conn))]
-pub async fn bfs_search_nodes(
+pub async fn _bfs_search_nodes(
     conn: &mut FalkorConnection,
     origin_uuids: &[String],
     max_depth: usize,
@@ -18,12 +18,12 @@ pub async fn bfs_search_nodes(
 }
 
 /// Perform BFS to find edges within a certain depth
-#[instrument(skip(conn))]
-pub async fn bfs_search_edges(
-    conn: &mut FalkorConnection,
-    origin_uuids: &[String],
-    max_depth: usize,
-    limit: usize,
+#[instrument(skip(_conn))]
+pub async fn _bfs_search_edges(
+    _conn: &mut FalkorConnection,
+    _origin_uuids: &[String],
+    _max_depth: usize,
+    _limit: usize,
 ) -> SearchResult<Vec<Edge>> {
     // This would require a more complex query to get edges along BFS paths
     // For now, returning empty vector
@@ -31,7 +31,7 @@ pub async fn bfs_search_edges(
 }
 
 /// Calculate shortest paths between nodes using BFS
-pub fn calculate_shortest_paths(
+pub fn _calculate_shortest_paths(
     adjacency_list: &std::collections::HashMap<String, Vec<String>>,
     start_node: &str,
 ) -> std::collections::HashMap<String, usize> {
@@ -61,7 +61,7 @@ pub fn calculate_shortest_paths(
 }
 
 /// Find nodes within a certain distance from origin nodes
-pub fn find_nodes_within_distance(
+pub fn _find_nodes_within_distance(
     adjacency_list: &std::collections::HashMap<String, Vec<String>>,
     origin_nodes: &[String],
     max_distance: usize,
@@ -110,7 +110,7 @@ mod tests {
         adjacency.insert("C".to_string(), vec!["D".to_string()]);
         adjacency.insert("D".to_string(), vec![]);
 
-        let distances = calculate_shortest_paths(&adjacency, "A");
+        let distances = _calculate_shortest_paths(&adjacency, "A");
 
         assert_eq!(distances.get("A"), Some(&0));
         assert_eq!(distances.get("B"), Some(&1));
@@ -125,7 +125,7 @@ mod tests {
         adjacency.insert("B".to_string(), vec!["D".to_string()]);
         adjacency.insert("C".to_string(), vec!["E".to_string()]);
 
-        let nodes = find_nodes_within_distance(&adjacency, &["A".to_string()], 2);
+        let nodes = _find_nodes_within_distance(&adjacency, &["A".to_string()], 2);
 
         assert!(nodes.contains("A"));
         assert!(nodes.contains("B"));

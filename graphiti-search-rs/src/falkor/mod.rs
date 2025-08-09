@@ -37,7 +37,7 @@ impl Manager for FalkorManager {
         debug!("Creating new FalkorDB connection");
         FalkorClient::new(&self.config)
             .await
-            .map_err(|e| SearchError::Database(format!("Failed to create connection: {}", e)))
+            .map_err(|e| SearchError::Database(format!("Failed to create connection: {e}")))
     }
 
     async fn recycle(
@@ -47,7 +47,7 @@ impl Manager for FalkorManager {
     ) -> RecycleResult<Self::Error> {
         conn.ping()
             .await
-            .map_err(|e| SearchError::Database(format!("Connection ping failed: {}", e)))?;
+            .map_err(|e| SearchError::Database(format!("Connection ping failed: {e}")))?;
         Ok(())
     }
 }
@@ -58,13 +58,13 @@ pub async fn create_falkor_pool(config: &Config) -> SearchResult<FalkorPool> {
     let pool = Pool::builder(manager)
         .max_size(config.max_connections)
         .build()
-        .map_err(|e| SearchError::Database(format!("Failed to create pool: {}", e)))?;
+        .map_err(|e| SearchError::Database(format!("Failed to create pool: {e}")))?;
 
     // Test connection
     let conn = pool
         .get()
         .await
-        .map_err(|e| SearchError::Database(format!("Failed to get connection: {}", e)))?;
+        .map_err(|e| SearchError::Database(format!("Failed to get connection: {e}")))?;
     drop(conn);
 
     info!(
