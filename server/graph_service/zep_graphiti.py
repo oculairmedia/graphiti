@@ -9,12 +9,12 @@ if '/app' not in sys.path:
     sys.path.insert(0, '/app')
 
 from fastapi import Depends, HTTPException
-from graphiti_core import Graphiti  # type: ignore
-from graphiti_core.edges import EntityEdge  # type: ignore
-from graphiti_core.embedder import EmbedderClient  # type: ignore
+from graphiti_core import Graphiti
+from graphiti_core.edges import EntityEdge
+from graphiti_core.embedder import EmbedderClient
 from graphiti_core.errors import EdgeNotFoundError, GroupsEdgesNotFoundError, NodeNotFoundError
-from graphiti_core.llm_client import LLMClient  # type: ignore
-from graphiti_core.nodes import EntityNode, EpisodicNode  # type: ignore
+from graphiti_core.llm_client import LLMClient
+from graphiti_core.nodes import EntityNode, EpisodicNode
 
 from graph_service.config import ZepEnvDep
 from graph_service.dto import FactResult
@@ -28,7 +28,7 @@ try:
     logger.info(f'Attempting FalkorDB import. Python path: {sys.path[:3]}')
     logger.info(f'Current working directory: {os.getcwd()}')
 
-    from graphiti_core.driver.falkordb_driver import FalkorDriver  # type: ignore
+    from graphiti_core.driver.falkordb_driver import FalkorDriver
 
     FALKORDB_AVAILABLE = True
     logger.info('✅ Successfully imported FalkorDriver')
@@ -41,7 +41,7 @@ except ImportError as e:
     logger.error(f'Full traceback: {traceback.format_exc()}')
 
 try:
-    from graphiti_core.driver.neo4j_driver import Neo4jDriver  # type: ignore
+    from graphiti_core.driver.neo4j_driver import Neo4jDriver
 
     NEO4J_AVAILABLE = True
 except ImportError:
