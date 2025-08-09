@@ -29,13 +29,8 @@ pub async fn community_search_handler(
 ) -> SearchResult<Json<CommunitySearchResponse>> {
     let start = std::time::Instant::now();
 
-    // Get database connection
-    let falkor_conn = state.falkor_pool.get().await.map_err(|e| {
-        crate::error::SearchError::Database(format!("Failed to get database connection: {e}"))
-    })?;
-
-    // Create search engine
-    let mut engine = SearchEngine::new(falkor_conn, state.redis_pool.clone());
+    // Create search engine with pools
+    let mut engine = SearchEngine::new(state.falkor_pool.clone(), state.redis_pool.clone());
 
     // Execute community search
     let communities = engine
