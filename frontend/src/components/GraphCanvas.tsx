@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, forwardRef, useState, useCallback, use } from 'react';
+import React, { useEffect, useRef, forwardRef, useState, useCallback, useMemo, use } from 'react';
 import { Cosmograph, prepareCosmographData } from '@cosmograph/react';
 import '../styles/cosmograph.css';
 import { GraphNode } from '../api/types';
@@ -196,6 +196,18 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     
     // Get DuckDB connection
     const { service: duckdbService, isInitialized: isDuckDBInitialized, getDuckDBConnection } = useDuckDB();
+    
+    // Get the actual DuckDB connection for Cosmograph to prevent internal table conflicts
+    const duckDBConnection = useMemo(() => {
+      if (isDuckDBInitialized && getDuckDBConnection) {
+        const conn = getDuckDBConnection();
+        if (conn && conn.duckdb) {
+          console.log('[GraphCanvas] Using shared DuckDB connection for Cosmograph');
+          return conn;
+        }
+      }
+      return undefined;
+    }, [isDuckDBInitialized, getDuckDBConnection]);
     
     // Glowing nodes state for real-time visualization
     const [glowingNodes, setGlowingNodes] = useState<Map<string, number>>(new Map());
@@ -701,13 +713,33 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           promises.push(cosmographRef.current.dataManager!.removeLinksByPointIdPairs(linkPairsToDelete));
         }
         
-        // Handle additions
+        // Handle additions with error handling for table conflicts
         if (pointsToAdd.length > 0) {
-          promises.push(cosmographRef.current.dataManager!.addPoints(pointsToAdd));
+          promises.push(
+            cosmographRef.current.dataManager!.addPoints(pointsToAdd).catch((error: any) => {
+              // Check if it's a table already exists error
+              if (error?.message?.includes('already exists')) {
+                console.warn('[GraphCanvas] Table already exists, attempting to append data');
+                // Try to append without creating tables
+                return cosmographRef.current.dataManager!.addPoints(pointsToAdd);
+              }
+              throw error;
+            })
+          );
         }
         
         if (linksToAdd.length > 0) {
-          promises.push(cosmographRef.current.dataManager!.addLinks(linksToAdd));
+          promises.push(
+            cosmographRef.current.dataManager!.addLinks(linksToAdd).catch((error: any) => {
+              // Check if it's a table already exists error
+              if (error?.message?.includes('already exists')) {
+                console.warn('[GraphCanvas] Table already exists, attempting to append data');
+                // Try to append without creating tables
+                return cosmographRef.current.dataManager!.addLinks(linksToAdd);
+              }
+              throw error;
+            })
+          );
         }
         
         // Wait for all operations to complete
@@ -757,8 +789,56 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             } catch (statsError) {
               console.warn('[GraphCanvas] Failed to update live stats:', statsError);
             }
-          } catch (error) {
+          } catch (error: any) {
             console.error('[GraphCanvas] Error applying updates to Cosmograph:', error);
+            
+            // If dataManager failed due to table issues, fallback to setData
+            if (error?.message?.includes('already exists') || error?.message?.includes('t_cosmograph')) {
+              console.warn('[GraphCanvas] DataManager failed, falling back to setData method');
+              
+              try {
+                // Fallback: rebuild complete dataset and use setData
+                const currentNodesMap = new Map(currentNodes.map(n => [n.id, n]));
+                const currentLinksMap = new Map(currentLinks.map(l => [`${l.source}-${l.target}`, l]));
+                
+                // Apply the pending changes
+                pointsToAdd.forEach(point => {
+                  currentNodesMap.set(point.id, point);
+                });
+                pointsToUpdate.forEach((point, id) => {
+                  currentNodesMap.set(id, point);
+                });
+                pointIdsToDelete.forEach(id => {
+                  currentNodesMap.delete(id);
+                });
+                linksToAdd.forEach(link => {
+                  currentLinksMap.set(`${link.source}-${link.target}`, link);
+                });
+                linkPairsToDelete.forEach(([source, target]) => {
+                  currentLinksMap.delete(`${source}-${target}`);
+                });
+                
+                const updatedNodes = Array.from(currentNodesMap.values());
+                const updatedLinks = Array.from(currentLinksMap.values());
+                
+                // Use setData as fallback
+                if (cosmographRef.current?.setData) {
+                  console.log('[GraphCanvas] Using setData fallback with', updatedNodes.length, 'nodes and', updatedLinks.length, 'links');
+                  cosmographRef.current.setData(updatedNodes, updatedLinks, keepRunning);
+                  setCurrentNodes(updatedNodes);
+                  setCurrentLinks(updatedLinks);
+                  
+                  // Update stats
+                  setLiveStats({
+                    nodeCount: updatedNodes.length,
+                    edgeCount: updatedLinks.length,
+                    lastUpdated: Date.now()
+                  });
+                }
+              } catch (fallbackError) {
+                console.error('[GraphCanvas] Fallback setData also failed:', fallbackError);
+              }
+            }
           }
         } else {
           console.log('[GraphCanvas] No operations to apply');
@@ -773,6 +853,25 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     // Store processDeltaBatch in a ref to avoid dependency issues
     const processDeltaBatchRef = useRef<(() => Promise<void>) | null>(null);
     processDeltaBatchRef.current = processDeltaBatch;
+    
+    // Cleanup effect for Cosmograph dataManager
+    useEffect(() => {
+      return () => {
+        // Cleanup on unmount to prevent stale table references
+        if (cosmographRef.current?.dataManager) {
+          console.log('[GraphCanvas] Cleaning up Cosmograph dataManager on unmount');
+          try {
+            // Clear any pending operations
+            deltaQueueRef.current = [];
+            // Note: Cosmograph doesn't expose a direct cleanup method for dataManager
+            // but setting the ref to null helps garbage collection
+            cosmographRef.current.dataManager = null;
+          } catch (error) {
+            console.warn('[GraphCanvas] Error during cleanup:', error);
+          }
+        }
+      };
+    }, []);
     
     // Use Rust WebSocket for delta updates
     const { subscribe: subscribeToRust } = useRustWebSocket();
@@ -3224,6 +3323,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       >
           <Cosmograph
             ref={cosmographRef}
+            duckDBConnection={duckDBConnection}
             onMount={(cosmograph) => {
               console.log('[GraphCanvas] Cosmograph mounted, checking internals');
               // Store the actual Cosmograph instance
