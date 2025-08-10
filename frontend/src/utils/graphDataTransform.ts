@@ -9,6 +9,11 @@ export interface TransformedNode {
   summary?: string;
   created_at: string | null;
   created_at_timestamp: number | null;
+  // Centrality metrics
+  degree_centrality?: number;
+  betweenness_centrality?: number;
+  pagerank_centrality?: number;
+  eigenvector_centrality?: number;
 }
 
 export interface TransformedLink {
@@ -24,7 +29,7 @@ export interface TransformedLink {
 
 /**
  * Transform nodes for Cosmograph v2.0
- * Creates properly indexed nodes without centrality data
+ * Creates properly indexed nodes with centrality metrics
  */
 export function transformNodes(nodes: GraphNode[]): TransformedNode[] {
   return nodes.map((node, index) => {
@@ -37,7 +42,12 @@ export function transformNodes(nodes: GraphNode[]): TransformedNode[] {
       node_type: String(node.node_type || 'Unknown'),
       summary: node.summary || node.properties?.summary,
       created_at: createdAt,
-      created_at_timestamp: createdAt ? new Date(createdAt).getTime() : null
+      created_at_timestamp: createdAt ? new Date(createdAt).getTime() : null,
+      // Include centrality metrics from properties
+      degree_centrality: node.properties?.degree_centrality,
+      betweenness_centrality: node.properties?.betweenness_centrality,
+      pagerank_centrality: node.properties?.pagerank_centrality || node.properties?.pagerank,
+      eigenvector_centrality: node.properties?.eigenvector_centrality
     };
     
     if (!nodeData.id || nodeData.id === 'undefined') {

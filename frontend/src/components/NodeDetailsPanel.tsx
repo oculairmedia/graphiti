@@ -141,8 +141,19 @@ const NodeDetailsPanelComponent: React.FC<NodeDetailsPanelProps> = ({
     });
   };
 
-  // Use centrality hook with fallback
-  const { centrality, isLoading: centralityLoading, source } = useNodeCentralityWithFallback(node.id, node.properties);
+  // Use centrality hook with fallback - pass node centrality directly if available
+  const nodeCentrality = {
+    degree_centrality: (node as any).degree_centrality,
+    betweenness_centrality: (node as any).betweenness_centrality,
+    pagerank_centrality: (node as any).pagerank_centrality,
+    eigenvector_centrality: (node as any).eigenvector_centrality,
+  };
+  
+  const { centrality, isLoading: centralityLoading, source } = useNodeCentralityWithFallback(
+    node.id, 
+    node.properties,
+    nodeCentrality
+  );
 
   // Use real node data with deferred value for expensive property calculations
   const nodeProperties = node.properties || {};
