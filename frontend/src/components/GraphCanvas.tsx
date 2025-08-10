@@ -176,10 +176,10 @@ const cosmographInitializationMap = new WeakMap<HTMLElement, boolean>();
 
 const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
   ({ onNodeClick, onNodeSelect, onSelectNodes, onClearSelection, onNodeHover, onStatsUpdate, selectedNodes, highlightedNodes, className, stats, nodes, links }, ref) => {
-    const cosmographRef = useRef<CosmographRef | null>(null);
+    const cosmographRef = useRef<any>(null);
     
     // Add a stable ref for the Cosmograph instance to prevent issues in dev mode
-    const stableCosmographRef = useRef<CosmographRef | null>(null);
+    const stableCosmographRef = useRef<any>(null);
     useEffect(() => {
       stableCosmographRef.current = cosmographRef.current;
     });
@@ -189,10 +189,10 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     // Get loading coordinator - will always be available since we're inside ParallelInitProvider
     const loadingCoordinator = useLoadingCoordinator();
     
-    const [cosmographData, setCosmographData] = useState<{ nodes: GraphNode[], links: GraphLink[] } | null>(null);
+    const [cosmographData, setCosmographData] = useState<{ points: any[]; links: any[] } | null>(null);
     const [dataKitError, setDataKitError] = useState<string | null>(null);
     const [isDataPreparing, setIsDataPreparing] = useState(false);
-    const { config, setCosmographRef } = useGraphConfig();
+    const { config, setCosmographRef, updateConfig } = useGraphConfig();
     
     // Get DuckDB connection
     const { service: duckdbService, isInitialized: isDuckDBInitialized, getDuckDBConnection } = useDuckDB();
@@ -202,14 +202,11 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     const [glowingNodeIndices, setGlowingNodeIndices] = useState<number[]>([]);
     
     // CSS variables for label styling (avoids dynamic style tag injection)
-    const cssVariables = React.useMemo(
-      (): React.CSSProperties => ({
-        ['--cosmograph-label-size' as any]: `${config.labelSize}px`,
-        ['--cosmograph-border-width' as any]: `${(config as any).borderWidth ?? 0}px`,
-        ['--cosmograph-border-color' as any]: 'rgba(0,0,0,0.5)',
-      }),
-      [config.labelSize, (config as any).borderWidth]
-    );
+    const containerStyle: React.CSSProperties = {
+      ['--cosmograph-label-size' as any]: `${config.labelSize}px`,
+      ['--cosmograph-border-width' as any]: '0px',
+      ['--cosmograph-border-color' as any]: 'rgba(0,0,0,0.5)',
+    };
     
     // Live statistics tracking for real-time updates
     const [liveStats, setLiveStats] = useState<{
@@ -770,7 +767,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       
     
     // Store processDeltaBatch in a ref to avoid dependency issues
-    const processDeltaBatchRef = useRef<() => Promise<void>>();
+    const processDeltaBatchRef = useRef<(() => Promise<void>) | null>(null);
     processDeltaBatchRef.current = processDeltaBatch;
     
     // Use Rust WebSocket for delta updates
@@ -3217,10 +3214,10 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     return (
       <div
         className={`relative overflow-hidden ${className}`}
-        style={cssVariables}
+        style={containerStyle}
       >
           <Cosmograph
-            ref={cosmographRef}
+            ref={(instance) => { cosmographRef.current = instance as any; }}
             onMount={(cosmograph) => {
               console.log('[GraphCanvas] Cosmograph mounted, checking internals');
               // Store the actual Cosmograph instance
@@ -3371,14 +3368,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             
             // Label appearance
             pointLabelFontSize={config.labelSize}
-            pointLabelClassName={`
-              background: ${config.labelBackgroundColor};
-              color: ${config.labelColor};
-              font-weight: ${config.labelFontWeight};
-              padding: 2px 4px;
-              border-radius: 2px;
-              opacity: ${config.labelOpacity / 100};
-            `}
+            pointLabelClassName={'cosmograph-dynamic-label'}
             
             // Hovered label
             showHoveredPointLabel={config.showHoveredNodeLabel}
