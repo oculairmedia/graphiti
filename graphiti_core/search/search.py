@@ -87,17 +87,17 @@ async def search(
             # Convert filters to dict format for Rust service
             filters_dict = {}
             if search_filter:
-                if search_filter.node_types:
-                    filters_dict['node_types'] = search_filter.node_types
-                if search_filter.edge_types:
+                if hasattr(search_filter, 'node_labels') and search_filter.node_labels:
+                    filters_dict['node_types'] = search_filter.node_labels
+                if hasattr(search_filter, 'edge_types') and search_filter.edge_types:
                     filters_dict['edge_types'] = search_filter.edge_types
-                if search_filter.group_ids:
+                if hasattr(search_filter, 'group_ids') and search_filter.group_ids:
                     filters_dict['group_ids'] = search_filter.group_ids
                 elif group_ids:
                     filters_dict['group_ids'] = group_ids
-                if search_filter.created_after:
+                if hasattr(search_filter, 'created_after') and search_filter.created_after:
                     filters_dict['created_after'] = search_filter.created_after.isoformat()
-                if search_filter.created_before:
+                if hasattr(search_filter, 'created_before') and search_filter.created_before:
                     filters_dict['created_before'] = search_filter.created_before.isoformat()
             
             # Use Rust search service
