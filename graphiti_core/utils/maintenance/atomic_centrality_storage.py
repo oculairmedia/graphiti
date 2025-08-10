@@ -472,6 +472,9 @@ class AtomicCentralityStorage:
             raise ValueError(f"Transaction {transaction_id} not found")
         
         tx_data = records[0]["t"]
+        # Handle FalkorDB Node objects vs dict objects
+        if hasattr(tx_data, "properties"):
+            tx_data = tx_data.properties
         
         # Reconstruct transaction
         transaction = StorageTransaction(
@@ -532,7 +535,17 @@ class AtomicCentralityStorage:
         
         records, _, _ = await self.driver.execute_query(query, **params)
         
-        return [dict(record["t"]) for record in records]
+        # Handle FalkorDB Node objects vs dict objects
+        result = []
+        for record in records:
+            t = record["t"]
+            if hasattr(t, "properties"):
+                # FalkorDB Node object
+                result.append(t.properties)
+            else:
+                # Regular dict
+                result.append(dict(t))
+        return result
     
     @asynccontextmanager
     async def batch_update_context(self, transaction_id: Optional[str] = None):
