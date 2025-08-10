@@ -1963,12 +1963,6 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             if (sourceNode) {
               const nodeType = sourceNode.node_type || sourceNode.type;
               const sourceNodeColor = config.nodeTypeColors[nodeType];
-              
-              // Debug logging for first few links
-              if (linkIndex < 3) {
-                console.log(`[Link ${linkIndex}] Source node type: ${nodeType}, Color: ${sourceNodeColor}, Available colors:`, config.nodeTypeColors);
-              }
-              
               const finalColor = sourceNodeColor || config.linkColor;
               return opacity < 1 ? applyOpacityToColor(finalColor, opacity) : finalColor;
             }
