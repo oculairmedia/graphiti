@@ -266,7 +266,8 @@ export function GraphConfigProvider({ children }: { children: ReactNode }) {
       console.log('GraphConfigProvider: Loading persisted config', {
         hasNodeTypeColors: !!persistedConfig.nodeTypeColors,
         nodeTypeColorsCount: Object.keys(persistedConfig.nodeTypeColors || {}).length,
-        nodeTypeColors: persistedConfig.nodeTypeColors
+        nodeTypeColors: persistedConfig.nodeTypeColors,
+        filteredNodeTypes: persistedConfig.filteredNodeTypes
       });
       
       const { stable: loadedStable, dynamic: loadedDynamic } = splitConfig(persistedConfig);
@@ -277,7 +278,15 @@ export function GraphConfigProvider({ children }: { children: ReactNode }) {
       }
       if (Object.keys(loadedDynamic).length > 0) {
         // Always use 'entire_graph' for initial load regardless of persisted value
-        const { queryType, ...otherDynamicConfig } = loadedDynamic;
+        const { queryType, filteredNodeTypes, ...otherDynamicConfig } = loadedDynamic;
+        
+        // Fix legacy persisted state that only has 'Entity' in filteredNodeTypes
+        // This happens when Episodic nodes were added after the config was saved
+        let correctedFilteredNodeTypes = filteredNodeTypes;
+        if (filteredNodeTypes && filteredNodeTypes.length === 1 && filteredNodeTypes[0] === 'Entity') {
+          console.log('GraphConfigProvider: Fixing legacy filteredNodeTypes - clearing filter to show all nodes');
+          correctedFilteredNodeTypes = []; // Clear filter to show all node types
+        }
         
         // Ensure node type configurations are preserved
         setDynamicConfig(prev => {
@@ -285,6 +294,7 @@ export function GraphConfigProvider({ children }: { children: ReactNode }) {
             ...prev, 
             ...otherDynamicConfig,
             queryType: 'entire_graph', // Always start with entire graph
+            filteredNodeTypes: correctedFilteredNodeTypes || [], // Use corrected filter
             // Explicitly preserve node type configs
             nodeTypeColors: { ...prev.nodeTypeColors, ...(otherDynamicConfig.nodeTypeColors || {}) },
             nodeTypeVisibility: { ...prev.nodeTypeVisibility, ...(otherDynamicConfig.nodeTypeVisibility || {}) }
@@ -292,7 +302,8 @@ export function GraphConfigProvider({ children }: { children: ReactNode }) {
           
           console.log('GraphConfigProvider: Applied persisted dynamic config', {
             nodeTypeColors: configToApply.nodeTypeColors,
-            nodeTypeVisibility: configToApply.nodeTypeVisibility
+            nodeTypeVisibility: configToApply.nodeTypeVisibility,
+            filteredNodeTypes: configToApply.filteredNodeTypes
           });
           
           return configToApply;
