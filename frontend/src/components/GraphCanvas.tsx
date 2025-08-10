@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, forwardRef, useState, useCallback, use } from 'react';
+import React, { useEffect, useRef, forwardRef, useState, useCallback, useMemo, use } from 'react';
 import { Cosmograph, prepareCosmographData } from '@cosmograph/react';
 import '../styles/cosmograph.css';
 import { GraphNode } from '../api/types';
