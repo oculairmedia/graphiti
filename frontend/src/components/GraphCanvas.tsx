@@ -20,6 +20,8 @@ import { useWebSocketContext } from '../contexts/WebSocketProvider';
 import { useRustWebSocket } from '../contexts/RustWebSocketProvider';
 import { useDuckDB } from '../contexts/DuckDBProvider';
 import { useLoadingCoordinator } from '../contexts/LoadingCoordinator';
+import { ProgressiveLoader, LoadingPhase } from '../services/progressive-loader';
+import { ProgressiveLoadingOverlay } from './ProgressiveLoadingOverlay';
 
 const dataKitCoordinator = DataKitCoordinator.getInstance();
 
@@ -190,6 +192,15 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     const loadingCoordinator = useLoadingCoordinator();
     
     const [cosmographData, setCosmographData] = useState<{ nodes: any[]; links: any[] } | null>(null);
+    const [progressiveLoader] = useState(() => new ProgressiveLoader({
+      coreNodeThreshold: 0.7,
+      secondaryThreshold: 0.3,
+      degreeThreshold: 10,
+      phaseDelayMs: 100,
+      chunkSize: 500
+    }));
+    const [loadingPhase, setLoadingPhase] = useState<string>('');
+    const [loadingProgress, setLoadingProgress] = useState<{ loaded: number; total: number }>({ loaded: 0, total: 0 });
     const [dataKitError, setDataKitError] = useState<string | null>(null);
     const [isDataPreparing, setIsDataPreparing] = useState(false);
     const { config, setCosmographRef, updateConfig } = useGraphConfig();
@@ -1310,10 +1321,48 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
               targetIndex: link.targetIndex !== undefined ? link.targetIndex : -1
             }));
             
-            setCosmographData({
-                          nodes: indexedNodes,
-                          links: indexedLinks
+            // Use progressive loading if we have a large graph
+            if (indexedNodes.length > 1000) {
+              console.log('[GraphCanvas] Using progressive loading for', indexedNodes.length, 'nodes');
+              
+              // Prepare loading phases
+              const phases = progressiveLoader.prepareLoadingPhases(indexedNodes, indexedLinks);
+              
+              // Set initial data with core nodes
+              if (phases.length > 0) {
+                setCosmographData({
+                  nodes: phases[0].nodes,
+                  links: phases[0].edges
+                });
+                
+                // Schedule remaining phases
+                if (phases.length > 1) {
+                  setTimeout(() => {
+                    // Load remaining phases incrementally
+                    for (let i = 1; i < phases.length; i++) {
+                      const phase = phases[i];
+                      setTimeout(() => {
+                        setCosmographData(prevData => {
+                          if (!prevData) return { nodes: phase.nodes, links: phase.edges };
+                          return {
+                            nodes: [...prevData.nodes, ...phase.nodes],
+                            links: [...prevData.links, ...phase.edges]
+                          };
                         });
+                        setLoadingPhase(phase.name);
+                        setLoadingProgress({ loaded: phase.nodes.length, total: indexedNodes.length });
+                      }, phase.delay);
+                    }
+                  }, 0);
+                }
+              }
+            } else {
+              // Small graph, load all at once
+              setCosmographData({
+                nodes: indexedNodes,
+                links: indexedLinks
+              });
+            }
             
             // Mark data preparation as complete
             loadingCoordinator.setStageComplete('dataPreparation', {
@@ -1350,10 +1399,35 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
               targetIndex: link.targetIndex !== undefined ? link.targetIndex : -1
             }));
             
-            setCosmographData({
-                          nodes: indexedNodes,
-                          links: indexedLinks
-                        });
+            // Use progressive loading even in fallback
+            if (indexedNodes.length > 1000) {
+              const phases = progressiveLoader.prepareLoadingPhases(indexedNodes, indexedLinks);
+              if (phases.length > 0) {
+                setCosmographData({
+                  nodes: phases[0].nodes,
+                  links: phases[0].edges
+                });
+                
+                // Load remaining phases
+                for (let i = 1; i < phases.length; i++) {
+                  const phase = phases[i];
+                  setTimeout(() => {
+                    setCosmographData(prevData => {
+                      if (!prevData) return { nodes: phase.nodes, links: phase.edges };
+                      return {
+                        nodes: [...prevData.nodes, ...phase.nodes],
+                        links: [...prevData.links, ...phase.edges]
+                      };
+                    });
+                  }, phase.delay);
+                }
+              }
+            } else {
+              setCosmographData({
+                nodes: indexedNodes,
+                links: indexedLinks
+              });
+            }
             
             // Still mark as complete even with error (we have fallback data)
             loadingCoordinator.setStageComplete('dataPreparation', {
@@ -3321,6 +3395,12 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         className={`relative overflow-hidden ${className}`}
         style={containerStyle}
       >
+          <ProgressiveLoadingOverlay
+            phase={loadingPhase}
+            loaded={loadingProgress.loaded}
+            total={loadingProgress.total}
+            isVisible={!!loadingPhase}
+          />
           <Cosmograph
             ref={cosmographRef}
             duckDBConnection={duckDBConnection}
