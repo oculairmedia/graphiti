@@ -2,7 +2,7 @@ name: Build and Push Centrality Service Container
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, feature/graph-service-performance ]
     paths:
       - 'graphiti-centrality-rs/**'
       - '.github/workflows/build-centrality-service.yml'
@@ -64,8 +64,12 @@ jobs:
         push: ${{ github.event_name != 'pull_request' }}
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
+        cache-from: |
+          type=gha
+          type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache
+        cache-to: |
+          type=gha,mode=max
+          type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache,mode=max
         build-args: |
           BUILD_DATE=${{ github.event.head_commit.timestamp }}
           VCS_REF=${{ github.sha }}
