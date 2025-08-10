@@ -49,12 +49,37 @@ export function usePrefetchCentrality() {
 }
 
 // Hook to get centrality with fallback to node properties
-export function useNodeCentralityWithFallback(nodeId: string | null, nodeProperties?: Record<string, unknown>) {
+export function useNodeCentralityWithFallback(
+  nodeId: string | null, 
+  nodeProperties?: Record<string, unknown>,
+  nodeCentrality?: {
+    degree_centrality?: number;
+    betweenness_centrality?: number;
+    pagerank_centrality?: number;
+    eigenvector_centrality?: number;
+  }
+) {
   // Disable API calls for now since the endpoints aren't implemented yet
-  // Just use the fallback to node properties
+  // Just use the fallback to node properties or direct centrality values
   const { data: centralityData, isLoading, error } = useNodeCentrality(nodeId, false);
   
-  // Always use properties for now
+  // Try direct centrality values first (from transformed node)
+  if (nodeCentrality) {
+    const directCentrality: CentralityMetrics = {
+      degree: Number(nodeCentrality.degree_centrality || 0),
+      betweenness: Number(nodeCentrality.betweenness_centrality || 0),
+      pagerank: Number(nodeCentrality.pagerank_centrality || 0),
+      eigenvector: Number(nodeCentrality.eigenvector_centrality || 0),
+    };
+    
+    return {
+      centrality: directCentrality,
+      isLoading: false,
+      source: 'node' as const,
+    };
+  }
+  
+  // Fall back to properties
   if (nodeProperties) {
     const fallbackCentrality: CentralityMetrics = {
       degree: Number(nodeProperties.degree_centrality || 0),
