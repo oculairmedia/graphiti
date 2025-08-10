@@ -1,38 +1,32 @@
-# Multi-stage build for optimized production image
-FROM rust:1.83-slim as builder
-
-# Install required system dependencies
-RUN apt-get update && apt-get install -y \
-    pkg-config \
-    libssl-dev \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
-
-# Set working directory
+# Use cargo-chef for better caching
+FROM lukemathwalker/cargo-chef:latest-rust-1 AS chef
 WORKDIR /app
 
-# Copy manifests and dependencies first for better caching
+# Plan stage - prepare recipe
+FROM chef AS planner
 COPY Cargo.toml Cargo.lock ./
-
-# Create dummy source to build dependencies
-RUN mkdir src && echo "fn main() {}" > src/main.rs && echo "// placeholder" > src/lib.rs
-
-# Build dependencies (this layer will be cached unless Cargo.toml changes)
-RUN cargo build --release
-RUN rm src/main.rs src/lib.rs
-
-# Copy actual source code
 COPY src ./src
+RUN cargo chef prepare --recipe-path recipe.json
 
-# Build application with optimizations
-RUN cargo clean --release -p graphiti-centrality-rs && cargo build --release
+# Build stage - cook dependencies first
+FROM chef AS builder
 
-# Production stage
-FROM debian:bookworm-slim
+# Build dependencies - this layer is cached unless dependencies change!
+COPY --from=planner /app/recipe.json recipe.json
+RUN cargo chef cook --release --recipe-path recipe.json
+
+# Copy source code and build application
+COPY Cargo.toml Cargo.lock ./
+COPY src ./src
+RUN cargo build --release
+
+# Runtime stage - minimal image
+FROM debian:bookworm-slim AS runtime
 
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y \
     ca-certificates \
+    libssl3 \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
@@ -61,6 +55,9 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 # Set environment variables
 ENV RUST_LOG=graphiti_centrality=info,info
 ENV BIND_ADDR=0.0.0.0:3003
+ENV FALKORDB_HOST=falkordb
+ENV FALKORDB_PORT=6379
+ENV GRAPH_NAME=graphiti_migration
 
 # Run the application
 CMD ["./graphiti-centrality"]
