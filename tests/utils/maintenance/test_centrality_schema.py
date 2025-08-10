@@ -239,8 +239,18 @@ class TestSchemaManager:
         calls = mock_driver.execute_query.call_args_list
         
         # Check version was set
-        version_call = [c for c in calls if "CentralitySchemaVersion" in c[0][0]][0]
-        assert version_call[1]["version"] == SchemaVersion.latest().value
+        version_calls = [c for c in calls if "CentralitySchemaVersion" in str(c)]
+        assert len(version_calls) > 0, "No version call found"
+        
+        # The set_version method passes kwargs to execute_query
+        # Look for the call that has 'version' in kwargs
+        for call in calls:
+            if call.kwargs and "version" in call.kwargs:
+                assert call.kwargs["version"] == SchemaVersion.latest().value
+                break
+        else:
+            # No kwargs, check positional args
+            assert False, f"Could not find version in calls: {calls}"
     
     async def test_initialize_schema_already_exists(self, schema_manager, mock_driver):
         """Test initialization when schema already exists."""

@@ -496,6 +496,8 @@ class AtomicCentralityStorage:
         await self._process_batches(transaction, scores_subset)
         await self._commit_transaction(transaction)
         
+        transaction.state = StorageState.COMMITTED
+        
         return transaction
     
     async def get_transaction_history(

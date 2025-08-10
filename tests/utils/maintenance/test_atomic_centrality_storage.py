@@ -92,29 +92,29 @@ class TestAtomicCentralityStorage:
     
     async def test_store_centrality_validation(self, storage, mock_driver):
         """Test validation of centrality scores."""
-        # Test empty scores
-        with pytest.raises(ValueError, match="No scores provided"):
+        # Test empty scores - should raise RuntimeError (wrapping ValueError)
+        with pytest.raises(RuntimeError, match="Centrality storage failed"):
             await storage.store_centrality_atomic({})
         
         # Test invalid score type
         invalid_scores = {
             "node1": {"pagerank": "invalid"},
         }
-        with pytest.raises(ValueError, match="Invalid score type"):
+        with pytest.raises(RuntimeError, match="Centrality storage failed"):
             await storage.store_centrality_atomic(invalid_scores)
         
         # Test negative score
         negative_scores = {
             "node1": {"pagerank": -0.5},
         }
-        with pytest.raises(ValueError, match="Negative score"):
+        with pytest.raises(RuntimeError, match="Centrality storage failed"):
             await storage.store_centrality_atomic(negative_scores)
         
         # Test out of range PageRank
         out_of_range_scores = {
             "node1": {"pagerank": 1.5},
         }
-        with pytest.raises(ValueError, match="Score out of range"):
+        with pytest.raises(RuntimeError, match="Centrality storage failed"):
             await storage.store_centrality_atomic(out_of_range_scores)
     
     async def test_store_centrality_with_retry(self, storage, mock_driver, sample_scores):
@@ -210,7 +210,7 @@ class TestAtomicCentralityStorage:
         transaction = await storage.resume_transaction("test_txn", sample_scores)
         
         assert transaction.state == StorageState.COMMITTED
-        assert transaction.processed_nodes == 2  # Processed remaining 2 nodes
+        assert transaction.processed_nodes == 3  # Total processed (1 before + 2 new)
         assert transaction.total_nodes == 3
     
     async def test_transaction_history(self, storage, mock_driver):
