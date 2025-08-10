@@ -2,7 +2,7 @@ name: Build and Push API Server Container
 
 on:
   push:
-    branches: [ main, feature/graph-service-performance ]
+    branches: [ main, feature/graph-service-performance, feature/webhook-completion ]
     paths:
       - 'server/**'
       - 'graphiti_core/**'
