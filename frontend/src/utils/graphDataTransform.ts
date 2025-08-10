@@ -6,6 +6,7 @@ export interface TransformedNode {
   index: number;
   label: string;
   node_type: string;
+  summary?: string;
   created_at: string | null;
   created_at_timestamp: number | null;
 }
@@ -34,6 +35,7 @@ export function transformNodes(nodes: GraphNode[]): TransformedNode[] {
       index: index,
       label: String(node.label || node.id),
       node_type: String(node.node_type || 'Unknown'),
+      summary: node.summary || node.properties?.summary,
       created_at: createdAt,
       created_at_timestamp: createdAt ? new Date(createdAt).getTime() : null
     };
