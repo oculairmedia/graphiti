@@ -67,11 +67,11 @@ export interface GraphViewportHandle {
 }
 
 /**
- * Pure UI component for rendering the graph viewport
+ * Pure UI component for rendering the graph canvas
  * This component only handles rendering and basic interactions
  * All business logic should be handled by the parent component
  */
-export const GraphViewport = forwardRef<GraphViewportHandle, GraphViewportProps>((props, ref) => {
+export const GraphCanvasRenderer = forwardRef<GraphViewportHandle, GraphViewportProps>((props, ref) => {
   const {
     nodes = [],
     links = [],
@@ -599,4 +599,4 @@ export const GraphViewport = forwardRef<GraphViewportHandle, GraphViewportProps>
   );
 });
 
-GraphViewport.displayName = 'GraphViewport';
+GraphCanvasRenderer.displayName = 'GraphCanvasRenderer';

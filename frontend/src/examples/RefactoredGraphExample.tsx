@@ -1,7 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { 
   GraphContainer,
-  GraphViewport,
+  GraphCanvasRenderer,
   useGraphData,
   useWebSocketManager,
   type GraphViewportHandle,
@@ -126,7 +126,7 @@ export const RefactoredGraphExample: React.FC = () => {
 
     return (
       <div className="relative w-full h-full">
-        <GraphViewport
+        <GraphCanvasRenderer
           ref={viewportRef}
           nodes={graphData.nodes}
           links={graphData.links}

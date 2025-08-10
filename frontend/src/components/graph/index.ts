@@ -7,8 +7,8 @@
 export { GraphContainer } from './GraphContainer';
 export type { GraphContainerProps } from './GraphContainer';
 
-export { GraphViewport } from './GraphViewport';
-export type { GraphViewportProps, GraphViewportHandle, ViewportInfo } from './GraphViewport';
+export { GraphCanvasRenderer } from './GraphCanvasRenderer';
+export type { GraphViewportProps, GraphViewportHandle, ViewportInfo } from './GraphCanvasRenderer';
 
 // Utility components
 export { ErrorBoundary } from './ErrorBoundary';

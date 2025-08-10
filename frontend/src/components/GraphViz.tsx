@@ -4,6 +4,7 @@ import { CosmographProvider } from '@cosmograph/react';
 import { useGraphConfig } from '../contexts/GraphConfigProvider';
 import { ControlPanel } from './ControlPanel';
 import { GraphViewport } from './GraphViewport';
+import { GraphViewportRefactored } from './GraphViewportRefactored';
 import { LayoutPanel } from './LayoutPanel';
 import { logger } from '../utils/logger';
 
@@ -24,9 +25,12 @@ import type { GraphCanvasHandle, GraphVizProps } from '../types/components';
 import { getErrorMessage } from '../types/errors';
 
 export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
+  // Feature flag for using refactored components
+  const USE_REFACTORED_COMPONENTS = localStorage.getItem('graphiti.useRefactoredComponents') === 'true';
+  
   // Debug component lifecycle
   useEffect(() => {
-    console.log('[GraphViz] Component mounted');
+    console.log('[GraphViz] Component mounted, using refactored:', USE_REFACTORED_COMPONENTS);
     return () => {
       console.log('[GraphViz] Component unmounting');
     };
@@ -345,31 +349,58 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
             />
           </div>
 
-          {/* Main Graph Viewport */}
-          <GraphViewport
-            ref={graphCanvasRef}
-            nodes={dataToUse.nodes}
-            links={dataToUse.links}
-            selectedNodes={selectedNodes}
-            highlightedNodes={highlightedNodes}
-            hoveredNode={hoveredNode}
-            hoveredConnectedNodes={hoveredConnectedNodes}
-            selectedNode={selectedNode}
-            stats={data?.stats}
-            onNodeClick={handleNodeClick}
-            onNodeSelect={handleNodeSelect}
-            onSelectNodes={handleSelectNodes}
-            onNodeHover={handleNodeHover}
-            onClearSelection={clearAllSelections}
-            onShowNeighbors={handleShowNeighbors}
-            onZoomIn={handleZoomIn}
-            onZoomOut={handleZoomOut}
-            onFitView={handleFitView}
-            onScreenshot={handleCaptureScreenshot}
-            onToggleTimeline={toggleTimeline}
-            isTimelineVisible={isTimelineVisible}
-            onStatsUpdate={handleStatsUpdate}
-          />
+          {/* Main Graph Viewport - Conditionally use refactored components */}
+          {USE_REFACTORED_COMPONENTS ? (
+            <GraphViewportRefactored
+              ref={graphCanvasRef as any}
+              nodes={dataToUse.nodes}
+              links={dataToUse.links}
+              selectedNodes={selectedNodes}
+              highlightedNodes={highlightedNodes}
+              hoveredNode={hoveredNode}
+              hoveredConnectedNodes={hoveredConnectedNodes}
+              selectedNode={selectedNode}
+              stats={data?.stats}
+              onNodeClick={handleNodeClick}
+              onNodeSelect={handleNodeSelect}
+              onSelectNodes={handleSelectNodes}
+              onNodeHover={handleNodeHover}
+              onClearSelection={clearAllSelections}
+              onShowNeighbors={handleShowNeighbors}
+              onZoomIn={handleZoomIn}
+              onZoomOut={handleZoomOut}
+              onFitView={handleFitView}
+              onScreenshot={handleCaptureScreenshot}
+              onToggleTimeline={toggleTimeline}
+              isTimelineVisible={isTimelineVisible}
+              onStatsUpdate={handleStatsUpdate}
+            />
+          ) : (
+            <GraphViewport
+              ref={graphCanvasRef}
+              nodes={dataToUse.nodes}
+              links={dataToUse.links}
+              selectedNodes={selectedNodes}
+              highlightedNodes={highlightedNodes}
+              hoveredNode={hoveredNode}
+              hoveredConnectedNodes={hoveredConnectedNodes}
+              selectedNode={selectedNode}
+              stats={data?.stats}
+              onNodeClick={handleNodeClick}
+              onNodeSelect={handleNodeSelect}
+              onSelectNodes={handleSelectNodes}
+              onNodeHover={handleNodeHover}
+              onClearSelection={clearAllSelections}
+              onShowNeighbors={handleShowNeighbors}
+              onZoomIn={handleZoomIn}
+              onZoomOut={handleZoomOut}
+              onFitView={handleFitView}
+              onScreenshot={handleCaptureScreenshot}
+              onToggleTimeline={toggleTimeline}
+              isTimelineVisible={isTimelineVisible}
+              onStatsUpdate={handleStatsUpdate}
+            />
+          )}
 
           {/* Right Layout Panel */}
           <div className={`${rightPanelCollapsed ? 'w-12' : 'w-80'} transition-all duration-300 flex-shrink-0`}>

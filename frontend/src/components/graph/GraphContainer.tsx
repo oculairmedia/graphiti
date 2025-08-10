@@ -1,5 +1,5 @@
 import React, { useRef, useCallback, useEffect, useMemo, useState } from 'react';
-import { GraphViewport, GraphViewportHandle } from './GraphViewport';
+import { GraphCanvasRenderer, GraphViewportHandle } from './GraphCanvasRenderer';
 import { useGraphData, GraphDelta, createGraphDelta } from '../../hooks/graph/useGraphData';
 import { useWebSocketManager } from '../../hooks/graph/useWebSocketManager';
 import { GraphNode } from '../../api/types';
@@ -309,8 +309,8 @@ export const GraphContainer: React.FC<GraphContainerProps> = ({
       }
     >
       <div className={`relative ${className}`}>
-        {/* Main viewport */}
-        <GraphViewport
+        {/* Main canvas renderer */}
+        <GraphCanvasRenderer
           ref={viewportRef}
           nodes={graphData.nodes}
           links={graphData.links}
