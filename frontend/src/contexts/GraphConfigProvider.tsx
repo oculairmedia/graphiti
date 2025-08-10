@@ -263,7 +263,12 @@ export function GraphConfigProvider({ children }: { children: ReactNode }) {
     hasLoadedPersistedRef.current = true;
     
     if (persistedConfig && Object.keys(persistedConfig).length > 0) {
-      console.log('GraphConfigProvider: Loading persisted config');
+      console.log('GraphConfigProvider: Loading persisted config', {
+        hasNodeTypeColors: !!persistedConfig.nodeTypeColors,
+        nodeTypeColorsCount: Object.keys(persistedConfig.nodeTypeColors || {}).length,
+        nodeTypeColors: persistedConfig.nodeTypeColors
+      });
+      
       const { stable: loadedStable, dynamic: loadedDynamic } = splitConfig(persistedConfig);
       
       // Only update if there are actual differences
@@ -273,11 +278,25 @@ export function GraphConfigProvider({ children }: { children: ReactNode }) {
       if (Object.keys(loadedDynamic).length > 0) {
         // Always use 'entire_graph' for initial load regardless of persisted value
         const { queryType, ...otherDynamicConfig } = loadedDynamic;
-        setDynamicConfig(prev => ({ 
-          ...prev, 
-          ...otherDynamicConfig,
-          queryType: 'entire_graph' // Always start with entire graph
-        }));
+        
+        // Ensure node type configurations are preserved
+        setDynamicConfig(prev => {
+          const configToApply = { 
+            ...prev, 
+            ...otherDynamicConfig,
+            queryType: 'entire_graph', // Always start with entire graph
+            // Explicitly preserve node type configs
+            nodeTypeColors: { ...prev.nodeTypeColors, ...(otherDynamicConfig.nodeTypeColors || {}) },
+            nodeTypeVisibility: { ...prev.nodeTypeVisibility, ...(otherDynamicConfig.nodeTypeVisibility || {}) }
+          };
+          
+          console.log('GraphConfigProvider: Applied persisted dynamic config', {
+            nodeTypeColors: configToApply.nodeTypeColors,
+            nodeTypeVisibility: configToApply.nodeTypeVisibility
+          });
+          
+          return configToApply;
+        });
       }
     } else {
       console.log('GraphConfigProvider: No persisted config found, using defaults');
@@ -300,15 +319,19 @@ export function GraphConfigProvider({ children }: { children: ReactNode }) {
     
     setStableConfig(prev => {
       const newConfig = { ...prev, ...updates };
+      
+      // Persist immediately within setState to ensure we capture the right values
+      setTimeout(() => {
+        const fullConfig = { ...newConfig, ...dynamicConfigRef.current };
+        console.log('GraphConfigProvider: Persisting stable config', {
+          updateKeys: Object.keys(updates),
+          example: updates[Object.keys(updates)[0]]
+        });
+        setPersistedConfig(fullConfig);
+      }, 0);
+      
       return newConfig;
     });
-    
-    // Persist after state update using refs
-    setTimeout(() => {
-      const fullConfig = { ...stableConfigRef.current, ...dynamicConfigRef.current };
-      console.log('GraphConfigProvider: Saving stable config update', updates, 'Full config:', fullConfig);
-      setPersistedConfig(fullConfig);
-    }, 0);
   }, [setPersistedConfig, isLoadingPersistedConfig]);
   
   // Update dynamic config immediately
@@ -321,15 +344,28 @@ export function GraphConfigProvider({ children }: { children: ReactNode }) {
     
     setDynamicConfig(prev => {
       const newConfig = { ...prev, ...updates };
+      
+      // Special handling for nodeTypeColors and nodeTypeVisibility - merge instead of replace
+      if (updates.nodeTypeColors) {
+        newConfig.nodeTypeColors = { ...prev.nodeTypeColors, ...updates.nodeTypeColors };
+      }
+      if (updates.nodeTypeVisibility) {
+        newConfig.nodeTypeVisibility = { ...prev.nodeTypeVisibility, ...updates.nodeTypeVisibility };
+      }
+      
+      // Persist immediately within setState to ensure we capture the right values
+      setTimeout(() => {
+        const fullConfig = { ...stableConfigRef.current, ...newConfig };
+        console.log('GraphConfigProvider: Persisting dynamic config', {
+          updateKeys: Object.keys(updates),
+          nodeTypeColors: newConfig.nodeTypeColors,
+          nodeTypeVisibility: newConfig.nodeTypeVisibility
+        });
+        setPersistedConfig(fullConfig);
+      }, 0);
+      
       return newConfig;
     });
-    
-    // Persist after state update using refs
-    setTimeout(() => {
-      const fullConfig = { ...stableConfigRef.current, ...dynamicConfigRef.current };
-      console.log('GraphConfigProvider: Saving dynamic config update', updates, 'Full config:', fullConfig);
-      setPersistedConfig(fullConfig);
-    }, 0);
   }, [setPersistedConfig, isLoadingPersistedConfig]);
   
   // Batch update dynamic config
