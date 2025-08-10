@@ -1961,8 +1961,16 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             // Color from source (originating) node
             const sourceNode: any = nodeIdToDataMap.get(link.source);
             if (sourceNode) {
-              const sourceNodeColor = config.nodeTypeColors[sourceNode.node_type] || config.linkColor;
-              return opacity < 1 ? applyOpacityToColor(sourceNodeColor, opacity) : sourceNodeColor;
+              const nodeType = sourceNode.node_type || sourceNode.type;
+              const sourceNodeColor = config.nodeTypeColors[nodeType];
+              
+              // Debug logging for first few links
+              if (linkIndex < 3) {
+                console.log(`[Link ${linkIndex}] Source node type: ${nodeType}, Color: ${sourceNodeColor}, Available colors:`, config.nodeTypeColors);
+              }
+              
+              const finalColor = sourceNodeColor || config.linkColor;
+              return opacity < 1 ? applyOpacityToColor(finalColor, opacity) : finalColor;
             }
             const color = config.linkColor;
             return opacity < 1 ? applyOpacityToColor(color, opacity) : color;
