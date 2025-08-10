@@ -177,10 +177,17 @@ export function useGraphDataQuery() {
             }
             
             // Data has changed, update it
+            // Debug: Log node type distribution from DuckDB
+            const duckDBNodeTypes = nodes.reduce((acc, node) => {
+              acc[node.node_type] = (acc[node.node_type] || 0) + 1;
+              return acc;
+            }, {} as Record<string, number>);
+            
             logger.log('Loaded UI data from DuckDB:', nodes.length, 'nodes,', edges.length, 'edges');
             console.log('[useGraphDataQuery] DuckDB data loaded:', { 
               nodeCount: nodes.length, 
               edgeCount: edges.length,
+              nodeTypes: duckDBNodeTypes,
               firstNode: nodes[0],
               firstEdge: edges[0]
             });
@@ -219,8 +226,10 @@ export function useGraphDataQuery() {
 
   // Initial fetch and retry logic
   useEffect(() => {
-    // Initial fetch attempt
-    fetchDuckDBData();
+    // Force refresh on mount to get fresh data
+    console.log('[useGraphDataQuery] Component mounted - forcing data refresh');
+    hasFetchedDuckDBRef.current = false; // Reset flag to force fresh fetch
+    fetchDuckDBData(true); // Force refresh on mount
     
     // Only set up retry interval if we haven't fetched yet
     let intervalId: NodeJS.Timeout | null = null;
@@ -469,7 +478,26 @@ export function useGraphDataQuery() {
       return { nodes: [], links: [] };
     }
     
+    // Debug: Log node type distribution before filtering
+    const nodeTypesBefore = sourceData.nodes.reduce((acc, node) => {
+      acc[node.node_type] = (acc[node.node_type] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+    
     const visibleNodes = sourceData.nodes.filter(node => nodePassesFilters(node, filterConfig));
+    
+    // Debug: Log node type distribution after filtering
+    const nodeTypesAfter = visibleNodes.reduce((acc, node) => {
+      acc[node.node_type] = (acc[node.node_type] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+    
+    console.log('[useGraphDataQuery] Node filtering:', {
+      before: nodeTypesBefore,
+      after: nodeTypesAfter,
+      filteredNodeTypes: filterConfig.filteredNodeTypes,
+      nodeTypeVisibility: filterConfig.nodeTypeVisibility
+    });
 
     // Virtualization: For very large graphs (>10k nodes), prioritize most important nodes
     let finalNodes = visibleNodes;
