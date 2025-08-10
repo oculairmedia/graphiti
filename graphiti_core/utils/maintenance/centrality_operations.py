@@ -332,6 +332,7 @@ async def calculate_betweenness_centrality(
 async def store_centrality_scores(
     driver: GraphDriver,
     scores: Dict[str, Dict[str, float]],
+    use_atomic: bool = True,
 ) -> None:
     """
     Store centrality scores as node properties.
@@ -339,26 +340,49 @@ async def store_centrality_scores(
     Args:
         driver: Graph database driver
         scores: Dictionary mapping node UUIDs to score dictionaries
+        use_atomic: Whether to use atomic transaction-safe storage
     """
-    logger.info(f'Storing centrality scores for {len(scores)} nodes')
+    if use_atomic:
+        # Use atomic storage with transaction safety
+        from .atomic_centrality_storage import AtomicCentralityStorage
+        
+        storage = AtomicCentralityStorage(
+            driver=driver,
+            batch_size=100,
+            max_retries=3,
+            checkpoint_interval=500,
+        )
+        
+        try:
+            transaction = await storage.store_centrality_atomic(scores)
+            logger.info(
+                f'Atomic storage completed: {transaction.processed_nodes}/{transaction.total_nodes} nodes, '
+                f'transaction_id={transaction.transaction_id}'
+            )
+        except Exception as e:
+            logger.error(f'Atomic storage failed: {e}')
+            raise
+    else:
+        # Legacy non-atomic storage (kept for compatibility)
+        logger.info(f'Storing centrality scores for {len(scores)} nodes (non-atomic)')
 
-    for node_uuid, node_scores in scores.items():
-        # Build SET clause for scores
-        set_clauses = []
-        params = {'uuid': node_uuid}
+        for node_uuid, node_scores in scores.items():
+            # Build SET clause for scores
+            set_clauses = []
+            params = {'uuid': node_uuid}
 
-        for score_name, score_value in node_scores.items():
-            set_clauses.append(f'n.centrality_{score_name} = ${score_name}')
-            params[score_name] = score_value
+            for score_name, score_value in node_scores.items():
+                set_clauses.append(f'n.centrality_{score_name} = ${score_name}')
+                params[score_name] = score_value
 
-        if set_clauses:
-            query = f"""
-            MATCH (n {{uuid: $uuid}})
-            SET {', '.join(set_clauses)}
-            """
-            await driver.execute_query(query, **params)
+            if set_clauses:
+                query = f"""
+                MATCH (n {{uuid: $uuid}})
+                SET {', '.join(set_clauses)}
+                """
+                await driver.execute_query(query, **params)
 
-    logger.info('Centrality scores stored successfully')
+        logger.info('Centrality scores stored successfully')
 
 
 async def calculate_all_centralities(
