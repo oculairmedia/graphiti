@@ -176,10 +176,10 @@ const cosmographInitializationMap = new WeakMap<HTMLElement, boolean>();
 
 const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
   ({ onNodeClick, onNodeSelect, onSelectNodes, onClearSelection, onNodeHover, onStatsUpdate, selectedNodes, highlightedNodes, className, stats, nodes, links }, ref) => {
-    const cosmographRef = useRef<any>(null);
+    const cosmographRef = useRef<CosmographRef | null>(null);
     
     // Add a stable ref for the Cosmograph instance to prevent issues in dev mode
-    const stableCosmographRef = useRef<any>(null);
+    const stableCosmographRef = useRef<CosmographRef | null>(null);
     useEffect(() => {
       stableCosmographRef.current = cosmographRef.current;
     });
@@ -189,10 +189,10 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     // Get loading coordinator - will always be available since we're inside ParallelInitProvider
     const loadingCoordinator = useLoadingCoordinator();
     
-    const [cosmographData, setCosmographData] = useState<{ points: any[]; links: any[] } | null>(null);
+    const [cosmographData, setCosmographData] = useState<{ nodes: GraphNode[]; links: GraphLink[] } | null>(null);
     const [dataKitError, setDataKitError] = useState<string | null>(null);
     const [isDataPreparing, setIsDataPreparing] = useState(false);
-    const { config, setCosmographRef, updateConfig } = useGraphConfig();
+    const { config, setCosmographRef } = useGraphConfig();
     
     // Get DuckDB connection
     const { service: duckdbService, isInitialized: isDuckDBInitialized, getDuckDBConnection } = useDuckDB();
@@ -3217,7 +3217,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         style={containerStyle}
       >
           <Cosmograph
-            ref={(instance) => { cosmographRef.current = instance as any; }}
+            ref={cosmographRef}
             onMount={(cosmograph) => {
               console.log('[GraphCanvas] Cosmograph mounted, checking internals');
               // Store the actual Cosmograph instance

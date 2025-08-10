@@ -2,7 +2,7 @@ name: Build and Push Frontend Container
 
 on:
   push:
-    branches: [ main, feature/real-time-node-glow, feature/duckdb-realtime-updates ]
+    branches: [ main, feature/real-time-node-glow, feature/duckdb-realtime-updates, feature/graph-service-performance ]
     paths:
       - 'frontend/**'
       - '.github/workflows/build-frontend.yml'
