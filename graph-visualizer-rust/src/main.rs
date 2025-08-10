@@ -24,10 +24,13 @@ use base64::{Engine as _, engine::general_purpose};
 mod duckdb_store;
 mod arrow_converter;
 mod delta_tracker;
+mod cache;
 
 use duckdb_store::{DuckDBStore, GraphUpdate, UpdateOperation};
 use arrow_converter::ArrowConverter;
 use delta_tracker::{DeltaTracker, GraphDelta};
+use cache::EnhancedCache;
+use deadpool_redis::{Config as RedisConfig, Runtime};
 
 #[derive(Clone)]
 struct AppState {
@@ -42,6 +45,7 @@ struct AppState {
     http_client: Arc<reqwest::Client>,
     centrality_url: String,
     cache_config: CacheConfig,
+    enhanced_cache: Option<Arc<EnhancedCache>>,
 }
 
 #[derive(Clone)]
@@ -136,7 +140,7 @@ impl Default for GraphStats {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 struct QueryParams {
     query_type: String,
     limit: Option<usize>,
@@ -244,6 +248,26 @@ async fn main() -> anyhow::Result<()> {
     info!("Cache configuration: enabled={}, ttl={}s, strategy={:?}, force_fresh={}",
           cache_config.enabled, cache_config.ttl_seconds, cache_config.strategy, cache_config.force_fresh);
     
+    // Initialize Redis-based enhanced cache if configured
+    let enhanced_cache = if cache_config.enabled {
+        if let Ok(redis_url) = std::env::var("REDIS_URL") {
+            info!("Initializing enhanced cache with Redis at: {}", redis_url);
+            let redis_config = RedisConfig::from_url(redis_url);
+            if let Ok(redis_pool) = redis_config.create_pool(Some(Runtime::Tokio1)) {
+                Some(Arc::new(EnhancedCache::new(redis_pool)))
+            } else {
+                error!("Failed to create Redis pool, falling back to in-memory cache");
+                None
+            }
+        } else {
+            info!("REDIS_URL not configured, using in-memory cache only");
+            None
+        }
+    } else {
+        info!("Enhanced cache disabled");
+        None
+    };
+    
     let state = AppState {
         client: Arc::new(client),
         graph_name: graph_name.clone(),
@@ -256,6 +280,7 @@ async fn main() -> anyhow::Result<()> {
         http_client,
         centrality_url,
         cache_config,
+        enhanced_cache,
     };
     
     // Load initial data into DuckDB with optimized separate queries
@@ -568,13 +593,55 @@ async fn visualize(
 ) -> Result<Json<QueryResponse>, (StatusCode, Json<ErrorResponse>)> {
     let start = std::time::Instant::now();
     
-    // Check cache first - but only if cache is enabled
+    // Create cache key
     let cache_key = format!("{:?}", params);
     
-    // Check if CACHE_ENABLED environment variable is set to false
-    let cache_enabled = std::env::var("CACHE_ENABLED")
-        .unwrap_or_else(|_| "true".to_string())
-        .to_lowercase() != "false";
+    // Try enhanced cache first if available
+    if let Some(ref enhanced_cache) = state.enhanced_cache {
+        if !state.cache_config.force_fresh {
+            // Clone values needed for the closure
+            let client = state.client.clone();
+            let graph_name = state.graph_name.clone();
+            let params_clone = params.clone();
+            
+            // Use enhanced cache with all optimizations
+            let cached_result = enhanced_cache
+                .get_or_compute::<GraphData, _, _>(&cache_key, || {
+                    Box::pin(async move {
+                        let limit = if params_clone.query_type == "entire_graph" {
+                            params_clone.limit.unwrap_or(50000).min(100000)
+                        } else {
+                            params_clone.limit.unwrap_or(200).min(1000)
+                        };
+                        let offset = params_clone.offset.unwrap_or(0);
+                        
+                        let query = build_query(
+                            &params_clone.query_type,
+                            limit,
+                            offset,
+                            params_clone.search.as_deref(),
+                        );
+                        
+                        execute_graph_query(&client, &graph_name, &query)
+                            .await
+                            .map(Some)
+                    })
+                })
+                .await;
+                
+            if let Ok(Some(data)) = cached_result {
+                let execution_time_ms = start.elapsed().as_millis();
+                return Ok(Json(QueryResponse {
+                    data,
+                    has_more: false,
+                    execution_time_ms,
+                }));
+            }
+        }
+    }
+    
+    // Fallback to in-memory cache if enhanced cache not available
+    let cache_enabled = state.cache_config.enabled && !state.cache_config.force_fresh;
     
     if cache_enabled {
         if let Some(cached) = state.graph_cache.get(&cache_key) {
