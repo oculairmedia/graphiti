@@ -182,10 +182,12 @@ const GraphViewportRefactored = forwardRef<GraphCanvasRefactoredHandle, GraphVie
     },
     selectNode: (node: GraphNode) => {
       onNodeSelect(node.id);
-      onSelectNodes?.([node]);
+      // Don't call onSelectNodes here to avoid recursion
     },
     selectNodes: (nodesToSelect: GraphNode[]) => {
-      onSelectNodes?.(nodesToSelect);
+      // Don't call onSelectNodes here to avoid recursion
+      // This is called by the parent component
+      console.log('[GraphViewportRefactored] selectNodes called with', nodesToSelect.length, 'nodes');
     },
     
     // Viewport controls
@@ -284,22 +286,33 @@ const GraphViewportRefactored = forwardRef<GraphCanvasRefactoredHandle, GraphVie
       return indices;
     },
     
-    // Incremental updates
-    addIncrementalData: (newNodes: GraphNode[], newLinks: GraphLink[], runSimulation = true) => {
+    // Incremental updates - these are called by useIncrementalUpdates hook
+    addIncrementalData: async (newNodes: GraphNode[], newLinks: GraphLink[], runSimulation = true) => {
       console.log('[GraphViewportRefactored] Adding incremental data:', newNodes.length, 'nodes');
       setIsIncrementalUpdate(true);
+      // The parent component will update the nodes/links props
+      // which will trigger a re-render with the new data
+      return Promise.resolve();
     },
-    updateNodes: (updatedNodes: GraphNode[]) => {
+    updateNodes: async (updatedNodes: GraphNode[]) => {
       console.log('[GraphViewportRefactored] Updating nodes:', updatedNodes.length);
+      // The parent component handles the actual update
+      return Promise.resolve();
     },
-    updateLinks: (updatedLinks: GraphLink[]) => {
+    updateLinks: async (updatedLinks: GraphLink[]) => {
       console.log('[GraphViewportRefactored] Updating links:', updatedLinks.length);
+      // The parent component handles the actual update
+      return Promise.resolve();
     },
-    removeNodes: (nodeIds: string[]) => {
+    removeNodes: async (nodeIds: string[]) => {
       console.log('[GraphViewportRefactored] Removing nodes:', nodeIds.length);
+      // The parent component handles the actual removal
+      return Promise.resolve();
     },
-    removeLinks: (linkIds: string[]) => {
+    removeLinks: async (linkIds: string[]) => {
       console.log('[GraphViewportRefactored] Removing links:', linkIds.length);
+      // The parent component handles the actual removal
+      return Promise.resolve();
     },
     
     // Simulation controls
