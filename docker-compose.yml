@@ -1,6 +1,6 @@
 services:
   graph:
-    image: ghcr.io/oculairmedia/graphiti-api:main
+    image: ghcr.io/oculairmedia/graphiti-api:feature-graph-service-performance
     ports:
       - 8003:8000
     healthcheck:
