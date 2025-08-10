@@ -15,8 +15,7 @@ from pydantic import BaseModel, Field
 
 from graphiti_core.nodes import EntityNode
 from graphiti_core.edges import EntityEdge, EpisodicEdge
-from graphiti_core.search.search_config import SearchConfig
-from graphiti_core.search.search_results import SearchResults
+from graphiti_core.search.search_config import SearchConfig, SearchResults
 
 
 class RustSearchClient:
