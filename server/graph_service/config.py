@@ -32,6 +32,10 @@ class Settings(BaseSettings):
     # Rust centrality service configuration
     use_rust_centrality: bool = Field(True)
     rust_centrality_url: str = Field('http://graphiti-centrality-rs:3003')
+    
+    # Webhook configuration
+    graphiti_webhook_url: str | None = Field(None)  # For node access events
+    graphiti_data_webhook_urls: str | None = Field(None)  # Comma-separated URLs for data ingestion events
 
     model_config = SettingsConfigDict(env_file='.env', extra='ignore')
 
