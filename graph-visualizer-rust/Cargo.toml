@@ -49,3 +49,11 @@ bytes = "1.5"
 sha2 = "0.10"
 base64 = "0.22"
 uuid = { version = "1.17", features = ["v4"] }
+
+# Caching
+deadpool = "0.10"
+deadpool-redis = "0.14"
+redis = { version = "0.24", features = ["tokio-comp", "connection-manager", "aio"] }
+lru = "0.12"
+bloom = "0.3"
+rkyv = { version = "0.7", features = ["validation"] }

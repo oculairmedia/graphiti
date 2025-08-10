@@ -101,14 +101,16 @@ services:
       - EDGE_LIMIT=${EDGE_LIMIT:-100000}
       - MIN_DEGREE_CENTRALITY=${MIN_DEGREE_CENTRALITY:-0.0}
       - CACHE_ENABLED=${CACHE_ENABLED:-true}
-      - CACHE_TTL_SECONDS=${CACHE_TTL_SECONDS:-30}
+      - CACHE_TTL_SECONDS=${CACHE_TTL_SECONDS:-300}
       - CACHE_STRATEGY=${CACHE_STRATEGY:-aggressive}
       - FORCE_FRESH_DATA=${FORCE_FRESH_DATA:-false}
+      - REDIS_URL=redis://letta-redis-1:6379/2  # Use DB 2 for visual server cache
     depends_on:
       falkordb:
         condition: service_healthy
     networks:
       - graphiti_network
+      - letta_network  # For Redis access
     labels:
       - homepage.group=Knowledge Management
       - homepage.name=Graph Visualizer (Rust)
@@ -311,6 +313,8 @@ services:
 networks:
   graphiti_network:
     driver: bridge
+  letta_network:
+    external: true
 volumes:
   falkordb_data: null
   falkordb_backups: null

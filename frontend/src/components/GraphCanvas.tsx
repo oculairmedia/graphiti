@@ -176,10 +176,10 @@ const cosmographInitializationMap = new WeakMap<HTMLElement, boolean>();
 
 const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
   ({ onNodeClick, onNodeSelect, onSelectNodes, onClearSelection, onNodeHover, onStatsUpdate, selectedNodes, highlightedNodes, className, stats, nodes, links }, ref) => {
-    const cosmographRef = useRef<CosmographRef | null>(null);
+    const cosmographRef = useRef<any>(null);
     
     // Add a stable ref for the Cosmograph instance to prevent issues in dev mode
-    const stableCosmographRef = useRef<CosmographRef | null>(null);
+    const stableCosmographRef = useRef<any>(null);
     useEffect(() => {
       stableCosmographRef.current = cosmographRef.current;
     });
@@ -189,10 +189,10 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     // Get loading coordinator - will always be available since we're inside ParallelInitProvider
     const loadingCoordinator = useLoadingCoordinator();
     
-    const [cosmographData, setCosmographData] = useState<{ nodes: GraphNode[]; links: GraphLink[] } | null>(null);
+    const [cosmographData, setCosmographData] = useState<{ nodes: any[]; links: any[] } | null>(null);
     const [dataKitError, setDataKitError] = useState<string | null>(null);
     const [isDataPreparing, setIsDataPreparing] = useState(false);
-    const { config, setCosmographRef } = useGraphConfig();
+    const { config, setCosmographRef, updateConfig } = useGraphConfig();
     
     // Get DuckDB connection
     const { service: duckdbService, isInitialized: isDuckDBInitialized, getDuckDBConnection } = useDuckDB();
@@ -391,7 +391,11 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             setGlowingNodeIndices([]);
             // Clear selection in Cosmograph
             if (cosmographRef.current) {
-              cosmographRef.current.unselectAllPoints();
+              if (typeof cosmographRef.current.unselectAll === 'function') {
+                cosmographRef.current.unselectAll();
+              } else if (typeof cosmographRef.current.selectPoints === 'function') {
+                cosmographRef.current.selectPoints([]);
+              }
             }
             return;
           }
@@ -409,9 +413,9 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             }
           } 
           // Try Cosmograph data
-          else if (cosmographData?.points && Array.isArray(cosmographData.points)) {
-            console.log('[GraphCanvas] Using cosmographData for indices, length:', cosmographData.points.length);
-            cosmographData.points.forEach((point: any, index: number) => {
+          else if (cosmographData?.nodes && Array.isArray(cosmographData.nodes)) {
+            console.log('[GraphCanvas] Using cosmographData for indices, length:', cosmographData.nodes.length);
+            cosmographData.nodes.forEach((point: any, index: number) => {
               if (event.node_ids.includes(point.id)) {
                 indices.push(index);
                 console.log('[GraphCanvas] Found glowing node at index:', index, 'id:', point.id);
@@ -582,9 +586,9 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
                   pagerank_centrality: Number(node.properties?.pagerank_centrality || 0),
                   betweenness_centrality: Number(node.properties?.betweenness_centrality || 0),
                   eigenvector_centrality: Number(node.properties?.eigenvector_centrality || 0),
-                  created_at: node.properties?.created_at || node.created_at || node.properties?.created || null,
-                  created_at_timestamp: (node.properties?.created_at || node.created_at || node.properties?.created) ? 
-                    new Date(node.properties?.created_at || node.created_at || node.properties?.created).getTime() : null
+                  created_at: node.properties?.created_at || node.created_at || (node.properties as any)?.created || null,
+                  created_at_timestamp: (node.properties?.created_at || node.created_at || (node.properties as any)?.created) ?
+                    new Date(node.properties?.created_at || node.created_at || (node.properties as any)?.created).getTime() : null
                 });
               });
             }
@@ -986,7 +990,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       return nodes.map((node, arrayIndex) => ({
         id: String(node.id),
         // Use the preserved idx from DuckDB if available, otherwise use array index
-        index: node.idx !== undefined ? node.idx : (node.properties?.idx !== undefined ? node.properties.idx : arrayIndex),
+        index: arrayIndex,
         label: String(node.label || node.id),
         node_type: String(node.node_type || 'Unknown'),
         centrality: Number(node.properties?.degree_centrality || node.properties?.pagerank_centrality || node.size || 1),
@@ -1085,7 +1089,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           transformedNodes = memoizedNodes.filter(node => node.id && node.id !== 'undefined');
 
           // Apply clustering if enabled
-          let clusterAssignments: (string | number)[] = [];
+          let clusterAssignments: string[] = [];
           let clusterStrengths: number[] = [];
           
           if (config.clusteringEnabled && config.clusteringMethod !== 'none') {
@@ -1095,13 +1099,13 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
               clusterStrength: config.clusterStrength
             };
             
-            const { nodes: clusteredNodes, clusterMapping, clusterPositions } = 
+            const { nodes: clusteredNodes, clusterMapping, clusterPositions } =
               applyClusteringToGraphData(transformedNodes, clusteringConfig);
             
             // If using DuckDB, we need to update the table; otherwise update the nodes
             if (useDuckDBTables && duckdbService) {
               // Extract cluster data for DuckDB update
-              clusterAssignments = clusteredNodes.map(node => node.cluster || 'none');
+              clusterAssignments = clusteredNodes.map(node => String((node as any).cluster ?? 'none'));
               clusterStrengths = clusteredNodes.map(node => node.clusterStrength || 0);
               
               // We'll update DuckDB after data preparation is complete
@@ -1111,9 +1115,9 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             }
             
             // Update dynamic config with cluster mapping
-            config.updateConfig({ 
+            updateConfig({
               clusterMapping,
-              clusterPositions 
+              clusterPositions
             });
             
             logger.log('GraphCanvas: Applied clustering', {
@@ -1208,9 +1212,9 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             }));
             
             setCosmographData({
-              points: indexedNodes,
-              links: indexedLinks
-            });
+                          nodes: indexedNodes,
+                          links: indexedLinks
+                        });
             
             // Mark data preparation as complete
             loadingCoordinator.setStageComplete('dataPreparation', {
@@ -1248,9 +1252,9 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             }));
             
             setCosmographData({
-              points: indexedNodes,
-              links: indexedLinks
-            });
+                          nodes: indexedNodes,
+                          links: indexedLinks
+                        });
             
             // Still mark as complete even with error (we have fallback data)
             loadingCoordinator.setStageComplete('dataPreparation', {
@@ -1465,8 +1469,8 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     // Simplified data transformation for legacy compatibility
     const transformedData = React.useMemo(() => {
       // Use the actual data that's being rendered by Cosmograph
-      if (cosmographData?.points && cosmographData?.links) {
-        return { nodes: cosmographData.points, links: cosmographData.links };
+      if (cosmographData?.nodes && cosmographData?.links) {
+        return { nodes: cosmographData.nodes, links: cosmographData.links };
       }
       // Fallback to original data if cosmographData isn't ready
       return { nodes, links };
@@ -1703,7 +1707,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           if (link) {
             switch (config.linkOpacityScheme) {
               case 'by-source-centrality': {
-                const sourceNode = nodeIdToDataMap.get(link.source);
+                const sourceNode: any = nodeIdToDataMap.get(link.source);
                 if (sourceNode) {
                   const centrality = sourceNode.properties?.degree_centrality || 0;
                   opacity = 0.1 + (centrality * 0.9);
@@ -1711,8 +1715,8 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
                 break;
               }
               case 'by-distance': {
-                const sourceNode = nodeIdToDataMap.get(link.source);
-                const targetNode = nodeIdToDataMap.get(link.target);
+                const sourceNode: any = nodeIdToDataMap.get(link.source);
+                const targetNode: any = nodeIdToDataMap.get(link.target);
                 if (sourceNode?.x !== undefined && targetNode?.x !== undefined) {
                   const distance = Math.sqrt(
                     Math.pow(targetNode.x - sourceNode.x, 2) + 
@@ -1764,8 +1768,8 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             
           case 'by-distance': {
             // Color by link distance/length
-            const sourceNode = nodeIdToDataMap.get(link.source);
-            const targetNode = nodeIdToDataMap.get(link.target);
+            const sourceNode: any = nodeIdToDataMap.get(link.source);
+            const targetNode: any = nodeIdToDataMap.get(link.target);
             if (sourceNode?.x !== undefined && targetNode?.x !== undefined) {
               const distance = Math.sqrt(
                 Math.pow(targetNode.x - sourceNode.x, 2) + 
@@ -1782,7 +1786,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             
           case 'by-source-node': {
             // Color from source (originating) node
-            const sourceNode = nodeIdToDataMap.get(link.source);
+            const sourceNode: any = nodeIdToDataMap.get(link.source);
             if (sourceNode) {
               const sourceNodeColor = config.nodeTypeColors[sourceNode.node_type] || config.linkColor;
               return opacity < 1 ? applyOpacityToColor(sourceNodeColor, opacity) : sourceNodeColor;
@@ -1793,8 +1797,8 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           
           case 'gradient': {
             // Gradient from source to target node colors (future: true gradient)
-            const sourceNode = nodeIdToDataMap.get(link.source);
-            const targetNode = nodeIdToDataMap.get(link.target);
+            const sourceNode: any = nodeIdToDataMap.get(link.source);
+            const targetNode: any = nodeIdToDataMap.get(link.target);
             const sourceNodeColor = sourceNode ? config.nodeTypeColors[sourceNode.node_type] : '';
             const targetNodeColor = targetNode ? config.nodeTypeColors[targetNode.node_type] : '';
             // For now, blend the colors simply
@@ -1804,8 +1808,8 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             
           case 'by-community': {
             // Color bridges between communities differently
-            const sourceNode = nodeIdToDataMap.get(link.source);
-            const targetNode = nodeIdToDataMap.get(link.target);
+            const sourceNode: any = nodeIdToDataMap.get(link.source);
+            const targetNode: any = nodeIdToDataMap.get(link.target);
             const sourceCommunity = sourceNode?.cluster;
             const targetCommunity = targetNode?.cluster;
             const color = sourceCommunity !== targetCommunity ? '#FF6B6B' : config.linkColor;
@@ -2404,8 +2408,8 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             betweenness_centrality: Number(node.properties?.betweenness_centrality || 0),
             eigenvector_centrality: Number(node.properties?.eigenvector_centrality || 0),
             // Include temporal data for timeline
-            created_at: node.properties?.created_at || node.created_at || node.properties?.created || null,
-            created_at_timestamp: (node.properties?.created_at || node.created_at || node.properties?.created) ? new Date(node.properties?.created_at || node.created_at || node.properties?.created).getTime() : null
+            created_at: node.properties?.created_at || node.created_at || (node.properties as any)?.created || null,
+            created_at_timestamp: (node.properties?.created_at || node.created_at || (node.properties as any)?.created) ? new Date(node.properties?.created_at || node.created_at || (node.properties as any)?.created).getTime() : null
           }));
           
           const transformedLinks = updatedLinks.map(link => ({
@@ -2455,8 +2459,8 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           betweenness_centrality: Number(node.properties?.betweenness_centrality || 0),
           eigenvector_centrality: Number(node.properties?.eigenvector_centrality || 0),
           // Include temporal data for timeline
-          created_at: node.properties?.created_at || node.created_at || node.properties?.created || null,
-          created_at_timestamp: (node.properties?.created_at || node.created_at || node.properties?.created) ? new Date(node.properties?.created_at || node.created_at || node.properties?.created).getTime() : null,
+          created_at: node.properties?.created_at || node.created_at || (node.properties as any)?.created || null,
+          created_at_timestamp: (node.properties?.created_at || node.created_at || (node.properties as any)?.created) ? new Date(node.properties?.created_at || node.created_at || (node.properties as any)?.created).getTime() : null,
           // Cluster by node type for proper grouping
           cluster: String(node.node_type || 'Unknown'),
           clusterStrength: 0.7 // Strong clustering by type (0-1 range)
@@ -2507,8 +2511,8 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           betweenness_centrality: Number(node.properties?.betweenness_centrality || 0),
           eigenvector_centrality: Number(node.properties?.eigenvector_centrality || 0),
           // Include temporal data for timeline
-          created_at: node.properties?.created_at || node.created_at || node.properties?.created || null,
-          created_at_timestamp: (node.properties?.created_at || node.created_at || node.properties?.created) ? new Date(node.properties?.created_at || node.created_at || node.properties?.created).getTime() : null,
+          created_at: node.properties?.created_at || node.created_at || (node.properties as any)?.created || null,
+          created_at_timestamp: (node.properties?.created_at || node.created_at || (node.properties as any)?.created) ? new Date(node.properties?.created_at || node.created_at || (node.properties as any)?.created).getTime() : null,
           // Cluster by node type for proper grouping
           cluster: String(node.node_type || 'Unknown'),
           clusterStrength: 0.7 // Strong clustering by type (0-1 range)
@@ -2561,8 +2565,8 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           betweenness_centrality: Number(node.properties?.betweenness_centrality || 0),
           eigenvector_centrality: Number(node.properties?.eigenvector_centrality || 0),
           // Include temporal data for timeline
-          created_at: node.properties?.created_at || node.created_at || node.properties?.created || null,
-          created_at_timestamp: (node.properties?.created_at || node.created_at || node.properties?.created) ? new Date(node.properties?.created_at || node.created_at || node.properties?.created).getTime() : null,
+          created_at: node.properties?.created_at || node.created_at || (node.properties as any)?.created || null,
+          created_at_timestamp: (node.properties?.created_at || node.created_at || (node.properties as any)?.created) ? new Date(node.properties?.created_at || node.created_at || (node.properties as any)?.created).getTime() : null,
           // Cluster by node type for proper grouping
           cluster: String(node.node_type || 'Unknown'),
           clusterStrength: 0.7 // Strong clustering by type (0-1 range)
@@ -2612,8 +2616,8 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           betweenness_centrality: Number(node.properties?.betweenness_centrality || 0),
           eigenvector_centrality: Number(node.properties?.eigenvector_centrality || 0),
           // Include temporal data for timeline
-          created_at: node.properties?.created_at || node.created_at || node.properties?.created || null,
-          created_at_timestamp: (node.properties?.created_at || node.created_at || node.properties?.created) ? new Date(node.properties?.created_at || node.created_at || node.properties?.created).getTime() : null,
+          created_at: node.properties?.created_at || node.created_at || (node.properties as any)?.created || null,
+          created_at_timestamp: (node.properties?.created_at || node.created_at || (node.properties as any)?.created) ? new Date(node.properties?.created_at || node.created_at || (node.properties as any)?.created).getTime() : null,
           // Cluster by node type for proper grouping
           cluster: String(node.node_type || 'Unknown'),
           clusterStrength: 0.7 // Strong clustering by type (0-1 range)
@@ -2773,7 +2777,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     }, []);
 
     // Create stable method refs
-    const methodsRef = useRef({
+    const methodsRef = useRef<any>({
       clearSelection: clearCosmographSelection,
       selectNode: selectCosmographNode,
       selectNodes: selectCosmographNodes,
@@ -2834,7 +2838,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         pauseSimulation,
         resumeSimulation,
         keepSimulationRunning
-      };
+      } as any;
     }, [
       clearCosmographSelection,
       selectCosmographNode,
@@ -2876,7 +2880,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       zoomIn,
       zoomOut,
       fitView,
-      fitViewByIndices,
+      fitViewByPointIndices: fitViewByIndices,
       zoomToPoint,
       trackPointPositionsByIndices,
       getTrackedPointPositionsMap,
@@ -2976,6 +2980,8 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
                     label: String(point.label || point.id || index),
                     name: String(point.name || point.label || point.id),  // Include name field
                     node_type: String(point.node_type || 'Unknown'),
+                    color: (config.nodeTypeColors && config.nodeTypeColors[String(point.node_type || 'Unknown')]) ?
+                      config.nodeTypeColors[String(point.node_type || 'Unknown')] : '#ffffff',
                     summary: point.summary || null,
                     size: Number(point.size || point.degree_centrality || 1),
                     properties: {
@@ -3198,7 +3204,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     
     // Pass Arrow tables directly to Cosmograph when using DuckDB
     // When not using DuckDB, cosmographData contains the points and links arrays directly
-    const pointsData = useDuckDBTables ? duckDBData?.points : (cosmographData ? cosmographData.points : memoizedNodes);
+    const pointsData = useDuckDBTables ? duckDBData?.points : (cosmographData ? cosmographData.nodes : memoizedNodes);
     const linksData = useDuckDBTables ? duckDBData?.links : (cosmographData ? cosmographData.links : memoizedLinks);
 
     if (!pointsData) {
@@ -3269,7 +3275,6 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             fitViewDuration={config.fitViewDuration}
             fitViewPadding={config.fitViewPadding}
             // initialZoomLevel={1.5} // Commented out - causing infinite zoom loop
-            disableZoom={false}
             backgroundColor={config.backgroundColor}
             
             // Use Cosmograph v2.0 built-in color strategies
@@ -3294,9 +3299,6 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             
             // Selection ring colors for when nodes are selected via API
             focusedPointRingColor={config.nodeAccessHighlightColor}
-            selectedPointRingColor={config.nodeAccessHighlightColor}
-            renderFocusedPointRing={true}
-            renderSelectedPointRing={true}
             renderLinks={config.renderLinks}
             
             // Zoom event handlers (debugging disabled for now)
@@ -3310,7 +3312,6 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             //   console.log('Zoom ended', { userDriven, transform: e.transform });
             // }}
             
-            nodeGreyoutOpacity={selectedNodes.length > 0 || highlightedNodes.length > 0 || glowingNodeIndices.length > 0 ? 0.1 : 1}
             
             // Performance
             pixelRatio={1}
