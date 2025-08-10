@@ -1,7 +1,8 @@
 import React, { forwardRef, useMemo, useState, useEffect } from 'react';
 import { GraphNode } from '../api/types';
 import { GraphLink } from '../types/graph';
-import { GraphCanvas, type GraphCanvasRef as GraphCanvasHandle } from './GraphCanvas';
+import { LazyGraphCanvas } from './LazyGraphCanvas';
+import type { GraphCanvasRef as GraphCanvasHandle } from './GraphCanvas';
 import { NodeDetailsPanel } from './NodeDetailsPanel';
 import { GraphOverlays } from './GraphOverlays';
 import GraphErrorBoundary from './GraphErrorBoundary';
@@ -136,7 +137,7 @@ const GraphViewportComponent = forwardRef<GraphCanvasHandle, GraphViewportProps>
   return (
     <div className="flex-1 relative">
       <GraphErrorBoundary>
-        <GraphCanvas 
+        <LazyGraphCanvas 
           ref={ref}
           nodes={nodes}
           links={links}

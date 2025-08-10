@@ -16,12 +16,66 @@
     <meta name="twitter:site" content="@lovable_dev" />
     <meta name="twitter:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
     
-    <!-- Resource hints for faster loading -->
+    <!-- Enhanced resource hints for faster loading -->
     <link rel="preconnect" href="http://192.168.50.90:3000" crossorigin>
     <link rel="dns-prefetch" href="http://192.168.50.90:3000">
+    <link rel="preconnect" href="http://192.168.50.90:8088" crossorigin>
+    <link rel="dns-prefetch" href="http://192.168.50.90:8088">
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+    <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
+    
+    <!-- Preload critical resources -->
+    <link rel="preload" href="http://192.168.50.90:3000/api/arrow/nodes" as="fetch" crossorigin="anonymous">
+    <link rel="preload" href="http://192.168.50.90:3000/api/arrow/edges" as="fetch" crossorigin="anonymous">
     
     <!-- Server configuration for preloader -->
     <meta name="rust-server-url" content="http://192.168.50.90:3000" />
+    
+    <!-- Early preloading script - starts data fetch before React loads -->
+    <script>
+      (function() {
+        // Start fetching critical data immediately
+        window.__PRELOAD_CACHE__ = {};
+        window.__PRELOAD_START_TIME__ = performance.now();
+        
+        const serverUrl = 'http://192.168.50.90:3000';
+        
+        // Fetch nodes data
+        window.__PRELOAD_CACHE__.nodesPromise = fetch(serverUrl + '/api/arrow/nodes')
+          .then(r => r.arrayBuffer())
+          .then(data => {
+            console.log('[EarlyPreload] Nodes loaded:', (data.byteLength / 1024).toFixed(2) + 'KB');
+            window.__PRELOAD_CACHE__.nodes = data;
+            return data;
+          })
+          .catch(err => {
+            console.error('[EarlyPreload] Failed to preload nodes:', err);
+            return null;
+          });
+        
+        // Fetch edges data
+        window.__PRELOAD_CACHE__.edgesPromise = fetch(serverUrl + '/api/arrow/edges')
+          .then(r => r.arrayBuffer())
+          .then(data => {
+            console.log('[EarlyPreload] Edges loaded:', (data.byteLength / 1024).toFixed(2) + 'KB');
+            window.__PRELOAD_CACHE__.edges = data;
+            return data;
+          })
+          .catch(err => {
+            console.error('[EarlyPreload] Failed to preload edges:', err);
+            return null;
+          });
+        
+        // Report timing when both complete
+        Promise.all([
+          window.__PRELOAD_CACHE__.nodesPromise,
+          window.__PRELOAD_CACHE__.edgesPromise
+        ]).then(() => {
+          const elapsed = performance.now() - window.__PRELOAD_START_TIME__;
+          console.log('[EarlyPreload] Data preloading completed in', elapsed.toFixed(2) + 'ms');
+        });
+      })();
+    </script>
   </head>
 
   <body>

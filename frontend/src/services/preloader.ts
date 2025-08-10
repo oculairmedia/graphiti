@@ -49,6 +49,43 @@ class PreloaderService {
    * Call this as early as possible (e.g., in index.html)
    */
   startPreloading(): void {
+    // Check if data was already preloaded in HTML
+    if ((window as any).__PRELOAD_CACHE__) {
+      const cache = (window as any).__PRELOAD_CACHE__;
+      
+      // If we have cached data, use it directly
+      if (cache.nodes) {
+        console.log('[Preloader] Using early-preloaded nodes data');
+        this.preloadedData.nodes = cache.nodes;
+        this.preloadPromises.set('nodes', Promise.resolve(cache.nodes));
+      } else if (cache.nodesPromise) {
+        console.log('[Preloader] Waiting for early-preloaded nodes promise');
+        this.preloadPromises.set('nodes', cache.nodesPromise);
+        cache.nodesPromise.then((data: ArrayBuffer) => {
+          if (data) this.preloadedData.nodes = data;
+        });
+      }
+      
+      if (cache.edges) {
+        console.log('[Preloader] Using early-preloaded edges data');
+        this.preloadedData.edges = cache.edges;
+        this.preloadPromises.set('edges', Promise.resolve(cache.edges));
+      } else if (cache.edgesPromise) {
+        console.log('[Preloader] Waiting for early-preloaded edges promise');
+        this.preloadPromises.set('edges', cache.edgesPromise);
+        cache.edgesPromise.then((data: ArrayBuffer) => {
+          if (data) this.preloadedData.edges = data;
+        });
+      }
+      
+      // If we have both promises, we're done
+      if (this.preloadPromises.size >= 2) {
+        console.log('[Preloader] Using early-preloaded data, skipping network requests');
+        this.preloadedData.timestamp = Date.now();
+        return;
+      }
+    }
+    
     // Prevent duplicate preloading
     if (this.preloadPromises.size > 0) {
       console.log('[Preloader] Already preloading, skipping duplicate call');

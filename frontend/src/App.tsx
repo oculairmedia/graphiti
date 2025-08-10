@@ -13,6 +13,7 @@ import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import { memoryMonitor } from "@/utils/memoryMonitor";
 import { preloader } from "@/services/preloader";
+import { preloadDuckDB } from "@/services/duckdb-lazy-loader";
 
 // Create query client once
 const queryClient = new QueryClient({
@@ -36,6 +37,9 @@ const App = () => {
       console.log('[App] Starting data preload...');
       preloader.startPreloading();
     }
+    
+    // Start preloading DuckDB in the background
+    preloadDuckDB();
     
     // Preconnect to API endpoints if configured
     const apiUrl = import.meta.env.VITE_API_URL;
