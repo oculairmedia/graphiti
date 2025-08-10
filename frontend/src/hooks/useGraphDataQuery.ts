@@ -364,7 +364,11 @@ export function useGraphDataQuery() {
     }
     
     // Node type filter - only apply if we have filtered types configured
-    if (filterConfig.filteredNodeTypes.length > 0 && !filterConfig.filteredNodeTypes.includes(node.node_type)) {
+    // Skip filter if it only contains "Entity" (likely bad persisted state)
+    const shouldApplyTypeFilter = filterConfig.filteredNodeTypes.length > 0 && 
+      !(filterConfig.filteredNodeTypes.length === 1 && filterConfig.filteredNodeTypes[0] === 'Entity');
+    
+    if (shouldApplyTypeFilter && !filterConfig.filteredNodeTypes.includes(node.node_type)) {
       filterCacheRef.current.set(cacheKey, false);
       return false;
     }
