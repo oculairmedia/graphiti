@@ -1,5 +1,6 @@
-import * as duckdb from '@duckdb/duckdb-wasm';
 import * as arrow from 'apache-arrow';
+import { loadDuckDB } from './duckdb-lazy-loader';
+import type * as duckdb from '@duckdb/duckdb-wasm';
 import { graphCache } from './graph-cache';
 
 export interface DuckDBConfig {
@@ -30,6 +31,9 @@ export class DuckDBService {
 
     try {
       console.log('[DuckDB] Starting parallel initialization...');
+      
+      // Load DuckDB module lazily
+      const duckdb = await loadDuckDB();
       
       // Parallel initialization - start all async operations simultaneously
       const [bundle, dataPromise] = await Promise.all([
