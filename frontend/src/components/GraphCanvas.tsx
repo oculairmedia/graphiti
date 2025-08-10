@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, forwardRef, useState, useCallback, use } from 'react';
 import { Cosmograph, prepareCosmographData } from '@cosmograph/react';
+import '../styles/cosmograph.css';
 import { GraphNode } from '../api/types';
 import type { GraphData } from '../types/graph';
 import { useGraphConfig } from '../contexts/GraphConfigProvider';
@@ -199,6 +200,16 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     // Glowing nodes state for real-time visualization
     const [glowingNodes, setGlowingNodes] = useState<Map<string, number>>(new Map());
     const [glowingNodeIndices, setGlowingNodeIndices] = useState<number[]>([]);
+    
+    // CSS variables for label styling (avoids dynamic style tag injection)
+    const cssVariables = React.useMemo(
+      (): React.CSSProperties => ({
+        ['--cosmograph-label-size' as any]: `${config.labelSize}px`,
+        ['--cosmograph-border-width' as any]: `${(config as any).borderWidth ?? 0}px`,
+        ['--cosmograph-border-color' as any]: 'rgba(0,0,0,0.5)',
+      }),
+      [config.labelSize, (config as any).borderWidth]
+    );
     
     // Live statistics tracking for real-time updates
     const [liveStats, setLiveStats] = useState<{
@@ -3204,8 +3215,9 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     }
 
     return (
-      <div 
+      <div
         className={`relative overflow-hidden ${className}`}
+        style={cssVariables}
       >
           <Cosmograph
             ref={cosmographRef}
@@ -3304,7 +3316,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             nodeGreyoutOpacity={selectedNodes.length > 0 || highlightedNodes.length > 0 || glowingNodeIndices.length > 0 ? 0.1 : 1}
             
             // Performance
-            pixelRatio={config.performanceMode ? 1.0 : (currentNodes.length > 10000 ? 1.5 : 2.5)}
+            pixelRatio={1}
             showFPSMonitor={config.showFPS}
             renderUnselectedNodesTransparency={config.pixelationThreshold > 0 ? Math.max(0.1, 1 - config.pixelationThreshold / 20) : 1}
             

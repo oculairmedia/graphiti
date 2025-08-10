@@ -15,6 +15,7 @@ limitations under the License.
 """
 
 import logging
+import os
 from collections import defaultdict
 from time import time
 
@@ -41,6 +42,7 @@ from graphiti_core.search.search_config import (
     SearchResults,
 )
 from graphiti_core.search.search_filters import SearchFilters
+from graphiti_core.search.rust_client import rust_search
 from graphiti_core.search.search_utils import (
     community_fulltext_search,
     community_similarity_search,
@@ -75,6 +77,43 @@ async def search(
 ) -> SearchResults:
     start = time()
 
+    # Check if Rust search is enabled
+    use_rust_search = os.getenv('USE_RUST_SEARCH', 'false').lower() == 'true'
+    rust_search_url = os.getenv('RUST_SEARCH_URL', 'http://localhost:3004')
+    
+    if use_rust_search:
+        logger.info(f"Using Rust search service at {rust_search_url}")
+        try:
+            # Convert filters to dict format for Rust service
+            filters_dict = {}
+            if search_filter:
+                if search_filter.node_types:
+                    filters_dict['node_types'] = search_filter.node_types
+                if search_filter.edge_types:
+                    filters_dict['edge_types'] = search_filter.edge_types
+                if search_filter.group_ids:
+                    filters_dict['group_ids'] = search_filter.group_ids
+                elif group_ids:
+                    filters_dict['group_ids'] = group_ids
+                if search_filter.created_after:
+                    filters_dict['created_after'] = search_filter.created_after.isoformat()
+                if search_filter.created_before:
+                    filters_dict['created_before'] = search_filter.created_before.isoformat()
+            
+            # Use Rust search service
+            return await rust_search(
+                query=query,
+                config=config,
+                base_url=rust_search_url,
+                filters=filters_dict,
+                center_node_uuid=center_node_uuid,
+                bfs_origin_node_uuids=bfs_origin_node_uuids,
+                query_vector=query_vector,
+            )
+        except Exception as e:
+            logger.error(f"Rust search failed, falling back to Python: {e}")
+            # Fall through to Python implementation
+    
     driver = clients.driver
     embedder = clients.embedder
     cross_encoder = clients.cross_encoder
