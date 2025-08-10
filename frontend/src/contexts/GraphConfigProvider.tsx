@@ -400,19 +400,19 @@ export function GraphConfigProvider({ children }: { children: ReactNode }) {
     }
     
     setDynamicConfig(prev => {
-      const existingTypes = Object.keys(prev.nodeTypeColors);
-      const newTypes = nodeTypes.filter(type => !existingTypes.includes(type));
-      
-      if (newTypes.length === 0) {
-        return prev;
-      }
-      
       const newColors = { ...prev.nodeTypeColors };
       const newVisibility = { ...prev.nodeTypeVisibility };
       
-      newTypes.forEach((type, index) => {
-        newColors[type] = generateNodeTypeColor(type, existingTypes.length + index);
-        newVisibility[type] = true;
+      // Ensure ALL node types have both color and visibility entries
+      nodeTypes.forEach((type, index) => {
+        // Add color if missing
+        if (!newColors[type]) {
+          newColors[type] = generateNodeTypeColor(type, index);
+        }
+        // Always ensure visibility is set (default to true if not explicitly set)
+        if (newVisibility[type] === undefined) {
+          newVisibility[type] = true;
+        }
       });
       
       const newConfig = {
