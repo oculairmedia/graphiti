@@ -10,12 +10,12 @@ export interface LoadingPhase {
 
 export interface ProgressiveLoadingConfig {
   // Thresholds for different loading phases
-  coreNodeThreshold?: number;      // Default: 0.7 eigenvector centrality
-  secondaryThreshold?: number;      // Default: 0.3 eigenvector centrality
-  degreeThreshold?: number;         // Default: 10 connections
+  coreNodeThreshold?: number;      // Default: 0.5 eigenvector centrality
+  secondaryThreshold?: number;      // Default: 0.2 eigenvector centrality
+  degreeThreshold?: number;         // Default: 5 connections
   
   // Timing configuration
-  phaseDelayMs?: number;            // Default: 100ms between phases
+  phaseDelayMs?: number;            // Default: 50ms between phases
   chunkSize?: number;               // Default: 500 nodes per chunk
   
   // Visual configuration
@@ -36,10 +36,10 @@ export class ProgressiveLoader {
   
   constructor(config: ProgressiveLoadingConfig = {}) {
     this.config = {
-      coreNodeThreshold: config.coreNodeThreshold ?? 0.7,
-      secondaryThreshold: config.secondaryThreshold ?? 0.3,
-      degreeThreshold: config.degreeThreshold ?? 10,
-      phaseDelayMs: config.phaseDelayMs ?? 100,
+      coreNodeThreshold: config.coreNodeThreshold ?? 0.5,
+      secondaryThreshold: config.secondaryThreshold ?? 0.2,
+      degreeThreshold: config.degreeThreshold ?? 5,
+      phaseDelayMs: config.phaseDelayMs ?? 50,
       chunkSize: config.chunkSize ?? 500,
       fadeInDuration: config.fadeInDuration ?? 500,
       showPlaceholders: config.showPlaceholders ?? true,
@@ -68,7 +68,7 @@ export class ProgressiveLoader {
       const degree = node.properties?.degree_centrality || 0;
       
       // Include high eigenvector centrality OR high degree nodes
-      if (eigenvector > this.config.coreNodeThreshold || degree > 50) {
+      if (eigenvector > this.config.coreNodeThreshold || degree > 30) {
         coreNodeIds.add(node.id);
         return true;
       }

@@ -193,10 +193,10 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     
     const [cosmographData, setCosmographData] = useState<{ nodes: any[]; links: any[] } | null>(null);
     const [progressiveLoader] = useState(() => new ProgressiveLoader({
-      coreNodeThreshold: 0.7,
-      secondaryThreshold: 0.3,
-      degreeThreshold: 10,
-      phaseDelayMs: 100,
+      coreNodeThreshold: 0.5,
+      secondaryThreshold: 0.2,
+      degreeThreshold: 5,
+      phaseDelayMs: 50,
       chunkSize: 500
     }));
     const [loadingPhase, setLoadingPhase] = useState<string>('');
@@ -1321,8 +1321,8 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
               targetIndex: link.targetIndex !== undefined ? link.targetIndex : -1
             }));
             
-            // Use progressive loading if we have a large graph
-            if (indexedNodes.length > 1000) {
+            // Always use progressive loading for better perceived performance
+            if (indexedNodes.length > 100) {
               console.log('[GraphCanvas] Using progressive loading for', indexedNodes.length, 'nodes');
               
               // Prepare loading phases
@@ -1399,8 +1399,8 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
               targetIndex: link.targetIndex !== undefined ? link.targetIndex : -1
             }));
             
-            // Use progressive loading even in fallback
-            if (indexedNodes.length > 1000) {
+            // Always use progressive loading even in fallback
+            if (indexedNodes.length > 100) {
               const phases = progressiveLoader.prepareLoadingPhases(indexedNodes, indexedLinks);
               if (phases.length > 0) {
                 setCosmographData({
