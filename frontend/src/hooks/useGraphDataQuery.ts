@@ -48,6 +48,10 @@ export function useGraphDataQuery() {
   // Skip JSON fetch if using DuckDB (Arrow format is faster)
   const skipJsonFetch = false; // Use JSON fetch as fallback when Arrow data is not available
   
+  // Use progressive loading for large graphs
+  const INITIAL_LOAD_LIMIT = 1000; // Start with 1000 most important nodes
+  const USE_PROGRESSIVE_LOADING = true; // Enable progressive loading
+  
   // Fetch graph data from Rust server (disabled when using Arrow)
   const { data: jsonData, isLoading: isJsonLoading, error } = useQuery({
     queryKey: ['graphData'], // Remove config dependencies to prevent refetches on config changes
@@ -56,10 +60,14 @@ export function useGraphDataQuery() {
         // Return empty data - we'll use Arrow format from DuckDB instead
         return { nodes: [], edges: [] };
       }
-      // Always fetch entire graph to maintain stability
+      
+      // Use progressive loading for better initial performance
+      const limit = USE_PROGRESSIVE_LOADING ? INITIAL_LOAD_LIMIT : 100000;
+      
+      // Always fetch entire graph to maintain stability (or initial batch for progressive)
       const result = await graphClient.getGraphData({ 
         query_type: 'entire_graph',
-        limit: 100000 
+        limit: limit
       });
       return result;
     },
