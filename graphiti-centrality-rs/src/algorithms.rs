@@ -2,7 +2,7 @@ use crate::client::{falkor_value_to_f64, falkor_value_to_i64, falkor_value_to_st
 use crate::error::{CentralityError, Result};
 use crate::models::CentralityScores;
 use falkordb::FalkorValue;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::time::Instant;
 use tracing::{debug, info, warn};
 
@@ -467,6 +467,148 @@ async fn calculate_betweenness_approximation(
     })
 }
 
+/// Calculate eigenvector centrality using power iteration method
+pub async fn calculate_eigenvector_centrality(
+    client: &FalkorClient,
+    group_id: Option<&str>,
+    max_iterations: u32,
+    tolerance: f64,
+) -> Result<CentralityScores> {
+    let start = Instant::now();
+    info!("Starting eigenvector centrality calculation");
+
+    // First, get all nodes and their connections
+    let adjacency_query = if let Some(group_id) = group_id {
+        format!(
+            "MATCH (n) WHERE n.group_id = '{}' 
+             OPTIONAL MATCH (n)-[r]-(m)
+             WHERE m.group_id = '{}'
+             RETURN n.uuid as node, collect(DISTINCT m.uuid) as neighbors",
+            group_id, group_id
+        )
+    } else {
+        "MATCH (n)
+         OPTIONAL MATCH (n)-[r]-(m)
+         RETURN n.uuid as node, collect(DISTINCT m.uuid) as neighbors"
+            .to_string()
+    };
+
+    debug!("Fetching adjacency list for eigenvector centrality");
+    let results = client.execute_query(&adjacency_query, None).await?;
+    
+    // Build adjacency list
+    let mut adjacency: HashMap<String, Vec<String>> = HashMap::new();
+    let mut all_nodes: HashSet<String> = HashSet::new();
+    
+    for record in results {
+        if let Some(node_val) = record.get("node") {
+            let node = falkor_value_to_string(node_val);
+            all_nodes.insert(node.clone());
+            
+            // Get neighbors
+            let neighbors = if let Some(FalkorValue::Array(neighbors_array)) = record.get("neighbors") {
+                neighbors_array
+                    .iter()
+                    .filter_map(|v| {
+                        if let FalkorValue::String(s) = v {
+                            Some(s.clone())
+                        } else {
+                            None
+                        }
+                    })
+                    .collect()
+            } else {
+                Vec::new()
+            };
+            
+            adjacency.insert(node, neighbors);
+        }
+    }
+    
+    if all_nodes.is_empty() {
+        return Err(CentralityError::NoNodesFound);
+    }
+    
+    let node_count = all_nodes.len();
+    info!("Computing eigenvector centrality for {} nodes", node_count);
+    
+    // Initialize scores to 1/sqrt(n)
+    let initial_value = 1.0 / (node_count as f64).sqrt();
+    let mut scores: HashMap<String, f64> = HashMap::new();
+    for node in &all_nodes {
+        scores.insert(node.clone(), initial_value);
+    }
+    
+    // Power iteration
+    for iteration in 0..max_iterations {
+        let mut new_scores: HashMap<String, f64> = HashMap::new();
+        
+        // Calculate new scores: score[v] = sum of neighbors' scores
+        for node in &all_nodes {
+            let mut score = 0.0;
+            if let Some(neighbors) = adjacency.get(node) {
+                for neighbor in neighbors {
+                    if let Some(neighbor_score) = scores.get(neighbor) {
+                        score += neighbor_score;
+                    }
+                }
+            }
+            new_scores.insert(node.clone(), score);
+        }
+        
+        // Calculate L2 norm for normalization
+        let norm: f64 = new_scores
+            .values()
+            .map(|s| s * s)
+            .sum::<f64>()
+            .sqrt();
+        
+        // Normalize scores
+        if norm > 0.0 {
+            for score in new_scores.values_mut() {
+                *score /= norm;
+            }
+        } else {
+            // If norm is 0, reinitialize to avoid degenerate case
+            warn!("Eigenvector centrality norm is 0, reinitializing");
+            for score in new_scores.values_mut() {
+                *score = initial_value;
+            }
+        }
+        
+        // Check for convergence
+        let mut total_diff = 0.0;
+        for node in &all_nodes {
+            let old_score = scores.get(node).unwrap_or(&0.0);
+            let new_score = new_scores.get(node).unwrap_or(&0.0);
+            total_diff += (old_score - new_score).abs();
+        }
+        
+        let avg_diff = total_diff / node_count as f64;
+        debug!("Iteration {}: average difference = {:.8}", iteration + 1, avg_diff);
+        
+        // Update scores for next iteration
+        scores = new_scores;
+        
+        // Check convergence
+        if avg_diff < tolerance {
+            info!("Eigenvector centrality converged after {} iterations", iteration + 1);
+            break;
+        }
+    }
+    
+    let duration = start.elapsed();
+    info!(
+        "Eigenvector centrality calculation completed in {:?} for {} nodes",
+        duration, node_count
+    );
+    
+    Ok(CentralityScores {
+        scores,
+        nodes_processed: node_count,
+    })
+}
+
 /// Calculate all centrality metrics efficiently
 pub async fn calculate_all_centralities(
     client: &FalkorClient,
@@ -485,6 +627,9 @@ pub async fn calculate_all_centralities(
     let sample_size = if *node_count > 100 { Some(50) } else { None };
 
     let betweenness = calculate_betweenness_centrality(client, group_id, sample_size).await?;
+    
+    // Calculate true eigenvector centrality
+    let eigenvector = calculate_eigenvector_centrality(client, group_id, 100, 1e-6).await?;
 
     // Find max degree for normalization
     let max_degree = degree.scores.values().fold(0.0_f64, |a, &b| a.max(b));
@@ -496,6 +641,7 @@ pub async fn calculate_all_centralities(
         .keys()
         .chain(degree.scores.keys())
         .chain(betweenness.scores.keys())
+        .chain(eigenvector.scores.keys())
         .cloned()
         .collect();
 
@@ -514,11 +660,15 @@ pub async fn calculate_all_centralities(
         // Betweenness is already normalized in the approximation function
         let betweenness_score = betweenness.scores.get(&node_id).copied().unwrap_or(0.0);
         node_scores.insert("betweenness".to_string(), betweenness_score);
+        
+        // True eigenvector centrality (already normalized by power iteration)
+        let eigenvector_score = eigenvector.scores.get(&node_id).copied().unwrap_or(0.0);
+        node_scores.insert("eigenvector".to_string(), eigenvector_score);
 
-        // Calculate eigenvector centrality approximation (importance)
-        // Use a weighted combination that's guaranteed to be in [0,1] range
-        let eigenvector = (0.5 * pagerank_score + 0.3 * degree_normalized + 0.2 * betweenness_score).min(1.0);
-        node_scores.insert("importance".to_string(), eigenvector);
+        // Calculate importance as a weighted combination
+        // This is a composite metric, not eigenvector centrality
+        let importance = (0.4 * pagerank_score + 0.3 * eigenvector_score + 0.2 * degree_normalized + 0.1 * betweenness_score).min(1.0);
+        node_scores.insert("importance".to_string(), importance);
 
         all_scores.insert(node_id, node_scores);
     }
