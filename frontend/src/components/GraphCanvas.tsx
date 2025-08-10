@@ -1074,6 +1074,8 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         // Execute data preparation directly without DataKitCoordinator wrapper
         let transformedNodes: any[] = [];
         let transformedLinks: any[] = [];
+        let clusterAssignments: string[] = [];
+        let clusterStrengths: number[] = [];
         
         try {
           setIsDataPreparing(true);
@@ -1089,8 +1091,6 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           transformedNodes = memoizedNodes.filter(node => node.id && node.id !== 'undefined');
 
           // Apply clustering if enabled
-          let clusterAssignments: string[] = [];
-          let clusterStrengths: number[] = [];
           
           if (config.clusteringEnabled && config.clusteringMethod !== 'none') {
             const clusteringConfig: ClusteringConfig = {
@@ -3316,7 +3316,6 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             // Performance
             pixelRatio={1}
             showFPSMonitor={config.showFPS}
-            renderUnselectedNodesTransparency={config.pixelationThreshold > 0 ? Math.max(0.1, 1 - config.pixelationThreshold / 20) : 1}
             
             // Zoom behavior
             enableSimulationDuringZoom={true}
