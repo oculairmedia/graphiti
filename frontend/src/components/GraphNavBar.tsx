@@ -12,6 +12,7 @@ interface GraphNavBarProps {
   isVirtualized: boolean;
   isSimulationRunning: boolean;
   selectedNodes: GraphNode[];
+  allNodes: GraphNode[];
   onNodeSelect: (node: GraphNode) => void;
   onHighlightNodes: (nodes: GraphNode[]) => void;
   onSelectNodes: (nodes: GraphNode[]) => void;
@@ -33,6 +34,7 @@ export const GraphNavBar: React.FC<GraphNavBarProps> = ({
   isVirtualized,
   isSimulationRunning,
   selectedNodes,
+  allNodes,
   onNodeSelect,
   onHighlightNodes,
   onSelectNodes,
@@ -70,7 +72,7 @@ export const GraphNavBar: React.FC<GraphNavBarProps> = ({
           onSelectNodes={onSelectNodes}
           onClearSelection={onClearSelection}
           onFilterClick={onFilterClick}
-          nodes={selectedNodes}
+          nodes={allNodes}
           className="w-full"
         />
       </div>

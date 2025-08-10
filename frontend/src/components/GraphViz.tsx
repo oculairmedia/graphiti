@@ -314,7 +314,8 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
           visibleNodes={transformedData.nodes.length}
           isVirtualized={data && data.nodes.length > 10000}
           isSimulationRunning={isSimulationRunning}
-          selectedNodes={data?.nodes || []}
+          selectedNodes={selectedNodes}
+          allNodes={transformedData.nodes}
           onNodeSelect={handleNodeSelectWithCosmograph}
           onHighlightNodes={handleHighlightNodes}
           onSelectNodes={handleSelectNodes}
@@ -396,14 +397,15 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
             <StatsPanel 
               isOpen={showStatsPanel}
               onClose={() => setShowStatsPanel(false)}
-              data={data ? {
-                ...data,
-                edges: data.edges || transformedData.links?.map(link => ({
+              data={transformedData.nodes.length > 0 ? {
+                nodes: transformedData.nodes,
+                edges: transformedData.links?.map(link => ({
                   source: link.source,
                   target: link.target,
                   edge_type: link.edge_type || '',
                   weight: link.weight || 1
-                })) || []
+                })) || [],
+                stats: data?.stats || {}
               } : undefined}
               liveStats={liveStats}
             />

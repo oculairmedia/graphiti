@@ -364,9 +364,15 @@ export function useGraphDataQuery() {
     }
     
     // Node type filter - only apply if we have filtered types configured
-    // Skip filter if it only contains "Entity" (likely bad persisted state)
+    // Skip filter if:
+    // 1. Empty array (no filtering)
+    // 2. Only contains "Entity" (likely bad persisted state from before Episodic was added)
+    // 3. Contains both Entity and Episodic (showing all main types)
+    const hasEntityAndEpisodic = filterConfig.filteredNodeTypes.includes('Entity') && 
+                                 filterConfig.filteredNodeTypes.includes('Episodic');
     const shouldApplyTypeFilter = filterConfig.filteredNodeTypes.length > 0 && 
-      !(filterConfig.filteredNodeTypes.length === 1 && filterConfig.filteredNodeTypes[0] === 'Entity');
+      !(filterConfig.filteredNodeTypes.length === 1 && filterConfig.filteredNodeTypes[0] === 'Entity') &&
+      !hasEntityAndEpisodic;
     
     if (shouldApplyTypeFilter && !filterConfig.filteredNodeTypes.includes(node.node_type)) {
       filterCacheRef.current.set(cacheKey, false);
