@@ -46,6 +46,7 @@ export function useGraphDataQuery() {
   const lastFetchTimeRef = useRef(0);
   
   // Skip JSON fetch if using DuckDB (Arrow format is faster)
+  // TEMPORARY: Force JSON fetch until Arrow data contains all nodes
   const skipJsonFetch = false; // Use JSON fetch as fallback when Arrow data is not available
   
   // Use progressive loading for large graphs
@@ -123,6 +124,7 @@ export function useGraphDataQuery() {
             summary: n.summary || null,
             size: n.degree_centrality || 1,
             created_at: n.created_at,
+            created_at_timestamp: n.created_at_timestamp || null,  // Add timestamp for timeline
             properties: {
               idx: n.idx !== undefined ? n.idx : arrayIndex,  // Also store in properties for access
               degree_centrality: n.degree_centrality || 0,
@@ -133,6 +135,7 @@ export function useGraphDataQuery() {
               connections: n.connections || n.degree || 0,
               created: n.created_at,
               date: n.created_at,
+              created_at_timestamp: n.created_at_timestamp || null,  // Also in properties for timeline
               ...n // Include all other properties
             }
         }));
@@ -504,7 +507,9 @@ export function useGraphDataQuery() {
       return acc;
     }, {} as Record<string, number>);
     
-    const visibleNodes = sourceData.nodes.filter(node => nodePassesFilters(node, filterConfig));
+    // Don't filter nodes - load the full graph
+    // const visibleNodes = sourceData.nodes.filter(node => nodePassesFilters(node, filterConfig));
+    const visibleNodes = sourceData.nodes;
     
     // Debug: Log node type distribution after filtering
     const nodeTypesAfter = visibleNodes.reduce((acc, node) => {

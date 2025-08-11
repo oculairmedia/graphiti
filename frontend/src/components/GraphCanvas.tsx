@@ -617,8 +617,9 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
                   betweenness_centrality: Number(node.properties?.betweenness_centrality || 0),
                   eigenvector_centrality: Number(node.properties?.eigenvector_centrality || 0),
                   created_at: node.properties?.created_at || node.created_at || (node.properties as any)?.created || null,
-                  created_at_timestamp: (node.properties?.created_at || node.created_at || (node.properties as any)?.created) ?
-                    new Date(node.properties?.created_at || node.created_at || (node.properties as any)?.created).getTime() : null
+                  created_at_timestamp: node.created_at_timestamp || node.properties?.created_at_timestamp || 
+                    ((node.properties?.created_at || node.created_at || (node.properties as any)?.created) ?
+                    new Date(node.properties?.created_at || node.created_at || (node.properties as any)?.created).getTime() : null)
                 });
               });
             }
@@ -673,8 +674,9 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
                   betweenness_centrality: Number(node.properties?.betweenness_centrality || 0),
                   eigenvector_centrality: Number(node.properties?.eigenvector_centrality || 0),
                   created_at: node.properties?.created_at || node.created_at || node.properties?.created || null,
-                  created_at_timestamp: (node.properties?.created_at || node.created_at || node.properties?.created) ? 
-                    new Date(node.properties?.created_at || node.created_at || node.properties?.created).getTime() : null
+                  created_at_timestamp: node.created_at_timestamp || node.properties?.created_at_timestamp ||
+                    ((node.properties?.created_at || node.created_at || node.properties?.created) ? 
+                    new Date(node.properties?.created_at || node.created_at || node.properties?.created).getTime() : null)
                 });
               });
             }
@@ -1104,6 +1106,20 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     const memoizedNodes = React.useMemo(() => {
       if (!nodes || nodes.length === 0) return [];
       
+      // Debug: Check timestamp data
+      if (nodes.length > 0) {
+        const sampleNode = nodes[0];
+        console.log('[GraphCanvas] Sample node timestamp check:', {
+          nodeId: sampleNode.id,
+          directTimestamp: sampleNode.created_at_timestamp,
+          propsTimestamp: sampleNode.properties?.created_at_timestamp,
+          created_at: sampleNode.created_at,
+          propsCreated: sampleNode.properties?.created_at,
+          nodeCount: nodes.length,
+          nodesWithTimestamp: nodes.filter(n => n.created_at_timestamp || n.properties?.created_at_timestamp).length
+        });
+      }
+      
       return nodes.map((node, arrayIndex) => ({
         id: String(node.id),
         // Use the preserved idx from DuckDB if available, otherwise use array index
@@ -1118,7 +1134,8 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         betweenness_centrality: Number(node.properties?.betweenness_centrality || 0),
         eigenvector_centrality: Number(node.properties?.eigenvector_centrality || 0),
         created_at: node.properties?.created_at || node.created_at || null,
-        created_at_timestamp: node.properties?.created_at ? new Date(node.properties?.created_at).getTime() : null
+        created_at_timestamp: node.created_at_timestamp || node.properties?.created_at_timestamp || 
+          (node.properties?.created_at ? new Date(node.properties?.created_at).getTime() : null)
       }));
     }, [nodes]);
     
@@ -2561,7 +2578,9 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             eigenvector_centrality: Number(node.properties?.eigenvector_centrality || 0),
             // Include temporal data for timeline
             created_at: node.properties?.created_at || node.created_at || (node.properties as any)?.created || null,
-            created_at_timestamp: (node.properties?.created_at || node.created_at || (node.properties as any)?.created) ? new Date(node.properties?.created_at || node.created_at || (node.properties as any)?.created).getTime() : null
+            created_at_timestamp: node.created_at_timestamp || node.properties?.created_at_timestamp ||
+              ((node.properties?.created_at || node.created_at || (node.properties as any)?.created) ? 
+              new Date(node.properties?.created_at || node.created_at || (node.properties as any)?.created).getTime() : null)
           }));
           
           const transformedLinks = updatedLinks.map(link => ({
@@ -2612,7 +2631,9 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           eigenvector_centrality: Number(node.properties?.eigenvector_centrality || 0),
           // Include temporal data for timeline
           created_at: node.properties?.created_at || node.created_at || (node.properties as any)?.created || null,
-          created_at_timestamp: (node.properties?.created_at || node.created_at || (node.properties as any)?.created) ? new Date(node.properties?.created_at || node.created_at || (node.properties as any)?.created).getTime() : null,
+          created_at_timestamp: node.created_at_timestamp || node.properties?.created_at_timestamp ||
+            ((node.properties?.created_at || node.created_at || (node.properties as any)?.created) ? 
+            new Date(node.properties?.created_at || node.created_at || (node.properties as any)?.created).getTime() : null),
           // Cluster by node type for proper grouping
           cluster: String(node.node_type || 'Unknown'),
           clusterStrength: 0.7 // Strong clustering by type (0-1 range)
@@ -2664,7 +2685,9 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           eigenvector_centrality: Number(node.properties?.eigenvector_centrality || 0),
           // Include temporal data for timeline
           created_at: node.properties?.created_at || node.created_at || (node.properties as any)?.created || null,
-          created_at_timestamp: (node.properties?.created_at || node.created_at || (node.properties as any)?.created) ? new Date(node.properties?.created_at || node.created_at || (node.properties as any)?.created).getTime() : null,
+          created_at_timestamp: node.created_at_timestamp || node.properties?.created_at_timestamp ||
+            ((node.properties?.created_at || node.created_at || (node.properties as any)?.created) ? 
+            new Date(node.properties?.created_at || node.created_at || (node.properties as any)?.created).getTime() : null),
           // Cluster by node type for proper grouping
           cluster: String(node.node_type || 'Unknown'),
           clusterStrength: 0.7 // Strong clustering by type (0-1 range)
@@ -2718,7 +2741,9 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           eigenvector_centrality: Number(node.properties?.eigenvector_centrality || 0),
           // Include temporal data for timeline
           created_at: node.properties?.created_at || node.created_at || (node.properties as any)?.created || null,
-          created_at_timestamp: (node.properties?.created_at || node.created_at || (node.properties as any)?.created) ? new Date(node.properties?.created_at || node.created_at || (node.properties as any)?.created).getTime() : null,
+          created_at_timestamp: node.created_at_timestamp || node.properties?.created_at_timestamp ||
+            ((node.properties?.created_at || node.created_at || (node.properties as any)?.created) ? 
+            new Date(node.properties?.created_at || node.created_at || (node.properties as any)?.created).getTime() : null),
           // Cluster by node type for proper grouping
           cluster: String(node.node_type || 'Unknown'),
           clusterStrength: 0.7 // Strong clustering by type (0-1 range)
@@ -2769,7 +2794,9 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           eigenvector_centrality: Number(node.properties?.eigenvector_centrality || 0),
           // Include temporal data for timeline
           created_at: node.properties?.created_at || node.created_at || (node.properties as any)?.created || null,
-          created_at_timestamp: (node.properties?.created_at || node.created_at || (node.properties as any)?.created) ? new Date(node.properties?.created_at || node.created_at || (node.properties as any)?.created).getTime() : null,
+          created_at_timestamp: node.created_at_timestamp || node.properties?.created_at_timestamp ||
+            ((node.properties?.created_at || node.created_at || (node.properties as any)?.created) ? 
+            new Date(node.properties?.created_at || node.created_at || (node.properties as any)?.created).getTime() : null),
           // Cluster by node type for proper grouping
           cluster: String(node.node_type || 'Unknown'),
           clusterStrength: 0.7 // Strong clustering by type (0-1 range)
@@ -3642,4 +3669,6 @@ export const GraphCanvas = React.memo(GraphCanvasComponent, (prevProps, nextProp
   return !shouldRerender;
 });
 
-GraphCanvas.displayName = 'GraphCanvas';// Trigger rebuild with all changes Wed Aug  6 01:00:43 AM EDT 2025
+GraphCanvas.displayName = 'GraphCanvas';
+
+// Trigger rebuild with all changes Wed Aug  6 01:00:43 AM EDT 2025

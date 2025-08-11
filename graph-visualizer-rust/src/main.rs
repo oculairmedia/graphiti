@@ -462,6 +462,7 @@ async fn main() -> anyhow::Result<()> {
     let update_tx_clone = update_tx.clone();
     let cache_config_clone = state.cache_config.clone();
     let graph_name_clone = graph_name.clone();
+    let store_clone = state.duckdb_store.clone();
     
     tokio::spawn(async move {
         let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(5));
@@ -505,27 +506,43 @@ async fn main() -> anyhow::Result<()> {
                           last_node_count, current_node_count,
                           last_edge_count, current_edge_count);
                     
-                    // Clear caches if cache invalidation is enabled
-                    if cache_config_clone.enabled {
-                        cache_clone.clear();
-                        let mut arrow_cache_guard = arrow_cache_clone.write().await;
-                        *arrow_cache_guard = None;
-                        drop(arrow_cache_guard);
-                        info!("Caches cleared due to graph changes");
-                    }
+                    // RELOAD DATA FROM FALKORDB INTO DUCKDB
+                    info!("Auto-reloading DuckDB from FalkorDB due to detected changes");
                     
-                    // Broadcast cache invalidation message as a special GraphUpdate
-                    // We'll use the UpdateNodes operation with empty nodes to signal cache invalidation
-                    let cache_invalidation = duckdb_store::GraphUpdate {
-                        operation: duckdb_store::UpdateOperation::UpdateNodes,
-                        nodes: Some(vec![]), // Empty nodes signals cache invalidation
-                        edges: None,
-                        timestamp: std::time::SystemTime::now()
-                            .duration_since(std::time::UNIX_EPOCH)
-                            .unwrap()
-                            .as_secs(),
-                    };
-                    let _ = update_tx_clone.send(cache_invalidation);
+                    // Fetch fresh data from FalkorDB
+                    let query = build_query("entire_graph", 100000, 0, None);
+                    if let Ok(graph_data) = execute_graph_query(&client_clone, &graph_name_clone, &query).await {
+                        info!("Fetched {} nodes and {} edges from FalkorDB", 
+                            graph_data.nodes.len(), graph_data.edges.len());
+                        
+                        // Reload DuckDB with fresh data
+                        if let Ok(_) = store_clone.load_initial_data(graph_data.nodes.clone(), graph_data.edges.clone()).await {
+                            info!("DuckDB reloaded successfully with fresh data");
+                            
+                            // Clear caches after successful reload
+                            cache_clone.clear();
+                            let mut arrow_cache_guard = arrow_cache_clone.write().await;
+                            *arrow_cache_guard = None;
+                            drop(arrow_cache_guard);
+                            info!("Caches cleared after successful reload");
+                            
+                            // Broadcast full reload event with actual data
+                            let full_reload = duckdb_store::GraphUpdate {
+                                operation: duckdb_store::UpdateOperation::AddNodes,
+                                nodes: Some(graph_data.nodes),
+                                edges: Some(graph_data.edges),
+                                timestamp: std::time::SystemTime::now()
+                                    .duration_since(std::time::UNIX_EPOCH)
+                                    .unwrap()
+                                    .as_secs(),
+                            };
+                            let _ = update_tx_clone.send(full_reload);
+                        } else {
+                            error!("Failed to reload DuckDB with fresh data");
+                        }
+                    } else {
+                        error!("Failed to fetch fresh data from FalkorDB");
+                    }
                 }
                 
                 last_node_count = current_node_count;
