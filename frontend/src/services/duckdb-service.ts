@@ -164,7 +164,19 @@ export class DuckDBService {
           NULL as clusterStrength
         FROM nodes`);
       await this.conn.query(`CREATE OR REPLACE VIEW cosmograph_links AS 
-        SELECT source, sourceidx as sourceIndex, target, targetidx as targetIndex, edge_type, weight, color 
+        SELECT 
+          source, 
+          sourceidx as sourceIndex, 
+          target, 
+          targetidx as targetIndex, 
+          edge_type, 
+          weight, 
+          color,
+          CASE 
+            WHEN edge_type IN ('entity_entity', 'relates_to') THEN 1.5
+            WHEN edge_type IN ('episodic', 'temporal', 'mentioned_in') THEN 0.5
+            ELSE 1.0
+          END as strength
         FROM edges`);
       
       console.log(`[DuckDB] Loaded ${nodesTable.numRows} nodes and ${edgesTable.numRows} edges`);
@@ -222,7 +234,21 @@ export class DuckDBService {
           
           // Also create Cosmograph-specific views/tables that map to our data
           await this.conn.query(`CREATE OR REPLACE VIEW cosmograph_points AS SELECT * FROM nodes`);
-          await this.conn.query(`CREATE OR REPLACE VIEW cosmograph_links AS SELECT * FROM edges`);
+          await this.conn.query(`CREATE OR REPLACE VIEW cosmograph_links AS 
+            SELECT 
+              source, 
+              sourceidx as sourceIndex, 
+              target, 
+              targetidx as targetIndex, 
+              edge_type, 
+              weight, 
+              color,
+              CASE 
+                WHEN edge_type IN ('entity_entity', 'relates_to') THEN 1.5
+                WHEN edge_type IN ('episodic', 'temporal', 'mentioned_in') THEN 0.5
+                ELSE 1.0
+              END as strength
+            FROM edges`);
           
           console.log('[DuckDB] Loaded from cache successfully');
           
@@ -293,7 +319,19 @@ export class DuckDBService {
           NULL as clusterStrength
         FROM nodes`);
       await this.conn.query(`CREATE OR REPLACE VIEW cosmograph_links AS 
-        SELECT source, sourceidx as sourceIndex, target, targetidx as targetIndex, edge_type, weight, color 
+        SELECT 
+          source, 
+          sourceidx as sourceIndex, 
+          target, 
+          targetidx as targetIndex, 
+          edge_type, 
+          weight, 
+          color,
+          CASE 
+            WHEN edge_type IN ('entity_entity', 'relates_to') THEN 1.5
+            WHEN edge_type IN ('episodic', 'temporal', 'mentioned_in') THEN 0.5
+            ELSE 1.0
+          END as strength
         FROM edges`);
       
       // Get stats

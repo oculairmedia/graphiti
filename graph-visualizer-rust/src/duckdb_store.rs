@@ -84,6 +84,7 @@ impl DuckDBStore {
             Field::new("edge_type", DataType::Utf8, false),
             Field::new("weight", DataType::Float64, false),
             Field::new("color", DataType::Utf8, true),
+            Field::new("strength", DataType::Float64, true), // Link strength for Cosmograph
         ]));
         
         // Create tables
@@ -115,6 +116,7 @@ impl DuckDBStore {
                 edge_type VARCHAR NOT NULL,
                 weight DOUBLE NOT NULL DEFAULT 1.0,
                 color VARCHAR,
+                strength DOUBLE DEFAULT 1.0,
                 PRIMARY KEY (source, target, edge_type)
             )",
             params![],
@@ -203,14 +205,21 @@ impl DuckDBStore {
         }
         
         // Insert edges with indices
-        let stmt_edge = "INSERT OR IGNORE INTO edges (source, sourceidx, target, targetidx, edge_type, weight, color) 
-                         VALUES (?, ?, ?, ?, ?, ?, ?)";
+        let stmt_edge = "INSERT OR IGNORE INTO edges (source, sourceidx, target, targetidx, edge_type, weight, color, strength) 
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
         
         for edge in edges.iter() {
             if let (Some(&source_idx), Some(&target_idx)) = 
                 (node_to_idx.get(&edge.from), node_to_idx.get(&edge.to)) {
                 
                 let color = self.get_edge_color(&edge.edge_type);
+                
+                // Calculate link strength based on edge type
+                let strength = match edge.edge_type.as_str() {
+                    "entity_entity" | "relates_to" => 1.5,  // Stronger Entity-Entity connections
+                    "episodic" | "temporal" | "mentioned_in" => 0.5,  // Weaker Episodic connections
+                    _ => 1.0,  // Default strength
+                };
                 
                 tx.execute(
                     stmt_edge,
@@ -221,7 +230,8 @@ impl DuckDBStore {
                         target_idx,
                         &edge.edge_type,
                         edge.weight,
-                        color
+                        color,
+                        strength
                     ],
                 )?;
             }
@@ -317,7 +327,7 @@ impl DuckDBStore {
         let conn = self.conn.lock().unwrap();
         
         let mut stmt = conn.prepare(
-            "SELECT source, sourceidx, target, targetidx, edge_type, weight, color 
+            "SELECT source, sourceidx, target, targetidx, edge_type, weight, color, strength 
              FROM edges 
              ORDER BY sourceidx, targetidx"
         )?;
@@ -329,6 +339,7 @@ impl DuckDBStore {
         let mut edge_types = Vec::new();
         let mut weights = Vec::new();
         let mut colors = Vec::new();
+        let mut strengths = Vec::new();
         
         let rows = stmt.query_map(params![], |row| {
             Ok((
@@ -339,11 +350,12 @@ impl DuckDBStore {
                 row.get::<_, String>(4)?,     // edge_type
                 row.get::<_, f64>(5)?,        // weight
                 row.get::<_, Option<String>>(6)?, // color
+                row.get::<_, Option<f64>>(7)?, // strength
             ))
         })?;
         
         for row in rows {
-            let (source, source_idx, target, target_idx, edge_type, weight, color) = row?;
+            let (source, source_idx, target, target_idx, edge_type, weight, color, strength) = row?;
             sources.push(source);
             source_indices.push(source_idx);
             targets.push(target);
@@ -351,6 +363,7 @@ impl DuckDBStore {
             edge_types.push(edge_type);
             weights.push(weight);
             colors.push(color);
+            strengths.push(strength.unwrap_or(1.0));
         }
         
         let batch = RecordBatch::try_new(
@@ -363,6 +376,7 @@ impl DuckDBStore {
                 Arc::new(StringArray::from(edge_types)) as ArrayRef,
                 Arc::new(Float64Array::from(weights)) as ArrayRef,
                 Arc::new(StringArray::from(colors)) as ArrayRef,
+                Arc::new(Float64Array::from(strengths)) as ArrayRef,
             ],
         )?;
         
@@ -518,9 +532,16 @@ impl DuckDBStore {
                 if let (Some(src_idx), Some(tgt_idx)) = (source_idx, target_idx) {
                     let color = self.get_edge_color(&edge.edge_type);
                     
+                    // Calculate link strength based on edge type
+                    let strength = match edge.edge_type.as_str() {
+                        "entity_entity" | "relates_to" => 1.5,  // Stronger Entity-Entity connections
+                        "episodic" | "temporal" | "mentioned_in" => 0.5,  // Weaker Episodic connections
+                        _ => 1.0,  // Default strength
+                    };
+                    
                     tx.execute(
-                        "INSERT OR IGNORE INTO edges (source, sourceidx, target, targetidx, edge_type, weight, color) 
-                         VALUES (?, ?, ?, ?, ?, ?, ?)",
+                        "INSERT OR IGNORE INTO edges (source, sourceidx, target, targetidx, edge_type, weight, color, strength) 
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                         params![
                             &edge.from,
                             src_idx,
@@ -528,7 +549,8 @@ impl DuckDBStore {
                             tgt_idx,
                             &edge.edge_type,
                             edge.weight,
-                            color
+                            color,
+                            strength
                         ],
                     )?;
                     
@@ -586,9 +608,16 @@ impl DuckDBStore {
                 if let (Some(src_idx), Some(tgt_idx)) = (source_idx, target_idx) {
                     let color = self.get_edge_color(&pending.edge.edge_type);
                     
+                    // Calculate link strength based on edge type
+                    let strength = match pending.edge.edge_type.as_str() {
+                        "entity_entity" | "relates_to" => 1.5,  // Stronger Entity-Entity connections
+                        "episodic" | "temporal" | "mentioned_in" => 0.5,  // Weaker Episodic connections
+                        _ => 1.0,  // Default strength
+                    };
+                    
                     tx.execute(
-                        "INSERT OR IGNORE INTO edges (source, sourceidx, target, targetidx, edge_type, weight, color) 
-                         VALUES (?, ?, ?, ?, ?, ?, ?)",
+                        "INSERT OR IGNORE INTO edges (source, sourceidx, target, targetidx, edge_type, weight, color, strength) 
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                         params![
                             &pending.edge.from,
                             src_idx,
@@ -596,7 +625,8 @@ impl DuckDBStore {
                             tgt_idx,
                             &pending.edge.edge_type,
                             pending.edge.weight,
-                            color
+                            color,
+                            strength
                         ],
                     )?;
                     

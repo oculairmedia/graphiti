@@ -66,21 +66,21 @@ export const GraphControlContext = createContext<GraphControlContextType | undef
 
 // Default configurations
 const defaultStableConfig: StableConfig = {
-  // Physics - Cosmograph v2.0 simulation defaults
-  gravity: 0.05,
-  repulsion: 3.0,
+  // Physics - Optimized simulation parameters based on Cosmograph v2.0 docs
+  gravity: 0.25,  // Increased from 0.05 - better clustering
+  repulsion: 1.0,  // Reduced from 3.0 - less spread, tighter layout
   centerForce: 0.10,
-  friction: 0.86,
-  linkSpring: 0.12,
-  linkDistance: 3.1,
+  friction: 0.85,  // Reduced from 0.86 - slightly smoother movement
+  linkSpring: 0.15,  // Slightly increased for stronger connections
+  linkDistance: 10,  // Increased from 3.1 - better spacing (Cosmograph default)
   linkDistRandomVariationRange: [1, 1.2],
-  mouseRepulsion: 10.0,
-  simulationDecay: 10000, // 10 seconds for longer natural simulation
-  simulationRepulsionTheta: 1.70,
+  mouseRepulsion: 2.0,  // Reduced from 10.0 - more subtle interaction
+  simulationDecay: 5000, // Reduced from 10000 - faster convergence (5 seconds)
+  simulationRepulsionTheta: 1.15,  // Reduced from 1.70 - more accurate (Cosmograph default)
   simulationCluster: 0.1, // Default cluster coefficient
-  simulationClusterStrength: 0.5,
+  simulationClusterStrength: 0.5,  // Not using - kills performance
   simulationImpulse: 0.01,
-  spaceSize: 4096,
+  spaceSize: 4096,  // Keep at 4096, increase to 8192 only for very large graphs
   
   // Quadtree optimization
   useQuadtree: true,
