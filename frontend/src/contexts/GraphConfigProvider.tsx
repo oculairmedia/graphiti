@@ -118,6 +118,11 @@ const defaultStableConfig: StableConfig = {
   episodicStrength: 0.5,
   defaultLinkStrength: 1.0,
   
+  // Link Animation
+  linkAnimationEnabled: false,
+  linkAnimationAmplitude: 0.15,  // ±15% variation
+  linkAnimationFrequency: 0.5,    // Slower, organic movement
+  
   // Node sizing
   minNodeSize: 4,
   maxNodeSize: 30,

@@ -54,6 +54,11 @@ export interface StableConfig {
   episodicStrength: number;
   defaultLinkStrength: number;
   
+  // Link Animation
+  linkAnimationEnabled: boolean;
+  linkAnimationAmplitude: number;  // How much variation (0.1 = ±10%)
+  linkAnimationFrequency: number;  // Speed of variation (lower = slower)
+  
   // Node sizing defaults
   minNodeSize: number;
   maxNodeSize: number;

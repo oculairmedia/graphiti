@@ -502,6 +502,63 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
                 </div>
 
                 <div>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-sm font-medium">Link Animation</h3>
+                    <Switch
+                      checked={config.linkAnimationEnabled}
+                      onCheckedChange={(checked) => updateConfig({ linkAnimationEnabled: checked })}
+                      className="data-[state=checked]:bg-purple-500"
+                    />
+                  </div>
+                  
+                  {config.linkAnimationEnabled && (
+                    <div className="space-y-4">
+                      {/* Animation Amplitude */}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-xs">Variation Amount</Label>
+                          <span className="text-xs text-muted-foreground">
+                            ±{(config.linkAnimationAmplitude * 100).toFixed(0)}%
+                          </span>
+                        </div>
+                        <Slider
+                          value={[config.linkAnimationAmplitude]}
+                          onValueChange={(value) => updateConfig({ linkAnimationAmplitude: value[0] })}
+                          min={0.05}
+                          max={0.5}
+                          step={0.05}
+                          className="w-full"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          How much the link strength varies
+                        </p>
+                      </div>
+
+                      {/* Animation Speed */}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-xs">Animation Speed</Label>
+                          <span className="text-xs text-muted-foreground">
+                            {config.linkAnimationFrequency.toFixed(1)}x
+                          </span>
+                        </div>
+                        <Slider
+                          value={[config.linkAnimationFrequency]}
+                          onValueChange={(value) => updateConfig({ linkAnimationFrequency: value[0] })}
+                          min={0.1}
+                          max={2.0}
+                          step={0.1}
+                          className="w-full"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Speed of organic movement
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div>
                   <h3 className="text-sm font-medium mb-3">Link Display</h3>
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
