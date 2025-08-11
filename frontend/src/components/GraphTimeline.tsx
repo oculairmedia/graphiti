@@ -39,45 +39,6 @@ export const GraphTimeline = forwardRef<GraphTimelineHandle, GraphTimelineProps>
     const timelineRef = useRef<CosmographTimelineRef>(null);
     const cosmograph = useCosmograph();
     
-    // Debug: Check what data timeline is getting
-    useEffect(() => {
-      if (cosmograph) {
-        // Try different methods to access node data
-        const methods = [
-          'getNodes',
-          'getData',
-          'getPointPositions',
-          'getNodeData',
-          'nodes',
-          'data'
-        ];
-
-        const availableMethods = methods.filter(method => typeof cosmograph[method] === 'function');
-        const availableProperties = methods.filter(method => cosmograph[method] !== undefined && typeof cosmograph[method] !== 'function');
-
-        console.log('[GraphTimeline] Cosmograph instance check:', {
-          hasCosmograph: !!cosmograph,
-          availableMethods,
-          availableProperties,
-          cosmographKeys: Object.keys(cosmograph).slice(0, 10), // First 10 keys
-          cosmographType: typeof cosmograph
-        });
-
-        // Try to get data using available methods
-        if (cosmograph.getNodes && typeof cosmograph.getNodes === 'function') {
-          try {
-            const nodes = cosmograph.getNodes();
-            console.log('[GraphTimeline] Node data from getNodes():', {
-              nodeCount: nodes?.length || 0,
-              sampleNode: nodes?.[0],
-              hasTimestamp: nodes?.[0]?.created_at_timestamp !== undefined
-            });
-          } catch (e) {
-            console.log('[GraphTimeline] Error calling getNodes():', e);
-          }
-        }
-      }
-    }, [cosmograph]);
     const [isAnimating, setIsAnimating] = useState(false);
     
     // Get zoom controls from the hook
