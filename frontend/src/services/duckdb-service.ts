@@ -172,11 +172,7 @@ export class DuckDBService {
           edge_type, 
           weight, 
           color,
-          CASE 
-            WHEN edge_type IN ('entity_entity', 'relates_to') THEN 1.5
-            WHEN edge_type IN ('episodic', 'temporal', 'mentioned_in') THEN 0.5
-            ELSE 1.0
-          END as strength
+          strength
         FROM edges`);
       
       console.log(`[DuckDB] Loaded ${nodesTable.numRows} nodes and ${edgesTable.numRows} edges`);
@@ -327,11 +323,7 @@ export class DuckDBService {
           edge_type, 
           weight, 
           color,
-          CASE 
-            WHEN edge_type IN ('entity_entity', 'relates_to') THEN 1.5
-            WHEN edge_type IN ('episodic', 'temporal', 'mentioned_in') THEN 0.5
-            ELSE 1.0
-          END as strength
+          strength
         FROM edges`);
       
       // Get stats
