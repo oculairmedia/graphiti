@@ -5,6 +5,8 @@ import { useGraphConfig } from '../contexts/GraphConfigProvider';
 import { ControlPanel } from './ControlPanel';
 import { GraphViewport } from './GraphViewport';
 import { GraphViewportSimplified } from './GraphViewportSimplified';
+import { GraphViewportEnhanced } from './GraphViewportEnhanced';
+import { GraphViewportEnhancedFixed } from './GraphViewportEnhancedFixed';
 import { LayoutPanel } from './LayoutPanel';
 import { logger } from '../utils/logger';
 
@@ -25,6 +27,8 @@ import type { GraphCanvasHandle, GraphVizProps } from '../types/components';
 import { getErrorMessage } from '../types/errors';
 
 export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
+  // Component rendering
+  
   // Feature flag for using refactored components
   const USE_REFACTORED_COMPONENTS = localStorage.getItem('graphiti.useRefactoredComponents') === 'true';
   
@@ -123,6 +127,8 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
     handleNodeHover,
     clearAllSelections,
   } = useNodeSelection(transformedData, graphCanvasRef);
+  
+  // Hover state is managed by useNodeSelection hook
 
   // Apply incremental updates
   useIncrementalUpdates(
@@ -349,16 +355,14 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
             />
           </div>
 
-          {/* Main Graph Viewport - Conditionally use simplified components */}
+          {/* Main Graph Viewport - Conditionally use enhanced or original components */}
           {USE_REFACTORED_COMPONENTS ? (
-            <GraphViewportSimplified
+            <GraphViewportEnhancedFixed
               ref={graphCanvasRef}
               nodes={dataToUse.nodes}
               links={dataToUse.links}
               selectedNodes={selectedNodes}
               highlightedNodes={highlightedNodes}
-              hoveredNode={hoveredNode}
-              hoveredConnectedNodes={hoveredConnectedNodes}
               selectedNode={selectedNode}
               stats={data?.stats}
               onNodeClick={handleNodeClick}
@@ -382,8 +386,6 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
               links={dataToUse.links}
               selectedNodes={selectedNodes}
               highlightedNodes={highlightedNodes}
-              hoveredNode={hoveredNode}
-              hoveredConnectedNodes={hoveredConnectedNodes}
               selectedNode={selectedNode}
               stats={data?.stats}
               onNodeClick={handleNodeClick}

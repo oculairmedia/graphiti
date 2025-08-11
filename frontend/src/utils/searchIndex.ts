@@ -45,11 +45,13 @@ export class GraphSearchIndex {
       this.index.typeIndex.get(node.node_type)!.add(node.id);
       
       // Index label
-      const labelLower = (node.label || node.id).toLowerCase();
-      if (!this.index.labelIndex.has(labelLower)) {
+      const labelLower = (node.label || node.id || '').toLowerCase();
+      if (labelLower && !this.index.labelIndex.has(labelLower)) {
         this.index.labelIndex.set(labelLower, new Set());
       }
-      this.index.labelIndex.get(labelLower)!.add(node.id);
+      if (labelLower) {
+        this.index.labelIndex.get(labelLower)!.add(node.id);
+      }
       
       // Build text index from various fields
       const textFields = [

@@ -15,8 +15,7 @@ interface GraphViewportProps {
   links: GraphLink[];
   selectedNodes: string[];
   highlightedNodes: string[];
-  hoveredNode: GraphNode | null;
-  hoveredConnectedNodes: string[];
+  // Removed hoveredNode and hoveredConnectedNodes - not used in this component
   selectedNode: GraphNode | null;
   stats?: {
     nodeCount: number;
@@ -48,8 +47,6 @@ const GraphViewportComponent = forwardRef<GraphCanvasHandle, GraphViewportProps>
   links,
   selectedNodes,
   highlightedNodes,
-  hoveredNode,
-  hoveredConnectedNodes,
   selectedNode,
   stats,
   onNodeClick,
@@ -148,7 +145,7 @@ const GraphViewportComponent = forwardRef<GraphCanvasHandle, GraphViewportProps>
           onNodeHover={stableOnNodeHover}
           onStatsUpdate={handleStatsUpdate}
           selectedNodes={selectedNodes}
-          highlightedNodes={[...highlightedNodes, ...hoveredConnectedNodes]}
+          highlightedNodes={highlightedNodes}
           stats={stats}
           className="h-full w-full"
         />
@@ -199,8 +196,6 @@ export const GraphViewport = React.memo(GraphViewportComponent, (prevProps, next
          prevProps.links === nextProps.links &&
          arraysEqual(prevProps.selectedNodes, nextProps.selectedNodes) &&
          arraysEqual(prevProps.highlightedNodes, nextProps.highlightedNodes) &&
-         prevProps.hoveredNode === nextProps.hoveredNode &&
-         arraysEqual(prevProps.hoveredConnectedNodes, nextProps.hoveredConnectedNodes) &&
          prevProps.selectedNode === nextProps.selectedNode &&
          prevProps.stats === nextProps.stats;
 });

@@ -14,7 +14,7 @@ export const RefactoredToggle: React.FC = () => {
     
     // Show message and reload after a short delay
     const message = newValue 
-      ? 'Switching to refactored components...' 
+      ? 'Switching to enhanced components with all features...' 
       : 'Switching to original components...';
     
     console.log(`[RefactoredToggle] ${message}`);
@@ -37,12 +37,12 @@ export const RefactoredToggle: React.FC = () => {
       size="sm"
       onClick={handleToggle}
       className="flex items-center gap-2"
-      title={isRefactored ? 'Using refactored components (click to switch to original)' : 'Using original components (click to switch to refactored)'}
+      title={isRefactored ? 'Using enhanced components with all features (click to switch to original)' : 'Using original components (click to switch to enhanced)'}
     >
       {isRefactored ? (
         <>
           <FlaskConical className="h-4 w-4 text-green-500" />
-          <span className="text-xs text-green-500">Refactored</span>
+          <span className="text-xs text-green-500">Enhanced</span>
         </>
       ) : (
         <>

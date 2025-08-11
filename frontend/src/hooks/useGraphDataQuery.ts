@@ -464,18 +464,38 @@ export function useGraphDataQuery() {
     return true;
   }, []);
 
+  // CRITICAL: Keep transformedData stable to prevent hover lag
+  // Only recreate if the actual data content has changed
+  const previousTransformedDataRef = useRef<TransformedData | null>(null);
+  const previousFilterConfigRef = useRef<FilterConfig | null>(null);
+  const previousDataRef = useRef<{ nodes: GraphNode[], edges: GraphLink[] } | null>(null);
+  
   const transformedData = useMemo<TransformedData>(() => {
     // During incremental updates, return the exact same object reference
     if (isIncrementalUpdate && stableTransformedDataRef.current) {
       return stableTransformedDataRef.current;
     }
     
+    // Check if we can reuse the previous result
+    const filterConfigChanged = JSON.stringify(filterConfig) !== JSON.stringify(previousFilterConfigRef.current);
+    const dataChanged = data !== previousDataRef.current;
+    
+    if (!filterConfigChanged && !dataChanged && previousTransformedDataRef.current) {
+      // Nothing changed, return the exact same reference
+      return previousTransformedDataRef.current;
+    }
+    
+    // Update refs for next comparison
+    previousFilterConfigRef.current = filterConfig;
+    previousDataRef.current = data;
+    
     // During incremental updates, use stable data to prevent cascade re-renders
     const sourceData = isIncrementalUpdate ? stableDataRef.current : data;
     
     if (!sourceData) {
       logger.warn('GraphViz: No source data available', { isIncrementalUpdate, hasData: !!data });
-      return { nodes: [], links: [] };
+      // Return previous data if available to maintain stability
+      return previousTransformedDataRef.current || { nodes: [], links: [] };
     }
     
     // Debug: Log node type distribution before filtering
@@ -492,12 +512,7 @@ export function useGraphDataQuery() {
       return acc;
     }, {} as Record<string, number>);
     
-    console.log('[useGraphDataQuery] Node filtering:', {
-      before: nodeTypesBefore,
-      after: nodeTypesAfter,
-      filteredNodeTypes: filterConfig.filteredNodeTypes,
-      nodeTypeVisibility: filterConfig.nodeTypeVisibility
-    });
+    // Node filtering complete
 
     // Virtualization: For very large graphs (>10k nodes), prioritize most important nodes
     let finalNodes = visibleNodes;
@@ -540,10 +555,24 @@ export function useGraphDataQuery() {
       links: filteredLinks,
     };
     
+    // Check if data actually changed by comparing node/link counts and first few items
+    const hasDataChanged = !previousTransformedDataRef.current ||
+      previousTransformedDataRef.current.nodes.length !== newTransformedData.nodes.length ||
+      previousTransformedDataRef.current.links.length !== newTransformedData.links.length ||
+      (newTransformedData.nodes[0]?.id !== previousTransformedDataRef.current.nodes[0]?.id);
+    
+    if (!hasDataChanged) {
+      // Return the previous reference to maintain stability
+      return previousTransformedDataRef.current;
+    }
+    
     // Update stable reference when not in incremental mode
     if (!isIncrementalUpdate) {
       stableTransformedDataRef.current = newTransformedData;
     }
+    
+    // Store for next comparison
+    previousTransformedDataRef.current = newTransformedData;
     
     return newTransformedData;
   }, [data, isIncrementalUpdate, filterConfig, nodePassesFilters]);

@@ -132,7 +132,7 @@ const defaultStableConfig: StableConfig = {
   
   // Hover and focus
   hoveredPointCursor: 'pointer',
-  renderHoveredPointRing: true,
+  renderHoveredPointRing: false, // Disabled for performance
   hoveredPointRingColor: '#FFD700',
   focusedPointRingColor: '#FF6B6B',
   
@@ -146,7 +146,7 @@ const defaultDynamicConfig: DynamicConfig = {
   disableSimulation: false,
   renderLinks: true,
   showLabels: true,
-  showHoveredNodeLabel: true,
+  showHoveredNodeLabel: false, // Disabled for performance
   
   // Label optimization settings
   showDynamicLabels: true,

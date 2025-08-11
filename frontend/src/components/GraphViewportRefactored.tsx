@@ -371,11 +371,13 @@ const GraphViewportRefactored = forwardRef<GraphCanvasRefactoredHandle, GraphVie
         
         {/* Node Details Panel */}
         {showNodeDetails && selectedNode && (
-          <NodeDetailsPanel
-            node={selectedNode}
-            onClose={() => setShowNodeDetails(false)}
-            onShowNeighbors={onShowNeighbors}
-          />
+          <div className="absolute top-4 right-4 w-96 animate-slide-in-right z-20">
+            <NodeDetailsPanel
+              node={selectedNode}
+              onClose={() => setShowNodeDetails(false)}
+              onShowNeighbors={onShowNeighbors}
+            />
+          </div>
         )}
       </div>
     </GraphErrorBoundary>

@@ -104,7 +104,7 @@ const defaultConfig: GraphConfig = {
   // Labels
   renderLabels: true,
   showLabels: true,
-  showHoveredNodeLabel: true,
+  showHoveredNodeLabel: false, // Disabled for performance
   showDynamicLabels: true,
   showTopLabels: true,
   showTopLabelsLimit: 100,
@@ -126,7 +126,7 @@ const defaultConfig: GraphConfig = {
   
   // Hover and focus styling
   hoveredPointCursor: 'pointer',
-  renderHoveredPointRing: true,
+  renderHoveredPointRing: false, // Disabled for performance
   hoveredPointRingColor: '#22d3ee', // Cyan
   focusedPointRingColor: '#ef4444', // Bright Red  
   focusedPointIndex: undefined,
