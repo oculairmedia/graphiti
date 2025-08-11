@@ -48,6 +48,12 @@ export interface StableConfig {
   curvedLinkWeight: number;
   curvedLinkControlPointDistance: number;
   
+  // Link Strength
+  linkStrengthEnabled: boolean;
+  entityEntityStrength: number;
+  episodicStrength: number;
+  defaultLinkStrength: number;
+  
   // Node sizing defaults
   minNodeSize: number;
   maxNodeSize: number;
