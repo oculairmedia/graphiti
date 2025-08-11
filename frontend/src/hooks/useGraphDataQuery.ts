@@ -542,8 +542,9 @@ export function useGraphDataQuery() {
     
     const visibleNodeIds = new Set(finalNodes.map(n => n.id));
     
+    // Don't filter edges - let Cosmograph handle optimization
+    // This ensures all edges are available for incremental loading
     const filteredLinks = sourceData.edges
-      .filter(edge => visibleNodeIds.has(edge.from) && visibleNodeIds.has(edge.to))
       .map(edge => ({
         ...edge,
         source: edge.from,
