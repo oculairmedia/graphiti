@@ -150,14 +150,15 @@ export function useGraphDataQuery() {
         const edges: GraphLink[] = edgesArray.map((e: any) => {
             const edgeType = e.edge_type || '';
             
-            // Calculate link strength based on edge type
-            // Entity-Entity links are stronger (1.5x) for tighter clustering
-            // Episodic links are weaker (0.5x) for looser temporal connections
-            let strength = 1.0;
-            if (edgeType === 'entity_entity' || edgeType === 'relates_to') {
-              strength = 1.5;  // Stronger Entity-Entity connections
-            } else if (edgeType === 'episodic' || edgeType === 'temporal' || edgeType === 'mentioned_in') {
-              strength = 0.5;  // Weaker Episodic connections
+            // Calculate link strength based on edge type and config
+            // Use dynamic values from UI config if link strength is enabled
+            let strength = config.defaultLinkStrength || 1.0;
+            if (config.linkStrengthEnabled) {
+              if (edgeType === 'entity_entity' || edgeType === 'relates_to') {
+                strength = config.entityEntityStrength || 1.5;  // Stronger Entity-Entity connections
+              } else if (edgeType === 'episodic' || edgeType === 'temporal' || edgeType === 'mentioned_in') {
+                strength = config.episodicStrength || 0.5;  // Weaker Episodic connections
+              }
             }
             
             return {

@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useOptimistic, useTransition } from 'react';
-import { X, Filter, Calendar, TrendingUp, Tag } from 'lucide-react';
+import { X, Filter, Calendar, TrendingUp, Tag, Link2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { useGraphConfig } from '../contexts/GraphConfigProvider';
 import type { GraphData } from '../types/graph';
 
@@ -177,18 +178,22 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
 
         <CardContent className="p-0">
           <Tabs defaultValue="basic" className="w-full">
-            <TabsList className="grid w-full grid-cols-3 glass">
-              <TabsTrigger value="basic" className="flex items-center space-x-2">
+            <TabsList className="grid w-full grid-cols-4 glass">
+              <TabsTrigger value="basic" className="flex items-center space-x-1">
                 <Tag className="h-3 w-3" />
                 <span>Basic</span>
               </TabsTrigger>
-              <TabsTrigger value="metrics" className="flex items-center space-x-2">
+              <TabsTrigger value="metrics" className="flex items-center space-x-1">
                 <TrendingUp className="h-3 w-3" />
                 <span>Metrics</span>
               </TabsTrigger>
-              <TabsTrigger value="temporal" className="flex items-center space-x-2">
+              <TabsTrigger value="temporal" className="flex items-center space-x-1">
                 <Calendar className="h-3 w-3" />
                 <span>Time</span>
+              </TabsTrigger>
+              <TabsTrigger value="links" className="flex items-center space-x-1">
+                <Link2 className="h-3 w-3" />
+                <span>Links</span>
               </TabsTrigger>
             </TabsList>
 
@@ -397,6 +402,129 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
                     >
                       Last 90 days
                     </Button>
+                  </div>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="links" className="mt-0 space-y-6">
+                <div>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-sm font-medium">Link Strength</h3>
+                    <Switch
+                      checked={config.linkStrengthEnabled}
+                      onCheckedChange={(checked) => updateConfig({ linkStrengthEnabled: checked })}
+                      className="data-[state=checked]:bg-green-500"
+                    />
+                  </div>
+                  
+                  {config.linkStrengthEnabled && (
+                    <div className="space-y-4">
+                      {/* Entity-Entity Strength */}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-xs">Entity-Entity Links</Label>
+                          <span className="text-xs text-muted-foreground">
+                            {config.entityEntityStrength.toFixed(1)}x
+                          </span>
+                        </div>
+                        <Slider
+                          value={[config.entityEntityStrength]}
+                          onValueChange={(value) => updateConfig({ entityEntityStrength: value[0] })}
+                          min={0.1}
+                          max={3.0}
+                          step={0.1}
+                          className="w-full"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Stronger connections between entities (tighter clustering)
+                        </p>
+                      </div>
+
+                      {/* Episodic Strength */}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-xs">Episodic/Temporal Links</Label>
+                          <span className="text-xs text-muted-foreground">
+                            {config.episodicStrength.toFixed(1)}x
+                          </span>
+                        </div>
+                        <Slider
+                          value={[config.episodicStrength]}
+                          onValueChange={(value) => updateConfig({ episodicStrength: value[0] })}
+                          min={0.1}
+                          max={3.0}
+                          step={0.1}
+                          className="w-full"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Weaker connections for temporal relationships
+                        </p>
+                      </div>
+
+                      {/* Default Strength */}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-xs">Other Links</Label>
+                          <span className="text-xs text-muted-foreground">
+                            {config.defaultLinkStrength.toFixed(1)}x
+                          </span>
+                        </div>
+                        <Slider
+                          value={[config.defaultLinkStrength]}
+                          onValueChange={(value) => updateConfig({ defaultLinkStrength: value[0] })}
+                          min={0.1}
+                          max={3.0}
+                          step={0.1}
+                          className="w-full"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Default strength for unspecified link types
+                        </p>
+                      </div>
+
+                      {/* Reset button */}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full"
+                        onClick={() => {
+                          updateConfig({
+                            entityEntityStrength: 1.5,
+                            episodicStrength: 0.5,
+                            defaultLinkStrength: 1.0,
+                          });
+                        }}
+                      >
+                        Reset to Defaults
+                      </Button>
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <h3 className="text-sm font-medium mb-3">Link Display</h3>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs">Show Links</Label>
+                      <Switch
+                        checked={config.renderLinks}
+                        onCheckedChange={(checked) => updateConfig({ renderLinks: checked })}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs">Link Arrows</Label>
+                      <Switch
+                        checked={config.linkArrows}
+                        onCheckedChange={(checked) => updateConfig({ linkArrows: checked })}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs">Curved Links</Label>
+                      <Switch
+                        checked={config.curvedLinks}
+                        onCheckedChange={(checked) => updateConfig({ curvedLinks: checked })}
+                      />
+                    </div>
                   </div>
                 </div>
               </TabsContent>

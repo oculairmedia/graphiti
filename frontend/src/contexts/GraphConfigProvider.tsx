@@ -112,6 +112,12 @@ const defaultStableConfig: StableConfig = {
   curvedLinkWeight: 0.5,
   curvedLinkControlPointDistance: 0.5,
   
+  // Link Strength
+  linkStrengthEnabled: true,
+  entityEntityStrength: 1.5,
+  episodicStrength: 0.5,
+  defaultLinkStrength: 1.0,
+  
   // Node sizing
   minNodeSize: 4,
   maxNodeSize: 30,

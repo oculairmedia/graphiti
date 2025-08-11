@@ -2583,12 +2583,27 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
               new Date(node.properties?.created_at || node.created_at || (node.properties as any)?.created).getTime() : null)
           }));
           
-          const transformedLinks = updatedLinks.map(link => ({
-            source: String(link.source),
-            target: String(link.target),
-            edge_type: String(link.edge_type || 'default'),
-            weight: Number(link.weight || 1)
-          }));
+          const transformedLinks = updatedLinks.map(link => {
+            const edgeType = String(link.edge_type || 'default');
+            
+            // Use dynamic link strength from config if enabled
+            let linkStrength = config.defaultLinkStrength || 1.0;
+            if (config.linkStrengthEnabled) {
+              if (edgeType === 'entity_entity' || edgeType === 'relates_to') {
+                linkStrength = config.entityEntityStrength || 1.5;
+              } else if (edgeType === 'episodic' || edgeType === 'temporal' || edgeType === 'mentioned_in') {
+                linkStrength = config.episodicStrength || 0.5;
+              }
+            }
+            
+            return {
+              source: String(link.source),
+              target: String(link.target),
+              edge_type: edgeType,
+              weight: Number(link.weight || 1),
+              strength: linkStrength
+            };
+          });
           
           // Use direct setData without Data Kit reprocessing for better performance
           cosmographRef.current.setData(transformedNodes, transformedLinks, runSimulation);
@@ -2639,12 +2654,27 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           clusterStrength: 0.7 // Strong clustering by type (0-1 range)
         }));
         
-        const transformedLinks = currentLinks.map(link => ({
-          source: String(link.source),
-          target: String(link.target),
-          edge_type: String(link.edge_type || 'default'),
-          weight: Number(link.weight || 1)
-        }));
+        const transformedLinks = currentLinks.map(link => {
+          const edgeType = String(link.edge_type || 'default');
+          
+          // Use dynamic link strength from config if enabled
+          let linkStrength = config.defaultLinkStrength || 1.0;
+          if (config.linkStrengthEnabled) {
+            if (edgeType === 'entity_entity' || edgeType === 'relates_to') {
+              linkStrength = config.entityEntityStrength || 1.5;
+            } else if (edgeType === 'episodic' || edgeType === 'temporal' || edgeType === 'mentioned_in') {
+              linkStrength = config.episodicStrength || 0.5;
+            }
+          }
+          
+          return {
+            source: String(link.source),
+            target: String(link.target),
+            edge_type: edgeType,
+            weight: Number(link.weight || 1),
+            strength: linkStrength
+          };
+        });
         
         cosmographRef.current.setData(transformedNodes, transformedLinks, false);
       } catch (error) {
@@ -2693,12 +2723,27 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           clusterStrength: 0.7 // Strong clustering by type (0-1 range)
         }));
         
-        const transformedLinks = newCurrentLinks.map(link => ({
-          source: String(link.source),
-          target: String(link.target),
-          edge_type: String(link.edge_type || 'default'),
-          weight: Number(link.weight || 1)
-        }));
+        const transformedLinks = newCurrentLinks.map(link => {
+          const edgeType = String(link.edge_type || 'default');
+          
+          // Use dynamic link strength from config if enabled
+          let linkStrength = config.defaultLinkStrength || 1.0;
+          if (config.linkStrengthEnabled) {
+            if (edgeType === 'entity_entity' || edgeType === 'relates_to') {
+              linkStrength = config.entityEntityStrength || 1.5;
+            } else if (edgeType === 'episodic' || edgeType === 'temporal' || edgeType === 'mentioned_in') {
+              linkStrength = config.episodicStrength || 0.5;
+            }
+          }
+          
+          return {
+            source: String(link.source),
+            target: String(link.target),
+            edge_type: edgeType,
+            weight: Number(link.weight || 1),
+            strength: linkStrength
+          };
+        });
         
         cosmographRef.current.setData(transformedNodes, transformedLinks, false);
       } catch (error) {
@@ -2752,14 +2797,14 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         const transformedLinks = filteredLinks.map(link => {
           const edgeType = String(link.edge_type || 'default');
           
-          // Vary link strength based on edge type
-          // Entity-Entity links are stronger (1.5x) for tighter clustering
-          // Episodic links are weaker (0.5x) for looser temporal connections
-          let linkStrength = 1.0;
-          if (edgeType === 'entity_entity' || edgeType === 'relates_to') {
-            linkStrength = 1.5;  // Stronger Entity-Entity connections
-          } else if (edgeType === 'episodic' || edgeType === 'temporal' || edgeType === 'mentioned_in') {
-            linkStrength = 0.5;  // Weaker Episodic connections
+          // Use dynamic link strength from config if enabled
+          let linkStrength = config.defaultLinkStrength || 1.0;
+          if (config.linkStrengthEnabled) {
+            if (edgeType === 'entity_entity' || edgeType === 'relates_to') {
+              linkStrength = config.entityEntityStrength || 1.5;  // Stronger Entity-Entity connections
+            } else if (edgeType === 'episodic' || edgeType === 'temporal' || edgeType === 'mentioned_in') {
+              linkStrength = config.episodicStrength || 0.5;  // Weaker Episodic connections
+            }
           }
           
           return {
@@ -2820,14 +2865,14 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         const transformedLinks = filteredLinks.map(link => {
           const edgeType = String(link.edge_type || 'default');
           
-          // Vary link strength based on edge type
-          // Entity-Entity links are stronger (1.5x) for tighter clustering
-          // Episodic links are weaker (0.5x) for looser temporal connections
-          let linkStrength = 1.0;
-          if (edgeType === 'entity_entity' || edgeType === 'relates_to') {
-            linkStrength = 1.5;  // Stronger Entity-Entity connections
-          } else if (edgeType === 'episodic' || edgeType === 'temporal' || edgeType === 'mentioned_in') {
-            linkStrength = 0.5;  // Weaker Episodic connections
+          // Use dynamic link strength from config if enabled
+          let linkStrength = config.defaultLinkStrength || 1.0;
+          if (config.linkStrengthEnabled) {
+            if (edgeType === 'entity_entity' || edgeType === 'relates_to') {
+              linkStrength = config.entityEntityStrength || 1.5;  // Stronger Entity-Entity connections
+            } else if (edgeType === 'episodic' || edgeType === 'temporal' || edgeType === 'mentioned_in') {
+              linkStrength = config.episodicStrength || 0.5;  // Weaker Episodic connections
+            }
           }
           
           return {
