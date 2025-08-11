@@ -147,19 +147,34 @@ export function useGraphDataQuery() {
         });
         
         // Transform to GraphLink format with indices
-        const edges: GraphLink[] = edgesArray.map((e: any) => ({
-            id: `${e.source}-${e.target}`,
-            source: e.source,
-            target: e.target || e.targetidx,
-            from: e.source,
-            to: e.target || e.targetidx,
-            sourceIndex: nodeIndexMap.get(String(e.source)) ?? -1,
-            targetIndex: nodeIndexMap.get(String(e.target || e.targetidx)) ?? -1,
-            edge_type: e.edge_type || '',
-            weight: e.weight || 1,
-            created_at: e.created_at,
-            updated_at: e.updated_at
-        }));
+        const edges: GraphLink[] = edgesArray.map((e: any) => {
+            const edgeType = e.edge_type || '';
+            
+            // Calculate link strength based on edge type
+            // Entity-Entity links are stronger (1.5x) for tighter clustering
+            // Episodic links are weaker (0.5x) for looser temporal connections
+            let strength = 1.0;
+            if (edgeType === 'entity_entity' || edgeType === 'relates_to') {
+              strength = 1.5;  // Stronger Entity-Entity connections
+            } else if (edgeType === 'episodic' || edgeType === 'temporal' || edgeType === 'mentioned_in') {
+              strength = 0.5;  // Weaker Episodic connections
+            }
+            
+            return {
+                id: `${e.source}-${e.target}`,
+                source: e.source,
+                target: e.target || e.targetidx,
+                from: e.source,
+                to: e.target || e.targetidx,
+                sourceIndex: nodeIndexMap.get(String(e.source)) ?? -1,
+                targetIndex: nodeIndexMap.get(String(e.target || e.targetidx)) ?? -1,
+                edge_type: edgeType,
+                weight: e.weight || 1,
+                strength: strength,  // Add strength for link force variation
+                created_at: e.created_at,
+                updated_at: e.updated_at
+            };
+        });
         
         // Only update if data has actually changed
         setDuckDBData(prevData => {

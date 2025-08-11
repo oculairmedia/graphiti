@@ -2749,12 +2749,27 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           clusterStrength: 0.7 // Strong clustering by type (0-1 range)
         }));
         
-        const transformedLinks = filteredLinks.map(link => ({
-          source: String(link.source),
-          target: String(link.target),
-          edge_type: String(link.edge_type || 'default'),
-          weight: Number(link.weight || 1)
-        }));
+        const transformedLinks = filteredLinks.map(link => {
+          const edgeType = String(link.edge_type || 'default');
+          
+          // Vary link strength based on edge type
+          // Entity-Entity links are stronger (1.5x) for tighter clustering
+          // Episodic links are weaker (0.5x) for looser temporal connections
+          let linkStrength = 1.0;
+          if (edgeType === 'entity_entity' || edgeType === 'relates_to') {
+            linkStrength = 1.5;  // Stronger Entity-Entity connections
+          } else if (edgeType === 'episodic' || edgeType === 'temporal' || edgeType === 'mentioned_in') {
+            linkStrength = 0.5;  // Weaker Episodic connections
+          }
+          
+          return {
+            source: String(link.source),
+            target: String(link.target),
+            edge_type: edgeType,
+            weight: Number(link.weight || 1),
+            strength: linkStrength  // Add strength for Cosmograph's simulationLinkStrength
+          };
+        });
         
         cosmographRef.current.setData(transformedNodes, transformedLinks, false);
       } catch (error) {
@@ -2802,12 +2817,27 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           clusterStrength: 0.7 // Strong clustering by type (0-1 range)
         }));
         
-        const transformedLinks = filteredLinks.map(link => ({
-          source: String(link.source),
-          target: String(link.target),
-          edge_type: String(link.edge_type || 'default'),
-          weight: Number(link.weight || 1)
-        }));
+        const transformedLinks = filteredLinks.map(link => {
+          const edgeType = String(link.edge_type || 'default');
+          
+          // Vary link strength based on edge type
+          // Entity-Entity links are stronger (1.5x) for tighter clustering
+          // Episodic links are weaker (0.5x) for looser temporal connections
+          let linkStrength = 1.0;
+          if (edgeType === 'entity_entity' || edgeType === 'relates_to') {
+            linkStrength = 1.5;  // Stronger Entity-Entity connections
+          } else if (edgeType === 'episodic' || edgeType === 'temporal' || edgeType === 'mentioned_in') {
+            linkStrength = 0.5;  // Weaker Episodic connections
+          }
+          
+          return {
+            source: String(link.source),
+            target: String(link.target),
+            edge_type: edgeType,
+            weight: Number(link.weight || 1),
+            strength: linkStrength  // Add strength for Cosmograph's simulationLinkStrength
+          };
+        });
         
         cosmographRef.current.setData(transformedNodes, transformedLinks, false);
       } catch (error) {
@@ -3475,6 +3505,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             linkTargetIndexBy={useDuckDBTables ? "targetidx" : "targetIndex"}
             linkColorBy="edge_type"  // Required for linkColorByFn to work
             linkWidthBy={config.linkWidthBy || "weight"}
+            linkStrengthBy="strength"  // Use strength column for link force variation
             
             // Override with UI-specific configurations
             fitViewOnInit={false} // Disable automatic fitView to prevent simulation interruption
