@@ -1,11 +1,16 @@
 import React, { Suspense } from 'react';
 import { Skeleton } from './ui/skeleton';
 
+// Import GraphCanvas type for the ref
+import type { GraphCanvasRef } from './GraphCanvas';
+
 // Lazy load the heavy GraphCanvas component
+// Use a simpler approach that works with React.memo components
 const GraphCanvas = React.lazy(() => 
-  import('./GraphCanvas').then(module => ({
-    default: module.GraphCanvas
-  }))
+  import('./GraphCanvas').then(module => {
+    // React.memo components are objects, not functions, but they're valid components
+    return { default: module.GraphCanvas };
+  })
 );
 
 // Loading placeholder that matches the graph canvas appearance
@@ -22,7 +27,7 @@ const GraphCanvasLoader: React.FC = () => (
 );
 
 // Export a wrapped version that handles lazy loading
-export const LazyGraphCanvas = React.forwardRef<any, any>((props, ref) => {
+export const LazyGraphCanvas = React.forwardRef<GraphCanvasRef, any>((props, ref) => {
   return (
     <Suspense fallback={<GraphCanvasLoader />}>
       <GraphCanvas ref={ref} {...props} />
