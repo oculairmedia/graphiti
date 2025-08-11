@@ -144,6 +144,29 @@ export class DuckDBService {
         this.conn.insertArrowTable(edgesTable, { name: 'edges' })
       ]);
       
+      // Also create Cosmograph-specific views/tables that map to our data
+      // Cosmograph expects cosmograph_points and cosmograph_links tables
+      // Map our 'idx' column to 'index' that Cosmograph expects
+      // Include all possible columns, using NULL defaults for those that might not exist yet
+      await this.conn.query(`CREATE OR REPLACE VIEW cosmograph_points AS 
+        SELECT 
+          idx as index, 
+          id, 
+          label, 
+          node_type, 
+          summary, 
+          degree_centrality, 
+          x, 
+          y, 
+          color, 
+          size,
+          NULL as cluster,
+          NULL as clusterStrength
+        FROM nodes`);
+      await this.conn.query(`CREATE OR REPLACE VIEW cosmograph_links AS 
+        SELECT source, sourceidx as sourceIndex, target, targetidx as targetIndex, edge_type, weight, color 
+        FROM edges`);
+      
       console.log(`[DuckDB] Loaded ${nodesTable.numRows} nodes and ${edgesTable.numRows} edges`);
       
       // Skip caching ArrayBuffer data to avoid conversion issues
@@ -159,7 +182,10 @@ export class DuckDBService {
     // Drop existing tables in parallel to ensure clean state
     await Promise.all([
       this.conn.query(`DROP TABLE IF EXISTS edges`),
-      this.conn.query(`DROP TABLE IF EXISTS nodes`)
+      this.conn.query(`DROP TABLE IF EXISTS nodes`),
+      // Also drop Cosmograph-specific tables if they exist
+      this.conn.query(`DROP TABLE IF EXISTS cosmograph_points`),
+      this.conn.query(`DROP TABLE IF EXISTS cosmograph_links`)
     ]);
     
     // Note: We don't create the tables here anymore
@@ -193,6 +219,10 @@ export class DuckDBService {
           
           const edgesTable = arrow.tableFromIPC(new Uint8Array(cached.edges));
           await this.conn.insertArrowTable(edgesTable, { name: 'edges' });
+          
+          // Also create Cosmograph-specific views/tables that map to our data
+          await this.conn.query(`CREATE OR REPLACE VIEW cosmograph_points AS SELECT * FROM nodes`);
+          await this.conn.query(`CREATE OR REPLACE VIEW cosmograph_links AS SELECT * FROM edges`);
           
           console.log('[DuckDB] Loaded from cache successfully');
           
@@ -242,6 +272,29 @@ export class DuckDBService {
       // Insert both tables (can't parallelize DuckDB inserts)
       await this.conn.insertArrowTable(nodesTable, { name: 'nodes' });
       await this.conn.insertArrowTable(edgesTable, { name: 'edges' });
+      
+      // Also create Cosmograph-specific views/tables that map to our data
+      // Cosmograph expects cosmograph_points and cosmograph_links tables
+      // Map our 'idx' column to 'index' that Cosmograph expects
+      // Include all possible columns, using NULL defaults for those that might not exist yet
+      await this.conn.query(`CREATE OR REPLACE VIEW cosmograph_points AS 
+        SELECT 
+          idx as index, 
+          id, 
+          label, 
+          node_type, 
+          summary, 
+          degree_centrality, 
+          x, 
+          y, 
+          color, 
+          size,
+          NULL as cluster,
+          NULL as clusterStrength
+        FROM nodes`);
+      await this.conn.query(`CREATE OR REPLACE VIEW cosmograph_links AS 
+        SELECT source, sourceidx as sourceIndex, target, targetidx as targetIndex, edge_type, weight, color 
+        FROM edges`);
       
       // Get stats
       const nodeCount = await this.conn.query('SELECT COUNT(*) as count FROM nodes');

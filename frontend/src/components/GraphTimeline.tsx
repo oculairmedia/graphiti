@@ -55,6 +55,7 @@ export const GraphTimeline = forwardRef<GraphTimelineHandle, GraphTimelineProps>
     const [animationSpeed, setAnimationSpeed] = useState(200);
     const [isLooping, setIsLooping] = useState(false);
     const [currentTimeWindow, setCurrentTimeWindow] = useState<string>('');
+    const tickCheckInterval = useRef<NodeJS.Timeout | null>(null);
 
     // Show timeline when component mounts
     useEffect(() => {
@@ -128,7 +129,6 @@ export const GraphTimeline = forwardRef<GraphTimelineHandle, GraphTimelineProps>
 
     // Track last animation tick time to detect when animation ends
     const lastTickTime = useRef<number>(0);
-    const tickCheckInterval = useRef<NodeJS.Timeout | null>(null);
 
     // Animation callbacks
     const handleAnimationPlay = useCallback((isRunning: boolean, selection?: (number | Date)[]) => {

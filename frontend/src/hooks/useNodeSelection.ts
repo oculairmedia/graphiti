@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useMemo, useOptimistic, startTransition } from 'react';
+import { useState, useCallback, useRef, useMemo, useOptimistic, startTransition, useEffect } from 'react';
 import { GraphNode } from '../api/types';
 import { GraphLink } from '../types/graph';
 
@@ -13,6 +13,9 @@ export function useNodeSelection(
   transformedData: { nodes: GraphNode[], links: GraphLink[] },
   graphCanvasRef: React.RefObject<GraphCanvasHandle>
 ) {
+  // Simple hover state management with refs for stability
+  const [hoveredNode, setHoveredNode] = useState<GraphNode | null>(null);
+  const [hoveredConnectedNodes, setHoveredConnectedNodes] = useState<string[]>([]);
   const [selectedNodes, setSelectedNodes] = useState<string[]>([]);
   const [optimisticSelectedNodes, addOptimisticSelectedNode] = useOptimistic(
     selectedNodes,
@@ -40,8 +43,20 @@ export function useNodeSelection(
     (_state: string[], newNodeIds: string[]) => newNodeIds
   );
   
-  const [hoveredNode, setHoveredNode] = useState<GraphNode | null>(null);
-  const [hoveredConnectedNodes, setHoveredConnectedNodes] = useState<string[]>([]);
+  // CRITICAL: Use refs to keep hover handler stable
+  const hoveredNodeRef = useRef<GraphNode | null>(null);
+  // Stable empty array to prevent re-renders
+  const EMPTY_ARRAY = useMemo(() => [], []);
+  const setHoveredNodeStable = useCallback((node: GraphNode | null) => {
+    hoveredNodeRef.current = node;
+    setHoveredNode(node);
+    // Only update connected nodes if they're actually different
+    setHoveredConnectedNodes(prev => {
+      // Always return the same empty array reference to prevent re-renders
+      if (prev.length === 0) return prev;
+      return EMPTY_ARRAY;
+    });
+  }, [EMPTY_ARRAY]);
 
   const handleNodeSelect = useCallback(async (nodeId: string) => {
     // Wrap optimistic update in startTransition to avoid React 19 warning
@@ -63,7 +78,6 @@ export function useNodeSelection(
   }, [addOptimisticSelectedNode]);
 
   const handleNodeClick = useCallback(async (node: GraphNode) => {
-    console.log('[useNodeSelection] handleNodeClick called with node:', node.id);
     
     // Wrap optimistic update in startTransition to avoid React 19 warning
     startTransition(() => {
@@ -169,27 +183,10 @@ export function useNodeSelection(
     }
   }, [highlightedNodes, transformedData, graphCanvasRef]);
 
+  // STABLE hover handler that never changes
   const handleNodeHover = useCallback((node: GraphNode | null) => {
-    setHoveredNode(node);
-    
-    if (node && graphCanvasRef.current) {
-      // Find connected nodes
-      const nodeIndex = transformedData.nodes.findIndex(n => n.id === node.id);
-      if (nodeIndex !== -1) {
-        const connectedIndices = graphCanvasRef.current.getConnectedPointIndices(nodeIndex);
-        if (connectedIndices && connectedIndices.length > 0) {
-          const connectedNodeIds = connectedIndices
-            .map(idx => transformedData.nodes[idx]?.id)
-            .filter(Boolean);
-          setHoveredConnectedNodes(connectedNodeIds);
-        } else {
-          setHoveredConnectedNodes([]);
-        }
-      }
-    } else {
-      setHoveredConnectedNodes([]);
-    }
-  }, [transformedData.nodes, graphCanvasRef]);
+    setHoveredNodeStable(node);
+  }, [setHoveredNodeStable]);
 
   const clearAllSelections = useCallback(() => {
     // Check current state using refs to avoid dependencies
@@ -206,14 +203,18 @@ export function useNodeSelection(
       return prev;
     });
     
+    // Clear hover state
+    setHoveredNodeStable(null);
+    
     // Clear GraphCanvas selection using direct ref (only for clearing)
     if (graphCanvasRef.current && typeof graphCanvasRef.current.clearSelection === 'function') {
       graphCanvasRef.current.clearSelection();
     }
-  }, [graphCanvasRef]);
+  }, [graphCanvasRef, setHoveredNodeStable]);
 
   // Memoize the return object to prevent unnecessary re-renders
-  return useMemo(() => ({
+  const result = useMemo(() => {
+    return {
     selectedNodes: optimisticSelectedNodes,
     selectedNode: optimisticSelectedNode,
     highlightedNodes: optimisticHighlightedNodes,
@@ -227,7 +228,8 @@ export function useNodeSelection(
     handleShowNeighbors,
     handleNodeHover,
     clearAllSelections,
-  }), [
+    };
+  }, [
     optimisticSelectedNodes,
     optimisticSelectedNode,
     optimisticHighlightedNodes,
@@ -242,4 +244,6 @@ export function useNodeSelection(
     handleNodeHover,
     clearAllSelections,
   ]);
+  
+  return result;
 }

@@ -1,0 +1,35 @@
+<\!DOCTYPE html>
+<html>
+<head>
+    <title>Reset Features</title>
+</head>
+<body>
+    <h1>Feature Reset</h1>
+    <button onclick="resetFeatures()">Reset All Features</button>
+    <pre id="output"></pre>
+    
+    <script>
+        function resetFeatures() {
+            // Clear problematic localStorage items
+            localStorage.removeItem('graphiti.features');
+            
+            // Set safe defaults
+            localStorage.setItem('graphiti.features', JSON.stringify({
+                clustering: false,
+                progressiveLoading: true,
+                search: true,
+                rustWebSocket: false,
+                dataKit: false,
+                temporal: false,
+                visualization: true,
+                selection: true,
+                keyboard: true,
+                performance: false,
+                layout: false
+            }));
+            
+            document.getElementById('output').textContent = 'Features reset\! Refresh the main app.';
+        }
+    </script>
+</body>
+</html>
