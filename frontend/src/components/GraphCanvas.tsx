@@ -3507,10 +3507,15 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             ref={cosmographRef}
             duckDBConnection={duckDBConnection}
             onMount={(cosmograph) => {
-              console.log('[GraphCanvas] Cosmograph mounted, checking internals');
+              console.log('[GraphCanvas] Cosmograph mounted, initializing context');
               // Store the actual Cosmograph instance
               if (cosmograph) {
                 cosmographRef.current = cosmograph as any;
+                
+                // IMPORTANT: The Cosmograph component from @cosmograph/react automatically
+                // calls initCosmograph on the CosmographContext when it mounts.
+                // This happens internally in the library.
+                // The timeline uses useCosmograph() to access this same context.
                 
                 // Try to access internal API directly or through a property
                 const internalApi = (cosmograph as any)._internalApi || 

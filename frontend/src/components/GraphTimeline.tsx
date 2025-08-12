@@ -37,7 +37,9 @@ export interface GraphTimelineHandle {
 export const GraphTimeline = forwardRef<GraphTimelineHandle, GraphTimelineProps>(
   ({ onTimeRangeChange, className = '', isVisible = true, onVisibilityChange, cosmographRef, selectedCount = 0, onClearSelection, onScreenshot }, ref) => {
     const timelineRef = useRef<CosmographTimelineRef>(null);
-    const cosmograph = useCosmograph();
+    const cosmographContext = useCosmograph();
+    // The context returns an object with { cosmograph, initCosmograph }
+    const cosmograph = cosmographContext?.cosmograph;
     
     // TEMPORARY WORKAROUND: Timeline not getting data from context
     // This is a known issue with the enhanced components
@@ -45,17 +47,17 @@ export const GraphTimeline = forwardRef<GraphTimelineHandle, GraphTimelineProps>
     
     // Debug: Check what data timeline is getting
     useEffect(() => {
-      if (cosmograph) {
-        // getPointPositions returns coordinates, not data
-        // The timeline should automatically get data from the cosmograph context
-        // Log available methods to debug
-        console.log('[GraphTimeline] Cosmograph context check:', {
-          hasCosmograph: !!cosmograph,
-          availableMethods: Object.getOwnPropertyNames(Object.getPrototypeOf(cosmograph || {})),
-          cosmographType: cosmograph?.constructor?.name
-        });
+      console.log('[GraphTimeline] Context state:', {
+        hasContext: !!cosmographContext,
+        hasCosmograph: !!cosmograph,
+        cosmographType: cosmograph?.constructor?.name,
+        availableMethods: cosmograph ? Object.getOwnPropertyNames(Object.getPrototypeOf(cosmograph)) : [],
+      });
+      
+      if (!cosmograph) {
+        console.log('[GraphTimeline] ⚠️ No cosmograph instance in context! Timeline will not work.');
       }
-    }, [cosmograph]);
+    }, [cosmograph, cosmographContext]);
     const [isAnimating, setIsAnimating] = useState(false);
     
     // Get zoom controls from the hook
