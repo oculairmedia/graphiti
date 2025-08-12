@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, forwardRef, useState, useCallback, useMemo, use } from 'react';
-import { Cosmograph, prepareCosmographData } from '@cosmograph/react';
+import { Cosmograph, prepareCosmographData, useCosmographInternal } from '@cosmograph/react';
 import '../styles/cosmograph.css';
 import { GraphNode } from '../api/types';
 import type { GraphData } from '../types/graph';
@@ -181,6 +181,9 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     // Component rendering
     
     const cosmographRef = useRef<any>(null);
+    
+    // Get the CosmographContext to ensure timeline can access it
+    const cosmographContext = useCosmographInternal();
     
     // Add a stable ref for the Cosmograph instance to prevent issues in dev mode
     const stableCosmographRef = useRef<any>(null);
@@ -3512,10 +3515,12 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
               if (cosmograph) {
                 cosmographRef.current = cosmograph as any;
                 
-                // IMPORTANT: The Cosmograph component from @cosmograph/react automatically
-                // calls initCosmograph on the CosmographContext when it mounts.
-                // This happens internally in the library.
-                // The timeline uses useCosmograph() to access this same context.
+                // IMPORTANT: Manually initialize the context if it hasn't been done
+                // This ensures the timeline can access the Cosmograph instance
+                if (cosmographContext && cosmographContext.initCosmograph) {
+                  console.log('[GraphCanvas] Manually initializing CosmographContext for timeline');
+                  cosmographContext.initCosmograph(cosmograph);
+                }
                 
                 // Try to access internal API directly or through a property
                 const internalApi = (cosmograph as any)._internalApi || 
