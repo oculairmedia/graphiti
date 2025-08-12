@@ -121,6 +121,8 @@ export class DeltaCompressor {
     const blob = new Blob([workerCode], { type: 'application/javascript' });
     const workerUrl = URL.createObjectURL(blob);
     this.compressionWorker = new Worker(workerUrl);
+    // Clean up the object URL after creating the worker
+    URL.revokeObjectURL(workerUrl);
   }
 
   async compressDelta(delta: GraphDelta): Promise<CompressedDelta> {

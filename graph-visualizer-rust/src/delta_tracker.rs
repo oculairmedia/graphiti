@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use serde::{Serialize, Deserialize};
@@ -30,6 +30,8 @@ pub struct DeltaTracker {
     current_nodes: Arc<RwLock<HashMap<String, Node>>>,
     current_edges: Arc<RwLock<HashMap<(String, String), Edge>>>,
     sequence_counter: Arc<RwLock<u64>>,
+    delta_history: Arc<RwLock<VecDeque<GraphDelta>>>,
+    max_history_size: usize,
 }
 
 impl DeltaTracker {
@@ -38,6 +40,8 @@ impl DeltaTracker {
             current_nodes: Arc::new(RwLock::new(HashMap::new())),
             current_edges: Arc::new(RwLock::new(HashMap::new())),
             sequence_counter: Arc::new(RwLock::new(0)),
+            delta_history: Arc::new(RwLock::new(VecDeque::new())),
+            max_history_size: 100, // Keep last 100 deltas
         }
     }
     
@@ -121,7 +125,7 @@ impl DeltaTracker {
         *seq += 1;
         let sequence = *seq;
         
-        GraphDelta {
+        let delta = GraphDelta {
             operation: if sequence == 1 { DeltaOperation::Initial } else { DeltaOperation::Update },
             nodes_added,
             nodes_updated,
@@ -134,17 +138,30 @@ impl DeltaTracker {
                 .unwrap()
                 .as_millis() as u64,
             sequence,
+        };
+        
+        // Store delta in history
+        let mut history = self.delta_history.write().await;
+        history.push_back(delta.clone());
+        
+        // Limit history size
+        while history.len() > self.max_history_size {
+            history.pop_front();
         }
+        
+        delta
     }
     
     pub async fn reset(&self) {
         let mut nodes = self.current_nodes.write().await;
         let mut edges = self.current_edges.write().await;
         let mut seq = self.sequence_counter.write().await;
+        let mut history = self.delta_history.write().await;
         
         nodes.clear();
         edges.clear();
         *seq = 0;
+        history.clear();
     }
     
     pub async fn get_stats(&self) -> (usize, usize, u64) {
@@ -160,11 +177,15 @@ impl DeltaTracker {
         *seq
     }
     
-    pub async fn get_changes_since(&self, _since_sequence: u64, _limit: usize) -> Vec<GraphDelta> {
-        // TODO: Implement proper change history tracking
-        // For now, return empty list as we don't store historical deltas yet
-        // This would require storing a history of deltas in memory or database
-        vec![]
+    pub async fn get_changes_since(&self, since_sequence: u64, limit: usize) -> Vec<GraphDelta> {
+        let history = self.delta_history.read().await;
+        
+        history
+            .iter()
+            .filter(|delta| delta.sequence > since_sequence)
+            .take(limit)
+            .cloned()
+            .collect()
     }
 }
 

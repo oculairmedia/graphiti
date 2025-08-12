@@ -47,19 +47,8 @@ services:
       - homepage.description=Knowledge graph API service
   falkordb:
     image: falkordb/falkordb:latest
-    command: >
-      redis-server
-      --loadmodule /var/lib/falkordb/bin/falkordb.so
-      --protected-mode no
-      --bind 0.0.0.0
-      --save 60 1
-      --dir /data
-      --dbfilename falkordb.rdb
-      --loglevel warning
-      --maxmemory 2gb
-      --maxmemory-policy allkeys-lru
-    mem_limit: 3g
-    mem_reservation: 1g
+    mem_limit: 8g
+    mem_reservation: 2g
     healthcheck:
       test:
         - CMD
@@ -73,7 +62,7 @@ services:
       - 6389:6379 # Redis/FalkorDB port (changed from 6379)
       - 3100:3000 # FalkorDB UI
     volumes:
-      - falkordb_data:/data
+      - falkordb_data:/var/lib/falkordb/data
     environment:
       - REDIS_URL=redis://192.168.50.90:6389
       - NEXT_PUBLIC_REDIS_URL=redis://192.168.50.90:6389

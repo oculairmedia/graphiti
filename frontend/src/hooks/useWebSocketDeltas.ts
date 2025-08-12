@@ -49,6 +49,7 @@ export function useWebSocketDeltas({
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectAttemptsRef = useRef(0);
+  const pingIntervalRef = useRef<NodeJS.Timeout | null>(null); // Store ping interval ref
   
   // Function to fetch incremental data when notification is received
   const fetchIncrementalData = useCallback(async (notification: GraphNotification) => {
@@ -135,11 +136,15 @@ export function useWebSocketDeltas({
       ws.send(JSON.stringify({ type: 'subscribe:deltas' }));
       
       // Start ping interval to keep connection alive
-      const pingInterval = setInterval(() => {
+      pingIntervalRef.current = setInterval(() => {
         if (ws.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify({ type: 'ping' }));
         } else {
-          clearInterval(pingInterval);
+          // Clear interval if connection is no longer open
+          if (pingIntervalRef.current) {
+            clearInterval(pingIntervalRef.current);
+            pingIntervalRef.current = null;
+          }
         }
       }, 30000); // Ping every 30 seconds
       
@@ -226,6 +231,13 @@ export function useWebSocketDeltas({
     ws.onclose = () => {
       logger.log('WebSocket disconnected');
       setIsConnected(false);
+      
+      // Clean up ping interval on close
+      if (pingIntervalRef.current) {
+        clearInterval(pingIntervalRef.current);
+        pingIntervalRef.current = null;
+      }
+      
       onDisconnected?.();
       
       // Attempt to reconnect with exponential backoff
@@ -243,11 +255,19 @@ export function useWebSocketDeltas({
   }, [enabled, onDelta, onNotification, onConnected, onDisconnected, fetchIncrementalData]);
   
   const disconnect = useCallback(() => {
+    // Clear ping interval
+    if (pingIntervalRef.current) {
+      clearInterval(pingIntervalRef.current);
+      pingIntervalRef.current = null;
+    }
+    
+    // Clear reconnect timeout
     if (reconnectTimeoutRef.current) {
       clearTimeout(reconnectTimeoutRef.current);
       reconnectTimeoutRef.current = null;
     }
     
+    // Close WebSocket
     if (wsRef.current) {
       wsRef.current.close();
       wsRef.current = null;
@@ -273,7 +293,7 @@ export function useWebSocketDeltas({
     return () => {
       disconnect();
     };
-  }, [enabled, connect, disconnect]);
+  }, [enabled]); // Remove connect and disconnect from deps to avoid recreation
   
   return {
     isConnected,
