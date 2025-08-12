@@ -77,17 +77,14 @@ export function useNodeSelection(
     });
   }, [addOptimisticSelectedNode]);
 
-  const handleNodeClick = useCallback(async (node: GraphNode) => {
+  const handleNodeClick = useCallback((node: GraphNode) => {
     
     // Wrap optimistic update in startTransition to avoid React 19 warning
     startTransition(() => {
       setOptimisticSelectedNode(node);
     });
     
-    // Simulate async operation
-    await new Promise(resolve => setTimeout(resolve, 50));
-    
-    // Actually update the state
+    // Immediately update the state - no artificial delay
     setSelectedNode(node);
   }, [setOptimisticSelectedNode]);
 

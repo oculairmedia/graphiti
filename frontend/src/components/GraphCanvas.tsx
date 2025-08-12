@@ -1775,6 +1775,19 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       return map;
     }, [currentNodes]);
     
+    // Create a map for transformedData nodes for O(1) lookups in click handler
+    const transformedDataNodeMap = React.useMemo(() => {
+      const map = new Map<string, GraphNode>();
+      if (transformedData?.nodes) {
+        transformedData.nodes.forEach((node, index) => {
+          map.set(node.id, node);
+          // Also store by index for quick index-based lookups
+          map.set(`index-${index}`, node);
+        });
+      }
+      return map;
+    }, [transformedData]);
+    
     const linkIndexToDataMap = React.useMemo(() => {
       const map = new Map<number, GraphLink>();
       currentLinks.forEach((link, index) => {
@@ -3229,59 +3242,17 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
 
     // Handle Cosmograph events with native selection methods and multi-selection
     // Cosmograph v2.0 onClick signature: (index: number | undefined, pointPosition: [number, number] | undefined, event: MouseEvent) => void
-    const handleClick = async (index?: number, pointPosition?: [number, number], event?: MouseEvent) => {
+    const handleClick = (index?: number, pointPosition?: [number, number], event?: MouseEvent) => {
       
       if (typeof index === 'number' && cosmographRef.current) {
         
-        // Get the original node data using the index
+        // Get node data immediately using the Map for O(1) lookup
         let originalNode: GraphNode | undefined;
         
-        // First, try to get the actual node data from Cosmograph using the index
-        // This ensures we get the correct node regardless of filtering or ordering
-        if (typeof cosmographRef.current.getPointsByIndices === 'function') {
-          try {
-            const pointData = await cosmographRef.current.getPointsByIndices([index]);
-            
-            if (pointData && pointData.numRows && pointData.numRows > 0) {
-              // Convert the point data to GraphNode format
-              const pointArray = cosmographRef.current.convertCosmographDataToObject(pointData);
-              if (pointArray && pointArray.length > 0) {
-                const point = pointArray[0];
-                // Use the node ID from the actual data to find the correct node in transformedData
-                const nodeId = String(point.id);
-                
-                // Find the matching node in transformedData by ID, not by index
-                originalNode = transformedData.nodes.find(n => n.id === nodeId);
-                
-                // If not found in transformedData, create from point data
-                if (!originalNode) {
-                  originalNode = {
-                    id: nodeId,
-                    label: String(point.label || point.id || index),
-                    name: String(point.name || point.label || point.id),  // Include name field
-                    node_type: String(point.node_type || 'Unknown'),
-                    color: (config.nodeTypeColors && config.nodeTypeColors[String(point.node_type || 'Unknown')]) ?
-                      config.nodeTypeColors[String(point.node_type || 'Unknown')] : '#ffffff',
-                    summary: point.summary || null,
-                    size: Number(point.size || point.degree_centrality || 1),
-                    properties: {
-                      degree_centrality: Number(point.degree_centrality || 0),
-                      pagerank_centrality: Number(point.pagerank_centrality || 0),
-                      betweenness_centrality: Number(point.betweenness_centrality || 0),
-                      eigenvector_centrality: Number(point.eigenvector_centrality || 0),
-                      name: String(point.name || point.label || point.id),  // Include name in properties
-                      ...point // Include all other properties
-                    }
-                  } as GraphNode;
-                }
-              }
-            }
-          } catch (error) {
-            logger.error('Failed to retrieve point data from Cosmograph:', error);
-          }
-        }
+        // Use the node map for instant lookup
+        originalNode = transformedDataNodeMap.get(`index-${index}`);
         
-        // Fallback: If we still don't have the node, try by index (less reliable)
+        // Fallback to direct array access if map doesn't have it
         if (!originalNode && index >= 0 && index < transformedData.nodes.length) {
           originalNode = transformedData.nodes[index];
         }
@@ -3289,7 +3260,8 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         if (originalNode) {
           const currentTime = Date.now();
           const timeDiff = currentTime - lastClickTimeRef.current;
-          const isDoubleClick = timeDiff < 300 && lastClickedNodeRef.current?.id === originalNode.id;
+          // Reduce double-click window to 250ms for faster response
+          const isDoubleClick = timeDiff < 250 && lastClickedNodeRef.current?.id === originalNode.id;
           
           // Clear any existing timeout
           if (doubleClickTimeoutRef.current) {
@@ -3359,52 +3331,39 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
               // Show the info panel
               onNodeClick(originalNode);
             } else {
-              // Single click - wait to see if it's a double click
-              doubleClickTimeoutRef.current = setTimeout(() => {
-                // Single click confirmed - select and show info panel
-                
-                // Select the node
-                if (typeof cosmographRef.current.selectPoint === 'function') {
-                  cosmographRef.current.selectPoint(index);
-                } else if (typeof cosmographRef.current.selectPoints === 'function') {
-                  cosmographRef.current.selectPoints([index]);
+              // Single click - respond immediately for better UX
+              
+              // Select the node immediately
+              if (typeof cosmographRef.current.selectPoint === 'function') {
+                cosmographRef.current.selectPoint(index);
+              } else if (typeof cosmographRef.current.selectPoints === 'function') {
+                cosmographRef.current.selectPoints([index]);
+              }
+              
+              // Track the selected node position for following during simulation
+              trackPointPositionsByIndices([index]);
+              
+              // Focus the node (draws a ring around it) and optionally follow it
+              if (typeof cosmographRef.current.setFocusedPoint === 'function') {
+                if (config.followSelectedNode) {
+                  // Enable following - camera will track this node during simulation
+                  cosmographRef.current.setFocusedPoint(index);
+                } else {
+                  // Just highlight without following
+                  cosmographRef.current.setFocusedPoint(index);
                 }
-                
-                // Track the selected node position for following during simulation
-                trackPointPositionsByIndices([index]);
-                
-                // Focus the node (draws a ring around it) and optionally follow it
-                if (typeof cosmographRef.current.setFocusedPoint === 'function') {
-                  if (config.followSelectedNode) {
-                    // Enable following - camera will track this node during simulation
-                    cosmographRef.current.setFocusedPoint(index);
-                  } else {
-                    // Just highlight without following
-                    cosmographRef.current.setFocusedPoint(index);
-                  }
-                }
-                
-                // Removed automatic zoom on node selection for now
-                
-                // Show the info panel
-                onNodeClick(originalNode);
-                
-                // Show node details (popup removed - using NodeDetailsPanel instead)
-                if (cosmographRef.current) {
-                  // Clear any existing timeouts
-                  if (popupTimeoutRef.current) {
-                    clearTimeout(popupTimeoutRef.current);
-                  }
-                  
-                  // CosmographPopup not available - details shown in NodeDetailsPanel
-                  logger.log('Node double-clicked:', {
-                    label: originalNode.label || originalNode.id,
-                    type: originalNode.node_type,
-                    connections: originalNode.properties?.degree,
-                    pagerank: originalNode.properties?.pagerank_centrality
-                  });
-                }
-              }, 300);
+              }
+              
+              // Show the info panel immediately
+              onNodeClick(originalNode);
+              
+              // Log the click
+              logger.log('Node clicked:', {
+                label: originalNode.label || originalNode.id,
+                type: originalNode.node_type,
+                connections: originalNode.properties?.degree_centrality,
+                pagerank: originalNode.properties?.pagerank_centrality
+              });
             }
           }
           
