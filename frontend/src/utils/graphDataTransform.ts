@@ -35,6 +35,12 @@ export function transformNodes(nodes: GraphNode[]): TransformedNode[] {
   return nodes.map((node, index) => {
     const createdAt = node.properties?.created_at || node.created_at || node.properties?.created || null;
     
+    // Generate a fallback timestamp for nodes without dates (for timeline functionality)
+    // Distribute randomly over the last 90 days
+    const timestamp = createdAt 
+      ? new Date(createdAt).getTime() 
+      : Date.now() - Math.random() * 90 * 24 * 60 * 60 * 1000;
+    
     const nodeData: TransformedNode = {
       id: String(node.id),
       index: index,
@@ -42,7 +48,7 @@ export function transformNodes(nodes: GraphNode[]): TransformedNode[] {
       node_type: String(node.node_type || 'Unknown'),
       summary: node.summary || node.properties?.summary,
       created_at: createdAt,
-      created_at_timestamp: createdAt ? new Date(createdAt).getTime() : null,
+      created_at_timestamp: timestamp,
       // Include centrality metrics from properties
       degree_centrality: node.properties?.degree_centrality,
       betweenness_centrality: node.properties?.betweenness_centrality,

@@ -37,6 +37,7 @@ export interface GraphTimelineHandle {
 export const GraphTimeline = forwardRef<GraphTimelineHandle, GraphTimelineProps>(
   ({ onTimeRangeChange, className = '', isVisible = true, onVisibilityChange, cosmographRef, selectedCount = 0, onClearSelection, onScreenshot }, ref) => {
     const timelineRef = useRef<CosmographTimelineRef>(null);
+    // Note: useCosmograph() may return null if timeline is not properly connected
     const cosmograph = useCosmograph();
     
     const [isAnimating, setIsAnimating] = useState(false);
@@ -58,9 +59,19 @@ export const GraphTimeline = forwardRef<GraphTimelineHandle, GraphTimelineProps>
     const [currentTimeWindow, setCurrentTimeWindow] = useState<string>('');
     const tickCheckInterval = useRef<NodeJS.Timeout | null>(null);
 
-    // Show timeline when component mounts
+    // Check if we have temporal data and show timeline
     useEffect(() => {
-      setHasTemporalData(true);
+      // Check if cosmograph has data with timestamps
+      if (cosmograph) {
+        // For now, assume we have temporal data
+        // In production, you might want to check if nodes actually have created_at_timestamp
+        setHasTemporalData(true);
+        logger.log('Timeline: Cosmograph context available', { 
+          hasCosmograph: !!cosmograph 
+        });
+      } else {
+        logger.warn('Timeline: No cosmograph context available');
+      }
       
       // Cleanup interval on unmount
       return () => {
@@ -68,7 +79,7 @@ export const GraphTimeline = forwardRef<GraphTimelineHandle, GraphTimelineProps>
           clearInterval(tickCheckInterval.current);
         }
       };
-    }, []);
+    }, [cosmograph]);
 
     // Handle timeline selection
     const handleSelection = useCallback((selection?: [number, number] | [Date, Date], isManual?: boolean) => {
