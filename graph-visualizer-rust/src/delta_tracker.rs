@@ -154,6 +154,18 @@ impl DeltaTracker {
         
         (nodes.len(), edges.len(), *seq)
     }
+    
+    pub async fn get_current_sequence(&self) -> u64 {
+        let seq = self.sequence_counter.read().await;
+        *seq
+    }
+    
+    pub async fn get_changes_since(&self, since_sequence: u64, limit: usize) -> Vec<GraphDelta> {
+        // TODO: Implement proper change history tracking
+        // For now, return empty list as we don't store historical deltas yet
+        // This would require storing a history of deltas in memory or database
+        vec![]
+    }
 }
 
 fn nodes_equal(a: &Node, b: &Node) -> bool {
