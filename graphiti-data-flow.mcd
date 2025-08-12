@@ -1,0 +1,167 @@
+graph TD
+    %% Data Sources
+    subgraph "Data Sources"
+        API[Rust GraphQL API<br/>graphClient.getGraphData]
+        WS[WebSocket<br/>ws://localhost:3000/ws]
+        DuckDB[(DuckDB<br/>Arrow Tables)]
+        StaticHTML[Static HTML Files<br/>cosmos.html, cosmograph.html]
+    end
+
+    %% Data Fetching Hooks
+    subgraph "Data Fetching Layer"
+        useGraphDataQuery[useGraphDataQuery Hook<br/>- Fetches from API<br/>- Manages DuckDB data<br/>- Progressive loading]
+        useGraphData[useGraphData Hook<br/>- Caching with TTL<br/>- Error handling<br/>- Incremental updates]
+        useGraphDelta[useGraphDelta Hook<br/>- WebSocket deltas<br/>- Real-time updates]
+        useDuckDB[useDuckDB Hook<br/>- Arrow table queries<br/>- SELECT * FROM nodes/edges]
+    end
+
+    %% Data Processing
+    subgraph "Data Processing"
+        DataTransform[Data Transformation<br/>transformNodes/transformLinks<br/>- Add indices<br/>- Normalize properties<br/>- Calculate centrality]
+        GraphProcessor[Graph Processor Worker<br/>- Background processing<br/>- Statistics calculation<br/>- Index mapping]
+        DataManager[GraphDataManager<br/>- State management<br/>- Validation<br/>- Memory optimization]
+    end
+
+    %% GraphCanvas Variants
+    subgraph "GraphCanvas Components"
+        MainGraphCanvas[GraphCanvas.tsx<br/>Main Implementation<br/>- 3500+ lines<br/>- Full featured]
+        RefactoredCanvas[graph-refactored/GraphCanvas.tsx<br/>- Thin orchestration layer<br/>- Uses specialized components]
+        OptimizedCanvas[GraphCanvasOptimized.tsx<br/>- Memory leak prevention<br/>- Performance monitoring]
+    end
+
+    %% Data Flow to Cosmograph
+    subgraph "Cosmograph Integration"
+        CosmographData[Cosmograph Data Format<br/>pointsData & linksData]
+        CosmographComponent[Cosmograph Component<br/>- points={pointsData}<br/>- links={linksData}<br/>- Configuration props]
+        DuckDBTables[DuckDB Arrow Tables<br/>Direct table passing<br/>when useDuckDBTables=true]
+    end
+
+    %% Data Flow Connections
+    API --> useGraphDataQuery
+    WS --> useGraphDelta
+    DuckDB --> useDuckDB
+    StaticHTML --> CosmographComponent
+
+    useGraphDataQuery --> DataTransform
+    useGraphData --> DataTransform
+    useGraphDelta --> DataManager
+    useDuckDB --> DuckDBTables
+
+    DataTransform --> GraphProcessor
+    GraphProcessor --> DataManager
+    DataManager --> MainGraphCanvas
+    DataManager --> RefactoredCanvas
+    DataManager --> OptimizedCanvas
+
+    MainGraphCanvas --> CosmographData
+    RefactoredCanvas --> CosmographData
+    OptimizedCanvas --> CosmographData
+
+    CosmographData --> CosmographComponent
+    DuckDBTables --> CosmographComponent
+
+    %% Key Data Structures
+    subgraph "Data Structures"
+        NodeStructure[GraphNode<br/>- id: string<br/>- label: string<br/>- node_type: string<br/>- properties: object<br/>- centrality metrics]
+        LinkStructure[GraphLink<br/>- source: string<br/>- target: string<br/>- sourceIndex: number<br/>- targetIndex: number<br/>- edge_type: string<br/>- weight: number]
+        TransformedNode[TransformedNode<br/>- index: number<br/>- created_at_timestamp<br/>- degree_centrality<br/>- pagerank_centrality<br/>- betweenness_centrality]
+    end
+
+    DataTransform --> NodeStructure
+    DataTransform --> LinkStructure
+    NodeStructure --> TransformedNode
+    TransformedNode --> CosmographData
+    LinkStructure --> CosmographData
+
+    %% Configuration Flow
+    subgraph "Configuration"
+        GraphConfig[useGraphConfig<br/>- Point color/size mapping<br/>- Link width configuration<br/>- Clustering settings]
+        DataKitConfig[DataKit Configuration<br/>- pointIdBy: 'id'<br/>- pointIndexBy: 'index'<br/>- linkSourceBy: 'source'<br/>- linkTargetBy: 'target']
+    end
+
+    GraphConfig --> DataKitConfig
+    DataKitConfig --> CosmographComponent
+
+    %% Parent Components (Examples)
+    subgraph "Parent Components"
+        AppComponent[App Component<br/>- Passes nodes/links props<br/>- Event handlers]
+        GraphContainer[GraphContainer<br/>- Data fetching wrapper<br/>- Theme management]
+        ExampleComponents[Example Components<br/>- RefactoredGraphExample<br/>- Static data examples]
+    end
+
+    AppComponent --> MainGraphCanvas
+    GraphContainer --> RefactoredCanvas
+    ExampleComponents --> RefactoredCanvas
+
+    %% Styling
+    classDef dataSource fill:#e1f5fe
+    classDef hook fill:#f3e5f5
+    classDef processing fill:#fff3e0
+    classDef component fill:#e8f5e8
+    classDef structure fill:#fce4ec
+    classDef config fill:#f1f8e9
+
+    class API,WS,DuckDB,StaticHTML dataSource
+    class useGraphDataQuery,useGraphData,useGraphDelta,useDuckDB hook
+    class DataTransform,GraphProcessor,DataManager processing
+    class MainGraphCanvas,RefactoredCanvas,OptimizedCanvas,CosmographComponent component
+    class NodeStructure,LinkStructure,TransformedNode,CosmographData,DuckDBTables structure
+    class GraphConfig,DataKitConfig config
+
+    %% Key Implementation Notes
+    subgraph "Implementation Details"
+        Note1[pointsData = useDuckDBTables ? <br/>duckDBData?.points : <br/>cosmographData.nodes]
+        Note2[linksData = useDuckDBTables ? <br/>duckDBData?.links : <br/>cosmographData.links]
+        Note3[Data flows through useEffect<br/>when nodes/links props change<br/>triggers data transformation]
+        Note4[Cosmograph receives data via:<br/>points={pointsData}<br/>links={linksData}<br/>at line ~3524 in GraphCanvas.tsx]
+    end
+
+    %% Critical Data Flow Paths
+    subgraph "Critical Paths"
+        Path1[Path 1: JSON API → useGraphDataQuery → <br/>transformNodes/Links → cosmographData → <br/>pointsData/linksData → Cosmograph]
+        Path2[Path 2: DuckDB → Arrow Tables → <br/>duckDBData → pointsData/linksData → <br/>Cosmograph (bypasses transformation)]
+        Path3[Path 3: WebSocket → useGraphDelta → <br/>incremental updates → setData() → <br/>Cosmograph.setData()]
+    end
+
+    %% Memory Management
+    subgraph "Memory & Performance"
+        MemoryTracking[Memory Tracking<br/>- CleanupTracker<br/>- MemoryMonitor<br/>- ResourceManager]
+        PerformanceMetrics[Performance Metrics<br/>- AdaptiveQuality<br/>- BatchProcessor<br/>- FPS monitoring]
+        LoadingCoordinator[Loading Coordinator<br/>- Progressive loading<br/>- Stage management<br/>- Index mapping]
+    end
+
+    OptimizedCanvas --> MemoryTracking
+    OptimizedCanvas --> PerformanceMetrics
+    MainGraphCanvas --> LoadingCoordinator
+
+    %% Props Interface Details
+    subgraph "GraphCanvas Props Interface"
+        PropsInterface[GraphCanvasComponentProps<br/>- nodes: GraphNode[]<br/>- links: GraphLink[]<br/>- selectedNodes: string[]<br/>- highlightedNodes: string[]<br/>- onNodeClick: function<br/>- onNodeSelect: function<br/>- onStatsUpdate: function]
+        PropsFlow[Props → useEffect → <br/>setCurrentNodes/Links → <br/>data transformation → <br/>cosmographData state]
+    end
+
+    %% Data Transformation Pipeline
+    subgraph "Transformation Pipeline"
+        Step1[1. Raw API Data<br/>nodes: GraphNode[]<br/>edges: GraphLink[]]
+        Step2[2. Index Mapping<br/>nodeIdToIndex Map<br/>sourceIndex/targetIndex]
+        Step3[3. Property Normalization<br/>centrality metrics<br/>created_at timestamps]
+        Step4[4. Cosmograph Format<br/>id, label, node_type<br/>source, target indices]
+        Step5[5. Final Data<br/>pointsData & linksData<br/>ready for Cosmograph]
+    end
+
+    Step1 --> Step2
+    Step2 --> Step3
+    Step3 --> Step4
+    Step4 --> Step5
+    Step5 --> CosmographComponent
+
+    %% Alternative Data Sources
+    subgraph "Alternative Sources"
+        StaticData[Static Test Data<br/>createMockNode/Link<br/>for testing]
+        CachedData[Cached Data<br/>TTL-based caching<br/>in useGraphData]
+        IncrementalData[Incremental Updates<br/>addNode/removeNode<br/>delta processing]
+    end
+
+    StaticData --> PropsInterface
+    CachedData --> DataManager
+    IncrementalData --> CosmographComponent
