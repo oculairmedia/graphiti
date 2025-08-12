@@ -1645,6 +1645,32 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       return { nodes, links };
     }, [nodes, links, cosmographData]);
     
+    // Create a map for transformedData nodes for O(1) lookups in click handler
+    // MOVED BEFORE useEffect to fix initialization error
+    const transformedDataNodeMap = React.useMemo(() => {
+      const map = new Map<string, GraphNode>();
+      if (transformedData?.nodes) {
+        transformedData.nodes.forEach((node, index) => {
+          map.set(node.id, node);
+          // Also store by index for quick index-based lookups
+          map.set(`index-${index}`, node);
+        });
+      }
+      return map;
+    }, [transformedData]);
+    
+    // Create node ID to index map for O(1) index lookups
+    // MOVED BEFORE useEffect to fix initialization error
+    const nodeIdToIndexMap = React.useMemo(() => {
+      const map = new Map<string, number>();
+      if (transformedData?.nodes) {
+        transformedData.nodes.forEach((node, index) => {
+          map.set(node.id, index);
+        });
+      }
+      return map;
+    }, [transformedData]);
+    
     // Handle popup for glowing nodes (search results)
     useEffect(() => {
       if (glowingNodes.size > 0 && cosmographRef.current && transformedData.nodes.length > 0) {
@@ -1739,30 +1765,6 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       });
       return map;
     }, [currentNodes]);
-    
-    // Create a map for transformedData nodes for O(1) lookups in click handler
-    const transformedDataNodeMap = React.useMemo(() => {
-      const map = new Map<string, GraphNode>();
-      if (transformedData?.nodes) {
-        transformedData.nodes.forEach((node, index) => {
-          map.set(node.id, node);
-          // Also store by index for quick index-based lookups
-          map.set(`index-${index}`, node);
-        });
-      }
-      return map;
-    }, [transformedData]);
-    
-    // Create node ID to index map for O(1) index lookups
-    const nodeIdToIndexMap = React.useMemo(() => {
-      const map = new Map<string, number>();
-      if (transformedData?.nodes) {
-        transformedData.nodes.forEach((node, index) => {
-          map.set(node.id, index);
-        });
-      }
-      return map;
-    }, [transformedData]);
     
     const linkIndexToDataMap = React.useMemo(() => {
       const map = new Map<number, GraphLink>();
