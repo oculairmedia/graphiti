@@ -326,10 +326,13 @@ impl DuckDBStore {
     pub async fn get_edges_as_arrow(&self) -> Result<RecordBatch> {
         let conn = self.conn.lock().unwrap();
         
+        // Only get edges where both nodes exist - this filters out orphaned edges
         let mut stmt = conn.prepare(
-            "SELECT source, sourceidx, target, targetidx, edge_type, weight, color, strength 
-             FROM edges 
-             ORDER BY sourceidx, targetidx"
+            "SELECT e.source, e.sourceidx, e.target, e.targetidx, e.edge_type, e.weight, e.color, e.strength 
+             FROM edges e
+             INNER JOIN nodes n1 ON e.source = n1.id
+             INNER JOIN nodes n2 ON e.target = n2.id
+             ORDER BY e.sourceidx, e.targetidx"
         )?;
         
         let mut sources = Vec::new();
