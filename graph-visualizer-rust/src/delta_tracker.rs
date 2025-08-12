@@ -160,7 +160,7 @@ impl DeltaTracker {
         *seq
     }
     
-    pub async fn get_changes_since(&self, since_sequence: u64, limit: usize) -> Vec<GraphDelta> {
+    pub async fn get_changes_since(&self, _since_sequence: u64, _limit: usize) -> Vec<GraphDelta> {
         // TODO: Implement proper change history tracking
         // For now, return empty list as we don't store historical deltas yet
         // This would require storing a history of deltas in memory or database
