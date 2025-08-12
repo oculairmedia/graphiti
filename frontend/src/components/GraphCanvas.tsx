@@ -165,8 +165,6 @@ interface GraphCanvasHandle {
   keepSimulationRunning: (enable: boolean) => void;
   // External incremental flag control
   setIncrementalUpdateFlag: (enabled: boolean) => void;
-  // CRITICAL: Get the actual Cosmograph instance for timeline
-  getCosmographInstance: () => any;
 }
 
 interface GraphCanvasComponentProps extends GraphCanvasProps {
@@ -3186,9 +3184,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       getLiveStats,
       setIncrementalUpdateFlag: (enabled: boolean) => {
         isIncrementalUpdateRef.current = enabled;
-      },
-      // CRITICAL: Expose the actual Cosmograph instance for timeline
-      getCosmographInstance: () => cosmographRef.current
+      }
     }), [
       clearCosmographSelection,
       selectCosmographNode,
