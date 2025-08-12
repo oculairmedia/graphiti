@@ -3550,7 +3550,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             linkTargetIndexBy={useDuckDBTables ? "targetidx" : "targetIndex"}
             linkColorBy="edge_type"  // Required for linkColorByFn to work
             linkWidthBy={config.linkWidthBy || "weight"}
-            linkStrengthBy="strength"  // Use strength column for link force variation
+            // Don't use linkStrengthBy - calculate strength dynamically based on edge type
             
             // Override with UI-specific configurations
             fitViewOnInit={false} // Disable automatic fitView to prevent simulation interruption
@@ -3621,6 +3621,16 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             simulationFriction={config.friction}
             simulationDecay={config.simulationDecay}
             simulationRepulsionFromMouse={config.mouseRepulsion}
+            // Dynamic link strength based on edge type
+            simulationLinkStrength={config.linkStrengthEnabled ? (link: any) => {
+              const edgeType = String(link.edge_type || 'default');
+              if (edgeType === 'entity_entity' || edgeType === 'relates_to') {
+                return config.entityEntityStrength || 1.5;
+              } else if (edgeType === 'episodic' || edgeType === 'temporal' || edgeType === 'mentioned_in') {
+                return config.episodicStrength || 0.5;
+              }
+              return config.defaultLinkStrength || 1.0;
+            } : config.defaultLinkStrength || 1.0}
             
             // Link Properties - disable advanced features in performance mode
             linkColor={config.linkColor}
