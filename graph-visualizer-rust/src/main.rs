@@ -373,26 +373,46 @@ async fn main() -> anyhow::Result<()> {
             }
         }
         
-        // Step 2: Load edges only for loaded nodes
-        let edges_query = format!(
-            "MATCH (n)-[r]->(m) WHERE n.uuid IN [{}] AND m.uuid IN [{}] RETURN n.uuid, type(r), m.uuid, r.weight LIMIT {}",
-            node_ids.join(","),
-            node_ids.join(","),
-            edge_limit
-        );
-        
-        let mut graph = state.client.select_graph(&graph_name);
-        let mut edges_result = graph.query(&edges_query).execute().await?;
+        // Step 2: Load edges only for loaded nodes - paginate to avoid FalkorDB's 10K result limit
         let mut edges = Vec::new();
+        let batch_size: usize = 5000;
+        let mut offset: usize = 0;
         
-        while let Some(row) = edges_result.data.next() {
-            edges.push(Edge {
-                from: row.get(0).and_then(|v| v.as_string()).map_or("", |v| v).to_string(),
-                to: row.get(2).and_then(|v| v.as_string()).map_or("", |v| v).to_string(),
-                edge_type: row.get(1).and_then(|v| v.as_string()).map_or("", |v| v).to_string(),
-                weight: row.get(3).and_then(|v| v.to_f64()).unwrap_or(1.0),
-            });
+        loop {
+            let edges_query = format!(
+                "MATCH (n)-[r]->(m) WHERE n.uuid IN [{}] AND m.uuid IN [{}] RETURN n.uuid, type(r), m.uuid, r.weight SKIP {} LIMIT {}",
+                node_ids.join(","),
+                node_ids.join(","),
+                offset,
+                batch_size.min((edge_limit as usize).saturating_sub(offset))
+            );
+            
+            info!("Fetching edges batch: offset={}, limit={}", offset, batch_size);
+            
+            let mut graph = state.client.select_graph(&graph_name);
+            let mut edges_result = graph.query(&edges_query).execute().await?;
+            let mut batch_count = 0;
+            
+            while let Some(row) = edges_result.data.next() {
+                batch_count += 1;
+                edges.push(Edge {
+                    from: row.get(0).and_then(|v| v.as_string()).map_or("", |v| v).to_string(),
+                    to: row.get(2).and_then(|v| v.as_string()).map_or("", |v| v).to_string(),
+                    edge_type: row.get(1).and_then(|v| v.as_string()).map_or("", |v| v).to_string(),
+                    weight: row.get(3).and_then(|v| v.to_f64()).unwrap_or(1.0),
+                });
+            }
+            
+            info!("Batch fetched {} edges", batch_count);
+            
+            if batch_count < batch_size || edges.len() >= edge_limit as usize {
+                break;
+            }
+            
+            offset += batch_size;
         }
+        
+        info!("Total fetched {} edges from FalkorDB", edges.len());
         
         let initial_data = GraphData { 
             nodes: nodes.clone(),
@@ -1029,32 +1049,48 @@ async fn execute_graph_query(client: &FalkorAsyncClient, graph_name: &str, query
             }
         }
         
-        // Query 2: Get all edges
-        let edges_query = r#"
-            MATCH (n)-[r]->(m)
-            RETURN 
-                n.uuid as source_id,
-                m.uuid as target_id,
-                type(r) as rel_type
-        "#;
-        
-        let mut graph = client.select_graph(graph_name);
-        let mut edges_result = graph.query(edges_query).execute().await?;
-        
-        // Process all edges
-        while let Some(row) = edges_result.data.next() {
-            if row.len() >= 3 {
-                let source_id = value_to_string(&row[0]);
-                let target_id = value_to_string(&row[1]);
-                let rel_type = value_to_string(&row[2]);
-                
-                edges.push(Edge {
-                    from: source_id,
-                    to: target_id,
-                    edge_type: rel_type,
-                    weight: 1.0,
-                });
+        // Query 2: Get all edges with pagination to handle FalkorDB's 10K limit
+        let batch_size = 5000;
+        let mut offset = 0;
+        loop {
+            let edges_query = format!(r#"
+                MATCH (n)-[r]->(m)
+                RETURN 
+                    n.uuid as source_id,
+                    m.uuid as target_id,
+                    type(r) as rel_type
+                SKIP {}
+                LIMIT {}
+            "#, offset, batch_size);
+            
+            let mut graph = client.select_graph(graph_name);
+            let mut edges_result = graph.query(&edges_query).execute().await?;
+            
+            let mut batch_count = 0;
+            // Process edges in this batch
+            while let Some(row) = edges_result.data.next() {
+                if row.len() >= 3 {
+                    let source_id = value_to_string(&row[0]);
+                    let target_id = value_to_string(&row[1]);
+                    let rel_type = value_to_string(&row[2]);
+                    
+                    edges.push(Edge {
+                        from: source_id,
+                        to: target_id,
+                        edge_type: rel_type,
+                        weight: 1.0,
+                    });
+                    batch_count += 1;
+                }
             }
+            
+            // If we got fewer edges than batch_size, we've reached the end
+            if batch_count < batch_size {
+                break;
+            }
+            
+            offset += batch_size;
+            info!("Fetched {} edges so far...", edges.len());
         }
     } else {
         // Regular query processing

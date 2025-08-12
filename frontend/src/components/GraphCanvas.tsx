@@ -120,6 +120,7 @@ interface GraphCanvasProps {
   onClearSelection?: () => void;
   onNodeHover?: (node: GraphNode | null) => void;
   onStatsUpdate?: (stats: { nodeCount: number; edgeCount: number; lastUpdated: number }) => void;
+  onContextReady?: (isReady: boolean) => void;
   selectedNodes: string[];
   highlightedNodes: string[];
   className?: string;
@@ -177,13 +178,16 @@ interface GraphCanvasComponentProps extends GraphCanvasProps {
 const cosmographInitializationMap = new WeakMap<HTMLElement, boolean>();
 
 const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
-  ({ onNodeClick, onNodeSelect, onSelectNodes, onClearSelection, onNodeHover, onStatsUpdate, selectedNodes, highlightedNodes, className, stats, nodes, links }, ref) => {
+  ({ onNodeClick, onNodeSelect, onSelectNodes, onClearSelection, onNodeHover, onStatsUpdate, onContextReady, selectedNodes, highlightedNodes, className, stats, nodes, links }, ref) => {
     // Component rendering
     
     const cosmographRef = useRef<any>(null);
     
     // Get the CosmographContext to ensure timeline can access it
     const cosmographContext = useCosmographInternal();
+    
+    // Track if context has been initialized for timeline
+    const [isContextInitialized, setIsContextInitialized] = useState(false);
     
     // Add a stable ref for the Cosmograph instance to prevent issues in dev mode
     const stableCosmographRef = useRef<any>(null);
@@ -3004,6 +3008,9 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     // Cleanup all timers and refs on unmount
     useEffect(() => {
       return () => {
+        // Notify parent that context is no longer ready
+        onContextReady?.(false);
+        
         // Clear simulation timer
         if (simulationTimerRef.current) {
           clearInterval(simulationTimerRef.current);
@@ -3031,7 +3038,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         lastResumeTimeRef.current = 0;
         pendingHoverRef.current = null;
       };
-    }, []);
+    }, [onContextReady]);
 
     // Create stable method refs
     const methodsRef = useRef<any>({
@@ -3520,6 +3527,35 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
                 if (cosmographContext && cosmographContext.initCosmograph) {
                   console.log('[GraphCanvas] Manually initializing CosmographContext for timeline');
                   cosmographContext.initCosmograph(cosmograph);
+                  
+                  // Wait for data to be available before marking context as ready
+                  // The timeline needs both the context AND the data to work properly
+                  const waitForData = () => {
+                    // In Cosmograph v2.0, we need to check if the data has been set
+                    // We can check if nodes are available through the component's props
+                    const hasNodes = nodes && nodes.length > 0;
+                    const hasLinks = links && links.length > 0;
+                    
+                    console.log('[GraphCanvas] Checking for data availability:', {
+                      hasNodes,
+                      nodeCount: nodes?.length || 0,
+                      linkCount: links?.length || 0,
+                      cosmographReady: !!cosmograph
+                    });
+                    
+                    if (hasNodes && cosmograph) {
+                      // Data and context are ready, notify parent
+                      setIsContextInitialized(true);
+                      onContextReady?.(true);
+                      console.log('[GraphCanvas] Context and data ready, timeline can now render properly');
+                    } else {
+                      // Data or context not ready yet, check again
+                      setTimeout(waitForData, 200);
+                    }
+                  };
+                  
+                  // Start checking for data immediately
+                  waitForData();
                 }
                 
                 // Try to access internal API directly or through a property

@@ -37,27 +37,10 @@ export interface GraphTimelineHandle {
 export const GraphTimeline = forwardRef<GraphTimelineHandle, GraphTimelineProps>(
   ({ onTimeRangeChange, className = '', isVisible = true, onVisibilityChange, cosmographRef, selectedCount = 0, onClearSelection, onScreenshot }, ref) => {
     const timelineRef = useRef<CosmographTimelineRef>(null);
-    const cosmographContext = useCosmograph();
-    // The context returns an object with { cosmograph, initCosmograph }
-    const cosmograph = cosmographContext?.cosmograph;
+    const cosmograph = useCosmograph();
     
-    // TEMPORARY WORKAROUND: Timeline not getting data from context
-    // This is a known issue with the enhanced components
-    // TODO: Fix proper data flow between Cosmograph and Timeline
-    
-    // Debug: Check what data timeline is getting
-    useEffect(() => {
-      console.log('[GraphTimeline] Context state:', {
-        hasContext: !!cosmographContext,
-        hasCosmograph: !!cosmograph,
-        cosmographType: cosmograph?.constructor?.name,
-        availableMethods: cosmograph ? Object.getOwnPropertyNames(Object.getPrototypeOf(cosmograph)) : [],
-      });
-      
-      if (!cosmograph) {
-        console.log('[GraphTimeline] ⚠️ No cosmograph instance in context! Timeline will not work.');
-      }
-    }, [cosmograph, cosmographContext]);
+    // The CosmographTimeline component will access data internally through the context
+    // It uses the accessor="created_at_timestamp" prop to find the timestamp field
     const [isAnimating, setIsAnimating] = useState(false);
     
     // Get zoom controls from the hook
@@ -446,11 +429,6 @@ export const GraphTimeline = forwardRef<GraphTimelineHandle, GraphTimelineProps>
 
         {/* Timeline Component */}
         <div style={{ height: isExpanded ? '120px' : '60px', padding: '0 16px' }}>
-          {/* KNOWN ISSUE: Timeline doesn't work with enhanced components
-              The CosmographTimeline component cannot access data from the Cosmograph
-              context when using GraphViewportEnhancedFixed. This appears to be a 
-              limitation in the @cosmograph/react package's timeline integration.
-              Workaround: Use non-enhanced components or implement custom timeline */}
           <CosmographTimeline
             ref={timelineRef}
             useLinksData={false}

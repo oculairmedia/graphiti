@@ -565,12 +565,14 @@ export function useGraphDataQuery() {
     
     // Don't filter edges - let Cosmograph handle optimization
     // This ensures all edges are available for incremental loading
+    console.log('[useGraphDataQuery] Total edges from API:', sourceData.edges.length);
     const filteredLinks = sourceData.edges
       .map(edge => ({
         ...edge,
         source: edge.from,
         target: edge.to,
       }));
+    console.log('[useGraphDataQuery] Mapped links:', filteredLinks.length);
     
     const newTransformedData = {
       nodes: finalNodes,

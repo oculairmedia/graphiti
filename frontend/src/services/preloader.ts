@@ -78,10 +78,9 @@ class PreloaderService {
         });
       }
       
-      // If we have both promises, we're done
+      // If we have both promises, skip reloading
       if (this.preloadPromises.size >= 2) {
         console.log('[Preloader] Using early-preloaded data, skipping network requests');
-        this.preloadedData.timestamp = Date.now();
         return;
       }
     }
@@ -135,13 +134,18 @@ class PreloaderService {
     responseType: 'arrayBuffer' | 'json' | 'text'
   ): Promise<any> {
     try {
-      const response = await fetch(url, {
+      // Add cache-busting timestamp
+      const cacheBuster = url.includes('?') ? `&t=${Date.now()}` : `?t=${Date.now()}`;
+      const response = await fetch(url + cacheBuster, {
         method: 'GET',
         headers: {
           'Accept': responseType === 'arrayBuffer' 
             ? 'application/octet-stream' 
-            : 'application/json'
+            : 'application/json',
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
         },
+        cache: 'no-cache',
         // Use high priority for critical resources
         priority: 'high' as any
       });

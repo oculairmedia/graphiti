@@ -3,9 +3,6 @@ import { useStableCallback } from '../hooks/useStableCallback';
 import { CosmographProvider } from '@cosmograph/react';
 import { useGraphConfig } from '../contexts/GraphConfigProvider';
 import { ControlPanel } from './ControlPanel';
-import { GraphViewport } from './GraphViewport';
-import { GraphViewportSimplified } from './GraphViewportSimplified';
-import { GraphViewportEnhanced } from './GraphViewportEnhanced';
 import { GraphViewportEnhancedFixed } from './GraphViewportEnhancedFixed';
 import { LayoutPanel } from './LayoutPanel';
 import { logger } from '../utils/logger';
@@ -29,12 +26,9 @@ import { getErrorMessage } from '../types/errors';
 export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
   // Component rendering
   
-  // Always use refactored components (can be overridden by setting localStorage to 'false')
-  const USE_REFACTORED_COMPONENTS = localStorage.getItem('graphiti.useRefactoredComponents') !== 'false';
-  
   // Debug component lifecycle
   useEffect(() => {
-    console.log('[GraphViz] Component mounted, using refactored:', USE_REFACTORED_COMPONENTS);
+    console.log('[GraphViz] Component mounted');
     return () => {
       console.log('[GraphViz] Component unmounting');
     };
@@ -66,6 +60,15 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
     const saved = localStorage.getItem('graphiti.timeline.visible');
     return saved !== null ? saved === 'true' : true;
   });
+  
+  // Track if Cosmograph context is ready for timeline
+  const [isContextReady, setIsContextReady] = useState(false);
+
+  // Handle context ready state from GraphCanvas
+  const handleContextReady = useCallback((ready: boolean) => {
+    console.log('[GraphViz] Cosmograph context ready:', ready);
+    setIsContextReady(ready);
+  }, []);
 
   // Handle timeline visibility change
   const handleTimelineVisibilityChange = useCallback((visible: boolean) => {
@@ -355,54 +358,30 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
             />
           </div>
 
-          {/* Main Graph Viewport - Conditionally use enhanced or original components */}
-          {USE_REFACTORED_COMPONENTS ? (
-            <GraphViewportEnhancedFixed
-              ref={graphCanvasRef}
-              nodes={dataToUse.nodes}
-              links={dataToUse.links}
-              selectedNodes={selectedNodes}
-              highlightedNodes={highlightedNodes}
-              selectedNode={selectedNode}
-              stats={data?.stats}
-              onNodeClick={handleNodeClick}
-              onNodeSelect={handleNodeSelect}
-              onSelectNodes={handleSelectNodes}
-              onNodeHover={handleNodeHover}
-              onClearSelection={clearAllSelections}
-              onShowNeighbors={handleShowNeighbors}
-              onZoomIn={handleZoomIn}
-              onZoomOut={handleZoomOut}
-              onFitView={handleFitView}
-              onScreenshot={handleCaptureScreenshot}
-              onToggleTimeline={toggleTimeline}
-              isTimelineVisible={isTimelineVisible}
-              onStatsUpdate={handleStatsUpdate}
-            />
-          ) : (
-            <GraphViewport
-              ref={graphCanvasRef}
-              nodes={dataToUse.nodes}
-              links={dataToUse.links}
-              selectedNodes={selectedNodes}
-              highlightedNodes={highlightedNodes}
-              selectedNode={selectedNode}
-              stats={data?.stats}
-              onNodeClick={handleNodeClick}
-              onNodeSelect={handleNodeSelect}
-              onSelectNodes={handleSelectNodes}
-              onNodeHover={handleNodeHover}
-              onClearSelection={clearAllSelections}
-              onShowNeighbors={handleShowNeighbors}
-              onZoomIn={handleZoomIn}
-              onZoomOut={handleZoomOut}
-              onFitView={handleFitView}
-              onScreenshot={handleCaptureScreenshot}
-              onToggleTimeline={toggleTimeline}
-              isTimelineVisible={isTimelineVisible}
-              onStatsUpdate={handleStatsUpdate}
-            />
-          )}
+          {/* Main Graph Viewport - Using refactored components */}
+          <GraphViewportEnhancedFixed
+            ref={graphCanvasRef}
+            nodes={dataToUse.nodes}
+            links={dataToUse.links}
+            selectedNodes={selectedNodes}
+            highlightedNodes={highlightedNodes}
+            selectedNode={selectedNode}
+            stats={data?.stats}
+            onNodeClick={handleNodeClick}
+            onNodeSelect={handleNodeSelect}
+            onSelectNodes={handleSelectNodes}
+            onNodeHover={handleNodeHover}
+            onClearSelection={clearAllSelections}
+            onShowNeighbors={handleShowNeighbors}
+            onZoomIn={handleZoomIn}
+            onZoomOut={handleZoomOut}
+            onFitView={handleFitView}
+            onScreenshot={handleCaptureScreenshot}
+            onToggleTimeline={toggleTimeline}
+            isTimelineVisible={isTimelineVisible}
+            onStatsUpdate={handleStatsUpdate}
+            onContextReady={handleContextReady}
+          />
 
           {/* Right Layout Panel */}
           <div className={`${rightPanelCollapsed ? 'w-12' : 'w-80'} transition-all duration-300 flex-shrink-0`}>
@@ -445,8 +424,8 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
           </React.Suspense>
         )}
         
-        {/* Timeline at the bottom */}
-        {data && data.nodes && data.nodes.length > 0 && (
+        {/* Timeline at the bottom - Only render when context is ready */}
+        {data && data.nodes && data.nodes.length > 0 && isContextReady && (
           <div className={`fixed bottom-0 z-50 transition-all duration-300`}
             style={{
               left: leftPanelCollapsed ? '48px' : '320px',
@@ -469,6 +448,21 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
                 className=""
               />
             </React.Suspense>
+          </div>
+        )}
+        
+        {/* Show loading indicator when timeline should be visible but context not ready */}
+        {data && data.nodes && data.nodes.length > 0 && !isContextReady && isTimelineVisible && (
+          <div className={`fixed bottom-0 z-50 transition-all duration-300`}
+            style={{
+              left: leftPanelCollapsed ? '48px' : '320px',
+              right: rightPanelCollapsed ? '48px' : '320px',
+              height: '180px'
+            }}
+          >
+            <div className="h-full bg-background/80 backdrop-blur-sm border-t border-border flex items-center justify-center">
+              <div className="text-muted-foreground">Initializing timeline...</div>
+            </div>
           </div>
         )}
       </div>

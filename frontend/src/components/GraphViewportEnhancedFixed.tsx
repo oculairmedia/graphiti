@@ -44,6 +44,7 @@ interface GraphViewportEnhancedFixedProps {
   onToggleTimeline?: () => void;
   isTimelineVisible?: boolean;
   onStatsUpdate?: (stats: { nodeCount: number; edgeCount: number; lastUpdated: number }) => void;
+  onContextReady?: (isReady: boolean) => void;
 }
 
 /**
@@ -95,6 +96,7 @@ const GraphViewportEnhancedFixed = forwardRef<GraphCanvasHandle, GraphViewportEn
     onToggleTimeline,
     isTimelineVisible,
     onStatsUpdate,
+    onContextReady,
   } = props;
 
   // State
@@ -270,6 +272,7 @@ const GraphViewportEnhancedFixed = forwardRef<GraphCanvasHandle, GraphViewportEn
                   onNodeHover={onNodeHover}
                   onClearSelection={onClearSelection}
                   onStatsUpdate={onStatsUpdate}
+                  onContextReady={onContextReady}
                 />
               </SelectionTools>
             </VisualizationStrategies>

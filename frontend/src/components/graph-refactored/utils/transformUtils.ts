@@ -232,13 +232,29 @@ export function mergeGraphData(
     });
   }
   
-  // Add links
+  // Add links (only if both source and target nodes exist)
   if (updates.linksAdded?.length) {
+    // Create a set of all node IDs for quick lookup
+    const nodeIds = new Set(nodes.map(n => n.id));
+    
     const existingKeys = new Set(links.map(l => `${l.source}-${l.target}`));
     const newLinks = updates.linksAdded.filter(l => {
       const key = `${l.source}-${l.target}`;
-      return !existingKeys.has(key);
+      // Only add link if it's new AND both nodes exist
+      return !existingKeys.has(key) && 
+             nodeIds.has(l.source) && 
+             nodeIds.has(l.target);
     });
+    
+    // Log orphaned edges for debugging
+    const orphanedLinks = updates.linksAdded.filter(l => 
+      !nodeIds.has(l.source) || !nodeIds.has(l.target)
+    );
+    if (orphanedLinks.length > 0) {
+      console.warn('[mergeGraphData] Skipping orphaned edges:', orphanedLinks.length, 
+                   'edges reference non-existent nodes');
+    }
+    
     links = [...links, ...newLinks];
   }
   
