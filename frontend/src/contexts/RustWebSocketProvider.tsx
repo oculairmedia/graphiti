@@ -192,12 +192,27 @@ export function RustWebSocketProvider({ children }: { children: React.ReactNode 
     // connect();
 
     return () => {
+      // Clean up all subscriptions
+      subscribersRef.current.clear();
+      
+      // Clear reconnect timeout
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
       }
+      
+      // Close WebSocket connection
       if (wsRef.current) {
+        wsRef.current.onopen = null;
+        wsRef.current.onmessage = null;
+        wsRef.current.onerror = null;
+        wsRef.current.onclose = null;
         wsRef.current.close();
+        wsRef.current = null;
       }
+      
+      // Reset connection state
+      isConnectingRef.current = false;
+      setIsConnected(false);
     };
   }, [connect]);
 

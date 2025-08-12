@@ -3027,6 +3027,12 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         lastClickedNodeRef.current = null;
         isIncrementalUpdateRef.current = false;
         lastResumeTimeRef.current = 0;
+        
+        // IMPORTANT: Clear large data arrays to free memory
+        setCurrentNodes([]);
+        setCurrentLinks([]);
+        setCosmographData(null);
+        prevDataRef.current = { nodeCount: 0, linkCount: 0 };
         pendingHoverRef.current = null;
       };
     }, [onContextReady]);
@@ -3224,13 +3230,18 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       
       if (typeof index === 'number' && cosmographRef.current) {
         
-        // Get node data - index from Cosmograph should match our array index
-        // since we disabled progressive loading
+        // Get node data - use the same data source that's passed to Cosmograph
         let originalNode: GraphNode | undefined;
         
-        // Direct array access - index should be correct now
-        if (index >= 0 && index < transformedData.nodes.length) {
-          originalNode = transformedData.nodes[index];
+        // Use the same data source that we pass to Cosmograph's points prop
+        // This matches the logic used below for pointsData
+        const nodesArray = useDuckDBTables ? 
+          (duckDBData?.points ? (Array.isArray(duckDBData.points) ? memoizedNodes : memoizedNodes) : memoizedNodes) :
+          (cosmographData ? cosmographData.nodes : memoizedNodes);
+        
+        // Direct array access using the correct data source
+        if (index >= 0 && index < nodesArray.length) {
+          originalNode = nodesArray[index];
           console.log('[GraphCanvas] Click on index', index, '-> node:', originalNode?.id, originalNode?.label);
         }
         
@@ -3243,8 +3254,8 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         if (originalNode) {
           const currentTime = Date.now();
           const timeDiff = currentTime - lastClickTimeRef.current;
-          // Reduce double-click window to 250ms for faster response
-          const isDoubleClick = timeDiff < 250 && lastClickedNodeRef.current?.id === originalNode.id;
+          // Reduce double-click window to 200ms for faster response
+          const isDoubleClick = timeDiff < 200 && lastClickedNodeRef.current?.id === originalNode.id;
           
           // Clear any existing timeout
           if (doubleClickTimeoutRef.current) {
@@ -3316,29 +3327,32 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             } else {
               // Single click - respond immediately for better UX
               
-              // Select the node immediately
-              if (typeof cosmographRef.current.selectPoint === 'function') {
-                cosmographRef.current.selectPoint(index);
-              } else if (typeof cosmographRef.current.selectPoints === 'function') {
-                cosmographRef.current.selectPoints([index]);
-              }
-              
-              // Track the selected node position for following during simulation
-              trackPointPositionsByIndices([index]);
-              
-              // Focus the node (draws a ring around it) and optionally follow it
-              if (typeof cosmographRef.current.setFocusedPoint === 'function') {
-                if (config.followSelectedNode) {
-                  // Enable following - camera will track this node during simulation
-                  cosmographRef.current.setFocusedPoint(index);
-                } else {
-                  // Just highlight without following
-                  cosmographRef.current.setFocusedPoint(index);
-                }
-              }
-              
-              // Show the info panel immediately
+              // Show the info panel immediately - do this FIRST for instant feedback
               onNodeClick(originalNode);
+              
+              // Then update visual selection (non-blocking)
+              requestAnimationFrame(() => {
+                // Select the node
+                if (typeof cosmographRef.current.selectPoint === 'function') {
+                  cosmographRef.current.selectPoint(index);
+                } else if (typeof cosmographRef.current.selectPoints === 'function') {
+                  cosmographRef.current.selectPoints([index]);
+                }
+                
+                // Track the selected node position for following during simulation
+                trackPointPositionsByIndices([index]);
+                
+                // Focus the node (draws a ring around it) and optionally follow it
+                if (typeof cosmographRef.current.setFocusedPoint === 'function') {
+                  if (config.followSelectedNode) {
+                    // Enable following - camera will track this node during simulation
+                    cosmographRef.current.setFocusedPoint(index);
+                  } else {
+                    // Just highlight without following
+                    cosmographRef.current.setFocusedPoint(index);
+                  }
+                }
+              });
               
               // Log the click
               logger.log('Node clicked:', {

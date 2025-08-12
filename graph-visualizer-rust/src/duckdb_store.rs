@@ -326,13 +326,30 @@ impl DuckDBStore {
     pub async fn get_edges_as_arrow(&self) -> Result<RecordBatch> {
         let conn = self.conn.lock().unwrap();
         
-        // Only get edges where both nodes exist - this filters out orphaned edges
+        // First, get the actual nodes to build an ID to index mapping
+        let mut node_stmt = conn.prepare("SELECT id, idx FROM nodes ORDER BY idx")?;
+        let node_rows = node_stmt.query_map(params![], |row| {
+            Ok((
+                row.get::<_, String>(0)?,  // id
+                row.get::<_, u32>(1)?,     // idx
+            ))
+        })?;
+        
+        // Build a map from node ID to its actual index in the current node array
+        let mut node_id_to_index = std::collections::HashMap::new();
+        let mut current_index = 0u32;
+        for row in node_rows {
+            let (id, _) = row?;
+            node_id_to_index.insert(id, current_index);
+            current_index += 1;
+        }
+        
+        // Now get edges and recalculate indices based on current node positions
         let mut stmt = conn.prepare(
-            "SELECT e.source, e.sourceidx, e.target, e.targetidx, e.edge_type, e.weight, e.color, e.strength 
+            "SELECT e.source, e.target, e.edge_type, e.weight, e.color, e.strength 
              FROM edges e
              INNER JOIN nodes n1 ON e.source = n1.id
-             INNER JOIN nodes n2 ON e.target = n2.id
-             ORDER BY e.sourceidx, e.targetidx"
+             INNER JOIN nodes n2 ON e.target = n2.id"
         )?;
         
         let mut sources = Vec::new();
@@ -347,26 +364,29 @@ impl DuckDBStore {
         let rows = stmt.query_map(params![], |row| {
             Ok((
                 row.get::<_, String>(0)?,     // source
-                row.get::<_, u32>(1)?,        // sourceidx
-                row.get::<_, String>(2)?,     // target
-                row.get::<_, u32>(3)?,        // targetidx
-                row.get::<_, String>(4)?,     // edge_type
-                row.get::<_, f64>(5)?,        // weight
-                row.get::<_, Option<String>>(6)?, // color
-                row.get::<_, Option<f64>>(7)?, // strength
+                row.get::<_, String>(1)?,     // target
+                row.get::<_, String>(2)?,     // edge_type
+                row.get::<_, f64>(3)?,        // weight
+                row.get::<_, Option<String>>(4)?, // color
+                row.get::<_, Option<f64>>(5)?, // strength
             ))
         })?;
         
         for row in rows {
-            let (source, source_idx, target, target_idx, edge_type, weight, color, strength) = row?;
-            sources.push(source);
-            source_indices.push(source_idx);
-            targets.push(target);
-            target_indices.push(target_idx);
-            edge_types.push(edge_type);
-            weights.push(weight);
-            colors.push(color);
-            strengths.push(strength.unwrap_or(1.0));
+            let (source, target, edge_type, weight, color, strength) = row?;
+            
+            // Look up the actual indices based on current node positions
+            if let (Some(&source_idx), Some(&target_idx)) = 
+                (node_id_to_index.get(&source), node_id_to_index.get(&target)) {
+                sources.push(source);
+                source_indices.push(source_idx);
+                targets.push(target);
+                target_indices.push(target_idx);
+                edge_types.push(edge_type);
+                weights.push(weight);
+                colors.push(color);
+                strengths.push(strength.unwrap_or(1.0));
+            }
         }
         
         let batch = RecordBatch::try_new(

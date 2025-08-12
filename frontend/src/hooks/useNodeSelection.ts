@@ -208,6 +208,19 @@ export function useNodeSelection(
       graphCanvasRef.current.clearSelection();
     }
   }, [graphCanvasRef, setHoveredNodeStable]);
+  
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      // Clear all state on unmount to free memory
+      setHoveredNode(null);
+      setHoveredConnectedNodes([]);
+      setSelectedNodes([]);
+      setSelectedNode(null);
+      setHighlightedNodes([]);
+      hoveredNodeRef.current = null;
+    };
+  }, []);
 
   // Memoize the return object to prevent unnecessary re-renders
   const result = useMemo(() => {
