@@ -6,6 +6,7 @@ import type { GraphCanvasRef as GraphCanvasHandle } from './GraphCanvas';
 import { NodeDetailsPanel } from './NodeDetailsPanel';
 import { GraphOverlays } from './GraphOverlays';
 import GraphErrorBoundary from './GraphErrorBoundary';
+import { useGraphConfig } from '../contexts/GraphConfigProvider';
 
 // Import feature components
 import { KeyboardShortcuts } from './graph-refactored/features/KeyboardShortcuts';
@@ -103,6 +104,18 @@ const GraphViewportEnhancedFixed = forwardRef<GraphCanvasHandle, GraphViewportEn
   
   // Internal ref for the actual GraphCanvas
   const graphCanvasRef = useRef<GraphCanvasHandle>(null);
+  
+  // Get setCosmographRef from GraphConfigProvider
+  // This is CRITICAL for the timeline to work
+  const { setCosmographRef } = useGraphConfig();
+  
+  // Set the cosmograph ref when the component mounts or the ref changes
+  useEffect(() => {
+    if (graphCanvasRef.current) {
+      // Pass the ref to the GraphConfigProvider so the timeline can access it
+      setCosmographRef(graphCanvasRef as any);
+    }
+  }, [setCosmographRef]);
   
   // Expose all methods via ref - including the missing ones
   useImperativeHandle(ref, () => ({
