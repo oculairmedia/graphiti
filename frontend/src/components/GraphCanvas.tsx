@@ -1352,48 +1352,13 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
               targetIndex: link.targetIndex !== undefined ? link.targetIndex : -1
             }));
             
-            // Always use progressive loading for better perceived performance
-            if (indexedNodes.length > 100) {
-              console.log('[GraphCanvas] Using progressive loading for', indexedNodes.length, 'nodes');
-              
-              // Prepare loading phases
-              const phases = progressiveLoader.prepareLoadingPhases(indexedNodes, indexedLinks);
-              
-              // Set initial data with core nodes
-              if (phases.length > 0) {
-                setCosmographData({
-                  nodes: phases[0].nodes,
-                  links: phases[0].edges
-                });
-                
-                // Schedule remaining phases
-                if (phases.length > 1) {
-                  setTimeout(() => {
-                    // Load remaining phases incrementally
-                    for (let i = 1; i < phases.length; i++) {
-                      const phase = phases[i];
-                      setTimeout(() => {
-                        setCosmographData(prevData => {
-                          if (!prevData) return { nodes: phase.nodes, links: phase.edges };
-                          return {
-                            nodes: [...prevData.nodes, ...phase.nodes],
-                            links: [...prevData.links, ...phase.edges]
-                          };
-                        });
-                        setLoadingPhase(phase.name);
-                        setLoadingProgress({ loaded: phase.nodes.length, total: indexedNodes.length });
-                      }, phase.delay);
-                    }
-                  }, 0);
-                }
-              }
-            } else {
-              // Small graph, load all at once
-              setCosmographData({
-                nodes: indexedNodes,
-                links: indexedLinks
-              });
-            }
+            // DISABLED progressive loading - causes index mismatch and wrong node selection
+            // Always load all data at once for correct index mapping
+            setCosmographData({
+              nodes: indexedNodes,
+              links: indexedLinks
+            });
+            console.log('[GraphCanvas] Loaded all data at once:', indexedNodes.length, 'nodes,', indexedLinks.length, 'edges');
             
             // Mark data preparation as complete
             loadingCoordinator.setStageComplete('dataPreparation', {
@@ -1683,11 +1648,11 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
     // Handle popup for glowing nodes (search results)
     useEffect(() => {
       if (glowingNodes.size > 0 && cosmographRef.current && transformedData.nodes.length > 0) {
-        // Get the first glowing node
+        // Get the first glowing node - use O(1) map lookup
         const firstGlowingNodeId = Array.from(glowingNodes.keys())[0];
-        const nodeIndex = transformedData.nodes.findIndex(n => n.id === firstGlowingNodeId);
+        const nodeIndex = nodeIdToIndexMap.get(firstGlowingNodeId);
         
-        if (nodeIndex >= 0) {
+        if (nodeIndex !== undefined && nodeIndex >= 0) {
           // Clear existing popup timeout
           if (popupTimeoutRef.current) {
             clearTimeout(popupTimeoutRef.current);
@@ -1700,7 +1665,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           });
         }
       }
-    }, [glowingNodes, transformedData.nodes]);
+    }, [glowingNodes, transformedData.nodes, nodeIdToIndexMap]);
     
     // Memoize node types for color generation
     const allNodeTypes = React.useMemo(() => {
@@ -1783,6 +1748,17 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           map.set(node.id, node);
           // Also store by index for quick index-based lookups
           map.set(`index-${index}`, node);
+        });
+      }
+      return map;
+    }, [transformedData]);
+    
+    // Create node ID to index map for O(1) index lookups
+    const nodeIdToIndexMap = React.useMemo(() => {
+      const map = new Map<string, number>();
+      if (transformedData?.nodes) {
+        transformedData.nodes.forEach((node, index) => {
+          map.set(node.id, index);
         });
       }
       return map;
@@ -2178,16 +2154,16 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         try {
           // For Cosmograph v2.0 with Data Kit, we need to use point indices
           if (typeof cosmographRef.current.selectPoint === 'function') {
-            // Try to find the node index from the transformed data
-            const nodeIndex = transformedData.nodes.findIndex(n => n.id === node.id);
-            if (nodeIndex >= 0) {
+            // Use O(1) map lookup instead of O(n) findIndex
+            const nodeIndex = nodeIdToIndexMap.get(node.id);
+            if (nodeIndex !== undefined && nodeIndex >= 0) {
               cosmographRef.current.selectPoint(nodeIndex);
             } else {
               logger.warn('Could not find node index for selection:', node.id);
             }
           } else if (typeof cosmographRef.current.selectPoints === 'function') {
-            const nodeIndex = transformedData.nodes.findIndex(n => n.id === node.id);
-            if (nodeIndex >= 0) {
+            const nodeIndex = nodeIdToIndexMap.get(node.id);
+            if (nodeIndex !== undefined && nodeIndex >= 0) {
               cosmographRef.current.selectPoints([nodeIndex]);
             }
           }
@@ -2195,17 +2171,17 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
           logger.error('Error selecting Cosmograph node:', error);
         }
       }
-    }, [transformedData.nodes]);
+    }, [transformedData.nodes, nodeIdToIndexMap]);
 
     // Method to select multiple nodes in Cosmograph
     const selectCosmographNodes = useCallback((nodes: GraphNode[]) => {
       if (cosmographRef.current) {
         try {
           if (typeof cosmographRef.current.selectPoints === 'function') {
-            // Convert node IDs to indices
+            // Convert node IDs to indices using O(1) map lookup
             const nodeIndices = nodes.map(node => {
-              return transformedData.nodes.findIndex(n => n.id === node.id);
-            }).filter(index => index >= 0); // Remove invalid indices
+              return nodeIdToIndexMap.get(node.id);
+            }).filter((index): index is number => index !== undefined && index >= 0); // Remove invalid indices
             
             if (nodeIndices.length > 0) {
               cosmographRef.current.selectPoints(nodeIndices);
@@ -3246,15 +3222,20 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       
       if (typeof index === 'number' && cosmographRef.current) {
         
-        // Get node data immediately using the Map for O(1) lookup
+        // Get node data - index from Cosmograph should match our array index
+        // since we disabled progressive loading
         let originalNode: GraphNode | undefined;
         
-        // Use the node map for instant lookup
-        originalNode = transformedDataNodeMap.get(`index-${index}`);
-        
-        // Fallback to direct array access if map doesn't have it
-        if (!originalNode && index >= 0 && index < transformedData.nodes.length) {
+        // Direct array access - index should be correct now
+        if (index >= 0 && index < transformedData.nodes.length) {
           originalNode = transformedData.nodes[index];
+          console.log('[GraphCanvas] Click on index', index, '-> node:', originalNode?.id, originalNode?.label);
+        }
+        
+        // Fallback to map if direct access fails
+        if (!originalNode) {
+          originalNode = transformedDataNodeMap.get(`index-${index}`);
+          console.warn('[GraphCanvas] Had to use fallback map for index:', index);
         }
         
         if (originalNode) {
