@@ -589,6 +589,11 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/updates/nodes", post(add_nodes))
         .route("/api/updates/edges", post(add_edges))
         .route("/api/updates/batch", post(batch_update))
+        // Incremental query endpoints for notification-based updates
+        .route("/api/graph/changes", get(get_changes_since))
+        .route("/api/graph/nodes", get(get_nodes_by_ids))
+        .route("/api/graph/edges", get(get_edges_by_ids))
+        .route("/api/graph/sequence", get(get_current_sequence))
         // Webhook and data sync endpoints
         .route("/api/webhooks/data-ingestion", post(webhook_data_ingestion))
         .route("/api/data/reload", post(reload_duckdb_from_falkordb))
@@ -2228,6 +2233,113 @@ async fn reload_duckdb_from_falkordb(
             ))
         }
     }
+}
+
+// Incremental query endpoints for notification-based architecture
+
+#[derive(Debug, Deserialize)]
+struct ChangesSinceQuery {
+    since_sequence: Option<u64>,
+    limit: Option<usize>,
+}
+
+async fn get_changes_since(
+    Query(params): Query<ChangesSinceQuery>,
+    State(state): State<AppState>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<ErrorResponse>)> {
+    let since_sequence = params.since_sequence.unwrap_or(0);
+    let limit = params.limit.unwrap_or(1000).min(10000);
+    
+    // Get changes from delta tracker
+    let changes = state.delta_tracker.get_changes_since(since_sequence, limit).await;
+    
+    Ok(Json(serde_json::json!({
+        "changes": changes,
+        "current_sequence": state.delta_tracker.get_current_sequence().await,
+    })))
+}
+
+#[derive(Debug, Deserialize)]
+struct NodesByIdsQuery {
+    ids: String, // Comma-separated list of node IDs
+}
+
+async fn get_nodes_by_ids(
+    Query(params): Query<NodesByIdsQuery>,
+    State(state): State<AppState>,
+) -> Result<Json<Vec<Node>>, (StatusCode, Json<ErrorResponse>)> {
+    let ids: Vec<String> = params.ids.split(',').map(|s| s.trim().to_string()).collect();
+    
+    if ids.is_empty() {
+        return Ok(Json(vec![]));
+    }
+    
+    // Query specific nodes from DuckDB
+    match state.duckdb_store.get_nodes_by_ids(&ids).await {
+        Ok(nodes) => Ok(Json(nodes)),
+        Err(e) => {
+            error!("Failed to get nodes by IDs: {}", e);
+            Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: format!("Failed to get nodes: {}", e),
+                }),
+            ))
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct EdgesByIdsQuery {
+    ids: String, // Comma-separated list of edge IDs (format: source-target)
+}
+
+async fn get_edges_by_ids(
+    Query(params): Query<EdgesByIdsQuery>,
+    State(state): State<AppState>,
+) -> Result<Json<Vec<Edge>>, (StatusCode, Json<ErrorResponse>)> {
+    let ids: Vec<String> = params.ids.split(',').map(|s| s.trim().to_string()).collect();
+    
+    if ids.is_empty() {
+        return Ok(Json(vec![]));
+    }
+    
+    // Parse edge IDs to get source-target pairs
+    let edge_pairs: Vec<(String, String)> = ids.iter()
+        .filter_map(|id| {
+            let parts: Vec<&str> = id.split('-').collect();
+            if parts.len() == 2 {
+                Some((parts[0].to_string(), parts[1].to_string()))
+            } else {
+                None
+            }
+        })
+        .collect();
+    
+    // Query specific edges from DuckDB
+    match state.duckdb_store.get_edges_by_pairs(&edge_pairs).await {
+        Ok(edges) => Ok(Json(edges)),
+        Err(e) => {
+            error!("Failed to get edges by IDs: {}", e);
+            Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: format!("Failed to get edges: {}", e),
+                }),
+            ))
+        }
+    }
+}
+
+async fn get_current_sequence(
+    State(state): State<AppState>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    let sequence = state.delta_tracker.get_current_sequence().await;
+    
+    Ok(Json(serde_json::json!({
+        "sequence": sequence,
+        "timestamp": chrono::Utc::now().to_rfc3339(),
+    })))
 }
 
 // Force rebuild for CI/CD workflow

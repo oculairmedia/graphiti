@@ -3,6 +3,16 @@ import { GraphNode } from '../api/types';
 import { GraphLink } from '../types/graph';
 import { logger } from '../utils/logger';
 
+interface GraphNotification {
+  type: 'graph:notification';
+  operation: 'insert' | 'update' | 'delete' | 'bulk_insert' | 'bulk_update' | 'bulk_delete';
+  entity_type: 'node' | 'edge' | 'episode';
+  entity_ids: string[];
+  sequence: number;
+  timestamp: string;
+  metadata?: Record<string, any>;
+}
+
 interface GraphDelta {
   operation: 'initial' | 'update' | 'refresh';
   nodes_added: GraphNode[];
@@ -18,22 +28,92 @@ interface GraphDelta {
 interface UseWebSocketDeltasOptions {
   enabled?: boolean;
   onDelta?: (delta: GraphDelta) => void;
+  onNotification?: (notification: GraphNotification) => void;
   onConnected?: () => void;
   onDisconnected?: () => void;
+  apiBaseUrl?: string; // Base URL for fetching incremental updates
 }
 
 export function useWebSocketDeltas({
   enabled = true,
   onDelta,
+  onNotification,
   onConnected,
   onDisconnected,
+  apiBaseUrl = 'http://localhost:3000',
 }: UseWebSocketDeltasOptions = {}) {
   const [isConnected, setIsConnected] = useState(false);
   const [lastDelta, setLastDelta] = useState<GraphDelta | null>(null);
+  const [lastNotification, setLastNotification] = useState<GraphNotification | null>(null);
   const [sequence, setSequence] = useState<number>(0);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectAttemptsRef = useRef(0);
+  
+  // Function to fetch incremental data when notification is received
+  const fetchIncrementalData = useCallback(async (notification: GraphNotification) => {
+    try {
+      if (notification.entity_type === 'node') {
+        // Fetch specific nodes
+        const response = await fetch(
+          `${apiBaseUrl}/api/graph/nodes?ids=${notification.entity_ids.join(',')}`
+        );
+        
+        if (response.ok) {
+          const nodes = await response.json();
+          logger.log('Fetched incremental nodes:', nodes.length);
+          
+          // Convert to delta format for compatibility
+          const delta: GraphDelta = {
+            operation: notification.operation === 'insert' ? 'update' : 'update',
+            nodes_added: notification.operation === 'insert' ? nodes : [],
+            nodes_updated: notification.operation === 'update' ? nodes : [],
+            nodes_removed: notification.operation === 'delete' ? notification.entity_ids : [],
+            edges_added: [],
+            edges_updated: [],
+            edges_removed: [],
+            timestamp: Date.now(),
+            sequence: notification.sequence,
+          };
+          
+          setLastDelta(delta);
+          onDelta?.(delta);
+        }
+      } else if (notification.entity_type === 'edge') {
+        // Fetch specific edges
+        const response = await fetch(
+          `${apiBaseUrl}/api/graph/edges?ids=${notification.entity_ids.join(',')}`
+        );
+        
+        if (response.ok) {
+          const edges = await response.json();
+          logger.log('Fetched incremental edges:', edges.length);
+          
+          // Convert to delta format for compatibility
+          const delta: GraphDelta = {
+            operation: notification.operation === 'insert' ? 'update' : 'update',
+            nodes_added: [],
+            nodes_updated: [],
+            nodes_removed: [],
+            edges_added: notification.operation === 'insert' ? edges : [],
+            edges_updated: notification.operation === 'update' ? edges : [],
+            edges_removed: notification.operation === 'delete' ? 
+              notification.entity_ids.map(id => {
+                const [source, target] = id.split('-');
+                return [source, target] as [string, string];
+              }) : [],
+            timestamp: Date.now(),
+            sequence: notification.sequence,
+          };
+          
+          setLastDelta(delta);
+          onDelta?.(delta);
+        }
+      }
+    } catch (error) {
+      logger.error('Failed to fetch incremental data:', error);
+    }
+  }, [apiBaseUrl, onDelta]);
   
   const connect = useCallback(() => {
     if (!enabled || wsRef.current?.readyState === WebSocket.OPEN) return;
@@ -66,7 +146,7 @@ export function useWebSocketDeltas({
       onConnected?.();
     };
     
-    ws.onmessage = (event) => {
+    ws.onmessage = async (event) => {
       try {
         const message = JSON.parse(event.data);
         
@@ -79,9 +159,40 @@ export function useWebSocketDeltas({
             logger.log('Successfully subscribed to delta updates');
             break;
             
+          case 'graph:notification':
+            // Handle notification-only message
+            const notification = message as GraphNotification;
+            logger.log('Received graph notification:', {
+              operation: notification.operation,
+              entityType: notification.entity_type,
+              entityCount: notification.entity_ids.length,
+              sequence: notification.sequence,
+            });
+            
+            setLastNotification(notification);
+            setSequence(notification.sequence);
+            onNotification?.(notification);
+            
+            // Fetch actual data based on notification
+            if (notification.entity_ids.length > 0) {
+              await fetchIncrementalData(notification);
+            }
+            break;
+            
+          case 'node_access':
+            // Handle node access notifications
+            logger.log('Node access notification:', {
+              nodeCount: message.node_ids?.length || 0,
+              accessType: message.access_type,
+              sequence: message.sequence,
+            });
+            setSequence(message.sequence || sequence);
+            break;
+            
           case 'graph:delta':
+            // Legacy delta message (for backward compatibility)
             const delta = message.data as GraphDelta;
-            logger.log('Received delta update:', {
+            logger.log('Received delta update (legacy):', {
               sequence: delta.sequence,
               nodesAdded: delta.nodes_added.length,
               nodesUpdated: delta.nodes_updated.length,
@@ -129,7 +240,7 @@ export function useWebSocketDeltas({
         }, delay);
       }
     };
-  }, [enabled, onDelta, onConnected, onDisconnected]);
+  }, [enabled, onDelta, onNotification, onConnected, onDisconnected, fetchIncrementalData]);
   
   const disconnect = useCallback(() => {
     if (reconnectTimeoutRef.current) {
@@ -167,6 +278,7 @@ export function useWebSocketDeltas({
   return {
     isConnected,
     lastDelta,
+    lastNotification,
     sequence,
     connect,
     disconnect,

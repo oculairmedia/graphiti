@@ -725,4 +725,103 @@ impl DuckDBStore {
             _ => "#CCCCCC".to_string(),
         }
     }
+    
+    pub async fn get_nodes_by_ids(&self, ids: &[String]) -> Result<Vec<Node>> {
+        if ids.is_empty() {
+            return Ok(vec![]);
+        }
+        
+        let conn = self.conn.lock().unwrap();
+        
+        // Build placeholders for IN clause
+        let placeholders: Vec<String> = ids.iter().enumerate()
+            .map(|(i, _)| format!("${}", i + 1))
+            .collect();
+        let query = format!(
+            "SELECT * FROM nodes WHERE id IN ({}) ORDER BY idx",
+            placeholders.join(", ")
+        );
+        
+        let mut stmt = conn.prepare(&query)?;
+        
+        // Convert ids to params
+        let params: Vec<&dyn duckdb::ToSql> = ids.iter()
+            .map(|id| id as &dyn duckdb::ToSql)
+            .collect();
+        
+        let node_iter = stmt.query_map(&params[..], |row| {
+            let properties_json: String = row.get(8)?;
+            let properties: HashMap<String, serde_json::Value> = 
+                serde_json::from_str(&properties_json).unwrap_or_default();
+            
+            Ok(Node {
+                id: row.get(0)?,
+                idx: row.get(1)?,
+                label: row.get(2)?,
+                node_type: row.get(3)?,
+                summary: row.get(4)?,
+                size: row.get(5)?,
+                created_at: row.get(6)?,
+                created_at_timestamp: row.get(7)?,
+                properties,
+                color: self.get_node_color(&row.get::<_, String>(3)?),
+            })
+        })?;
+        
+        let mut nodes = Vec::new();
+        for node in node_iter {
+            nodes.push(node?);
+        }
+        
+        Ok(nodes)
+    }
+    
+    pub async fn get_edges_by_pairs(&self, pairs: &[(String, String)]) -> Result<Vec<Edge>> {
+        if pairs.is_empty() {
+            return Ok(vec![]);
+        }
+        
+        let conn = self.conn.lock().unwrap();
+        
+        // Build WHERE clause for multiple source-target pairs
+        let conditions: Vec<String> = pairs.iter().enumerate()
+            .map(|(i, _)| format!("(source = ${} AND target = ${})", i * 2 + 1, i * 2 + 2))
+            .collect();
+        
+        let query = format!(
+            "SELECT * FROM edges WHERE {} ORDER BY sourceidx, targetidx",
+            conditions.join(" OR ")
+        );
+        
+        let mut stmt = conn.prepare(&query)?;
+        
+        // Flatten pairs into params
+        let mut params: Vec<&dyn duckdb::ToSql> = Vec::new();
+        for (source, target) in pairs {
+            params.push(source as &dyn duckdb::ToSql);
+            params.push(target as &dyn duckdb::ToSql);
+        }
+        
+        let edge_iter = stmt.query_map(&params[..], |row| {
+            Ok(Edge {
+                from: row.get(0)?,
+                from_idx: row.get(1)?,
+                to: row.get(2)?,
+                to_idx: row.get(3)?,
+                edge_type: row.get(4)?,
+                weight: row.get(5)?,
+                created_at: row.get(6)?,
+                updated_at: row.get(7)?,
+                color: row.get(8)?,
+                strength: row.get(9)?,
+            })
+        })?;
+        
+        let mut edges = Vec::new();
+        for edge in edge_iter {
+            edges.push(edge?);
+        }
+        
+        Ok(edges)
+    }
 }
