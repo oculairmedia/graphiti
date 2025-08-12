@@ -112,8 +112,15 @@ const GraphViewportEnhancedFixed = forwardRef<GraphCanvasHandle, GraphViewportEn
   // Set the cosmograph ref when the component mounts or the ref changes
   useEffect(() => {
     if (graphCanvasRef.current) {
-      // Pass the ref to the GraphConfigProvider so the timeline can access it
-      setCosmographRef(graphCanvasRef as any);
+      // Get the actual Cosmograph instance from GraphCanvas
+      const cosmographInstance = graphCanvasRef.current.getCosmographInstance?.();
+      if (cosmographInstance) {
+        // Pass the actual Cosmograph instance to the GraphConfigProvider so the timeline can access it
+        setCosmographRef({ current: cosmographInstance });
+      } else {
+        // Fallback to the wrapped ref if getCosmographInstance is not available
+        setCosmographRef(graphCanvasRef as any);
+      }
     }
   }, [setCosmographRef]);
   
@@ -165,6 +172,9 @@ const GraphViewportEnhancedFixed = forwardRef<GraphCanvasHandle, GraphViewportEn
       graphCanvasRef.current?.selectPointsInRect(selection, addToSelection),
     selectPointsInPolygon: (polygonPoints: [number, number][], addToSelection?: boolean) => 
       graphCanvasRef.current?.selectPointsInPolygon(polygonPoints, addToSelection),
+    
+    // CRITICAL: Expose the actual Cosmograph instance for timeline
+    getCosmographInstance: () => graphCanvasRef.current?.getCosmographInstance?.(),
   }), []);
 
   // Handle node details
