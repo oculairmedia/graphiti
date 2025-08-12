@@ -40,6 +40,10 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     logger.info("Registering WebSocket broadcast handler with async dispatcher")
     await dispatcher.add_internal_handler(manager.broadcast_node_access)
     
+    # Register data ingestion notification handler
+    logger.info("Registering data ingestion notification handler")
+    await dispatcher.add_data_handler(manager.broadcast_data_ingestion_notification)
+    
     # Keep old webhook service for backward compatibility (will migrate gradually)
     await webhook_service.add_internal_handler(manager.broadcast_node_access)
     

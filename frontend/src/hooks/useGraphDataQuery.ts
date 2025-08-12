@@ -46,8 +46,8 @@ export function useGraphDataQuery() {
   const lastFetchTimeRef = useRef(0);
   
   // Skip JSON fetch if using DuckDB (Arrow format is faster)
-  // TEMPORARY: Force JSON fetch until Arrow data contains all nodes
-  const skipJsonFetch = false; // Use JSON fetch as fallback when Arrow data is not available
+  // TEMPORARY: Disable JSON/WebSocket fetch to use DuckDB data only
+  const skipJsonFetch = true; // Disable WebSocket override issue
   
   // Use progressive loading for large graphs
   const INITIAL_LOAD_LIMIT = 1000; // Start with 1000 most important nodes
@@ -273,6 +273,8 @@ export function useGraphDataQuery() {
   // Use DuckDB data if available, otherwise fall back to JSON data
   // Memoize the data to prevent unnecessary recalculations
   const data = useMemo(() => {
+    // Temporarily prioritize DuckDB data over WebSocket data
+    // TODO: Fix WebSocket to send notifications instead of replacement data
     return duckDBData || jsonData || { nodes: [], edges: [] };
   }, [duckDBData, jsonData]);
   
