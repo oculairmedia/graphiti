@@ -29,8 +29,8 @@ import { getErrorMessage } from '../types/errors';
 export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
   // Component rendering
   
-  // Feature flag for using refactored components
-  const USE_REFACTORED_COMPONENTS = localStorage.getItem('graphiti.useRefactoredComponents') === 'true';
+  // Always use refactored components (can be overridden by setting localStorage to 'false')
+  const USE_REFACTORED_COMPONENTS = localStorage.getItem('graphiti.useRefactoredComponents') !== 'false';
   
   // Debug component lifecycle
   useEffect(() => {
