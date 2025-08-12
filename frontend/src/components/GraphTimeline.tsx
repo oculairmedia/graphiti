@@ -37,9 +37,25 @@ export interface GraphTimelineHandle {
 export const GraphTimeline = forwardRef<GraphTimelineHandle, GraphTimelineProps>(
   ({ onTimeRangeChange, className = '', isVisible = true, onVisibilityChange, cosmographRef, selectedCount = 0, onClearSelection, onScreenshot }, ref) => {
     const timelineRef = useRef<CosmographTimelineRef>(null);
-    // Note: useCosmograph() may return null if timeline is not properly connected
     const cosmograph = useCosmograph();
     
+    // TEMPORARY WORKAROUND: Timeline not getting data from context
+    // This is a known issue with the enhanced components
+    // TODO: Fix proper data flow between Cosmograph and Timeline
+    
+    // Debug: Check what data timeline is getting
+    useEffect(() => {
+      if (cosmograph) {
+        // getPointPositions returns coordinates, not data
+        // The timeline should automatically get data from the cosmograph context
+        // Log available methods to debug
+        console.log('[GraphTimeline] Cosmograph context check:', {
+          hasCosmograph: !!cosmograph,
+          availableMethods: Object.getOwnPropertyNames(Object.getPrototypeOf(cosmograph || {})),
+          cosmographType: cosmograph?.constructor?.name
+        });
+      }
+    }, [cosmograph]);
     const [isAnimating, setIsAnimating] = useState(false);
     
     // Get zoom controls from the hook
@@ -59,19 +75,9 @@ export const GraphTimeline = forwardRef<GraphTimelineHandle, GraphTimelineProps>
     const [currentTimeWindow, setCurrentTimeWindow] = useState<string>('');
     const tickCheckInterval = useRef<NodeJS.Timeout | null>(null);
 
-    // Check if we have temporal data and show timeline
+    // Show timeline when component mounts
     useEffect(() => {
-      // Check if cosmograph has data with timestamps
-      if (cosmograph) {
-        // For now, assume we have temporal data
-        // In production, you might want to check if nodes actually have created_at_timestamp
-        setHasTemporalData(true);
-        logger.log('Timeline: Cosmograph context available', { 
-          hasCosmograph: !!cosmograph 
-        });
-      } else {
-        logger.warn('Timeline: No cosmograph context available');
-      }
+      setHasTemporalData(true);
       
       // Cleanup interval on unmount
       return () => {
@@ -79,7 +85,7 @@ export const GraphTimeline = forwardRef<GraphTimelineHandle, GraphTimelineProps>
           clearInterval(tickCheckInterval.current);
         }
       };
-    }, [cosmograph]);
+    }, []);
 
     // Handle timeline selection
     const handleSelection = useCallback((selection?: [number, number] | [Date, Date], isManual?: boolean) => {
@@ -438,6 +444,11 @@ export const GraphTimeline = forwardRef<GraphTimelineHandle, GraphTimelineProps>
 
         {/* Timeline Component */}
         <div style={{ height: isExpanded ? '120px' : '60px', padding: '0 16px' }}>
+          {/* KNOWN ISSUE: Timeline doesn't work with enhanced components
+              The CosmographTimeline component cannot access data from the Cosmograph
+              context when using GraphViewportEnhancedFixed. This appears to be a 
+              limitation in the @cosmograph/react package's timeline integration.
+              Workaround: Use non-enhanced components or implement custom timeline */}
           <CosmographTimeline
             ref={timelineRef}
             useLinksData={false}
