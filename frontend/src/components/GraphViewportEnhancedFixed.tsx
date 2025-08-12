@@ -6,7 +6,6 @@ import type { GraphCanvasRef as GraphCanvasHandle } from './GraphCanvas';
 import { NodeDetailsPanel } from './NodeDetailsPanel';
 import { GraphOverlays } from './GraphOverlays';
 import GraphErrorBoundary from './GraphErrorBoundary';
-import { useGraphConfig } from '../contexts/GraphConfigProvider';
 
 // Import feature components
 import { KeyboardShortcuts } from './graph-refactored/features/KeyboardShortcuts';
@@ -105,24 +104,9 @@ const GraphViewportEnhancedFixed = forwardRef<GraphCanvasHandle, GraphViewportEn
   // Internal ref for the actual GraphCanvas
   const graphCanvasRef = useRef<GraphCanvasHandle>(null);
   
-  // Get setCosmographRef from GraphConfigProvider
-  // This is CRITICAL for the timeline to work
-  const { setCosmographRef } = useGraphConfig();
-  
-  // Set the cosmograph ref when the component mounts or the ref changes
-  useEffect(() => {
-    if (graphCanvasRef.current) {
-      // Get the actual Cosmograph instance from GraphCanvas
-      const cosmographInstance = graphCanvasRef.current.getCosmographInstance?.();
-      if (cosmographInstance) {
-        // Pass the actual Cosmograph instance to the GraphConfigProvider so the timeline can access it
-        setCosmographRef({ current: cosmographInstance });
-      } else {
-        // Fallback to the wrapped ref if getCosmographInstance is not available
-        setCosmographRef(graphCanvasRef as any);
-      }
-    }
-  }, [setCosmographRef]);
+  // Note: We don't need to manually set the cosmograph ref
+  // The Cosmograph component in GraphCanvas automatically initializes the CosmographContext
+  // which the CosmographTimeline uses via useCosmograph()
   
   // Expose all methods via ref - including the missing ones
   useImperativeHandle(ref, () => ({
@@ -172,9 +156,6 @@ const GraphViewportEnhancedFixed = forwardRef<GraphCanvasHandle, GraphViewportEn
       graphCanvasRef.current?.selectPointsInRect(selection, addToSelection),
     selectPointsInPolygon: (polygonPoints: [number, number][], addToSelection?: boolean) => 
       graphCanvasRef.current?.selectPointsInPolygon(polygonPoints, addToSelection),
-    
-    // CRITICAL: Expose the actual Cosmograph instance for timeline
-    getCosmographInstance: () => graphCanvasRef.current?.getCosmographInstance?.(),
   }), []);
 
   // Handle node details
