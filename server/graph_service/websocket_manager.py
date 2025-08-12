@@ -5,14 +5,41 @@ Handles client connections and broadcasts node access events.
 
 import json
 import logging
-from typing import Set
+from typing import Set, List, Optional, Dict, Any
 from fastapi import WebSocket
 from datetime import datetime, timezone
 import asyncio
+from enum import Enum
 
-from graph_service.webhooks import NodeAccessEvent
+from graph_service.webhooks import NodeAccessEvent, DataIngestionEvent
 
 logger = logging.getLogger(__name__)
+
+
+class NotificationType(str, Enum):
+    """Types of notifications sent via WebSocket."""
+    NODE_ACCESS = "node_access"
+    GRAPH_NOTIFICATION = "graph:notification"
+    DATA_ADDED = "data:added"
+    DATA_UPDATED = "data:updated"
+    DATA_REMOVED = "data:removed"
+
+
+class GraphOperation(str, Enum):
+    """Types of graph operations."""
+    INSERT = "insert"
+    UPDATE = "update"
+    DELETE = "delete"
+    BULK_INSERT = "bulk_insert"
+    BULK_UPDATE = "bulk_update"
+    BULK_DELETE = "bulk_delete"
+
+
+class EntityType(str, Enum):
+    """Types of graph entities."""
+    NODE = "node"
+    EDGE = "edge"
+    EPISODE = "episode"
 
 
 class ConnectionManager:
@@ -21,6 +48,8 @@ class ConnectionManager:
     def __init__(self) -> None:
         self.active_connections: Set[WebSocket] = set()
         self._lock = asyncio.Lock()
+        self._sequence_counter = 0
+        self._sequence_lock = asyncio.Lock()
     
     async def connect(self, websocket: WebSocket) -> None:
         """Accept a new WebSocket connection."""
@@ -88,17 +117,120 @@ class ConnectionManager:
         if disconnected:
             logger.info(f"Removed {len(disconnected)} disconnected clients")
     
+    async def _get_next_sequence(self) -> int:
+        """Get the next sequence number for ordering notifications."""
+        async with self._sequence_lock:
+            self._sequence_counter += 1
+            return self._sequence_counter
+    
     async def broadcast_node_access(self, event: NodeAccessEvent) -> None:
-        """Broadcast a node access event to all connected clients."""
+        """Broadcast a node access event to all connected clients.
+        
+        NOTE: This now sends ONLY notification, not the actual data.
+        Clients should query the backend for the actual node data.
+        """
+        sequence = await self._get_next_sequence()
         message = {
-            "type": "node_access",
+            "type": NotificationType.NODE_ACCESS,
             "node_ids": event.node_ids,
             "timestamp": event.timestamp.isoformat(),
             "access_type": event.access_type,
-            "query": event.query
+            "query": event.query,
+            "sequence": sequence
         }
-        logger.info(f"Broadcasting node access event: {len(event.node_ids)} nodes, type: {event.access_type}, query: {event.query}")
+        logger.info(f"Broadcasting node access notification: {len(event.node_ids)} nodes, type: {event.access_type}, seq: {sequence}")
         await self.broadcast(json.dumps(message))
+    
+    async def broadcast_graph_notification(
+        self,
+        operation: GraphOperation,
+        entity_type: EntityType,
+        entity_ids: List[str],
+        metadata: Optional[Dict[str, Any]] = None
+    ) -> None:
+        """Broadcast a graph change notification to all connected clients.
+        
+        This sends ONLY a notification about what changed, not the actual data.
+        Clients should query the backend API to fetch the actual changes.
+        
+        Args:
+            operation: Type of operation (insert, update, delete)
+            entity_type: Type of entity (node, edge, episode)
+            entity_ids: List of affected entity IDs
+            metadata: Optional metadata about the change
+        """
+        sequence = await self._get_next_sequence()
+        message = {
+            "type": NotificationType.GRAPH_NOTIFICATION,
+            "operation": operation.value,
+            "entity_type": entity_type.value,
+            "entity_ids": entity_ids,
+            "sequence": sequence,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "metadata": metadata or {}
+        }
+        
+        logger.info(
+            f"Broadcasting graph notification: {operation.value} {len(entity_ids)} {entity_type.value}(s), seq: {sequence}"
+        )
+        await self.broadcast(json.dumps(message))
+    
+    async def broadcast_data_ingestion_notification(self, event: DataIngestionEvent) -> None:
+        """Broadcast a notification when data is ingested into the graph.
+        
+        This sends ONLY a notification about what was ingested, not the actual data.
+        Clients should query the backend API to fetch the actual data.
+        
+        Args:
+            event: Data ingestion event with operation details
+        """
+        # Determine operation type
+        operation = GraphOperation.INSERT
+        if "update" in event.operation.lower():
+            operation = GraphOperation.UPDATE
+        elif "bulk" in event.operation.lower():
+            operation = GraphOperation.BULK_INSERT
+        
+        # Extract entity IDs
+        node_ids = [node.get("uuid", node.get("id", "")) for node in event.nodes if node]
+        edge_ids = [f"{edge.get('source_node_id')}-{edge.get('target_node_id')}" 
+                   for edge in event.edges if edge]
+        
+        # Send separate notifications for nodes and edges
+        if node_ids:
+            await self.broadcast_graph_notification(
+                operation=operation,
+                entity_type=EntityType.NODE,
+                entity_ids=node_ids,
+                metadata={
+                    "group_id": event.group_id,
+                    "operation": event.operation
+                }
+            )
+        
+        if edge_ids:
+            await self.broadcast_graph_notification(
+                operation=operation,
+                entity_type=EntityType.EDGE,
+                entity_ids=edge_ids,
+                metadata={
+                    "group_id": event.group_id,
+                    "operation": event.operation
+                }
+            )
+        
+        if event.episode:
+            episode_id = event.episode.get("uuid", event.episode.get("id", ""))
+            if episode_id:
+                await self.broadcast_graph_notification(
+                    operation=operation,
+                    entity_type=EntityType.EPISODE,
+                    entity_ids=[episode_id],
+                    metadata={
+                        "group_id": event.group_id,
+                        "operation": event.operation
+                    }
+                )
     
     async def handle_client_message(self, websocket: WebSocket, data: str) -> None:
         """Handle incoming messages from a client."""

@@ -166,6 +166,15 @@ class AsyncWebhookDispatcher:
         async with self._handlers_lock:
             self.internal_handlers.append(handler)
     
+    async def add_data_handler(self, handler: Callable[[DataIngestionEvent], Awaitable[None]]):
+        """Add a data ingestion handler (e.g., WebSocket notification).
+        
+        This is a convenience method that wraps the handler to work with
+        the internal handler system.
+        """
+        async with self._handlers_lock:
+            self.internal_handlers.append(handler)
+    
     async def remove_internal_handler(self, handler: Callable[[Any], Awaitable[None]]):
         """Remove an internal handler."""
         async with self._handlers_lock:
