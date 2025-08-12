@@ -751,20 +751,22 @@ impl DuckDBStore {
         
         let node_iter = stmt.query_map(&params[..], |row| {
             let properties_json: String = row.get(8)?;
-            let properties: HashMap<String, serde_json::Value> = 
+            let mut properties: HashMap<String, serde_json::Value> = 
                 serde_json::from_str(&properties_json).unwrap_or_default();
+            
+            // Add all metadata to properties
+            properties.insert("idx".to_string(), serde_json::json!(row.get::<_, i32>(1)?));
+            properties.insert("size".to_string(), serde_json::json!(row.get::<_, f64>(5)?));
+            properties.insert("created_at".to_string(), serde_json::json!(row.get::<_, String>(6)?));
+            properties.insert("created_at_timestamp".to_string(), serde_json::json!(row.get::<_, Option<i64>>(7)?));
+            properties.insert("color".to_string(), serde_json::json!(self.get_node_color(&row.get::<_, String>(3)?)));
             
             Ok(Node {
                 id: row.get(0)?,
-                idx: row.get(1)?,
                 label: row.get(2)?,
                 node_type: row.get(3)?,
                 summary: row.get(4)?,
-                size: row.get(5)?,
-                created_at: row.get(6)?,
-                created_at_timestamp: row.get(7)?,
                 properties,
-                color: self.get_node_color(&row.get::<_, String>(3)?),
             })
         })?;
         
@@ -805,15 +807,9 @@ impl DuckDBStore {
         let edge_iter = stmt.query_map(&params[..], |row| {
             Ok(Edge {
                 from: row.get(0)?,
-                from_idx: row.get(1)?,
                 to: row.get(2)?,
-                to_idx: row.get(3)?,
                 edge_type: row.get(4)?,
                 weight: row.get(5)?,
-                created_at: row.get(6)?,
-                updated_at: row.get(7)?,
-                color: row.get(8)?,
-                strength: row.get(9)?,
             })
         })?;
         
