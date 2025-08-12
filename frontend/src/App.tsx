@@ -14,6 +14,7 @@ import NotFound from "./pages/NotFound";
 import { memoryMonitor } from "@/utils/memoryMonitor";
 import { preloader } from "@/services/preloader";
 import { preloadDuckDB } from "@/services/duckdb-lazy-loader";
+import { graphCache } from "@/services/graph-cache";
 
 // Create query client once
 const queryClient = new QueryClient({
@@ -32,6 +33,12 @@ const queryClient = new QueryClient({
 const App = () => {
   // Preload resources for better performance
   React.useEffect(() => {
+    // Clear cache on startup to ensure fresh data
+    console.log('[App] Clearing graph cache on startup to ensure fresh data');
+    graphCache.clearCache().catch(err => {
+      console.error('[App] Failed to clear cache:', err);
+    });
+    
     // Start preloading if not already started
     if (!preloader.isPreloaded('nodes')) {
       console.log('[App] Starting data preload...');

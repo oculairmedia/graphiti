@@ -106,11 +106,24 @@ export class DuckDBService {
         }
       }
       
-      // Prefetch from server in parallel
+      // Prefetch from server in parallel with cache-busting
       console.log('[DuckDB] Prefetching data from server...');
+      const cacheBuster = `?t=${Date.now()}`;
       const [nodesResponse, edgesResponse] = await Promise.all([
-        fetch(`${this.rustServerUrl}/api/arrow/nodes`),
-        fetch(`${this.rustServerUrl}/api/arrow/edges`)
+        fetch(`${this.rustServerUrl}/api/arrow/nodes${cacheBuster}`, {
+          cache: 'no-cache',
+          headers: {
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache'
+          }
+        }),
+        fetch(`${this.rustServerUrl}/api/arrow/edges${cacheBuster}`, {
+          cache: 'no-cache',
+          headers: {
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache'
+          }
+        })
       ]);
       
       if (!nodesResponse.ok || !edgesResponse.ok) {
@@ -139,10 +152,23 @@ export class DuckDBService {
       const nodesTable = arrow.tableFromIPC(new Uint8Array(nodes));
       const edgesTable = arrow.tableFromIPC(new Uint8Array(edges));
       
-      await Promise.all([
-        this.conn.insertArrowTable(nodesTable, { name: 'nodes' }),
-        this.conn.insertArrowTable(edgesTable, { name: 'edges' })
-      ]);
+      // Insert nodes first
+      await this.conn.insertArrowTable(nodesTable, { name: 'nodes' });
+      
+      // Check how many edges have valid source/target nodes
+      const edgeCount = edgesTable.numRows;
+      console.log(`[DuckDB] Processing ${edgeCount} edges from Arrow data`);
+      
+      // Insert edges - the Arrow data should already have sourceidx/targetidx
+      await this.conn.insertArrowTable(edgesTable, { name: 'edges' });
+      
+      // Verify edges with valid nodes
+      const validEdges = await this.conn.query(`
+        SELECT COUNT(*) as count FROM edges e
+        WHERE EXISTS (SELECT 1 FROM nodes WHERE id = e.source)
+        AND EXISTS (SELECT 1 FROM nodes WHERE id = e.target)
+      `);
+      console.log(`[DuckDB] Valid edges (both nodes exist): ${validEdges.get(0)?.count} out of ${edgeCount}`);
       
       // Also create Cosmograph-specific views/tables that map to our data
       // Cosmograph expects cosmograph_points and cosmograph_links tables
@@ -160,6 +186,7 @@ export class DuckDBService {
           y, 
           color, 
           size,
+          created_at_timestamp,
           NULL as cluster,
           NULL as clusterStrength
         FROM nodes`);
@@ -265,13 +292,26 @@ export class DuckDBService {
         }
       }
       
-      // Fetch from server - PARALLEL loading for speed
+      // Fetch from server - PARALLEL loading for speed with cache-busting
       console.log('[DuckDB] Cache miss or cleared, fetching from server (parallel)...');
       
-      // Fetch nodes and edges in PARALLEL
+      // Fetch nodes and edges in PARALLEL with cache-busting
+      const cacheBuster = `?t=${Date.now()}`;
       const [nodesResponse, edgesResponse] = await Promise.all([
-        fetch(`${this.rustServerUrl}/api/arrow/nodes`),
-        fetch(`${this.rustServerUrl}/api/arrow/edges`)
+        fetch(`${this.rustServerUrl}/api/arrow/nodes${cacheBuster}`, {
+          cache: 'no-cache',
+          headers: {
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache'
+          }
+        }),
+        fetch(`${this.rustServerUrl}/api/arrow/edges${cacheBuster}`, {
+          cache: 'no-cache',
+          headers: {
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache'
+          }
+        })
       ]);
       
       if (!nodesResponse.ok) {
@@ -311,6 +351,7 @@ export class DuckDBService {
           y, 
           color, 
           size,
+          created_at_timestamp,
           NULL as cluster,
           NULL as clusterStrength
         FROM nodes`);

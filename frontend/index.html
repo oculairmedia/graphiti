@@ -39,9 +39,17 @@
         window.__PRELOAD_START_TIME__ = performance.now();
         
         const serverUrl = 'http://192.168.50.90:3000';
+        // Add cache-busting timestamp to ensure fresh data
+        const cacheBuster = '?t=' + Date.now();
         
         // Fetch nodes data
-        window.__PRELOAD_CACHE__.nodesPromise = fetch(serverUrl + '/api/arrow/nodes')
+        window.__PRELOAD_CACHE__.nodesPromise = fetch(serverUrl + '/api/arrow/nodes' + cacheBuster, {
+          cache: 'no-cache',
+          headers: {
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache'
+          }
+        })
           .then(r => r.arrayBuffer())
           .then(data => {
             console.log('[EarlyPreload] Nodes loaded:', (data.byteLength / 1024).toFixed(2) + 'KB');
@@ -54,7 +62,13 @@
           });
         
         // Fetch edges data
-        window.__PRELOAD_CACHE__.edgesPromise = fetch(serverUrl + '/api/arrow/edges')
+        window.__PRELOAD_CACHE__.edgesPromise = fetch(serverUrl + '/api/arrow/edges' + cacheBuster, {
+          cache: 'no-cache',
+          headers: {
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache'
+          }
+        })
           .then(r => r.arrayBuffer())
           .then(data => {
             console.log('[EarlyPreload] Edges loaded:', (data.byteLength / 1024).toFixed(2) + 'KB');
