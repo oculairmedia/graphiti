@@ -51,6 +51,13 @@ const NodeDetailsPanelComponent: React.FC<NodeDetailsPanelProps> = ({
   const [nodeSummary, setNodeSummary] = useState(node.summary || '');
   const { toast } = useToast();
   
+  // Update summary when node changes
+  useEffect(() => {
+    setNodeSummary(node.summary || '');
+    setIsSummaryExpanded(false);
+    setIsEditingSummary(false);
+  }, [node.id]);
+  
   // React 19 performance features
   const [isPending, startTransition] = useTransition();
 
