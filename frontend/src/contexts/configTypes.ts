@@ -138,6 +138,12 @@ export interface DynamicConfig {
   circularOrdering: string;
   clusterBy: string;
   
+  // Fit View configuration
+  fitViewOnInit: boolean;
+  fitViewDelay: number;
+  fitViewPadding: number;
+  fitViewDuration: number;
+  
   // Advanced rendering options
   renderLabels: boolean;
   edgeArrows: boolean;

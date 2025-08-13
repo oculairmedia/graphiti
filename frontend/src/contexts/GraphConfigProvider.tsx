@@ -199,6 +199,12 @@ const defaultDynamicConfig: DynamicConfig = {
   circularOrdering: 'degree',
   clusterBy: 'community',
   
+  // Fit View configuration
+  fitViewOnInit: true,  // Auto-fit graph on initialization
+  fitViewDelay: 250,    // Delay before fitting (ms)
+  fitViewPadding: 0.1,  // Padding around bounding box (0-1)
+  fitViewDuration: 250, // Animation duration (ms)
+  
   // Advanced rendering options
   renderLabels: true,
   edgeArrows: false,
