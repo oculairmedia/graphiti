@@ -293,8 +293,10 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
         if (success) {
           console.log('[GraphCanvasV2] Applied incremental update successfully');
           
-          // Update React state to keep it in sync (for node details panel, etc.)
-          // But don't trigger a re-render of Cosmograph
+          // Update React state to keep UI in sync
+          // Note: This will trigger a re-computation of cosmographData via useMemo,
+          // but Cosmograph should handle this gracefully since its internal state
+          // is already updated via the incremental API
           if (event.operation === 'add' && event.nodes) {
             addNodes(event.nodes);
           } else if (event.operation === 'update' && event.nodes) {
@@ -303,47 +305,6 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
           if (event.operation === 'add' && event.edges) {
             addLinks(event.edges);
           }
-          
-          // CRITICAL: Update cosmographData to match the incremental updates
-          // This prevents the WebGL buffer mismatch error
-          setCosmographData(prevData => {
-            if (!prevData) return prevData;
-            
-            const newData = { ...prevData };
-            
-            // For add operations, append new data
-            if (event.operation === 'add') {
-              if (event.nodes && event.nodes.length > 0) {
-                // Transform new nodes using the data preparer
-                const startIndex = prevData.nodes.length;
-                const transformedNodes = event.nodes.map((node: any, idx: number) => 
-                  sanitizeNode(node, startIndex + idx, {
-                    clusteringMethod: config.clusteringMethod,
-                    centralityMetric: config.centralityMetric,
-                    clusterStrength: config.clusterStrength
-                  }, true)
-                );
-                newData.nodes = [...prevData.nodes, ...transformedNodes];
-              }
-              
-              if (event.edges && event.edges.length > 0) {
-                // Build node ID to index map for new edges
-                const nodeIdToIndex = new Map<string, number>();
-                newData.nodes.forEach((node: any, index: number) => {
-                  nodeIdToIndex.set(node.id, index);
-                });
-                
-                // Transform new edges
-                const transformedEdges = event.edges
-                  .map((edge: any) => sanitizeLink(edge, nodeIdToIndex))
-                  .filter((edge: any) => edge !== null);
-                
-                newData.links = [...prevData.links, ...transformedEdges];
-              }
-            }
-            
-            return newData;
-          });
           
           console.log(`[GraphCanvasV2] After incremental update: ${nodes.length} nodes, ${links.length} edges`);
           return; // Exit early - incremental update succeeded
