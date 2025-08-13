@@ -135,8 +135,7 @@ export function useNodeSelection(
       setSelectedNodes(nodeIds);
     }
     
-    // Note: Don't call graphCanvasRef.current.selectNodes here as it's already
-    // being called from the onSelectionChange callback in GraphCanvasV2
+    // Note: Visual selection is handled by GraphCanvasV2 through the selectedNodes prop
   }, []);
 
   const handleShowNeighbors = useCallback((nodeId: string) => {
@@ -175,9 +174,11 @@ export function useNodeSelection(
       const allHighlightedIds = [...new Set([...nodesToExplore, ...Array.from(newNeighborIds)])];
       setHighlightedNodes(allHighlightedIds);
       
-      // Note: Visual selection is handled by the highlightedNodes state change
-      // Don't call graphCanvasRef.current.selectNodes here as it will trigger 
-      // onSelectionChange callback which will cause an infinite loop.
+      // Also update the selectedNodes to visually select them
+      setSelectedNodes(allHighlightedIds);
+      
+      // Note: Visual highlighting is handled by the highlightedNodes state change
+      // and visual selection is handled by the selectedNodes state change
     }
   }, [highlightedNodes, transformedData, graphCanvasRef]);
 

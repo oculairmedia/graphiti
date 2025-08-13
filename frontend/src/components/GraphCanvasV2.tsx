@@ -751,10 +751,22 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
         const toSelect = selectedNodes.filter(id => !currentSelection.includes(id));
         const toDeselect = currentSelection.filter(id => !selectedNodes.includes(id));
         
+        // Update selection state
         toSelect.forEach(id => selectSingleNode(id));
         toDeselect.forEach(id => deselectNode(id));
+        
+        // Also update visual selection in Cosmograph
+        if (cosmographRef.current?.selectPoints) {
+          const indices = selectedNodes.map(id => nodes.findIndex(n => n.id === id)).filter(i => i >= 0);
+          if (indices.length > 0) {
+            cosmographRef.current.selectPoints(indices, false);
+          } else {
+            // Clear selection if no nodes selected
+            cosmographRef.current.unselectAll?.();
+          }
+        }
       }
-    }, [selectedNodes, selectedNodeIds, selectSingleNode, deselectNode]);
+    }, [selectedNodes, selectedNodeIds, selectSingleNode, deselectNode, nodes]);
     
     // Update statistics when nodes or links change
     useEffect(() => {
