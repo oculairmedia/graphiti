@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useDeferredValue, useTransition } from 'react';
+import React, { useCallback, useState, useDeferredValue, useTransition, useEffect } from 'react';
 import { X, Pin, Eye, EyeOff, Copy, Download, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
