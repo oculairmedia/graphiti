@@ -118,28 +118,40 @@ export function sanitizeNode(
   // Sanitize all properties
   const sanitizedProperties = sanitizeProperties(node.properties);
   
-  // Build sanitized node - field count depends on whether it's incremental
-  // Cosmograph creates different schemas for initial vs incremental updates
+  // Build sanitized node - for incremental updates, only include non-null fields
+  // Cosmograph's DuckDB doesn't count null fields in column count
   const sanitizedNode: any = {
-    // Core fields always present
+    // Always include these core fields
     index: Number(index),
     id: String(node.id),
     label: String(node.label || node.name || node.id),
     node_type: String(node.node_type || 'Unknown'),
-    summary: node.summary ? String(node.summary) : null,
     degree_centrality: Number(sanitizedProperties.degree_centrality || 0),
     pagerank_centrality: Number(sanitizedProperties.pagerank_centrality || 0),
     betweenness_centrality: Number(sanitizedProperties.betweenness_centrality || 0),
     eigenvector_centrality: Number(sanitizedProperties.eigenvector_centrality || 0),
-    x: node.x ?? null,
-    y: node.y ?? null,
     color: generateNodeTypeColor(node.node_type || 'Unknown', nodeTypeIndex),
-    size: Number(node.size || 5),
-    created_at_timestamp: node.created_at_timestamp ?? null
+    size: Number(node.size || 5)
   };
   
-  // For initial load, include clustering fields (16 total)
-  // For incremental updates, omit them (14 total)
+  // Only add these fields if they have values (non-null)
+  if (node.summary) {
+    sanitizedNode.summary = String(node.summary);
+  }
+  
+  // For incremental updates, skip position fields if null
+  // For initial load, include them even if null
+  if (!isIncremental || node.x !== null && node.x !== undefined) {
+    sanitizedNode.x = node.x ?? null;
+  }
+  if (!isIncremental || node.y !== null && node.y !== undefined) {
+    sanitizedNode.y = node.y ?? null;
+  }
+  if (!isIncremental || node.created_at_timestamp) {
+    sanitizedNode.created_at_timestamp = node.created_at_timestamp ?? null;
+  }
+  
+  // For initial load, include clustering fields
   if (!isIncremental) {
     sanitizedNode.cluster = String(cluster);
     sanitizedNode.clusterStrength = Number(config.clusterStrength ?? 0.7);
@@ -167,22 +179,36 @@ export function sanitizeLink(
     return null;
   }
   
-  return {
-    // Required fields (matches cosmograph_links view)
+  // Build link with only required fields for DuckDB
+  // Cosmograph expects exactly: source, sourceIndex, target, targetIndex, edge_type
+  const sanitizedLink: any = {
     source: sourceId,
-    sourceIndex: Number(sourceIndex),
     target: targetId,
-    targetIndex: Number(targetIndex),
-    edge_type: String(link.edge_type || 'default'),
-    weight: Number(link.weight || 1),
-    color: link.color || null,  // Required by cosmograph_links
-    strength: Number(link.strength || 1),  // Required by cosmograph_links
-    
-    // Additional fields for compatibility
-    sourceidx: Number(sourceIndex), // DuckDB compatibility
-    targetidx: Number(targetIndex), // DuckDB compatibility
-    created_at: link.created_at ? String(link.created_at) : null
+    edge_type: String(link.edge_type || 'default')
   };
+  
+  // Add index fields only if valid
+  if (sourceIndex !== undefined && sourceIndex >= 0) {
+    sanitizedLink.sourceIndex = Number(sourceIndex);
+    sanitizedLink.sourceidx = Number(sourceIndex); // DuckDB alias
+  }
+  if (targetIndex !== undefined && targetIndex >= 0) {
+    sanitizedLink.targetIndex = Number(targetIndex);
+    sanitizedLink.targetidx = Number(targetIndex); // DuckDB alias
+  }
+  
+  // Add optional fields only if they have values
+  if (link.weight !== undefined && link.weight !== null) {
+    sanitizedLink.weight = Number(link.weight);
+  }
+  if (link.color) {
+    sanitizedLink.color = String(link.color);
+  }
+  if (link.strength !== undefined && link.strength !== null) {
+    sanitizedLink.strength = Number(link.strength);
+  }
+  
+  return sanitizedLink;
 }
 
 /**
