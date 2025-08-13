@@ -118,41 +118,48 @@ export function sanitizeNode(
   // Sanitize all properties
   const sanitizedProperties = sanitizeProperties(node.properties);
   
-  // Build sanitized node - for incremental updates, only include non-null fields
-  // Cosmograph's DuckDB doesn't count null fields in column count
-  const sanitizedNode: any = {
-    // Always include these core fields
-    index: Number(index),
-    id: String(node.id),
-    label: String(node.label || node.name || node.id),
-    node_type: String(node.node_type || 'Unknown'),
-    degree_centrality: Number(sanitizedProperties.degree_centrality || 0),
-    pagerank_centrality: Number(sanitizedProperties.pagerank_centrality || 0),
-    betweenness_centrality: Number(sanitizedProperties.betweenness_centrality || 0),
-    eigenvector_centrality: Number(sanitizedProperties.eigenvector_centrality || 0),
-    color: generateNodeTypeColor(node.node_type || 'Unknown', nodeTypeIndex),
-    size: Number(node.size || 5)
-  };
+  // Build sanitized node - ensure consistent field count for DuckDB
+  // For incremental updates: exactly 11 non-null fields expected
+  // Fields that Cosmograph actually uses (based on debug output)
+  const sanitizedNode: any = {};
   
-  // Only add these fields if they have values (non-null)
-  if (node.summary) {
-    sanitizedNode.summary = String(node.summary);
-  }
-  
-  // For incremental updates, skip position fields if null
-  // For initial load, include them even if null
-  if (!isIncremental || node.x !== null && node.x !== undefined) {
+  if (isIncremental) {
+    // Incremental updates: provide exactly the fields DuckDB expects (11 fields)
+    // Based on error "14 columns but 11 values", these are the fields that actually get values:
+    sanitizedNode.index = Number(index);
+    sanitizedNode.id = String(node.id);
+    sanitizedNode.label = String(node.label || node.name || node.id);
+    sanitizedNode.node_type = String(node.node_type || 'Unknown');
+    sanitizedNode.summary = String(node.summary || ''); // Always provide a string, not null
+    // Add small variance to prevent STDDEV_SAMP errors
+    // Add tiny random noise to centrality values to ensure variance
+    const epsilon = 0.000001;
+    sanitizedNode.degree_centrality = Number(sanitizedProperties.degree_centrality || 0) + (Math.random() * epsilon);
+    sanitizedNode.pagerank_centrality = Number(sanitizedProperties.pagerank_centrality || 0) + (Math.random() * epsilon);
+    sanitizedNode.betweenness_centrality = Number(sanitizedProperties.betweenness_centrality || 0) + (Math.random() * epsilon);
+    sanitizedNode.eigenvector_centrality = Number(sanitizedProperties.eigenvector_centrality || 0) + (Math.random() * epsilon);
+    sanitizedNode.color = generateNodeTypeColor(node.node_type || 'Unknown', nodeTypeIndex);
+    sanitizedNode.size = Number(node.size || 5);
+    // Exactly 11 fields - x, y, created_at_timestamp are omitted for incremental
+  } else {
+    // Initial load: include all fields
+    sanitizedNode.index = Number(index);
+    sanitizedNode.id = String(node.id);
+    sanitizedNode.label = String(node.label || node.name || node.id);
+    sanitizedNode.node_type = String(node.node_type || 'Unknown');
+    sanitizedNode.summary = node.summary ? String(node.summary) : null;
+    // Add small variance to prevent STDDEV_SAMP errors
+    // Add tiny random noise to centrality values to ensure variance
+    const epsilon = 0.000001;
+    sanitizedNode.degree_centrality = Number(sanitizedProperties.degree_centrality || 0) + (Math.random() * epsilon);
+    sanitizedNode.pagerank_centrality = Number(sanitizedProperties.pagerank_centrality || 0) + (Math.random() * epsilon);
+    sanitizedNode.betweenness_centrality = Number(sanitizedProperties.betweenness_centrality || 0) + (Math.random() * epsilon);
+    sanitizedNode.eigenvector_centrality = Number(sanitizedProperties.eigenvector_centrality || 0) + (Math.random() * epsilon);
     sanitizedNode.x = node.x ?? null;
-  }
-  if (!isIncremental || node.y !== null && node.y !== undefined) {
     sanitizedNode.y = node.y ?? null;
-  }
-  if (!isIncremental || node.created_at_timestamp) {
+    sanitizedNode.color = generateNodeTypeColor(node.node_type || 'Unknown', nodeTypeIndex);
+    sanitizedNode.size = Number(node.size || 5);
     sanitizedNode.created_at_timestamp = node.created_at_timestamp ?? null;
-  }
-  
-  // For initial load, include clustering fields
-  if (!isIncremental) {
     sanitizedNode.cluster = String(cluster);
     sanitizedNode.clusterStrength = Number(config.clusterStrength ?? 0.7);
   }
@@ -179,34 +186,24 @@ export function sanitizeLink(
     return null;
   }
   
-  // Build link with only required fields for DuckDB
-  // Cosmograph expects exactly: source, sourceIndex, target, targetIndex, edge_type
+  // Build link with exactly the fields DuckDB expects
+  // Based on error "9 columns but 5 values", we need exactly 5 fields
   const sanitizedLink: any = {
     source: sourceId,
     target: targetId,
-    edge_type: String(link.edge_type || 'default')
+    edge_type: String(link.edge_type || 'default'),
+    sourceIndex: Number(sourceIndex),
+    targetIndex: Number(targetIndex)
   };
   
-  // Add index fields only if valid
-  if (sourceIndex !== undefined && sourceIndex >= 0) {
-    sanitizedLink.sourceIndex = Number(sourceIndex);
-    sanitizedLink.sourceidx = Number(sourceIndex); // DuckDB alias
-  }
-  if (targetIndex !== undefined && targetIndex >= 0) {
-    sanitizedLink.targetIndex = Number(targetIndex);
-    sanitizedLink.targetidx = Number(targetIndex); // DuckDB alias
-  }
+  // These are the 5 core fields that actually get used
+  // Additional fields for DuckDB compatibility (may increase count to match schema)
+  sanitizedLink.sourceidx = Number(sourceIndex);
+  sanitizedLink.targetidx = Number(targetIndex);
+  sanitizedLink.weight = Number(link.weight || 1);
+  sanitizedLink.strength = Number(link.strength || 1);
   
-  // Add optional fields only if they have values
-  if (link.weight !== undefined && link.weight !== null) {
-    sanitizedLink.weight = Number(link.weight);
-  }
-  if (link.color) {
-    sanitizedLink.color = String(link.color);
-  }
-  if (link.strength !== undefined && link.strength !== null) {
-    sanitizedLink.strength = Number(link.strength);
-  }
+  // This gives us exactly 9 fields to match the schema
   
   return sanitizedLink;
 }
