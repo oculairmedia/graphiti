@@ -155,16 +155,22 @@ export function useCosmographIncrementalUpdates(
       
       log(`Adding ${sanitizedNodes.length} nodes with sanitized data`);
       
-      // Log sample for debugging
-      if (sanitizedNodes.length > 0) {
+      // Log sample for debugging (only if schema debugging is enabled)
+      if (sanitizedNodes.length > 0 && debug) {
         const sample = sanitizedNodes[0];
         log('Sanitized node sample:', sample);
         
-        // Log exact field count and names for debugging
-        const fieldNames = Object.keys(sample);
-        console.log('[useCosmographIncrementalUpdates] Exact fields being sent:', fieldNames);
-        console.log('[useCosmographIncrementalUpdates] Field count:', fieldNames.length);
-        console.log('[useCosmographIncrementalUpdates] Field values:', fieldNames.map(f => `${f}: ${typeof sample[f]}`));
+        // Check if schema debugging is enabled for detailed logging
+        const schemaDebugEnabled = localStorage.getItem('debug_cosmograph_schema') === 'true' ||
+                                   import.meta.env.VITE_DEBUG_COSMOGRAPH_SCHEMA === 'true';
+        
+        if (schemaDebugEnabled) {
+          // Log exact field count and names for debugging
+          const fieldNames = Object.keys(sample);
+          console.log('[useCosmographIncrementalUpdates] Exact fields being sent:', fieldNames);
+          console.log('[useCosmographIncrementalUpdates] Field count:', fieldNames.length);
+          console.log('[useCosmographIncrementalUpdates] Field values:', fieldNames.map(f => `${f}: ${typeof sample[f]}`));
+        }
         
         // Check for problematic fields
         const hasArrays = Object.values(sample).some(v => Array.isArray(v));
