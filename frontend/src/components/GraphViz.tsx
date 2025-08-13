@@ -464,7 +464,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
         {/* Node Details Panel - Show when a node is selected (rendered last to be on top) */}
         {selectedNode && (
           <div 
-            className="absolute z-[9999]" 
+            className="absolute z-[55]" 
             style={{ 
               top: '80px', // Below the nav bar
               right: rightPanelCollapsed ? '60px' : '340px', // Adjust based on right panel
