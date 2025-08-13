@@ -28,6 +28,7 @@ import { useGraphCamera } from '../hooks/useGraphCamera';
 import { useGraphInteractions } from '../hooks/useGraphInteractions';
 import { useGraphSimulation } from '../hooks/useGraphSimulation';
 import { useGraphVisualEffects } from '../hooks/useGraphVisualEffects';
+import { useCosmographIncrementalUpdates } from '../hooks/useCosmographIncrementalUpdates';
 
 // Additional imports
 import { useLoadingCoordinator } from '../contexts/LoadingCoordinator';
@@ -243,17 +244,97 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
       }
     }, [setData]);
     
-    const handleDeltaUpdate = useCallback((event: any) => {
-      if (event.nodes) {
-        if (event.operation === 'add') {
-          addNodes(event.nodes);
-        } else if (event.operation === 'update') {
-          updateNodes(event.nodes);
-        } else if (event.operation === 'remove') {
-          removeNodes(event.nodes.map(n => n.id));
+    // Incremental updates hook
+    const {
+      applyDelta,
+      metrics: incrementalMetrics,
+      isReady: incrementalUpdatesReady
+    } = useCosmographIncrementalUpdates(
+      cosmographRef,
+      nodes,
+      links as GraphLink[],
+      {
+        debug: true,
+        onError: (error) => {
+          console.error('[GraphCanvasV2] Incremental update error:', error);
+        },
+        onSuccess: (operation, count) => {
+          console.log(`[GraphCanvasV2] Incremental ${operation}: ${count} items`);
+        },
+        fallbackToFullUpdate: (fallbackNodes, fallbackEdges) => {
+          console.log('[GraphCanvasV2] Falling back to full update');
+          // Fall back to traditional state update
+          setData(fallbackNodes, fallbackEdges as any);
         }
       }
-    }, [addNodes, updateNodes, removeNodes]);
+    );
+    
+    const handleDeltaUpdate = useCallback(async (event: any) => {
+      console.log('[GraphCanvasV2] Received delta update:', event);
+      console.log(`[GraphCanvasV2] Current graph size: ${nodes.length} nodes, ${links.length} edges`);
+      
+      // Try incremental update first if Cosmograph is ready
+      if (incrementalUpdatesReady && cosmographRef.current) {
+        const success = await applyDelta(event);
+        if (success) {
+          console.log('[GraphCanvasV2] Applied incremental update successfully');
+          
+          // Update React state to keep it in sync (for node details panel, etc.)
+          // But don't trigger a re-render of Cosmograph
+          if (event.operation === 'add' && event.nodes) {
+            addNodes(event.nodes);
+          } else if (event.operation === 'update' && event.nodes) {
+            updateNodes(event.nodes);
+          }
+          if (event.operation === 'add' && event.edges) {
+            addLinks(event.edges);
+          }
+          
+          console.log(`[GraphCanvasV2] After incremental update: ${nodes.length} nodes, ${links.length} edges`);
+          return; // Exit early - incremental update succeeded
+        }
+      }
+      
+      // Fall back to traditional state-based updates
+      console.log('[GraphCanvasV2] Using traditional state update');
+      
+      // Handle node updates
+      if (event.nodes && event.nodes.length > 0) {
+        if (event.operation === 'add') {
+          console.log('[GraphCanvasV2] Adding nodes:', event.nodes.length);
+          addNodes(event.nodes);
+        } else if (event.operation === 'update') {
+          console.log('[GraphCanvasV2] Updating nodes:', event.nodes.length);
+          updateNodes(event.nodes);
+        } else if (event.operation === 'delete') {
+          console.log('[GraphCanvasV2] Removing nodes:', event.nodes.length);
+          const nodeIds = typeof event.nodes[0] === 'string' 
+            ? event.nodes 
+            : event.nodes.map(n => n.id);
+          removeNodes(nodeIds);
+        }
+      }
+      
+      // Handle edge updates
+      if (event.edges && event.edges.length > 0) {
+        if (event.operation === 'add') {
+          console.log('[GraphCanvasV2] Adding edges:', event.edges.length);
+          addLinks(event.edges);
+        } else if (event.operation === 'update') {
+          console.log('[GraphCanvasV2] Updating/adding edges:', event.edges.length);
+          addLinks(event.edges);
+        } else if (event.operation === 'delete') {
+          console.log('[GraphCanvasV2] Removing edges:', event.edges.length);
+          const edgeIds = typeof event.edges[0] === 'string'
+            ? event.edges
+            : event.edges.map(e => `${e.from || e.source}-${e.to || e.target}`);
+          removeLinks(edgeIds);
+        }
+      }
+      
+      // Log final count after traditional update
+      console.log(`[GraphCanvasV2] After traditional update: ${nodes.length} nodes, ${links.length} edges`);
+    }, [incrementalUpdatesReady, applyDelta, addNodes, updateNodes, removeNodes, addLinks, removeLinks, nodes.length, links.length]);
     
     // WebSocket updates
     const {
@@ -265,12 +346,13 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
       triggerDeltaUpdate,
       getRecentEvents
     } = useGraphWebSocket({
-      enablePython: false,  // DISABLED - causing duplicate subscriptions
-      enableRust: false,    // DISABLED - causing duplicate subscriptions
+      enablePython: false,  // Python WebSocket disabled
+      enableRust: true,     // Enable Rust WebSocket for real-time updates
       batchInterval: 100,
       onNodeAccess: handleNodeAccess,
       onGraphUpdate: handleGraphUpdate,
-      onDeltaUpdate: handleDeltaUpdate
+      onDeltaUpdate: handleDeltaUpdate,
+      debug: true  // Enable debug logging to monitor updates
     });
     
     // Camera controls
