@@ -15,7 +15,7 @@ import React, {
 import { Cosmograph, prepareCosmographData } from '@cosmograph/react';
 import '../styles/cosmograph.css';
 import { GraphNode } from '../api/types';
-import type { GraphData } from '../types/graph';
+import type { GraphData, GraphLink } from '../types/graph';
 import { useGraphConfig } from '../contexts/GraphConfigProvider';
 import { hexToRgba, generateHSLColor } from '../utils/colorCache';
 
@@ -42,17 +42,7 @@ import {
 } from '../utils/cosmographDataPreparer';
 import { inspectCosmographSchema, attachSchemaDebugger, isSchemaDebuggingEnabled } from '../utils/debugCosmographSchema';
 
-interface GraphLink {
-  source: string;
-  target: string;
-  from: string;
-  to: string;
-  sourceIndex?: number;
-  targetIndex?: number;
-  weight?: number;
-  edge_type?: string;
-  [key: string]: unknown;
-}
+// GraphLink is now imported from '../types/graph'
 
 interface GraphStats {
   total_nodes: number;
@@ -313,6 +303,47 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
           if (event.operation === 'add' && event.edges) {
             addLinks(event.edges);
           }
+          
+          // CRITICAL: Update cosmographData to match the incremental updates
+          // This prevents the WebGL buffer mismatch error
+          setCosmographData(prevData => {
+            if (!prevData) return prevData;
+            
+            const newData = { ...prevData };
+            
+            // For add operations, append new data
+            if (event.operation === 'add') {
+              if (event.nodes && event.nodes.length > 0) {
+                // Transform new nodes using the data preparer
+                const startIndex = prevData.nodes.length;
+                const transformedNodes = event.nodes.map((node: any, idx: number) => 
+                  sanitizeNode(node, startIndex + idx, {
+                    clusteringMethod: config.clusteringMethod,
+                    centralityMetric: config.centralityMetric,
+                    clusterStrength: config.clusterStrength
+                  }, true)
+                );
+                newData.nodes = [...prevData.nodes, ...transformedNodes];
+              }
+              
+              if (event.edges && event.edges.length > 0) {
+                // Build node ID to index map for new edges
+                const nodeIdToIndex = new Map<string, number>();
+                newData.nodes.forEach((node: any, index: number) => {
+                  nodeIdToIndex.set(node.id, index);
+                });
+                
+                // Transform new edges
+                const transformedEdges = event.edges
+                  .map((edge: any) => sanitizeLink(edge, nodeIdToIndex))
+                  .filter((edge: any) => edge !== null);
+                
+                newData.links = [...prevData.links, ...transformedEdges];
+              }
+            }
+            
+            return newData;
+          });
           
           console.log(`[GraphCanvasV2] After incremental update: ${nodes.length} nodes, ${links.length} edges`);
           return; // Exit early - incremental update succeeded
