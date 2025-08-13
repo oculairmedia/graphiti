@@ -124,15 +124,15 @@ export function sanitizeNode(
   const sanitizedNode: any = {};
   
   if (isIncremental) {
-    // Incremental updates: provide exactly 14 fields to match DuckDB table schema
-    // The table was created with 14 columns, so we must provide all 14
+    // Incremental updates: MUST provide exactly 14 NON-NULL fields to match DuckDB table schema
+    // DuckDB counts null fields differently in incremental vs initial load
+    // The table was created with 14 columns, so we must provide all 14 with non-null values
     sanitizedNode.index = Number(index);
     sanitizedNode.id = String(node.id);
     sanitizedNode.label = String(node.label || node.name || node.id);
     sanitizedNode.node_type = String(node.node_type || 'Unknown');
     sanitizedNode.summary = String(node.summary || ''); // Always provide a string, not null
     // Add small variance to prevent STDDEV_SAMP errors
-    // Add tiny random noise to centrality values to ensure variance
     const epsilon = 0.000001;
     sanitizedNode.degree_centrality = Number(sanitizedProperties.degree_centrality || 0) + (Math.random() * epsilon);
     sanitizedNode.pagerank_centrality = Number(sanitizedProperties.pagerank_centrality || 0) + (Math.random() * epsilon);
@@ -140,12 +140,19 @@ export function sanitizeNode(
     sanitizedNode.eigenvector_centrality = Number(sanitizedProperties.eigenvector_centrality || 0) + (Math.random() * epsilon);
     sanitizedNode.color = generateNodeTypeColor(node.node_type || 'Unknown', nodeTypeIndex);
     sanitizedNode.size = Number(node.size || 5);
-    // Add the missing 3 fields to match the 14-column schema
     sanitizedNode.cluster = String(cluster);
     sanitizedNode.clusterStrength = Number(config.clusterStrength ?? 0.7);
-    // created_at_timestamp is likely the 14th field (x and y are probably not in the DuckDB schema)
-    sanitizedNode.created_at_timestamp = node.created_at_timestamp ?? null;
-    // Total: 14 fields (index, id, label, node_type, summary, 4 centralities, color, size, cluster, clusterStrength, created_at_timestamp)
+    // CRITICAL: created_at_timestamp MUST NOT be null for incremental updates
+    // DuckDB doesn't count null values as "supplied" in incremental updates
+    sanitizedNode.created_at_timestamp = node.created_at_timestamp || new Date().toISOString();
+    
+    // Verify we have exactly 14 fields with no nulls
+    const fieldCount = Object.keys(sanitizedNode).length;
+    const nullCount = Object.values(sanitizedNode).filter(v => v === null || v === undefined).length;
+    if (fieldCount !== 14 || nullCount > 0) {
+      console.error(`[sanitizeNode] CRITICAL: DuckDB requires exactly 14 non-null fields. Have ${fieldCount} fields with ${nullCount} nulls:`, 
+        Object.entries(sanitizedNode).map(([k, v]) => `${k}: ${v === null ? 'NULL' : typeof v}`));
+    }
   } else {
     // Initial load: include all fields
     sanitizedNode.index = Number(index);
