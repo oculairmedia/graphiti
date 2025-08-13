@@ -184,7 +184,7 @@ export const StatsPanel: React.FC<StatsPanelProps> = React.memo(({
   // Show loading state if no data available
   if (!stats) {
     return (
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
         <Card className="glass-panel w-full max-w-md">
           <CardContent className="p-6 text-center">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mb-4 mx-auto"></div>
@@ -197,7 +197,7 @@ export const StatsPanel: React.FC<StatsPanelProps> = React.memo(({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
       <Card className="glass-panel w-full max-w-4xl max-h-[85vh] overflow-hidden animate-scale-in">
         <CardHeader className="pb-3 border-b border-border/20">
           <div className="flex items-center justify-between">
