@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Path, Query, State, WebSocketUpgrade},
+    extract::{Path, Query, State},
     http::{StatusCode, header, HeaderMap},
     response::{IntoResponse, Json, Response},
     routing::{get, patch, post},
@@ -25,27 +25,29 @@ mod duckdb_store;
 mod arrow_converter;
 mod delta_tracker;
 mod cache;
+mod websocket;
 
 use duckdb_store::{DuckDBStore, GraphUpdate, UpdateOperation};
 use arrow_converter::ArrowConverter;
 use delta_tracker::{DeltaTracker, GraphDelta};
 use cache::EnhancedCache;
+use websocket::{websocket_handler, BroadcastExt};
 use deadpool_redis::{Config as RedisConfig, Runtime};
 
 #[derive(Clone)]
-struct AppState {
-    client: Arc<FalkorAsyncClient>,
-    graph_name: String,
-    graph_cache: Arc<DashMap<String, GraphData>>,
-    duckdb_store: Arc<DuckDBStore>,
-    update_tx: broadcast::Sender<GraphUpdate>,
-    delta_tx: broadcast::Sender<GraphDelta>,
-    arrow_cache: Arc<RwLock<Option<ArrowCache>>>,
-    delta_tracker: Arc<DeltaTracker>,
-    http_client: Arc<reqwest::Client>,
-    centrality_url: String,
-    cache_config: CacheConfig,
-    enhanced_cache: Option<Arc<EnhancedCache>>,
+pub struct AppState {
+    pub(crate) client: Arc<FalkorAsyncClient>,
+    pub(crate) graph_name: String,
+    pub(crate) graph_cache: Arc<DashMap<String, GraphData>>,
+    pub(crate) duckdb_store: Arc<DuckDBStore>,
+    pub(crate) update_tx: broadcast::Sender<GraphUpdate>,
+    pub(crate) delta_tx: broadcast::Sender<GraphDelta>,
+    pub(crate) arrow_cache: Arc<RwLock<Option<ArrowCache>>>,
+    pub(crate) delta_tracker: Arc<DeltaTracker>,
+    pub(crate) http_client: Arc<reqwest::Client>,
+    pub(crate) centrality_url: String,
+    pub(crate) cache_config: CacheConfig,
+    pub(crate) enhanced_cache: Option<Arc<EnhancedCache>>,
 }
 
 #[derive(Clone)]
@@ -480,6 +482,8 @@ async fn main() -> anyhow::Result<()> {
     let cache_clone = state.graph_cache.clone();
     let arrow_cache_clone = state.arrow_cache.clone();
     let update_tx_clone = update_tx.clone();
+    let delta_tx_clone = delta_tx.clone();
+    let delta_tracker_clone = state.delta_tracker.clone();
     let cache_config_clone = state.cache_config.clone();
     let graph_name_clone = graph_name.clone();
     let store_clone = state.duckdb_store.clone();
@@ -546,17 +550,24 @@ async fn main() -> anyhow::Result<()> {
                             drop(arrow_cache_guard);
                             info!("Caches cleared after successful reload");
                             
-                            // Broadcast full reload event with actual data
-                            let full_reload = duckdb_store::GraphUpdate {
-                                operation: duckdb_store::UpdateOperation::AddNodes,
-                                nodes: Some(graph_data.nodes),
-                                edges: Some(graph_data.edges),
-                                timestamp: std::time::SystemTime::now()
-                                    .duration_since(std::time::UNIX_EPOCH)
-                                    .unwrap()
-                                    .as_secs(),
-                            };
-                            let _ = update_tx_clone.send(full_reload);
+                            // Compute delta with the new data
+                            let delta = delta_tracker_clone.compute_delta(
+                                graph_data.nodes,
+                                graph_data.edges
+                            ).await;
+                            
+                            // Log delta statistics
+                            info!("Broadcasting delta: {} nodes added, {} nodes updated, {} nodes removed, {} edges added, {} edges updated, {} edges removed",
+                                delta.nodes_added.len(),
+                                delta.nodes_updated.len(),
+                                delta.nodes_removed.len(),
+                                delta.edges_added.len(),
+                                delta.edges_updated.len(),
+                                delta.edges_removed.len()
+                            );
+                            
+                            // Broadcast delta instead of full update
+                            let _ = delta_tx_clone.send(delta);
                         } else {
                             error!("Failed to reload DuckDB with fresh data");
                         }
@@ -752,150 +763,6 @@ async fn search(
     }
 }
 
-async fn websocket_handler(
-    ws: WebSocketUpgrade,
-    State(state): State<AppState>,
-) -> impl IntoResponse {
-    ws.on_upgrade(move |socket| handle_socket(socket, state))
-}
-
-async fn handle_socket(mut socket: axum::extract::ws::WebSocket, state: AppState) {
-    use axum::extract::ws::Message;
-    
-    info!("WebSocket connection established");
-    
-    // Subscribe to channels
-    let mut update_rx = state.update_tx.subscribe();
-    let mut delta_rx = state.delta_tx.subscribe();
-    
-    // Track client ID for logging
-    let client_id = uuid::Uuid::new_v4().to_string();
-    info!("Client {} connected", client_id);
-    
-    // Send initial connection confirmation with delta support flag
-    let _ = socket.send(Message::Text(
-        serde_json::to_string(&serde_json::json!({
-            "type": "connected",
-            "timestamp": std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_millis(),
-            "features": {
-                "delta_updates": true,
-                "compression": true,
-                "batch_updates": true
-            }
-        })).unwrap()
-    )).await;
-    
-    // Track client preferences
-    let mut use_deltas = false;
-    
-    // Handle incoming messages and broadcast updates
-    loop {
-        tokio::select! {
-            // Handle incoming WebSocket messages
-            Some(msg) = socket.recv() => {
-                match msg {
-                    Ok(Message::Text(text)) => {
-                        // Parse client commands
-                        if let Ok(cmd) = serde_json::from_str::<serde_json::Value>(&text) {
-                            if let Some(cmd_type) = cmd.get("type").and_then(|t| t.as_str()) {
-                                match cmd_type {
-                                    "subscribe:deltas" => {
-                                        use_deltas = true;
-                                        let _ = socket.send(Message::Text(
-                                            serde_json::to_string(&serde_json::json!({
-                                                "type": "subscribed:deltas",
-                                                "status": "ok"
-                                            })).unwrap()
-                                        )).await;
-                                    }
-                                    "unsubscribe:deltas" => {
-                                        use_deltas = false;
-                                    }
-                                    "ping" => {
-                                        let _ = socket.send(Message::Text(
-                                            serde_json::to_string(&serde_json::json!({
-                                                "type": "pong",
-                                                "timestamp": std::time::SystemTime::now()
-                                                    .duration_since(std::time::UNIX_EPOCH)
-                                                    .unwrap()
-                                                    .as_millis()
-                                            })).unwrap()
-                                        )).await;
-                                    }
-                                    "clear_cache" => {
-                                        // Client requested cache clear
-                                        info!("Client {} requested cache clear", client_id);
-                                        state.graph_cache.clear();
-                                        let mut arrow_cache = state.arrow_cache.write().await;
-                                        *arrow_cache = None;
-                                        drop(arrow_cache);
-                                        
-                                        let _ = socket.send(Message::Text(
-                                            serde_json::to_string(&serde_json::json!({
-                                                "type": "cache_cleared",
-                                                "timestamp": std::time::SystemTime::now()
-                                                    .duration_since(std::time::UNIX_EPOCH)
-                                                    .unwrap()
-                                                    .as_millis()
-                                            })).unwrap()
-                                        )).await;
-                                    }
-                                    _ => {
-                                        debug!("Unknown command: {}", cmd_type);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    Ok(Message::Close(_)) => {
-                        info!("WebSocket connection closed by client");
-                        break;
-                    }
-                    Err(e) => {
-                        error!("WebSocket error: {}", e);
-                        break;
-                    }
-                    _ => {}
-                }
-            }
-            
-            // Broadcast delta updates (preferred)
-            Ok(delta) = delta_rx.recv() => {
-                if use_deltas {
-                    let msg = serde_json::json!({
-                        "type": "graph:delta",
-                        "data": delta
-                    });
-                    
-                    if let Err(e) = socket.send(Message::Text(serde_json::to_string(&msg).unwrap())).await {
-                        error!("Failed to send delta: {}", e);
-                        break;
-                    }
-                }
-            }
-            
-            // Broadcast full updates (fallback)
-            Ok(update) = update_rx.recv() => {
-                if !use_deltas {
-                    let msg = serde_json::json!({
-                        "type": "graph:update",
-                        "data": update
-                    });
-                    
-                    if let Err(e) = socket.send(Message::Text(serde_json::to_string(&msg).unwrap())).await {
-                        error!("Failed to send update: {}", e);
-                        break;
-                    }
-                }
-            }
-        }
-    }
-    
-    info!("WebSocket connection closed for client {}", client_id);
-}
 
 // Cache management endpoints
 async fn clear_cache(State(state): State<AppState>) -> Result<Json<CacheResponse>, StatusCode> {
@@ -1878,7 +1745,7 @@ async fn add_nodes(
     match state.duckdb_store.process_updates().await {
         Ok(Some(update)) => {
             // Broadcast update to WebSocket clients
-            let _ = state.update_tx.send(update.clone());
+            state.broadcast_update(update.clone());
             
             // Clear caches to ensure fresh data
             state.graph_cache.clear();
@@ -1925,7 +1792,7 @@ async fn add_edges(
     match state.duckdb_store.process_updates().await {
         Ok(Some(update)) => {
             // Broadcast update to WebSocket clients
-            let _ = state.update_tx.send(update.clone());
+            state.broadcast_update(update.clone());
             
             // Clear caches to ensure fresh data
             state.graph_cache.clear();
@@ -1981,7 +1848,7 @@ async fn batch_update(
     match state.duckdb_store.process_updates().await {
         Ok(Some(update)) => {
             // Broadcast update to WebSocket clients
-            let _ = state.update_tx.send(update.clone());
+            state.broadcast_update(update.clone());
             
             // Clear caches to ensure fresh data
             state.graph_cache.clear();
@@ -2116,7 +1983,7 @@ async fn webhook_data_ingestion(
     match state.duckdb_store.process_updates().await {
         Ok(Some(update)) => {
             // Broadcast update to WebSocket clients
-            let _ = state.update_tx.send(update.clone());
+            state.broadcast_update(update.clone());
             
             // Also send as delta for clients subscribed to deltas
             use delta_tracker::DeltaOperation;
@@ -2131,7 +1998,7 @@ async fn webhook_data_ingestion(
                 timestamp: update.timestamp,
                 sequence: 0, // Will be set by delta tracker if needed
             };
-            let _ = state.delta_tx.send(delta);
+            state.broadcast_delta(delta);
             
             // Clear caches to ensure fresh data
             state.graph_cache.clear();
@@ -2212,7 +2079,7 @@ async fn reload_duckdb_from_falkordb(
                     .unwrap()
                     .as_millis() as u64,
             };
-            let _ = state.update_tx.send(update);
+            state.broadcast_update(update);
             
             info!("DuckDB reload completed successfully");
             
