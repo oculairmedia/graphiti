@@ -359,10 +359,11 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
           </div>
 
           {/* Main Graph Viewport - Using refactored components */}
-          <LazyGraphCanvas
-            ref={graphCanvasRef}
-            nodes={dataToUse.nodes}
-            links={dataToUse.links}
+          <div className="flex-1 relative">
+            <LazyGraphCanvas
+              ref={graphCanvasRef}
+              nodes={dataToUse.nodes}
+              links={dataToUse.links}
             selectedNodes={selectedNodes}
             highlightedNodes={highlightedNodes}
             selectedNode={selectedNode}
@@ -379,16 +380,20 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
             onScreenshot={handleCaptureScreenshot}
             onToggleTimeline={toggleTimeline}
             isTimelineVisible={isTimelineVisible}
-            onStatsUpdate={handleStatsUpdate}
-            onContextReady={handleContextReady}
-          />
+              onStatsUpdate={handleStatsUpdate}
+              onContextReady={handleContextReady}
+            />
+          </div>
 
           {/* Right Layout Panel */}
           <div className={`${rightPanelCollapsed ? 'w-12' : 'w-80'} transition-all duration-300 flex-shrink-0`}>
             <LayoutPanel 
               collapsed={rightPanelCollapsed}
               onToggleCollapse={() => setRightPanelCollapsed(!rightPanelCollapsed)}
-              graphData={transformedData}
+              graphData={{
+                nodes: transformedData?.nodes || [],
+                edges: transformedData?.links || []  // Map links to edges for LayoutPanel
+              }}
             />
           </div>
         </div>
