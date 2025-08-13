@@ -119,47 +119,44 @@ export function sanitizeNode(
   
   // Build sanitized node with only primitive values
   const sanitizedNode: any = {
-    // Core fields - always present
+    // Core fields - always present (matches cosmograph_points schema)
+    index: Number(index),  // cosmograph_points expects 'index' first
     id: String(node.id),
-    index: Number(index),
-    idx: Number(index),
-    
-    // Display fields
     label: String(node.label || node.name || node.id),
-    name: String(node.name || node.label || ''),
     node_type: String(node.node_type || 'Unknown'),
+    summary: node.summary ? String(node.summary) : null,
     
-    // Numeric fields
+    // Centrality metrics (from cosmograph_points schema)
+    degree_centrality: Number(sanitizedProperties.degree_centrality || 0),
+    pagerank_centrality: Number(sanitizedProperties.pagerank_centrality || 0),
+    betweenness_centrality: Number(sanitizedProperties.betweenness_centrality || 0),
+    eigenvector_centrality: Number(sanitizedProperties.eigenvector_centrality || 0),
+    
+    // Position (may be null initially)
+    x: node.x ?? null,
+    y: node.y ?? null,
+    
+    // Visual properties
+    color: generateNodeTypeColor(node.node_type || 'Unknown', nodeTypeIndex),
     size: Number(node.size || 5),
     
-    // Clustering
+    // Timestamp
+    created_at_timestamp: node.created_at_timestamp ?? null,
+    
+    // Clustering (required by cosmograph_points)
     cluster: String(cluster),
     clusterStrength: Number(config.clusterStrength ?? 0.7),
     
-    // Color - generated from node type
-    color: generateNodeTypeColor(node.node_type || 'Unknown', nodeTypeIndex),
+    // Additional fields for compatibility
+    idx: Number(index),  // Duplicate of index for compatibility
+    name: String(node.name || node.label || ''),
     
-    // Sanitized properties
+    // Properties object for additional data
     properties: sanitizedProperties,
     
-    // Optional string fields
-    summary: node.summary ? String(node.summary) : '',
+    // Original created_at string
     created_at: node.created_at ? String(node.created_at) : ''
   };
-  
-  // Add centrality metrics at root level if they exist
-  if (sanitizedProperties.degree_centrality !== undefined) {
-    sanitizedNode.degree_centrality = Number(sanitizedProperties.degree_centrality);
-  }
-  if (sanitizedProperties.pagerank_centrality !== undefined) {
-    sanitizedNode.pagerank_centrality = Number(sanitizedProperties.pagerank_centrality);
-  }
-  if (sanitizedProperties.betweenness_centrality !== undefined) {
-    sanitizedNode.betweenness_centrality = Number(sanitizedProperties.betweenness_centrality);
-  }
-  if (sanitizedProperties.closeness_centrality !== undefined) {
-    sanitizedNode.closeness_centrality = Number(sanitizedProperties.closeness_centrality);
-  }
   
   return sanitizedNode;
 }
@@ -236,37 +233,22 @@ export class CosmographDataPreparer {
       .map(link => sanitizeLink(link, this.nodeIdToIndex))
       .filter(link => link !== null);
     
-    // Prepare data using Cosmograph's function
-    const prepConfig = {
-      points: {
-        data: sanitizedNodes,
-        idBy: 'id',
-        indexBy: 'index'
-      },
-      links: {
-        data: sanitizedLinks,
-        sourceBy: 'source',
-        targetBy: 'target'
-      }
-    };
-    
-    // Use prepareCosmographData to ensure proper Arrow format
-    const prepared = await prepareCosmographData(
-      prepConfig,
-      sanitizedNodes,
-      sanitizedLinks
-    );
-    
-    if (!prepared) {
-      throw new Error('Failed to prepare Cosmograph data');
-    }
-    
-    // Store config for reuse
-    this.preparedConfig = prepared.config;
+    // Don't use prepareCosmographData for now - it has issues
+    // Just return the sanitized data directly
+    // The Cosmograph component will handle the conversion to Arrow format
     
     return {
-      data: prepared.data,
-      config: prepared.config
+      data: {
+        nodes: sanitizedNodes,
+        links: sanitizedLinks
+      },
+      config: {
+        // Return empty config since we're not using prepareCosmographData
+        nodeIdBy: 'id',
+        nodeIndexBy: 'index',
+        linkSourceBy: 'source',
+        linkTargetBy: 'target'
+      }
     };
   }
   
