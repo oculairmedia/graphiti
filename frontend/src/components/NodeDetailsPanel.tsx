@@ -191,7 +191,7 @@ const NodeDetailsPanelComponent: React.FC<NodeDetailsPanelProps> = ({
       <CardHeader className="pb-3 flex-shrink-0">
         <div className="flex items-start justify-between">
           <div className="flex-1 pr-2 min-w-0">
-            <CardTitle className="text-lg leading-tight mb-2 break-words overflow-wrap-anywhere">
+            <CardTitle className="text-lg leading-tight mb-2 break-words overflow-wrap-anywhere min-h-[2lh] h-[2lh] overflow-hidden line-clamp-2">
               {data.name}
             </CardTitle>
             <div className="flex items-center space-x-2 mb-2">
