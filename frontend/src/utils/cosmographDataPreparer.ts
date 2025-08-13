@@ -210,35 +210,32 @@ export function sanitizeLink(
     return null;
   }
   
-  // CRITICAL: Links from Rust backend already have all 9 fields
-  // We must preserve ALL of them for DuckDB compatibility
-  // The 9 fields are: source, target, edge_type, sourceIndex, targetIndex, 
-  // weight, strength, sourceidx, targetidx
+  // CRITICAL: DuckDB table was created with 9 columns from previous runs
+  // Even though Cosmograph only uses 5 fields, we must provide all 9
+  // to match the existing table schema
   
   const sanitizedLink: any = {};
   
-  // Core identity fields
+  // The 5 fields Cosmograph actually uses
   sanitizedLink.source = String(sourceId);
   sanitizedLink.target = String(targetId);
-  sanitizedLink.edge_type = String(link.edge_type || 'default');
-  
-  // Index fields (both formats)
   sanitizedLink.sourceIndex = Number(sourceIndex);
   sanitizedLink.targetIndex = Number(targetIndex);
+  sanitizedLink.edge_type = String(link.edge_type || 'default');
+  
+  // Additional 4 fields to match the 9-column table
+  // These must be provided even if Cosmograph doesn't use them
+  sanitizedLink.weight = Number(link.weight ?? 1);
+  sanitizedLink.strength = Number(link.strength ?? 1);
   sanitizedLink.sourceidx = Number(link.sourceidx ?? sourceIndex);
   sanitizedLink.targetidx = Number(link.targetidx ?? targetIndex);
   
-  // Weight and strength
-  sanitizedLink.weight = Number(link.weight ?? 1);
-  sanitizedLink.strength = Number(link.strength ?? 1);
-  
-  // Verify we have exactly 9 non-null fields
+  // Verify we have exactly 9 fields (5 used + 4 padding)
   const fieldCount = Object.keys(sanitizedLink).length;
   const nullCount = Object.values(sanitizedLink).filter(v => v === null || v === undefined).length;
   
   if (fieldCount !== 9 || nullCount > 0) {
-    console.error(`[sanitizeLink] CRITICAL: DuckDB requires exactly 9 non-null fields. Have ${fieldCount} fields with ${nullCount} nulls:`, 
-      Object.entries(sanitizedLink).map(([k, v]) => `${k}: ${v === null ? 'NULL' : v === undefined ? 'UNDEFINED' : typeof v}`));
+    console.warn(`[sanitizeLink] Expected 9 non-null fields, have ${fieldCount} fields with ${nullCount} nulls`);
   }
   
   return sanitizedLink;
