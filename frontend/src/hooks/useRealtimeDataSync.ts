@@ -90,7 +90,7 @@ export function useRealtimeDataSync({
         clearTimeout(debounceTimerRef.current);
       }
     };
-  }, [enabled, isConnected, subscribe, handleDataUpdate, onNotification]);
+  }, [enabled, isConnected]); // Remove unstable dependencies
 
   // Cleanup on unmount
   useEffect(() => {
