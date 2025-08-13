@@ -174,11 +174,8 @@ export function useNodeSelection(
       const allHighlightedIds = [...new Set([...nodesToExplore, ...Array.from(newNeighborIds)])];
       setHighlightedNodes(allHighlightedIds);
       
-      // Also update the selectedNodes to visually select them
-      setSelectedNodes(allHighlightedIds);
-      
       // Note: Visual highlighting is handled by the highlightedNodes state change
-      // and visual selection is handled by the selectedNodes state change
+      // The actual visual selection happens through the highlight effect
     }
   }, [highlightedNodes, transformedData, graphCanvasRef]);
 

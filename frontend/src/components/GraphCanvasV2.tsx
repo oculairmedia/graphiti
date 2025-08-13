@@ -736,14 +736,32 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
       }
     }, [cosmographRef.current]); // eslint-disable-line react-hooks/exhaustive-deps
     
-    // Handle highlighted nodes
+    // Handle highlighted nodes - visual selection for Show Neighbors
     useEffect(() => {
-      if (highlightedNodes && highlightedNodes.length > 0) {
+      if (highlightedNodes && highlightedNodes.length > 0 && cosmographRef.current && nodes) {
+        // Find indices of highlighted nodes
+        const indices: number[] = [];
+        highlightedNodes.forEach(nodeId => {
+          const index = nodes.findIndex(n => n.id === nodeId);
+          if (index >= 0) indices.push(index);
+        });
+        
+        // Select nodes visually in Cosmograph
+        if (indices.length > 0 && cosmographRef.current.selectPoints) {
+          cosmographRef.current.selectPoints(indices, false);
+        }
+        
+        // Also apply visual effects
         highlightNodeVisuals(highlightedNodes, 2000);
+      } else if (highlightedNodes && highlightedNodes.length === 0 && cosmographRef.current) {
+        // Clear selection when no nodes are highlighted
+        if (cosmographRef.current.unselectAllPoints) {
+          cosmographRef.current.unselectAllPoints();
+        }
       }
-    }, [highlightedNodes, highlightNodeVisuals]);
+    }, [highlightedNodes, highlightNodeVisuals, nodes]);
     
-    // Handle selected nodes
+    // Handle selected nodes - simplified to just update internal state
     useEffect(() => {
       // Ensure selectedNodes is defined and is an array
       if (selectedNodes && Array.isArray(selectedNodes) && selectedNodeIds) {
@@ -754,19 +772,8 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
         // Update selection state
         toSelect.forEach(id => selectSingleNode(id));
         toDeselect.forEach(id => deselectNode(id));
-        
-        // Also update visual selection in Cosmograph
-        if (cosmographRef.current?.selectPoints) {
-          const indices = selectedNodes.map(id => nodes.findIndex(n => n.id === id)).filter(i => i >= 0);
-          if (indices.length > 0) {
-            cosmographRef.current.selectPoints(indices, false);
-          } else {
-            // Clear selection if no nodes selected
-            cosmographRef.current.unselectAll?.();
-          }
-        }
       }
-    }, [selectedNodes, selectedNodeIds, selectSingleNode, deselectNode, nodes]);
+    }, [selectedNodes, selectedNodeIds, selectSingleNode, deselectNode]);
     
     // Update statistics when nodes or links change
     useEffect(() => {
@@ -1060,8 +1067,19 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
             if (typeof index === 'number' && index >= 0 && index < nodes.length) {
               const node = nodes[index];
               if (node) {
+                // First, show the info panel immediately for instant feedback
                 onNodeClick(node);
                 onNodeSelect(node.id);
+                
+                // Then update visual selection (following the old implementation pattern)
+                requestAnimationFrame(() => {
+                  // Select the node visually in Cosmograph
+                  if (cosmographRef.current?.selectPoint) {
+                    cosmographRef.current.selectPoint(index);
+                  } else if (cosmographRef.current?.selectPoints) {
+                    cosmographRef.current.selectPoints([index]);
+                  }
+                });
               }
             }
           }}
