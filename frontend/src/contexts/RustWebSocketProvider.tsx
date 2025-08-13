@@ -188,8 +188,8 @@ export function RustWebSocketProvider({ children }: { children: React.ReactNode 
   }, []);
 
   useEffect(() => {
-    // DISABLED - Rust server not available on port 4543
-    // connect();
+    // Connect to Rust WebSocket server
+    connect();
 
     return () => {
       // Clean up all subscriptions
