@@ -210,32 +210,40 @@ export function sanitizeLink(
     return null;
   }
   
-  // Build link with exactly 9 fields that DuckDB expects
+  // Build link with exactly 9 NON-NULL fields that DuckDB expects
   // DuckDB created the links table with 9 columns, we must provide all 9
-  // The error "9 columns but 5 values" means we're only providing 5 non-null values
+  // CRITICAL: All fields MUST be non-null, DuckDB doesn't count null values
   const sanitizedLink: any = {};
   
-  // Core fields (these 5 are always provided in the error message)
-  sanitizedLink.source = sourceId;
-  sanitizedLink.target = targetId;
+  // These are the fields DuckDB expects based on the initial load schema
+  // Field 1-2: Source and target IDs
+  sanitizedLink.source = String(sourceId);
+  sanitizedLink.target = String(targetId);
+  
+  // Field 3: Edge type
   sanitizedLink.edge_type = String(link.edge_type || 'default');
+  
+  // Field 4-5: Source and target indices  
   sanitizedLink.sourceIndex = Number(sourceIndex);
   sanitizedLink.targetIndex = Number(targetIndex);
   
-  // Additional fields to reach 9 columns total
-  // These fields might be expected by DuckDB even if they seem redundant
+  // Field 6-7: Weight and strength (numeric fields)
   sanitizedLink.weight = Number(link.weight || 1);
   sanitizedLink.strength = Number(link.strength || 1);
-  // Add two more fields that Cosmograph might expect
-  // Looking at typical Cosmograph schemas, these could be:
-  sanitizedLink.id = link.id || `${sourceId}-${targetId}`;
-  sanitizedLink.timestamp = link.timestamp ? new Date(link.timestamp).getTime() : Date.now();
   
-  // Verify we have exactly 9 fields
+  // Field 8-9: Additional required fields
+  // Based on DuckDB expecting 9 columns, we need 2 more fields
+  // These are likely sourceidx and targetidx (duplicates of indices)
+  sanitizedLink.sourceidx = Number(sourceIndex);
+  sanitizedLink.targetidx = Number(targetIndex);
+  
+  // Verify we have exactly 9 non-null fields
   const fieldCount = Object.keys(sanitizedLink).length;
-  if (fieldCount !== 9) {
-    console.error(`[sanitizeLink] CRITICAL: DuckDB requires exactly 9 fields. Have ${fieldCount} fields:`, 
-      Object.keys(sanitizedLink));
+  const nullCount = Object.values(sanitizedLink).filter(v => v === null || v === undefined).length;
+  
+  if (fieldCount !== 9 || nullCount > 0) {
+    console.error(`[sanitizeLink] CRITICAL: DuckDB requires exactly 9 non-null fields. Have ${fieldCount} fields with ${nullCount} nulls:`, 
+      Object.entries(sanitizedLink).map(([k, v]) => `${k}: ${v === null ? 'NULL' : v === undefined ? 'UNDEFINED' : typeof v}`));
   }
   
   return sanitizedLink;
