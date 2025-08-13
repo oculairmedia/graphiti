@@ -284,9 +284,10 @@ export function useGraphWebSocket(config: UseGraphWebSocketConfig = {}) {
     log(`Processing batch: ${batch.nodes.size} nodes, ${batch.edges.size} edges`);
     
     // Create delta update event
+    // Use the stored operation from the batch
     const event: DeltaUpdateEvent = {
       type: 'delta_update',
-      operation: batch.deletedNodeIds.size > 0 || batch.deletedEdgeIds.size > 0 ? 'delete' : 'update',
+      operation: (batch as any).operation || (batch.deletedNodeIds.size > 0 || batch.deletedEdgeIds.size > 0 ? 'delete' : 'update'),
       nodes: Array.from(batch.nodes.values()),
       edges: Array.from(batch.edges.values()),
       nodeIds: Array.from(batch.deletedNodeIds),
@@ -323,6 +324,9 @@ export function useGraphWebSocket(config: UseGraphWebSocketConfig = {}) {
     edgeIds?: string[]
   ) => {
     const batch = updateBatchRef.current;
+    
+    // Store the operation in the batch for later use
+    (batch as any).operation = operation;
     
     // Handle nodes
     if (nodes) {
@@ -586,34 +590,52 @@ export function useGraphWebSocket(config: UseGraphWebSocketConfig = {}) {
   }, [pythonWs, enablePython, handleNodeAccess, handleGraphUpdate, handleCacheInvalidate, 
       addToBatch, onDeltaUpdate, updateStats, batchInterval, log]);
 
+  // Store callbacks in refs to avoid re-subscriptions
+  const addToBatchRef = useRef(addToBatch);
+  const onDeltaUpdateRef = useRef(onDeltaUpdate);
+  const updateStatsRef = useRef(updateStats);
+  const logRef = useRef(log);
+  
+  // Update refs when functions change
+  useEffect(() => {
+    addToBatchRef.current = addToBatch;
+    onDeltaUpdateRef.current = onDeltaUpdate;
+    updateStatsRef.current = updateStats;
+    logRef.current = log;
+  });
+  
   // Subscribe to Rust WebSocket events
   useEffect(() => {
     if (!rustWs || !enableRust) return;
     
-    log('Setting up Rust WebSocket subscription');
+    logRef.current('Setting up Rust WebSocket subscription');
     
     const unsubscribe = rustWs.subscribe((update) => {
-      log('Received update from Rust:', update);
+      logRef.current('Received update from Rust:', update);
       
       if (update.type === 'graph:delta' || update.type === 'graph:update') {
-        const { operation, nodes, edges } = update.data;
+        const data = update.data;
+        
+        // The RustWebSocketProvider already transforms the delta format
+        // So we just pass through the operation, nodes, and edges
+        const { operation, nodes, edges } = data;
         
         if (batchInterval > 0) {
-          addToBatch(operation, nodes, edges);
+          addToBatchRef.current(operation, nodes, edges);
         } else {
           const event: DeltaUpdateEvent = {
             type: 'delta_update',
             operation,
             nodes,
             edges,
-            timestamp: update.data.timestamp || Date.now(),
+            timestamp: data.timestamp || Date.now(),
             source: 'rust'
           };
           
-          if (onDeltaUpdate) {
-            onDeltaUpdate(event);
+          if (onDeltaUpdateRef.current) {
+            onDeltaUpdateRef.current(event);
           }
-          updateStats('delta');
+          updateStatsRef.current('delta');
         }
       }
     });
@@ -621,10 +643,10 @@ export function useGraphWebSocket(config: UseGraphWebSocketConfig = {}) {
     // Don't update connection status here - it's handled in a separate effect
     
     return () => {
-      log('Cleaning up Rust WebSocket subscription');
+      logRef.current('Cleaning up Rust WebSocket subscription');
       unsubscribe();
     };
-  }, [rustWs, enableRust, addToBatch, onDeltaUpdate, updateStats, batchInterval, log]);
+  }, [rustWs, enableRust, batchInterval]); // Only depend on rustWs, enableRust, and batchInterval
 
   // Update overall connection status
   useEffect(() => {

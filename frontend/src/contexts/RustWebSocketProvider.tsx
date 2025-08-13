@@ -109,51 +109,79 @@ export function RustWebSocketProvider({ children }: { children: React.ReactNode 
           else if (message.type === 'graph:delta' || message.type === 'graph:update') {
             console.log('[RustWebSocketProvider] Delta/Update data:', message);
             
-            // Transform to unified delta format
-            let deltaMessage = message;
-            
             // Handle GraphDelta format from Rust server
             if (message.type === 'graph:delta' && message.data) {
-              // Transform GraphDelta to frontend format
               const data = message.data;
-              deltaMessage = {
-                type: 'graph:delta',
-                data: {
-                  operation: 'add', // Simplified - could be 'update' based on data.operation
-                  nodes: data.nodes_added || [],
-                  edges: data.edges_added || [],
-                  timestamp: data.timestamp || Date.now()
-                }
-              };
               
-              // If there are updates or removals, handle them separately
-              if (data.nodes_updated?.length > 0) {
-                // Could send separate update message or combine
-                console.log('[RustWebSocketProvider] Node updates present:', data.nodes_updated.length);
+              console.log('[RustWebSocketProvider] Processing delta:', {
+                nodes_added: data.nodes_added?.length || 0,
+                nodes_updated: data.nodes_updated?.length || 0,
+                nodes_removed: data.nodes_removed?.length || 0,
+                edges_added: data.edges_added?.length || 0,
+                edges_updated: data.edges_updated?.length || 0,
+                edges_removed: data.edges_removed?.length || 0
+              });
+              
+              // Send added nodes/edges - THIS IS THE IMPORTANT ONE FOR REAL-TIME
+              if ((data.nodes_added?.length > 0) || (data.edges_added?.length > 0)) {
+                const addMessage = {
+                  type: 'graph:delta',
+                  data: {
+                    operation: 'add' as const,
+                    nodes: data.nodes_added || [],
+                    edges: data.edges_added || [],
+                    timestamp: data.timestamp || Date.now()
+                  }
+                };
+                console.log('[RustWebSocketProvider] Sending ADD message:', {
+                  nodes: addMessage.data.nodes.length,
+                  edges: addMessage.data.edges.length
+                });
+                subscribersRef.current.forEach(callback => callback(addMessage));
               }
-              if (data.nodes_removed?.length > 0 || data.edges_removed?.length > 0) {
-                console.log('[RustWebSocketProvider] Removals present');
+              
+              // Skip node updates - not needed for real-time sync
+              // We only care about new nodes/edges being added
+              if (data.nodes_updated?.length > 0) {
+                console.log('[RustWebSocketProvider] Skipping node updates:', data.nodes_updated.length);
+              }
+              
+              // Skip edge updates too - they're causing issues
+              if (data.edges_updated?.length > 0) {
+                console.log('[RustWebSocketProvider] Skipping edge updates:', data.edges_updated.length);
+              }
+              
+              // Send removed nodes/edges
+              if ((data.nodes_removed?.length > 0) || (data.edges_removed?.length > 0)) {
+                const deleteMessage = {
+                  type: 'graph:delta',
+                  data: {
+                    operation: 'delete' as const,
+                    nodes: data.nodes_removed || [],
+                    edges: data.edges_removed || [],
+                    timestamp: data.timestamp || Date.now()
+                  }
+                };
+                console.log('[RustWebSocketProvider] Sending DELETE message:', {
+                  nodes: deleteMessage.data.nodes.length,
+                  edges: deleteMessage.data.edges.length
+                });
+                subscribersRef.current.forEach(callback => callback(deleteMessage));
               }
             }
             // Handle GraphUpdate format (fallback)
             else if (message.type === 'graph:update' && message.data) {
-              deltaMessage = {
-                type: 'graph:delta',
+              const deltaMessage = {
+                type: 'graph:delta' as const,
                 data: {
-                  operation: 'add',
+                  operation: 'update' as const,
                   nodes: message.data.nodes || [],
                   edges: message.data.edges || [],
                   timestamp: message.data.timestamp || Date.now()
                 }
               };
+              subscribersRef.current.forEach(callback => callback(deltaMessage));
             }
-            
-            // Notify all subscribers
-            console.log('[RustWebSocketProvider] Notifying subscribers, count:', subscribersRef.current.size);
-            subscribersRef.current.forEach(callback => {
-              console.log('[RustWebSocketProvider] Calling subscriber callback');
-              callback(deltaMessage);
-            });
           }
         } catch (error) {
           console.error('[RustWebSocketProvider] Error parsing message:', error);
