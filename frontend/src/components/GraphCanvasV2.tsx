@@ -747,8 +747,16 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
         });
         
         // Select nodes visually in Cosmograph
-        if (indices.length > 0 && cosmographRef.current.selectPoints) {
-          cosmographRef.current.selectPoints(indices, false);
+        if (indices.length > 0) {
+          if (cosmographRef.current.selectPoints) {
+            cosmographRef.current.selectPoints(indices, false);
+          }
+          
+          // Fit view to show all selected nodes with smooth animation
+          // Use small padding (0.1 = 10% extra space) to avoid zooming out too far
+          if (cosmographRef.current.fitViewByIndices) {
+            cosmographRef.current.fitViewByIndices(indices, 500, 0.1); // 500ms duration, 10% padding
+          }
         }
         
         // Also apply visual effects
@@ -1081,6 +1089,16 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
                   }
                 });
               }
+            } else {
+              // Clicked on empty space - clear selection
+              onClearSelection();
+              
+              // Also clear visual selection in Cosmograph
+              requestAnimationFrame(() => {
+                if (cosmographRef.current?.unselectAllPoints) {
+                  cosmographRef.current.unselectAllPoints();
+                }
+              });
             }
           }}
           onMouseMove={(index?: number) => {
