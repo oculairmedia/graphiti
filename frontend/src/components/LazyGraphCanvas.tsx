@@ -5,12 +5,9 @@ import { Skeleton } from './ui/skeleton';
 import type { GraphCanvasRef } from './GraphCanvas';
 
 // Lazy load the heavy GraphCanvas component
-// Use a simpler approach that works with React.memo components
+// TODO: Switch back to GraphCanvasV2 after fixing infinite loop issue
 const GraphCanvas = React.lazy(() => 
-  import('./GraphCanvas').then(module => {
-    // React.memo components are objects, not functions, but they're valid components
-    return { default: module.GraphCanvas };
-  })
+  import('./GraphCanvas')
 );
 
 // Loading placeholder that matches the graph canvas appearance

@@ -124,6 +124,14 @@ export function useGraphDataManagement(config: UseGraphDataManagementConfig = {}
     lastUpdate: Date.now(),
     updateCount: 0
   });
+  
+  // Log initial state
+  if (debug) {
+    console.log('[useGraphDataManagement] Initial state:', {
+      nodeCount: initialNodes.length,
+      linkCount: initialLinks.length
+    });
+  }
 
   // Cache management
   const cacheRef = useRef<Map<string, CacheEntry>>(new Map());
@@ -402,6 +410,7 @@ export function useGraphDataManagement(config: UseGraphDataManagementConfig = {}
    * Reset graph data
    */
   const resetData = useCallback((nodes: GraphNode[], links: GraphLink[], source: DataUpdateEvent['source'] = 'manual') => {
+    console.log(`[useGraphDataManagement] resetData called with ${nodes.length} nodes and ${links.length} links from ${source}`);
     log(`Resetting data with ${nodes.length} nodes and ${links.length} links from ${source}`);
     
     setDataState(prev => {
@@ -424,7 +433,7 @@ export function useGraphDataManagement(config: UseGraphDataManagementConfig = {}
         onDataUpdate(event);
       }
       
-      return {
+      const newState = {
         ...prev,
         nodes: validNodes,
         links: validLinks,
@@ -432,6 +441,13 @@ export function useGraphDataManagement(config: UseGraphDataManagementConfig = {}
         updateCount: prev.updateCount + 1,
         error: null
       };
+      
+      console.log('[useGraphDataManagement] New state after reset:', {
+        nodeCount: newState.nodes.length,
+        linkCount: newState.links.length
+      });
+      
+      return newState;
     });
   }, [onDataUpdate, log]);
 

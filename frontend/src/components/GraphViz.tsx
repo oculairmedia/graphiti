@@ -3,7 +3,7 @@ import { useStableCallback } from '../hooks/useStableCallback';
 import { CosmographProvider } from '@cosmograph/react';
 import { useGraphConfig } from '../contexts/GraphConfigProvider';
 import { ControlPanel } from './ControlPanel';
-import { GraphViewportEnhancedFixed } from './GraphViewportEnhancedFixed';
+import { LazyGraphCanvas } from './LazyGraphCanvas';
 import { LayoutPanel } from './LayoutPanel';
 import { logger } from '../utils/logger';
 
@@ -359,7 +359,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
           </div>
 
           {/* Main Graph Viewport - Using refactored components */}
-          <GraphViewportEnhancedFixed
+          <LazyGraphCanvas
             ref={graphCanvasRef}
             nodes={dataToUse.nodes}
             links={dataToUse.links}
