@@ -95,7 +95,8 @@ function sanitizeProperties(properties: any): Record<string, any> {
 export function sanitizeNode(
   node: GraphNode,
   index: number,
-  config: DataPrepConfig = {}
+  config: DataPrepConfig = {},
+  isIncremental: boolean = false
 ): any {
   // Get or assign node type index for color generation
   let nodeTypeIndex = 0;
@@ -117,10 +118,10 @@ export function sanitizeNode(
   // Sanitize all properties
   const sanitizedProperties = sanitizeProperties(node.properties);
   
-  // Build sanitized node - always include ALL fields for consistency
-  // Cosmograph's DuckDB expects exact field count
+  // Build sanitized node - field count depends on whether it's incremental
+  // Cosmograph creates different schemas for initial vs incremental updates
   const sanitizedNode: any = {
-    // Core 16 fields from cosmograph_points view
+    // Core fields always present
     index: Number(index),
     id: String(node.id),
     label: String(node.label || node.name || node.id),
@@ -134,10 +135,15 @@ export function sanitizeNode(
     y: node.y ?? null,
     color: generateNodeTypeColor(node.node_type || 'Unknown', nodeTypeIndex),
     size: Number(node.size || 5),
-    created_at_timestamp: node.created_at_timestamp ?? null,
-    cluster: String(cluster),
-    clusterStrength: Number(config.clusterStrength ?? 0.7)
+    created_at_timestamp: node.created_at_timestamp ?? null
   };
+  
+  // For initial load, include clustering fields (16 total)
+  // For incremental updates, omit them (14 total)
+  if (!isIncremental) {
+    sanitizedNode.cluster = String(cluster);
+    sanitizedNode.clusterStrength = Number(config.clusterStrength ?? 0.7);
+  }
   
   return sanitizedNode;
 }
@@ -206,7 +212,8 @@ export class CosmographDataPreparer {
     // Sanitize all nodes
     const sanitizedNodes = nodes.map((node, index) => {
       this.nodeIdToIndex.set(node.id, index);
-      return sanitizeNode(node, index, this.config);
+      // Pass isIncremental=false for initial load
+      return sanitizeNode(node, index, this.config, false);
     });
     
     // Sanitize all links
@@ -250,7 +257,8 @@ export class CosmographDataPreparer {
       
       const index = this.nodeIdToIndex.size;
       this.nodeIdToIndex.set(node.id, index);
-      sanitizedNodes.push(sanitizeNode(node, index, this.config));
+      // Pass isIncremental=true for incremental updates
+      sanitizedNodes.push(sanitizeNode(node, index, this.config, true));
     }
     
     // Sanitize new links
