@@ -117,6 +117,9 @@ interface GraphCanvasComponentProps extends GraphCanvasProps {
   links: GraphLink[];
 }
 
+// Track component instances
+let instanceCounter = 0;
+
 const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
   ({ 
     onNodeClick, 
@@ -134,8 +137,11 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
     links: initialLinks 
   }, ref) => {
     
+    // Track this instance
+    const instanceId = useRef(++instanceCounter);
+    
     // Log initialization
-    console.log('[GraphCanvasV2] Initializing with', {
+    console.log(`[GraphCanvasV2 #${instanceId.current}] Initializing with`, {
       nodeCount: initialNodes?.length || 0,
       linkCount: initialLinks?.length || 0,
       hasCallbacks: {
@@ -462,11 +468,11 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
       },
       trackPointPositionsByIndices: (indices: number[]) => {
         // This would need to be implemented with Cosmograph's tracking API
-        logger.warn('[GraphCanvasV2] trackPointPositionsByIndices not yet implemented');
+        console.warn('[GraphCanvasV2] trackPointPositionsByIndices not yet implemented');
       },
       getTrackedPointPositionsMap: () => {
         // This would need to be implemented with Cosmograph's tracking API
-        logger.warn('[GraphCanvasV2] getTrackedPointPositionsMap not yet implemented');
+        console.warn('[GraphCanvasV2] getTrackedPointPositionsMap not yet implemented');
         return undefined;
       },
       
@@ -599,9 +605,9 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
     
     // Log component lifecycle
     useEffect(() => {
-      console.log('[GraphCanvasV2] Component mounted');
+      console.log(`[GraphCanvasV2 #${instanceId.current}] Component mounted`);
       return () => {
-        console.log('[GraphCanvasV2] Component unmounting');
+        console.log(`[GraphCanvasV2 #${instanceId.current}] Component unmounting`);
       };
     }, []);
     
@@ -649,49 +655,52 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
     
     // Mark dataPreparation and canvas stages complete when cosmograph data is ready
     useEffect(() => {
-      if (cosmographData) {
-        console.log('[GraphCanvasV2] Cosmograph data loaded, marking stages as complete');
-        
-        // Mark data preparation as complete
-        loadingCoordinator.setStageComplete('dataPreparation', {
-          nodesCount: cosmographData.nodes?.length || 0,
-          linksCount: cosmographData.links?.length || 0
-        });
-        
-        // Mark canvas stage as complete when data is loaded
-        // Cosmograph will handle the actual rendering
-        loadingCoordinator.setStageComplete('canvas', {
-          canvasReady: true,
-          hasData: true
-        });
-      }
-    }, [cosmographData]);
-    
-    // Fallback timeout to ensure stages complete even if detection fails
-    useEffect(() => {
-      const fallbackTimeout = setTimeout(() => {
-        // Check and complete dataPreparation if needed
+      if (cosmographData && cosmographData.nodes?.length > 0) {
+        // Only mark complete if not already complete
         if (loadingCoordinator.getStageStatus('dataPreparation') !== 'complete') {
-          console.warn('[GraphCanvasV2] Data preparation timeout, marking as complete');
+          console.log(`[GraphCanvasV2 #${instanceId.current}] Marking dataPreparation as complete`);
           loadingCoordinator.setStageComplete('dataPreparation', {
-            nodesCount: nodes?.length || 0,
-            linksCount: links?.length || 0,
-            fallback: true
+            nodesCount: cosmographData.nodes?.length || 0,
+            linksCount: cosmographData.links?.length || 0
           });
         }
         
-        // Check and complete canvas if needed
+        // Only mark canvas complete if not already complete
         if (loadingCoordinator.getStageStatus('canvas') !== 'complete') {
-          console.warn('[GraphCanvasV2] Canvas detection timeout, marking as complete');
+          console.log(`[GraphCanvasV2 #${instanceId.current}] Marking canvas as complete`);
           loadingCoordinator.setStageComplete('canvas', {
             canvasReady: true,
-            fallback: true
+            hasData: true
           });
         }
-      }, 1500); // 1.5 seconds fallback
+      }
+    }, [cosmographData?.nodes?.length, cosmographData?.links?.length]); // Use stable dependencies
+    
+    // Fallback timeout to ensure stages complete even if detection fails - DISABLED FOR DEBUGGING
+    // useEffect(() => {
+    //   const fallbackTimeout = setTimeout(() => {
+    //     // Check and complete dataPreparation if needed
+    //     if (loadingCoordinator.getStageStatus('dataPreparation') !== 'complete') {
+    //       console.warn(`[GraphCanvasV2 #${instanceId.current}] Data preparation timeout, marking as complete`);
+    //       loadingCoordinator.setStageComplete('dataPreparation', {
+    //         nodesCount: nodes?.length || 0,
+    //         linksCount: links?.length || 0,
+    //         fallback: true
+    //       });
+    //     }
+        
+    //     // Check and complete canvas if needed
+    //     if (loadingCoordinator.getStageStatus('canvas') !== 'complete') {
+    //       console.warn(`[GraphCanvasV2 #${instanceId.current}] Canvas detection timeout, marking as complete`);
+    //       loadingCoordinator.setStageComplete('canvas', {
+    //         canvasReady: true,
+    //         fallback: true
+    //       });
+    //     }
+    //   }, 1500); // 1.5 seconds fallback
       
-      return () => clearTimeout(fallbackTimeout);
-    }, [loadingCoordinator, nodes, links]);
+    //   return () => clearTimeout(fallbackTimeout);
+    // }, [loadingCoordinator, nodes, links]);
     
     // === 5. RENDER ===
     

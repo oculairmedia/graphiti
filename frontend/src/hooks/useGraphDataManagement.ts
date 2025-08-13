@@ -624,9 +624,13 @@ export function useGraphDataManagement(config: UseGraphDataManagementConfig = {}
   // Initial fetch if endpoint is configured
   useEffect(() => {
     if (dataSource?.endpoint) {
-      fetchData(false);
+      // Only fetch on first mount, not on every re-render
+      const timeoutId = setTimeout(() => {
+        fetchData(false);
+      }, 0);
+      return () => clearTimeout(timeoutId);
     }
-  }, []); // Only run once on mount
+  }, [dataSource?.endpoint]); // Include minimal stable dependency
 
   return {
     // Data state
