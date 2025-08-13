@@ -53,11 +53,11 @@ export const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
       className={`
         ${className} 
         ${isDragging ? 'opacity-50 z-50' : ''} 
-        bg-card/30 border border-border/20 rounded-lg p-3 transition-all duration-200
+        bg-card/30 border border-border/20 rounded-lg p-2 transition-all duration-200
       `}
     >
       <Collapsible.Root open={!section.isCollapsed}>
-        <div className="flex items-center justify-between mb-2 group">
+        <div className="flex items-center justify-between mb-1 group">
           <Collapsible.Trigger asChild>
             <Button
               variant="ghost"

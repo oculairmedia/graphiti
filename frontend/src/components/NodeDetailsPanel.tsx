@@ -1,5 +1,5 @@
 import React, { useCallback, useState, useDeferredValue, useTransition, useEffect } from 'react';
-import { X, Pin, Eye, EyeOff, Copy, Download, ExternalLink } from 'lucide-react';
+import { X, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -188,13 +188,13 @@ const NodeDetailsPanelComponent: React.FC<NodeDetailsPanelProps> = ({
 
   return (
     <Card className="glass-panel w-96 max-h-[calc(100vh-300px)] overflow-hidden animate-fade-in flex flex-col min-w-0">
-      <CardHeader className="pb-3 flex-shrink-0">
+      <CardHeader className="pb-2 pt-3 px-3 flex-shrink-0">
         <div className="flex items-start justify-between">
           <div className="flex-1 pr-2 min-w-0">
-            <CardTitle className="text-lg leading-tight mb-2 break-words overflow-wrap-anywhere min-h-[2lh] h-[2lh] overflow-hidden line-clamp-2">
+            <CardTitle className="text-base leading-snug mb-1 break-words overflow-wrap-anywhere min-h-[2lh] h-[2lh] overflow-hidden line-clamp-2">
               {data.name}
             </CardTitle>
-            <div className="flex items-center space-x-2 mb-2">
+            <div className="flex items-center space-x-1.5 mb-1">
               <Badge 
                 className={`text-xs border-0 ${
                   getBadgeHslColor(data.type) ? 'details-badge' : 'details-badge-default'
@@ -221,7 +221,7 @@ const NodeDetailsPanelComponent: React.FC<NodeDetailsPanelProps> = ({
         </div>
       </CardHeader>
 
-      <CardContent className="flex-1 overflow-y-auto custom-scrollbar space-y-3 min-h-0 min-w-0">
+      <CardContent className="flex-1 overflow-y-auto custom-scrollbar space-y-2 px-3 pb-3 pt-0 min-h-0 min-w-0">
         <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}
@@ -305,7 +305,7 @@ const NodeDetailsPanelComponent: React.FC<NodeDetailsPanelProps> = ({
                   case 'properties': {
                     return (
                       <CollapsibleSection key={section.id} {...sectionProps}>
-                        <div className="space-y-2 min-w-0">
+                        <div className="space-y-1 min-w-0">
                           {Object.entries(data.properties).map(([key, value]) => (
                             <div key={key} className="flex justify-between items-start gap-2 min-w-0">
                               <span className="text-xs text-muted-foreground capitalize flex-shrink-0">
@@ -324,7 +324,7 @@ const NodeDetailsPanelComponent: React.FC<NodeDetailsPanelProps> = ({
                   case 'centrality': {
                     return (
                       <CollapsibleSection key={section.id} {...sectionProps}>
-                        <div className="space-y-3">
+                        <div className="space-y-1.5">
                           {centralityLoading && source === 'none' ? (
                             <div className="text-xs text-muted-foreground text-center py-2">
                               Loading centrality metrics...
@@ -375,7 +375,7 @@ const NodeDetailsPanelComponent: React.FC<NodeDetailsPanelProps> = ({
                   case 'timestamps': {
                     return (
                       <CollapsibleSection key={section.id} {...sectionProps}>
-                        <div className="space-y-1">
+                        <div className="space-y-0.5">
                           <div className="flex justify-between items-center">
                             <span className="text-xs text-muted-foreground">Created:</span>
                             <span className="text-xs">{formatDate(data.timestamps.created)}</span>
@@ -392,37 +392,16 @@ const NodeDetailsPanelComponent: React.FC<NodeDetailsPanelProps> = ({
                   case 'actions': {
                     return (
                       <CollapsibleSection key={section.id} {...sectionProps}>
-                        <div className="space-y-2">
-                          <div className="grid grid-cols-2 gap-2">
-                            <Button variant="outline" size="sm" className="h-8">
-                              <Pin className="h-3 w-3 mr-1" />
-                              Pin
-                            </Button>
-                            <Button variant="outline" size="sm" className="h-8">
-                              <Eye className="h-3 w-3 mr-1" />
-                              Focus
-                            </Button>
-                            <Button variant="outline" size="sm" className="h-8">
-                              <Copy className="h-3 w-3 mr-1" />
-                              Copy ID
-                            </Button>
-                            <Button variant="outline" size="sm" className="h-8">
-                              <Download className="h-3 w-3 mr-1" />
-                              Export
-                            </Button>
-                          </div>
-
-                          <Button 
-                            variant="secondary" 
-                            className="w-full h-8" 
-                            size="sm"
-                            onClick={() => onShowNeighbors?.(data.id)}
-                            disabled={!onShowNeighbors}
-                          >
-                            <ExternalLink className="h-3 w-3 mr-2" />
-                            Show Neighbors
-                          </Button>
-                        </div>
+                        <Button 
+                          variant="secondary" 
+                          className="w-full h-7 text-xs" 
+                          size="sm"
+                          onClick={() => onShowNeighbors?.(data.id)}
+                          disabled={!onShowNeighbors}
+                        >
+                          <ExternalLink className="h-3 w-3 mr-1.5" />
+                          Show Neighbors
+                        </Button>
                       </CollapsibleSection>
                     );
                   }
