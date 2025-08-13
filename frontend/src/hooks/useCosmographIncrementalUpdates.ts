@@ -159,6 +159,13 @@ export function useCosmographIncrementalUpdates(
       if (sanitizedNodes.length > 0) {
         const sample = sanitizedNodes[0];
         log('Sanitized node sample:', sample);
+        
+        // Log exact field count and names for debugging
+        const fieldNames = Object.keys(sample);
+        console.log('[useCosmographIncrementalUpdates] Exact fields being sent:', fieldNames);
+        console.log('[useCosmographIncrementalUpdates] Field count:', fieldNames.length);
+        console.log('[useCosmographIncrementalUpdates] Field values:', fieldNames.map(f => `${f}: ${typeof sample[f]}`));
+        
         // Check for problematic fields
         const hasArrays = Object.values(sample).some(v => Array.isArray(v));
         const hasObjects = Object.values(sample).some(v => 
