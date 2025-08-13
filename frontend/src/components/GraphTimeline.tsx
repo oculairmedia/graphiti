@@ -41,7 +41,7 @@ export const GraphTimeline = forwardRef<GraphTimelineHandle, GraphTimelineProps>
       cosmographRef || { current: null },
       {
         fitViewDuration: 750,
-        fitViewPadding: 40,
+        fitViewPadding: 0.2,  // Normalized value (0-1), not pixels - 0.2 = 20% padding
         zoomFactor: 1.5,
       }
     );
