@@ -276,17 +276,23 @@ export function useGraphDataQuery() {
     fetchDuckDBData(true);
   }, [fetchDuckDBData]);
 
+  // Stable callbacks for real-time sync
+  const handleRealtimeDataUpdate = useCallback(() => {
+    logger.log('[useGraphDataQuery] Real-time update triggered, refreshing data');
+    refreshDuckDBData();
+  }, [refreshDuckDBData]);
+
+  const handleRealtimeNotification = useCallback((notification: any) => {
+    logger.log('[useGraphDataQuery] Received notification:', notification);
+  }, []);
+
   // Integrate real-time data sync with WebSocket notifications
+  // TEMPORARILY DISABLED to fix subscription loop issue
   const { pendingUpdate } = useRealtimeDataSync({
-    enabled: true,
+    enabled: false, // DISABLED - causing rapid re-subscriptions
     debounceMs: 500, // Debounce rapid updates
-    onDataUpdate: () => {
-      logger.log('[useGraphDataQuery] Real-time update triggered, refreshing data');
-      refreshDuckDBData();
-    },
-    onNotification: (notification) => {
-      logger.log('[useGraphDataQuery] Received notification:', notification);
-    },
+    onDataUpdate: handleRealtimeDataUpdate,
+    onNotification: handleRealtimeNotification,
   });
 
   // Initial fetch and retry logic
