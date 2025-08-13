@@ -794,6 +794,26 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
       return () => clearTimeout(timer);
     }, [cosmographData?.nodes?.length]); // Only depend on data availability
     
+    // Manually trigger fitView after simulation settles (like old implementation)
+    useEffect(() => {
+      if (cosmographRef.current && cosmographData?.nodes?.length > 0 && config.fitViewOnInit !== false) {
+        // Wait for simulation to settle before fitting view
+        // Use simulationDecay time plus a buffer
+        const fitDelay = (config.fitViewDelay || 1500); // Default 1.5s to let simulation settle
+        
+        const fitTimer = setTimeout(() => {
+          if (cosmographRef.current?.fitView) {
+            cosmographRef.current.fitView(
+              config.fitViewDuration || 1000,
+              config.fitViewPadding !== undefined ? config.fitViewPadding : 0.2
+            );
+          }
+        }, fitDelay);
+        
+        return () => clearTimeout(fitTimer);
+      }
+    }, [cosmographData?.nodes?.length, config.fitViewOnInit, config.fitViewDelay, config.fitViewDuration, config.fitViewPadding]);
+    
     // Mark dataPreparation and canvas stages complete when cosmograph data is ready
     useEffect(() => {
       if (cosmographData && cosmographData.nodes?.length > 0) {
@@ -995,10 +1015,10 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
           renderSelectedNodesOnTop={config.renderSelectedNodesOnTop || false}
           pointsOnEdge={config.pointsOnEdge || false}
           // Layout and simulation - fitView configuration
-          fitViewOnInit={config.fitViewOnInit !== false}  // Default: true - auto-fit on initialization
-          fitViewDelay={config.fitViewDelay || 250}  // Default: 250ms - delay before fitting
-          fitViewPadding={config.fitViewPadding || 0.1}  // Default: 0.1 - padding around bounding box
-          fitViewDuration={config.fitViewDuration || 250}  // Default: 250ms - animation duration
+          fitViewOnInit={false}  // Disable automatic fitView to prevent simulation interruption (like old implementation)
+          // fitViewDelay={config.fitViewDelay || 500}  // Not needed when fitViewOnInit is false
+          fitViewPadding={config.fitViewPadding !== undefined ? config.fitViewPadding : 0.2}  // Default: 0.2 (20% padding) - normalized value 0-1
+          fitViewDuration={config.fitViewDuration || 1000}  // Default: 1000ms - animation duration
           simulationEnabled={!config.disableSimulation && config.simulationEnabled !== false}
           simulationGravity={config.gravity ?? config.simulationGravity ?? 0.1}
           simulationCenter={config.centerForce ?? config.simulationCenter ?? 0.0}

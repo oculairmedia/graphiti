@@ -200,10 +200,10 @@ const defaultDynamicConfig: DynamicConfig = {
   clusterBy: 'community',
   
   // Fit View configuration
-  fitViewOnInit: true,  // Auto-fit graph on initialization
-  fitViewDelay: 250,    // Delay before fitting (ms)
-  fitViewPadding: 0.1,  // Padding around bounding box (0-1)
-  fitViewDuration: 250, // Animation duration (ms)
+  fitViewOnInit: true,  // Auto-fit graph on initialization (manually triggered after delay)
+  fitViewDelay: 1500,   // Delay before fitting (ms) - allows simulation to settle
+  fitViewPadding: 0.2,  // Padding around bounding box (0-1, where 0.2 = 20% padding)
+  fitViewDuration: 1000, // Animation duration (ms)
   
   // Advanced rendering options
   renderLabels: true,
