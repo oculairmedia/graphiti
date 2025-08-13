@@ -223,13 +223,13 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
       getSelectedNodes: getSelectedNodesList
     } = useGraphSelection(nodes, links as any, {
       multiSelect: true,
-      onSelectionChange: (event) => {
+      onSelectionChange: useCallback((event) => {
         // Only handle node selection events
         if (onSelectNodes && event.target === 'node' && event.ids) {
           const selectedNodeObjects = nodes.filter(n => event.ids.includes(n.id));
           onSelectNodes(selectedNodeObjects);
         }
-      }
+      }, [onSelectNodes, nodes])
     });
     
     // WebSocket callbacks
