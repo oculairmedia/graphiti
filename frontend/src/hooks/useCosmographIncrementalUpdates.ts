@@ -5,7 +5,7 @@
  * Uses Cosmograph's built-in incremental update API for smooth, real-time updates.
  */
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useRef, useState, useEffect } from 'react';
 import type { GraphNode } from '../api/types';
 import type { GraphLink } from '../types/graph';
 import {
@@ -18,6 +18,10 @@ import {
   type CosmographPointInput,
   type CosmographLinkInput
 } from '../utils/cosmographTransformers';
+import {
+  CosmographDataPreparer,
+  getGlobalDataPreparer
+} from '../utils/cosmographDataPreparer';
 
 /**
  * Hook options
@@ -27,6 +31,11 @@ export interface UseCosmographIncrementalUpdatesOptions {
   onSuccess?: (operation: string, count: number) => void;
   debug?: boolean;
   fallbackToFullUpdate?: (nodes: GraphNode[], edges: GraphLink[]) => void;
+  config?: {
+    clusteringMethod?: string;
+    centralityMetric?: string;
+    clusterStrength?: number;
+  };
 }
 
 /**
@@ -54,11 +63,20 @@ export function useCosmographIncrementalUpdates(
     onError,
     onSuccess,
     debug = false,
-    fallbackToFullUpdate
+    fallbackToFullUpdate,
+    config = {}
   } = options;
 
   // Track node ID to index mapping
   const nodeIdToIndexRef = useRef<Map<string, number>>(new Map());
+  
+  // Data preparer for consistent data transformation
+  const dataPreparerRef = useRef<CosmographDataPreparer>(getGlobalDataPreparer(config));
+  
+  // Update config when it changes
+  useEffect(() => {
+    dataPreparerRef.current.updateConfig(config);
+  }, [config]);
   
   // Performance metrics
   const [metrics, setMetrics] = useState<IncrementalUpdateMetrics>({
@@ -98,12 +116,18 @@ export function useCosmographIncrementalUpdates(
   }, []);
 
   /**
-   * Initialize or rebuild the node ID to index map
+   * Initialize or rebuild the node ID to index map and data preparer
    */
-  const rebuildNodeIndexMap = useCallback(() => {
+  const rebuildNodeIndexMap = useCallback(async () => {
     nodeIdToIndexRef.current = buildNodeIdToIndexMap(currentNodes);
-    log(`Rebuilt node index map with ${nodeIdToIndexRef.current.size} nodes`);
-  }, [currentNodes, log]);
+    // Initialize data preparer with current graph data
+    try {
+      await dataPreparerRef.current.prepareInitialData(currentNodes, currentEdges);
+      log(`Rebuilt node index map with ${nodeIdToIndexRef.current.size} nodes`);
+    } catch (error) {
+      log('Failed to prepare initial data:', error);
+    }
+  }, [currentNodes, currentEdges, log]);
 
   /**
    * Apply node additions incrementally
@@ -115,15 +139,35 @@ export function useCosmographIncrementalUpdates(
     }
 
     try {
-      const startIndex = currentNodes.length;
-      const transformedNodes = transformNodesForCosmograph(nodes, startIndex);
+      // Use data preparer to ensure consistent transformation
+      const { nodes: sanitizedNodes } = await dataPreparerRef.current.prepareIncrementalData(nodes, []);
       
-      log(`Adding ${nodes.length} nodes starting at index ${startIndex}`);
-      await cosmographRef.current.addPoints(transformedNodes);
+      if (sanitizedNodes.length === 0) {
+        log('No new nodes to add');
+        return true;
+      }
+      
+      log(`Adding ${sanitizedNodes.length} nodes with sanitized data`);
+      
+      // Log sample for debugging
+      if (sanitizedNodes.length > 0) {
+        const sample = sanitizedNodes[0];
+        log('Sanitized node sample:', sample);
+        // Check for problematic fields
+        const hasArrays = Object.values(sample).some(v => Array.isArray(v));
+        const hasObjects = Object.values(sample).some(v => 
+          v !== null && typeof v === 'object' && !Array.isArray(v) && v !== sample.properties
+        );
+        if (hasArrays || hasObjects) {
+          console.warn('[useCosmographIncrementalUpdates] Node still has complex types!');
+        }
+      }
+      
+      await cosmographRef.current.addPoints(sanitizedNodes);
       
       // Update the index map
-      nodes.forEach((node, i) => {
-        nodeIdToIndexRef.current.set(node.id, startIndex + i);
+      sanitizedNodes.forEach((node) => {
+        nodeIdToIndexRef.current.set(node.id, node.index);
       });
       
       onSuccess?.('addNodes', nodes.length);
@@ -133,7 +177,7 @@ export function useCosmographIncrementalUpdates(
       onError?.(error as Error);
       return false;
     }
-  }, [cosmographRef, currentNodes.length, log, onSuccess, onError]);
+  }, [cosmographRef, log, onSuccess, onError]);
 
   /**
    * Apply node updates incrementally
@@ -199,19 +243,20 @@ export function useCosmographIncrementalUpdates(
     }
 
     try {
-      // Transform edges to ensure they have the required format
-      const transformedEdges = edges.map(edge => ({
-        source: edge.source || edge.from,
-        target: edge.target || edge.to,
-        // Don't include indices as Cosmograph will resolve them from IDs
-        weight: edge.weight || 1,
-        edge_type: edge.edge_type || 'default'
-      }));
+      // Use data preparer to ensure consistent transformation
+      const { links: sanitizedLinks } = await dataPreparerRef.current.prepareIncrementalData([], edges);
       
-      log(`Adding ${edges.length} edges`);
-      await cosmographRef.current.addLinks(transformedEdges);
+      if (sanitizedLinks.length === 0) {
+        log('No valid links to add');
+        return true; // Not an error, just no valid links
+      }
       
-      onSuccess?.('addEdges', edges.length);
+      log(`Adding ${sanitizedLinks.length} sanitized edges (from ${edges.length} input)`);
+      log('Sanitized link sample:', sanitizedLinks[0]);
+      
+      await cosmographRef.current.addLinks(sanitizedLinks);
+      
+      onSuccess?.('addEdges', sanitizedLinks.length);
       return true;
     } catch (error) {
       log('Failed to add edges:', error);
@@ -260,9 +305,9 @@ export function useCosmographIncrementalUpdates(
       return false;
     }
 
-    // Ensure node index map is initialized
-    if (nodeIdToIndexRef.current.size === 0) {
-      rebuildNodeIndexMap();
+    // Ensure node index map and data preparer are initialized
+    if (nodeIdToIndexRef.current.size === 0 || dataPreparerRef.current.getNodeCount() === 0) {
+      await rebuildNodeIndexMap();
     }
 
     let success = true;
@@ -346,6 +391,7 @@ export function useCosmographIncrementalUpdates(
    */
   const reset = useCallback(() => {
     nodeIdToIndexRef.current.clear();
+    dataPreparerRef.current.reset();
     setMetrics({
       totalUpdates: 0,
       successfulUpdates: 0,
