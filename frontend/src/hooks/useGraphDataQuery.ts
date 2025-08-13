@@ -7,6 +7,7 @@ import { useGraphDataDiff } from './useGraphDataDiff';
 import { useGraphConfig } from '../contexts/GraphConfigProvider';
 import { useDuckDB } from '../contexts/DuckDBProvider';
 import { useRustWebSocket } from '../contexts/RustWebSocketProvider';
+import { useRealtimeDataSync } from './useRealtimeDataSync';
 import { logger } from '../utils/logger';
 
 interface FilterConfig {
@@ -34,7 +35,6 @@ interface TransformedData {
 export function useGraphDataQuery() {
   const { config, updateNodeTypeConfigurations } = useGraphConfig();
   const { getDuckDBConnection, isInitialized: isDuckDBInitialized } = useDuckDB();
-  const { subscribe } = useRustWebSocket();
   
   // State for DuckDB-sourced UI data
   const [duckDBData, setDuckDBData] = useState<{ nodes: GraphNode[], edges: GraphLink[] } | null>(null);
@@ -276,18 +276,18 @@ export function useGraphDataQuery() {
     fetchDuckDBData(true);
   }, [fetchDuckDBData]);
 
-  // Subscribe to WebSocket updates and refresh data
-  useEffect(() => {
-    const unsubscribe = subscribe((update) => {
-      if (update.type === 'graph:delta' && update.data) {
-        // Delay refresh slightly to ensure DuckDB has been updated
-        console.log('[useGraphDataQuery] Received delta update, scheduling refresh');
-        setTimeout(refreshDuckDBData, 100);
-      }
-    });
-    
-    return unsubscribe;
-  }, [subscribe, refreshDuckDBData]);
+  // Integrate real-time data sync with WebSocket notifications
+  const { pendingUpdate } = useRealtimeDataSync({
+    enabled: true,
+    debounceMs: 500, // Debounce rapid updates
+    onDataUpdate: () => {
+      logger.log('[useGraphDataQuery] Real-time update triggered, refreshing data');
+      refreshDuckDBData();
+    },
+    onNotification: (notification) => {
+      logger.log('[useGraphDataQuery] Received notification:', notification);
+    },
+  });
 
   // Initial fetch and retry logic
   useEffect(() => {
@@ -664,5 +664,6 @@ export function useGraphDataQuery() {
     isGraphInitialized,
     stableDataRef,
     refreshDuckDBData,
+    pendingUpdate, // Indicates if a real-time update is pending
   };
 }

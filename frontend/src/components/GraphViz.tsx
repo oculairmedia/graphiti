@@ -104,6 +104,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
     setIsIncrementalUpdate,
     isGraphInitialized,
     stableDataRef,
+    pendingUpdate,
   } = useGraphDataQuery();
   
   const {
@@ -351,6 +352,16 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
 
           {/* Main Graph Viewport - Using refactored components */}
           <div className="flex-1 relative">
+            {/* Real-time update indicator */}
+            {pendingUpdate && (
+              <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-40">
+                <div className="bg-primary/90 text-primary-foreground px-4 py-2 rounded-lg shadow-lg flex items-center space-x-2">
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                  <span className="text-sm font-medium">Updating graph...</span>
+                </div>
+              </div>
+            )}
+            
             <LazyGraphCanvas
               ref={graphCanvasRef}
               nodes={dataToUse.nodes}
