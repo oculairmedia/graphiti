@@ -994,10 +994,11 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
           pixelationThreshold={config.pixelationThreshold || 0}
           renderSelectedNodesOnTop={config.renderSelectedNodesOnTop || false}
           pointsOnEdge={config.pointsOnEdge || false}
-          // Layout and simulation
-          fitViewOnInit={true}
-          fitViewDuration={1000}
-          fitViewPadding={50}
+          // Layout and simulation - fitView configuration
+          fitViewOnInit={config.fitViewOnInit !== false}  // Default: true - auto-fit on initialization
+          fitViewDelay={config.fitViewDelay || 250}  // Default: 250ms - delay before fitting
+          fitViewPadding={config.fitViewPadding || 0.1}  // Default: 0.1 - padding around bounding box
+          fitViewDuration={config.fitViewDuration || 250}  // Default: 250ms - animation duration
           simulationEnabled={!config.disableSimulation && config.simulationEnabled !== false}
           simulationGravity={config.gravity ?? config.simulationGravity ?? 0.1}
           simulationCenter={config.centerForce ?? config.simulationCenter ?? 0.0}
@@ -1022,19 +1023,9 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
             }
           }}
           onClick={(index?: number, pointPosition?: [number, number], event?: MouseEvent) => {
-            console.log('[GraphCanvasV2] Cosmograph onClick fired, index:', index, 'position:', pointPosition);
             if (typeof index === 'number' && index >= 0 && index < nodes.length) {
               const node = nodes[index];
-              console.log('[GraphCanvasV2] Found node at index', index, ':', node);
-              console.log('[GraphCanvasV2] Node properties:', node.properties);
-              console.log('[GraphCanvasV2] Centrality values:', {
-                degree_centrality: node.properties?.degree_centrality,
-                betweenness_centrality: node.properties?.betweenness_centrality,
-                pagerank_centrality: node.properties?.pagerank_centrality,
-                eigenvector_centrality: node.properties?.eigenvector_centrality
-              });
               if (node) {
-                console.log('[GraphCanvasV2] Calling onNodeClick with node:', node);
                 onNodeClick(node);
                 onNodeSelect(node.id);
               }
