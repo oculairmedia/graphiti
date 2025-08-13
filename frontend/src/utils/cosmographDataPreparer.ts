@@ -210,24 +210,33 @@ export function sanitizeLink(
     return null;
   }
   
-  // Build link with exactly the fields DuckDB expects
-  // Based on error "9 columns but 5 values", we need exactly 5 fields
-  const sanitizedLink: any = {
-    source: sourceId,
-    target: targetId,
-    edge_type: String(link.edge_type || 'default'),
-    sourceIndex: Number(sourceIndex),
-    targetIndex: Number(targetIndex)
-  };
+  // Build link with exactly 9 fields that DuckDB expects
+  // DuckDB created the links table with 9 columns, we must provide all 9
+  // The error "9 columns but 5 values" means we're only providing 5 non-null values
+  const sanitizedLink: any = {};
   
-  // These are the 5 core fields that actually get used
-  // Additional fields for DuckDB compatibility (may increase count to match schema)
-  sanitizedLink.sourceidx = Number(sourceIndex);
-  sanitizedLink.targetidx = Number(targetIndex);
+  // Core fields (these 5 are always provided in the error message)
+  sanitizedLink.source = sourceId;
+  sanitizedLink.target = targetId;
+  sanitizedLink.edge_type = String(link.edge_type || 'default');
+  sanitizedLink.sourceIndex = Number(sourceIndex);
+  sanitizedLink.targetIndex = Number(targetIndex);
+  
+  // Additional fields to reach 9 columns total
+  // These fields might be expected by DuckDB even if they seem redundant
   sanitizedLink.weight = Number(link.weight || 1);
   sanitizedLink.strength = Number(link.strength || 1);
+  // Add two more fields that Cosmograph might expect
+  // Looking at typical Cosmograph schemas, these could be:
+  sanitizedLink.id = link.id || `${sourceId}-${targetId}`;
+  sanitizedLink.timestamp = link.timestamp ? new Date(link.timestamp).getTime() : Date.now();
   
-  // This gives us exactly 9 fields to match the schema
+  // Verify we have exactly 9 fields
+  const fieldCount = Object.keys(sanitizedLink).length;
+  if (fieldCount !== 9) {
+    console.error(`[sanitizeLink] CRITICAL: DuckDB requires exactly 9 fields. Have ${fieldCount} fields:`, 
+      Object.keys(sanitizedLink));
+  }
   
   return sanitizedLink;
 }
