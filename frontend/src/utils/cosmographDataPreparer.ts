@@ -124,8 +124,8 @@ export function sanitizeNode(
   const sanitizedNode: any = {};
   
   if (isIncremental) {
-    // Incremental updates: provide exactly the fields DuckDB expects (11 fields)
-    // Based on error "14 columns but 11 values", these are the fields that actually get values:
+    // Incremental updates: provide exactly 14 fields to match DuckDB table schema
+    // The table was created with 14 columns, so we must provide all 14
     sanitizedNode.index = Number(index);
     sanitizedNode.id = String(node.id);
     sanitizedNode.label = String(node.label || node.name || node.id);
@@ -140,7 +140,12 @@ export function sanitizeNode(
     sanitizedNode.eigenvector_centrality = Number(sanitizedProperties.eigenvector_centrality || 0) + (Math.random() * epsilon);
     sanitizedNode.color = generateNodeTypeColor(node.node_type || 'Unknown', nodeTypeIndex);
     sanitizedNode.size = Number(node.size || 5);
-    // Exactly 11 fields - x, y, created_at_timestamp are omitted for incremental
+    // Add the missing 3 fields to match the 14-column schema
+    sanitizedNode.cluster = String(cluster);
+    sanitizedNode.clusterStrength = Number(config.clusterStrength ?? 0.7);
+    // created_at_timestamp is likely the 14th field (x and y are probably not in the DuckDB schema)
+    sanitizedNode.created_at_timestamp = node.created_at_timestamp ?? null;
+    // Total: 14 fields (index, id, label, node_type, summary, 4 centralities, color, size, cluster, clusterStrength, created_at_timestamp)
   } else {
     // Initial load: include all fields
     sanitizedNode.index = Number(index);
