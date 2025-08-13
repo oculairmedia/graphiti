@@ -265,8 +265,8 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
       triggerDeltaUpdate,
       getRecentEvents
     } = useGraphWebSocket({
-      enablePython: true,
-      enableRust: true,
+      enablePython: false,  // DISABLED - causing duplicate subscriptions
+      enableRust: false,    // DISABLED - causing duplicate subscriptions
       batchInterval: 100,
       onNodeAccess: handleNodeAccess,
       onGraphUpdate: handleGraphUpdate,
