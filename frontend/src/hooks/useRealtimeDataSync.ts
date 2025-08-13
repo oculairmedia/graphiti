@@ -24,6 +24,17 @@ export function useRealtimeDataSync({
   const [pendingUpdate, setPendingUpdate] = useState(false);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const updateCountRef = useRef(0);
+  const lastUpdateTimeRef = useRef(0);
+
+  // Store callbacks in refs to avoid recreating them
+  const onDataUpdateRef = useRef(onDataUpdate);
+  const onNotificationRef = useRef(onNotification);
+  
+  // Update refs when callbacks change
+  useEffect(() => {
+    onDataUpdateRef.current = onDataUpdate;
+    onNotificationRef.current = onNotification;
+  }, [onDataUpdate, onNotification]);
 
   // Debounced update handler to prevent too frequent refreshes
   const handleDataUpdate = useCallback(() => {
@@ -42,16 +53,17 @@ export function useRealtimeDataSync({
       
       logger.log('[useRealtimeDataSync] Triggering data refresh', {
         updateCount: updateCountRef.current,
-        timeSinceLastUpdate: now - lastUpdateTime,
+        timeSinceLastUpdate: now - (lastUpdateTimeRef.current || 0),
       });
 
+      lastUpdateTimeRef.current = now;
       setLastUpdateTime(now);
       setPendingUpdate(false);
       
-      // Trigger the data update callback
-      onDataUpdate?.();
+      // Trigger the data update callback using ref
+      onDataUpdateRef.current?.();
     }, debounceMs);
-  }, [debounceMs, lastUpdateTime, onDataUpdate]);
+  }, [debounceMs]); // Only depend on debounceMs
 
   // Subscribe to WebSocket notifications
   useEffect(() => {
@@ -65,7 +77,7 @@ export function useRealtimeDataSync({
       // Handle different update types
       if (update.type === 'graph:update' || update.type === 'graph:delta') {
         // Call the notification callback if provided
-        onNotification?.(update);
+        onNotificationRef.current?.(update);
 
         // Check if this is a notification (no data payload) or actual data
         const hasDataPayload = update.data?.nodes || update.data?.edges;
@@ -90,7 +102,7 @@ export function useRealtimeDataSync({
         clearTimeout(debounceTimerRef.current);
       }
     };
-  }, [enabled, isConnected]); // Remove unstable dependencies
+  }, [enabled, isConnected, subscribe, handleDataUpdate]); // Stable dependencies
 
   // Cleanup on unmount
   useEffect(() => {
