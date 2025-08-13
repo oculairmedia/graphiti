@@ -34,6 +34,12 @@ import { useCosmographIncrementalUpdates } from '../hooks/useCosmographIncrement
 import { useLoadingCoordinator } from '../contexts/LoadingCoordinator';
 import { ProgressiveLoadingOverlay } from './ProgressiveLoadingOverlay';
 import { useWebSocketContext } from '../contexts/WebSocketProvider';
+import { 
+  CosmographDataPreparer, 
+  getGlobalDataPreparer,
+  sanitizeNode,
+  sanitizeLink
+} from '../utils/cosmographDataPreparer';
 
 interface GraphLink {
   source: string;
@@ -255,6 +261,11 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
       links as GraphLink[],
       {
         debug: true,
+        config: {
+          clusteringMethod: config.clusteringMethod,
+          centralityMetric: config.centralityMetric,
+          clusterStrength: config.clusterStrength
+        },
         onError: (error) => {
           console.error('[GraphCanvasV2] Incremental update error:', error);
         },
@@ -447,55 +458,62 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
     
     // === 2. DATA PREPARATION ===
     
-    // Prepare data for Cosmograph
+    // Get global data preparer instance
+    const dataPreparerRef = useRef<CosmographDataPreparer>(getGlobalDataPreparer({
+      clusteringMethod: config.clusteringMethod,
+      centralityMetric: config.centralityMetric,
+      clusterStrength: config.clusterStrength
+    }));
+    
+    // Update preparer config when it changes
+    useEffect(() => {
+      dataPreparerRef.current.updateConfig({
+        clusteringMethod: config.clusteringMethod,
+        centralityMetric: config.centralityMetric,
+        clusterStrength: config.clusterStrength
+      });
+    }, [config.clusteringMethod, config.centralityMetric, config.clusterStrength]);
+    
+    // Prepare data for Cosmograph using unified preparer
     const cosmographData = useMemo(() => {
       if (!nodes || !links) {
         return { nodes: [], links: [] };
       }
       
-      // Transform nodes for Cosmograph - create a map for quick ID lookup
+      // Use the data preparer for consistent transformation
+      // This ensures both initial load and incremental updates use the same pipeline
+      const preparer = dataPreparerRef.current;
+      
+      // Prepare initial data synchronously (since we're in a useMemo)
+      // The prepareInitialData is async but we can use the synchronous sanitization
+      preparer.reset(); // Clear any previous state
+      
+      // Build node index map and sanitize nodes
       const nodeIdToIndex = new Map<string, number>();
+      const nodeTypeIndexMap = new Map<string, number>();
+      
       const transformedNodes = nodes.map((node, index) => {
         nodeIdToIndex.set(node.id, index);
         
-        return {
-          ...node,
-          index,
-          idx: index, // Add idx field for compatibility
-          size: node.size || 5,
-          label: node.label || node.name || node.id,
-          // Add clustering data based on clustering method
-          cluster: config.clusteringMethod === 'nodeType' 
-            ? String(node.node_type || 'Unknown')
-            : config.clusteringMethod === 'centrality'
-            ? String(Math.floor((node.properties?.[config.centralityMetric + '_centrality'] || 0) * 10))
-            : String(node.node_type || 'Unknown'),
-          clusterStrength: config.clusterStrength ?? 0.7 // Use configured strength or default
-        };
+        // Get or assign node type index for color generation
+        const nodeType = node.node_type || 'Unknown';
+        if (!nodeTypeIndexMap.has(nodeType)) {
+          nodeTypeIndexMap.set(nodeType, nodeTypeIndexMap.size);
+        }
+        
+        // Use the sanitizeNode function from cosmographDataPreparer
+        return sanitizeNode(node, index, {
+          clusteringMethod: config.clusteringMethod,
+          centralityMetric: config.centralityMetric,
+          clusterStrength: config.clusterStrength,
+          nodeTypeIndexMap
+        });
       });
       
-      // Transform links for Cosmograph - add source and target indices
-      const transformedLinks = links.map(link => {
-        const sourceIndex = nodeIdToIndex.get(link.source || link.from);
-        const targetIndex = nodeIdToIndex.get(link.target || link.to);
-        const sourceNode = sourceIndex !== undefined ? transformedNodes[sourceIndex] : null;
-        
-        return {
-          ...link,
-          source: link.source || link.from,
-          target: link.target || link.to,
-          sourceIndex: sourceIndex !== undefined ? sourceIndex : -1,
-          targetIndex: targetIndex !== undefined ? targetIndex : -1,
-          sourceidx: sourceIndex !== undefined ? sourceIndex : -1, // For DuckDB compatibility
-          targetidx: targetIndex !== undefined ? targetIndex : -1, // For DuckDB compatibility
-          weight: link.weight || 1,
-          edge_type: link.edge_type || 'default',
-          // Add centrality values for link width/opacity schemes
-          source_centrality: sourceNode?.properties?.degree_centrality || 0,
-          source_pagerank: sourceNode?.properties?.pagerank_centrality || 0,
-          source_betweenness: sourceNode?.properties?.betweenness_centrality || 0
-        };
-      }).filter(link => link.sourceIndex >= 0 && link.targetIndex >= 0); // Only keep valid links
+      // Transform links using sanitization
+      const transformedLinks = links
+        .map(link => sanitizeLink(link, nodeIdToIndex))
+        .filter(link => link !== null);
       
       return {
         nodes: transformedNodes,
