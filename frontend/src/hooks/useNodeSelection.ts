@@ -127,11 +127,6 @@ export function useNodeSelection(
   }, [addOptimisticHighlightedNodes]);
 
   const handleSelectNodes = useCallback((nodes: GraphNode[]) => {
-    // Select multiple nodes with Cosmograph visual effects
-    if (graphCanvasRef.current && typeof graphCanvasRef.current.selectNodes === 'function') {
-      graphCanvasRef.current.selectNodes(nodes);
-    }
-    
     // Update React state - for multiple selection, we'll select the first node for the modal
     // and add all to the selectedNodes array
     if (nodes.length > 0) {
@@ -139,23 +134,21 @@ export function useNodeSelection(
       const nodeIds = nodes.map(node => node.id);
       setSelectedNodes(nodeIds);
     }
-  }, [graphCanvasRef]);
+    
+    // Note: Don't call graphCanvasRef.current.selectNodes here as it's already
+    // being called from the onSelectionChange callback in GraphCanvasV2
+  }, []);
 
   const handleShowNeighbors = useCallback((nodeId: string) => {
-    console.log('[useNodeSelection] handleShowNeighbors called with nodeId:', nodeId);
-    
     // Ensure we have valid data
     if (!transformedData?.nodes || !transformedData?.links) {
       console.warn('[useNodeSelection] handleShowNeighbors: No data available');
       return;
     }
     
-    console.log('[useNodeSelection] Data available - nodes:', transformedData.nodes.length, 'links:', transformedData.links.length);
-    
     // Start with nodes to explore - if we have highlighted nodes, use all of them
     // Otherwise, just use the clicked node
     const nodesToExplore = highlightedNodes.length > 0 ? highlightedNodes : [nodeId];
-    console.log('[useNodeSelection] Nodes to explore:', nodesToExplore);
     const newNeighborIds = new Set<string>();
     
     // Find neighbors for all nodes we're exploring
@@ -182,14 +175,9 @@ export function useNodeSelection(
       const allHighlightedIds = [...new Set([...nodesToExplore, ...Array.from(newNeighborIds)])];
       setHighlightedNodes(allHighlightedIds);
       
-      // Select all highlighted nodes with visual effects - with safety check
-      const allHighlightedNodes = transformedData.nodes.filter(node => 
-        node?.id && allHighlightedIds.includes(node.id)
-      );
-      
-      if (graphCanvasRef.current && typeof graphCanvasRef.current.selectNodes === 'function') {
-        graphCanvasRef.current.selectNodes(allHighlightedNodes);
-      }
+      // Note: Visual selection is handled by the highlightedNodes state change
+      // Don't call graphCanvasRef.current.selectNodes here as it will trigger 
+      // onSelectionChange callback which will cause an infinite loop.
     }
   }, [highlightedNodes, transformedData, graphCanvasRef]);
 
