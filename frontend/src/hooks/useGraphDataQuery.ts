@@ -287,9 +287,8 @@ export function useGraphDataQuery() {
   }, []);
 
   // Integrate real-time data sync with WebSocket notifications
-  // TEMPORARILY DISABLED to fix subscription loop issue
   const { pendingUpdate } = useRealtimeDataSync({
-    enabled: false, // DISABLED - causing rapid re-subscriptions
+    enabled: true, // Re-enabled after fixing subscription issue
     debounceMs: 500, // Debounce rapid updates
     onDataUpdate: handleRealtimeDataUpdate,
     onNotification: handleRealtimeNotification,
