@@ -190,12 +190,13 @@ impl DeltaTracker {
 }
 
 fn nodes_equal(a: &Node, b: &Node) -> bool {
-    // Compare all relevant fields
+    // Compare only meaningful fields that indicate actual changes
+    // Ignore volatile fields like timestamps and centrality metrics
     a.id == b.id &&
     a.label == b.label &&
     a.node_type == b.node_type &&
     a.summary == b.summary &&
-    properties_equal_map(&a.properties, &b.properties)
+    properties_equal_meaningful(&a.properties, &b.properties)
 }
 
 fn edges_equal(a: &Edge, b: &Edge) -> bool {
@@ -205,7 +206,36 @@ fn edges_equal(a: &Edge, b: &Edge) -> bool {
     (a.weight - b.weight).abs() < 0.001 // Float comparison tolerance
 }
 
-fn properties_equal_map(a: &HashMap<String, serde_json::Value>, b: &HashMap<String, serde_json::Value>) -> bool {
-    // Deep comparison of HashMap properties
-    a == b
+fn properties_equal_meaningful(a: &HashMap<String, serde_json::Value>, b: &HashMap<String, serde_json::Value>) -> bool {
+    // Fields to ignore when comparing properties (volatile/computed fields)
+    const IGNORED_FIELDS: &[&str] = &[
+        "created_at",           // Timestamp might have formatting differences
+        "degree_centrality",    // Computed metric that might vary slightly
+        "pagerank_centrality",  // Computed metric that might vary slightly
+        "betweenness_centrality", // Computed metric that might vary slightly
+        "eigenvector_centrality", // Computed metric that might vary slightly
+    ];
+    
+    // Compare only meaningful properties
+    for (key, value_a) in a {
+        // Skip ignored fields
+        if IGNORED_FIELDS.contains(&key.as_str()) {
+            continue;
+        }
+        
+        // Check if the key exists in b and has the same value
+        match b.get(key) {
+            Some(value_b) if value_a == value_b => continue,
+            _ => return false,
+        }
+    }
+    
+    // Check for keys in b that aren't in a (excluding ignored fields)
+    for key in b.keys() {
+        if !IGNORED_FIELDS.contains(&key.as_str()) && !a.contains_key(key) {
+            return false;
+        }
+    }
+    
+    true
 }
