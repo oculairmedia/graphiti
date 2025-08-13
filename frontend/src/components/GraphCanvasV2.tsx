@@ -627,13 +627,17 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
     
     // === 4. EFFECTS ===
     
-    // Log component lifecycle
+    // Log component lifecycle and cleanup
     useEffect(() => {
       console.log(`[GraphCanvasV2 #${instanceId.current}] Component mounted`);
       return () => {
         console.log(`[GraphCanvasV2 #${instanceId.current}] Component unmounting`);
+        // Notify parent that context is no longer ready
+        if (onContextReady) {
+          onContextReady(false);
+        }
       };
-    }, []);
+    }, [onContextReady]);
     
     // Note: Data is already initialized from props in useGraphDataManagement hook
     // We don't need to update it again here as it causes infinite loops
@@ -670,12 +674,13 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
       updateStatistics(nodes, links, 'full');
     }, [nodes, links]);
     
-    // Notify when context is ready
+    // Notify when context is ready - check both canvas ready and data availability
     useEffect(() => {
-      if (onContextReady) {
-        onContextReady(isReady && isCanvasReady);
+      if (onContextReady && isReady && isCanvasReady && cosmographRef.current && cosmographData?.nodes?.length > 0) {
+        console.log('[GraphCanvasV2] All conditions met, notifying parent context is ready');
+        onContextReady(true);
       }
-    }, [isReady, isCanvasReady, onContextReady]);
+    }, [isReady, isCanvasReady, cosmographData?.nodes?.length, onContextReady]);
     
     // Mark dataPreparation and canvas stages complete when cosmograph data is ready
     useEffect(() => {
@@ -818,6 +823,12 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
             console.log('[GraphCanvasV2] Cosmograph ready');
             setIsReady(true);
             setIsCanvasReady(true);
+            
+            // Check if we have data and notify parent that everything is ready
+            if (cosmographRef.current && cosmographData && cosmographData.nodes.length > 0) {
+              console.log('[GraphCanvasV2] Context and data ready, timeline can now render');
+              onContextReady?.(true);
+            }
           }}
           onClick={(node: any) => {
             if (node) {
