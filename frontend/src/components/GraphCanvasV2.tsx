@@ -41,6 +41,7 @@ import {
   sanitizeLink
 } from '../utils/cosmographDataPreparer';
 import { inspectCosmographSchema, attachSchemaDebugger, isSchemaDebuggingEnabled } from '../utils/debugCosmographSchema';
+import { inspectDuckDBSchema } from '../utils/inspectDuckDBSchema';
 
 // GraphLink is now imported from '../types/graph'
 
@@ -765,6 +766,14 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
       
       return () => clearTimeout(timeout);
     }, [glowingNodes]);
+    
+    // Expose DuckDB schema inspector for debugging
+    useEffect(() => {
+      if (typeof window !== 'undefined') {
+        (window as any).inspectDuckDBSchema = inspectDuckDBSchema;
+        (window as any).cosmographRef = cosmographRef;
+      }
+    }, []);
     
     // Subscribe to WebSocket events for node access highlighting
     useEffect(() => {
