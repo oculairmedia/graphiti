@@ -7,7 +7,7 @@ import type { GraphCanvasRef } from './GraphCanvas';
 // Lazy load the heavy GraphCanvas component
 // TODO: Switch back to GraphCanvasV2 after fixing infinite loop issue
 const GraphCanvas = React.lazy(() => 
-  import('./GraphCanvas')
+  import('./GraphCanvas').then(module => ({ default: module.GraphCanvas }))
 );
 
 // Loading placeholder that matches the graph canvas appearance
