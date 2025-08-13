@@ -122,7 +122,13 @@ export function useCosmographIncrementalUpdates(
     nodeIdToIndexRef.current = buildNodeIdToIndexMap(currentNodes);
     // Initialize data preparer with current graph data
     try {
-      await dataPreparerRef.current.prepareInitialData(currentNodes, currentEdges);
+      const result = await dataPreparerRef.current.prepareInitialData(currentNodes, currentEdges);
+      // Update the local node index from the preparer's data
+      if (result?.data?.nodes) {
+        result.data.nodes.forEach((node: any) => {
+          nodeIdToIndexRef.current.set(node.id, node.index);
+        });
+      }
       log(`Rebuilt node index map with ${nodeIdToIndexRef.current.size} nodes`);
     } catch (error) {
       log('Failed to prepare initial data:', error);
@@ -140,7 +146,7 @@ export function useCosmographIncrementalUpdates(
 
     try {
       // Use data preparer to ensure consistent transformation
-      const { nodes: sanitizedNodes } = await dataPreparerRef.current.prepareIncrementalData(nodes, []);
+      const { nodes: sanitizedNodes, links: _ } = await dataPreparerRef.current.prepareIncrementalData(nodes, []);
       
       if (sanitizedNodes.length === 0) {
         log('No new nodes to add');
