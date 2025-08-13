@@ -165,8 +165,20 @@ export function useGraphWebSocket(config: UseGraphWebSocketConfig = {}) {
   } = config;
 
   // Get WebSocket contexts (may be null if not provided)
-  const pythonWs = enablePython ? useWebSocketContext() : null;
-  const rustWs = enableRust ? useRustWebSocket() : null;
+  let pythonWs = null;
+  let rustWs = null;
+  
+  try {
+    pythonWs = enablePython ? useWebSocketContext() : null;
+  } catch (e) {
+    console.warn('[useGraphWebSocket] Python WebSocket context not available:', e);
+  }
+  
+  try {
+    rustWs = enableRust ? useRustWebSocket() : null;
+  } catch (e) {
+    console.warn('[useGraphWebSocket] Rust WebSocket context not available:', e);
+  }
 
   // Connection status
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>({
