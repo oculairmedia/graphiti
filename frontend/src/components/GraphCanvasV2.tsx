@@ -456,8 +456,8 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
       ['--cosmograph-border-color' as any]: 'rgba(0,0,0,0.5)',
       width: '100%',
       height: '100%',
-      position: 'absolute' as const,
-      inset: 0,
+      position: 'relative' as const,  // Changed from absolute to relative
+      // Removed inset: 0 which was making it cover everything
     };
     
     // === 3. IMPERATIVE HANDLE ===
