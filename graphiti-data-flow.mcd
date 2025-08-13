@@ -1,112 +1,139 @@
 graph TD
-    %% Data Sources
-    subgraph "Data Sources"
-        API[Rust GraphQL API<br/>graphClient.getGraphData]
-        WS[WebSocket<br/>ws://localhost:3000/ws]
-        DuckDB[(DuckDB<br/>Arrow Tables)]
-        StaticHTML[Static HTML Files<br/>cosmos.html, cosmograph.html]
+    %% V2 Data Sources
+    subgraph "V2 Data Sources"
+        FalkorDB[(FalkorDB<br/>Primary Graph Database)]
+        PythonAPI[Python API Server<br/>port 8003<br/>Graphiti Core]
+        RustBackend[Rust Backend Server<br/>port 3000<br/>Data & Visualization]
+        DuckDBCache[(DuckDB Cache<br/>Arrow Tables<br/>Performance Layer)]
     end
 
-    %% Data Fetching Hooks
-    subgraph "Data Fetching Layer"
-        useGraphDataQuery[useGraphDataQuery Hook<br/>- Fetches from API<br/>- Manages DuckDB data<br/>- Progressive loading]
-        useGraphData[useGraphData Hook<br/>- Caching with TTL<br/>- Error handling<br/>- Incremental updates]
-        useGraphDelta[useGraphDelta Hook<br/>- WebSocket deltas<br/>- Real-time updates]
-        useDuckDB[useDuckDB Hook<br/>- Arrow table queries<br/>- SELECT * FROM nodes/edges]
+    %% V2 Real-time Pipeline
+    subgraph "V2 Notification System"
+        Webhook[Webhook Trigger<br/>Python API → Rust<br/>/api/webhooks/data-ingestion]
+        NotificationWS[WebSocket Notifications<br/>ws://localhost:3000/ws<br/>Notification-only (no data)]
+        CacheInvalidation[Cache Invalidation<br/>Clear DuckDB & HTTP caches<br/>Force fresh data]
     end
 
-    %% Data Processing
-    subgraph "Data Processing"
-        DataTransform[Data Transformation<br/>transformNodes/transformLinks<br/>- Add indices<br/>- Normalize properties<br/>- Calculate centrality]
-        GraphProcessor[Graph Processor Worker<br/>- Background processing<br/>- Statistics calculation<br/>- Index mapping]
-        DataManager[GraphDataManager<br/>- State management<br/>- Validation<br/>- Memory optimization]
+    %% V2 Frontend Hooks
+    subgraph "V2 Frontend Layer"
+        useGraphDataV2[useGraphData Hook V2<br/>- HTTP API fetching<br/>- TTL caching<br/>- Manual refresh capability]
+        useNotificationRefresh[useNotificationRefresh Hook<br/>- WebSocket listener<br/>- Debounced refresh<br/>- Rate limiting]
+        useGraphDeltaV2[useGraphDelta Hook V2<br/>- Notification subscription<br/>- Connection management<br/>- ❌ NO delta processing]
     end
 
-    %% GraphCanvas Variants
-    subgraph "GraphCanvas Components"
-        MainGraphCanvas[GraphCanvas.tsx<br/>Main Implementation<br/>- 3500+ lines<br/>- Full featured]
-        RefactoredCanvas[graph-refactored/GraphCanvas.tsx<br/>- Thin orchestration layer<br/>- Uses specialized components]
-        OptimizedCanvas[GraphCanvasOptimized.tsx<br/>- Memory leak prevention<br/>- Performance monitoring]
+    %% V2 Data Processing
+    subgraph "V2 Data Processing"
+        DataTransformV2[Data Transformation V2<br/>transformNodes/transformLinks<br/>- Optimized memory usage<br/>- Single source of truth<br/>- No redundant copies]
+        GraphDataManagerV2[GraphDataManager V2<br/>- Unified state management<br/>- DuckDB integration<br/>- ❌ Missing notification integration]
+        BackendCaching[Backend Data Caching<br/>- HTTP response caching<br/>- Arrow table caching<br/>- Cache invalidation on updates]
     end
 
-    %% Data Flow to Cosmograph
-    subgraph "Cosmograph Integration"
-        CosmographData[Cosmograph Data Format<br/>pointsData & linksData]
-        CosmographComponent[Cosmograph Component<br/>- points={pointsData}<br/>- links={linksData}<br/>- Configuration props]
-        DuckDBTables[DuckDB Arrow Tables<br/>Direct table passing<br/>when useDuckDBTables=true]
+    %% V2 GraphCanvas Components (Current Active)
+    subgraph "V2 Active Components"
+        GraphCanvasV2[GraphCanvasV2.tsx<br/>✅ ACTIVE COMPONENT<br/>- Optimized architecture<br/>- Memory management<br/>- ❌ Missing notification integration]
+        GraphDataManagerComp[GraphDataManager Component<br/>- Data state management<br/>- DuckDB integration<br/>- ❌ No auto-refresh]
+        LazyGraphCanvas[LazyGraphCanvas.tsx<br/>- Lazy loading wrapper<br/>- Performance optimization]
     end
 
-    %% Data Flow Connections
-    API --> useGraphDataQuery
-    WS --> useGraphDelta
-    DuckDB --> useDuckDB
-    StaticHTML --> CosmographComponent
-
-    useGraphDataQuery --> DataTransform
-    useGraphData --> DataTransform
-    useGraphDelta --> DataManager
-    useDuckDB --> DuckDBTables
-
-    DataTransform --> GraphProcessor
-    GraphProcessor --> DataManager
-    DataManager --> MainGraphCanvas
-    DataManager --> RefactoredCanvas
-    DataManager --> OptimizedCanvas
-
-    MainGraphCanvas --> CosmographData
-    RefactoredCanvas --> CosmographData
-    OptimizedCanvas --> CosmographData
-
-    CosmographData --> CosmographComponent
-    DuckDBTables --> CosmographComponent
-
-    %% Key Data Structures
-    subgraph "Data Structures"
-        NodeStructure[GraphNode<br/>- id: string<br/>- label: string<br/>- node_type: string<br/>- properties: object<br/>- centrality metrics]
-        LinkStructure[GraphLink<br/>- source: string<br/>- target: string<br/>- sourceIndex: number<br/>- targetIndex: number<br/>- edge_type: string<br/>- weight: number]
-        TransformedNode[TransformedNode<br/>- index: number<br/>- created_at_timestamp<br/>- degree_centrality<br/>- pagerank_centrality<br/>- betweenness_centrality]
+    %% V2 Legacy Components (Unused)
+    subgraph "V2 Legacy Components (Not Used)"
+        OldGraphCanvas[GraphCanvas.tsx<br/>❌ LEGACY - NOT USED<br/>- 3500+ lines<br/>- Delta processing<br/>- Memory issues]
+        DeltaProcessor[DeltaProcessor.tsx<br/>❌ NOT USED<br/>- Complex delta handling<br/>- Not integrated]
     end
 
-    DataTransform --> NodeStructure
-    DataTransform --> LinkStructure
-    NodeStructure --> TransformedNode
-    TransformedNode --> CosmographData
-    LinkStructure --> CosmographData
-
-    %% Configuration Flow
-    subgraph "Configuration"
-        GraphConfig[useGraphConfig<br/>- Point color/size mapping<br/>- Link width configuration<br/>- Clustering settings]
-        DataKitConfig[DataKit Configuration<br/>- pointIdBy: 'id'<br/>- pointIndexBy: 'index'<br/>- linkSourceBy: 'source'<br/>- linkTargetBy: 'target']
+    %% V2 Cosmograph Integration
+    subgraph "V2 Cosmograph Integration"
+        CosmographDataV2[Cosmograph Data V2<br/>Optimized pointsData & linksData<br/>Single transformation]
+        CosmographComponentV2[Cosmograph Component V2<br/>- Efficient rendering<br/>- Memory optimized<br/>- No incremental updates]
+        DuckDBTablesV2[DuckDB Arrow Tables V2<br/>High-performance data<br/>Direct Arrow integration]
     end
 
-    GraphConfig --> DataKitConfig
-    DataKitConfig --> CosmographComponent
+    %% V2 Data Flow Connections (Working Path)
+    FalkorDB --> PythonAPI
+    PythonAPI --> Webhook
+    Webhook --> RustBackend
+    RustBackend --> DuckDBCache
+    RustBackend --> CacheInvalidation
+    CacheInvalidation --> NotificationWS
 
-    %% Parent Components (Examples)
-    subgraph "Parent Components"
-        AppComponent[App Component<br/>- Passes nodes/links props<br/>- Event handlers]
-        GraphContainer[GraphContainer<br/>- Data fetching wrapper<br/>- Theme management]
-        ExampleComponents[Example Components<br/>- RefactoredGraphExample<br/>- Static data examples]
+    %% V2 Frontend Data Flow (Working)
+    RustBackend --> useGraphDataV2
+    useGraphDataV2 --> DataTransformV2
+    DataTransformV2 --> GraphDataManagerV2
+    GraphDataManagerV2 --> GraphCanvasV2
+    GraphCanvasV2 --> CosmographDataV2
+    CosmographDataV2 --> CosmographComponentV2
+
+    %% V2 Notification Flow (BROKEN)
+    NotificationWS -.-> useGraphDeltaV2
+    useGraphDeltaV2 -.-> useNotificationRefresh
+    useNotificationRefresh -.-> useGraphDataV2
+
+    %% V2 DuckDB Integration
+    DuckDBCache --> DuckDBTablesV2
+    DuckDBTablesV2 --> CosmographComponentV2
+
+    %% V2 Key Data Structures
+    subgraph "V2 Data Structures"
+        NodeStructureV2[GraphNode V2<br/>- Optimized structure<br/>- Memory efficient<br/>- Single source of truth]
+        LinkStructureV2[GraphLink V2<br/>- Optimized relationships<br/>- Efficient indexing<br/>- No redundant copies]
+        NotificationStructure[Notification Structure<br/>- type: 'data:updated'<br/>- timestamp: number<br/>- changes: object<br/>- NO DATA PAYLOAD]
     end
 
-    AppComponent --> MainGraphCanvas
-    GraphContainer --> RefactoredCanvas
-    ExampleComponents --> RefactoredCanvas
+    %% V2 Configuration Flow
+    subgraph "V2 Configuration"
+        GraphConfigV2[V2 Graph Configuration<br/>- Optimized rendering<br/>- Memory management<br/>- Performance settings]
+        CosmographConfigV2[V2 Cosmograph Config<br/>- Efficient data binding<br/>- Optimized rendering<br/>- Memory leak prevention]
+    end
 
-    %% Styling
-    classDef dataSource fill:#e1f5fe
-    classDef hook fill:#f3e5f5
-    classDef processing fill:#fff3e0
-    classDef component fill:#e8f5e8
-    classDef structure fill:#fce4ec
-    classDef config fill:#f1f8e9
+    %% V2 Issue Indicators
+    subgraph "V2 Issues (To Fix)"
+        BrokenNotification[❌ BROKEN<br/>Notification → Refresh<br/>Integration Missing]
+        MissingAutoRefresh[❌ MISSING<br/>Auto-refresh on<br/>Notification Receipt]
+        UnusedWebSocket[❌ UNUSED<br/>WebSocket Connected<br/>But Ignored]
+    end
 
-    class API,WS,DuckDB,StaticHTML dataSource
-    class useGraphDataQuery,useGraphData,useGraphDelta,useDuckDB hook
-    class DataTransform,GraphProcessor,DataManager processing
-    class MainGraphCanvas,RefactoredCanvas,OptimizedCanvas,CosmographComponent component
-    class NodeStructure,LinkStructure,TransformedNode,CosmographData,DuckDBTables structure
-    class GraphConfig,DataKitConfig config
+    DataTransformV2 --> NodeStructureV2
+    DataTransformV2 --> LinkStructureV2
+    NodeStructureV2 --> CosmographDataV2
+    LinkStructureV2 --> CosmographDataV2
+    NotificationWS --> NotificationStructure
+    NotificationStructure --> BrokenNotification
+
+    GraphConfigV2 --> CosmographConfigV2
+    CosmographConfigV2 --> CosmographComponentV2
+
+    %% V2 Parent Components (Current Active)
+    subgraph "V2 Active Parent Components"
+        IndexPage[Index.tsx<br/>✅ ACTIVE<br/>Main application page]
+        GraphViz[GraphViz.tsx<br/>✅ ACTIVE<br/>Graph visualization wrapper]
+        LazyWrapper[LazyGraphCanvas.tsx<br/>✅ ACTIVE<br/>Lazy loading wrapper]
+    end
+
+    %% V2 Example Components
+    subgraph "V2 Example Components"
+        RefactoredExample[RefactoredGraphExample.tsx<br/>- V2 architecture demo<br/>- Advanced usage patterns]
+        StaticExamples[Static Examples<br/>- Test data<br/>- Development demos]
+    end
+
+    IndexPage --> GraphViz
+    GraphViz --> LazyWrapper
+    LazyWrapper --> GraphCanvasV2
+    RefactoredExample --> GraphCanvasV2
+
+    %% V2 Styling
+    classDef v2Active fill:#4caf50,color:#fff
+    classDef v2Legacy fill:#f44336,color:#fff
+    classDef v2Working fill:#2196f3,color:#fff
+    classDef v2Broken fill:#ff9800,color:#fff
+    classDef v2Missing fill:#9c27b0,color:#fff
+
+    class FalkorDB,PythonAPI,RustBackend,DuckDBCache v2Working
+    class Webhook,NotificationWS,CacheInvalidation v2Working
+    class useGraphDataV2,GraphCanvasV2,CosmographComponentV2 v2Active
+    class OldGraphCanvas,DeltaProcessor v2Legacy
+    class BrokenNotification,MissingAutoRefresh,UnusedWebSocket v2Broken
+    class useNotificationRefresh v2Missing
 
     %% Key Implementation Notes
     subgraph "Implementation Details"
