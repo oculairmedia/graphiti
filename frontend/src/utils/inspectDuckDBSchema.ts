@@ -4,11 +4,11 @@
  */
 
 export async function inspectDuckDBSchema() {
-  // Get Cosmograph instance from the DOM
-  const cosmographElement = document.querySelector('[data-cosmograph]') as any;
-  const cosmograph = cosmographElement?.__cosmograph || 
-                    window['cosmographRef']?.current ||
-                    document.querySelector('.cosmograph-container')?.__cosmograph;
+  // Get Cosmograph instance from the DOM or window
+  const cosmograph = window['cosmographRef']?.current ||
+                    document.querySelector('[data-cosmograph]')?.__cosmograph || 
+                    document.querySelector('.cosmograph-container')?.__cosmograph ||
+                    (document.querySelector('canvas') as any)?._cosmograph;
   
   if (!cosmograph) {
     console.error('Could not find Cosmograph instance');
@@ -75,7 +75,43 @@ export async function inspectDuckDBSchema() {
   }
 }
 
-// Make it available globally for browser console
+/**
+ * Compare what we're sending vs what DuckDB expects
+ */
+export function compareSchemaWithData(sampleLink: any) {
+  console.log('=== LINK DATA ANALYSIS ===');
+  console.log('Fields we are sending:', Object.keys(sampleLink));
+  console.log('Field count:', Object.keys(sampleLink).length);
+  
+  console.log('\nField values:');
+  Object.entries(sampleLink).forEach(([key, value]) => {
+    console.log(`  ${key}: ${value} (${typeof value})`);
+  });
+  
+  // Check for nulls
+  const nullFields = Object.entries(sampleLink)
+    .filter(([_, v]) => v === null || v === undefined)
+    .map(([k]) => k);
+  
+  if (nullFields.length > 0) {
+    console.log('\nNULL/UNDEFINED fields:', nullFields);
+  }
+  
+  // DuckDB only counts non-null values
+  const nonNullCount = Object.values(sampleLink)
+    .filter(v => v !== null && v !== undefined).length;
+  console.log('\nNon-null field count:', nonNullCount);
+  
+  console.log('\nDuckDB says: "table has 9 columns but 5 values were supplied"');
+  console.log('This means DuckDB only sees 5 non-null values out of our', nonNullCount, 'non-null fields');
+  console.log('Possible reasons:');
+  console.log('1. Some fields are being filtered out before reaching DuckDB');
+  console.log('2. DuckDB expects different field names');
+  console.log('3. Type conversion is failing for some fields');
+}
+
+// Make them available globally for browser console
 if (typeof window !== 'undefined') {
   (window as any).inspectDuckDBSchema = inspectDuckDBSchema;
+  (window as any).compareSchemaWithData = compareSchemaWithData;
 }
