@@ -74,11 +74,6 @@ export const QueryControlsTab: React.FC<QueryControlsTabProps> = ({
                 onChange={(e) => onSearchTermChange?.(e.target.value)}
                 placeholder="Enter search term..."
                 className="h-8 bg-secondary/30"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    onRefreshGraph();
-                  }
-                }}
               />
             </div>
           )}

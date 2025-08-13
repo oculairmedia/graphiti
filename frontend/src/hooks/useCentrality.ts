@@ -65,6 +65,7 @@ export function useNodeCentralityWithFallback(
   
   // Try direct centrality values first (from transformed node)
   if (nodeCentrality) {
+    console.log('[useCentrality] Using nodeCentrality:', nodeCentrality);
     const directCentrality: CentralityMetrics = {
       degree: Number(nodeCentrality.degree_centrality || 0),
       betweenness: Number(nodeCentrality.betweenness_centrality || 0),
@@ -72,6 +73,7 @@ export function useNodeCentralityWithFallback(
       eigenvector: Number(nodeCentrality.eigenvector_centrality || 0),
     };
     
+    console.log('[useCentrality] Direct centrality values:', directCentrality);
     return {
       centrality: directCentrality,
       isLoading: false,
@@ -81,6 +83,7 @@ export function useNodeCentralityWithFallback(
   
   // Fall back to properties
   if (nodeProperties) {
+    console.log('[useCentrality] Using nodeProperties:', nodeProperties);
     const fallbackCentrality: CentralityMetrics = {
       degree: Number(nodeProperties.degree_centrality || 0),
       betweenness: Number(nodeProperties.betweenness_centrality || 0),
@@ -88,6 +91,7 @@ export function useNodeCentralityWithFallback(
       eigenvector: Number(nodeProperties.eigenvector_centrality || 0),
     };
     
+    console.log('[useCentrality] Fallback centrality values:', fallbackCentrality);
     return {
       centrality: fallbackCentrality,
       isLoading: false,

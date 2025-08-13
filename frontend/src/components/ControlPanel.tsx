@@ -118,6 +118,13 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
   };
 
   const handleRefreshGraph = async (): Promise<void> => {
+    // Only refresh for non-search query types
+    if (config.queryType === 'search') {
+      // For search mode, don't reload the graph
+      // The search functionality in GraphSearch handles node highlighting
+      return;
+    }
+    
     setIsRefreshing(true);
     try {
       // Trigger a refresh through window reload or other mechanism

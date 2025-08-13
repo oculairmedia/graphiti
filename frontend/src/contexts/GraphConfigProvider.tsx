@@ -131,10 +131,17 @@ const defaultStableConfig: StableConfig = {
   borderWidth: 2,
   
   // Labels
+  labelBy: 'label',  // Default field for label text
   labelColor: '#FFFFFF',
   hoveredLabelColor: '#FFFFFF',
   labelSize: 12,
   labelOpacity: 0.8,
+  labelVisibilityThreshold: 0.5,
+  labelFontWeight: 400,
+  labelBackgroundColor: 'rgba(0,0,0,0.7)',
+  hoveredLabelSize: 14,
+  hoveredLabelFontWeight: 600,
+  hoveredLabelBackgroundColor: 'rgba(0,0,0,0.9)',
   
   // Visual defaults
   colorScheme: 'by-type',

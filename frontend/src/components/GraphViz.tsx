@@ -5,11 +5,11 @@ import { useGraphConfig } from '../contexts/GraphConfigProvider';
 import { ControlPanel } from './ControlPanel';
 import { LazyGraphCanvas } from './LazyGraphCanvas';
 import { LayoutPanel } from './LayoutPanel';
-import { logger } from '../utils/logger';
 
 // Lazy load modal panels
 const FilterPanel = React.lazy(() => import('./FilterPanel').then(m => ({ default: m.FilterPanel })));
 const StatsPanel = React.lazy(() => import('./StatsPanel').then(m => ({ default: m.StatsPanel })));
+const NodeDetailsPanel = React.lazy(() => import('./NodeDetailsPanel').then(m => ({ default: m.NodeDetailsPanel })));
 import { GraphNavBar } from './GraphNavBar';
 
 // Lazy load heavy components
@@ -25,14 +25,6 @@ import { getErrorMessage } from '../types/errors';
 
 export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
   // Component rendering
-  
-  // Debug component lifecycle
-  useEffect(() => {
-    console.log('[GraphViz] Component mounted');
-    return () => {
-      console.log('[GraphViz] Component unmounting');
-    };
-  }, []);
   
   const { applyLayout, zoomIn, zoomOut, fitView } = useGraphConfig();
   
@@ -66,7 +58,6 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
 
   // Handle context ready state from GraphCanvas
   const handleContextReady = useCallback((ready: boolean) => {
-    console.log('[GraphViz] Cosmograph context ready:', ready);
     setIsContextReady(ready);
   }, []);
 
@@ -448,7 +439,6 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
                 onScreenshot={handleCaptureScreenshot}
                 onTimeRangeChange={(range) => {
                   // Handle timeline range changes
-                  logger.log('Timeline range changed:', range);
                 }}
                 className=""
               />
@@ -468,6 +458,29 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
             <div className="h-full bg-background/80 backdrop-blur-sm border-t border-border flex items-center justify-center">
               <div className="text-muted-foreground">Initializing timeline...</div>
             </div>
+          </div>
+        )}
+        
+        {/* Node Details Panel - Show when a node is selected (rendered last to be on top) */}
+        {selectedNode && (
+          <div 
+            className="absolute z-[9999]" 
+            style={{ 
+              top: '80px', // Below the nav bar
+              right: rightPanelCollapsed ? '60px' : '340px', // Adjust based on right panel
+              maxHeight: 'calc(100vh - 280px)', // Leave space for nav and timeline
+              pointerEvents: 'auto',
+              transition: 'right 0.3s ease-in-out'
+            }}
+          >
+            <React.Suspense fallback={<div className="w-96 h-96 bg-background/80 backdrop-blur-sm rounded-lg animate-pulse" />}>
+              <NodeDetailsPanel
+                node={selectedNode}
+                connections={selectedNode.connections}
+                onClose={() => clearAllSelections()}
+                onShowNeighbors={handleShowNeighbors}
+              />
+            </React.Suspense>
           </div>
         )}
       </div>
