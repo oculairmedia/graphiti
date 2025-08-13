@@ -246,7 +246,7 @@ export function useGraphDataQuery() {
   // Initial fetch and retry logic
   useEffect(() => {
     // Always try to fetch on mount if DuckDB is ready
-    if (isDuckDBInitialized && !duckDBData) {
+    if (isDuckDBInitialized && !hasFetchedDuckDBRef.current) {
       console.log('[useGraphDataQuery] DuckDB initialized, fetching data');
       fetchDuckDBData(true); // Fetch when DuckDB is ready
     }
@@ -270,7 +270,8 @@ export function useGraphDataQuery() {
         clearInterval(intervalId);
       }
     };
-  }, [isDuckDBInitialized, fetchDuckDBData]); // Re-run when DuckDB becomes initialized or fetchDuckDBData changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isDuckDBInitialized]); // Only depend on isDuckDBInitialized, not fetchDuckDBData
   
   // Use DuckDB data if available, otherwise fall back to JSON data
   // Memoize the data to prevent unnecessary recalculations
