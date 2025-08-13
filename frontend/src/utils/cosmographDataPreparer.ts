@@ -210,33 +210,23 @@ export function sanitizeLink(
     return null;
   }
   
-  // CRITICAL: DuckDB table was created with 9 columns from previous runs
-  // Even though Cosmograph only uses 5 fields, we must provide all 9
-  // to match the existing table schema
+  // Cosmograph's addLinks only passes these 5 fields to DuckDB:
+  // source, target, sourceIndex, targetIndex, edge_type
+  // Any other fields are filtered out internally
   
   const sanitizedLink: any = {};
   
-  // The 5 fields Cosmograph actually uses
+  // Provide ONLY the 5 fields that Cosmograph will pass to DuckDB
   sanitizedLink.source = String(sourceId);
   sanitizedLink.target = String(targetId);
   sanitizedLink.sourceIndex = Number(sourceIndex);
   sanitizedLink.targetIndex = Number(targetIndex);
   sanitizedLink.edge_type = String(link.edge_type || 'default');
   
-  // Additional 4 fields to match the 9-column table
-  // These must be provided even if Cosmograph doesn't use them
-  sanitizedLink.weight = Number(link.weight ?? 1);
-  sanitizedLink.strength = Number(link.strength ?? 1);
-  sanitizedLink.sourceidx = Number(link.sourceidx ?? sourceIndex);
-  sanitizedLink.targetidx = Number(link.targetidx ?? targetIndex);
-  
-  // Verify we have exactly 9 fields (5 used + 4 padding)
-  const fieldCount = Object.keys(sanitizedLink).length;
-  const nullCount = Object.values(sanitizedLink).filter(v => v === null || v === undefined).length;
-  
-  if (fieldCount !== 9 || nullCount > 0) {
-    console.warn(`[sanitizeLink] Expected 9 non-null fields, have ${fieldCount} fields with ${nullCount} nulls`);
-  }
+  // Note: The "9 columns but 5 values" error occurs because:
+  // 1. DuckDB table was created with 9 columns from a previous version
+  // 2. Cosmograph now only sends 5 values for incremental updates
+  // 3. Solution: Run resetDuckDBStorage() in console and refresh page
   
   return sanitizedLink;
 }
