@@ -501,6 +501,36 @@ export function useGraphWebSocket(config: UseGraphWebSocketConfig = {}) {
     updateTimestampsRef.current = [];
   }, []);
 
+  // Monitor Python WebSocket connection status
+  useEffect(() => {
+    if (!pythonWs || !enablePython) return;
+    
+    // Update connection status when Python WebSocket connection changes
+    setConnectionStatus(prev => ({
+      ...prev,
+      python: {
+        connected: pythonWs.isConnected || false,
+        quality: pythonWs.connectionQuality || 'poor',
+        latency: pythonWs.latency || 0
+      }
+    }));
+  }, [pythonWs?.isConnected, pythonWs?.connectionQuality, pythonWs?.latency, enablePython]);
+  
+  // Monitor Rust WebSocket connection status
+  useEffect(() => {
+    if (!rustWs || !enableRust) return;
+    
+    // Update connection status when Rust WebSocket connection changes
+    setConnectionStatus(prev => ({
+      ...prev,
+      rust: {
+        connected: rustWs.isConnected || false,
+        quality: 'good', // Rust WS doesn't provide quality metric
+        latency: 0 // Rust WS doesn't provide latency metric
+      }
+    }));
+  }, [rustWs?.isConnected, enableRust]);
+  
   // Subscribe to Python WebSocket events
   useEffect(() => {
     if (!pythonWs || !enablePython) return;
@@ -543,15 +573,8 @@ export function useGraphWebSocket(config: UseGraphWebSocketConfig = {}) {
       handleCacheInvalidate(event.keys);
     });
     
-    // Update connection status
-    setConnectionStatus(prev => ({
-      ...prev,
-      python: {
-        connected: pythonWs.isConnected,
-        quality: pythonWs.connectionQuality,
-        latency: pythonWs.latency
-      }
-    }));
+    // Don't update connection status here - it causes infinite loops
+    // Connection status should be updated via connection event handlers
     
     return () => {
       log('Cleaning up Python WebSocket subscriptions');
@@ -595,14 +618,7 @@ export function useGraphWebSocket(config: UseGraphWebSocketConfig = {}) {
       }
     });
     
-    // Update connection status
-    setConnectionStatus(prev => ({
-      ...prev,
-      rust: {
-        connected: rustWs.isConnected,
-        reconnectCount: 0
-      }
-    }));
+    // Don't update connection status here - it's handled in a separate effect
     
     return () => {
       log('Cleaning up Rust WebSocket subscription');

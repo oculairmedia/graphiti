@@ -245,14 +245,13 @@ export function useGraphDataQuery() {
 
   // Initial fetch and retry logic
   useEffect(() => {
-    // Force refresh on mount to get fresh data
-    console.log('[useGraphDataQuery] Component mounted - forcing data refresh');
-    hasFetchedDuckDBRef.current = false; // Reset flag to force fresh fetch
-    fetchDuckDBData(true); // Force refresh on mount
-    
-    // Only set up retry interval if we haven't fetched yet
-    let intervalId: NodeJS.Timeout | null = null;
+    // Only fetch if we haven't already fetched
     if (!hasFetchedDuckDBRef.current) {
+      console.log('[useGraphDataQuery] Initial mount - fetching data');
+      fetchDuckDBData(true); // Fetch on first mount only
+      
+      // Set up retry interval if needed
+      let intervalId: NodeJS.Timeout | null = null;
       intervalId = setInterval(() => {
         if (!hasFetchedDuckDBRef.current) {
           fetchDuckDBData();
@@ -261,14 +260,14 @@ export function useGraphDataQuery() {
           intervalId = null;
         }
       }, 500); // Reduced frequency from 100ms to 500ms
+      
+      return () => {
+        if (intervalId) {
+          clearInterval(intervalId);
+        }
+      };
     }
-    
-    return () => {
-      if (intervalId) {
-        clearInterval(intervalId);
-      }
-    };
-  }, [fetchDuckDBData]);
+  }, []); // Empty dependency array - only run once on mount
   
   // Use DuckDB data if available, otherwise fall back to JSON data
   // Memoize the data to prevent unnecessary recalculations
