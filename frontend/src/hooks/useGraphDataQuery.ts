@@ -33,7 +33,7 @@ interface TransformedData {
 
 export function useGraphDataQuery() {
   const { config, updateNodeTypeConfigurations } = useGraphConfig();
-  const { getDuckDBConnection } = useDuckDB();
+  const { getDuckDBConnection, isInitialized: isDuckDBInitialized } = useDuckDB();
   const { subscribe } = useRustWebSocket();
   
   // State for DuckDB-sourced UI data
@@ -245,29 +245,32 @@ export function useGraphDataQuery() {
 
   // Initial fetch and retry logic
   useEffect(() => {
-    // Only fetch if we haven't already fetched
-    if (!hasFetchedDuckDBRef.current) {
-      console.log('[useGraphDataQuery] Initial mount - fetching data');
-      fetchDuckDBData(true); // Fetch on first mount only
-      
-      // Set up retry interval if needed
-      let intervalId: NodeJS.Timeout | null = null;
+    // Always try to fetch on mount if DuckDB is ready
+    if (isDuckDBInitialized && !duckDBData) {
+      console.log('[useGraphDataQuery] DuckDB initialized, fetching data');
+      fetchDuckDBData(true); // Fetch when DuckDB is ready
+    }
+    
+    // Set up retry interval if we don't have data yet
+    let intervalId: NodeJS.Timeout | null = null;
+    if (isDuckDBInitialized && !hasFetchedDuckDBRef.current) {
       intervalId = setInterval(() => {
-        if (!hasFetchedDuckDBRef.current) {
+        if (!hasFetchedDuckDBRef.current && isDuckDBInitialized) {
+          console.log('[useGraphDataQuery] Retrying DuckDB data fetch');
           fetchDuckDBData();
         } else if (intervalId) {
           clearInterval(intervalId);
           intervalId = null;
         }
       }, 500); // Reduced frequency from 100ms to 500ms
-      
-      return () => {
-        if (intervalId) {
-          clearInterval(intervalId);
-        }
-      };
     }
-  }, []); // Empty dependency array - only run once on mount
+    
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
+  }, [isDuckDBInitialized, fetchDuckDBData]); // Re-run when DuckDB becomes initialized or fetchDuckDBData changes
   
   // Use DuckDB data if available, otherwise fall back to JSON data
   // Memoize the data to prevent unnecessary recalculations
@@ -566,12 +569,13 @@ export function useGraphDataQuery() {
     
     // Don't filter edges - let Cosmograph handle optimization
     // This ensures all edges are available for incremental loading
-    console.log('[useGraphDataQuery] Total edges from API:', sourceData.edges.length);
-    const filteredLinks = sourceData.edges
+    const edges = sourceData.edges || [];
+    console.log('[useGraphDataQuery] Total edges from API:', edges.length);
+    const filteredLinks = edges
       .map(edge => ({
         ...edge,
-        source: edge.from,
-        target: edge.to,
+        source: edge.from || edge.source,
+        target: edge.to || edge.target,
       }));
     console.log('[useGraphDataQuery] Mapped links:', filteredLinks.length);
     
