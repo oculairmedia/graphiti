@@ -67,15 +67,16 @@ export interface StableConfig {
   borderWidth: number;
   
   // Label defaults
+  labelBy: string; // Which field contains the label text
   labelColor: string;
   hoveredLabelColor: string;
   labelSize: number;
   labelOpacity: number;
   labelVisibilityThreshold: number;
-  labelFontWeight: string;
+  labelFontWeight: number;
   labelBackgroundColor: string;
   hoveredLabelSize: number;
-  hoveredLabelFontWeight: string;
+  hoveredLabelFontWeight: number;
   hoveredLabelBackgroundColor: string;
   
   // Visual defaults
@@ -193,7 +194,7 @@ export const isStableConfigKey = (key: string): boolean => {
     'linkArrows', 'linkArrowsSizeScale', 'curvedLinks', 'curvedLinkSegments',
     'curvedLinkWeight', 'curvedLinkControlPointDistance', 'minNodeSize',
     'maxNodeSize', 'sizeMultiplier', 'nodeOpacity', 'borderWidth',
-    'labelColor', 'hoveredLabelColor', 'labelSize', 'labelOpacity',
+    'labelBy', 'labelColor', 'hoveredLabelColor', 'labelSize', 'labelOpacity',
     'labelVisibilityThreshold', 'labelFontWeight', 'labelBackgroundColor',
     'hoveredLabelSize', 'hoveredLabelFontWeight', 'hoveredLabelBackgroundColor',
     'colorScheme', 'gradientHighColor', 'gradientLowColor', 'hoveredPointCursor',

@@ -160,7 +160,15 @@ export const GraphSearch: React.FC<GraphSearchProps> = React.memo(({
     setActiveIndex(-1);
     setVisibleResultsCount(20); // Reset visible count on new search
     
-  }, [nodes, cosmographRef]);
+    // Highlight all search results in the graph
+    if (results.length > 0 && onHighlightNodes) {
+      onHighlightNodes(results);
+    } else if (results.length === 0 && onHighlightNodes) {
+      // Clear highlights when no results
+      onHighlightNodes([]);
+    }
+    
+  }, [nodes, cosmographRef, onHighlightNodes]);
   
   // Handle search input changes with transition for non-blocking updates
   const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -184,32 +192,25 @@ export const GraphSearch: React.FC<GraphSearchProps> = React.memo(({
     // Focus and select the node in Cosmograph if available
     if (cosmographRef?.current) {
       try {
-        // Skip exact value search for now due to Promise handling issues
-        // TODO: Fix getPointIndicesByExactValues to properly handle async
-        const useExactValueSearch = false; // Temporarily disabled
-        if (useExactValueSearch && typeof cosmographRef.current.getPointIndicesByExactValues === 'function') {
-          // This method returns a Promise but our wrapper doesn't handle it correctly yet
-        } else {
-          // Fallback to linear search
-          const nodeIndex = nodes.findIndex(n => n.id === node.id);
-          if (nodeIndex >= 0) {
-            // Use Cosmograph's focus methods
-            if (typeof cosmographRef.current.setFocusedPoint === 'function') {
-              cosmographRef.current.setFocusedPoint(nodeIndex);
-            }
-            
-            // Also select the node
-            if (typeof cosmographRef.current.selectPoint === 'function') {
-              cosmographRef.current.selectPoint(nodeIndex);
-            } else if (typeof cosmographRef.current.selectPoints === 'function') {
-              cosmographRef.current.selectPoints([nodeIndex]);
-            }
-            
-            // Zoom to the selected node
-            if (typeof cosmographRef.current.zoomToPoint === 'function') {
-              // Zoom without restarting simulation to prevent graph reload
-              cosmographRef.current.zoomToPoint(nodeIndex, 250, 4.0, true);
-            }
+        // Find the node index for focusing
+        const nodeIndex = nodes.findIndex(n => n.id === node.id);
+        if (nodeIndex >= 0) {
+          // Use Cosmograph's focus methods
+          if (typeof cosmographRef.current.setFocusedPoint === 'function') {
+            cosmographRef.current.setFocusedPoint(nodeIndex);
+          }
+          
+          // Also select the node
+          if (typeof cosmographRef.current.selectPoint === 'function') {
+            cosmographRef.current.selectPoint(nodeIndex);
+          } else if (typeof cosmographRef.current.selectPoints === 'function') {
+            cosmographRef.current.selectPoints([nodeIndex]);
+          }
+          
+          // Zoom to the selected node without restarting simulation
+          if (typeof cosmographRef.current.zoomToPoint === 'function') {
+            // Use smooth zoom without simulation restart to prevent graph reload
+            cosmographRef.current.zoomToPoint(nodeIndex, 500, 3.0, false);
           }
         }
       } catch (error) {
@@ -347,6 +348,10 @@ export const GraphSearch: React.FC<GraphSearchProps> = React.memo(({
                   setSearchValue('');
                   setSearchResults([]);
                   setIsSearchOpen(false);
+                  // Clear highlights when clearing search
+                  if (onHighlightNodes) {
+                    onHighlightNodes([]);
+                  }
                 }}
                 className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 p-0 hover:bg-secondary"
               >

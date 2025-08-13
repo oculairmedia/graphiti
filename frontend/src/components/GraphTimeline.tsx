@@ -4,16 +4,8 @@ import type { CosmographTimelineRef } from '@cosmograph/react';
 import { Play, Pause, RotateCcw, ChevronDown, ChevronUp, SkipForward, Clock, Calendar, ZoomIn, ZoomOut, Maximize2, Camera, Trash2, Pin, Eye, Download, Move } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
-import { logger } from '../utils/logger';
 import { useGraphZoom } from '../hooks/useGraphZoom';
 
-// Extend window for debugging
-declare global {
-  interface Window {
-    timelineAccessorCount?: number;
-    timelineValidDates?: number;
-  }
-}
 
 interface GraphTimelineProps {
   onTimeRangeChange?: (range: [Date, Date] | [number, number] | undefined) => void;
@@ -42,6 +34,7 @@ export const GraphTimeline = forwardRef<GraphTimelineHandle, GraphTimelineProps>
     // The CosmographTimeline component will access data internally through the context
     // It uses the accessor="created_at_timestamp" prop to find the timestamp field
     const [isAnimating, setIsAnimating] = useState(false);
+    const [isCosmographReady, setIsCosmographReady] = useState(false);
     
     // Get zoom controls from the hook
     const { zoomIn, zoomOut, fitView } = useGraphZoom(
@@ -60,11 +53,24 @@ export const GraphTimeline = forwardRef<GraphTimelineHandle, GraphTimelineProps>
     const [currentTimeWindow, setCurrentTimeWindow] = useState<string>('');
     const tickCheckInterval = useRef<NodeJS.Timeout | null>(null);
 
-    // Show timeline when component mounts
+    // Check if cosmograph is available through ref or context
     useEffect(() => {
-      setHasTemporalData(true);
+      // Try to get the actual Cosmograph ref from the GraphCanvas handle
+      let actualCosmographRef = null;
+      if (cosmographRef?.current?.getCosmographRef) {
+        actualCosmographRef = cosmographRef.current.getCosmographRef();
+      }
       
-      // Cleanup interval on unmount
+      const hasCosmo = !!(actualCosmographRef?.current || cosmograph);
+      setIsCosmographReady(hasCosmo);
+      
+      if (hasCosmo) {
+        setHasTemporalData(true);
+      }
+    }, [cosmographRef, cosmograph]); // Use stable deps
+    
+    // Cleanup interval on unmount
+    useEffect(() => {
       return () => {
         if (tickCheckInterval.current) {
           clearInterval(tickCheckInterval.current);
@@ -87,12 +93,6 @@ export const GraphTimeline = forwardRef<GraphTimelineHandle, GraphTimelineProps>
           year: 'numeric'
         });
         setCurrentTimeWindow(`${formatDate(start)} - ${formatDate(end)}`);
-        
-        logger.log('Timeline: Range selected', {
-          start: selection[0],
-          end: selection[1],
-          isManual
-        });
       } else {
         setCurrentTimeWindow('');
       }
@@ -135,7 +135,6 @@ export const GraphTimeline = forwardRef<GraphTimelineHandle, GraphTimelineProps>
 
     // Animation callbacks
     const handleAnimationPlay = useCallback((isRunning: boolean, selection?: (number | Date)[]) => {
-      logger.log('Animation play callback:', { isRunning, selection, isLooping });
       setIsAnimating(isRunning);
       
       if (isRunning && isLooping) {
@@ -151,8 +150,7 @@ export const GraphTimeline = forwardRef<GraphTimelineHandle, GraphTimelineProps>
         tickCheckInterval.current = setInterval(() => {
           const timeSinceLastTick = Date.now() - lastTickTime.current;
           if (timeSinceLastTick > 1000 && timelineRef.current) {
-            logger.log('Animation appears to have ended, restarting for loop');
-            // Clear interval
+            // Animation appears to have ended, restart for loop
             if (tickCheckInterval.current) {
               clearInterval(tickCheckInterval.current);
               tickCheckInterval.current = null;
@@ -171,7 +169,6 @@ export const GraphTimeline = forwardRef<GraphTimelineHandle, GraphTimelineProps>
     }, [isLooping]);
 
     const handleAnimationPause = useCallback((isRunning: boolean) => {
-      logger.log('Animation pause callback:', { isRunning });
       setIsAnimating(isRunning);
       
       // Clear the tick monitoring when paused
@@ -232,9 +229,13 @@ export const GraphTimeline = forwardRef<GraphTimelineHandle, GraphTimelineProps>
       toggleVisibility
     }), [toggleVisibility]);
 
-    if (!hasTemporalData || !isVisible) {
+    // Don't render if not visible
+    if (!isVisible) {
       return null;
     }
+    
+    // For now, just render the timeline - the parent already checks if context is ready
+    // The CosmographTimeline component will handle its own data internally
 
     return (
       <div className={`border-t border-border shadow-lg transition-all duration-300 ${className}`} 

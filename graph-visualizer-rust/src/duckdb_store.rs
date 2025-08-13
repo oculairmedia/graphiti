@@ -66,6 +66,9 @@ impl DuckDBStore {
             Field::new("node_type", DataType::Utf8, false),
             Field::new("summary", DataType::Utf8, true),
             Field::new("degree_centrality", DataType::Float64, true),
+            Field::new("pagerank_centrality", DataType::Float64, true),
+            Field::new("betweenness_centrality", DataType::Float64, true),
+            Field::new("eigenvector_centrality", DataType::Float64, true),
             Field::new("x", DataType::Float64, true),
             Field::new("y", DataType::Float64, true),
             Field::new("color", DataType::Utf8, true),
@@ -96,6 +99,9 @@ impl DuckDBStore {
                 node_type VARCHAR NOT NULL,
                 summary VARCHAR,
                 degree_centrality DOUBLE,
+                pagerank_centrality DOUBLE,
+                betweenness_centrality DOUBLE,
+                eigenvector_centrality DOUBLE,
                 x DOUBLE,
                 y DOUBLE,
                 color VARCHAR,
@@ -145,8 +151,8 @@ impl DuckDBStore {
         let tx = conn.transaction()?;
         
         // Insert nodes with indices - use INSERT OR REPLACE to handle duplicates
-        let stmt_node = "INSERT OR REPLACE INTO nodes (id, idx, label, node_type, summary, degree_centrality, x, y, color, size, created_at_timestamp, cluster, clusterStrength) 
-                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        let stmt_node = "INSERT OR REPLACE INTO nodes (id, idx, label, node_type, summary, degree_centrality, pagerank_centrality, betweenness_centrality, eigenvector_centrality, x, y, color, size, created_at_timestamp, cluster, clusterStrength) 
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         
         let mut node_to_idx = HashMap::new();
         
@@ -157,6 +163,18 @@ impl DuckDBStore {
         
         for (idx, node) in sorted_nodes.iter().enumerate() {
             let degree = node.properties.get("degree_centrality")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.0);
+            
+            let pagerank = node.properties.get("pagerank_centrality")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.0);
+            
+            let betweenness = node.properties.get("betweenness_centrality")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.0);
+            
+            let eigenvector = node.properties.get("eigenvector_centrality")
                 .and_then(|v| v.as_f64())
                 .unwrap_or(0.0);
             
@@ -191,6 +209,9 @@ impl DuckDBStore {
                     &node.node_type,
                     &node.summary,
                     degree,
+                    pagerank,
+                    betweenness,
+                    eigenvector,
                     Option::<f64>::None, // x - will be computed by layout
                     Option::<f64>::None, // y - will be computed by layout
                     color,
@@ -247,7 +268,7 @@ impl DuckDBStore {
         let conn = self.conn.lock().unwrap();
         
         let mut stmt = conn.prepare(
-            "SELECT id, idx, label, node_type, summary, degree_centrality, x, y, color, size, created_at_timestamp, cluster, clusterStrength 
+            "SELECT id, idx, label, node_type, summary, degree_centrality, pagerank_centrality, betweenness_centrality, eigenvector_centrality, x, y, color, size, created_at_timestamp, cluster, clusterStrength 
              FROM nodes 
              ORDER BY idx"
         )?;
@@ -258,6 +279,9 @@ impl DuckDBStore {
         let mut node_types = Vec::new();
         let mut summaries = Vec::new();
         let mut degrees = Vec::new();
+        let mut pageranks = Vec::new();
+        let mut betweennesses = Vec::new();
+        let mut eigenvectors = Vec::new();
         let mut xs = Vec::new();
         let mut ys = Vec::new();
         let mut colors = Vec::new();
@@ -274,24 +298,30 @@ impl DuckDBStore {
                 row.get::<_, String>(3)?,     // node_type
                 row.get::<_, Option<String>>(4)?, // summary
                 row.get::<_, Option<f64>>(5)?,    // degree_centrality
-                row.get::<_, Option<f64>>(6)?,    // x
-                row.get::<_, Option<f64>>(7)?,    // y
-                row.get::<_, Option<String>>(8)?, // color
-                row.get::<_, Option<f64>>(9)?,    // size
-                row.get::<_, Option<f64>>(10)?,   // created_at_timestamp
-                row.get::<_, Option<String>>(11)?, // cluster
-                row.get::<_, Option<f64>>(12)?,   // clusterStrength
+                row.get::<_, Option<f64>>(6)?,    // pagerank_centrality
+                row.get::<_, Option<f64>>(7)?,    // betweenness_centrality
+                row.get::<_, Option<f64>>(8)?,    // eigenvector_centrality
+                row.get::<_, Option<f64>>(9)?,    // x
+                row.get::<_, Option<f64>>(10)?,   // y
+                row.get::<_, Option<String>>(11)?, // color
+                row.get::<_, Option<f64>>(12)?,   // size
+                row.get::<_, Option<f64>>(13)?,   // created_at_timestamp
+                row.get::<_, Option<String>>(14)?, // cluster
+                row.get::<_, Option<f64>>(15)?,   // clusterStrength
             ))
         })?;
         
         for row in rows {
-            let (id, idx, label, node_type, summary, degree, x, y, color, size, timestamp, cluster, cluster_strength) = row?;
+            let (id, idx, label, node_type, summary, degree, pagerank, betweenness, eigenvector, x, y, color, size, timestamp, cluster, cluster_strength) = row?;
             ids.push(id);
             indices.push(idx);
             labels.push(label);
             node_types.push(node_type);
             summaries.push(summary);
             degrees.push(degree);
+            pageranks.push(pagerank);
+            betweennesses.push(betweenness);
+            eigenvectors.push(eigenvector);
             xs.push(x);
             ys.push(y);
             colors.push(color);
@@ -310,6 +340,9 @@ impl DuckDBStore {
                 Arc::new(StringArray::from(node_types)) as ArrayRef,
                 Arc::new(StringArray::from(summaries)) as ArrayRef,
                 Arc::new(Float64Array::from(degrees)) as ArrayRef,
+                Arc::new(Float64Array::from(pageranks)) as ArrayRef,
+                Arc::new(Float64Array::from(betweennesses)) as ArrayRef,
+                Arc::new(Float64Array::from(eigenvectors)) as ArrayRef,
                 Arc::new(Float64Array::from(xs)) as ArrayRef,
                 Arc::new(Float64Array::from(ys)) as ArrayRef,
                 Arc::new(StringArray::from(colors)) as ArrayRef,
@@ -466,6 +499,18 @@ impl DuckDBStore {
                     .and_then(|v| v.as_f64())
                     .unwrap_or(0.0);
                 
+                let pagerank = node.properties.get("pagerank_centrality")
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(0.0);
+                
+                let betweenness = node.properties.get("betweenness_centrality")
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(0.0);
+                
+                let eigenvector = node.properties.get("eigenvector_centrality")
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(0.0);
+                
                 let color = self.get_node_color(&node.node_type);
                 let size = 4.0 + (degree * 20.0);
                 
@@ -484,8 +529,8 @@ impl DuckDBStore {
                 };
 
                 tx.execute(
-                    "INSERT OR REPLACE INTO nodes (id, idx, label, node_type, summary, degree_centrality, x, y, color, size, created_at_timestamp, cluster, clusterStrength) 
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "INSERT OR REPLACE INTO nodes (id, idx, label, node_type, summary, degree_centrality, pagerank_centrality, betweenness_centrality, eigenvector_centrality, x, y, color, size, created_at_timestamp, cluster, clusterStrength) 
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     params![
                         &node.id,
                         start_idx,
@@ -493,6 +538,9 @@ impl DuckDBStore {
                         &node.node_type,
                         &node.summary,
                         degree,
+                        pagerank,
+                        betweenness,
+                        eigenvector,
                         Option::<f64>::None,
                         Option::<f64>::None,
                         color,

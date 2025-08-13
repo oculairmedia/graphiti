@@ -78,6 +78,7 @@ export function useNodeSelection(
   }, [addOptimisticSelectedNode]);
 
   const handleNodeClick = useCallback((node: GraphNode) => {
+    console.log('[useNodeSelection] handleNodeClick called with node:', node);
     
     // Wrap optimistic update in startTransition to avoid React 19 warning
     startTransition(() => {
@@ -86,6 +87,7 @@ export function useNodeSelection(
     
     // Immediately update the state - no artificial delay
     setSelectedNode(node);
+    console.log('[useNodeSelection] selectedNode set to:', node);
   }, [setOptimisticSelectedNode]);
 
   const handleNodeSelectWithCosmograph = useCallback(async (node: GraphNode) => {

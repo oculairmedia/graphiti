@@ -142,11 +142,12 @@ const NodeDetailsPanelComponent: React.FC<NodeDetailsPanelProps> = ({
   };
 
   // Use centrality hook with fallback - pass node centrality directly if available
+  // Check both root level and properties for centrality values
   const nodeCentrality = {
-    degree_centrality: (node as any).degree_centrality,
-    betweenness_centrality: (node as any).betweenness_centrality,
-    pagerank_centrality: (node as any).pagerank_centrality,
-    eigenvector_centrality: (node as any).eigenvector_centrality,
+    degree_centrality: (node as any).degree_centrality || node.properties?.degree_centrality,
+    betweenness_centrality: (node as any).betweenness_centrality || node.properties?.betweenness_centrality,
+    pagerank_centrality: (node as any).pagerank_centrality || node.properties?.pagerank_centrality,
+    eigenvector_centrality: (node as any).eigenvector_centrality || node.properties?.eigenvector_centrality,
   };
   
   const { centrality, isLoading: centralityLoading, source } = useNodeCentralityWithFallback(
@@ -179,7 +180,7 @@ const NodeDetailsPanelComponent: React.FC<NodeDetailsPanelProps> = ({
   };
 
   return (
-    <Card className="glass-panel w-96 max-h-[80vh] overflow-hidden animate-fade-in flex flex-col min-w-0">
+    <Card className="glass-panel w-96 max-h-[calc(100vh-300px)] overflow-hidden animate-fade-in flex flex-col min-w-0">
       <CardHeader className="pb-3 flex-shrink-0">
         <div className="flex items-start justify-between">
           <div className="flex-1 pr-2 min-w-0">

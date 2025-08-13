@@ -115,30 +115,76 @@ export function useGraphDataQuery() {
         const edgesArray = edgesResult.toArray();
         
         // Transform to GraphNode format - PRESERVE idx field for proper indexing
-        const nodes: GraphNode[] = nodesArray.map((n: any, arrayIndex) => ({
-            id: n.id,
-            idx: n.idx !== undefined ? n.idx : arrayIndex,  // Preserve DuckDB idx or use array index
-            label: n.label || n.id,
-            name: n.properties?.name || n.name || n.label || n.id,  // Use name from properties or direct field
-            node_type: n.node_type || 'Unknown',
-            summary: n.summary || null,
-            size: n.degree_centrality || 1,
-            created_at: n.created_at,
-            created_at_timestamp: n.created_at_timestamp || null,  // Add timestamp for timeline
-            properties: {
-              idx: n.idx !== undefined ? n.idx : arrayIndex,  // Also store in properties for access
-              degree_centrality: n.degree_centrality || 0,
-              pagerank_centrality: n.pagerank_centrality || n.pagerank || 0,
-              betweenness_centrality: n.betweenness_centrality || 0,
-              eigenvector_centrality: n.eigenvector_centrality || 0,
-              degree: n.degree || 0,
-              connections: n.connections || n.degree || 0,
-              created: n.created_at,
-              date: n.created_at,
-              created_at_timestamp: n.created_at_timestamp || null,  // Also in properties for timeline
-              ...n // Include all other properties
+        const nodes: GraphNode[] = nodesArray.map((n: any, arrayIndex) => {
+            // DuckDB StructRow objects are Proxy objects that need special handling
+            // We need to convert them to plain objects to access all properties correctly
+            let plainNode: any = {};
+            
+            // Try toJSON() first if available
+            if (typeof n.toJSON === 'function') {
+              plainNode = n.toJSON();
+            } else {
+              // Manual extraction using Object.keys or known fields
+              // Get all enumerable properties from the proxy
+              const keys = Object.keys(n);
+              if (keys.length > 0) {
+                // If we can enumerate keys, copy them
+                keys.forEach(key => {
+                  plainNode[key] = n[key];
+                });
+              } else {
+                // Fall back to known schema fields
+                plainNode = {
+                  id: n.id,
+                  idx: n.idx,
+                  label: n.label,
+                  node_type: n.node_type,
+                  summary: n.summary,
+                  degree_centrality: n.degree_centrality,
+                  pagerank_centrality: n.pagerank_centrality,
+                  betweenness_centrality: n.betweenness_centrality,
+                  eigenvector_centrality: n.eigenvector_centrality,
+                  x: n.x,
+                  y: n.y,
+                  color: n.color,
+                  size: n.size,
+                  created_at: n.created_at,
+                  created_at_timestamp: n.created_at_timestamp,
+                  updated_at: n.updated_at
+                };
+              }
             }
-        }));
+            
+            
+            return {
+              id: plainNode.id,
+              idx: plainNode.idx !== undefined ? plainNode.idx : arrayIndex,  // Preserve DuckDB idx or use array index
+              label: plainNode.label || plainNode.id,
+              name: plainNode.label || plainNode.id,  // Use label as name
+              node_type: plainNode.node_type || 'Unknown',
+              summary: plainNode.summary || null,
+              size: plainNode.degree_centrality || 1,
+              created_at: plainNode.created_at,
+              created_at_timestamp: plainNode.created_at_timestamp || null,  // Add timestamp for timeline
+              // Store centrality at the root level for direct access
+              degree_centrality: plainNode.degree_centrality || 0,
+              pagerank_centrality: plainNode.pagerank_centrality || 0,
+              betweenness_centrality: plainNode.betweenness_centrality || 0,
+              eigenvector_centrality: plainNode.eigenvector_centrality || 0,
+              properties: {
+                idx: plainNode.idx !== undefined ? plainNode.idx : arrayIndex,  // Also store in properties for access
+                degree_centrality: plainNode.degree_centrality || 0,
+                pagerank_centrality: plainNode.pagerank_centrality || 0,
+                betweenness_centrality: plainNode.betweenness_centrality || 0,
+                eigenvector_centrality: plainNode.eigenvector_centrality || 0,
+                degree: plainNode.degree_centrality ? Math.round(plainNode.degree_centrality * 100) : 0,  // Convert to count
+                connections: plainNode.degree_centrality ? Math.round(plainNode.degree_centrality * 100) : 0,
+                created: plainNode.created_at,
+                date: plainNode.created_at,
+                created_at_timestamp: plainNode.created_at_timestamp || null,  // Also in properties for timeline
+              }
+            };
+        });
         
         // Create node index map for edge indices
         const nodeIndexMap = new Map<string, number>();
