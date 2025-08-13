@@ -117,10 +117,10 @@ export function sanitizeNode(
   // Sanitize all properties
   const sanitizedProperties = sanitizeProperties(node.properties);
   
-  // Build sanitized node matching Cosmograph's internal schema
-  // Cosmograph internally expects 18 columns (adds 2 more: idx and name)
+  // Build sanitized node - always include ALL fields for consistency
+  // Cosmograph's DuckDB expects exact field count
   const sanitizedNode: any = {
-    // Core fields matching cosmograph_points view + Cosmograph internals
+    // Core 16 fields from cosmograph_points view
     index: Number(index),
     id: String(node.id),
     label: String(node.label || node.name || node.id),
@@ -136,10 +136,7 @@ export function sanitizeNode(
     size: Number(node.size || 5),
     created_at_timestamp: node.created_at_timestamp ?? null,
     cluster: String(cluster),
-    clusterStrength: Number(config.clusterStrength ?? 0.7),
-    // Additional fields Cosmograph adds internally (17, 18)
-    idx: Number(index),  // Cosmograph uses this internally
-    name: String(node.name || node.label || '') // Cosmograph uses this for search
+    clusterStrength: Number(config.clusterStrength ?? 0.7)
   };
   
   return sanitizedNode;
@@ -165,20 +162,20 @@ export function sanitizeLink(
   }
   
   return {
-    // Required fields
+    // Required fields (matches cosmograph_links view)
     source: sourceId,
-    target: targetId,
     sourceIndex: Number(sourceIndex),
+    target: targetId,
     targetIndex: Number(targetIndex),
+    edge_type: String(link.edge_type || 'default'),
+    weight: Number(link.weight || 1),
+    color: link.color || null,  // Required by cosmograph_links
+    strength: Number(link.strength || 1),  // Required by cosmograph_links
+    
+    // Additional fields for compatibility
     sourceidx: Number(sourceIndex), // DuckDB compatibility
     targetidx: Number(targetIndex), // DuckDB compatibility
-    
-    // Link properties
-    weight: Number(link.weight || 1),
-    edge_type: String(link.edge_type || 'default'),
-    
-    // Optional fields
-    created_at: link.created_at ? String(link.created_at) : ''
+    created_at: link.created_at ? String(link.created_at) : null
   };
 }
 
