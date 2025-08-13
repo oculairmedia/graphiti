@@ -40,7 +40,7 @@ import {
   sanitizeNode,
   sanitizeLink
 } from '../utils/cosmographDataPreparer';
-import { inspectCosmographSchema, attachSchemaDebugger } from '../utils/debugCosmographSchema';
+import { inspectCosmographSchema, attachSchemaDebugger, isSchemaDebuggingEnabled } from '../utils/debugCosmographSchema';
 
 interface GraphLink {
   source: string;
@@ -144,13 +144,15 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
     const [loadingPhase, setLoadingPhase] = useState<string>('');
     const [loadingProgress, setLoadingProgress] = useState<{ loaded: number; total: number }>({ loaded: 0, total: 0 });
     
-    // Attach debugger on mount
+    // Attach debugger on mount (only if debugging is enabled)
     useEffect(() => {
-      attachSchemaDebugger();
-      // Debug schema after cosmograph is ready
-      if (cosmographRef.current && isCanvasReady) {
-        console.log('[GraphCanvasV2] Inspecting Cosmograph schema...');
-        inspectCosmographSchema(cosmographRef);
+      if (isSchemaDebuggingEnabled()) {
+        attachSchemaDebugger();
+        // Debug schema after cosmograph is ready
+        if (cosmographRef.current && isCanvasReady) {
+          console.log('[GraphCanvasV2] Inspecting Cosmograph schema...');
+          inspectCosmographSchema(cosmographRef);
+        }
       }
     }, [isCanvasReady]);
     

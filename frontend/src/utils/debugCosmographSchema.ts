@@ -1,8 +1,48 @@
 /**
  * Debug utility to inspect Cosmograph's internal DuckDB schema
+ * 
+ * Enable by setting:
+ * - Environment variable: VITE_DEBUG_COSMOGRAPH_SCHEMA=true
+ * - Or localStorage: localStorage.setItem('debug_cosmograph_schema', 'true')
+ * - Or URL parameter: ?debug_cosmograph_schema=true
+ * 
+ * @example
+ * // Enable via console
+ * localStorage.setItem('debug_cosmograph_schema', 'true')
+ * location.reload()
+ * 
+ * // Check schema from console
+ * window.debugCosmographSchema(cosmographRef)
  */
 
+// Check if debugging is enabled
+export function isSchemaDebuggingEnabled(): boolean {
+  // Check environment variable
+  if (import.meta.env.VITE_DEBUG_COSMOGRAPH_SCHEMA === 'true') {
+    return true;
+  }
+  
+  // Check localStorage
+  if (typeof window !== 'undefined' && localStorage.getItem('debug_cosmograph_schema') === 'true') {
+    return true;
+  }
+  
+  // Check URL parameter
+  if (typeof window !== 'undefined') {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('debug_cosmograph_schema') === 'true') {
+      return true;
+    }
+  }
+  
+  return false;
+}
+
 export async function inspectCosmographSchema(cosmographRef: any) {
+  if (!isSchemaDebuggingEnabled()) {
+    return;
+  }
+  
   if (!cosmographRef?.current) {
     console.log('[Schema Debug] No cosmograph instance');
     return;
@@ -80,8 +120,21 @@ export async function inspectCosmographSchema(cosmographRef: any) {
 
 // Export a function to attach to window for debugging
 export function attachSchemaDebugger() {
+  if (!isSchemaDebuggingEnabled()) {
+    return;
+  }
+  
   if (typeof window !== 'undefined') {
     (window as any).debugCosmographSchema = inspectCosmographSchema;
+    (window as any).enableSchemaDebug = () => {
+      localStorage.setItem('debug_cosmograph_schema', 'true');
+      console.log('[Schema Debug] Enabled. Refresh the page to see debug output.');
+    };
+    (window as any).disableSchemaDebug = () => {
+      localStorage.removeItem('debug_cosmograph_schema');
+      console.log('[Schema Debug] Disabled. Refresh the page to hide debug output.');
+    };
     console.log('[Schema Debug] Attached debugger to window.debugCosmographSchema');
+    console.log('[Schema Debug] Use window.enableSchemaDebug() to enable, window.disableSchemaDebug() to disable');
   }
 }
