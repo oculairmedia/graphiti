@@ -142,9 +142,15 @@ export function sanitizeNode(
     sanitizedNode.size = Number(node.size || 5);
     sanitizedNode.cluster = String(cluster);
     sanitizedNode.clusterStrength = Number(config.clusterStrength ?? 0.7);
-    // CRITICAL: created_at_timestamp MUST NOT be null for incremental updates
-    // DuckDB doesn't count null values as "supplied" in incremental updates
-    sanitizedNode.created_at_timestamp = node.created_at_timestamp || new Date().toISOString();
+    // CRITICAL: created_at_timestamp MUST be a number (Unix timestamp) for DuckDB
+    // DuckDB created this column as DOUBLE type, not string
+    if (node.created_at_timestamp) {
+      // Convert ISO string to Unix timestamp (milliseconds since epoch)
+      const timestamp = new Date(node.created_at_timestamp).getTime();
+      sanitizedNode.created_at_timestamp = isNaN(timestamp) ? Date.now() : timestamp;
+    } else {
+      sanitizedNode.created_at_timestamp = Date.now();
+    }
     
     // Verify we have exactly 14 fields with no nulls
     const fieldCount = Object.keys(sanitizedNode).length;
@@ -171,7 +177,13 @@ export function sanitizeNode(
     sanitizedNode.y = node.y ?? null;
     sanitizedNode.color = generateNodeTypeColor(node.node_type || 'Unknown', nodeTypeIndex);
     sanitizedNode.size = Number(node.size || 5);
-    sanitizedNode.created_at_timestamp = node.created_at_timestamp ?? null;
+    // Convert timestamp to number for consistency with DuckDB DOUBLE type
+    if (node.created_at_timestamp) {
+      const timestamp = new Date(node.created_at_timestamp).getTime();
+      sanitizedNode.created_at_timestamp = isNaN(timestamp) ? Date.now() : timestamp;
+    } else {
+      sanitizedNode.created_at_timestamp = Date.now(); // Default to current time
+    }
     sanitizedNode.cluster = String(cluster);
     sanitizedNode.clusterStrength = Number(config.clusterStrength ?? 0.7);
   }
