@@ -271,7 +271,24 @@ export function useCosmographIncrementalUpdates(
       }
       
       log(`Adding ${sanitizedLinks.length} sanitized edges (from ${edges.length} input)`);
-      log('Sanitized link sample:', sanitizedLinks[0]);
+      if (sanitizedLinks.length > 0) {
+        const sample = sanitizedLinks[0];
+        log('Sanitized link sample:', sample);
+        
+        // Debug: Check what fields are actually being sent
+        const fieldNames = Object.keys(sample);
+        const fieldTypes = Object.entries(sample).map(([k, v]) => `${k}:${typeof v}`);
+        console.log('[DEBUG] Link fields being sent to DuckDB:', fieldNames);
+        console.log('[DEBUG] Link field types:', fieldTypes);
+        console.log('[DEBUG] Link field values:', Object.entries(sample).map(([k, v]) => `${k}=${v}`));
+        console.log('[DEBUG] Link field count:', fieldNames.length);
+        
+        // Check for null/undefined
+        const nullFields = Object.entries(sample).filter(([k, v]) => v === null || v === undefined);
+        if (nullFields.length > 0) {
+          console.error('[DEBUG] WARNING: Link has null/undefined fields:', nullFields.map(([k]) => k));
+        }
+      }
       
       await cosmographRef.current.addLinks(sanitizedLinks);
       

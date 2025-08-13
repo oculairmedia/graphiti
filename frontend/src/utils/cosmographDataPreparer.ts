@@ -210,32 +210,27 @@ export function sanitizeLink(
     return null;
   }
   
-  // Build link with exactly 9 NON-NULL fields that DuckDB expects
-  // DuckDB created the links table with 9 columns, we must provide all 9
-  // CRITICAL: All fields MUST be non-null, DuckDB doesn't count null values
+  // CRITICAL: Links from Rust backend already have all 9 fields
+  // We must preserve ALL of them for DuckDB compatibility
+  // The 9 fields are: source, target, edge_type, sourceIndex, targetIndex, 
+  // weight, strength, sourceidx, targetidx
+  
   const sanitizedLink: any = {};
   
-  // These are the fields DuckDB expects based on the initial load schema
-  // Field 1-2: Source and target IDs
+  // Core identity fields
   sanitizedLink.source = String(sourceId);
   sanitizedLink.target = String(targetId);
-  
-  // Field 3: Edge type
   sanitizedLink.edge_type = String(link.edge_type || 'default');
   
-  // Field 4-5: Source and target indices  
+  // Index fields (both formats)
   sanitizedLink.sourceIndex = Number(sourceIndex);
   sanitizedLink.targetIndex = Number(targetIndex);
+  sanitizedLink.sourceidx = Number(link.sourceidx ?? sourceIndex);
+  sanitizedLink.targetidx = Number(link.targetidx ?? targetIndex);
   
-  // Field 6-7: Weight and strength (numeric fields)
-  sanitizedLink.weight = Number(link.weight || 1);
-  sanitizedLink.strength = Number(link.strength || 1);
-  
-  // Field 8-9: Additional required fields
-  // Based on DuckDB expecting 9 columns, we need 2 more fields
-  // These are likely sourceidx and targetidx (duplicates of indices)
-  sanitizedLink.sourceidx = Number(sourceIndex);
-  sanitizedLink.targetidx = Number(targetIndex);
+  // Weight and strength
+  sanitizedLink.weight = Number(link.weight ?? 1);
+  sanitizedLink.strength = Number(link.strength ?? 1);
   
   // Verify we have exactly 9 non-null fields
   const fieldCount = Object.keys(sanitizedLink).length;
