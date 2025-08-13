@@ -117,45 +117,29 @@ export function sanitizeNode(
   // Sanitize all properties
   const sanitizedProperties = sanitizeProperties(node.properties);
   
-  // Build sanitized node with only primitive values
+  // Build sanitized node matching Cosmograph's internal schema
+  // Cosmograph internally expects 18 columns (adds 2 more: idx and name)
   const sanitizedNode: any = {
-    // Core fields - always present (matches cosmograph_points schema)
-    index: Number(index),  // cosmograph_points expects 'index' first
+    // Core fields matching cosmograph_points view + Cosmograph internals
+    index: Number(index),
     id: String(node.id),
     label: String(node.label || node.name || node.id),
     node_type: String(node.node_type || 'Unknown'),
     summary: node.summary ? String(node.summary) : null,
-    
-    // Centrality metrics (from cosmograph_points schema)
     degree_centrality: Number(sanitizedProperties.degree_centrality || 0),
     pagerank_centrality: Number(sanitizedProperties.pagerank_centrality || 0),
     betweenness_centrality: Number(sanitizedProperties.betweenness_centrality || 0),
     eigenvector_centrality: Number(sanitizedProperties.eigenvector_centrality || 0),
-    
-    // Position (may be null initially)
     x: node.x ?? null,
     y: node.y ?? null,
-    
-    // Visual properties
     color: generateNodeTypeColor(node.node_type || 'Unknown', nodeTypeIndex),
     size: Number(node.size || 5),
-    
-    // Timestamp
     created_at_timestamp: node.created_at_timestamp ?? null,
-    
-    // Clustering (required by cosmograph_points)
     cluster: String(cluster),
     clusterStrength: Number(config.clusterStrength ?? 0.7),
-    
-    // Additional fields for compatibility
-    idx: Number(index),  // Duplicate of index for compatibility
-    name: String(node.name || node.label || ''),
-    
-    // Properties object for additional data
-    properties: sanitizedProperties,
-    
-    // Original created_at string
-    created_at: node.created_at ? String(node.created_at) : ''
+    // Additional fields Cosmograph adds internally (17, 18)
+    idx: Number(index),  // Cosmograph uses this internally
+    name: String(node.name || node.label || '') // Cosmograph uses this for search
   };
   
   return sanitizedNode;
