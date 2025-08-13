@@ -142,9 +142,20 @@ export function useNodeSelection(
   }, [graphCanvasRef]);
 
   const handleShowNeighbors = useCallback((nodeId: string) => {
+    console.log('[useNodeSelection] handleShowNeighbors called with nodeId:', nodeId);
+    
+    // Ensure we have valid data
+    if (!transformedData?.nodes || !transformedData?.links) {
+      console.warn('[useNodeSelection] handleShowNeighbors: No data available');
+      return;
+    }
+    
+    console.log('[useNodeSelection] Data available - nodes:', transformedData.nodes.length, 'links:', transformedData.links.length);
+    
     // Start with nodes to explore - if we have highlighted nodes, use all of them
     // Otherwise, just use the clicked node
     const nodesToExplore = highlightedNodes.length > 0 ? highlightedNodes : [nodeId];
+    console.log('[useNodeSelection] Nodes to explore:', nodesToExplore);
     const newNeighborIds = new Set<string>();
     
     // Find neighbors for all nodes we're exploring
@@ -161,9 +172,9 @@ export function useNodeSelection(
     // Remove nodes we're already exploring to get only NEW neighbors
     nodesToExplore.forEach(id => newNeighborIds.delete(id));
     
-    // Find the actual neighbor nodes from our data
+    // Find the actual neighbor nodes from our data - with safety check for node.id
     const newNeighborNodes = transformedData.nodes.filter(node => 
-      newNeighborIds.has(node.id)
+      node?.id && newNeighborIds.has(node.id)
     );
     
     if (newNeighborNodes.length > 0) {
@@ -171,9 +182,9 @@ export function useNodeSelection(
       const allHighlightedIds = [...new Set([...nodesToExplore, ...Array.from(newNeighborIds)])];
       setHighlightedNodes(allHighlightedIds);
       
-      // Select all highlighted nodes with visual effects
+      // Select all highlighted nodes with visual effects - with safety check
       const allHighlightedNodes = transformedData.nodes.filter(node => 
-        allHighlightedIds.includes(node.id)
+        node?.id && allHighlightedIds.includes(node.id)
       );
       
       if (graphCanvasRef.current && typeof graphCanvasRef.current.selectNodes === 'function') {

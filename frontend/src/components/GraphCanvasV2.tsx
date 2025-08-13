@@ -223,9 +223,10 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
       getSelectedNodes: getSelectedNodesList
     } = useGraphSelection(nodes, links as any, {
       multiSelect: true,
-      onSelectionChange: (selected) => {
-        if (onSelectNodes) {
-          const selectedNodeObjects = nodes.filter(n => selected.nodes.includes(n.id));
+      onSelectionChange: (event) => {
+        // Only handle node selection events
+        if (onSelectNodes && event.target === 'node' && event.ids) {
+          const selectedNodeObjects = nodes.filter(n => event.ids.includes(n.id));
           onSelectNodes(selectedNodeObjects);
         }
       }
@@ -744,7 +745,8 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
     
     // Handle selected nodes
     useEffect(() => {
-      if (selectedNodes && selectedNodeIds) {
+      // Ensure selectedNodes is defined and is an array
+      if (selectedNodes && Array.isArray(selectedNodes) && selectedNodeIds) {
         const currentSelection = Array.from(selectedNodeIds);
         const toSelect = selectedNodes.filter(id => !currentSelection.includes(id));
         const toDeselect = currentSelection.filter(id => !selectedNodes.includes(id));
