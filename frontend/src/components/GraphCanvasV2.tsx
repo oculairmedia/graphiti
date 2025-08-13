@@ -139,18 +139,22 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
     
     // Track this instance
     const instanceId = useRef(++instanceCounter);
+    const hasLoggedInit = useRef(false);
     
-    // Log initialization
-    console.log(`[GraphCanvasV2 #${instanceId.current}] Initializing with`, {
-      nodeCount: initialNodes?.length || 0,
-      linkCount: initialLinks?.length || 0,
-      hasCallbacks: {
-        onNodeClick: !!onNodeClick,
-        onNodeSelect: !!onNodeSelect,
-        onStatsUpdate: !!onStatsUpdate,
-        onContextReady: !!onContextReady
-      }
-    });
+    // Log initialization only once
+    if (!hasLoggedInit.current) {
+      console.log(`[GraphCanvasV2 #${instanceId.current}] Initializing with`, {
+        nodeCount: initialNodes?.length || 0,
+        linkCount: initialLinks?.length || 0,
+        hasCallbacks: {
+          onNodeClick: !!onNodeClick,
+          onNodeSelect: !!onNodeSelect,
+          onStatsUpdate: !!onStatsUpdate,
+          onContextReady: !!onContextReady
+        }
+      });
+      hasLoggedInit.current = true;
+    }
     
     // Component state
     const cosmographRef = useRef<any>(null);
@@ -190,6 +194,12 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
       onStatsUpdate: handleStatsUpdate
     });
     
+    // Memoize initial data to prevent re-initialization
+    const memoizedInitialData = useMemo(
+      () => ({ nodes: initialNodes, links: initialLinks }),
+      [initialNodes?.length, initialLinks?.length] // Only re-create if lengths change
+    );
+    
     // Data management
     const {
       nodes,
@@ -205,8 +215,8 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
       removeLinks,
       refresh: refreshData
     } = useGraphDataManagement({
-      initialNodes,
-      initialLinks: initialLinks as any,
+      initialNodes: memoizedInitialData.nodes,
+      initialLinks: memoizedInitialData.links as any,
       dataSource: {
         enableCache: true,
         cacheDuration: 5 * 60 * 1000,
@@ -215,10 +225,9 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
       optimisticUpdates: true,
       autoDedup: true,
       onDataUpdate: (event) => {
-        console.log('[GraphCanvasV2] Data update event', event);
-        // Don't call updateStatistics here as it can cause loops
+        // Don't log here to avoid noise
       },
-      debug: true
+      debug: false
     });
     
     // Selection management
@@ -402,22 +411,37 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
         return { nodes: [], links: [] };
       }
       
-      // Transform nodes for Cosmograph
-      const transformedNodes = nodes.map((node, index) => ({
-        ...node,
-        index,
-        size: 5,
-        color: generateNodeTypeColor(node.node_type)
-      }));
+      // Transform nodes for Cosmograph - create a map for quick ID lookup
+      const nodeIdToIndex = new Map<string, number>();
+      const transformedNodes = nodes.map((node, index) => {
+        nodeIdToIndex.set(node.id, index);
+        return {
+          ...node,
+          index,
+          idx: index, // Add idx field for compatibility
+          size: node.size || 5,
+          color: generateNodeTypeColor(node.node_type),
+          label: node.label || node.name || node.id
+        };
+      });
       
-      // Transform links for Cosmograph
-      const transformedLinks = links.map(link => ({
-        ...link,
-        source: link.source,
-        target: link.target,
-        from: link.source,
-        to: link.target
-      }));
+      // Transform links for Cosmograph - add source and target indices
+      const transformedLinks = links.map(link => {
+        const sourceIndex = nodeIdToIndex.get(link.source || link.from);
+        const targetIndex = nodeIdToIndex.get(link.target || link.to);
+        
+        return {
+          ...link,
+          source: link.source || link.from,
+          target: link.target || link.to,
+          sourceIndex: sourceIndex !== undefined ? sourceIndex : -1,
+          targetIndex: targetIndex !== undefined ? targetIndex : -1,
+          sourceidx: sourceIndex !== undefined ? sourceIndex : -1, // For DuckDB compatibility
+          targetidx: targetIndex !== undefined ? targetIndex : -1, // For DuckDB compatibility
+          weight: link.weight || 1,
+          edge_type: link.edge_type || 'default'
+        };
+      }).filter(link => link.sourceIndex >= 0 && link.targetIndex >= 0); // Only keep valid links
       
       return {
         nodes: transformedNodes,
@@ -743,31 +767,53 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
         
         <Cosmograph
           ref={cosmographRef}
-          nodes={cosmographData.nodes}
+          // Use points/links instead of nodes/links
+          points={cosmographData.nodes}
           links={cosmographData.links}
-          nodeSize={config.nodeSize}
-          linkWidth={config.linkWidth}
+          // Point configuration - tell Cosmograph how to interpret the data
+          pointIdBy="id"
+          pointIndexBy="index"
+          pointLabelBy="label"
+          pointColorBy="node_type"
+          pointSizeBy="size"
+          // Link configuration - use indices for performance
+          linkSourceBy="source"
+          linkSourceIndexBy="sourceIndex"
+          linkTargetBy="target"
+          linkTargetIndexBy="targetIndex"
+          linkColorBy="edge_type"
+          linkWidthBy="weight"
+          // Visual configuration
           backgroundColor={config.backgroundColor}
-          nodeColor={(node: any) => {
-            if (isNodeHighlighted(node.id)) {
-              return '#ff0000';
-            }
-            if (isNodeSelected(node.id)) {
-              return '#0066cc';
-            }
-            return node.color || generateNodeTypeColor(node.node_type);
-          }}
-          linkColor={() => visualStyle.links?.stroke || '#999'}
-          showLabels={config.showLabels}
-          labelSize={config.labelSize}
-          simulationEnabled={config.simulationEnabled}
-          simulationGravity={config.simulationGravity}
-          simulationCenter={config.simulationCenter}
-          simulationRepulsion={config.simulationRepulsion}
-          simulationLinkDistance={config.simulationLinkDistance}
-          simulationLinkSpring={config.simulationLinkSpring}
-          simulationFriction={config.simulationFriction}
-          simulationDecay={config.simulationDecay}
+          pointSizeStrategy="auto"
+          pointSizeRange={[config.minNodeSize || 2, config.maxNodeSize || 8]}
+          // Color configuration
+          pointColorPalette={[
+            '#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6',
+            '#1abc9c', '#34495e', '#e67e22', '#95a5a6', '#d35400'
+          ]}
+          pointColorByMap={config.nodeTypeColors || {}}
+          // Interaction
+          enableDrag={true}
+          enableRightClickRepulsion={true}
+          renderLinks={config.renderLinks !== false}
+          hoveredPointCursor="pointer"
+          renderHoveredPointRing={true}
+          hoveredPointRingColor="#ff0000"
+          focusedPointRingColor="#0066cc"
+          // Layout and simulation
+          fitViewOnInit={true}
+          fitViewDuration={1000}
+          fitViewPadding={50}
+          simulationEnabled={config.simulationEnabled !== false}
+          simulationGravity={config.simulationGravity || 0.1}
+          simulationCenter={config.simulationCenter || 0.0}
+          simulationRepulsion={config.simulationRepulsion || 0.5}
+          simulationLinkDistance={config.simulationLinkDistance || 2}
+          simulationLinkSpring={config.simulationLinkSpring || 1}
+          simulationFriction={config.simulationFriction || 0.85}
+          simulationDecay={config.simulationDecay || 1000}
+          // Events
           onReady={() => {
             console.log('[GraphCanvasV2] Cosmograph ready');
             setIsReady(true);
@@ -778,7 +824,7 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
               handleInteractionNodeClick(node.id, { x: 0, y: 0 });
             }
           }}
-          onHover={(node: any) => {
+          onMouseMove={(node: any) => {
             handleInteractionNodeHover(node?.id || null);
           }}
         />
