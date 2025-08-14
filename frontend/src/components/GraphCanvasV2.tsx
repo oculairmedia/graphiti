@@ -34,6 +34,7 @@ import { useCosmographIncrementalUpdates } from '../hooks/useCosmographIncrement
 import { useLoadingCoordinator } from '../contexts/LoadingCoordinator';
 import { ProgressiveLoadingOverlay } from './ProgressiveLoadingOverlay';
 import { useWebSocketContext } from '../contexts/WebSocketProvider';
+import { GraphOverlays } from './GraphOverlays';
 import { 
   CosmographDataPreparer, 
   getGlobalDataPreparer,
@@ -151,6 +152,14 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
     // Glowing nodes state for real-time access highlighting
     const [glowingNodes, setGlowingNodes] = useState<Map<string, number>>(new Map());
     const glowTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    
+    // Live stats state for overlays
+    const [liveNodeCount, setLiveNodeCount] = useState<number>(0);
+    const [liveEdgeCount, setLiveEdgeCount] = useState<number>(0);
+    const [fps, setFps] = useState<number>(60);
+    const fpsIntervalRef = useRef<NodeJS.Timeout | null>(null);
+    const lastFrameTimeRef = useRef<number>(performance.now());
+    const frameCountRef = useRef<number>(0);
     
     // Context hooks
     const { config, setCosmographRef } = useGraphConfig();
@@ -779,9 +788,30 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
       }
     }, []);
     
-    // Subscribe to WebSocket events for node access highlighting
+    // Subscribe to WebSocket events for node access highlighting and live counts
     useEffect(() => {
       const unsubscribe = subscribeToWebSocket((event: any) => {
+        // Handle delta updates for live counts
+        if (event.type === 'delta' && event.data) {
+          const deltaData = event.data;
+          if (deltaData.added_nodes?.length > 0 || deltaData.removed_nodes?.length > 0) {
+            // Update live node count
+            setLiveNodeCount(prev => {
+              const newCount = prev + (deltaData.added_nodes?.length || 0) - (deltaData.removed_nodes?.length || 0);
+              console.log('[GraphCanvasV2] Live node count updated:', newCount);
+              return newCount;
+            });
+          }
+          if (deltaData.added_edges?.length > 0 || deltaData.removed_edges?.length > 0) {
+            // Update live edge count
+            setLiveEdgeCount(prev => {
+              const newCount = prev + (deltaData.added_edges?.length || 0) - (deltaData.removed_edges?.length || 0);
+              console.log('[GraphCanvasV2] Live edge count updated:', newCount);
+              return newCount;
+            });
+          }
+        }
+        
         if (event.type === 'node_access' && event.node_ids) {
           console.log('[GraphCanvasV2] Node access event received:', {
             nodeIds: event.node_ids,
@@ -835,6 +865,40 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
         }
       };
     }, [subscribeToWebSocket, nodes]);
+    
+    // FPS calculation effect
+    useEffect(() => {
+      let animationFrameId: number;
+      let lastTime = performance.now();
+      let frameCount = 0;
+      
+      const calculateFPS = () => {
+        const now = performance.now();
+        const delta = now - lastTime;
+        frameCount++;
+        
+        // Update FPS every second
+        if (delta >= 1000) {
+          const currentFps = Math.round((frameCount * 1000) / delta);
+          setFps(currentFps);
+          frameCount = 0;
+          lastTime = now;
+        }
+        
+        animationFrameId = requestAnimationFrame(calculateFPS);
+      };
+      
+      // Start FPS calculation
+      if (config.showFPS && cosmographData?.nodes?.length > 0) {
+        animationFrameId = requestAnimationFrame(calculateFPS);
+      }
+      
+      return () => {
+        if (animationFrameId) {
+          cancelAnimationFrame(animationFrameId);
+        }
+      };
+    }, [config.showFPS, cosmographData?.nodes?.length]);
     
     // Cleanup on unmount
     useEffect(() => {
@@ -964,6 +1028,10 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
     // Mark dataPreparation and canvas stages complete when cosmograph data is ready
     useEffect(() => {
       if (cosmographData && cosmographData.nodes?.length > 0) {
+        // Initialize live counts from initial data
+        setLiveNodeCount(cosmographData.nodes.length);
+        setLiveEdgeCount(cosmographData.links?.length || 0);
+        
         // Only mark complete if not already complete
         if (loadingCoordinator.getStageStatus('dataPreparation') !== 'complete') {
           loadingCoordinator.setStageComplete('dataPreparation', {
@@ -1008,6 +1076,17 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
             progress={loadingProgress}
           />
         )}
+        
+        {/* Graph Overlays for stats display */}
+        <GraphOverlays
+          nodeCount={statistics.nodeCount}
+          edgeCount={statistics.edgeCount}
+          liveNodeCount={liveNodeCount}
+          liveEdgeCount={liveEdgeCount}
+          fps={fps}
+          visibleNodes={cosmographData?.nodes?.length}
+          selectedNodes={selectedNodes.length}
+        />
         
         <Cosmograph
           ref={cosmographRef}
