@@ -189,8 +189,13 @@ export function useCosmographIncrementalUpdates(
         nodeIdToIndexRef.current.set(node.id, node.index);
       });
       
-      // Restart simulation after adding nodes to keep animation running
-      if (cosmographRef.current.restart) {
+      // Reheat simulation after adding nodes to keep animation running smoothly
+      // Using reheat instead of restart to avoid pausing the animation
+      if (cosmographRef.current.reheat) {
+        cosmographRef.current.reheat(0.1); // Small alpha value for gentle energy addition
+        log('Reheated simulation after adding nodes');
+      } else if (cosmographRef.current.restart) {
+        // Fallback to restart if reheat is not available
         cosmographRef.current.restart();
         log('Restarted simulation after adding nodes');
       }
@@ -298,8 +303,13 @@ export function useCosmographIncrementalUpdates(
       
       await cosmographRef.current.addLinks(sanitizedLinks);
       
-      // Restart simulation after adding edges to keep animation running
-      if (cosmographRef.current.restart) {
+      // Reheat simulation after adding edges to keep animation running smoothly
+      // Using reheat instead of restart to avoid pausing the animation
+      if (cosmographRef.current.reheat) {
+        cosmographRef.current.reheat(0.1); // Small alpha value for gentle energy addition
+        log('Reheated simulation after adding edges');
+      } else if (cosmographRef.current.restart) {
+        // Fallback to restart if reheat is not available
         cosmographRef.current.restart();
         log('Restarted simulation after adding edges');
       }
