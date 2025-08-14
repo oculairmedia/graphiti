@@ -8,6 +8,7 @@
 import { useCallback, useRef, useState, useEffect } from 'react';
 import type { GraphNode } from '../api/types';
 import type { GraphLink } from '../types/graph';
+import FallbackOrchestrator, { UpdateAttempt, ErrorClassifier } from '../utils/updateFallbackStrategies';
 import {
   transformNodesForCosmograph,
   transformEdgesForCosmograph,
@@ -72,6 +73,26 @@ export function useCosmographIncrementalUpdates(
   
   // Data preparer for consistent data transformation
   const dataPreparerRef = useRef<CosmographDataPreparer>(getGlobalDataPreparer(config));
+  
+  // Initialize fallback orchestrator
+  const fallbackOrchestratorRef = useRef<FallbackOrchestrator>(
+    new FallbackOrchestrator({
+      enableRetries: true,
+      maxGlobalRetries: 3,
+      enableQueueing: true,
+      queueMaxSize: 50,
+      enableBatching: true,
+      batchDelay: 100,
+      enableFullReload: !!fallbackToFullUpdate,
+      onFallbackTriggered: (strategy, attempt) => {
+        log(`Fallback strategy triggered: ${strategy} for ${attempt.operation}`);
+      },
+      onAllFallbacksFailed: (attempt) => {
+        log(`All fallback strategies failed for ${attempt.operation}`, 'error');
+        onError?.(new Error(`Failed to apply ${attempt.operation} after all fallback attempts`));
+      }
+    })
+  );
   
   // Update config when it changes
   useEffect(() => {
@@ -204,8 +225,21 @@ export function useCosmographIncrementalUpdates(
       return true;
     } catch (error) {
       log('Failed to add nodes:', error);
-      onError?.(error as Error);
-      return false;
+      
+      // Try fallback strategies for node addition failure
+      const attempt: UpdateAttempt = {
+        operation: 'addNodes',
+        data: { nodes },
+        error: error as Error,
+        attemptNumber: 1,
+        timestamp: Date.now()
+      };
+      
+      const fallbackSuccess = await fallbackOrchestratorRef.current.handleFailure(attempt);
+      if (!fallbackSuccess) {
+        onError?.(error as Error);
+      }
+      return fallbackSuccess;
     }
   }, [cosmographRef, log, onSuccess, onError]);
 
@@ -418,15 +452,34 @@ export function useCosmographIncrementalUpdates(
       updateMetrics(false, duration);
       
       log('Failed to apply delta:', error);
-      onError?.(error as Error);
       
-      // Fall back to full update if available
-      if (fallbackToFullUpdate) {
-        log('Falling back to full update');
-        fallbackToFullUpdate(currentNodes, currentEdges);
+      // Create update attempt for fallback handling
+      const attempt: UpdateAttempt = {
+        operation: `delta-${delta.operation}`,
+        data: delta,
+        error: error as Error,
+        attemptNumber: 1,
+        timestamp: Date.now()
+      };
+      
+      // Classify the error to determine best recovery approach
+      const classification = ErrorClassifier.classify(error as Error);
+      log(`Error classified as ${classification.severity}, recoverable: ${classification.recoverable}`);
+      
+      // Try fallback strategies
+      const fallbackSuccess = await fallbackOrchestratorRef.current.handleFailure(attempt);
+      
+      if (!fallbackSuccess) {
+        // All fallbacks failed, try full reload as last resort
+        onError?.(error as Error);
+        
+        if (fallbackToFullUpdate) {
+          log('All fallbacks failed, attempting full update');
+          fallbackToFullUpdate(currentNodes, currentEdges);
+        }
       }
       
-      return false;
+      return fallbackSuccess;
     }
   }, [
     cosmographRef,
