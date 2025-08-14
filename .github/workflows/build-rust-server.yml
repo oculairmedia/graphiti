@@ -2,7 +2,7 @@ name: Build and Push Rust Server Container
 
 on:
   push:
-    branches: [ main, feature/rust-server-ci, feature/duckdb-realtime-updates, feature/graph-service-performance ]
+    branches: [ main, feature/rust-server-ci, feature/duckdb-realtime-updates, feature/graph-service-performance, relevance-scoring ]
     paths:
       - 'graph-visualizer-rust/**'
       - '.github/workflows/build-rust-server.yml'
@@ -51,6 +51,7 @@ jobs:
           type=ref,event=pr
           type=sha
           type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+          type=raw,value=dev,enable=${{ github.ref == 'refs/heads/relevance-scoring' }}
 
     - name: Build and push Docker image
       uses: docker/build-push-action@v5
