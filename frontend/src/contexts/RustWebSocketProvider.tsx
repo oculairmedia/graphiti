@@ -28,6 +28,7 @@ export function RustWebSocketProvider({ children }: { children: React.ReactNode 
   
   const reconnectAttempts = 5;
   const reconnectDelay = 1000;
+  const isIntentionalCloseRef = useRef(false);
 
   const connect = useCallback(() => {
     // Prevent duplicate connections
@@ -37,6 +38,7 @@ export function RustWebSocketProvider({ children }: { children: React.ReactNode 
     }
     
     isConnectingRef.current = true;
+    isIntentionalCloseRef.current = false; // Reset the intentional close flag
     
     // Use environment variable for Rust WebSocket URL, with fallbacks
     let rustWsUrl: string;
@@ -194,13 +196,13 @@ export function RustWebSocketProvider({ children }: { children: React.ReactNode 
       };
 
       ws.onclose = () => {
-        console.log('[RustWebSocketProvider] Connection closed');
+        console.log('[RustWebSocketProvider] Connection closed, intentional:', isIntentionalCloseRef.current);
         wsRef.current = null;
         isConnectingRef.current = false;
         setIsConnected(false);
         
-        // Attempt reconnection
-        if (reconnectCountRef.current < reconnectAttempts) {
+        // Only attempt reconnection if this wasn't an intentional close
+        if (!isIntentionalCloseRef.current && reconnectCountRef.current < reconnectAttempts) {
           reconnectCountRef.current++;
           console.log(`[RustWebSocketProvider] Reconnecting... (${reconnectCountRef.current}/${reconnectAttempts})`);
           
@@ -220,6 +222,9 @@ export function RustWebSocketProvider({ children }: { children: React.ReactNode 
     connect();
 
     return () => {
+      // Mark this as an intentional close to prevent reconnection
+      isIntentionalCloseRef.current = true;
+      
       // Clean up all subscriptions
       subscribersRef.current.clear();
       
@@ -230,11 +235,14 @@ export function RustWebSocketProvider({ children }: { children: React.ReactNode 
       
       // Close WebSocket connection
       if (wsRef.current) {
+        // Disable auto-reconnect by clearing onclose handler before closing
+        wsRef.current.onclose = null;
         wsRef.current.onopen = null;
         wsRef.current.onmessage = null;
         wsRef.current.onerror = null;
-        wsRef.current.onclose = null;
-        wsRef.current.close();
+        if (wsRef.current.readyState === WebSocket.OPEN) {
+          wsRef.current.close();
+        }
         wsRef.current = null;
       }
       
@@ -242,7 +250,7 @@ export function RustWebSocketProvider({ children }: { children: React.ReactNode 
       isConnectingRef.current = false;
       setIsConnected(false);
     };
-  }, [connect]);
+  }, []); // Remove connect dependency to prevent re-renders
 
   const subscribe = useCallback((callback: (update: DeltaUpdate) => void) => {
     console.log('[RustWebSocketProvider] Adding subscriber, current count:', subscribersRef.current.size);

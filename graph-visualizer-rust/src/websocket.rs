@@ -41,10 +41,19 @@ async fn handle_socket(mut socket: WebSocket, state: AppState) {
     loop {
         tokio::select! {
             // Handle incoming WebSocket messages
-            Some(msg) = socket.recv() => {
-                match handle_client_message(msg, &mut socket, &mut use_deltas, &client_id, &state).await {
-                    MessageResult::Continue => continue,
-                    MessageResult::Close => break,
+            msg = socket.recv() => {
+                match msg {
+                    Some(msg) => {
+                        match handle_client_message(msg, &mut socket, &mut use_deltas, &client_id, &state).await {
+                            MessageResult::Continue => continue,
+                            MessageResult::Close => break,
+                        }
+                    }
+                    None => {
+                        // WebSocket stream has ended
+                        info!("WebSocket stream ended for client {}", client_id);
+                        break;
+                    }
                 }
             }
             
