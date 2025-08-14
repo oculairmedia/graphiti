@@ -423,6 +423,45 @@ export function useCosmographIncrementalUpdates(
   ]);
 
   /**
+   * Replace entire dataset using setConfig to avoid hard reloading
+   * This is an alternative to incremental updates when full replacement is needed
+   */
+  const replaceDataWithConfig = useCallback(async (nodes: GraphNode[], edges: GraphLink[]): Promise<boolean> => {
+    if (!cosmographRef.current?.setConfig) {
+      log('Cosmograph setConfig method not available');
+      return false;
+    }
+
+    try {
+      const startTime = performance.now();
+      log(`Replacing entire dataset: ${nodes.length} nodes, ${edges.length} edges`);
+      
+      // Reset and prepare all data
+      dataPreparerRef.current.reset();
+      const { data } = await dataPreparerRef.current.prepareInitialData(nodes, edges);
+      
+      // Use setConfig to replace data without hard reloading
+      await cosmographRef.current.setConfig({
+        points: data.nodes,
+        links: data.links
+      });
+      
+      // Rebuild index map
+      rebuildNodeIndexMap(nodes);
+      
+      const duration = performance.now() - startTime;
+      log(`Data replaced successfully using setConfig in ${duration.toFixed(2)}ms`);
+      
+      onSuccess?.('replaceData', nodes.length + edges.length);
+      return true;
+    } catch (error) {
+      log('Failed to replace data with setConfig:', error);
+      onError?.(error as Error);
+      return false;
+    }
+  }, [cosmographRef, rebuildNodeIndexMap, log, onSuccess, onError, currentNodes]);
+
+  /**
    * Reset the incremental update system
    */
   const reset = useCallback(() => {
@@ -442,6 +481,9 @@ export function useCosmographIncrementalUpdates(
   return {
     // Main delta application method
     applyDelta,
+    
+    // Full data replacement without hard reload
+    replaceDataWithConfig,
     
     // Individual operation methods (for advanced use)
     applyNodeAdditions,
