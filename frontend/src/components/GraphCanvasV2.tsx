@@ -1214,6 +1214,46 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
             config.linkWidthScheme === 'by-weight' && cosmographData.links[0]?.weight ? 'weight' : 
             undefined  // Don't use non-existent columns
           }
+          linkWidthByFn={
+            config.linkWidthScheme === 'uniform' ? 
+              undefined :
+            config.linkWidthScheme === 'by-source-pagerank' ?
+              (edgeType: any, linkIndex: number) => {
+                const link = cosmographData.links[linkIndex];
+                if (!link) return 2;
+                const sourceNode = cosmographData.nodes[link.sourceIndex];
+                if (!sourceNode) return 2;
+                const pagerank = sourceNode.pagerank_centrality || sourceNode.pagerank || 0;
+                // PageRank is usually small, so scale more aggressively and add base width
+                return Math.max(1, Math.min(8, 2 + (pagerank * 100)));
+              } :
+            config.linkWidthScheme === 'by-source-centrality' ?
+              (edgeType: any, linkIndex: number) => {
+                const link = cosmographData.links[linkIndex];
+                if (!link) return 2;
+                const sourceNode = cosmographData.nodes[link.sourceIndex];
+                if (!sourceNode) return 2;
+                const centrality = sourceNode.degree_centrality || 0;
+                return Math.max(1, Math.min(8, 2 + (centrality * 6)));
+              } :
+            config.linkWidthScheme === 'by-source-betweenness' ?
+              (edgeType: any, linkIndex: number) => {
+                const link = cosmographData.links[linkIndex];
+                if (!link) return 2;
+                const sourceNode = cosmographData.nodes[link.sourceIndex];
+                if (!sourceNode) return 2;
+                const betweenness = sourceNode.betweenness_centrality || 0;
+                return Math.max(1, Math.min(8, 2 + (betweenness * 6)));
+              } :
+            config.linkWidthScheme === 'by-weight' ?
+              (edgeType: any, linkIndex: number) => {
+                const link = cosmographData.links[linkIndex];
+                if (!link) return 2;
+                const weight = link.weight || 1;
+                return Math.max(1, Math.min(8, 1 + weight * 2));
+              } :
+            undefined
+          }
           // Link visual properties - increased visibility
           linkWidth={config.linkWidth || 2}
           linkOpacity={config.linkOpacity || 0.85}
