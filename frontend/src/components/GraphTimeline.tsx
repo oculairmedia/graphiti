@@ -27,7 +27,7 @@ export interface GraphTimelineHandle {
 }
 
 export const GraphTimeline = forwardRef<GraphTimelineHandle, GraphTimelineProps>(
-  ({ onTimeRangeChange, className = '', isVisible = true, onVisibilityChange, cosmographRef, selectedCount = 0, onClearSelection, onScreenshot }, ref) => {
+  ({ onTimeRangeChange, className = '', isVisible = true, onVisibilityChange, cosmographRef, selectedCount = 0, onClearSelection, onScreenshot, updateMode = 'instant' }, ref) => {
     const timelineRef = useRef<CosmographTimelineRef>(null);
     const cosmograph = useCosmograph();
     
