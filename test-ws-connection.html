@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>WebSocket Connection Test</title>
+</head>
+<body>
+    <h1>WebSocket Connection Test</h1>
+    <div id="status">Connecting...</div>
+    <div id="log" style="white-space: pre-wrap; font-family: monospace; background: #f0f0f0; padding: 10px; margin-top: 20px;"></div>
+    
+    <script>
+        const log = document.getElementById('log');
+        const status = document.getElementById('status');
+        let ws;
+        let pingInterval;
+        const PING_INTERVAL = 30000; // 30 seconds
+        
+        function addLog(message) {
+            const timestamp = new Date().toISOString();
+            log.textContent += `[${timestamp}] ${message}\n`;
+            console.log(message);
+        }
+        
+        function connect() {
+            addLog('Attempting to connect to ws://192.168.50.90:3000/ws');
+            ws = new WebSocket('ws://192.168.50.90:3000/ws');
+            
+            ws.onopen = () => {
+                addLog('Connected to WebSocket server');
+                status.textContent = 'Connected';
+                status.style.color = 'green';
+                
+                // Subscribe to delta updates
+                ws.send(JSON.stringify({ type: 'subscribe:deltas' }));
+                addLog('Sent subscribe:deltas message');
+                
+                // Start ping interval
+                if (pingInterval) clearInterval(pingInterval);
+                pingInterval = setInterval(() => {
+                    if (ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({ type: 'ping' }));
+                        addLog('Sent ping');
+                    }
+                }, PING_INTERVAL);
+            };
+            
+            ws.onmessage = (event) => {
+                const message = JSON.parse(event.data);
+                addLog(`Received message: ${message.type}`);
+                
+                if (message.type === 'pong') {
+                    addLog('Pong received - connection is alive');
+                }
+            };
+            
+            ws.onerror = (error) => {
+                addLog(`WebSocket error: ${error}`);
+                status.textContent = 'Error';
+                status.style.color = 'red';
+            };
+            
+            ws.onclose = () => {
+                addLog('WebSocket connection closed');
+                status.textContent = 'Disconnected';
+                status.style.color = 'red';
+                if (pingInterval) {
+                    clearInterval(pingInterval);
+                    pingInterval = null;
+                }
+                
+                // Attempt reconnect after 5 seconds
+                setTimeout(() => {
+                    addLog('Attempting to reconnect...');
+                    connect();
+                }, 5000);
+            };
+        }
+        
+        // Initial connection
+        connect();
+    </script>
+</body>
+</html>
