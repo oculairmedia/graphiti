@@ -709,27 +709,63 @@ async def merge_node_into(
     # Trigger centrality recalculation for the canonical node
     if recalculate_centrality and stats['edges_transferred'] > 0:
         try:
-            # Simple direct calculation for now
-            # TODO: Use single-node endpoint once GRAPH-309 is implemented
             logger.info(f'Recalculating centrality after merge of {canonical_uuid}')
             
-            # Calculate degree centrality directly
-            degree_query = """
-            MATCH (n:Entity {uuid: $uuid})
-            OPTIONAL MATCH (n)-[r]-(m)
-            WITH n, COUNT(DISTINCT m) as degree
-            SET n.degree_centrality = CASE WHEN degree > 0 THEN toFloat(degree) / 10.0 ELSE 0.0 END,
-                n.pagerank_centrality = CASE WHEN degree > 0 THEN 0.15 + 0.85 * toFloat(degree) / 100.0 ELSE 0.15 END,
-                n.betweenness_centrality = CASE WHEN degree > 0 THEN toFloat(degree) / 20.0 ELSE 0.0 END
-            RETURN degree
-            """
+            # Try to use the single-node centrality endpoint if available
+            import httpx
+            import os
             
-            result, _, _ = await driver.execute_query(degree_query, uuid=canonical_uuid)
-            if result:
-                logger.info(f'Updated centrality for {canonical_uuid}: degree={result[0]["degree"]}')
-                stats['centrality_recalculated'] = True
-            else:
-                stats['centrality_recalculated'] = False
+            centrality_host = os.getenv('CENTRALITY_SERVICE_HOST', 'localhost')
+            centrality_port = os.getenv('CENTRALITY_SERVICE_PORT', '3003')
+            centrality_url = f'http://{centrality_host}:{centrality_port}'
+            
+            try:
+                # Call single-node centrality endpoint
+                async with httpx.AsyncClient(timeout=5.0) as client:
+                    response = await client.post(
+                        f'{centrality_url}/centrality/node/{canonical_uuid}',
+                        json={
+                            'store_results': True,
+                            'metrics': ['degree', 'pagerank', 'betweenness']
+                        }
+                    )
+                    
+                    if response.status_code == 200:
+                        result = response.json()
+                        metrics = result.get('metrics', {})
+                        logger.info(
+                            f'Updated centrality via service for {canonical_uuid}: '
+                            f'degree={metrics.get("degree", 0):.3f}, '
+                            f'pagerank={metrics.get("pagerank", 0):.3f}, '
+                            f'betweenness={metrics.get("betweenness", 0):.3f}'
+                        )
+                        stats['centrality_recalculated'] = True
+                        stats['centrality_method'] = 'service'
+                    else:
+                        raise Exception(f'Service returned status {response.status_code}')
+                        
+            except Exception as service_error:
+                # Fallback to direct calculation if service is unavailable
+                logger.warning(f'Centrality service unavailable ({service_error}), using direct calculation')
+                
+                # Calculate degree centrality directly
+                degree_query = """
+                MATCH (n:Entity {uuid: $uuid})
+                OPTIONAL MATCH (n)-[r]-(m)
+                WITH n, COUNT(DISTINCT m) as degree
+                SET n.degree_centrality = CASE WHEN degree > 0 THEN toFloat(degree) / 10.0 ELSE 0.0 END,
+                    n.pagerank_centrality = CASE WHEN degree > 0 THEN 0.15 + 0.85 * toFloat(degree) / 100.0 ELSE 0.15 END,
+                    n.betweenness_centrality = CASE WHEN degree > 0 THEN toFloat(degree) / 20.0 ELSE 0.0 END
+                RETURN degree
+                """
+                
+                result, _, _ = await driver.execute_query(degree_query, uuid=canonical_uuid)
+                if result:
+                    logger.info(f'Updated centrality directly for {canonical_uuid}: degree={result[0]["degree"]}')
+                    stats['centrality_recalculated'] = True
+                    stats['centrality_method'] = 'direct'
+                else:
+                    stats['centrality_recalculated'] = False
                     
         except Exception as e:
             logger.error(f'Failed to recalculate centrality: {e}')
