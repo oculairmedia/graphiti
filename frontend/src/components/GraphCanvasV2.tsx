@@ -1169,7 +1169,9 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
                 if (!sourceNode) return config.linkColor;
                 // Use the color from config.nodeTypeColors or fallback to generated color
                 const nodeType = sourceNode.node_type;
-                return config.nodeTypeColors?.[nodeType] || generateNodeTypeColor(nodeType);
+                const baseColor = config.nodeTypeColors?.[nodeType] || generateNodeTypeColor(nodeType);
+                // Make the color more visible by ensuring good opacity
+                return hexToRgba(baseColor, 0.8); // Use 80% opacity for better visibility
               } :
             config.linkColorScheme === 'gradient' ? 
               (edgeType: any, linkIndex: number) => {
@@ -1181,7 +1183,9 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
                 if (!sourceNode) return config.linkColor;
                 // Use the color from config.nodeTypeColors or fallback to generated color
                 const nodeType = sourceNode.node_type;
-                return config.nodeTypeColors?.[nodeType] || generateNodeTypeColor(nodeType);
+                const baseColor = config.nodeTypeColors?.[nodeType] || generateNodeTypeColor(nodeType);
+                // Make the color more visible by ensuring good opacity
+                return hexToRgba(baseColor, 0.8); // Use 80% opacity for better visibility
               } :
             config.linkColorScheme === 'by-community' ?
               (edgeType: any, linkIndex: number) => {
@@ -1210,10 +1214,10 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
             config.linkWidthScheme === 'by-weight' && cosmographData.links[0]?.weight ? 'weight' : 
             undefined  // Don't use non-existent columns
           }
-          // Link visual properties
-          linkWidth={config.linkWidth || 1}
-          linkOpacity={config.linkOpacity || 0.6}
-          linkColor={config.linkColor || '#999999'}
+          // Link visual properties - increased visibility
+          linkWidth={config.linkWidth || 2}
+          linkOpacity={config.linkOpacity || 0.85}
+          linkColor={config.linkColor || '#9CA3AF'}
           linkArrows={config.edgeArrows || false}
           linkArrowSize={config.edgeArrowScale || 1}
           linkCurvature={config.curvedLinks ? (config.curvedLinkWeight || 0.5) : 0}
@@ -1234,7 +1238,10 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
           hoveredPointCursor={config.hoveredPointCursor || "pointer"}
           renderHoveredPointRing={config.renderHoveredPointRing !== false}
           hoveredPointRingColor={config.hoveredPointRingColor || "#ff0000"}
+          renderFocusedPointRing={true}
           focusedPointRingColor={glowingNodes.size > 0 ? (config.nodeAccessHighlightColor || "#FFD700") : (config.focusedPointRingColor || "#0066cc")}
+          renderSelectedPointRing={true}
+          selectedPointRingColor={glowingNodes.size > 0 ? (config.nodeAccessHighlightColor || "#FFD700") : (config.focusedPointRingColor || "#0066cc")}
           // Advanced rendering options
           pixelationThreshold={config.pixelationThreshold || 0}
           renderSelectedNodesOnTop={config.renderSelectedNodesOnTop || false}

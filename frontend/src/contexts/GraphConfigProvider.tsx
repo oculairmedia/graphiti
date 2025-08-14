@@ -88,14 +88,14 @@ const defaultStableConfig: StableConfig = {
   quadtreeLevels: 12,
   
   // Static appearance
-  linkWidth: 1,
+  linkWidth: 2,
   linkWidthBy: 'weight',
   linkWidthScheme: 'uniform',  // New: scheme for link width
   linkWidthScale: 0.5,
-  linkOpacity: 0.3,
+  linkOpacity: 0.85,
   linkOpacityScheme: 'uniform',  // New: scheme for link opacity
   linkGreyoutOpacity: 0.1,
-  linkColor: '#E5E7EB',
+  linkColor: '#9CA3AF',
   linkColorScheme: 'uniform',
   scaleLinksOnZoom: true,
   backgroundColor: '#000000',
