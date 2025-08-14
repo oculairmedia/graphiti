@@ -189,15 +189,15 @@ export function useCosmographIncrementalUpdates(
         nodeIdToIndexRef.current.set(node.id, node.index);
       });
       
-      // Reheat simulation after adding nodes to keep animation running smoothly
-      // Using reheat instead of restart to avoid pausing the animation
-      if (cosmographRef.current.reheat) {
-        cosmographRef.current.reheat(0.1); // Small alpha value for gentle energy addition
-        log('Reheated simulation after adding nodes');
+      // Keep simulation running smoothly after adding nodes
+      // Use start() with low alpha instead of restart() to avoid pausing
+      if (cosmographRef.current.start) {
+        cosmographRef.current.start(0.1); // Small alpha value for gentle energy addition
+        log('Started simulation with alpha=0.1 after adding nodes');
       } else if (cosmographRef.current.restart) {
-        // Fallback to restart if reheat is not available
+        // Fallback to restart if start is not available
         cosmographRef.current.restart();
-        log('Restarted simulation after adding nodes');
+        log('Restarted simulation after adding nodes (fallback)');
       }
       
       onSuccess?.('addNodes', nodes.length);
@@ -303,15 +303,15 @@ export function useCosmographIncrementalUpdates(
       
       await cosmographRef.current.addLinks(sanitizedLinks);
       
-      // Reheat simulation after adding edges to keep animation running smoothly
-      // Using reheat instead of restart to avoid pausing the animation
-      if (cosmographRef.current.reheat) {
-        cosmographRef.current.reheat(0.1); // Small alpha value for gentle energy addition
-        log('Reheated simulation after adding edges');
+      // Keep simulation running smoothly after adding edges
+      // Use start() with low alpha instead of restart() to avoid pausing
+      if (cosmographRef.current.start) {
+        cosmographRef.current.start(0.05); // Even smaller alpha for edges as they affect less
+        log('Started simulation with alpha=0.05 after adding edges');
       } else if (cosmographRef.current.restart) {
-        // Fallback to restart if reheat is not available
+        // Fallback to restart if start is not available
         cosmographRef.current.restart();
-        log('Restarted simulation after adding edges');
+        log('Restarted simulation after adding edges (fallback)');
       }
       
       onSuccess?.('addEdges', sanitizedLinks.length);
