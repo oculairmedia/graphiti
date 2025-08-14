@@ -237,6 +237,7 @@ export function sanitizeLink(
 export class CosmographDataPreparer {
   private config: DataPrepConfig;
   private nodeIdToIndex: Map<string, number> = new Map();
+  private indexToNodeData: Map<number, any> = new Map();  // Store minimal node data
   private nodeTypeIndexMap: Map<string, number> = new Map();
   private preparedConfig: any = null;
   
@@ -253,11 +254,19 @@ export class CosmographDataPreparer {
   ): Promise<{ data: any; config: any }> {
     // Clear maps
     this.nodeIdToIndex.clear();
+    this.indexToNodeData.clear();
     this.nodeTypeIndexMap.clear();
     
     // Sanitize all nodes
     const sanitizedNodes = nodes.map((node, index) => {
       this.nodeIdToIndex.set(node.id, index);
+      // Store minimal node data for click handling
+      this.indexToNodeData.set(index, {
+        id: node.id,
+        label: node.label || node.name || node.id,
+        node_type: node.node_type,
+        summary: node.summary
+      });
       // Pass isIncremental=false for initial load
       return sanitizeNode(node, index, this.config, false);
     });
@@ -303,6 +312,13 @@ export class CosmographDataPreparer {
       
       const index = this.nodeIdToIndex.size;
       this.nodeIdToIndex.set(node.id, index);
+      // Store minimal node data for click handling
+      this.indexToNodeData.set(index, {
+        id: node.id,
+        label: node.label || node.name || node.id,
+        node_type: node.node_type,
+        summary: node.summary
+      });
       // Pass isIncremental=true for incremental updates
       sanitizedNodes.push(sanitizeNode(node, index, this.config, true));
     }
@@ -347,10 +363,26 @@ export class CosmographDataPreparer {
   }
   
   /**
+   * Get node data by index
+   */
+  getNodeByIndex(index: number): any | undefined {
+    return this.indexToNodeData.get(index);
+  }
+  
+  /**
+   * Get node ID by index
+   */
+  getNodeIdByIndex(index: number): string | undefined {
+    const nodeData = this.indexToNodeData.get(index);
+    return nodeData?.id;
+  }
+  
+  /**
    * Reset the preparer
    */
   reset() {
     this.nodeIdToIndex.clear();
+    this.indexToNodeData.clear();
     this.nodeTypeIndexMap.clear();
     this.preparedConfig = null;
   }

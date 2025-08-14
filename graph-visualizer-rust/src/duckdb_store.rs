@@ -868,4 +868,50 @@ impl DuckDBStore {
         
         Ok(edges)
     }
+    
+    pub async fn get_node_by_id(&self, id: &str) -> Result<Option<Node>> {
+        let conn = self.conn.lock().unwrap();
+        
+        // Query for a single node by ID with all properties including centrality
+        let query = "SELECT * FROM nodes WHERE id = $1 LIMIT 1";
+        
+        let mut stmt = conn.prepare(query)?;
+        let mut rows = stmt.query_map(&[&id], |row| {
+            // Extract all properties including centrality metrics
+            let mut properties = HashMap::new();
+            
+            // Add centrality metrics if they exist
+            if let Ok(degree) = row.get::<_, f64>(5) {  // degree_centrality column
+                properties.insert("degree_centrality".to_string(), serde_json::Value::from(degree));
+            }
+            if let Ok(betweenness) = row.get::<_, f64>(6) {  // betweenness_centrality column
+                properties.insert("betweenness_centrality".to_string(), serde_json::Value::from(betweenness));
+            }
+            if let Ok(pagerank) = row.get::<_, f64>(7) {  // pagerank_centrality column
+                properties.insert("pagerank_centrality".to_string(), serde_json::Value::from(pagerank));
+            }
+            if let Ok(eigenvector) = row.get::<_, f64>(8) {  // eigenvector_centrality column
+                properties.insert("eigenvector_centrality".to_string(), serde_json::Value::from(eigenvector));
+            }
+            
+            // Add other properties
+            if let Ok(created_at) = row.get::<_, String>(12) {  // created_at column
+                properties.insert("created_at".to_string(), serde_json::Value::from(created_at));
+            }
+            
+            Ok(Node {
+                id: row.get(0)?,
+                label: row.get(1)?,
+                node_type: row.get(2)?,
+                summary: row.get(3).ok(),
+                properties,
+            })
+        })?;
+        
+        if let Some(result) = rows.next() {
+            Ok(Some(result?))
+        } else {
+            Ok(None)
+        }
+    }
 }
