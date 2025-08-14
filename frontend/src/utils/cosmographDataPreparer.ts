@@ -139,7 +139,9 @@ export function sanitizeNode(
     sanitizedNode.betweenness_centrality = Number(sanitizedProperties.betweenness_centrality || 0) + (Math.random() * epsilon);
     sanitizedNode.eigenvector_centrality = Number(sanitizedProperties.eigenvector_centrality || 0) + (Math.random() * epsilon);
     sanitizedNode.color = generateNodeTypeColor(node.node_type || 'Unknown', nodeTypeIndex);
-    sanitizedNode.size = Number(node.size || 5);
+    // Use centrality for size - scale it up for visibility (multiply by 100 for better range)
+    const centralityValue = sanitizedNode.degree_centrality || sanitizedNode.pagerank_centrality || 0.01;
+    sanitizedNode.size = Math.max(2, centralityValue * 100);
     sanitizedNode.cluster = String(cluster);
     sanitizedNode.clusterStrength = Number(config.clusterStrength ?? 0.7);
     // CRITICAL: created_at_timestamp MUST be a number (Unix timestamp) for DuckDB
@@ -176,7 +178,9 @@ export function sanitizeNode(
     sanitizedNode.x = node.x ?? null;
     sanitizedNode.y = node.y ?? null;
     sanitizedNode.color = generateNodeTypeColor(node.node_type || 'Unknown', nodeTypeIndex);
-    sanitizedNode.size = Number(node.size || 5);
+    // Use centrality for size - scale it up for visibility (multiply by 100 for better range)
+    const centralityValue = sanitizedNode.degree_centrality || sanitizedNode.pagerank_centrality || 0.01;
+    sanitizedNode.size = Math.max(2, centralityValue * 100);
     // Convert timestamp to number for consistency with DuckDB DOUBLE type
     if (node.created_at_timestamp) {
       const timestamp = new Date(node.created_at_timestamp).getTime();

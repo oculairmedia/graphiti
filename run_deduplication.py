@@ -146,7 +146,7 @@ async def resolve_duplicates(graphiti: Graphiti, duplicates):
 
                 if not existing_check[0]:  # No existing edge
                     # Create the edge
-                    duplicate_edges = build_duplicate_of_edges(
+                    duplicate_edges, merge_operations = build_duplicate_of_edges(
                         EpisodicNode(
                             name='Deduplication Maintenance',
                             uuid=str(uuid4()),
@@ -160,6 +160,12 @@ async def resolve_duplicates(graphiti: Graphiti, duplicates):
                         await edge.save(graphiti.driver)
                         edges_created += 1
                         print(f'Created edge: {dup_node.name} IS_DUPLICATE_OF {primary_node.name}')
+                    
+                    # Execute merge operations
+                    if merge_operations:
+                        from graphiti_core.utils.maintenance.edge_operations import execute_merge_operations
+                        await execute_merge_operations(graphiti.driver, merge_operations)
+                        print(f'Merged edges from {dup_node.name} into {primary_node.name}')
 
     print(f'\nCreated {edges_created} IS_DUPLICATE_OF edges')
 

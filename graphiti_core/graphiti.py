@@ -506,7 +506,7 @@ class Graphiti:
                 max_coroutines=self.max_coroutines,
             )
 
-            duplicate_of_edges = build_duplicate_of_edges(episode, now, node_duplicates)
+            duplicate_of_edges, merge_operations = build_duplicate_of_edges(episode, now, node_duplicates)
 
             entity_edges = resolved_edges + invalidated_edges + duplicate_of_edges
 
@@ -520,6 +520,11 @@ class Graphiti:
             await add_nodes_and_edges_bulk(
                 self.driver, [episode], episodic_edges, hydrated_nodes, entity_edges, self.embedder
             )
+            
+            # Execute merge operations after nodes and edges are saved
+            if merge_operations:
+                from graphiti_core.utils.maintenance.edge_operations import execute_merge_operations
+                await execute_merge_operations(self.driver, merge_operations)
 
             # Update any communities
             if update_communities:

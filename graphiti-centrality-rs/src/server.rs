@@ -253,6 +253,8 @@ async fn all_centralities_endpoint(
             if request.store_results {
                 if let Err(e) = state.client.store_centrality_scores(&result).await {
                     error!("Failed to store all centrality scores: {}", e);
+                } else {
+                    info!("✅ Centrality scores stored successfully. Visualization server should reload data from http://localhost:3000/api/data/reload");
                 }
             }
 

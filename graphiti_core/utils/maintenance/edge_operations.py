@@ -17,6 +17,7 @@ limitations under the License.
 import logging
 from datetime import datetime
 from time import time
+from typing import Any
 
 from pydantic import BaseModel
 from typing_extensions import LiteralString
@@ -43,6 +44,62 @@ from graphiti_core.utils.datetime_utils import ensure_utc, utc_now
 logger = logging.getLogger(__name__)
 
 
+async def execute_merge_operations(
+    driver,
+    merge_operations: list[tuple[str, str]],
+) -> dict[str, Any]:
+    """
+    Execute node merge operations to transfer edges from duplicates to canonical nodes.
+    
+    Args:
+        driver: The graph database driver
+        merge_operations: List of (canonical_uuid, duplicate_uuid) tuples
+        
+    Returns:
+        Dictionary with overall statistics from all merges
+    """
+    from graphiti_core.utils.maintenance.node_operations import merge_node_into
+    
+    total_stats = {
+        'total_merges': 0,
+        'total_edges_transferred': 0,
+        'total_conflicts_resolved': 0,
+        'failed_merges': [],
+        'total_duration_ms': 0,
+    }
+    
+    for canonical_uuid, duplicate_uuid in merge_operations:
+        try:
+            stats = await merge_node_into(driver, canonical_uuid, duplicate_uuid)
+            total_stats['total_merges'] += 1
+            total_stats['total_edges_transferred'] += stats['edges_transferred']
+            total_stats['total_conflicts_resolved'] += stats['conflicts_resolved']
+            total_stats['total_duration_ms'] += stats['duration_ms']
+            
+            if stats['errors']:
+                total_stats['failed_merges'].append({
+                    'canonical': canonical_uuid,
+                    'duplicate': duplicate_uuid,
+                    'errors': stats['errors']
+                })
+        except Exception as e:
+            logger.error(f'Failed to merge {duplicate_uuid} into {canonical_uuid}: {e}')
+            total_stats['failed_merges'].append({
+                'canonical': canonical_uuid,
+                'duplicate': duplicate_uuid,
+                'errors': [str(e)]
+            })
+    
+    if total_stats['total_merges'] > 0:
+        logger.info(
+            f'Completed {total_stats["total_merges"]} merge operations: '
+            f'{total_stats["total_edges_transferred"]} edges transferred, '
+            f'{total_stats["total_conflicts_resolved"]} conflicts resolved'
+        )
+    
+    return total_stats
+
+
 def build_episodic_edges(
     entity_nodes: list[EntityNode],
     episode_uuid: str,
@@ -67,8 +124,17 @@ def build_duplicate_of_edges(
     episode: EpisodicNode,
     created_at: datetime,
     duplicate_nodes: list[tuple[EntityNode, EntityNode]],
-) -> list[EntityEdge]:
+) -> tuple[list[EntityEdge], list[tuple[str, str]]]:
+    """
+    Build IS_DUPLICATE_OF edges and return merge operations to be performed.
+    
+    Returns:
+        Tuple of (edges list, merge operations list)
+        where merge operations are tuples of (canonical_uuid, duplicate_uuid)
+    """
     is_duplicate_of_edges: list[EntityEdge] = []
+    merge_operations: list[tuple[str, str]] = []
+    
     for source_node, target_node in duplicate_nodes:
         if source_node.uuid == target_node.uuid:
             continue
@@ -85,8 +151,11 @@ def build_duplicate_of_edges(
                 valid_at=created_at,
             )
         )
+        
+        # Add merge operation (target is canonical, source is duplicate)
+        merge_operations.append((target_node.uuid, source_node.uuid))
 
-    return is_duplicate_of_edges
+    return is_duplicate_of_edges, merge_operations
 
 
 def build_community_edges(
