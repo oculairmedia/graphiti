@@ -590,6 +590,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/cache/clear", post(clear_cache))
         .route("/api/cache/stats", get(get_cache_stats))
         .route("/api/nodes/:id/summary", patch(update_node_summary))
+        .route("/api/nodes/:id", get(get_node_by_id))
         // DuckDB endpoints
         .route("/api/duckdb/info", get(get_duckdb_info))
         .route("/api/arrow/nodes", get(get_nodes_arrow))
@@ -2207,6 +2208,35 @@ async fn get_current_sequence(
         "sequence": sequence,
         "timestamp": chrono::Utc::now().to_rfc3339(),
     })))
+}
+
+async fn get_node_by_id(
+    Path(id): Path<String>,
+    State(state): State<AppState>,
+) -> Result<Json<Node>, (StatusCode, Json<ErrorResponse>)> {
+    // Get from DuckDB (which has the most up-to-date data including incremental updates)
+    match state.duckdb_store.get_node_by_id(&id).await {
+        Ok(Some(node)) => {
+            Ok(Json(node))
+        }
+        Ok(None) => {
+            Err((
+                StatusCode::NOT_FOUND,
+                Json(ErrorResponse {
+                    error: format!("Node with id '{}' not found", id),
+                }),
+            ))
+        }
+        Err(e) => {
+            error!("Failed to get node by ID: {}", e);
+            Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: format!("Failed to get node: {}", e),
+                }),
+            ))
+        }
+    }
 }
 
 // Force rebuild for CI/CD workflow

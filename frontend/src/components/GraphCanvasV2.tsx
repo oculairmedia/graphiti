@@ -1188,46 +1188,59 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
               onContextReady?.(true);
             }
           }}
-          onClick={(index?: number, pointPosition?: [number, number], event?: MouseEvent) => {
+          onClick={async (index?: number, pointPosition?: [number, number], event?: MouseEvent) => {
             if (typeof index === 'number' && index >= 0) {
-              // Since we're using incremental updates without updating React state,
-              // we need to get the node data from Cosmograph's internal state
-              // For now, we'll just handle what we can access
+              // Visual selection first for immediate feedback
+              requestAnimationFrame(() => {
+                if (cosmographRef.current?.selectPoint) {
+                  cosmographRef.current.selectPoint(index);
+                } else if (cosmographRef.current?.selectPoints) {
+                  cosmographRef.current.selectPoints([index]);
+                }
+              });
               
-              // Check if index is within the original nodes array
+              // Try to get node from local state first (for original nodes)
               if (index < nodes.length) {
                 const node = nodes[index];
                 if (node) {
-                  // First, show the info panel immediately for instant feedback
                   onNodeClick(node);
                   onNodeSelect(node.id);
-                  
-                  // Then update visual selection (following the old implementation pattern)
-                  requestAnimationFrame(() => {
-                    // Select the node visually in Cosmograph
-                    if (cosmographRef.current?.selectPoint) {
-                      cosmographRef.current.selectPoint(index);
-                    } else if (cosmographRef.current?.selectPoints) {
-                      cosmographRef.current.selectPoints([index]);
-                    }
-                  });
+                  return;
+                }
+              }
+              
+              // For incrementally added nodes, check the data preparer
+              const nodeData = dataPreparerRef.current.getNodeByIndex(index);
+              if (nodeData) {
+                console.log(`[GraphCanvasV2] Clicked on incrementally added node:`, nodeData);
+                
+                // We have the basic node data, now fetch full details from server
+                if (nodeData.id) {
+                  try {
+                    // Import the graph client
+                    const { GraphClient } = await import('../api/graphClient');
+                    const client = new GraphClient();
+                    
+                    // Fetch full node details including centrality
+                    const fullNodeData = await client.getNodeDetails(nodeData.id);
+                    console.log(`[GraphCanvasV2] Fetched full node details:`, fullNodeData);
+                    
+                    // Call the callbacks with the full data
+                    onNodeClick(fullNodeData as any);
+                    onNodeSelect(nodeData.id);
+                  } catch (error) {
+                    console.error(`[GraphCanvasV2] Failed to fetch node details:`, error);
+                    // Fall back to using the minimal data we have
+                    onNodeClick(nodeData);
+                    onNodeSelect(nodeData.id);
+                  }
+                } else {
+                  // Use the minimal data we have
+                  onNodeClick(nodeData);
+                  onNodeSelect(nodeData.id || '');
                 }
               } else {
-                // This is a newly added node via incremental update
-                // We don't have its data in React state, but we can still select it visually
-                console.log(`[GraphCanvasV2] Clicked on incrementally added node at index ${index}`);
-                
-                // Visual selection still works
-                requestAnimationFrame(() => {
-                  if (cosmographRef.current?.selectPoint) {
-                    cosmographRef.current.selectPoint(index);
-                  } else if (cosmographRef.current?.selectPoints) {
-                    cosmographRef.current.selectPoints([index]);
-                  }
-                });
-                
-                // TODO: Get node data from Cosmograph's internal state or maintain a separate cache
-                // For now, we just can't show the info panel for incrementally added nodes
+                console.warn(`[GraphCanvasV2] No node data found for index ${index}`);
               }
             } else {
               // Clicked on empty space - clear selection
