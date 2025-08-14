@@ -834,7 +834,7 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
             return updated;
           });
           
-          // Highlight nodes in Cosmograph by selecting them
+          // Highlight nodes in Cosmograph using focus (shows the gold ring)
           if (cosmographRef.current && nodes) {
             const indices: number[] = [];
             event.node_ids.forEach((nodeId: string) => {
@@ -842,17 +842,29 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
               if (index >= 0) indices.push(index);
             });
             
-            if (indices.length > 0 && cosmographRef.current.selectPoints) {
-              cosmographRef.current.selectPoints(indices, false);
+            if (indices.length > 0) {
+              // Select all nodes for visual effect
+              if (cosmographRef.current.selectPoints) {
+                cosmographRef.current.selectPoints(indices, false);
+              }
+              // Focus on the first node to show the ring
+              if (cosmographRef.current.setFocusedPoint) {
+                cosmographRef.current.setFocusedPoint(indices[0]);
+              }
             }
           }
           
           // Remove glow after 2 seconds
           glowTimeoutRef.current = setTimeout(() => {
             setGlowingNodes(new Map());
-            // Clear selection in Cosmograph
-            if (cosmographRef.current?.unselectAllPoints) {
-              cosmographRef.current.unselectAllPoints();
+            // Clear focus and selection in Cosmograph
+            if (cosmographRef.current) {
+              if (cosmographRef.current.setFocusedPoint) {
+                cosmographRef.current.setFocusedPoint(undefined);
+              }
+              if (cosmographRef.current.unselectAllPoints) {
+                cosmographRef.current.unselectAllPoints();
+              }
             }
           }, 2000);
         }
@@ -1275,13 +1287,10 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
           enableDrag={true}
           enableRightClickRepulsion={true}
           renderLinks={config.renderLinks !== false}
+          // Point ring colors for hover and focus
           hoveredPointCursor={config.hoveredPointCursor || "pointer"}
-          renderHoveredPointRing={config.renderHoveredPointRing !== false}
           hoveredPointRingColor={config.hoveredPointRingColor || "#ff0000"}
-          renderFocusedPointRing={true}
           focusedPointRingColor={glowingNodes.size > 0 ? (config.nodeAccessHighlightColor || "#FFD700") : (config.focusedPointRingColor || "#0066cc")}
-          renderSelectedPointRing={true}
-          selectedPointRingColor={glowingNodes.size > 0 ? (config.nodeAccessHighlightColor || "#FFD700") : (config.focusedPointRingColor || "#0066cc")}
           // Advanced rendering options
           pixelationThreshold={config.pixelationThreshold || 0}
           renderSelectedNodesOnTop={config.renderSelectedNodesOnTop || false}
