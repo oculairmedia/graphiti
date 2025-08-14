@@ -428,9 +428,9 @@ export const GraphTimeline = forwardRef<GraphTimelineHandle, GraphTimelineProps>
           </div>
         </div>
 
-        {/* Timeline Component */}
+        {/* Timeline Component - Memoized to prevent re-renders */}
         <div style={{ height: isExpanded ? '120px' : '60px', padding: '0 16px' }}>
-          <CosmographTimeline
+          <MemoizedTimeline
             ref={timelineRef}
             useLinksData={false}
             accessor="created_at_timestamp"
@@ -461,7 +461,7 @@ export const GraphTimeline = forwardRef<GraphTimelineHandle, GraphTimelineProps>
             barTopMargin={isExpanded ? 20 : 10}
             
             // Custom styling with transparent background
-            className="cosmograph-timeline"
+            className={`cosmograph-timeline ${updateMode === 'instant' ? 'cosmograph-timeline-no-animation' : ''}`}
             style={{
               '--cosmograph-timeline-background': 'transparent',
               '--cosmograph-timeline-bar-color': '#4ECDC4',
