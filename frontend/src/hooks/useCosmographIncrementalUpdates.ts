@@ -189,6 +189,12 @@ export function useCosmographIncrementalUpdates(
         nodeIdToIndexRef.current.set(node.id, node.index);
       });
       
+      // Restart simulation after adding nodes to keep animation running
+      if (cosmographRef.current.restart) {
+        cosmographRef.current.restart();
+        log('Restarted simulation after adding nodes');
+      }
+      
       onSuccess?.('addNodes', nodes.length);
       return true;
     } catch (error) {
@@ -291,6 +297,12 @@ export function useCosmographIncrementalUpdates(
       }
       
       await cosmographRef.current.addLinks(sanitizedLinks);
+      
+      // Restart simulation after adding edges to keep animation running
+      if (cosmographRef.current.restart) {
+        cosmographRef.current.restart();
+        log('Restarted simulation after adding edges');
+      }
       
       onSuccess?.('addEdges', sanitizedLinks.length);
       return true;
