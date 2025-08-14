@@ -1234,7 +1234,7 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
           hoveredPointCursor={config.hoveredPointCursor || "pointer"}
           renderHoveredPointRing={config.renderHoveredPointRing !== false}
           hoveredPointRingColor={config.hoveredPointRingColor || "#ff0000"}
-          focusedPointRingColor={config.focusedPointRingColor || "#0066cc"}
+          focusedPointRingColor={glowingNodes.size > 0 ? (config.nodeAccessHighlightColor || "#FFD700") : (config.focusedPointRingColor || "#0066cc")}
           // Advanced rendering options
           pixelationThreshold={config.pixelationThreshold || 0}
           renderSelectedNodesOnTop={config.renderSelectedNodesOnTop || false}
