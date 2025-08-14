@@ -1,4 +1,4 @@
-import React, { forwardRef, useImperativeHandle, useRef, useCallback, useEffect, useState } from 'react';
+import React, { forwardRef, useImperativeHandle, useRef, useCallback, useEffect, useState, memo } from 'react';
 import { CosmographTimeline, useCosmograph } from '@cosmograph/react';
 import type { CosmographTimelineRef } from '@cosmograph/react';
 import { Play, Pause, RotateCcw, ChevronDown, ChevronUp, SkipForward, Clock, Calendar, ZoomIn, ZoomOut, Maximize2, Camera, Trash2, Pin, Eye, Download, Move } from 'lucide-react';
