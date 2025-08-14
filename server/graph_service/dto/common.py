@@ -10,6 +10,11 @@ class Result(BaseModel):
     success: bool
 
 
+class SuccessResponse(BaseModel):
+    success: bool = True
+    message: str = "Operation completed successfully"
+
+
 class Message(BaseModel):
     content: str = Field(..., description='The content of the message')
     uuid: str | None = Field(default=None, description='The uuid of the message (optional)')
