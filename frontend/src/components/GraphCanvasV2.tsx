@@ -249,15 +249,10 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
       // Handle node access events when needed
     }, []);
     
-    const handleGraphUpdate = useCallback((event: any) => {
-      if (event.nodes && event.edges) {
-        setData(event.nodes, event.edges as any);
-      }
-    }, [setData]);
-    
-    // Incremental updates hook
+    // Incremental updates hook - must be defined before using its values
     const {
       applyDelta,
+      replaceDataWithConfig,
       metrics: incrementalMetrics,
       isReady: incrementalUpdatesReady
     } = useCosmographIncrementalUpdates(
@@ -285,6 +280,21 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
       }
     );
     
+    const handleGraphUpdate = useCallback(async (event: any) => {
+      if (event.nodes && event.edges) {
+        // Try to use setConfig for seamless data replacement
+        if (incrementalUpdatesReady && replaceDataWithConfig) {
+          const success = await replaceDataWithConfig(event.nodes, event.edges);
+          if (success) {
+            console.log('[GraphCanvasV2] Replaced data using setConfig (no hard reload)');
+            return;
+          }
+        }
+        // Fall back to traditional state update
+        setData(event.nodes, event.edges as any);
+      }
+    }, [setData, incrementalUpdatesReady, replaceDataWithConfig]);
+    
     const handleDeltaUpdate = useCallback(async (event: any) => {
       console.log('[GraphCanvasV2] Received delta update:', event);
       console.log(`[GraphCanvasV2] Current graph size: ${nodes.length} nodes, ${links.length} edges`);
@@ -295,18 +305,10 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
         if (success) {
           console.log('[GraphCanvasV2] Applied incremental update successfully');
           
-          // Update React state to keep UI in sync
-          // Note: This will trigger a re-computation of cosmographData via useMemo,
-          // but Cosmograph should handle this gracefully since its internal state
-          // is already updated via the incremental API
-          if (event.operation === 'add' && event.nodes) {
-            addNodes(event.nodes);
-          } else if (event.operation === 'update' && event.nodes) {
-            updateNodes(event.nodes);
-          }
-          if (event.operation === 'add' && event.edges) {
-            addLinks(event.edges);
-          }
+          // DON'T update React state for incremental updates
+          // This would trigger a re-render and cause a hard reload
+          // The graph is already updated via Cosmograph's incremental API
+          // React state will be out of sync but that's acceptable for performance
           
           console.log(`[GraphCanvasV2] After incremental update: ${nodes.length} nodes, ${links.length} edges`);
           return; // Exit early - incremental update succeeded
