@@ -1126,11 +1126,10 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
             undefined  // Fallback to default
           }
           linkWidthBy={
-            config.linkWidthScheme === 'by-weight' ? 'weight' : 
-            config.linkWidthScheme === 'by-source-centrality' ? 'source_centrality' :
-            config.linkWidthScheme === 'by-source-pagerank' ? 'source_pagerank' :
-            config.linkWidthScheme === 'by-source-betweenness' ? 'source_betweenness' :
-            undefined
+            // Only use columns that actually exist in the links data
+            // Links only have: source, target, sourceIndex, targetIndex, edge_type
+            config.linkWidthScheme === 'by-weight' && cosmographData.links[0]?.weight ? 'weight' : 
+            undefined  // Don't use non-existent columns
           }
           // Link visual properties
           linkWidth={config.linkWidth || 1}
