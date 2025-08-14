@@ -5,3 +5,21 @@
   text-stroke-width: var(--cosmograph-border-width, 0px) !important;
   text-stroke-color: var(--cosmograph-border-color, rgba(0,0,0,0.5)) !important;
 }
+
+/* Disable animations on timeline during data updates */
+.cosmograph-timeline-no-animation,
+.cosmograph-timeline-no-animation * {
+  transition: none !important;
+  animation: none !important;
+}
+
+/* Prevent the color rise animation */
+.cosmograph-timeline canvas {
+  transition: none !important;
+}
+
+.cosmograph-timeline svg rect,
+.cosmograph-timeline svg path {
+  transition: none !important;
+  animation: none !important;
+}
