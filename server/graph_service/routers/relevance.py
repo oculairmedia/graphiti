@@ -21,7 +21,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from graph_service.dto.common import SuccessResponse
-from graph_service.factories import get_llm_client, graphiti_from_config
+from graph_service.factories import create_llm_client, graphiti_from_config
 from graphiti_core.driver.driver import GraphDriver
 from graphiti_core.llm_client.client import LLMClient
 from graphiti_core.relevance import (
@@ -75,7 +75,7 @@ _scorer: Optional[RelevanceScorer] = None
 
 async def get_scorer(
     graphiti=Depends(graphiti_from_config),
-    llm_client: Optional[LLMClient] = Depends(get_llm_client)
+    llm_client: Optional[LLMClient] = Depends(create_llm_client)
 ) -> RelevanceScorer:
     """Get or create the relevance scorer instance."""
     global _scorer
