@@ -6,10 +6,10 @@ use crate::client::FalkorClient;
 use crate::error::{CentralityError, Result};
 use crate::models::{
     AllCentralitiesRequest, AllCentralitiesResponse, BetweennessRequest, CentralityResponse,
-    DatabaseConfig, DegreeRequest, PageRankRequest,
+    DatabaseConfig, DegreeRequest, PageRankRequest, SingleNodeRequest, SingleNodeResponse,
 };
 use axum::{
-    extract::State,
+    extract::{Path, State},
     http::StatusCode,
     response::{IntoResponse, Json},
     routing::{get, post},
@@ -48,6 +48,7 @@ pub fn create_router(state: AppState) -> Router {
         .route("/centrality/degree", post(degree_endpoint))
         .route("/centrality/betweenness", post(betweenness_endpoint))
         .route("/centrality/all", post(all_centralities_endpoint))
+        .route("/centrality/node/:uuid", post(single_node_endpoint))
         .layer(CorsLayer::permissive())
         .with_state(state)
 }
@@ -299,4 +300,124 @@ fn handle_error(error: CentralityError) -> (StatusCode, Json<serde_json::Value>)
             "details": error.to_string()
         })),
     )
+}
+
+/// Single node centrality endpoint
+async fn single_node_endpoint(
+    State(state): State<AppState>,
+    Path(node_uuid): Path<String>,
+    Json(request): Json<SingleNodeRequest>,
+) -> impl IntoResponse {
+    let start = Instant::now();
+    
+    // Calculate requested metrics for the single node
+    let mut metrics = HashMap::new();
+    
+    // Calculate degree centrality if requested
+    if request.metrics.contains(&"degree".to_string()) {
+        match calculate_single_node_degree(&state.client, &node_uuid).await {
+            Ok(degree) => {
+                metrics.insert("degree".to_string(), degree);
+            }
+            Err(e) => {
+                error!("Failed to calculate degree centrality for {}: {}", node_uuid, e);
+                return handle_error(e).into_response();
+            }
+        }
+    }
+    
+    // Calculate PageRank if requested (simplified local calculation)
+    if request.metrics.contains(&"pagerank".to_string()) {
+        match calculate_single_node_pagerank(&state.client, &node_uuid).await {
+            Ok(pagerank) => {
+                metrics.insert("pagerank".to_string(), pagerank);
+            }
+            Err(e) => {
+                error!("Failed to calculate PageRank for {}: {}", node_uuid, e);
+                return handle_error(e).into_response();
+            }
+        }
+    }
+    
+    // Calculate betweenness if requested (simplified local calculation)
+    if request.metrics.contains(&"betweenness".to_string()) {
+        match calculate_single_node_betweenness(&state.client, &node_uuid).await {
+            Ok(betweenness) => {
+                metrics.insert("betweenness".to_string(), betweenness);
+            }
+            Err(e) => {
+                error!("Failed to calculate betweenness for {}: {}", node_uuid, e);
+                return handle_error(e).into_response();
+            }
+        }
+    }
+    
+    // Store results if requested
+    if request.store_results && !metrics.is_empty() {
+        let mut scores_map = HashMap::new();
+        scores_map.insert(node_uuid.clone(), metrics.clone());
+        
+        if let Err(e) = state.client.store_centrality_scores(&scores_map).await {
+            error!("Failed to store centrality scores for {}: {}", node_uuid, e);
+        }
+    }
+    
+    let execution_time_ms = start.elapsed().as_millis();
+    
+    Json(SingleNodeResponse {
+        node_id: node_uuid,
+        metrics,
+        execution_time_ms,
+    })
+    .into_response()
+}
+
+// Helper functions for single node calculations
+async fn calculate_single_node_degree(
+    client: &FalkorClient,
+    node_uuid: &str,
+) -> Result<f64> {
+    let query = format!(
+        r#"
+        MATCH (n {{uuid: '{}'}})
+        OPTIONAL MATCH (n)-[r]-(m)
+        RETURN COUNT(DISTINCT m) as degree
+        "#,
+        node_uuid
+    );
+    
+    let result = client.execute_query(&query, None).await?;
+    
+    if let Some(row) = result.first() {
+        if let Some(degree_value) = row.get("degree") {
+            if let Some(degree) = crate::client::falkor_value_to_i64(degree_value) {
+                // Normalize degree (simple normalization by dividing by 10)
+                return Ok(degree as f64 / 10.0);
+            }
+        }
+    }
+    
+    Ok(0.0)
+}
+
+async fn calculate_single_node_pagerank(
+    client: &FalkorClient,
+    node_uuid: &str,
+) -> Result<f64> {
+    // Simplified PageRank calculation based on degree
+    let degree = calculate_single_node_degree(client, node_uuid).await?;
+    
+    // Simple formula: base pagerank + scaled degree contribution
+    Ok(0.15 + 0.85 * (degree / 100.0).min(1.0))
+}
+
+async fn calculate_single_node_betweenness(
+    client: &FalkorClient,
+    node_uuid: &str,
+) -> Result<f64> {
+    // Simplified betweenness calculation based on degree
+    let degree = calculate_single_node_degree(client, node_uuid).await?;
+    
+    // Simple approximation
+    Ok((degree / 20.0).min(1.0))
 }
