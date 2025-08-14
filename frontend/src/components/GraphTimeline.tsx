@@ -480,3 +480,30 @@ export const GraphTimeline = forwardRef<GraphTimelineHandle, GraphTimelineProps>
 );
 
 GraphTimeline.displayName = 'GraphTimeline';
+
+// Memoized CosmographTimeline wrapper to prevent re-renders on data updates
+const MemoizedTimeline = memo(
+  forwardRef<CosmographTimelineRef, any>((props, ref) => {
+    return <CosmographTimeline {...props} ref={ref} />;
+  }),
+  (prevProps, nextProps) => {
+    // Only re-render if these specific props change
+    return (
+      prevProps.animationSpeed === nextProps.animationSpeed &&
+      prevProps.isExpanded === nextProps.isExpanded &&
+      prevProps.accessor === nextProps.accessor &&
+      prevProps.useLinksData === nextProps.useLinksData &&
+      prevProps.highlightSelectedData === nextProps.highlightSelectedData &&
+      prevProps.showAnimationControls === nextProps.showAnimationControls &&
+      prevProps.barCount === nextProps.barCount &&
+      prevProps.barRadius === nextProps.barRadius &&
+      prevProps.barPadding === nextProps.barPadding &&
+      prevProps.axisTickHeight === nextProps.axisTickHeight &&
+      prevProps.barTopMargin === nextProps.barTopMargin
+    );
+  }
+);
+
+MemoizedTimeline.displayName = 'MemoizedTimeline';
+
+export default GraphTimeline;
