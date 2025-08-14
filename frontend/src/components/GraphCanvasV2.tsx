@@ -1189,22 +1189,45 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
             }
           }}
           onClick={(index?: number, pointPosition?: [number, number], event?: MouseEvent) => {
-            if (typeof index === 'number' && index >= 0 && index < nodes.length) {
-              const node = nodes[index];
-              if (node) {
-                // First, show the info panel immediately for instant feedback
-                onNodeClick(node);
-                onNodeSelect(node.id);
+            if (typeof index === 'number' && index >= 0) {
+              // Since we're using incremental updates without updating React state,
+              // we need to get the node data from Cosmograph's internal state
+              // For now, we'll just handle what we can access
+              
+              // Check if index is within the original nodes array
+              if (index < nodes.length) {
+                const node = nodes[index];
+                if (node) {
+                  // First, show the info panel immediately for instant feedback
+                  onNodeClick(node);
+                  onNodeSelect(node.id);
+                  
+                  // Then update visual selection (following the old implementation pattern)
+                  requestAnimationFrame(() => {
+                    // Select the node visually in Cosmograph
+                    if (cosmographRef.current?.selectPoint) {
+                      cosmographRef.current.selectPoint(index);
+                    } else if (cosmographRef.current?.selectPoints) {
+                      cosmographRef.current.selectPoints([index]);
+                    }
+                  });
+                }
+              } else {
+                // This is a newly added node via incremental update
+                // We don't have its data in React state, but we can still select it visually
+                console.log(`[GraphCanvasV2] Clicked on incrementally added node at index ${index}`);
                 
-                // Then update visual selection (following the old implementation pattern)
+                // Visual selection still works
                 requestAnimationFrame(() => {
-                  // Select the node visually in Cosmograph
                   if (cosmographRef.current?.selectPoint) {
                     cosmographRef.current.selectPoint(index);
                   } else if (cosmographRef.current?.selectPoints) {
                     cosmographRef.current.selectPoints([index]);
                   }
                 });
+                
+                // TODO: Get node data from Cosmograph's internal state or maintain a separate cache
+                // For now, we just can't show the info panel for incrementally added nodes
               }
             } else {
               // Clicked on empty space - clear selection
