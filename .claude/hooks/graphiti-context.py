@@ -15,14 +15,20 @@ from typing import Dict, Any
 # Configuration
 GRAPHITI_API_URL = os.getenv("GRAPHITI_API_URL", "http://192.168.50.90:8003")
 
-def search_graphiti(query: str, limit: int = 5) -> Dict[str, Any]:
-    """Simple HTTP request to Graphiti search API"""
+def search_graphiti(query: str, limit: int = 10, group_ids: list = None) -> Dict[str, Any]:
+    """Simple HTTP request to Graphiti search API matching exact API schema"""
     try:
-        # Use the /search endpoint for facts
-        data = json.dumps({
+        # Build request matching exact API schema
+        request_data = {
             "query": query,
             "max_facts": limit
-        }).encode('utf-8')
+        }
+        
+        # Add group_ids if provided (optional parameter)
+        if group_ids:
+            request_data["group_ids"] = group_ids
+        
+        data = json.dumps(request_data).encode('utf-8')
         
         req = urllib.request.Request(
             f"{GRAPHITI_API_URL}/search",
@@ -30,7 +36,7 @@ def search_graphiti(query: str, limit: int = 5) -> Dict[str, Any]:
             headers={'Content-Type': 'application/json'}
         )
         
-        with urllib.request.urlopen(req, timeout=3) as response:
+        with urllib.request.urlopen(req, timeout=5) as response:
             return json.loads(response.read().decode('utf-8'))
     except Exception as e:
         return {"error": str(e)}
@@ -73,10 +79,10 @@ def format_as_context(results: Dict[str, Any], node_results: Dict[str, Any] = No
     lines = []
     lines.append("\n<!-- Graphiti Context -->")
     
-    # Format facts if present
+    # Format facts if present (show up to 10)
     if "facts" in results and results["facts"]:
         lines.append("Knowledge from Graphiti:")
-        for fact in results["facts"][:5]:
+        for fact in results["facts"][:10]:
             name = fact.get("name", "Unknown")
             fact_text = fact.get("fact", "")
             if fact_text:
@@ -119,8 +125,28 @@ def main():
         prompt = input_data.get("prompt", "")
         
         # Check if prompt mentions knowledge, graph, or context
-        trigger_words = ["knowledge", "graph", "remember", "recall", "previous", 
-                        "context", "earlier", "history", "what did", "what do we know"]
+        trigger_words = [
+            # Original triggers
+            "knowledge", "graph", "remember", "recall", "previous", 
+            "context", "earlier", "history", "what did", "what do we know",
+            # Question words
+            "what", "how", "why", "when", "where", "who",
+            # Information seeking
+            "tell me", "explain", "describe", "show", "find",
+            "search", "look", "get", "fetch", "retrieve",
+            # Components and code
+            "component", "function", "class", "module", "file",
+            "code", "implementation", "architecture", "system",
+            # Specific project terms
+            "websocket", "cosmograph", "graphiti", "falkor",
+            "canvas", "visualization", "frontend", "backend",
+            # Relationship words
+            "related", "connected", "associated", "linked",
+            "relationship", "connection", "association",
+            # Technical terms
+            "api", "endpoint", "hook", "service", "database",
+            "node", "edge", "entity", "fact", "episode"
+        ]
         
         prompt_lower = prompt.lower()
         if not any(word in prompt_lower for word in trigger_words):
@@ -129,8 +155,8 @@ def main():
         # Extract keywords and search
         keywords = extract_keywords(prompt)
         if keywords:
-            # Search for facts
-            results = search_graphiti(keywords)
+            # Search for facts (default 10 facts as per API)
+            results = search_graphiti(keywords, limit=10)
             # Also search for nodes
             node_results = search_nodes(keywords)
             
