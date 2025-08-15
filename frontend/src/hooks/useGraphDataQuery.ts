@@ -155,6 +155,21 @@ export function useGraphDataQuery() {
               }
             }
             
+            // Normalize temporal fields - ensure both exist
+            if (!plainNode.created_at && plainNode.created_at_timestamp) {
+              const ts = Number(plainNode.created_at_timestamp);
+              if (!Number.isNaN(ts)) {
+                plainNode.created_at = new Date(ts).toISOString();
+              }
+            } else if (plainNode.created_at && !plainNode.created_at_timestamp) {
+              plainNode.created_at_timestamp = new Date(plainNode.created_at).getTime();
+            }
+            
+            // Fallback to synthetic values if both missing
+            if (!plainNode.created_at && !plainNode.created_at_timestamp) {
+              plainNode.created_at_timestamp = Date.now();
+              plainNode.created_at = new Date(plainNode.created_at_timestamp).toISOString();
+            }
             
             return {
               id: plainNode.id,
@@ -179,9 +194,10 @@ export function useGraphDataQuery() {
                 eigenvector_centrality: plainNode.eigenvector_centrality || 0,
                 degree: plainNode.degree_centrality ? Math.round(plainNode.degree_centrality * 100) : 0,  // Convert to count
                 connections: plainNode.degree_centrality ? Math.round(plainNode.degree_centrality * 100) : 0,
-                created: plainNode.created_at,
-                date: plainNode.created_at,
-                created_at_timestamp: plainNode.created_at_timestamp || null,  // Also in properties for timeline
+                created: plainNode.created_at,  // Now guaranteed to exist
+                date: plainNode.created_at,      // Now guaranteed to exist
+                created_at: plainNode.created_at,  // Now guaranteed to exist
+                created_at_timestamp: plainNode.created_at_timestamp  // Now guaranteed to exist
               }
             };
         });

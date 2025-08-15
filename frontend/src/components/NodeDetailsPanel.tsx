@@ -180,8 +180,8 @@ const NodeDetailsPanelComponent: React.FC<NodeDetailsPanelProps> = ({
       eigenvector: 0
     },
     timestamps: {
-      created: node.created_at || deferredProperties?.created || new Date().toISOString(),
-      updated: node.updated_at || deferredProperties?.updated || new Date().toISOString()
+      created: node.created_at || deferredProperties?.created_at || deferredProperties?.created || new Date(deferredProperties?.created_at_timestamp || Date.now()).toISOString(),
+      updated: node.updated_at || deferredProperties?.updated_at || deferredProperties?.updated || new Date().toISOString()
     },
     connections: connections !== undefined ? connections : (deferredProperties?.degree || deferredProperties?.connections || 0)
   };

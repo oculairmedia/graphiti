@@ -146,11 +146,26 @@ export function sanitizeNode(
     sanitizedNode.clusterStrength = Number(config.clusterStrength ?? 0.7);
     // CRITICAL: created_at_timestamp MUST be a number (Unix timestamp) for DuckDB
     // DuckDB created this column as DOUBLE type, not string
-    if (node.created_at_timestamp) {
-      // Convert ISO string to Unix timestamp (milliseconds since epoch)
-      const timestamp = new Date(node.created_at_timestamp).getTime();
+    // Handle both number and string formats for robustness
+    if (node.created_at_timestamp !== undefined && node.created_at_timestamp !== null) {
+      // If it's already a number, use it directly
+      if (typeof node.created_at_timestamp === 'number') {
+        sanitizedNode.created_at_timestamp = node.created_at_timestamp;
+      } else {
+        // Try to parse as date string
+        const timestamp = new Date(node.created_at_timestamp).getTime();
+        sanitizedNode.created_at_timestamp = isNaN(timestamp) ? Date.now() : timestamp;
+      }
+    } else if (node.created_at) {
+      // Fallback: derive from created_at string
+      const timestamp = new Date(node.created_at).getTime();
       sanitizedNode.created_at_timestamp = isNaN(timestamp) ? Date.now() : timestamp;
+    } else if (node.properties?.created_at_timestamp) {
+      // Check properties as backup
+      const propTimestamp = Number(node.properties.created_at_timestamp);
+      sanitizedNode.created_at_timestamp = isNaN(propTimestamp) ? Date.now() : propTimestamp;
     } else {
+      // Final fallback to current time
       sanitizedNode.created_at_timestamp = Date.now();
     }
     
@@ -182,11 +197,27 @@ export function sanitizeNode(
     const centralityValue = sanitizedNode.degree_centrality || sanitizedNode.pagerank_centrality || 0.01;
     sanitizedNode.size = Math.max(2, centralityValue * 100);
     // Convert timestamp to number for consistency with DuckDB DOUBLE type
-    if (node.created_at_timestamp) {
-      const timestamp = new Date(node.created_at_timestamp).getTime();
+    // Handle both number and string formats for robustness
+    if (node.created_at_timestamp !== undefined && node.created_at_timestamp !== null) {
+      // If it's already a number, use it directly
+      if (typeof node.created_at_timestamp === 'number') {
+        sanitizedNode.created_at_timestamp = node.created_at_timestamp;
+      } else {
+        // Try to parse as date string
+        const timestamp = new Date(node.created_at_timestamp).getTime();
+        sanitizedNode.created_at_timestamp = isNaN(timestamp) ? Date.now() : timestamp;
+      }
+    } else if (node.created_at) {
+      // Fallback: derive from created_at string
+      const timestamp = new Date(node.created_at).getTime();
       sanitizedNode.created_at_timestamp = isNaN(timestamp) ? Date.now() : timestamp;
+    } else if (node.properties?.created_at_timestamp) {
+      // Check properties as backup
+      const propTimestamp = Number(node.properties.created_at_timestamp);
+      sanitizedNode.created_at_timestamp = isNaN(propTimestamp) ? Date.now() : propTimestamp;
     } else {
-      sanitizedNode.created_at_timestamp = Date.now(); // Default to current time
+      // Final fallback to current time
+      sanitizedNode.created_at_timestamp = Date.now();
     }
     sanitizedNode.cluster = String(cluster);
     sanitizedNode.clusterStrength = Number(config.clusterStrength ?? 0.7);
