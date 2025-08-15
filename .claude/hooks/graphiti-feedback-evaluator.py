@@ -14,7 +14,7 @@ from typing import Dict, Any, List
 from datetime import datetime
 
 # Configuration
-CENTRALITY_API_URL = os.getenv("CENTRALITY_API_URL", "http://localhost:3003")
+GRAPHITI_API_URL = os.getenv("GRAPHITI_API_URL", "http://192.168.50.90:8003")
 CONTEXT_CACHE_FILE = "/tmp/graphiti_context_cache.json"
 FEEDBACK_PENDING_FILE = "/tmp/graphiti_feedback_pending.json"
 
@@ -101,19 +101,25 @@ def send_relevance_feedback(context: Dict, response: str):
             score = evaluate_memory_relevance(memory_data, query_text, response)
             memory_scores[memory_id] = score
         
-        # Send feedback to centrality service
-        payload = {
+        # Send feedback to Graphiti Python API using the wrapped format
+        feedback_data = {
             "query_id": query_id,
             "query_text": query_text,
             "memory_scores": memory_scores,
             "response_text": response[:500] if response else None,  # Truncate for size
-            "source": "claude"
+            "metadata": {"source": "claude_hooks"}
+        }
+        
+        # Wrap in expected format for FastAPI endpoint
+        payload = {
+            "feedback_request": feedback_data,
+            "settings": {}  # Empty settings object
         }
         
         data = json.dumps(payload).encode('utf-8')
         
         req = urllib.request.Request(
-            f"{CENTRALITY_API_URL}/feedback/relevance",
+            f"{GRAPHITI_API_URL}/feedback/relevance",
             data=data,
             headers={'Content-Type': 'application/json'}
         )
@@ -121,9 +127,10 @@ def send_relevance_feedback(context: Dict, response: str):
         with urllib.request.urlopen(req, timeout=3) as resp:
             result = json.loads(resp.read().decode('utf-8'))
             
-            # Log success
+            # Log success with more details
             with open('/tmp/graphiti_feedback.log', 'a') as f:
-                f.write(f"{datetime.utcnow().isoformat()} - Sent feedback for {len(memory_scores)} memories\n")
+                avg_score = sum(memory_scores.values()) / len(memory_scores) if memory_scores else 0
+                f.write(f"{datetime.utcnow().isoformat()} - Sent feedback for {len(memory_scores)} memories (avg score: {avg_score:.3f})\n")
                 
     except Exception as e:
         # Log error but don't fail
