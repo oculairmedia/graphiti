@@ -807,15 +807,36 @@ class Graphiti:
             # Resolved pointers for episodic edges
             resolved_episodic_edges = resolve_edge_pointers(episodic_edges, uuid_map)
 
+            # Build duplicate edges for audit trail (similar to single episode flow)
+            duplicate_of_edges: list[EntityEdge] = []
+            merge_operations: list[tuple[str, str]] = []
+            
+            if node_duplicates:
+                # Use the first episode's timestamp for duplicate edges
+                # (or could aggregate across all episodes if preferred)
+                duplicate_of_edges, merge_operations = build_duplicate_of_edges(
+                    episodes[0], now, node_duplicates
+                )
+                logger.info(f'Found {len(node_duplicates)} duplicates to merge in bulk pipeline')
+            
             # save data to KG
             await add_nodes_and_edges_bulk(
                 self.driver,
                 episodes,
                 resolved_episodic_edges,
                 final_hydrated_nodes,
-                resolved_edges + invalidated_edges,
+                resolved_edges + invalidated_edges + duplicate_of_edges,
                 self.embedder,
             )
+            
+            # Execute merge operations after nodes and edges are saved
+            if merge_operations:
+                from graphiti_core.utils.maintenance.edge_operations import execute_merge_operations
+                merge_stats = await execute_merge_operations(self.driver, merge_operations)
+                logger.info(
+                    f'Bulk merge complete: {merge_stats["total_merges"]} merges, '
+                    f'{merge_stats["total_edges_transferred"]} edges transferred'
+                )
 
             end = time()
             logger.info(f'Completed add_episode_bulk in {(end - start) * 1000} ms')

@@ -1,5 +1,7 @@
 # Graph Build, Deduplication, and Merge Design
 
+See also: [Merge Implementation: Proposed Changes](./merge-implementation-proposed-changes.md)
+
 This document summarizes how Graphiti builds the knowledge graph today, how deduplication works, where merging currently does not happen, and proposes safe improvements to preserve connections and centrality.
 
 ## High-level Pipeline
