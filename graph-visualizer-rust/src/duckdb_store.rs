@@ -73,6 +73,7 @@ impl DuckDBStore {
             Field::new("y", DataType::Float64, true),
             Field::new("color", DataType::Utf8, true),
             Field::new("size", DataType::Float64, true),
+            Field::new("created_at", DataType::Utf8, true),           // ISO string
             Field::new("created_at_timestamp", DataType::Float64, true), // For timeline
             Field::new("cluster", DataType::Utf8, true), // For clustering
             Field::new("clusterStrength", DataType::Float64, true), // Clustering strength
@@ -106,7 +107,8 @@ impl DuckDBStore {
                 y DOUBLE,
                 color VARCHAR,
                 size DOUBLE,
-                created_at_timestamp DOUBLE,
+                created_at VARCHAR,              -- ISO string
+                created_at_timestamp DOUBLE,     -- milliseconds since epoch
                 cluster VARCHAR,
                 clusterStrength DOUBLE
             )",
@@ -127,6 +129,10 @@ impl DuckDBStore {
             )",
             params![],
         )?;
+        
+        // Migration: Try to add created_at column if it doesn't exist (for existing databases)
+        // This is a best-effort migration - if it fails, we assume the column already exists
+        let _ = conn.execute("ALTER TABLE nodes ADD COLUMN created_at VARCHAR", params![]);
         
         // Create indexes for performance
         conn.execute("CREATE INDEX idx_nodes_type ON nodes(node_type)", params![])?;
@@ -151,8 +157,8 @@ impl DuckDBStore {
         let tx = conn.transaction()?;
         
         // Insert nodes with indices - use INSERT OR REPLACE to handle duplicates
-        let stmt_node = "INSERT OR REPLACE INTO nodes (id, idx, label, node_type, summary, degree_centrality, pagerank_centrality, betweenness_centrality, eigenvector_centrality, x, y, color, size, created_at_timestamp, cluster, clusterStrength) 
-                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        let stmt_node = "INSERT OR REPLACE INTO nodes (id, idx, label, node_type, summary, degree_centrality, pagerank_centrality, betweenness_centrality, eigenvector_centrality, x, y, color, size, created_at, created_at_timestamp, cluster, clusterStrength) 
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         
         let mut node_to_idx = HashMap::new();
         
@@ -185,19 +191,24 @@ impl DuckDBStore {
             let cluster = node.node_type.clone();
             let cluster_strength = 0.7;
             
-            // Use real timestamp from created_at if available, otherwise generate synthetic one
-            let timestamp = if let Some(created_str) = node.properties.get("created_at")
+            // Compute both created_at string and timestamp
+            let (created_str, timestamp) = if let Some(created_str) = node.properties.get("created_at")
                 .and_then(|v| v.as_str()) {
-                // Parse ISO date to milliseconds
-                DateTime::parse_from_rfc3339(created_str)
+                // Have string, compute timestamp
+                let ts = DateTime::parse_from_rfc3339(created_str)
                     .map(|dt| dt.timestamp_millis() as f64)
                     .unwrap_or_else(|e| {
                         warn!("Failed to parse created_at '{}': {}", created_str, e);
                         (idx as f64) * 86400000.0 // Fallback to synthetic
-                    })
+                    });
+                (created_str.to_string(), ts)
             } else {
-                debug!("Node {} has no created_at, using synthetic timestamp", node.id);
-                (idx as f64) * 86400000.0 // Fallback to synthetic timestamp
+                // No string, synthesize both
+                debug!("Node {} has no created_at, synthesizing both fields", node.id);
+                let ts = (idx as f64) * 86400000.0; // Synthetic timestamp
+                let dt = DateTime::<Utc>::from_timestamp_millis(ts as i64)
+                    .unwrap_or_else(|| Utc::now());
+                (dt.to_rfc3339(), ts)
             };
             
             tx.execute(
@@ -216,7 +227,8 @@ impl DuckDBStore {
                     Option::<f64>::None, // y - will be computed by layout
                     color,
                     size,
-                    timestamp,
+                    &created_str,      // created_at string
+                    timestamp,         // created_at_timestamp
                     cluster,
                     cluster_strength
                 ],
@@ -268,7 +280,7 @@ impl DuckDBStore {
         let conn = self.conn.lock().unwrap();
         
         let mut stmt = conn.prepare(
-            "SELECT id, idx, label, node_type, summary, degree_centrality, pagerank_centrality, betweenness_centrality, eigenvector_centrality, x, y, color, size, created_at_timestamp, cluster, clusterStrength 
+            "SELECT id, idx, label, node_type, summary, degree_centrality, pagerank_centrality, betweenness_centrality, eigenvector_centrality, x, y, color, size, created_at, created_at_timestamp, cluster, clusterStrength 
              FROM nodes 
              ORDER BY idx"
         )?;
@@ -286,7 +298,8 @@ impl DuckDBStore {
         let mut ys = Vec::new();
         let mut colors = Vec::new();
         let mut sizes = Vec::new();
-        let mut timestamps = Vec::new();
+        let mut created_ats = Vec::new();     // ISO string dates
+        let mut timestamps = Vec::new();      // Numeric timestamps
         let mut clusters = Vec::new();
         let mut cluster_strengths = Vec::new();
         
@@ -305,14 +318,15 @@ impl DuckDBStore {
                 row.get::<_, Option<f64>>(10)?,   // y
                 row.get::<_, Option<String>>(11)?, // color
                 row.get::<_, Option<f64>>(12)?,   // size
-                row.get::<_, Option<f64>>(13)?,   // created_at_timestamp
-                row.get::<_, Option<String>>(14)?, // cluster
-                row.get::<_, Option<f64>>(15)?,   // clusterStrength
+                row.get::<_, Option<String>>(13)?, // created_at
+                row.get::<_, Option<f64>>(14)?,   // created_at_timestamp
+                row.get::<_, Option<String>>(15)?, // cluster
+                row.get::<_, Option<f64>>(16)?,   // clusterStrength
             ))
         })?;
         
         for row in rows {
-            let (id, idx, label, node_type, summary, degree, pagerank, betweenness, eigenvector, x, y, color, size, timestamp, cluster, cluster_strength) = row?;
+            let (id, idx, label, node_type, summary, degree, pagerank, betweenness, eigenvector, x, y, color, size, created_at, timestamp, cluster, cluster_strength) = row?;
             ids.push(id);
             indices.push(idx);
             labels.push(label);
@@ -326,6 +340,7 @@ impl DuckDBStore {
             ys.push(y);
             colors.push(color);
             sizes.push(size);
+            created_ats.push(created_at);
             timestamps.push(timestamp);
             clusters.push(cluster);
             cluster_strengths.push(cluster_strength);
@@ -347,7 +362,8 @@ impl DuckDBStore {
                 Arc::new(Float64Array::from(ys)) as ArrayRef,
                 Arc::new(StringArray::from(colors)) as ArrayRef,
                 Arc::new(Float64Array::from(sizes)) as ArrayRef,
-                Arc::new(Float64Array::from(timestamps)) as ArrayRef,
+                Arc::new(StringArray::from(created_ats)) as ArrayRef,    // created_at strings
+                Arc::new(Float64Array::from(timestamps)) as ArrayRef,     // created_at_timestamp
                 Arc::new(StringArray::from(clusters)) as ArrayRef,
                 Arc::new(Float64Array::from(cluster_strengths)) as ArrayRef,
             ],
@@ -798,22 +814,53 @@ impl DuckDBStore {
             .collect();
         
         let node_iter = stmt.query_map(&params[..], |row| {
-            let properties_json: String = row.get(8)?;
-            let mut properties: HashMap<String, serde_json::Value> = 
-                serde_json::from_str(&properties_json).unwrap_or_default();
+            let mut properties: HashMap<String, serde_json::Value> = HashMap::new();
             
-            // Add all metadata to properties
+            // Add all metadata to properties based on correct column indices
             properties.insert("idx".to_string(), serde_json::json!(row.get::<_, i32>(1)?));
-            properties.insert("size".to_string(), serde_json::json!(row.get::<_, f64>(5)?));
-            properties.insert("created_at".to_string(), serde_json::json!(row.get::<_, String>(6)?));
-            properties.insert("created_at_timestamp".to_string(), serde_json::json!(row.get::<_, Option<i64>>(7)?));
-            properties.insert("color".to_string(), serde_json::json!(self.get_node_color(&row.get::<_, String>(3)?)));
+            
+            // Add centrality metrics
+            if let Ok(degree) = row.get::<_, f64>(5) {
+                properties.insert("degree_centrality".to_string(), serde_json::json!(degree));
+            }
+            if let Ok(pagerank) = row.get::<_, f64>(6) {
+                properties.insert("pagerank_centrality".to_string(), serde_json::json!(pagerank));
+            }
+            if let Ok(betweenness) = row.get::<_, f64>(7) {
+                properties.insert("betweenness_centrality".to_string(), serde_json::json!(betweenness));
+            }
+            if let Ok(eigenvector) = row.get::<_, f64>(8) {
+                properties.insert("eigenvector_centrality".to_string(), serde_json::json!(eigenvector));
+            }
+            
+            // Add visual properties
+            if let Ok(color) = row.get::<_, String>(11) {
+                properties.insert("color".to_string(), serde_json::json!(color));
+            }
+            if let Ok(size) = row.get::<_, f64>(12) {
+                properties.insert("size".to_string(), serde_json::json!(size));
+            }
+            
+            // Add created_at string and timestamp
+            if let Ok(created_str) = row.get::<_, String>(13) {  // created_at column
+                properties.insert("created_at".to_string(), serde_json::json!(created_str));
+            }
+            if let Ok(timestamp) = row.get::<_, f64>(14) {  // created_at_timestamp column
+                properties.insert("created_at_timestamp".to_string(), serde_json::json!(timestamp));
+                
+                // If created_at string is missing, synthesize it from timestamp
+                if !properties.contains_key("created_at") {
+                    let datetime = DateTime::<Utc>::from_timestamp_millis(timestamp as i64)
+                        .unwrap_or_else(|| Utc::now());
+                    properties.insert("created_at".to_string(), serde_json::json!(datetime.to_rfc3339()));
+                }
+            }
             
             Ok(Node {
                 id: row.get(0)?,
                 label: row.get(2)?,
                 node_type: row.get(3)?,
-                summary: row.get(4)?,
+                summary: row.get(4).ok(),
                 properties,
             })
         })?;
@@ -884,26 +931,44 @@ impl DuckDBStore {
             if let Ok(degree) = row.get::<_, f64>(5) {  // degree_centrality column
                 properties.insert("degree_centrality".to_string(), serde_json::Value::from(degree));
             }
-            if let Ok(betweenness) = row.get::<_, f64>(6) {  // betweenness_centrality column
+            if let Ok(betweenness) = row.get::<_, f64>(7) {  // betweenness_centrality column (was wrong index)
                 properties.insert("betweenness_centrality".to_string(), serde_json::Value::from(betweenness));
             }
-            if let Ok(pagerank) = row.get::<_, f64>(7) {  // pagerank_centrality column
+            if let Ok(pagerank) = row.get::<_, f64>(6) {  // pagerank_centrality column (was wrong index)
                 properties.insert("pagerank_centrality".to_string(), serde_json::Value::from(pagerank));
             }
             if let Ok(eigenvector) = row.get::<_, f64>(8) {  // eigenvector_centrality column
                 properties.insert("eigenvector_centrality".to_string(), serde_json::Value::from(eigenvector));
             }
             
-            // Add other properties
-            if let Ok(created_at) = row.get::<_, String>(12) {  // created_at column
-                properties.insert("created_at".to_string(), serde_json::Value::from(created_at));
+            // Add created_at string and timestamp
+            if let Ok(created_str) = row.get::<_, String>(13) {  // created_at column
+                properties.insert("created_at".to_string(), serde_json::Value::from(created_str));
+            }
+            if let Ok(timestamp) = row.get::<_, f64>(14) {  // created_at_timestamp column
+                properties.insert("created_at_timestamp".to_string(), serde_json::Value::from(timestamp));
+                
+                // If created_at string is missing, synthesize it from timestamp
+                if !properties.contains_key("created_at") {
+                    let datetime = DateTime::<Utc>::from_timestamp_millis(timestamp as i64)
+                        .unwrap_or_else(|| Utc::now());
+                    properties.insert("created_at".to_string(), serde_json::Value::from(datetime.to_rfc3339()));
+                }
+            }
+            
+            // Add other visual properties
+            if let Ok(size) = row.get::<_, f64>(12) {  // size column
+                properties.insert("size".to_string(), serde_json::Value::from(size));
+            }
+            if let Ok(color) = row.get::<_, String>(11) {  // color column
+                properties.insert("color".to_string(), serde_json::Value::from(color));
             }
             
             Ok(Node {
                 id: row.get(0)?,
-                label: row.get(1)?,
-                node_type: row.get(2)?,
-                summary: row.get(3).ok(),
+                label: row.get(2)?,  // label is at index 2, not 1
+                node_type: row.get(3)?,  // node_type is at index 3, not 2
+                summary: row.get(4).ok(),  // summary is at index 4, not 3
                 properties,
             })
         })?;
