@@ -89,8 +89,9 @@ async def get_scorer(
 
 @router.post("/relevance", response_model=RelevanceFeedbackResponse)
 async def submit_relevance_feedback(
-    request: RelevanceFeedbackRequest,
-    scorer: RelevanceScorer = Depends(get_scorer)
+    feedback_request: RelevanceFeedbackRequest,
+    graphiti: ZepGraphitiDep,
+    llm_client: Optional[LLMClient] = Depends(create_llm_client)
 ) -> RelevanceFeedbackResponse:
     """
     Submit relevance feedback for memories retrieved during a query.
@@ -99,18 +100,23 @@ async def submit_relevance_feedback(
     for memories that were retrieved during a search operation.
     """
     try:
+        # Create scorer inline
+        driver = graphiti.driver
+        config = ScoringConfig()
+        scorer = RelevanceScorer(driver, llm_client, config)
+        
         feedbacks = []
         
-        for memory_id, score_value in request.memory_scores.items():
+        for memory_id, score_value in feedback_request.memory_scores.items():
             # Create relevance score
             score = RelevanceScore(
                 memory_id=memory_id,
                 score=score_value,
-                query_id=request.query_id,
+                query_id=feedback_request.query_id,
                 scoring_method="manual",
                 metadata={
-                    "query_text": request.query_text,
-                    "has_response": request.response_text is not None
+                    "query_text": feedback_request.query_text,
+                    "has_response": feedback_request.response_text is not None
                 }
             )
             
@@ -134,6 +140,7 @@ async def auto_score_memories(
     query_id: str,
     original_query: str,
     memory_contents: dict[str, str],  # memory_id -> content
+    graphiti: ZepGraphitiDep,
     agent_response: Optional[str] = None,
     decomposed_query: Optional[str] = None,
     scorer: RelevanceScorer = Depends(get_scorer)
@@ -332,6 +339,7 @@ async def bulk_recalculate_scores(
 @router.post("/rrf", response_model=list[dict[str, Any]])
 async def apply_rrf_fusion(
     rankings: dict[str, list[str]],
+    graphiti: ZepGraphitiDep,
     k: Optional[int] = Query(default=60, ge=1),
     scorer: RelevanceScorer = Depends(get_scorer)
 ) -> list[dict[str, Any]]:
