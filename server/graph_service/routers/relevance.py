@@ -179,10 +179,10 @@ async def auto_score_memories(
 @router.get("/memories", response_model=list[MemoryWithScoreResponse])
 async def get_memories_with_scores(
     group_id: str,
+    graphiti: ZepGraphitiDep,
     include_scores: bool = Query(default=True),
     min_relevance: Optional[float] = Query(default=None, ge=0.0, le=1.0),
-    limit: Optional[int] = Query(default=50, ge=1, le=1000),
-    graphiti: ZepGraphitiDep
+    limit: Optional[int] = Query(default=50, ge=1, le=1000)
 ) -> list[MemoryWithScoreResponse]:
     """
     Retrieve memories with their relevance scores.
@@ -242,8 +242,8 @@ async def get_memories_with_scores(
 @router.post("/recalculate", response_model=BulkRecalculateResponse)
 async def bulk_recalculate_scores(
     request: BulkRecalculateRequest,
-    scorer: RelevanceScorer = Depends(get_scorer),
-    graphiti: ZepGraphitiDep
+    graphiti: ZepGraphitiDep,
+    scorer: RelevanceScorer = Depends(get_scorer)
 ) -> BulkRecalculateResponse:
     """
     Bulk recalculate relevance scores for multiple memories.
