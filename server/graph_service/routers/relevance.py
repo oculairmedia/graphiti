@@ -182,7 +182,7 @@ async def get_memories_with_scores(
     include_scores: bool = Query(default=True),
     min_relevance: Optional[float] = Query(default=None, ge=0.0, le=1.0),
     limit: Optional[int] = Query(default=50, ge=1, le=1000),
-    graphiti=Depends(graphiti_from_config)
+    graphiti: ZepGraphitiDep
 ) -> list[MemoryWithScoreResponse]:
     """
     Retrieve memories with their relevance scores.
@@ -243,7 +243,7 @@ async def get_memories_with_scores(
 async def bulk_recalculate_scores(
     request: BulkRecalculateRequest,
     scorer: RelevanceScorer = Depends(get_scorer),
-    graphiti=Depends(graphiti_from_config)
+    graphiti: ZepGraphitiDep
 ) -> BulkRecalculateResponse:
     """
     Bulk recalculate relevance scores for multiple memories.
