@@ -9,6 +9,7 @@ use tracing::info;
 use tracing_subscriber::{filter::EnvFilter, FmtSubscriber};
 
 mod config;
+mod embeddings;
 mod error;
 mod falkor;
 mod handlers;
