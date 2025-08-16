@@ -2,6 +2,7 @@ use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
 use serde_json::json;
 use tracing::{error, info, instrument};
 
+use crate::embeddings::EMBEDDER;
 use crate::error::SearchResult;
 use crate::models::{SearchRequest, SearchResults};
 use crate::search::SearchEngine;
@@ -68,9 +69,26 @@ pub async fn health_check(State(state): State<AppState>) -> impl IntoResponse {
 #[instrument(skip(state))]
 pub async fn search_handler(
     State(state): State<AppState>,
-    Json(request): Json<SearchRequest>,
+    Json(mut request): Json<SearchRequest>,
 ) -> SearchResult<Json<SearchResults>> {
     info!("Processing search request for query: {}", request.query);
+
+    // Generate embedding if not provided
+    if request.query_vector.is_none() && !request.query.is_empty() {
+        info!("Generating embedding for query: {}", request.query);
+        match EMBEDDER.generate_embedding(&request.query).await {
+            Ok(Some(embedding)) => {
+                info!("Generated embedding with {} dimensions", embedding.len());
+                request.query_vector = Some(embedding);
+            }
+            Ok(None) => {
+                info!("No embedding generated, continuing with fulltext search only");
+            }
+            Err(e) => {
+                error!("Failed to generate embedding: {}, continuing without it", e);
+            }
+        }
+    }
 
     // Create search engine with pools
     let mut engine = SearchEngine::new(state.falkor_pool.clone(), state.redis_pool.clone());
