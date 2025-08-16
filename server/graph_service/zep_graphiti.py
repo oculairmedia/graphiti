@@ -64,20 +64,20 @@ class ZepGraphiti(Graphiti):
         if use_falkordb or uri.startswith('redis://'):
             if not FALKORDB_AVAILABLE:
                 raise ImportError('FalkorDB driver not available. Install falkordb package.')
-            # Parse redis URI for FalkorDriver - follow examples pattern
+            # FalkorDriver expects redis:// URI format
             parsed = urlparse(uri)
             host = parsed.hostname or 'localhost'
             port = parsed.port or 6379
-            database = 'graphiti_migration'  # Use same database as migration scripts
-            driver = FalkorDriver(host=host, port=port, database=database)
-            logger.info(f'Using FalkorDB driver with host: {host}:{port}, database: {database}')
+            redis_uri = f'redis://{host}:{port}'
+            driver = FalkorDriver(uri=redis_uri, user='', password='')
+            logger.info(f'Using FalkorDB driver with URI: {redis_uri}')
         else:
             if not NEO4J_AVAILABLE:
                 raise ImportError('Neo4j driver not available. Install neo4j package.')
             driver = Neo4jDriver(uri, user, password)  # type: ignore[assignment]
             logger.info(f'Using Neo4j driver with URI: {uri}')
 
-        super().__init__(graph_driver=driver, llm_client=llm_client, embedder=embedder)
+        super().__init__(uri=uri, user=user, password=password, graph_driver=driver, llm_client=llm_client, embedder=embedder)
 
     async def save_entity_node(self, name: str, uuid: str, group_id: str, summary: str = '') -> EntityNode:
         new_node = EntityNode(

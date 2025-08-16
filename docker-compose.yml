@@ -220,8 +220,8 @@ services:
     # build:
     #   context: ./graphiti-search-rs
     #   dockerfile: Dockerfile
-    # Use published image from GitHub Actions build:
-    image: ghcr.io/oculairmedia/graphiti-search-rs:dev
+    # Use local build with FalkorDB SDK:
+    image: graphiti-search-rs:falkordb-sdk
     container_name: graphiti-search-rs
     restart: unless-stopped
     ports:

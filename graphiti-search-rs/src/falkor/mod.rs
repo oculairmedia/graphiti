@@ -8,10 +8,13 @@ use crate::config::Config;
 use crate::error::{SearchError, SearchResult};
 
 pub mod client;
+pub mod client_v2;
 pub mod parser;
+pub mod parser_v2;
 pub mod queries;
 
 pub use self::client::FalkorClient;
+pub use self::client_v2::FalkorClientV2;
 
 pub type FalkorPool = Pool<FalkorManager>;
 pub type FalkorConnection = Object<FalkorManager>;
