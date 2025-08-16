@@ -17,6 +17,33 @@ export interface DataPrepConfig {
   centralityMetric?: string;
   clusterStrength?: number;
   nodeTypeIndexMap?: Map<string, number>;
+  sizeMapping?: string;  // Add sizeMapping to config
+}
+
+// Compute node size based on the selected sizing strategy (copied from useGraphDataQuery)
+export function computeSizeFromStrategy(node: any, config: DataPrepConfig): number {
+  // Return normalized value (0-1 range) - renderer will handle scaling
+  switch (config.sizeMapping) {
+    case 'degree':
+      return node.properties?.degree_centrality || node.degree_centrality || 0.1;
+    case 'betweenness':
+      return node.properties?.betweenness_centrality || node.betweenness_centrality || 0.1;
+    case 'pagerank':
+      return node.properties?.pagerank_centrality || node.properties?.pagerank || node.pagerank_centrality || node.pagerank || 0.1;
+    case 'importance':
+      return node.properties?.eigenvector_centrality || node.eigenvector_centrality || 0.1;
+    case 'connections':
+      // Same as degree but could use raw count if available
+      return node.properties?.degree_centrality || node.degree_centrality || 0.1;
+    case 'uniform':
+      return 0.5; // Middle value for uniform sizing
+    case 'custom':
+      // Use eigenvector as default for custom
+      return node.properties?.eigenvector_centrality || node.properties?.pagerank_centrality || node.properties?.degree_centrality || node.eigenvector_centrality || node.pagerank_centrality || node.degree_centrality || 0.1;
+    default:
+      // Safe fallback using best available metric
+      return node.properties?.degree_centrality || node.properties?.pagerank_centrality || node.degree_centrality || node.pagerank_centrality || 0.1;
+  }
 }
 
 /**
@@ -139,9 +166,9 @@ export function sanitizeNode(
     sanitizedNode.betweenness_centrality = Number(sanitizedProperties.betweenness_centrality || 0) + (Math.random() * epsilon);
     sanitizedNode.eigenvector_centrality = Number(sanitizedProperties.eigenvector_centrality || 0) + (Math.random() * epsilon);
     sanitizedNode.color = generateNodeTypeColor(node.node_type || 'Unknown', nodeTypeIndex);
-    // Use centrality for size - scale it up for visibility (multiply by 100 for better range)
-    const centralityValue = sanitizedNode.degree_centrality || sanitizedNode.pagerank_centrality || 0.01;
-    sanitizedNode.size = Math.max(2, centralityValue * 100);
+    // Use normalized size based on degree centrality (0-1 range)
+    // This provides a consistent base that can be scaled by pointSizeRange
+    sanitizedNode.size = sanitizedNode.degree_centrality || 0.1;
     sanitizedNode.cluster = String(cluster);
     sanitizedNode.clusterStrength = Number(config.clusterStrength ?? 0.7);
     // CRITICAL: created_at_timestamp MUST be a number (Unix timestamp) for DuckDB
@@ -193,9 +220,9 @@ export function sanitizeNode(
     sanitizedNode.x = node.x ?? null;
     sanitizedNode.y = node.y ?? null;
     sanitizedNode.color = generateNodeTypeColor(node.node_type || 'Unknown', nodeTypeIndex);
-    // Use centrality for size - scale it up for visibility (multiply by 100 for better range)
-    const centralityValue = sanitizedNode.degree_centrality || sanitizedNode.pagerank_centrality || 0.01;
-    sanitizedNode.size = Math.max(2, centralityValue * 100);
+    // Use normalized size based on degree centrality (0-1 range)
+    // This provides a consistent base that can be scaled by pointSizeRange
+    sanitizedNode.size = sanitizedNode.degree_centrality || 0.1;
     // Convert timestamp to number for consistency with DuckDB DOUBLE type
     // Handle both number and string formats for robustness
     if (node.created_at_timestamp !== undefined && node.created_at_timestamp !== null) {
