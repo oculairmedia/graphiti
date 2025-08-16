@@ -14,6 +14,7 @@ pub mod parser_v2;
 pub mod queries;
 
 pub use self::client::FalkorClient;
+#[allow(unused_imports)]
 pub use self::client_v2::FalkorClientV2;
 
 pub type FalkorPool = Pool<FalkorManager>;
