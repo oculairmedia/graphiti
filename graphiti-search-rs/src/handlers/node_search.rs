@@ -31,9 +31,13 @@ pub async fn node_search_handler(
     let start = std::time::Instant::now();
 
     // Generate embedding if not provided and similarity search is requested
-    if request.query_vector.is_none() 
-        && !request.query.is_empty() 
-        && request.config.search_methods.iter().any(|m| matches!(m, crate::models::SearchMethod::Similarity)) 
+    if request.query_vector.is_none()
+        && !request.query.is_empty()
+        && request
+            .config
+            .search_methods
+            .iter()
+            .any(|m| matches!(m, crate::models::SearchMethod::Similarity))
     {
         info!("Generating embedding for query: {}", request.query);
         match EMBEDDER.generate_embedding(&request.query).await {
