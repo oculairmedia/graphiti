@@ -26,6 +26,12 @@ pub struct OllamaEmbedder {
     model: String,
 }
 
+impl Default for OllamaEmbedder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl OllamaEmbedder {
     pub fn new() -> Self {
         let base_url = env::var("OLLAMA_BASE_URL")

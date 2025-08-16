@@ -59,6 +59,14 @@ pub struct RequestCoalescer<K: Clone + Eq + std::hash::Hash, V: Clone> {
 }
 
 impl<K: Clone + Eq + std::hash::Hash + Send + Sync + 'static, V: Clone + Send + Sync + 'static>
+    Default for RequestCoalescer<K, V>
+{
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<K: Clone + Eq + std::hash::Hash + Send + Sync + 'static, V: Clone + Send + Sync + 'static>
     RequestCoalescer<K, V>
 {
     pub fn new() -> Self {
