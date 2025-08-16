@@ -17,6 +17,7 @@ dependencies = [
     "redis>=5.0.0",
     "msgpack>=1.0.0",
     "psutil>=5.9.0",
+    "falkordb>=1.2.0",
 ]
 
 [project.optional-dependencies]

@@ -14,8 +14,8 @@ router = APIRouter(tags=["search"])
 logger = logging.getLogger(__name__)
 
 # Rust search service URL
-# Use the container name since they're on the same Docker network
-RUST_SEARCH_URL = "http://graphiti-search-rs:3004"
+# Use environment variable or fallback to localhost for development
+RUST_SEARCH_URL = os.getenv('RUST_SEARCH_URL', 'http://localhost:3004')
 
 class SearchQuery(BaseModel):
     """Search query matching the expected format"""
@@ -73,8 +73,8 @@ async def search_proxy(query: SearchQuery) -> SearchResults:
     Transforms the request format to match Rust service expectations.
     """
     try:
-        # Generate embedding for the query
-        query_vector = await generate_embedding(query.query)
+        # Don't generate embeddings here - let Rust service handle it
+        # The Rust service has Ollama embedding generation built-in
         
         # Transform request to Rust service format with full config
         rust_request = {
@@ -86,7 +86,7 @@ async def search_proxy(query: SearchQuery) -> SearchResults:
                 "edge_config": {
                     "enabled": True,
                     "limit": query.max_facts,
-                    "search_methods": ["fulltext", "similarity"],
+                    "search_methods": ["fulltext", "similarity"],  # Re-enable similarity
                     "reranker": "rrf",
                     "bfs_max_depth": 2,
                     "sim_min_score": 0.0,
@@ -95,7 +95,7 @@ async def search_proxy(query: SearchQuery) -> SearchResults:
                 "node_config": {
                     "enabled": True,
                     "limit": query.max_facts,
-                    "search_methods": ["fulltext", "similarity"],
+                    "search_methods": ["fulltext", "similarity"],  # Re-enable similarity
                     "reranker": "rrf",
                     "bfs_max_depth": 2,
                     "sim_min_score": 0.0,
@@ -109,12 +109,8 @@ async def search_proxy(query: SearchQuery) -> SearchResults:
         if query.group_ids:
             rust_request["filters"]["group_ids"] = query.group_ids
         
-        # Add query vector if generated
-        if query_vector:
-            rust_request["query_vector"] = query_vector
-            logger.info(f"Generated embedding with {len(query_vector)} dimensions")
-        else:
-            logger.warning("Failed to generate embedding for query")
+        # Don't add query_vector - let Rust service generate it
+        logger.info(f"Forwarding search query to Rust service: {query.query}")
         
         # Forward to Rust service
         async with httpx.AsyncClient(timeout=10.0) as client:

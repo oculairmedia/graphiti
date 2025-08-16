@@ -73,6 +73,7 @@ impl FalkorClient {
         limit: usize,
         min_score: f32,
     ) -> Result<Vec<Node>> {
+        // Convert embedding to comma-separated string
         let embedding_str = embedding
             .iter()
             .map(|v| v.to_string())
@@ -81,6 +82,7 @@ impl FalkorClient {
 
         // Use name_embedding field which is what Graphiti uses for nodes
         // FalkorDB uses cosineDistance, convert to similarity score: (2 - distance)/2
+        // Note: FalkorDB requires inline vectors, parameters don't work with vecf32()
         let cypher = format!(
             "MATCH (n:Entity) 
              WHERE n.name_embedding IS NOT NULL
@@ -91,9 +93,20 @@ impl FalkorClient {
              LIMIT {limit}"
         );
 
-        let results: Vec<Vec<redis::Value>> = redis::cmd("GRAPH.QUERY")
-            .arg(&self.graph_name)
-            .arg(&cypher)
+        // Debug log first part of query to avoid huge logs
+        let query_preview = if cypher.len() > 500 {
+            format!("{}...", &cypher[..500])
+        } else {
+            cypher.clone()
+        };
+        tracing::debug!("Similarity search query preview: {}", query_preview);
+
+        // Use raw command to avoid any escaping issues with the query
+        let mut cmd = redis::cmd("GRAPH.QUERY");
+        cmd.arg(&self.graph_name);
+        cmd.arg(cypher.as_bytes());  // Send as raw bytes to avoid string processing
+        
+        let results: Vec<Vec<redis::Value>> = cmd
             .query_async(&mut self.conn)
             .await?;
 
@@ -196,6 +209,7 @@ impl FalkorClient {
         limit: usize,
         min_score: f32,
     ) -> Result<Vec<Edge>> {
+        // Convert embedding to comma-separated string
         let embedding_str = embedding
             .iter()
             .map(|v| v.to_string())
@@ -204,6 +218,7 @@ impl FalkorClient {
 
         // Use fact_embedding field which is what Graphiti uses for edges
         // FalkorDB uses cosineDistance, convert to similarity score: (2 - distance)/2
+        // Note: FalkorDB requires inline vectors, parameters don't work with vecf32()
         let cypher = format!(
             "MATCH (a)-[r:RELATES_TO]->(b)
              WHERE r.fact_embedding IS NOT NULL
@@ -214,9 +229,20 @@ impl FalkorClient {
              LIMIT {limit}"
         );
 
-        let results: Vec<Vec<redis::Value>> = redis::cmd("GRAPH.QUERY")
-            .arg(&self.graph_name)
-            .arg(&cypher)
+        // Debug log first part of query to avoid huge logs
+        let query_preview = if cypher.len() > 500 {
+            format!("{}...", &cypher[..500])
+        } else {
+            cypher.clone()
+        };
+        tracing::debug!("Edge similarity search query preview: {}", query_preview);
+
+        // Use raw command to avoid any escaping issues with the query
+        let mut cmd = redis::cmd("GRAPH.QUERY");
+        cmd.arg(&self.graph_name);
+        cmd.arg(cypher.as_bytes());  // Send as raw bytes to avoid string processing
+        
+        let results: Vec<Vec<redis::Value>> = cmd
             .query_async(&mut self.conn)
             .await?;
 
