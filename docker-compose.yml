@@ -217,11 +217,11 @@ services:
   
   # High-performance Rust search service (43x faster than Python)
   graphiti-search-rs:
-    # build:
-    #   context: ./graphiti-search-rs
-    #   dockerfile: Dockerfile
-    # Use local build with FalkorDB SDK:
-    image: graphiti-search-rs:falkordb-sdk
+    build:
+      context: ./graphiti-search-rs
+      dockerfile: Dockerfile
+    # Use GitHub Actions build with FalkorDB SDK:
+    # image: ghcr.io/oculairmedia/graphiti-search-rs:relevance-scoring
     container_name: graphiti-search-rs
     restart: unless-stopped
     ports:
@@ -237,6 +237,8 @@ services:
       - RUST_LOG=graphiti_search=info,debug
       - RUST_SEARCH_ENABLED=${RUST_SEARCH_ENABLED:-false}  # Feature flag
       - RUST_SEARCH_PERCENTAGE=${RUST_SEARCH_PERCENTAGE:-0}  # A/B testing percentage
+      - OLLAMA_BASE_URL=${OLLAMA_EMBEDDING_BASE_URL:-http://192.168.50.80:11434/v1}
+      - OLLAMA_EMBEDDING_MODEL=${OLLAMA_EMBEDDING_MODEL:-mxbai-embed-large:latest}
     depends_on:
       falkordb:
         condition: service_healthy
