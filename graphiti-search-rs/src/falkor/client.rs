@@ -104,11 +104,9 @@ impl FalkorClient {
         // Use raw command to avoid any escaping issues with the query
         let mut cmd = redis::cmd("GRAPH.QUERY");
         cmd.arg(&self.graph_name);
-        cmd.arg(cypher.as_bytes());  // Send as raw bytes to avoid string processing
-        
-        let results: Vec<Vec<redis::Value>> = cmd
-            .query_async(&mut self.conn)
-            .await?;
+        cmd.arg(cypher.as_bytes()); // Send as raw bytes to avoid string processing
+
+        let results: Vec<Vec<redis::Value>> = cmd.query_async(&mut self.conn).await?;
 
         self.parse_nodes(results)
     }
@@ -240,11 +238,9 @@ impl FalkorClient {
         // Use raw command to avoid any escaping issues with the query
         let mut cmd = redis::cmd("GRAPH.QUERY");
         cmd.arg(&self.graph_name);
-        cmd.arg(cypher.as_bytes());  // Send as raw bytes to avoid string processing
-        
-        let results: Vec<Vec<redis::Value>> = cmd
-            .query_async(&mut self.conn)
-            .await?;
+        cmd.arg(cypher.as_bytes()); // Send as raw bytes to avoid string processing
+
+        let results: Vec<Vec<redis::Value>> = cmd.query_async(&mut self.conn).await?;
 
         self.parse_edges(results)
     }

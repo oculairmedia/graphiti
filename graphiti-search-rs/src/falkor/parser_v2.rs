@@ -32,8 +32,9 @@ pub fn parse_edges_from_falkor_v2(mut result: LazyResultSet<'_>) -> Result<Vec<E
     for row in result {
         // For edge queries, we expect [source_node, edge, target_node] or [source, edge, target, score]
         if row.len() >= 3 {
-            if let (FalkorValue::Node(source), FalkorValue::Edge(edge), FalkorValue::Node(target)) = 
-                (&row[0], &row[1], &row[2]) {
+            if let (FalkorValue::Node(source), FalkorValue::Edge(edge), FalkorValue::Node(target)) =
+                (&row[0], &row[1], &row[2])
+            {
                 if let Some(parsed_edge) = parse_single_edge_v2(source, edge, target)? {
                     edges.push(parsed_edge);
                 }
@@ -67,18 +68,16 @@ fn parse_single_node_v2(falkor_node: &falkordb::Node) -> Result<Option<Node>> {
     // Extract properties
     let uuid_str = get_string_property(falkor_node, "uuid")?;
     let name = get_string_property(falkor_node, "name")?;
-    let node_type = get_string_property(falkor_node, "entity_type")
-        .unwrap_or_else(|_| "entity".to_string());
+    let node_type =
+        get_string_property(falkor_node, "entity_type").unwrap_or_else(|_| "entity".to_string());
     let summary = get_optional_string_property(falkor_node, "summary");
     let group_id = get_optional_string_property(falkor_node, "group_id");
-    let created_at = get_datetime_property(falkor_node, "created_at")
-        .unwrap_or_else(|_| Utc::now());
-    let centrality = get_optional_float_property(falkor_node, "centrality")
-        .map(|f| f as f32);
+    let created_at =
+        get_datetime_property(falkor_node, "created_at").unwrap_or_else(|_| Utc::now());
+    let centrality = get_optional_float_property(falkor_node, "centrality").map(|f| f as f32);
 
     // Parse UUID
-    let uuid = Uuid::parse_str(&uuid_str)
-        .map_err(|e| anyhow!("Failed to parse UUID: {}", e))?;
+    let uuid = Uuid::parse_str(&uuid_str).map_err(|e| anyhow!("Failed to parse UUID: {}", e))?;
 
     Ok(Some(Node {
         uuid,
@@ -95,21 +94,20 @@ fn parse_single_node_v2(falkor_node: &falkordb::Node) -> Result<Option<Node>> {
 /// Parse a single edge from FalkorDB Edge with source and target nodes
 fn parse_single_edge_v2(
     source: &falkordb::Node,
-    falkor_edge: &falkordb::Edge, 
-    target: &falkordb::Node
+    falkor_edge: &falkordb::Edge,
+    target: &falkordb::Node,
 ) -> Result<Option<Edge>> {
     // Extract edge properties
     let uuid_str = get_edge_string_property(falkor_edge, "uuid")?;
     let fact = get_edge_string_property(falkor_edge, "fact")?;
-    let created_at = get_edge_datetime_property(falkor_edge, "created_at")
-        .unwrap_or_else(|_| Utc::now());
+    let created_at =
+        get_edge_datetime_property(falkor_edge, "created_at").unwrap_or_else(|_| Utc::now());
     let group_id = get_edge_optional_string_property(falkor_edge, "group_id");
-    let weight = get_edge_optional_float_property(falkor_edge, "weight")
-        .unwrap_or(1.0) as f32;
+    let weight = get_edge_optional_float_property(falkor_edge, "weight").unwrap_or(1.0) as f32;
 
     // Parse edge UUID
-    let uuid = Uuid::parse_str(&uuid_str)
-        .map_err(|e| anyhow!("Failed to parse edge UUID: {}", e))?;
+    let uuid =
+        Uuid::parse_str(&uuid_str).map_err(|e| anyhow!("Failed to parse edge UUID: {}", e))?;
 
     // Parse source and target UUIDs
     let source_node_uuid = Uuid::parse_str(&get_string_property(source, "uuid")?)?;
@@ -139,8 +137,8 @@ fn parse_single_episode_v2(falkor_node: &falkordb::Node) -> Result<Option<Episod
 
     let uuid_str = get_string_property(falkor_node, "uuid")?;
     let content = get_string_property(falkor_node, "content")?;
-    let created_at = get_datetime_property(falkor_node, "created_at")
-        .unwrap_or_else(|_| Utc::now());
+    let created_at =
+        get_datetime_property(falkor_node, "created_at").unwrap_or_else(|_| Utc::now());
     let group_id = get_optional_string_property(falkor_node, "group_id");
     let timestamp = get_optional_datetime_property(falkor_node, "timestamp");
 
@@ -159,128 +157,100 @@ fn parse_single_episode_v2(falkor_node: &falkordb::Node) -> Result<Option<Episod
 fn get_string_property(node: &falkordb::Node, key: &str) -> Result<String> {
     node.properties
         .get(key)
-        .and_then(|v| {
-            match v {
-                FalkorValue::String(s) => Some(s.clone()),
-                _ => None,
-            }
+        .and_then(|v| match v {
+            FalkorValue::String(s) => Some(s.clone()),
+            _ => None,
         })
         .ok_or_else(|| anyhow!("Missing property: {}", key))
 }
 
 fn get_optional_string_property(node: &falkordb::Node, key: &str) -> Option<String> {
-    node.properties
-        .get(key)
-        .and_then(|v| {
-            match v {
-                FalkorValue::String(s) => Some(s.clone()),
-                _ => None,
-            }
-        })
+    node.properties.get(key).and_then(|v| match v {
+        FalkorValue::String(s) => Some(s.clone()),
+        _ => None,
+    })
 }
 
 fn get_datetime_property(node: &falkordb::Node, key: &str) -> Result<DateTime<Utc>> {
-    let timestamp = node.properties
+    let timestamp = node
+        .properties
         .get(key)
-        .and_then(|v| {
-            match v {
-                FalkorValue::F64(f) => Some(*f as i64),
-                FalkorValue::I64(i) => Some(*i),
-                _ => None,
-            }
+        .and_then(|v| match v {
+            FalkorValue::F64(f) => Some(*f as i64),
+            FalkorValue::I64(i) => Some(*i),
+            _ => None,
         })
         .ok_or_else(|| anyhow!("Missing datetime property: {}", key))?;
 
-    Ok(DateTime::from_timestamp(timestamp, 0)
-        .unwrap_or_else(|| Utc::now()))
+    Ok(DateTime::from_timestamp(timestamp, 0).unwrap_or_else(|| Utc::now()))
 }
 
 fn get_optional_datetime_property(node: &falkordb::Node, key: &str) -> Option<DateTime<Utc>> {
     node.properties
         .get(key)
-        .and_then(|v| {
-            match v {
-                FalkorValue::F64(f) => Some(*f as i64),
-                FalkorValue::I64(i) => Some(*i),
-                _ => None,
-            }
+        .and_then(|v| match v {
+            FalkorValue::F64(f) => Some(*f as i64),
+            FalkorValue::I64(i) => Some(*i),
+            _ => None,
         })
         .and_then(|timestamp| DateTime::from_timestamp(timestamp, 0))
 }
 
 fn get_optional_float_property(node: &falkordb::Node, key: &str) -> Option<f64> {
-    node.properties
-        .get(key)
-        .and_then(|v| {
-            match v {
-                FalkorValue::F64(f) => Some(*f),
-                FalkorValue::I64(i) => Some(*i as f64),
-                _ => None,
-            }
-        })
+    node.properties.get(key).and_then(|v| match v {
+        FalkorValue::F64(f) => Some(*f),
+        FalkorValue::I64(i) => Some(*i as f64),
+        _ => None,
+    })
 }
 
 // Helper functions for extracting properties from FalkorEdge
 fn get_edge_string_property(edge: &falkordb::Edge, key: &str) -> Result<String> {
     edge.properties
         .get(key)
-        .and_then(|v| {
-            match v {
-                FalkorValue::String(s) => Some(s.clone()),
-                _ => None,
-            }
+        .and_then(|v| match v {
+            FalkorValue::String(s) => Some(s.clone()),
+            _ => None,
         })
         .ok_or_else(|| anyhow!("Missing edge property: {}", key))
 }
 
 fn get_edge_optional_string_property(edge: &falkordb::Edge, key: &str) -> Option<String> {
-    edge.properties
-        .get(key)
-        .and_then(|v| {
-            match v {
-                FalkorValue::String(s) => Some(s.clone()),
-                _ => None,
-            }
-        })
+    edge.properties.get(key).and_then(|v| match v {
+        FalkorValue::String(s) => Some(s.clone()),
+        _ => None,
+    })
 }
 
 fn get_edge_datetime_property(edge: &falkordb::Edge, key: &str) -> Result<DateTime<Utc>> {
-    let timestamp = edge.properties
+    let timestamp = edge
+        .properties
         .get(key)
-        .and_then(|v| {
-            match v {
-                FalkorValue::F64(f) => Some(*f as i64),
-                FalkorValue::I64(i) => Some(*i),
-                _ => None,
-            }
+        .and_then(|v| match v {
+            FalkorValue::F64(f) => Some(*f as i64),
+            FalkorValue::I64(i) => Some(*i),
+            _ => None,
         })
         .ok_or_else(|| anyhow!("Missing edge datetime property: {}", key))?;
 
-    Ok(DateTime::from_timestamp(timestamp, 0)
-        .unwrap_or_else(|| Utc::now()))
+    Ok(DateTime::from_timestamp(timestamp, 0).unwrap_or_else(|| Utc::now()))
 }
 
 fn get_edge_optional_datetime_property(edge: &falkordb::Edge, key: &str) -> Option<DateTime<Utc>> {
     edge.properties
         .get(key)
-        .and_then(|v| {
-            match v {
-                FalkorValue::F64(f) => Some(*f as i64),
-                FalkorValue::I64(i) => Some(*i),
-                _ => None,
-            }
+        .and_then(|v| match v {
+            FalkorValue::F64(f) => Some(*f as i64),
+            FalkorValue::I64(i) => Some(*i),
+            _ => None,
         })
         .and_then(|timestamp| DateTime::from_timestamp(timestamp, 0))
 }
 
 fn get_edge_optional_float_property(edge: &falkordb::Edge, key: &str) -> Option<f64> {
-    edge.properties
-        .get(key)
-        .and_then(|v| {
-            match v {
-                FalkorValue::F64(f) => Some(*f),
-                FalkorValue::I64(i) => Some(*i as f64),
-                _ => None,
-            }
-        })
+    edge.properties.get(key).and_then(|v| match v {
+        FalkorValue::F64(f) => Some(*f),
+        FalkorValue::I64(i) => Some(*i as f64),
+        _ => None,
+    })
 }
