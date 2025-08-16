@@ -33,7 +33,10 @@ impl OllamaEmbedder {
         let model = env::var("OLLAMA_EMBEDDING_MODEL")
             .unwrap_or_else(|_| "mxbai-embed-large:latest".to_string());
 
-        debug!("Ollama embedder initialized with URL: {}, Model: {}", base_url, model);
+        debug!(
+            "Ollama embedder initialized with URL: {}, Model: {}",
+            base_url, model
+        );
 
         Self {
             client: Client::new(),
@@ -49,10 +52,11 @@ impl OllamaEmbedder {
         };
 
         let url = format!("{}/embeddings", self.base_url);
-        
+
         debug!("Generating embedding for text: '{}'", text);
 
-        let response = self.client
+        let response = self
+            .client
             .post(&url)
             .header("Authorization", "Bearer ollama")
             .json(&request)
@@ -61,9 +65,12 @@ impl OllamaEmbedder {
 
         if response.status().is_success() {
             let embedding_response: EmbeddingResponse = response.json().await?;
-            
+
             if let Some(data) = embedding_response.data.first() {
-                debug!("Generated embedding with {} dimensions", data.embedding.len());
+                debug!(
+                    "Generated embedding with {} dimensions",
+                    data.embedding.len()
+                );
                 return Ok(Some(data.embedding.clone()));
             }
         } else {
