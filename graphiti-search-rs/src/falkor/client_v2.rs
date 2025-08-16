@@ -8,6 +8,7 @@ use crate::falkor::parser_v2;
 use crate::models::{Edge, Episode, Node};
 
 pub struct FalkorClientV2 {
+    #[allow(dead_code)]
     client: FalkorAsyncClient,
     graph: AsyncGraph,
 }

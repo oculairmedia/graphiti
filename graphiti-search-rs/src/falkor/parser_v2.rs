@@ -6,7 +6,7 @@ use uuid::Uuid;
 use crate::models::{Edge, Episode, Node};
 
 /// Parse nodes from FalkorDB LazyResultSet
-pub fn parse_nodes_from_falkor_v2(mut result: LazyResultSet<'_>) -> Result<Vec<Node>> {
+pub fn parse_nodes_from_falkor_v2(result: LazyResultSet<'_>) -> Result<Vec<Node>> {
     let mut nodes = Vec::new();
 
     // Iterate over the lazy result set
@@ -25,7 +25,7 @@ pub fn parse_nodes_from_falkor_v2(mut result: LazyResultSet<'_>) -> Result<Vec<N
 }
 
 /// Parse edges from FalkorDB LazyResultSet
-pub fn parse_edges_from_falkor_v2(mut result: LazyResultSet<'_>) -> Result<Vec<Edge>> {
+pub fn parse_edges_from_falkor_v2(result: LazyResultSet<'_>) -> Result<Vec<Edge>> {
     let mut edges = Vec::new();
 
     // Iterate over the lazy result set
@@ -46,7 +46,7 @@ pub fn parse_edges_from_falkor_v2(mut result: LazyResultSet<'_>) -> Result<Vec<E
 }
 
 /// Parse episodes from FalkorDB LazyResultSet
-pub fn parse_episodes_from_falkor_v2(mut result: LazyResultSet<'_>) -> Result<Vec<Episode>> {
+pub fn parse_episodes_from_falkor_v2(result: LazyResultSet<'_>) -> Result<Vec<Episode>> {
     let mut episodes = Vec::new();
 
     // Iterate over the lazy result set
@@ -182,7 +182,7 @@ fn get_datetime_property(node: &falkordb::Node, key: &str) -> Result<DateTime<Ut
         })
         .ok_or_else(|| anyhow!("Missing datetime property: {}", key))?;
 
-    Ok(DateTime::from_timestamp(timestamp, 0).unwrap_or_else(|| Utc::now()))
+    Ok(DateTime::from_timestamp(timestamp, 0).unwrap_or(Utc::now()))
 }
 
 fn get_optional_datetime_property(node: &falkordb::Node, key: &str) -> Option<DateTime<Utc>> {
@@ -233,9 +233,10 @@ fn get_edge_datetime_property(edge: &falkordb::Edge, key: &str) -> Result<DateTi
         })
         .ok_or_else(|| anyhow!("Missing edge datetime property: {}", key))?;
 
-    Ok(DateTime::from_timestamp(timestamp, 0).unwrap_or_else(|| Utc::now()))
+    Ok(DateTime::from_timestamp(timestamp, 0).unwrap_or(Utc::now()))
 }
 
+#[allow(dead_code)]
 fn get_edge_optional_datetime_property(edge: &falkordb::Edge, key: &str) -> Option<DateTime<Utc>> {
     edge.properties
         .get(key)
