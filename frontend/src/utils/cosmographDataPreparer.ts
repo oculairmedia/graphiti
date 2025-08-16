@@ -160,15 +160,25 @@ export function sanitizeNode(
     sanitizedNode.node_type = String(node.node_type || 'Unknown');
     sanitizedNode.summary = String(node.summary || ''); // Always provide a string, not null
     // Add small variance to prevent STDDEV_SAMP errors
+    // Keep raw values for the columns (they should already be 0-1 normalized from backend)
     const epsilon = 0.000001;
-    sanitizedNode.degree_centrality = Number(sanitizedProperties.degree_centrality || 0) + (Math.random() * epsilon);
-    sanitizedNode.pagerank_centrality = Number(sanitizedProperties.pagerank_centrality || 0) + (Math.random() * epsilon);
-    sanitizedNode.betweenness_centrality = Number(sanitizedProperties.betweenness_centrality || 0) + (Math.random() * epsilon);
-    sanitizedNode.eigenvector_centrality = Number(sanitizedProperties.eigenvector_centrality || 0) + (Math.random() * epsilon);
+    const degreeValue = Number(sanitizedProperties.degree_centrality || 0);
+    const pagerankValue = Number(sanitizedProperties.pagerank_centrality || 0);
+    const betweennessValue = Number(sanitizedProperties.betweenness_centrality || 0);
+    const eigenvectorValue = Number(sanitizedProperties.eigenvector_centrality || 0);
+    
+    // Add tiny random noise to prevent STDDEV_SAMP errors
+    sanitizedNode.degree_centrality = degreeValue + (Math.random() * epsilon);
+    sanitizedNode.pagerank_centrality = pagerankValue + (Math.random() * epsilon);
+    sanitizedNode.betweenness_centrality = betweennessValue + (Math.random() * epsilon);
+    sanitizedNode.eigenvector_centrality = eigenvectorValue + (Math.random() * epsilon);
+    
     sanitizedNode.color = generateNodeTypeColor(node.node_type || 'Unknown', nodeTypeIndex);
     // Use normalized size based on degree centrality (0-1 range)
     // This provides a consistent base that can be scaled by pointSizeRange
-    sanitizedNode.size = sanitizedNode.degree_centrality || 0.1;
+    sanitizedNode.size = degreeValue || 0.1;
+    // Add color value that can be used by color schemes (same as degree by default)
+    sanitizedNode.colorValue = degreeValue || 0.1;
     sanitizedNode.cluster = String(cluster);
     sanitizedNode.clusterStrength = Number(config.clusterStrength ?? 0.7);
     // CRITICAL: created_at_timestamp MUST be a number (Unix timestamp) for DuckDB
@@ -211,18 +221,27 @@ export function sanitizeNode(
     sanitizedNode.node_type = String(node.node_type || 'Unknown');
     sanitizedNode.summary = node.summary ? String(node.summary) : null;
     // Add small variance to prevent STDDEV_SAMP errors
-    // Add tiny random noise to centrality values to ensure variance
+    // Keep raw values for the columns (they should already be 0-1 normalized from backend)
     const epsilon = 0.000001;
-    sanitizedNode.degree_centrality = Number(sanitizedProperties.degree_centrality || 0) + (Math.random() * epsilon);
-    sanitizedNode.pagerank_centrality = Number(sanitizedProperties.pagerank_centrality || 0) + (Math.random() * epsilon);
-    sanitizedNode.betweenness_centrality = Number(sanitizedProperties.betweenness_centrality || 0) + (Math.random() * epsilon);
-    sanitizedNode.eigenvector_centrality = Number(sanitizedProperties.eigenvector_centrality || 0) + (Math.random() * epsilon);
+    const degreeValue = Number(sanitizedProperties.degree_centrality || 0);
+    const pagerankValue = Number(sanitizedProperties.pagerank_centrality || 0);
+    const betweennessValue = Number(sanitizedProperties.betweenness_centrality || 0);
+    const eigenvectorValue = Number(sanitizedProperties.eigenvector_centrality || 0);
+    
+    // Add tiny random noise to centrality values to ensure variance
+    sanitizedNode.degree_centrality = degreeValue + (Math.random() * epsilon);
+    sanitizedNode.pagerank_centrality = pagerankValue + (Math.random() * epsilon);
+    sanitizedNode.betweenness_centrality = betweennessValue + (Math.random() * epsilon);
+    sanitizedNode.eigenvector_centrality = eigenvectorValue + (Math.random() * epsilon);
+    
     sanitizedNode.x = node.x ?? null;
     sanitizedNode.y = node.y ?? null;
     sanitizedNode.color = generateNodeTypeColor(node.node_type || 'Unknown', nodeTypeIndex);
     // Use normalized size based on degree centrality (0-1 range)
     // This provides a consistent base that can be scaled by pointSizeRange
-    sanitizedNode.size = sanitizedNode.degree_centrality || 0.1;
+    sanitizedNode.size = degreeValue || 0.1;
+    // Add color value that can be used by color schemes (same as degree by default)
+    sanitizedNode.colorValue = degreeValue || 0.1;
     // Convert timestamp to number for consistency with DuckDB DOUBLE type
     // Handle both number and string formats for robustness
     if (node.created_at_timestamp !== undefined && node.created_at_timestamp !== null) {

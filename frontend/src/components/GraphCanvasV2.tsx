@@ -18,6 +18,7 @@ import { GraphNode } from '../api/types';
 import type { GraphData, GraphLink } from '../types/graph';
 import { useGraphConfig } from '../contexts/GraphConfigProvider';
 import { hexToRgba, generateHSLColor, interpolateColor } from '../utils/colorCache';
+import { NodeColorManager, getGlobalColorManager } from '../utils/NodeColorManager';
 
 // Import our new hooks
 import { useGraphStatistics } from '../hooks/useGraphStatistics';
@@ -580,15 +581,143 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
       }
     }, [config.sizeMapping, config.minNodeSize, config.maxNodeSize]);
     
-    // Dynamic node color map - only used for type-based coloring
-    const dynamicNodeColorMap = useMemo(() => {
-      // Only compute the map for type-based coloring
-      if (config.colorScheme === 'by-type' || !config.colorScheme) {
-        return config.nodeTypeColors || {};
+    // Initialize and update color manager
+    const colorManagerRef = useRef<NodeColorManager>(getGlobalColorManager({
+      scheme: config.colorScheme || 'by-type',
+      gradientHighColor: config.gradientHighColor,
+      gradientLowColor: config.gradientLowColor,
+      nodeTypeColors: config.nodeTypeColors,
+      normalizeMetrics: true
+    }));
+    
+    // Update color manager when config changes
+    useEffect(() => {
+      colorManagerRef.current.updateConfig({
+        scheme: config.colorScheme || 'by-type',
+        gradientHighColor: config.gradientHighColor,
+        gradientLowColor: config.gradientLowColor,
+        nodeTypeColors: config.nodeTypeColors,
+        normalizeMetrics: true
+      });
+    }, [config.colorScheme, config.gradientHighColor, config.gradientLowColor, config.nodeTypeColors]);
+    
+    // Update color manager with nodes data
+    useEffect(() => {
+      if (cosmographData?.nodes) {
+        colorManagerRef.current.setNodes(cosmographData.nodes);
       }
-      // Return empty map for other schemes (they use pointColorByFn)
-      return {};
-    }, [config.colorScheme, config.nodeTypeColors]);
+    }, [cosmographData?.nodes]);
+    
+    // Get appropriate color configuration based on scheme
+    const nodeColorConfig = useMemo(() => {
+      // Determine which column to use for coloring
+      let colorByColumn = 'node_type'; // default
+      let useDirectColoring = false;
+      
+      switch (config.colorScheme) {
+        case 'by-type':
+        default:
+          // Use node_type column with map strategy
+          return {
+            colorBy: 'node_type',
+            strategy: 'map',
+            colorMap: config.nodeTypeColors || {},
+            colorFn: undefined
+          };
+        
+        case 'by-centrality':
+        case 'by-degree':
+          // Use degree_centrality column directly
+          colorByColumn = 'degree_centrality';
+          useDirectColoring = true;
+          break;
+          
+        case 'by-pagerank':
+          // Use pagerank_centrality column directly
+          colorByColumn = 'pagerank_centrality';
+          useDirectColoring = true;
+          break;
+          
+        case 'by-betweenness':
+          // Use betweenness_centrality column directly
+          colorByColumn = 'betweenness_centrality';
+          useDirectColoring = true;
+          break;
+          
+        case 'by-eigenvector':
+          // Use eigenvector_centrality column directly
+          colorByColumn = 'eigenvector_centrality';
+          useDirectColoring = true;
+          break;
+          
+        case 'by-community':
+          // Use cluster column
+          colorByColumn = 'cluster';
+          useDirectColoring = true;
+          break;
+          
+        case 'custom':
+          // Use colorValue column
+          colorByColumn = 'colorValue';
+          useDirectColoring = true;
+          break;
+      }
+      
+      if (useDirectColoring) {
+        // For metric-based coloring, use a function to map values to colors
+        return {
+          colorBy: colorByColumn,
+          strategy: 'direct',
+          colorMap: {},
+          colorFn: (value: number | string) => {
+            // Normalize value and apply gradient
+            const numValue = typeof value === 'number' ? value : parseFloat(String(value)) || 0;
+            const highColor = config.gradientHighColor || '#FF6B6B';
+            const lowColor = config.gradientLowColor || '#4ECDC4';
+            
+            // For cluster/community, use palette
+            if (config.colorScheme === 'by-community') {
+              const communityColors = [
+                '#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6',
+                '#1abc9c', '#34495e', '#e67e22', '#95a5a6', '#d35400',
+                '#16a085', '#27ae60', '#2980b9', '#8e44ad', '#2c3e50',
+                '#f1c40f', '#e74c3c', '#ecf0f1', '#95a5a6', '#34495e'
+              ];
+              // Hash the cluster string to get a consistent index
+              let hash = 0;
+              const clusterStr = String(value);
+              for (let i = 0; i < clusterStr.length; i++) {
+                hash = ((hash << 5) - hash) + clusterStr.charCodeAt(i);
+                hash = hash & hash; // Convert to 32bit integer
+              }
+              const index = Math.abs(hash) % communityColors.length;
+              return communityColors[index];
+            }
+            
+            // For metrics, use gradient (values are already 0-1 normalized)
+            // Support 3-color gradient if midColor is defined
+            if (config.gradientMidColor) {
+              if (numValue < 0.5) {
+                // Low to mid gradient
+                return interpolateColor(lowColor, config.gradientMidColor, numValue * 2);
+              } else {
+                // Mid to high gradient
+                return interpolateColor(config.gradientMidColor, highColor, (numValue - 0.5) * 2);
+              }
+            }
+            // Simple 2-color gradient
+            return interpolateColor(lowColor, highColor, numValue);
+          }
+        };
+      }
+      
+      return {
+        colorBy: 'node_type',
+        strategy: 'map',
+        colorMap: config.nodeTypeColors || {},
+        colorFn: undefined
+      };
+    }, [config.colorScheme, config.nodeTypeColors, config.gradientHighColor, config.gradientLowColor]);
     
     // Dynamic link width function based on scheme
     // Separated from render to prevent reload when cosmographData changes
@@ -1364,7 +1493,6 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
           pointIdBy="id"
           pointIndexBy="index"
           pointLabelBy={config.labelBy || "label"}
-          pointColorBy="node_type"
           pointSizeBy="size"
           pointClusterBy={config.clusteringEnabled ? "cluster" : undefined}
           pointClusterStrengthBy={config.clusteringEnabled ? "clusterStrength" : undefined}
@@ -1429,7 +1557,14 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
             '#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6',
             '#1abc9c', '#34495e', '#e67e22', '#95a5a6', '#d35400'
           ]}
-          pointColorByMap={config.nodeTypeColors || {}}
+          // Use strategy based on color scheme
+          pointColorStrategy={nodeColorConfig.strategy}
+          // Specify which column contains the color data
+          pointColorBy={nodeColorConfig.colorBy}
+          // Use map for type-based coloring
+          pointColorByMap={nodeColorConfig.colorMap}
+          // Use function for metric-based coloring
+          pointColorByFn={nodeColorConfig.colorFn}
           // Interaction
           enableDrag={true}
           enableRightClickRepulsion={true}
