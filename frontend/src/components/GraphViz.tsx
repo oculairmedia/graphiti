@@ -22,6 +22,7 @@ import { GraphNode } from '../api/types';
 import { GraphLink } from '../types/graph';
 import type { GraphCanvasHandle, GraphVizProps } from '../types/components';
 import { getErrorMessage } from '../types/errors';
+import { calculateNodeDegrees } from '../utils/graphNodeOperations';
 
 export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
   // Component rendering
@@ -124,6 +125,17 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
   } = useNodeSelection(transformedData, graphCanvasRef);
   
   // Hover state is managed by useNodeSelection hook
+
+  // Calculate actual node degrees from edges for accurate connection counts
+  const nodeDegreeMap = useMemo(() => {
+    if (!transformedData?.nodes || !transformedData?.links) {
+      return new Map<string, number>();
+    }
+    return calculateNodeDegrees(transformedData.nodes, transformedData.links);
+  }, [transformedData?.nodes, transformedData?.links]);
+
+  // Get actual connection count for selected node
+  const selectedNodeConnections = selectedNode ? (nodeDegreeMap.get(selectedNode.id) || 0) : 0;
 
   // Apply incremental updates
   useIncrementalUpdates(
@@ -487,7 +499,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
             <React.Suspense fallback={<div className="w-96 h-96 bg-background/80 backdrop-blur-sm rounded-lg animate-pulse" />}>
               <NodeDetailsPanel
                 node={selectedNode}
-                connections={selectedNode.connections}
+                connections={selectedNodeConnections}
                 onClose={() => clearAllSelections()}
                 onShowNeighbors={handleShowNeighbors}
               />

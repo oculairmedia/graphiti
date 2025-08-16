@@ -1071,19 +1071,8 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
       }
     }, [config.colorScheme]);
     
-    // Memoize size by field based on mapping - moved here before dataKitConfig
-    const pointSizeBy = React.useMemo(() => {
-      switch (config.sizeMapping) {
-        case 'uniform': return undefined; // Will use uniform size
-        case 'degree': return 'degree_centrality';
-        case 'betweenness': return 'betweenness_centrality';
-        case 'pagerank': return 'pagerank_centrality';
-        case 'importance': return 'eigenvector_centrality';
-        case 'connections': return 'degree_centrality'; // Same as degree
-        case 'custom': return 'centrality'; // Default centrality field
-        default: return 'centrality';
-      }
-    }, [config.sizeMapping]);
+    // Always use 'size' field which is computed based on the selected strategy
+    const pointSizeBy = 'size';
 
     // Data Kit configuration for Cosmograph v2.0 - stable config to prevent reprocessing
     const dataKitConfig = React.useMemo(() => ({
@@ -1092,8 +1081,8 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         pointIndexBy: 'index',        // Required: ordinal index field
         pointLabelBy: 'label',        // Node display labels
         pointColorBy: pointColorBy || 'node_type',    // Dynamic color by field based on scheme
-        pointSizeBy: pointSizeBy || 'centrality',    // Dynamic size by field based on mapping
-        pointIncludeColumns: ['degree_centrality', 'pagerank_centrality', 'betweenness_centrality', 'eigenvector_centrality', 'created_at', 'created_at_timestamp'] // Include additional columns including temporal data
+        pointSizeBy: 'size',          // Always use 'size' field computed from strategy
+        pointIncludeColumns: ['size', 'degree_centrality', 'pagerank_centrality', 'betweenness_centrality', 'eigenvector_centrality', 'created_at', 'created_at_timestamp'] // Include size and centrality columns
       },
       links: {
         linkSourceBy: 'source',         // Source node ID field
@@ -1104,7 +1093,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
         linkWidthBy: config.linkWidthBy || 'weight',         // Dynamic width column
         linkIncludeColumns: ['created_at', 'updated_at', 'weight', 'strength', 'confidence', 'edge_type'] // Include various link properties
       }
-    }), [pointColorBy, pointSizeBy, config.linkWidthBy]);
+    }), [pointColorBy, config.linkWidthBy]);
 
     // Track previous data to prevent unnecessary reprocessing
     const prevDataRef = useRef<{ nodeCount: number; linkCount: number }>({ nodeCount: 0, linkCount: 0 });
@@ -3542,7 +3531,7 @@ const GraphCanvasComponent = forwardRef<GraphCanvasHandle, GraphCanvasComponentP
             pointIndexBy={useDuckDBTables ? "idx" : "index"}
             pointLabelBy="label"
             pointColorBy={useDuckDBTables ? "node_type" : pointColorBy}
-            pointSizeBy={useDuckDBTables ? "size" : pointSizeBy}
+            pointSizeBy="size"
             pointClusterBy={config.clusteringEnabled ? "cluster" : undefined}  // Use the cluster field we added to nodes
             pointClusterStrengthBy={config.clusteringEnabled ? "clusterStrength" : undefined}  // Use the clusterStrength field we added
             // Link configuration - use DuckDB column names when using DuckDB
