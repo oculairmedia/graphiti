@@ -45,9 +45,7 @@ impl FalkorClient {
                 OR toLower(n.summary) CONTAINS '{}'
              RETURN n 
              LIMIT {}",
-            escaped_query,
-            escaped_query,
-            limit
+            escaped_query, escaped_query, limit
         );
 
         let results: Vec<Vec<redis::Value>> = redis::cmd("GRAPH.QUERY")
@@ -145,9 +143,7 @@ impl FalkorClient {
                 OR toLower(r.name) CONTAINS '{}'
              RETURN a, r, b
              LIMIT {}",
-            escaped_query,
-            escaped_query,
-            limit
+            escaped_query, escaped_query, limit
         );
 
         let results: Vec<Vec<redis::Value>> = redis::cmd("GRAPH.QUERY")
@@ -174,9 +170,7 @@ impl FalkorClient {
                 OR toLower(e.name) CONTAINS '{}'
              RETURN e
              LIMIT {}",
-            escaped_query,
-            escaped_query,
-            limit
+            escaped_query, escaped_query, limit
         );
 
         let results: Vec<Vec<redis::Value>> = redis::cmd("GRAPH.QUERY")

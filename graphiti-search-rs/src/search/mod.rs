@@ -105,11 +105,10 @@ impl SearchEngine {
         query_vector: Option<&[f32]>,
     ) -> SearchResult<Vec<Edge>> {
         // Direct execution without cache
-        let mut falkor_conn = self.falkor_pool
-            .get()
-            .await
-            .map_err(|e| crate::error::SearchError::Database(format!("Failed to get connection: {}", e)))?;
-        
+        let mut falkor_conn = self.falkor_pool.get().await.map_err(|e| {
+            crate::error::SearchError::Database(format!("Failed to get connection: {}", e))
+        })?;
+
         let mut method_results = Vec::new();
 
         for method in &config.search_methods {
@@ -155,11 +154,10 @@ impl SearchEngine {
         query_vector: Option<&[f32]>,
     ) -> SearchResult<Vec<Node>> {
         // Direct execution without cache
-        let mut falkor_conn = self.falkor_pool
-            .get()
-            .await
-            .map_err(|e| crate::error::SearchError::Database(format!("Failed to get connection: {}", e)))?;
-        
+        let mut falkor_conn = self.falkor_pool.get().await.map_err(|e| {
+            crate::error::SearchError::Database(format!("Failed to get connection: {}", e))
+        })?;
+
         let mut method_results = Vec::new();
 
         for method in &config.search_methods {
