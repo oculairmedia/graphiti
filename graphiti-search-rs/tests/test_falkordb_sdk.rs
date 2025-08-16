@@ -1,8 +1,8 @@
 use anyhow::Result;
-use falkordb::{FalkorAsyncClient, FalkorClientBuilder, FalkorConnectionInfo, FalkorValue};
-use std::collections::HashMap;
+use falkordb::{FalkorClientBuilder, FalkorConnectionInfo, FalkorValue};
 
 #[tokio::test]
+#[ignore = "Requires FalkorDB instance running on localhost:6389"]
 async fn test_falkordb_sdk_similarity_search() -> Result<()> {
     println!("\n{}", "=".repeat(60));
     println!("Testing FalkorDB SDK Similarity Search");
@@ -121,6 +121,7 @@ async fn test_falkordb_sdk_similarity_search() -> Result<()> {
 }
 
 #[tokio::test]
+#[ignore = "Requires FalkorDB instance running on localhost:6389"]
 async fn test_falkordb_client_v2() -> Result<()> {
     use graphiti_search_rs::config::Config;
     use graphiti_search_rs::falkor::FalkorClientV2;
