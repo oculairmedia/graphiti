@@ -7,6 +7,7 @@ use crate::config::Config;
 use crate::falkor::parser;
 use crate::models::{Edge, Episode, Node};
 
+#[allow(dead_code)]
 pub struct FalkorClient {
     _client: Client,
     conn: Connection,
