@@ -14,6 +14,7 @@ pub struct FalkorClient {
     graph_name: String,
 }
 
+#[allow(dead_code)]
 impl FalkorClient {
     pub async fn new(config: &Config) -> Result<Self> {
         let url = format!("redis://{}:{}", config.falkor_host, config.falkor_port);

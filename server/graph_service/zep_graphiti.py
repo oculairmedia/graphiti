@@ -64,13 +64,13 @@ class ZepGraphiti(Graphiti):
         if use_falkordb or uri.startswith('redis://'):
             if not FALKORDB_AVAILABLE:
                 raise ImportError('FalkorDB driver not available. Install falkordb package.')
-            # FalkorDriver expects redis:// URI format
+            # FalkorDriver expects host and port parameters
             parsed = urlparse(uri)
             host = parsed.hostname or 'localhost'
             port = parsed.port or 6379
-            redis_uri = f'redis://{host}:{port}'
-            driver = FalkorDriver(uri=redis_uri, user='', password='')
-            logger.info(f'Using FalkorDB driver with URI: {redis_uri}')
+            # Use graphiti_migration database instead of default_db
+            driver = FalkorDriver(host=host, port=port, username='', password='', database='graphiti_migration')
+            logger.info(f'Using FalkorDB driver with host: {host}, port: {port}, database: graphiti_migration')
         else:
             if not NEO4J_AVAILABLE:
                 raise ImportError('Neo4j driver not available. Install neo4j package.')

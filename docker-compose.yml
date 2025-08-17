@@ -1,6 +1,8 @@
 services:
   graph:
     image: ghcr.io/oculairmedia/graphiti-api:dev
+    volumes:
+      - ./server/graph_service/zep_graphiti.py:/app/server/graph_service/zep_graphiti.py:ro
     ports:
       - 8003:8000
     healthcheck:
@@ -52,7 +54,7 @@ services:
       - homepage.description=Knowledge graph API service
   falkordb:
     image: falkordb/falkordb:latest
-    mem_limit: 8g
+    mem_limit: 6g  # Reduced to prevent OOM
     mem_reservation: 2g
     healthcheck:
       test:
@@ -68,6 +70,8 @@ services:
       - 3100:3000 # FalkorDB UI
     volumes:
       - falkordb_data:/var/lib/falkordb/data
+      - ./falkordb-config.conf:/usr/local/etc/redis/redis.conf:ro  # Custom config
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]  # Use custom config
     environment:
       - REDIS_URL=redis://192.168.50.90:6389
       - NEXT_PUBLIC_REDIS_URL=redis://192.168.50.90:6389
