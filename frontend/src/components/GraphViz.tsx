@@ -4,7 +4,6 @@ import { CosmographProvider } from '@cosmograph/react';
 import { useGraphConfig } from '../contexts/GraphConfigProvider';
 import { ControlPanel } from './ControlPanel';
 import { LazyGraphCanvas } from './LazyGraphCanvas';
-import { LayoutPanel } from './LayoutPanel';
 
 // Lazy load modal panels
 const FilterPanel = React.lazy(() => import('./FilterPanel').then(m => ({ default: m.FilterPanel })));
@@ -34,7 +33,6 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
   const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const [showStatsPanel, setShowStatsPanel] = useState(false);
-  const [showLayoutPanel, setShowLayoutPanel] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isSimulationRunning, setIsSimulationRunning] = useState(true);
   
@@ -342,7 +340,6 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
           onUpload={() => {/* Upload functionality would require file input */}}
           onScreenshot={handleCaptureScreenshot}
           onToggleSimulation={toggleSimulation}
-          onLayoutClick={() => setShowLayoutPanel(true)}
           onSettingsClick={() => setLeftPanelCollapsed(!leftPanelCollapsed)}
           onStatsClick={() => setShowStatsPanel(true)}
           onFullscreenClick={toggleFullscreen}
@@ -399,17 +396,6 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
             />
           </div>
 
-          {/* Right Layout Panel */}
-          <div className={`${rightPanelCollapsed ? 'w-12' : 'w-80'} transition-all duration-300 flex-shrink-0`}>
-            <LayoutPanel 
-              collapsed={rightPanelCollapsed}
-              onToggleCollapse={() => setRightPanelCollapsed(!rightPanelCollapsed)}
-              graphData={{
-                nodes: transformedData?.nodes || [],
-                edges: transformedData?.links || []  // Map links to edges for LayoutPanel
-              }}
-            />
-          </div>
         </div>
 
         {/* Modal Panels */}
