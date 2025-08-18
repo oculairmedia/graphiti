@@ -6,10 +6,12 @@ Forwards requests from Python API to graphiti-search-rs service.
 import httpx
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Set
 import os
 import logging
 from graph_service.webhooks import webhook_service
+from difflib import SequenceMatcher
+import hashlib
 
 router = APIRouter(tags=["search"])
 logger = logging.getLogger(__name__)
@@ -168,13 +170,38 @@ async def search_proxy(query: SearchQuery) -> SearchResults:
             
             # Transform Rust response to API format
             facts = []
+            seen_facts: Set[str] = set()  # For exact deduplication
+            seen_similar: List[str] = []  # For similarity deduplication
             
-            # Extract facts from edges
+            def is_duplicate(fact_text: str, similarity_threshold: float = 0.85) -> bool:
+                """Check if fact is duplicate or too similar to existing facts"""
+                # Check exact match using hash
+                fact_hash = hashlib.md5(fact_text.lower().strip().encode()).hexdigest()
+                if fact_hash in seen_facts:
+                    return True
+                
+                # Check similarity to existing facts
+                for existing in seen_similar:
+                    similarity = SequenceMatcher(None, fact_text.lower(), existing.lower()).ratio()
+                    if similarity > similarity_threshold:
+                        logger.debug(f"Deduplicating similar facts (similarity={similarity:.2f})")
+                        return True
+                
+                # Not a duplicate, add to tracking sets
+                seen_facts.add(fact_hash)
+                seen_similar.append(fact_text)
+                return False
+            
+            # Extract facts from edges with deduplication
             for edge in rust_result.get("edges", []):
+                fact_text = edge.get("fact", edge.get("name", ""))
+                if not fact_text or is_duplicate(fact_text):
+                    continue
+                    
                 fact = FactResult(
                     uuid=edge.get("uuid", ""),
                     name=edge.get("name", ""),
-                    fact=edge.get("fact", edge.get("name", "")),
+                    fact=fact_text,
                     valid_at=edge.get("valid_at"),
                     invalid_at=edge.get("invalid_at"),
                     created_at=edge.get("created_at"),
@@ -185,16 +212,22 @@ async def search_proxy(query: SearchQuery) -> SearchResults:
             # Also include nodes as facts if no edges found
             if not facts:
                 for node in rust_result.get("nodes", []):
+                    fact_text = node.get("summary", node.get("name", ""))
+                    if not fact_text or is_duplicate(fact_text):
+                        continue
+                        
                     fact = FactResult(
                         uuid=node.get("uuid", ""),
                         name=node.get("name", ""),
-                        fact=node.get("summary", node.get("name", "")),
+                        fact=fact_text,
                         valid_at=node.get("valid_at"),
                         invalid_at=node.get("invalid_at"),
                         created_at=node.get("created_at"),
                         expired_at=None
                     )
                     facts.append(fact)
+            
+            logger.info(f"[SEARCH] Deduplication: {len(rust_result.get('edges', [])) + len(rust_result.get('nodes', []))} -> {len(facts)} facts")
             
             # Collect node IDs for webhook
             node_ids = set()
