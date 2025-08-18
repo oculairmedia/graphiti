@@ -1,0 +1,47 @@
+# Dockerfile for queue monitoring dashboard
+FROM python:3.11-slim
+
+# Set working directory
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    gcc \
+    g++ \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy project files
+COPY pyproject.toml /app/
+COPY README.md /app/
+
+# Install Python dependencies
+RUN pip install --no-cache-dir uv && \
+    uv pip install --system -e .
+
+# Install additional dashboard dependencies
+RUN pip install --no-cache-dir \
+    msgpack \
+    httpx \
+    fastapi \
+    uvicorn \
+    websockets
+
+# Copy the application code
+COPY graphiti_core /app/graphiti_core
+COPY worker /app/worker
+
+# Create non-root user
+RUN useradd -m -u 1000 dashboard && chown -R dashboard:dashboard /app
+USER dashboard
+
+# Expose dashboard port
+EXPOSE 8091
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8091/health || exit 1
+
+# Run the dashboard
+CMD ["python", "-u", "worker/dashboard.py"]

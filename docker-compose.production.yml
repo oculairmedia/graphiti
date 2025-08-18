@@ -1,0 +1,129 @@
+version: '3.8'
+
+services:
+  # Queued service for high-performance message queue
+  queued:
+    image: ghcr.io/oculairmedia/graphiti-queued:latest
+    container_name: graphiti-queued
+    restart: unless-stopped
+    ports:
+      - "8093:8080"  # Queue service API
+    volumes:
+      - queued_data:/data  # Persistent queue storage
+    environment:
+      - QUEUED_DATA_DIR=/data
+      - RUST_LOG=queued=info
+    networks:
+      - graphiti_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/queues"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # Worker service for processing queue tasks
+  graphiti-worker:
+    image: ghcr.io/oculairmedia/graphiti-worker:latest
+    container_name: graphiti-worker-1
+    restart: unless-stopped
+    environment:
+      - QUEUED_URL=http://queued:8080
+      - FALKORDB_HOST=graphiti-falkordb
+      - FALKORDB_PORT=6379
+      - FALKORDB_DATABASE=${FALKORDB_DATABASE:-graphiti_migration}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - USE_OLLAMA=${USE_OLLAMA:-false}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://100.81.139.20:11434/v1}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-gemma3:12b}
+      - OLLAMA_EMBEDDING_MODEL=${OLLAMA_EMBEDDING_MODEL:-mxbai-embed-large:latest}
+      - WORKER_COUNT=4
+      - BATCH_SIZE=10
+      - POLL_INTERVAL=1.0
+      - PYTHONUNBUFFERED=1
+      - DRIVER_TYPE=falkordb
+    depends_on:
+      queued:
+        condition: service_healthy
+      falkordb:
+        condition: service_healthy
+    networks:
+      - graphiti_network
+    deploy:
+      replicas: 2  # Run multiple workers for scalability
+      resources:
+        limits:
+          memory: 2G
+          cpus: '2'
+
+  # Dashboard service for monitoring
+  graphiti-dashboard:
+    image: ghcr.io/oculairmedia/graphiti-dashboard:latest
+    container_name: graphiti-queue-dashboard
+    restart: unless-stopped
+    ports:
+      - "8091:8091"
+    environment:
+      - QUEUED_URL=http://queued:8080
+      - FALKORDB_HOST=graphiti-falkordb
+      - FALKORDB_PORT=6379
+      - FALKORDB_DATABASE=${FALKORDB_DATABASE:-graphiti_migration}
+      - DASHBOARD_PORT=8091
+      - ENABLE_DASHBOARD=true
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      queued:
+        condition: service_healthy
+    networks:
+      - graphiti_network
+
+  # API Server with queue integration
+  graphiti-api:
+    image: ghcr.io/oculairmedia/graphiti-api:latest
+    container_name: graphiti-api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - QUEUED_URL=http://queued:8080
+      - FALKORDB_HOST=graphiti-falkordb
+      - FALKORDB_PORT=6379
+      - FALKORDB_DATABASE=${FALKORDB_DATABASE:-graphiti_migration}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - USE_OLLAMA=${USE_OLLAMA:-false}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://100.81.139.20:11434/v1}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-gemma3:12b}
+      - DRIVER_TYPE=falkordb
+    depends_on:
+      falkordb:
+        condition: service_healthy
+      queued:
+        condition: service_healthy
+    networks:
+      - graphiti_network
+
+  # FalkorDB (required for workers and API)
+  falkordb:
+    image: falkordb/falkordb:latest
+    container_name: graphiti-falkordb
+    restart: unless-stopped
+    ports:
+      - "6389:6379"
+    volumes:
+      - falkordb_data:/data
+    networks:
+      - graphiti_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  queued_data:
+    driver: local
+  falkordb_data:
+    driver: local
+
+networks:
+  graphiti_network:
+    external: true

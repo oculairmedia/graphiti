@@ -1,0 +1,104 @@
+version: '3.8'
+
+services:
+  # Simple Redis-based queue using existing infrastructure
+  queue-redis:
+    image: redis:7-alpine
+    container_name: graphiti-queue-redis
+    restart: unless-stopped
+    ports:
+      - "6390:6379"  # Different port from FalkorDB
+    volumes:
+      - queue_redis_data:/data
+    command: >
+      redis-server
+      --save 60 1
+      --save 300 10
+      --save 900 100
+      --appendonly yes
+      --appendfsync everysec
+    networks:
+      - graphiti_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    labels:
+      - homepage.group=Knowledge Management
+      - homepage.name=Queue Redis
+      - homepage.icon=si-redis
+      - homepage.href=http://192.168.50.90:6390
+      - homepage.description=Redis queue for ingestion tasks
+
+  # Dashboard service (standalone for now)
+  graphiti-dashboard:
+    build:
+      context: .
+      dockerfile: worker/Dockerfile.dashboard
+    container_name: graphiti-queue-dashboard
+    restart: unless-stopped
+    ports:
+      - "8091:8091"
+    environment:
+      - REDIS_URL=redis://queue-redis:6379
+      - FALKORDB_HOST=falkordb
+      - FALKORDB_PORT=6379
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-sk-dummy}
+      - USE_OLLAMA=${USE_OLLAMA:-true}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://100.81.139.20:11434/v1}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-gemma3:12b}
+      - DASHBOARD_PORT=8091
+      - ENABLE_DASHBOARD=true
+    depends_on:
+      queue-redis:
+        condition: service_healthy
+    networks:
+      - graphiti_network
+    labels:
+      - homepage.group=Knowledge Management
+      - homepage.name=Queue Dashboard
+      - homepage.icon=si-grafana
+      - homepage.href=http://192.168.50.90:8091
+      - homepage.description=Ingestion queue monitoring dashboard
+
+  # Worker service
+  graphiti-worker:
+    build:
+      context: .
+      dockerfile: worker/Dockerfile.worker
+    container_name: graphiti-worker-1
+    restart: unless-stopped
+    environment:
+      - REDIS_URL=redis://queue-redis:6379
+      - FALKORDB_HOST=falkordb
+      - FALKORDB_PORT=6379
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-sk-dummy}
+      - USE_OLLAMA=${USE_OLLAMA:-true}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://100.81.139.20:11434/v1}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-gemma3:12b}
+      - OLLAMA_EMBEDDING_MODEL=${OLLAMA_EMBEDDING_MODEL:-mxbai-embed-large:latest}
+      - WORKER_COUNT=4
+      - BATCH_SIZE=10
+      - POLL_INTERVAL=1.0
+      - ENABLE_DASHBOARD=false
+    depends_on:
+      queue-redis:
+        condition: service_healthy
+      falkordb:
+        condition: service_healthy
+    networks:
+      - graphiti_network
+    labels:
+      - homepage.group=Knowledge Management
+      - homepage.name=Queue Worker 1
+      - homepage.icon=si-kubernetes
+      - homepage.description=Ingestion queue worker
+
+volumes:
+  queue_redis_data:
+    driver: local
+
+networks:
+  graphiti_network:
+    external: true

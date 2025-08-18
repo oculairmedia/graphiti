@@ -1,0 +1,84 @@
+name: Build and Push Dashboard Service Container
+
+on:
+  push:
+    branches: [ main, ingestion-queue-system ]
+    paths:
+      - 'worker/dashboard.py'
+      - 'worker/Dockerfile.dashboard'
+      - '.github/workflows/build-dashboard-service.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'worker/dashboard.py'
+      - 'worker/Dockerfile.dashboard'
+  workflow_dispatch:
+  workflow_call:
+    permissions:
+      contents: read
+      packages: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}-dashboard
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        persist-credentials: false
+        fetch-depth: 1
+        submodules: false
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to the Container registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha
+          type=raw,value=latest,enable={{is_default_branch}}
+
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./worker/Dockerfile.dashboard
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: |
+          type=gha
+          type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache
+        cache-to: |
+          type=gha,mode=max
+          type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache,mode=max
+        platforms: linux/amd64
+        build-args: |
+          BUILDKIT_PROGRESS=plain
+
+    - name: Output image details
+      if: success()
+      run: |
+        echo "✅ Dashboard service image successfully built and pushed!"
+        echo "📦 Registry: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
+        echo "🏷️  Tags: ${{ steps.meta.outputs.tags }}"
