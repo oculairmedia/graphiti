@@ -357,7 +357,7 @@ class IngestionWorker:
             
             # Update centrality for newly created nodes
             if result and result.nodes:
-                node_uuids = [node.uuid for node in result.nodes]
+                node_uuids = [node.uuid for node in result.nodes if node.uuid]
                 if node_uuids:
                     # Run centrality update asynchronously without blocking
                     asyncio.create_task(self._update_centrality_async(node_uuids))
@@ -377,6 +377,8 @@ class IngestionWorker:
         This runs in the background and doesn't block task processing.
         """
         try:
+            # Add a small delay to ensure nodes are saved to database
+            await asyncio.sleep(0.5)
             await self.centrality_client.update_nodes_centrality(node_uuids)
         except Exception as e:
             logger.error(f"Background centrality update failed: {e}")

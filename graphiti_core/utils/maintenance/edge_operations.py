@@ -130,16 +130,17 @@ def build_duplicate_of_edges(
     episode: EpisodicNode,
     created_at: datetime,
     duplicate_nodes: list[tuple[EntityNode, EntityNode]],
-) -> tuple[list[EntityEdge], list[tuple[str, str]]]:
+) -> tuple[list[EntityEdge], list[tuple[str, str]], list[EntityNode]]:
     """
     Build IS_DUPLICATE_OF edges and return merge operations to be performed.
     
     Returns:
-        Tuple of (edges list, merge operations list)
+        Tuple of (edges list, merge operations list, duplicate nodes to save)
         where merge operations are tuples of (canonical_uuid, duplicate_uuid)
     """
     is_duplicate_of_edges: list[EntityEdge] = []
     merge_operations: list[tuple[str, str]] = []
+    duplicate_nodes_to_save: list[EntityNode] = []
     
     for source_node, target_node in duplicate_nodes:
         if source_node.uuid == target_node.uuid:
@@ -158,10 +159,13 @@ def build_duplicate_of_edges(
             )
         )
         
+        # Add the duplicate node to be saved (source node)
+        duplicate_nodes_to_save.append(source_node)
+        
         # Add merge operation (target is canonical, source is duplicate)
         merge_operations.append((target_node.uuid, source_node.uuid))
 
-    return is_duplicate_of_edges, merge_operations
+    return is_duplicate_of_edges, merge_operations, duplicate_nodes_to_save
 
 
 def build_community_edges(

@@ -516,7 +516,7 @@ class Graphiti:
                 max_coroutines=self.max_coroutines,
             )
 
-            duplicate_of_edges, merge_operations = build_duplicate_of_edges(episode, now, node_duplicates)
+            duplicate_of_edges, merge_operations, duplicate_nodes_to_save = build_duplicate_of_edges(episode, now, node_duplicates)
 
             entity_edges = resolved_edges + invalidated_edges + duplicate_of_edges
 
@@ -527,8 +527,11 @@ class Graphiti:
             if not self.store_raw_episode_content:
                 episode.content = ''
 
+            # Combine all nodes to be saved (hydrated nodes + duplicate nodes)
+            all_nodes_to_save = hydrated_nodes + duplicate_nodes_to_save
+
             await add_nodes_and_edges_bulk(
-                self.driver, [episode], episodic_edges, hydrated_nodes, entity_edges, self.embedder
+                self.driver, [episode], episodic_edges, all_nodes_to_save, entity_edges, self.embedder
             )
             
             # Execute merge operations after nodes and edges are saved
@@ -830,21 +833,25 @@ class Graphiti:
             # Build duplicate edges for audit trail (similar to single episode flow)
             duplicate_of_edges: list[EntityEdge] = []
             merge_operations: list[tuple[str, str]] = []
+            duplicate_nodes_to_save: list[EntityNode] = []
             
             if node_duplicates:
                 # Use the first episode's timestamp for duplicate edges
                 # (or could aggregate across all episodes if preferred)
-                duplicate_of_edges, merge_operations = build_duplicate_of_edges(
+                duplicate_of_edges, merge_operations, duplicate_nodes_to_save = build_duplicate_of_edges(
                     episodes[0], now, node_duplicates
                 )
                 logger.info(f'Found {len(node_duplicates)} duplicates to merge in bulk pipeline')
+            
+            # Combine all nodes to be saved (including duplicate nodes)
+            all_nodes_to_save = final_hydrated_nodes + duplicate_nodes_to_save
             
             # save data to KG
             await add_nodes_and_edges_bulk(
                 self.driver,
                 episodes,
                 resolved_episodic_edges,
-                final_hydrated_nodes,
+                all_nodes_to_save,
                 resolved_edges + invalidated_edges + duplicate_of_edges,
                 self.embedder,
             )
