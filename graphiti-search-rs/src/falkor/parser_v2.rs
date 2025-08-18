@@ -63,45 +63,48 @@ pub fn parse_edges_with_properties_from_falkor_v2(result: LazyResultSet<'_>) -> 
                 edge_group_id,
                 edge_weight,
                 FalkorValue::Node(target),
-            ) = (&row[0], &row[1], &row[2], &row[3], &row[4], &row[5], &row[6])
-            {
+            ) = (
+                &row[0], &row[1], &row[2], &row[3], &row[4], &row[5], &row[6],
+            ) {
                 // Extract source and target UUIDs
                 let source_node_uuid = Uuid::parse_str(&get_string_property(source, "uuid")?)?;
                 let target_node_uuid = Uuid::parse_str(&get_string_property(target, "uuid")?)?;
-                
+
                 // Extract edge UUID
                 let uuid_str = match edge_uuid {
                     FalkorValue::String(s) => s.clone(),
                     _ => continue, // Skip if not a string
                 };
                 let uuid = Uuid::parse_str(&uuid_str)?;
-                
+
                 // Extract edge fact
                 let fact = match edge_fact {
                     FalkorValue::String(s) => s.clone(),
                     _ => String::new(),
                 };
-                
+
                 // Extract created_at
                 let created_at = match edge_created_at {
-                    FalkorValue::F64(f) => DateTime::from_timestamp(*f as i64, 0).unwrap_or(Utc::now()),
+                    FalkorValue::F64(f) => {
+                        DateTime::from_timestamp(*f as i64, 0).unwrap_or(Utc::now())
+                    }
                     FalkorValue::I64(i) => DateTime::from_timestamp(*i, 0).unwrap_or(Utc::now()),
                     _ => Utc::now(),
                 };
-                
+
                 // Extract group_id (optional)
                 let group_id = match edge_group_id {
                     FalkorValue::String(s) => Some(s.clone()),
                     _ => None,
                 };
-                
+
                 // Extract weight
                 let weight = match edge_weight {
                     FalkorValue::F64(f) => *f as f32,
                     FalkorValue::I64(i) => *i as f32,
                     _ => 1.0,
                 };
-                
+
                 let edge = Edge {
                     uuid,
                     source_node_uuid,
@@ -112,7 +115,7 @@ pub fn parse_edges_with_properties_from_falkor_v2(result: LazyResultSet<'_>) -> 
                     group_id,
                     weight,
                 };
-                
+
                 edges.push(edge);
             }
         }

@@ -153,15 +153,16 @@ impl FalkorClientV2 {
         // 1. Cannot deserialize edges containing vector properties
         // 2. Fails when LIMIT > 1 with vector calculations in WITH clause
         // 3. ORDER BY with SKIP also causes issues
-        // 
+        //
         // Solution: Get all scores in one query (LIMIT 1), then sort in Rust
-        
+
         let mut edge_scores = Vec::new();
-        
+
         // First, get all edges with scores above threshold
         // We have to get them one at a time due to the LIMIT > 1 bug
         // But we can't use ORDER BY or SKIP, so we'll collect all and sort later
-        for i in 0..100 {  // Max 100 iterations to prevent infinite loop
+        for i in 0..100 {
+            // Max 100 iterations to prevent infinite loop
             let cypher = if i == 0 {
                 // First query - no exclusions
                 format!(
@@ -180,7 +181,7 @@ impl FalkorClientV2 {
                     .map(|(uuid, _): &(String, f32)| format!("'{}'", uuid))
                     .collect::<Vec<_>>()
                     .join(",");
-                
+
                 format!(
                     "MATCH ()-[r:RELATES_TO]->()
                      WHERE r.fact_embedding IS NOT NULL AND r.uuid NOT IN [{}]
@@ -198,7 +199,9 @@ impl FalkorClientV2 {
                     let mut found = false;
                     for row in result.data {
                         if row.len() >= 2 {
-                            if let (Some(falkordb::FalkorValue::String(uuid)), Some(score_val)) = (row.get(0), row.get(1)) {
+                            if let (Some(falkordb::FalkorValue::String(uuid)), Some(score_val)) =
+                                (row.get(0), row.get(1))
+                            {
                                 let score = match score_val {
                                     falkordb::FalkorValue::F64(f) => *f as f32,
                                     falkordb::FalkorValue::I64(i) => *i as f32,
@@ -214,7 +217,7 @@ impl FalkorClientV2 {
                     if !found {
                         break;
                     }
-                    
+
                     // If we've collected enough results, stop
                     if edge_scores.len() >= limit {
                         break;
@@ -226,34 +229,34 @@ impl FalkorClientV2 {
                 }
             }
         }
-        
+
         // Sort by score descending and take only the requested limit
         edge_scores.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
         edge_scores.truncate(limit);
-        
+
         // Extract just the UUIDs
         let edge_uuids: Vec<String> = edge_scores.into_iter().map(|(uuid, _)| uuid).collect();
-        
+
         if edge_uuids.is_empty() {
             return Ok(Vec::new());
         }
-        
+
         // Step 2: Fetch the full edge data without vector operations
         let uuid_list = edge_uuids
             .iter()
             .map(|u| format!("'{}'", u))
             .collect::<Vec<_>>()
             .join(",");
-            
+
         let fetch_cypher = format!(
             "MATCH (a)-[r:RELATES_TO]->(b)
              WHERE r.uuid IN [{}]
              RETURN a, r, b",
             uuid_list
         );
-        
+
         let fetch_result = self.graph.query(&fetch_cypher).execute().await?;
-        
+
         // Parse edges using the standard parser
         parser_v2::parse_edges_from_falkor_v2(fetch_result.data)
     }
