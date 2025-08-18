@@ -16,6 +16,7 @@ import os
 
 from graphiti_core import Graphiti
 from graphiti_core.nodes import EpisodeType
+from graphiti_core.utils.datetime_utils import utc_now
 from graphiti_core.ingestion.queue_client import (
     QueuedClient, IngestionTask, TaskType, TaskPriority, QueueMetrics
 )
@@ -423,7 +424,7 @@ class IngestionWorker:
                     priority=task.priority,
                     retry_count=0,
                     max_retries=task.max_retries,
-                    created_at=datetime.utcnow(),
+                    created_at=utc_now(),
                     metadata=task.metadata
                 )
                 
@@ -455,7 +456,6 @@ class IngestionWorker:
             # Import required classes
             from graphiti_core.nodes import EntityNode
             from graphiti_core.edges import EntityEdge
-            from graphiti_core.utils.datetime_utils import utc_now
             
             # Create source node
             source_node = EntityNode(
@@ -628,7 +628,7 @@ class IngestionWorker:
         """
         task.metadata['error'] = str(error)
         task.metadata['error_type'] = type(error).__name__
-        task.metadata['failed_at'] = datetime.utcnow().isoformat()
+        task.metadata['failed_at'] = utc_now().isoformat()
         task.metadata['worker_id'] = self.worker_id
         
         # Push to DLQ with no expiry

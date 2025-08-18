@@ -41,13 +41,22 @@ RUNTIME_QUERY: LiteralString = ''
 
 
 def parse_db_date(neo_date: neo4j_time.DateTime | str | None) -> datetime | None:
-    return (
-        neo_date.to_native()
-        if isinstance(neo_date, neo4j_time.DateTime)
-        else datetime.fromisoformat(neo_date)
-        if neo_date
-        else None
-    )
+    if neo_date is None:
+        return None
+    
+    if isinstance(neo_date, neo4j_time.DateTime):
+        return neo_date.to_native()
+    
+    if isinstance(neo_date, str):
+        # Parse the ISO format string
+        parsed_dt = datetime.fromisoformat(neo_date)
+        # Ensure it has timezone information (assume UTC if naive)
+        if parsed_dt.tzinfo is None:
+            from datetime import timezone
+            parsed_dt = parsed_dt.replace(tzinfo=timezone.utc)
+        return parsed_dt
+    
+    return None
 
 
 def get_default_group_id(db_type: str) -> str:
