@@ -14,6 +14,8 @@ import msgpack
 import logging
 from contextlib import asynccontextmanager
 
+from graphiti_core.utils.datetime_utils import utc_now
+
 logger = logging.getLogger(__name__)
 
 
@@ -50,7 +52,7 @@ class IngestionTask:
     
     def __post_init__(self):
         if self.created_at is None:
-            self.created_at = datetime.utcnow()
+            self.created_at = utc_now()
         if self.metadata is None:
             self.metadata = {}
     
