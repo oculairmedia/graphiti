@@ -11,7 +11,11 @@ RUN apt-get update && apt-get install -y \
 # Clone and build queued
 RUN git clone https://github.com/wilsonzlin/queued.git /tmp/queued
 WORKDIR /tmp/queued
-RUN cargo build --release
+
+# Build with optimizations and reduced debug info to speed up compilation
+ENV CARGO_PROFILE_RELEASE_DEBUG=0
+ENV CARGO_PROFILE_RELEASE_LTO=false
+RUN cargo build --release --jobs 2
 
 # Runtime stage
 FROM debian:bookworm-slim
