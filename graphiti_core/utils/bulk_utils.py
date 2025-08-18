@@ -246,6 +246,9 @@ async def dedupe_nodes_bulk(
         dedupe_tuples.append((nodes_i, candidates_i))
 
     # Determine Node Resolutions
+    # NOTE: We're now NOT passing existing_nodes_override, which means
+    # resolve_extracted_nodes will query the database for existing nodes
+    # This enables cross-graph linking between new nodes and existing database nodes
     bulk_node_resolutions: list[
         tuple[list[EntityNode], dict[str, str], list[tuple[EntityNode, EntityNode]]]
     ] = await semaphore_gather(
@@ -256,7 +259,8 @@ async def dedupe_nodes_bulk(
                 episode_tuples[i][0],
                 episode_tuples[i][1],
                 entity_types,
-                existing_nodes_override=dedupe_tuples[i][1],
+                # Removed existing_nodes_override to enable database queries
+                # This allows new nodes to be merged with existing database nodes
             )
             for i, dedupe_tuple in enumerate(dedupe_tuples)
         ]
