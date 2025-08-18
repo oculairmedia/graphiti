@@ -12,9 +12,6 @@ on:
       - 'queued/**'
   workflow_dispatch:
   workflow_call:
-    permissions:
-      contents: read
-      packages: write
 
 env:
   REGISTRY: ghcr.io
