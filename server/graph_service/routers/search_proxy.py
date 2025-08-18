@@ -59,6 +59,22 @@ class NodeSearchResults(BaseModel):
     """Node search results response"""
     nodes: List[NodeResult]
 
+class EdgeResult(BaseModel):
+    """Edge result matching frontend expectations"""
+    uuid: str
+    name: str
+    fact: str
+    valid_at: Optional[str] = None
+    invalid_at: Optional[str] = None
+    created_at: Optional[str] = None
+    expired_at: Optional[str] = None
+
+class EdgesByNodeResponse(BaseModel):
+    """Edges by node response matching frontend expectations"""
+    edges: List[EdgeResult]
+    source_edges: List[EdgeResult]
+    target_edges: List[EdgeResult]
+
 async def generate_embedding(text: str) -> Optional[List[float]]:
     """Generate embedding for the query text using Ollama"""
     try:
@@ -278,4 +294,128 @@ async def search_nodes(query: NodeSearchQuery) -> NodeSearchResults:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Node search error: {str(e)}"
+        )
+
+@router.get('/edges/by-node/{node_uuid}', response_model=EdgesByNodeResponse, status_code=status.HTTP_200_OK)
+async def get_edges_by_node(node_uuid: str) -> EdgesByNodeResponse:
+    """
+    Get all edges connected to a specific node.
+    Returns edges where the node is either source or target.
+    """
+    try:
+        # Query Rust service for edges
+        rust_request = {
+            "query": "",  # Empty query for direct UUID lookup
+            "config": {
+                "limit": 100,
+                "edge_config": {
+                    "enabled": True,
+                    "limit": 100,
+                    "search_methods": ["fulltext"],
+                    "reranker": "none",
+                    "bfs_max_depth": 1,
+                    "sim_min_score": 0.0,
+                    "mmr_lambda": 0.5
+                },
+                "node_config": {
+                    "enabled": False,
+                    "limit": 0,
+                    "search_methods": [],
+                    "reranker": "none",
+                    "bfs_max_depth": 1,
+                    "sim_min_score": 0.0,
+                    "mmr_lambda": 0.5
+                }
+            },
+            "filters": {
+                "node_uuid": node_uuid
+            }
+        }
+        
+        logger.info(f"Fetching edges for node: {node_uuid}")
+        
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(
+                f"{RUST_SEARCH_URL}/search",
+                json=rust_request
+            )
+            
+            if response.status_code != 200:
+                raise HTTPException(
+                    status_code=response.status_code,
+                    detail=f"Rust search service error: {response.text}"
+                )
+            
+            rust_result = response.json()
+            
+            # Transform edges to frontend format
+            all_edges = []
+            source_edges = []
+            target_edges = []
+            
+            for edge in rust_result.get("edges", []):
+                edge_result = EdgeResult(
+                    uuid=edge.get("uuid", ""),
+                    name=edge.get("name", ""),
+                    fact=edge.get("fact", ""),
+                    valid_at=edge.get("valid_at"),
+                    invalid_at=edge.get("invalid_at"),
+                    created_at=edge.get("created_at"),
+                    expired_at=edge.get("expired_at")
+                )
+                
+                all_edges.append(edge_result)
+                
+                # Categorize by source/target
+                if edge.get("source_node_uuid") == node_uuid:
+                    source_edges.append(edge_result)
+                elif edge.get("target_node_uuid") == node_uuid:
+                    target_edges.append(edge_result)
+            
+            return EdgesByNodeResponse(
+                edges=all_edges,
+                source_edges=source_edges,
+                target_edges=target_edges
+            )
+            
+    except httpx.RequestError as e:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Failed to connect to search service: {str(e)}"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error fetching edges: {str(e)}"
+        )
+
+@router.patch('/nodes/{node_uuid}/summary', response_model=NodeResult, status_code=status.HTTP_200_OK)
+async def update_node_summary(node_uuid: str, summary_update: Dict[str, Any]) -> NodeResult:
+    """
+    Update the summary of a specific node.
+    This endpoint would normally update the node in the database.
+    For now, it returns a mock response.
+    """
+    try:
+        summary = summary_update.get("summary", "")
+        
+        # TODO: Implement actual node update in FalkorDB
+        # For now, return a mock response
+        logger.info(f"Updating summary for node {node_uuid}: {summary[:50]}...")
+        
+        # Return mock updated node
+        return NodeResult(
+            uuid=node_uuid,
+            name="Updated Node",
+            node_type="entity",
+            summary=summary,
+            created_at=None,
+            group_id=None,
+            centrality=None
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error updating node summary: {str(e)}"
         )
