@@ -36,6 +36,11 @@ class Settings(BaseSettings):
     # Webhook configuration
     graphiti_webhook_url: str | None = Field(None)  # For node access events
     graphiti_data_webhook_urls: str | None = Field(None)  # Comma-separated URLs for data ingestion events
+    
+    # Queue configuration
+    use_queue_for_ingestion: bool = Field(False)  # Enable queue-based ingestion
+    queue_url: str = Field('http://queued:8080')  # Queue service URL
+    queue_fallback_to_direct: bool = Field(True)  # Fall back to direct processing if queue fails
 
     model_config = SettingsConfigDict(env_file='.env', extra='ignore')
 
