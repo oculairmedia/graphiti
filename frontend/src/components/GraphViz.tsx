@@ -4,7 +4,6 @@ import { CosmographProvider } from '@cosmograph/react';
 import { useGraphConfig } from '../contexts/GraphConfigProvider';
 import { ControlPanel } from './ControlPanel';
 import { LazyGraphCanvas } from './LazyGraphCanvas';
-import { LayoutPanel } from './LayoutPanel';
 
 // Lazy load modal panels
 const FilterPanel = React.lazy(() => import('./FilterPanel').then(m => ({ default: m.FilterPanel })));
@@ -22,6 +21,7 @@ import { GraphNode } from '../api/types';
 import { GraphLink } from '../types/graph';
 import type { GraphCanvasHandle, GraphVizProps } from '../types/components';
 import { getErrorMessage } from '../types/errors';
+import { calculateNodeDegrees } from '../utils/graphNodeOperations';
 
 export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
   // Component rendering
@@ -30,10 +30,10 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
   
   // UI State
   const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);
-  const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
+  // Right panel removed - no longer needed
+  // const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const [showStatsPanel, setShowStatsPanel] = useState(false);
-  const [showLayoutPanel, setShowLayoutPanel] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isSimulationRunning, setIsSimulationRunning] = useState(true);
   
@@ -124,6 +124,17 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
   } = useNodeSelection(transformedData, graphCanvasRef);
   
   // Hover state is managed by useNodeSelection hook
+
+  // Calculate actual node degrees from edges for accurate connection counts
+  const nodeDegreeMap = useMemo(() => {
+    if (!transformedData?.nodes || !transformedData?.links) {
+      return new Map<string, number>();
+    }
+    return calculateNodeDegrees(transformedData.nodes, transformedData.links);
+  }, [transformedData?.nodes, transformedData?.links]);
+
+  // Get actual connection count for selected node
+  const selectedNodeConnections = selectedNode ? (nodeDegreeMap.get(selectedNode.id) || 0) : 0;
 
   // Apply incremental updates
   useIncrementalUpdates(
@@ -330,7 +341,6 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
           onUpload={() => {/* Upload functionality would require file input */}}
           onScreenshot={handleCaptureScreenshot}
           onToggleSimulation={toggleSimulation}
-          onLayoutClick={() => setShowLayoutPanel(true)}
           onSettingsClick={() => setLeftPanelCollapsed(!leftPanelCollapsed)}
           onStatsClick={() => setShowStatsPanel(true)}
           onFullscreenClick={toggleFullscreen}
@@ -387,17 +397,6 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
             />
           </div>
 
-          {/* Right Layout Panel */}
-          <div className={`${rightPanelCollapsed ? 'w-12' : 'w-80'} transition-all duration-300 flex-shrink-0`}>
-            <LayoutPanel 
-              collapsed={rightPanelCollapsed}
-              onToggleCollapse={() => setRightPanelCollapsed(!rightPanelCollapsed)}
-              graphData={{
-                nodes: transformedData?.nodes || [],
-                edges: transformedData?.links || []  // Map links to edges for LayoutPanel
-              }}
-            />
-          </div>
         </div>
 
         {/* Modal Panels */}
@@ -436,7 +435,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
           <div className={`fixed bottom-0 z-50 transition-all duration-300`}
             style={{
               left: leftPanelCollapsed ? '48px' : '320px',
-              right: rightPanelCollapsed ? '48px' : '320px'
+              right: '48px' // Fixed right margin after removing right panel
             }}
           >
             <React.Suspense fallback={<div className="h-20 bg-background/80 backdrop-blur-sm" />}>
@@ -462,7 +461,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
           <div className={`fixed bottom-0 z-50 transition-all duration-300`}
             style={{
               left: leftPanelCollapsed ? '48px' : '320px',
-              right: rightPanelCollapsed ? '48px' : '320px',
+              right: '48px', // Fixed right margin after removing right panel
               height: '180px'
             }}
           >
@@ -478,7 +477,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
             className="absolute z-[55]" 
             style={{ 
               top: '80px', // Below the nav bar
-              right: rightPanelCollapsed ? '60px' : '340px', // Adjust based on right panel
+              right: '60px', // Fixed right margin after removing right panel
               maxHeight: 'calc(100vh - 280px)', // Leave space for nav and timeline
               pointerEvents: 'auto',
               transition: 'right 0.3s ease-in-out'
@@ -487,7 +486,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
             <React.Suspense fallback={<div className="w-96 h-96 bg-background/80 backdrop-blur-sm rounded-lg animate-pulse" />}>
               <NodeDetailsPanel
                 node={selectedNode}
-                connections={selectedNode.connections}
+                connections={selectedNodeConnections}
                 onClose={() => clearAllSelections()}
                 onShowNeighbors={handleShowNeighbors}
               />

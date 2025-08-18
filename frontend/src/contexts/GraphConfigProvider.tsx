@@ -1,5 +1,4 @@
 import React, { createContext, useContext, useState, useCallback, useRef, ReactNode, useMemo, useEffect } from 'react';
-import { calculateLayoutPositions, type LayoutOptions } from '../utils/layoutAlgorithms';
 import type { GraphNode, GraphEdge } from '../types/graph';
 import { usePersistedGraphConfig, usePersistedNodeTypes } from '@/hooks/usePersistedConfig';
 import type { GraphConfig, StableConfig, DynamicConfig } from './configTypes';

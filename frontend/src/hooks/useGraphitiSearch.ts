@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { graphitiClient, type GraphitiNodeSearchQuery } from '@/api/graphitiClient';
 import type { NodeResult } from '@/api/types';
-import type { GraphCanvasRef } from '@/components/GraphCanvas';
+import type { GraphCanvasRef } from '@/types/graphCanvas';
 import { useDebounce } from './useDebounce';
 
 export interface UseGraphitiSearchOptions {

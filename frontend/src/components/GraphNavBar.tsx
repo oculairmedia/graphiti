@@ -1,5 +1,5 @@
 import React from 'react';
-import { Download, Upload, Camera, Play, Pause, Layout, Settings, BarChart3, Maximize2 } from 'lucide-react';
+import { Download, Upload, Camera, Play, Pause, Settings, BarChart3, Maximize2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { GraphSearch } from './GraphSearch';
@@ -22,7 +22,6 @@ interface GraphNavBarProps {
   onUpload: () => void;
   onScreenshot: () => void;
   onToggleSimulation: () => void;
-  onLayoutClick: () => void;
   onSettingsClick: () => void;
   onStatsClick: () => void;
   onFullscreenClick: () => void;
@@ -44,7 +43,6 @@ export const GraphNavBar: React.FC<GraphNavBarProps> = ({
   onUpload,
   onScreenshot,
   onToggleSimulation,
-  onLayoutClick,
   onSettingsClick,
   onStatsClick,
   onFullscreenClick,
@@ -56,7 +54,7 @@ export const GraphNavBar: React.FC<GraphNavBarProps> = ({
           Graphiti
         </div>
         <Badge variant="secondary" className="text-xs">
-          Knowledge Graph
+          Knowledge Graph Visualizer
         </Badge>
         {isVirtualized && (
           <Badge variant="outline" className="text-xs border-warning text-warning">
@@ -114,15 +112,6 @@ export const GraphNavBar: React.FC<GraphNavBarProps> = ({
           title={isSimulationRunning ? "Pause Simulation" : "Play Simulation"}
         >
           {isSimulationRunning ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={onLayoutClick}
-          className="hover:bg-primary/10"
-          title="Change Layout"
-        >
-          <Layout className="h-4 w-4" />
         </Button>
         <Button
           variant="ghost"

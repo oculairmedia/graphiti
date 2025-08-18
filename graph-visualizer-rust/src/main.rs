@@ -492,6 +492,7 @@ async fn main() -> anyhow::Result<()> {
         let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(5));
         let mut last_node_count = 0;
         let mut last_edge_count = 0;
+        let mut last_centrality_sum = 0.0;
         
         loop {
             interval.tick().await;
@@ -524,8 +525,26 @@ async fn main() -> anyhow::Result<()> {
                     } else { 0 }
                 };
                 
-                // Detect changes
-                if last_node_count > 0 && (current_node_count != last_node_count || current_edge_count != last_edge_count) {
+                // Check centrality values sum as a change indicator
+                let current_centrality_sum = {
+                    let mut graph = client_clone.select_graph(&graph_name_clone);
+                    let centrality_query = "MATCH (n) WHERE EXISTS(n.degree_centrality) RETURN SUM(n.degree_centrality) as sum";
+                    if let Ok(mut centrality_result) = graph.query(centrality_query).execute().await {
+                        if let Some(row) = centrality_result.data.next() {
+                            if let Some(value) = row.get(0) {
+                                value_to_f64(value)
+                            } else { 0.0 }
+                        } else { 0.0 }
+                    } else { 0.0 }
+                };
+                
+                // Detect changes (including centrality updates)
+                let centrality_changed = (last_centrality_sum > 0.0 && (current_centrality_sum - last_centrality_sum).abs() > 0.001) ||
+                                        (last_centrality_sum == 0.0 && current_centrality_sum > 0.0);
+                
+                if last_node_count > 0 && (current_node_count != last_node_count || 
+                                           current_edge_count != last_edge_count || 
+                                           centrality_changed) {
                     info!("Graph changed: nodes {} -> {}, edges {} -> {}", 
                           last_node_count, current_node_count,
                           last_edge_count, current_edge_count);
@@ -578,6 +597,7 @@ async fn main() -> anyhow::Result<()> {
                 
                 last_node_count = current_node_count;
                 last_edge_count = current_edge_count;
+                last_centrality_sum = current_centrality_sum;
             }
         }
     });
@@ -1117,6 +1137,16 @@ async fn calculate_graph_stats(client: &FalkorAsyncClient, graph_name: &str) -> 
         }
     }
     
+    // Calculate max degree centrality
+    let max_degree_query = "MATCH (n) WHERE EXISTS(n.degree_centrality) RETURN MAX(n.degree_centrality) as max_degree";
+    let max_degree = if let Ok(mut result) = graph.query(max_degree_query).execute().await {
+        if let Some(row) = result.data.next() {
+            if let Some(value) = row.get(0) {
+                value_to_f64(value)
+            } else { 0.0 }
+        } else { 0.0 }
+    } else { 0.0 };
+    
     Ok(GraphStats {
         total_nodes,
         total_edges,
@@ -1126,7 +1156,7 @@ async fn calculate_graph_stats(client: &FalkorAsyncClient, graph_name: &str) -> 
         } else { 
             0.0 
         },
-        max_degree: 0.0, // TODO: Calculate actual max degree
+        max_degree,
     })
 }
 

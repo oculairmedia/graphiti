@@ -17,6 +17,33 @@ export interface DataPrepConfig {
   centralityMetric?: string;
   clusterStrength?: number;
   nodeTypeIndexMap?: Map<string, number>;
+  sizeMapping?: string;  // Add sizeMapping to config
+}
+
+// Compute node size based on the selected sizing strategy (copied from useGraphDataQuery)
+export function computeSizeFromStrategy(node: any, config: DataPrepConfig): number {
+  // Return normalized value (0-1 range) - renderer will handle scaling
+  switch (config.sizeMapping) {
+    case 'degree':
+      return node.properties?.degree_centrality || node.degree_centrality || 0.1;
+    case 'betweenness':
+      return node.properties?.betweenness_centrality || node.betweenness_centrality || 0.1;
+    case 'pagerank':
+      return node.properties?.pagerank_centrality || node.properties?.pagerank || node.pagerank_centrality || node.pagerank || 0.1;
+    case 'importance':
+      return node.properties?.eigenvector_centrality || node.eigenvector_centrality || 0.1;
+    case 'connections':
+      // Same as degree but could use raw count if available
+      return node.properties?.degree_centrality || node.degree_centrality || 0.1;
+    case 'uniform':
+      return 0.5; // Middle value for uniform sizing
+    case 'custom':
+      // Use eigenvector as default for custom
+      return node.properties?.eigenvector_centrality || node.properties?.pagerank_centrality || node.properties?.degree_centrality || node.eigenvector_centrality || node.pagerank_centrality || node.degree_centrality || 0.1;
+    default:
+      // Safe fallback using best available metric
+      return node.properties?.degree_centrality || node.properties?.pagerank_centrality || node.degree_centrality || node.pagerank_centrality || 0.1;
+  }
 }
 
 /**
@@ -133,22 +160,49 @@ export function sanitizeNode(
     sanitizedNode.node_type = String(node.node_type || 'Unknown');
     sanitizedNode.summary = String(node.summary || ''); // Always provide a string, not null
     // Add small variance to prevent STDDEV_SAMP errors
+    // Keep raw values for the columns (they should already be 0-1 normalized from backend)
     const epsilon = 0.000001;
-    sanitizedNode.degree_centrality = Number(sanitizedProperties.degree_centrality || 0) + (Math.random() * epsilon);
-    sanitizedNode.pagerank_centrality = Number(sanitizedProperties.pagerank_centrality || 0) + (Math.random() * epsilon);
-    sanitizedNode.betweenness_centrality = Number(sanitizedProperties.betweenness_centrality || 0) + (Math.random() * epsilon);
-    sanitizedNode.eigenvector_centrality = Number(sanitizedProperties.eigenvector_centrality || 0) + (Math.random() * epsilon);
+    const degreeValue = Number(sanitizedProperties.degree_centrality || 0);
+    const pagerankValue = Number(sanitizedProperties.pagerank_centrality || 0);
+    const betweennessValue = Number(sanitizedProperties.betweenness_centrality || 0);
+    const eigenvectorValue = Number(sanitizedProperties.eigenvector_centrality || 0);
+    
+    // Add tiny random noise to prevent STDDEV_SAMP errors
+    sanitizedNode.degree_centrality = degreeValue + (Math.random() * epsilon);
+    sanitizedNode.pagerank_centrality = pagerankValue + (Math.random() * epsilon);
+    sanitizedNode.betweenness_centrality = betweennessValue + (Math.random() * epsilon);
+    sanitizedNode.eigenvector_centrality = eigenvectorValue + (Math.random() * epsilon);
+    
     sanitizedNode.color = generateNodeTypeColor(node.node_type || 'Unknown', nodeTypeIndex);
-    sanitizedNode.size = Number(node.size || 5);
+    // Use normalized size based on degree centrality (0-1 range)
+    // This provides a consistent base that can be scaled by pointSizeRange
+    sanitizedNode.size = degreeValue || 0.1;
+    // Add color value that can be used by color schemes (same as degree by default)
+    sanitizedNode.colorValue = degreeValue || 0.1;
     sanitizedNode.cluster = String(cluster);
     sanitizedNode.clusterStrength = Number(config.clusterStrength ?? 0.7);
     // CRITICAL: created_at_timestamp MUST be a number (Unix timestamp) for DuckDB
     // DuckDB created this column as DOUBLE type, not string
-    if (node.created_at_timestamp) {
-      // Convert ISO string to Unix timestamp (milliseconds since epoch)
-      const timestamp = new Date(node.created_at_timestamp).getTime();
+    // Handle both number and string formats for robustness
+    if (node.created_at_timestamp !== undefined && node.created_at_timestamp !== null) {
+      // If it's already a number, use it directly
+      if (typeof node.created_at_timestamp === 'number') {
+        sanitizedNode.created_at_timestamp = node.created_at_timestamp;
+      } else {
+        // Try to parse as date string
+        const timestamp = new Date(node.created_at_timestamp).getTime();
+        sanitizedNode.created_at_timestamp = isNaN(timestamp) ? Date.now() : timestamp;
+      }
+    } else if (node.created_at) {
+      // Fallback: derive from created_at string
+      const timestamp = new Date(node.created_at).getTime();
       sanitizedNode.created_at_timestamp = isNaN(timestamp) ? Date.now() : timestamp;
+    } else if (node.properties?.created_at_timestamp) {
+      // Check properties as backup
+      const propTimestamp = Number(node.properties.created_at_timestamp);
+      sanitizedNode.created_at_timestamp = isNaN(propTimestamp) ? Date.now() : propTimestamp;
     } else {
+      // Final fallback to current time
       sanitizedNode.created_at_timestamp = Date.now();
     }
     
@@ -167,22 +221,49 @@ export function sanitizeNode(
     sanitizedNode.node_type = String(node.node_type || 'Unknown');
     sanitizedNode.summary = node.summary ? String(node.summary) : null;
     // Add small variance to prevent STDDEV_SAMP errors
-    // Add tiny random noise to centrality values to ensure variance
+    // Keep raw values for the columns (they should already be 0-1 normalized from backend)
     const epsilon = 0.000001;
-    sanitizedNode.degree_centrality = Number(sanitizedProperties.degree_centrality || 0) + (Math.random() * epsilon);
-    sanitizedNode.pagerank_centrality = Number(sanitizedProperties.pagerank_centrality || 0) + (Math.random() * epsilon);
-    sanitizedNode.betweenness_centrality = Number(sanitizedProperties.betweenness_centrality || 0) + (Math.random() * epsilon);
-    sanitizedNode.eigenvector_centrality = Number(sanitizedProperties.eigenvector_centrality || 0) + (Math.random() * epsilon);
+    const degreeValue = Number(sanitizedProperties.degree_centrality || 0);
+    const pagerankValue = Number(sanitizedProperties.pagerank_centrality || 0);
+    const betweennessValue = Number(sanitizedProperties.betweenness_centrality || 0);
+    const eigenvectorValue = Number(sanitizedProperties.eigenvector_centrality || 0);
+    
+    // Add tiny random noise to centrality values to ensure variance
+    sanitizedNode.degree_centrality = degreeValue + (Math.random() * epsilon);
+    sanitizedNode.pagerank_centrality = pagerankValue + (Math.random() * epsilon);
+    sanitizedNode.betweenness_centrality = betweennessValue + (Math.random() * epsilon);
+    sanitizedNode.eigenvector_centrality = eigenvectorValue + (Math.random() * epsilon);
+    
     sanitizedNode.x = node.x ?? null;
     sanitizedNode.y = node.y ?? null;
     sanitizedNode.color = generateNodeTypeColor(node.node_type || 'Unknown', nodeTypeIndex);
-    sanitizedNode.size = Number(node.size || 5);
+    // Use normalized size based on degree centrality (0-1 range)
+    // This provides a consistent base that can be scaled by pointSizeRange
+    sanitizedNode.size = degreeValue || 0.1;
+    // Add color value that can be used by color schemes (same as degree by default)
+    sanitizedNode.colorValue = degreeValue || 0.1;
     // Convert timestamp to number for consistency with DuckDB DOUBLE type
-    if (node.created_at_timestamp) {
-      const timestamp = new Date(node.created_at_timestamp).getTime();
+    // Handle both number and string formats for robustness
+    if (node.created_at_timestamp !== undefined && node.created_at_timestamp !== null) {
+      // If it's already a number, use it directly
+      if (typeof node.created_at_timestamp === 'number') {
+        sanitizedNode.created_at_timestamp = node.created_at_timestamp;
+      } else {
+        // Try to parse as date string
+        const timestamp = new Date(node.created_at_timestamp).getTime();
+        sanitizedNode.created_at_timestamp = isNaN(timestamp) ? Date.now() : timestamp;
+      }
+    } else if (node.created_at) {
+      // Fallback: derive from created_at string
+      const timestamp = new Date(node.created_at).getTime();
       sanitizedNode.created_at_timestamp = isNaN(timestamp) ? Date.now() : timestamp;
+    } else if (node.properties?.created_at_timestamp) {
+      // Check properties as backup
+      const propTimestamp = Number(node.properties.created_at_timestamp);
+      sanitizedNode.created_at_timestamp = isNaN(propTimestamp) ? Date.now() : propTimestamp;
     } else {
-      sanitizedNode.created_at_timestamp = Date.now(); // Default to current time
+      // Final fallback to current time
+      sanitizedNode.created_at_timestamp = Date.now();
     }
     sanitizedNode.cluster = String(cluster);
     sanitizedNode.clusterStrength = Number(config.clusterStrength ?? 0.7);

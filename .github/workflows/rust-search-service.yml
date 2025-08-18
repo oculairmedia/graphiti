@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - feature/graph-service-performance
+      - relevance-scoring
     paths:
       - 'graphiti-search-rs/**'
       - '.github/workflows/rust-search-service.yml'
@@ -96,6 +97,7 @@ jobs:
             type=ref,event=pr
             type=sha
             type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=dev,enable=${{ github.ref == 'refs/heads/relevance-scoring' }}
       
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -114,7 +116,7 @@ jobs:
           cache-to: |
             type=gha,mode=max
             type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache,mode=max
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
 
   benchmark:
     name: Run Performance Benchmarks

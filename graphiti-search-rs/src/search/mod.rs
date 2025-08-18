@@ -104,69 +104,46 @@ impl SearchEngine {
         _filters: &SearchFilters,
         query_vector: Option<&[f32]>,
     ) -> SearchResult<Vec<Edge>> {
-        // Create cache key
-        let cache_key = format!(
-            "edges:{}:{:?}:{}",
-            query, config.search_methods, config.sim_min_score
-        );
+        // Direct execution without cache
+        let mut falkor_conn = self.falkor_pool.get().await.map_err(|e| {
+            crate::error::SearchError::Database(format!("Failed to get connection: {}", e))
+        })?;
 
-        // Clone values needed in the closure
-        let query_str = query.to_string();
-        let config_clone = config.clone();
-        let query_vector_clone = query_vector.map(|v| v.to_vec());
-        let falkor_pool = self.falkor_pool.clone();
+        let mut method_results = Vec::new();
 
-        // Use enhanced cache with adaptive TTL, request coalescing, and negative caching
-        let result = self
-            .cache
-            .get_or_compute(&cache_key, move || async move {
-                let mut falkor_conn = falkor_pool
-                    .get()
-                    .await
-                    .map_err(|e| anyhow::anyhow!("Failed to get connection: {}", e))?;
-                let mut method_results = Vec::new();
-
-                for method in &config_clone.search_methods {
-                    let edges = match method {
-                        SearchMethod::Fulltext => {
-                            fulltext::search_edges(&mut falkor_conn, &query_str, 100).await?
-                        }
-                        SearchMethod::Similarity if query_vector_clone.is_some() => {
-                            similarity::search_edges_by_embedding(
-                                &mut falkor_conn,
-                                query_vector_clone.as_ref().unwrap(),
-                                config_clone.sim_min_score,
-                                100,
-                            )
-                            .await?
-                        }
-                        SearchMethod::Bfs => {
-                            // BFS requires origin nodes, skip if not provided
-                            vec![]
-                        }
-                        _ => vec![],
-                    };
-
-                    method_results.push(edges);
+        for method in &config.search_methods {
+            let edges = match method {
+                SearchMethod::Fulltext => {
+                    fulltext::search_edges(&mut falkor_conn, query, 100).await?
                 }
-
-                // Apply reranking
-                let reranked = reranking::rerank_edges(
-                    method_results,
-                    &config_clone.reranker,
-                    query_vector_clone.as_deref(),
-                    config_clone.mmr_lambda,
-                )?;
-
-                if reranked.is_empty() {
-                    Ok(None)
-                } else {
-                    Ok(Some(reranked))
+                SearchMethod::Similarity if query_vector.is_some() => {
+                    similarity::search_edges_by_embedding(
+                        &mut falkor_conn,
+                        query_vector.unwrap(),
+                        config.sim_min_score,
+                        100,
+                    )
+                    .await?
                 }
-            })
-            .await?;
+                SearchMethod::Bfs => {
+                    // BFS requires origin nodes, skip if not provided
+                    vec![]
+                }
+                _ => vec![],
+            };
 
-        Ok(result.unwrap_or_else(Vec::new))
+            method_results.push(edges);
+        }
+
+        // Apply reranking
+        let reranked = reranking::rerank_edges(
+            method_results,
+            &config.reranker,
+            query_vector,
+            config.mmr_lambda,
+        )?;
+
+        Ok(reranked)
     }
 
     pub async fn search_nodes(
@@ -176,69 +153,46 @@ impl SearchEngine {
         _filters: &SearchFilters,
         query_vector: Option<&[f32]>,
     ) -> SearchResult<Vec<Node>> {
-        // Create cache key
-        let cache_key = format!(
-            "nodes:{}:{:?}:{}",
-            query, config.search_methods, config.sim_min_score
-        );
+        // Direct execution without cache
+        let mut falkor_conn = self.falkor_pool.get().await.map_err(|e| {
+            crate::error::SearchError::Database(format!("Failed to get connection: {}", e))
+        })?;
 
-        // Clone values needed in the closure
-        let query_str = query.to_string();
-        let config_clone = config.clone();
-        let query_vector_clone = query_vector.map(|v| v.to_vec());
-        let falkor_pool = self.falkor_pool.clone();
+        let mut method_results = Vec::new();
 
-        // Use enhanced cache with adaptive TTL, request coalescing, and negative caching
-        let result = self
-            .cache
-            .get_or_compute(&cache_key, move || async move {
-                let mut falkor_conn = falkor_pool
-                    .get()
-                    .await
-                    .map_err(|e| anyhow::anyhow!("Failed to get connection: {}", e))?;
-                let mut method_results = Vec::new();
-
-                for method in &config_clone.search_methods {
-                    let nodes = match method {
-                        SearchMethod::Fulltext => {
-                            fulltext::search_nodes(&mut falkor_conn, &query_str, 100).await?
-                        }
-                        SearchMethod::Similarity if query_vector_clone.is_some() => {
-                            similarity::search_nodes_by_embedding(
-                                &mut falkor_conn,
-                                query_vector_clone.as_ref().unwrap(),
-                                config_clone.sim_min_score,
-                                100,
-                            )
-                            .await?
-                        }
-                        SearchMethod::Bfs => {
-                            // BFS requires origin nodes, skip if not provided
-                            vec![]
-                        }
-                        _ => vec![],
-                    };
-
-                    method_results.push(nodes);
+        for method in &config.search_methods {
+            let nodes = match method {
+                SearchMethod::Fulltext => {
+                    fulltext::search_nodes(&mut falkor_conn, query, 100).await?
                 }
-
-                // Apply reranking
-                let reranked = reranking::rerank_nodes(
-                    method_results,
-                    &config_clone.reranker,
-                    query_vector_clone.as_deref(),
-                    config_clone.mmr_lambda,
-                )?;
-
-                if reranked.is_empty() {
-                    Ok(None)
-                } else {
-                    Ok(Some(reranked))
+                SearchMethod::Similarity if query_vector.is_some() => {
+                    similarity::search_nodes_by_embedding(
+                        &mut falkor_conn,
+                        query_vector.unwrap(),
+                        config.sim_min_score,
+                        100,
+                    )
+                    .await?
                 }
-            })
-            .await?;
+                SearchMethod::Bfs => {
+                    // BFS requires origin nodes, skip if not provided
+                    vec![]
+                }
+                _ => vec![],
+            };
 
-        Ok(result.unwrap_or_else(Vec::new))
+            method_results.push(nodes);
+        }
+
+        // Apply reranking
+        let reranked = reranking::rerank_nodes(
+            method_results,
+            &config.reranker,
+            query_vector,
+            config.mmr_lambda,
+        )?;
+
+        Ok(reranked)
     }
 
     pub async fn search_episodes(

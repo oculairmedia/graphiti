@@ -751,6 +751,7 @@ source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },
     { name = "diskcache" },
+    { name = "httpx" },
     { name = "neo4j" },
     { name = "numpy" },
     { name = "openai" },
@@ -814,6 +815,7 @@ requires-dist = [
     { name = "google-genai", marker = "extra == 'google-genai'", specifier = ">=1.8.0" },
     { name = "groq", marker = "extra == 'dev'", specifier = ">=0.2.0" },
     { name = "groq", marker = "extra == 'groq'", specifier = ">=0.2.0" },
+    { name = "httpx", specifier = ">=0.25.0" },
     { name = "ipykernel", marker = "extra == 'dev'", specifier = ">=6.29.5" },
     { name = "jupyterlab", marker = "extra == 'dev'", specifier = ">=4.2.4" },
     { name = "langchain-anthropic", marker = "extra == 'dev'", specifier = ">=0.2.4" },

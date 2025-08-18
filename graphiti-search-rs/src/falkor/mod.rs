@@ -8,10 +8,15 @@ use crate::config::Config;
 use crate::error::{SearchError, SearchResult};
 
 pub mod client;
+pub mod client_v2;
 pub mod parser;
+pub mod parser_v2;
 pub mod queries;
 
+// Keep old client for backward compatibility but allow it to be unused
+#[allow(unused_imports)]
 pub use self::client::FalkorClient;
+pub use self::client_v2::FalkorClientV2;
 
 pub type FalkorPool = Pool<FalkorManager>;
 pub type FalkorConnection = Object<FalkorManager>;
@@ -30,19 +35,19 @@ impl FalkorManager {
 
 #[async_trait]
 impl Manager for FalkorManager {
-    type Type = FalkorClient;
+    type Type = FalkorClientV2;
     type Error = SearchError;
 
-    async fn create(&self) -> Result<FalkorClient, Self::Error> {
-        debug!("Creating new FalkorDB connection");
-        FalkorClient::new(&self.config)
+    async fn create(&self) -> Result<FalkorClientV2, Self::Error> {
+        debug!("Creating new FalkorDB connection with SDK");
+        FalkorClientV2::new(&self.config)
             .await
             .map_err(|e| SearchError::Database(format!("Failed to create connection: {e}")))
     }
 
     async fn recycle(
         &self,
-        conn: &mut FalkorClient,
+        conn: &mut FalkorClientV2,
         _metrics: &deadpool::managed::Metrics,
     ) -> RecycleResult<Self::Error> {
         conn.ping()
