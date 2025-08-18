@@ -37,6 +37,28 @@ class SearchResults(BaseModel):
     """Search results response"""
     facts: List[FactResult]
 
+class NodeSearchQuery(BaseModel):
+    """Node search query matching frontend expectations"""
+    query: str = Field(description="Search query text")
+    max_nodes: int = Field(default=10, description="Maximum number of nodes to return")
+    group_ids: Optional[List[str]] = Field(default=None, description="Group IDs to filter by")
+    center_node_uuid: Optional[str] = Field(default=None, description="Center node UUID for graph search")
+    entity: Optional[str] = Field(default=None, description="Entity type filter")
+
+class NodeResult(BaseModel):
+    """Node result matching frontend expectations"""
+    uuid: str
+    name: str
+    node_type: str
+    summary: Optional[str] = None
+    created_at: Optional[str] = None
+    group_id: Optional[str] = None
+    centrality: Optional[float] = None
+
+class NodeSearchResults(BaseModel):
+    """Node search results response"""
+    nodes: List[NodeResult]
+
 async def generate_embedding(text: str) -> Optional[List[float]]:
     """Generate embedding for the query text using Ollama"""
     try:
@@ -168,4 +190,86 @@ async def search_proxy(query: SearchQuery) -> SearchResults:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Search proxy error: {str(e)}"
+        )
+
+@router.post('/search/nodes', response_model=NodeSearchResults, status_code=status.HTTP_200_OK)
+async def search_nodes(query: NodeSearchQuery) -> NodeSearchResults:
+    """
+    Search for nodes using the Rust search service.
+    Matches the frontend GraphitiClient expectations.
+    """
+    try:
+        # Transform request to Rust service format
+        rust_request = {
+            "query": query.query,
+            "config": {
+                "limit": query.max_nodes,
+                "reranker_min_score": 0.0,
+                "alpha": 0.5,
+                "node_config": {
+                    "enabled": True,
+                    "limit": query.max_nodes,
+                    "search_methods": ["fulltext", "similarity"],
+                    "reranker": "rrf",
+                    "bfs_max_depth": 2,
+                    "sim_min_score": 0.0,
+                    "mmr_lambda": 0.5
+                },
+                "edge_config": {
+                    "enabled": False  # Disable edge search for node-only queries
+                }
+            },
+            "filters": {}
+        }
+        
+        # Add filters if provided
+        if query.group_ids:
+            rust_request["filters"]["group_ids"] = query.group_ids
+        if query.entity:
+            rust_request["filters"]["entity_type"] = query.entity
+        if query.center_node_uuid:
+            rust_request["filters"]["center_node_uuid"] = query.center_node_uuid
+        
+        logger.info(f"Forwarding node search query to Rust service: {query.query}")
+        
+        # Forward to Rust service
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(
+                f"{RUST_SEARCH_URL}/search",
+                json=rust_request
+            )
+            
+            if response.status_code != 200:
+                raise HTTPException(
+                    status_code=response.status_code,
+                    detail=f"Rust search service error: {response.text}"
+                )
+            
+            rust_result = response.json()
+            
+            # Transform Rust response to frontend format
+            nodes = []
+            for node in rust_result.get("nodes", []):
+                node_result = NodeResult(
+                    uuid=node.get("uuid", ""),
+                    name=node.get("name", ""),
+                    node_type=node.get("node_type", "entity"),
+                    summary=node.get("summary"),
+                    created_at=node.get("created_at"),
+                    group_id=node.get("group_id"),
+                    centrality=node.get("centrality")
+                )
+                nodes.append(node_result)
+            
+            return NodeSearchResults(nodes=nodes)
+            
+    except httpx.RequestError as e:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Failed to connect to search service: {str(e)}"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Node search error: {str(e)}"
         )
