@@ -54,7 +54,7 @@ export const GraphNavBar: React.FC<GraphNavBarProps> = ({
           Graphiti
         </div>
         <Badge variant="secondary" className="text-xs">
-          Knowledge Graph
+          Knowledge Graph Visualizer
         </Badge>
         {isVirtualized && (
           <Badge variant="outline" className="text-xs border-warning text-warning">
