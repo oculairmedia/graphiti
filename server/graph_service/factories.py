@@ -9,9 +9,8 @@ import os
 import logging
 from typing import Optional, Any
 
-from graphiti_core.embedder import EmbedderClient, OpenAIEmbedder, OpenAIEmbedderConfig
-from graphiti_core.llm_client import LLMClient, LLMConfig, OpenAIClient
-from openai import AsyncOpenAI
+from graphiti_core.embedder import EmbedderClient
+from graphiti_core.llm_client import LLMClient
 
 from graph_service.config import Settings
 
@@ -26,29 +25,23 @@ def create_llm_client(settings: Settings) -> Optional[LLMClient]:
         settings: Application settings containing configuration
         
     Returns:
-        LLMClient instance or None if not using Ollama
+        LLMClient instance or None if not using special LLM provider
     """
-    if not os.getenv('USE_OLLAMA', '').lower() == 'true':
-        # In the future, this could create a standard OpenAI client
-        # based on settings.openai_api_key, settings.openai_base_url, etc.
-        return None
-
-    ollama_base_url = os.getenv('OLLAMA_BASE_URL', 'http://localhost:11434/v1')
-    ollama_model = os.getenv('OLLAMA_MODEL', 'mistral:latest')
+    # Check if we should use the centralized factory for Cerebras or Ollama
+    if os.getenv('USE_CEREBRAS', '').lower() == 'true' or os.getenv('USE_OLLAMA', '').lower() == 'true':
+        # Use the centralized factory which supports Cerebras, Ollama, and OpenAI
+        from graphiti_core.client_factory import GraphitiClientFactory
+        
+        if os.getenv('USE_CEREBRAS', '').lower() == 'true':
+            logger.info('Creating Cerebras LLM client via centralized factory')
+        else:
+            logger.info('Creating Ollama LLM client via centralized factory')
+        
+        return GraphitiClientFactory.create_llm_client()
     
-    logger.info(
-        f'Creating Ollama LLM client at {ollama_base_url} with model {ollama_model}'
-    )
-    
-    client = AsyncOpenAI(base_url=ollama_base_url, api_key='ollama')
-    config = LLMConfig(
-        model=ollama_model,
-        small_model=ollama_model,
-        temperature=0.7,
-        max_tokens=2000
-    )
-    
-    return OpenAIClient(config=config, client=client)
+    # Default behavior - return None for standard OpenAI client
+    # (which will be configured later via configure_non_ollama_clients)
+    return None
 
 
 def create_embedder_client(settings: Settings) -> Optional[EmbedderClient]:
@@ -59,54 +52,29 @@ def create_embedder_client(settings: Settings) -> Optional[EmbedderClient]:
         settings: Application settings containing configuration
         
     Returns:
-        EmbedderClient instance or None if not using Ollama
+        EmbedderClient instance or None if not using special embedder
     """
-    if not os.getenv('USE_OLLAMA', '').lower() == 'true':
-        # In the future, this could create a standard OpenAI embedder
-        # or other embedding providers based on settings
-        return None
-
-    # Determine embedding endpoint with dedicated support
-    embedding_base_url = _get_embedding_endpoint()
-    ollama_embed_model = os.getenv('OLLAMA_EMBEDDING_MODEL', 'mxbai-embed-large:latest')
-    
-    logger.info(
-        f'Creating Ollama embedder at {embedding_base_url} with model {ollama_embed_model}'
-    )
-
-    # Use dedicated API key if provided, otherwise default to 'ollama'
-    embedding_api_key = os.getenv('OLLAMA_EMBEDDING_API_KEY', 'ollama')
-    client = AsyncOpenAI(base_url=embedding_base_url, api_key=embedding_api_key)
-    config = OpenAIEmbedderConfig(embedding_model=ollama_embed_model)
-    
-    return OpenAIEmbedder(config=config, client=client)
-
-
-def _get_embedding_endpoint() -> str:
-    """Determine the appropriate embedding endpoint."""
-    use_dedicated = os.getenv('USE_DEDICATED_EMBEDDING_ENDPOINT', 'false').lower() == 'true'
-    
-    if use_dedicated:
-        dedicated_url = os.getenv('OLLAMA_EMBEDDING_BASE_URL')
-        if dedicated_url:
-            logger.info(f'Using dedicated embedding endpoint: {dedicated_url}')
-            return dedicated_url
-        elif os.getenv('EMBEDDING_ENDPOINT_FALLBACK', 'true').lower() == 'true':
-            fallback_url = os.getenv('OLLAMA_BASE_URL', 'http://localhost:11434/v1')
-            logger.warning(f'Dedicated embedding endpoint not configured, falling back to main Ollama URL: {fallback_url}')
-            return fallback_url
+    # Check if we should use the centralized factory for Cerebras or Ollama
+    if os.getenv('USE_CEREBRAS', '').lower() == 'true' or os.getenv('USE_OLLAMA', '').lower() == 'true':
+        # Use the centralized factory which handles embedder creation
+        from graphiti_core.client_factory import GraphitiClientFactory
+        
+        if os.getenv('USE_CEREBRAS', '').lower() == 'true':
+            logger.info('Creating embedder via centralized factory (for Cerebras mode)')
         else:
-            raise ValueError('Dedicated embedding endpoint required but not configured (OLLAMA_EMBEDDING_BASE_URL not set)')
+            logger.info('Creating Ollama embedder via centralized factory')
+        
+        return GraphitiClientFactory.create_embedder()
     
-    # Use main Ollama URL for embeddings
-    main_url = os.getenv('OLLAMA_BASE_URL', 'http://localhost:11434/v1')
-    logger.debug(f'Using main Ollama endpoint for embeddings: {main_url}')
-    return main_url
+    # Default behavior - return None for standard OpenAI embedder
+    # (which will be configured later if needed)
+    return None
+
 
 
 def configure_non_ollama_clients(client: Any, settings: Settings) -> None:
     """
-    Configure non-Ollama clients with custom settings.
+    Configure non-Ollama/non-Cerebras clients with custom settings.
     
     This handles the legacy configuration where OpenAI settings are
     applied after client creation.
@@ -115,8 +83,8 @@ def configure_non_ollama_clients(client: Any, settings: Settings) -> None:
         client: ZepGraphiti instance to configure
         settings: Application settings
     """
-    # Only configure OpenAI settings if not using Ollama
-    if os.getenv('USE_OLLAMA', '').lower() == 'true':
+    # Skip configuration if using Ollama or Cerebras (they're already configured)
+    if os.getenv('USE_OLLAMA', '').lower() == 'true' or os.getenv('USE_CEREBRAS', '').lower() == 'true':
         return
         
     if client.llm_client:
