@@ -227,7 +227,7 @@ class RustSearchClient:
                 else None
             ),
             "limit": config.limit,
-            "reranker_min_score": config.reranker_config.reranker_min_score,
+            "reranker_min_score": config.reranker_min_score,
         }
 
     def _parse_search_results(self, data: Dict[str, Any]) -> SearchResults:
