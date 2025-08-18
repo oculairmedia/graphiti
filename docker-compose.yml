@@ -22,9 +22,9 @@ services:
         condition: service_healthy
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY:-sk-dummy}
-      - FALKORDB_HOST=falkordb
+      - FALKORDB_HOST=graphiti-falkordb-1
       - FALKORDB_PORT=6379
-      - FALKORDB_URI=redis://falkordb:6379
+      - FALKORDB_URI=redis://graphiti-falkordb-1:6379
       - USE_FALKORDB=true
       - PORT=8000
       - USE_OLLAMA=${USE_OLLAMA:-true}
@@ -54,8 +54,9 @@ services:
       - homepage.description=Knowledge graph API service
   falkordb:
     image: falkordb/falkordb:latest
-    mem_limit: 6g  # Reduced to prevent OOM
-    mem_reservation: 2g
+    container_name: graphiti-falkordb-1
+    mem_limit: 12g  # Increased for large graph
+    mem_reservation: 4g
     healthcheck:
       test:
         - CMD
@@ -67,7 +68,6 @@ services:
       start_period: 3s
     ports:
       - 6389:6379 # Redis/FalkorDB port (changed from 6379)
-      - 3100:3000 # FalkorDB UI
     volumes:
       - falkordb_data:/var/lib/falkordb/data
       - ./falkordb-config.conf:/usr/local/etc/redis/redis.conf:ro  # Custom config
@@ -91,7 +91,7 @@ services:
     ports:
       - 3000:3000
     environment:
-      - FALKORDB_HOST=falkordb
+      - FALKORDB_HOST=graphiti-falkordb-1
       - FALKORDB_PORT=6379
       - GRAPH_NAME=graphiti_migration
       - RUST_LOG=graph_visualizer=debug,tower_http=debug
@@ -192,7 +192,7 @@ services:
     ports:
       - 3003:3003 # Rust centrality service
     environment:
-      - FALKORDB_HOST=falkordb
+      - FALKORDB_HOST=graphiti-falkordb-1
       - FALKORDB_PORT=6379
       - GRAPH_NAME=graphiti_migration
       - BIND_ADDR=0.0.0.0:3003
@@ -231,7 +231,7 @@ services:
     ports:
       - 3004:3004 # Rust search service
     environment:
-      - FALKORDB_HOST=falkordb
+      - FALKORDB_HOST=graphiti-falkordb-1
       - FALKORDB_PORT=6379
       - GRAPH_NAME=graphiti_migration
       - REDIS_URL=redis://letta-redis-1:6379  # Use separate Redis for cache

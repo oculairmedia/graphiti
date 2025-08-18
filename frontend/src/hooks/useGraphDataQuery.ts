@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { graphClient } from '../api/graphClient';
 import { GraphNode } from '../api/types';
@@ -8,6 +8,7 @@ import { useGraphConfig } from '../contexts/GraphConfigProvider';
 import { useDuckDB } from '../contexts/DuckDBProvider';
 import { useRustWebSocket } from '../contexts/RustWebSocketProvider';
 import { useRealtimeDataSync } from './useRealtimeDataSync';
+import { useGraphWebSocket } from './useGraphWebSocket';
 import { logger } from '../utils/logger';
 
 interface FilterConfig {
@@ -61,6 +62,7 @@ function computeSizeFromStrategy(node: any, config: any): number {
 export function useGraphDataQuery() {
   const { config, updateNodeTypeConfigurations } = useGraphConfig();
   const { getDuckDBConnection, isInitialized: isDuckDBInitialized } = useDuckDB();
+  const queryClient = useQueryClient();
   
   // State for DuckDB-sourced UI data
   const [duckDBData, setDuckDBData] = useState<{ nodes: GraphNode[], edges: GraphLink[] } | null>(null);
@@ -318,6 +320,27 @@ export function useGraphDataQuery() {
     hasFetchedDuckDBRef.current = false;
     fetchDuckDBData(true);
   }, [fetchDuckDBData]);
+  
+  // Set up WebSocket to listen for cache invalidation events
+  useGraphWebSocket({
+    enablePython: true,
+    enableRust: false,
+    onCacheInvalidate: (event) => {
+      logger.log('[useGraphDataQuery] Cache invalidated, refetching data...');
+      // Clear DuckDB cache and refetch
+      refreshDuckDBData();
+      // Also invalidate React Query cache if using JSON fetch
+      if (!skipJsonFetch) {
+        queryClient.invalidateQueries({ queryKey: ['graphData'] });
+      }
+    },
+    onGraphUpdate: (event) => {
+      logger.log('[useGraphDataQuery] Graph update received, refetching data...');
+      // Clear cache and refetch on graph updates
+      refreshDuckDBData();
+    },
+    debug: true
+  });
 
   // Stable callbacks for real-time sync
   const handleRealtimeDataUpdate = useCallback(() => {
