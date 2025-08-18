@@ -161,10 +161,8 @@ class WorkerService:
                 await asyncio.sleep(1)
                 
                 # Periodically log stats
-                if self.worker_pool and self.worker_pool.metrics:
-                    stats = self.worker_pool.metrics.get_stats()
-                    if stats["polled"] > 0:
-                        logger.info(f"Worker stats: {stats}")
+                # TODO: Add metrics collection when WorkerPool supports it
+                pass
                 
         except Exception as e:
             logger.error(f"Worker service error: {e}")
