@@ -14,8 +14,7 @@ from typing import Optional
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from graphiti_core.llm_client import OpenAIClient
-from graphiti_core.embedder import OpenAIEmbedder
+# LLM and embedder imports are done conditionally based on USE_OLLAMA
 from graphiti_core.ingestion.queue_client import QueuedClient
 from graphiti_core.ingestion.worker import IngestionWorker, WorkerPool
 from zep_graphiti import ZepGraphiti
@@ -75,17 +74,46 @@ class WorkerService:
         
         if use_ollama:
             logger.info("Using Ollama for LLM and embeddings")
-            # TODO: Add Ollama support when available
-            # For now, fall back to OpenAI
-            logger.warning("Ollama support not yet implemented, falling back to OpenAI")
-            openai_key = os.getenv("OPENAI_API_KEY")
-            if not openai_key:
-                raise ValueError("OPENAI_API_KEY environment variable is required")
             
-            # Set API key in environment for OpenAI client
-            os.environ["OPENAI_API_KEY"] = openai_key
-            llm_client = OpenAIClient()
-            embedder = OpenAIEmbedder()
+            # Import required classes
+            from openai import AsyncOpenAI
+            from graphiti_core.llm_client import LLMConfig, OpenAIClient
+            from graphiti_core.embedder import OpenAIEmbedder, OpenAIEmbedderConfig
+            
+            # Get Ollama configuration
+            ollama_base_url = os.getenv('OLLAMA_BASE_URL', 'http://localhost:11434/v1')
+            ollama_model = os.getenv('OLLAMA_MODEL', 'mistral:latest')
+            
+            logger.info(f'Creating Ollama LLM client at {ollama_base_url} with model {ollama_model}')
+            
+            # Create LLM client
+            llm_api_client = AsyncOpenAI(base_url=ollama_base_url, api_key='ollama')
+            llm_config = LLMConfig(
+                model=ollama_model,
+                small_model=ollama_model,
+                temperature=0.7,
+                max_tokens=2000
+            )
+            llm_client = OpenAIClient(config=llm_config, client=llm_api_client)
+            
+            # Create embedder client
+            use_dedicated = os.getenv('USE_DEDICATED_EMBEDDING_ENDPOINT', 'false').lower() == 'true'
+            if use_dedicated:
+                embedding_base_url = os.getenv('OLLAMA_EMBEDDING_BASE_URL', ollama_base_url)
+                logger.info(f'Using dedicated embedding endpoint: {embedding_base_url}')
+            else:
+                embedding_base_url = ollama_base_url
+                logger.info(f'Using same endpoint for embeddings: {embedding_base_url}')
+            
+            ollama_embed_model = os.getenv('OLLAMA_EMBEDDING_MODEL', 'mxbai-embed-large:latest')
+            embedding_api_key = os.getenv('OLLAMA_EMBEDDING_API_KEY', 'ollama')
+            
+            logger.info(f'Creating Ollama embedder at {embedding_base_url} with model {ollama_embed_model}')
+            
+            embed_api_client = AsyncOpenAI(base_url=embedding_base_url, api_key=embedding_api_key)
+            embed_config = OpenAIEmbedderConfig(embedding_model=ollama_embed_model)
+            embedder = OpenAIEmbedder(config=embed_config, client=embed_api_client)
+            
         else:
             logger.info("Using OpenAI for LLM and embeddings")
             openai_key = os.getenv("OPENAI_API_KEY")
