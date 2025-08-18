@@ -110,6 +110,7 @@ class Graphiti:
         store_raw_episode_content: bool = True,
         graph_driver: GraphDriver | None = None,
         max_coroutines: int | None = None,
+        enable_cross_graph_deduplication: bool = False,
     ):
         """
         Initialize a Graphiti instance.
@@ -142,6 +143,10 @@ class Graphiti:
         max_coroutines : int | None, optional
             The maximum number of concurrent operations allowed. Overrides SEMAPHORE_LIMIT set in the environment.
             If not set, the Graphiti default is used.
+        enable_cross_graph_deduplication : bool, optional
+            Enable deduplication of entities across different group_ids.
+            If True, entities with the same name in different groups can be merged.
+            Default is False to maintain backward compatibility.
 
         Returns
         -------
@@ -183,6 +188,9 @@ class Graphiti:
             self.cross_encoder = cross_encoder
         else:
             self.cross_encoder = GraphitiClientFactory.create_cross_encoder()
+        
+        self.store_raw_episode_content = store_raw_episode_content
+        self.enable_cross_graph_deduplication = enable_cross_graph_deduplication
 
         self.clients = GraphitiClients(
             driver=self.driver,
@@ -476,6 +484,8 @@ class Graphiti:
                     episode,
                     previous_episodes,
                     entity_types,
+                    existing_nodes_override=None,
+                    enable_cross_graph_deduplication=self.enable_cross_graph_deduplication,
                 ),
                 extract_edges(
                     self.clients,
@@ -524,7 +534,11 @@ class Graphiti:
             # Execute merge operations after nodes and edges are saved
             if merge_operations:
                 from graphiti_core.utils.maintenance.edge_operations import execute_merge_operations
-                await execute_merge_operations(self.driver, merge_operations)
+                await execute_merge_operations(
+                    self.driver, 
+                    merge_operations,
+                    allow_cross_graph_merge=self.enable_cross_graph_deduplication
+                )
 
             # Update any communities
             if update_communities:
@@ -649,7 +663,11 @@ class Graphiti:
 
             # Dedupe extracted nodes in memory
             nodes_by_episode, uuid_map = await dedupe_nodes_bulk(
-                self.clients, extracted_nodes_bulk, episode_context, entity_types
+                self.clients, 
+                extracted_nodes_bulk, 
+                episode_context, 
+                entity_types,
+                enable_cross_graph_deduplication=self.enable_cross_graph_deduplication
             )
 
             # Create Episodic Edges
@@ -731,6 +749,8 @@ class Graphiti:
                         episode,
                         previous_episodes,
                         entity_types,
+                        existing_nodes_override=None,
+                        enable_cross_graph_deduplication=self.enable_cross_graph_deduplication,
                     )
                     for episode, previous_episodes in episode_context
                 ]
@@ -832,7 +852,11 @@ class Graphiti:
             # Execute merge operations after nodes and edges are saved
             if merge_operations:
                 from graphiti_core.utils.maintenance.edge_operations import execute_merge_operations
-                merge_stats = await execute_merge_operations(self.driver, merge_operations)
+                merge_stats = await execute_merge_operations(
+                    self.driver, 
+                    merge_operations,
+                    allow_cross_graph_merge=self.enable_cross_graph_deduplication
+                )
                 logger.info(
                     f'Bulk merge complete: {merge_stats["total_merges"]} merges, '
                     f'{merge_stats["total_edges_transferred"]} edges transferred'
@@ -999,6 +1023,11 @@ class Graphiti:
         resolved_nodes, uuid_map, _ = await resolve_extracted_nodes(
             self.clients,
             [source_node, target_node],
+            episode=None,
+            previous_episodes=None,
+            entity_types=None,
+            existing_nodes_override=None,
+            enable_cross_graph_deduplication=self.enable_cross_graph_deduplication,
         )
 
         updated_edge = resolve_edge_pointers([edge], uuid_map)[0]

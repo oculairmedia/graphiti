@@ -205,6 +205,7 @@ async def dedupe_nodes_bulk(
     extracted_nodes: list[list[EntityNode]],
     episode_tuples: list[tuple[EpisodicNode, list[EpisodicNode]]],
     entity_types: dict[str, BaseModel] | None = None,
+    enable_cross_graph_deduplication: bool = False,
 ) -> tuple[dict[str, list[EntityNode]], dict[str, str]]:
     embedder = clients.embedder
     min_score = 0.8
@@ -261,6 +262,8 @@ async def dedupe_nodes_bulk(
                 entity_types,
                 # Removed existing_nodes_override to enable database queries
                 # This allows new nodes to be merged with existing database nodes
+                existing_nodes_override=None,
+                enable_cross_graph_deduplication=enable_cross_graph_deduplication,
             )
             for i, dedupe_tuple in enumerate(dedupe_tuples)
         ]
