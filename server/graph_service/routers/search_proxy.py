@@ -312,7 +312,7 @@ async def get_edges_by_node(node_uuid: str) -> EdgesByNodeResponse:
                     "enabled": True,
                     "limit": 100,
                     "search_methods": ["fulltext"],
-                    "reranker": "none",
+                    "reranker": "rrf",
                     "bfs_max_depth": 1,
                     "sim_min_score": 0.0,
                     "mmr_lambda": 0.5
@@ -321,7 +321,7 @@ async def get_edges_by_node(node_uuid: str) -> EdgesByNodeResponse:
                     "enabled": False,
                     "limit": 0,
                     "search_methods": [],
-                    "reranker": "none",
+                    "reranker": "rrf",
                     "bfs_max_depth": 1,
                     "sim_min_score": 0.0,
                     "mmr_lambda": 0.5
