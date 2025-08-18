@@ -89,10 +89,21 @@ class RustSearchClient:
             SearchResults containing edges, nodes, episodes, and communities
         """
         # Build request payload
+        # Ensure filters has all required fields for Rust API
+        search_filters = filters or {}
+        if not all(key in search_filters for key in ['node_types', 'edge_types', 'group_ids', 'created_after', 'created_before']):
+            search_filters = {
+                'node_types': search_filters.get('node_types', None),
+                'edge_types': search_filters.get('edge_types', None),
+                'group_ids': search_filters.get('group_ids', None),
+                'created_after': search_filters.get('created_after', None),
+                'created_before': search_filters.get('created_before', None),
+            }
+        
         payload = {
             "query": query,
             "config": self._serialize_config(config),
-            "filters": filters or {},
+            "filters": search_filters,
         }
 
         if center_node_uuid:

@@ -2,7 +2,7 @@ import React, { forwardRef, useRef, useImperativeHandle, useCallback, useEffect,
 import { GraphNode } from '../api/types';
 import { GraphLink } from '../types/graph';
 import { LazyGraphCanvas } from './LazyGraphCanvas';
-import type { GraphCanvasRef as GraphCanvasHandle } from './GraphCanvas';
+import type { GraphCanvasRef as GraphCanvasHandle } from '@/types/graphCanvas';
 import { NodeDetailsPanel } from './NodeDetailsPanel';
 import { GraphOverlays } from './GraphOverlays';
 import GraphErrorBoundary from './GraphErrorBoundary';
