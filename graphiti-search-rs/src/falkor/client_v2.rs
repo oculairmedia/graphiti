@@ -149,21 +149,58 @@ impl FalkorClientV2 {
             .collect::<Vec<_>>()
             .join(",");
 
-        // Use inline vecf32() function to ensure proper vector type
+        // WORKAROUND: FalkorDB SDK fails when vector operations return complex types
+        // We need to avoid any query that returns edges with vector properties
+        // Instead, we'll use a two-step approach:
+        // 1. Calculate similarities and get UUIDs (avoiding edge object deserialization)
+        // 2. Fetch full edge data separately
+        
+        // First, get edge UUIDs sorted by similarity score
+        // We avoid returning the edge object itself to prevent SDK deserialization issues
         let cypher = format!(
-            "MATCH (a)-[r:RELATES_TO]->(b)
-             WHERE r.fact_embedding IS NOT NULL
-             WITH a, r, b, (2 - vec.cosineDistance(r.fact_embedding, vecf32([{}])))/2 AS score
+            "MATCH ()-[r:RELATES_TO]->()
+             WHERE r.fact_embedding IS NOT NULL AND r.uuid IS NOT NULL
+             WITH r.uuid AS uuid_str, (2 - vec.cosineDistance(r.fact_embedding, vecf32([{}])))/2 AS score
              WHERE score >= {}
-             RETURN a, r, b, score 
-             ORDER BY score DESC 
+             RETURN uuid_str
+             ORDER BY score DESC
              LIMIT {}",
             embedding_str, min_score, limit
         );
 
         let result = self.graph.query(&cypher).execute().await?;
-
-        parser_v2::parse_edges_from_falkor_v2(result.data)
+        
+        // Extract UUIDs from the result
+        let mut edge_uuids = Vec::new();
+        for row in result.data {
+            if let Some(falkordb::FalkorValue::String(uuid)) = row.get(0) {
+                edge_uuids.push(uuid.clone());
+            }
+        }
+        
+        if edge_uuids.is_empty() {
+            return Ok(Vec::new());
+        }
+        
+        // Step 2: Fetch the full edge data (including nodes) without vector operations
+        // We explicitly exclude fact_embedding from the result to avoid deserialization issues
+        let uuid_list = edge_uuids
+            .iter()
+            .map(|u| format!("'{}'", u))
+            .collect::<Vec<_>>()
+            .join(",");
+            
+        let fetch_cypher = format!(
+            "MATCH (a)-[r:RELATES_TO]->(b)
+             WHERE r.uuid IN [{}]
+             RETURN a, r, b",
+            uuid_list
+        );
+        
+        let fetch_result = self.graph.query(&fetch_cypher).execute().await?;
+        
+        // Parse edges using the standard parser
+        parser_v2::parse_edges_from_falkor_v2(fetch_result.data)
     }
 
     #[instrument(skip(self))]
