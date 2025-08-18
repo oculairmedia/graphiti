@@ -2,7 +2,6 @@
 
 use anyhow::Result;
 use falkordb::{AsyncGraph, FalkorAsyncClient, FalkorClientBuilder, FalkorConnectionInfo};
-use std::collections::HashMap;
 use tracing::instrument;
 
 use crate::config::Config;
@@ -41,27 +40,18 @@ impl FalkorClientV2 {
 
     #[instrument(skip(self))]
     pub async fn fulltext_search_nodes(&mut self, query: &str, limit: usize) -> Result<Vec<Node>> {
-        let query_lower = query.to_lowercase();
-
-        let mut params = HashMap::new();
-        params.insert(
-            "query".to_string(),
-            format!("'{}'", query_lower.replace('\'', "\\'")),
+        // FalkorDB SDK doesn't support parameters well, use direct string interpolation
+        let escaped_query = query.replace('\'', "\\'").to_lowercase();
+        let cypher = format!(
+            "MATCH (n:Entity) 
+             WHERE toLower(n.name) CONTAINS '{}' 
+                OR toLower(n.summary) CONTAINS '{}'
+             RETURN n 
+             LIMIT {}",
+            escaped_query, escaped_query, limit
         );
-        params.insert("limit".to_string(), limit.to_string());
 
-        let cypher = "MATCH (n:Entity) 
-                     WHERE toLower(n.name) CONTAINS $query 
-                        OR toLower(n.summary) CONTAINS $query
-                     RETURN n 
-                     LIMIT $limit";
-
-        let result = self
-            .graph
-            .query(cypher)
-            .with_params(&params)
-            .execute()
-            .await?;
+        let result = self.graph.query(&cypher).execute().await?;
 
         parser_v2::parse_nodes_from_falkor_v2(result.data)
     }
@@ -129,27 +119,18 @@ impl FalkorClientV2 {
 
     #[instrument(skip(self))]
     pub async fn fulltext_search_edges(&mut self, query: &str, limit: usize) -> Result<Vec<Edge>> {
-        let query_lower = query.to_lowercase();
-
-        let mut params = HashMap::new();
-        params.insert(
-            "query".to_string(),
-            format!("'{}'", query_lower.replace('\'', "\\'")),
+        // FalkorDB SDK doesn't support parameters well, use direct string interpolation
+        let escaped_query = query.replace('\'', "\\'").to_lowercase();
+        let cypher = format!(
+            "MATCH (a)-[r:RELATES_TO]->(b)
+             WHERE toLower(r.fact) CONTAINS '{}' 
+                OR toLower(r.name) CONTAINS '{}'
+             RETURN a, r, b
+             LIMIT {}",
+            escaped_query, escaped_query, limit
         );
-        params.insert("limit".to_string(), limit.to_string());
 
-        let cypher = "MATCH (a)-[r:RELATES_TO]->(b)
-                     WHERE toLower(r.fact) CONTAINS $query 
-                        OR toLower(r.name) CONTAINS $query
-                     RETURN a, r, b
-                     LIMIT $limit";
-
-        let result = self
-            .graph
-            .query(cypher)
-            .with_params(&params)
-            .execute()
-            .await?;
+        let result = self.graph.query(&cypher).execute().await?;
 
         parser_v2::parse_edges_from_falkor_v2(result.data)
     }
@@ -191,27 +172,18 @@ impl FalkorClientV2 {
         query: &str,
         limit: usize,
     ) -> Result<Vec<Episode>> {
-        let query_lower = query.to_lowercase();
-
-        let mut params = HashMap::new();
-        params.insert(
-            "query".to_string(),
-            format!("'{}'", query_lower.replace('\'', "\\'")),
+        // FalkorDB SDK doesn't support parameters well, use direct string interpolation
+        let escaped_query = query.replace('\'', "\\'").to_lowercase();
+        let cypher = format!(
+            "MATCH (e:Episode)
+             WHERE toLower(e.content) CONTAINS '{}' 
+                OR toLower(e.name) CONTAINS '{}'
+             RETURN e
+             LIMIT {}",
+            escaped_query, escaped_query, limit
         );
-        params.insert("limit".to_string(), limit.to_string());
 
-        let cypher = "MATCH (e:Episode)
-                     WHERE toLower(e.content) CONTAINS $query 
-                        OR toLower(e.name) CONTAINS $query
-                     RETURN e
-                     LIMIT $limit";
-
-        let result = self
-            .graph
-            .query(cypher)
-            .with_params(&params)
-            .execute()
-            .await?;
+        let result = self.graph.query(&cypher).execute().await?;
 
         parser_v2::parse_episodes_from_falkor_v2(result.data)
     }
