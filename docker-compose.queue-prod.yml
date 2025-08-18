@@ -40,6 +40,7 @@ services:
       - OLLAMA_EMBEDDING_BASE_URL=${OLLAMA_EMBEDDING_BASE_URL:-http://192.168.50.80:11434/v1}
       - OLLAMA_EMBEDDING_MODEL=${OLLAMA_EMBEDDING_MODEL:-mxbai-embed-large:latest}
       - OLLAMA_EMBEDDING_API_KEY=${OLLAMA_EMBEDDING_API_KEY:-ollama}
+      - RUST_CENTRALITY_URL=http://graphiti-centrality-rs:3003
       - WORKER_COUNT=4
       - BATCH_SIZE=10
       - POLL_INTERVAL=1.0
