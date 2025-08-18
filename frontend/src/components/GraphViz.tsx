@@ -30,7 +30,8 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
   
   // UI State
   const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);
-  const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
+  // Right panel removed - no longer needed
+  // const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const [showStatsPanel, setShowStatsPanel] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -434,7 +435,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
           <div className={`fixed bottom-0 z-50 transition-all duration-300`}
             style={{
               left: leftPanelCollapsed ? '48px' : '320px',
-              right: rightPanelCollapsed ? '48px' : '320px'
+              right: '48px' // Fixed right margin after removing right panel
             }}
           >
             <React.Suspense fallback={<div className="h-20 bg-background/80 backdrop-blur-sm" />}>
@@ -460,7 +461,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
           <div className={`fixed bottom-0 z-50 transition-all duration-300`}
             style={{
               left: leftPanelCollapsed ? '48px' : '320px',
-              right: rightPanelCollapsed ? '48px' : '320px',
+              right: '48px', // Fixed right margin after removing right panel
               height: '180px'
             }}
           >
@@ -476,7 +477,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
             className="absolute z-[55]" 
             style={{ 
               top: '80px', // Below the nav bar
-              right: rightPanelCollapsed ? '60px' : '340px', // Adjust based on right panel
+              right: '60px', // Fixed right margin after removing right panel
               maxHeight: 'calc(100vh - 280px)', // Leave space for nav and timeline
               pointerEvents: 'auto',
               transition: 'right 0.3s ease-in-out'
