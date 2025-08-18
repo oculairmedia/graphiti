@@ -6,11 +6,13 @@ Handles rate limiting, retries, and error recovery.
 import asyncio
 import logging
 import time
-from typing import Dict, Any, Optional, Set
+from typing import Dict, Any, Optional, Set, List
 from datetime import datetime, timedelta
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 import traceback
+import httpx
+import os
 
 from graphiti_core import Graphiti
 from graphiti_core.nodes import EpisodeType
@@ -60,6 +62,72 @@ class RateLimitWindow:
     def record_request(self):
         """Record a new request"""
         self.requests.append(time.time())
+
+
+class CentralityClient:
+    """
+    Client for updating node centrality scores via Rust centrality service.
+    """
+    
+    def __init__(self, base_url: str = None):
+        self.base_url = base_url or os.getenv('RUST_CENTRALITY_URL', 'http://graphiti-centrality-rs:3003')
+        self.client = httpx.AsyncClient(timeout=10.0)
+        
+    async def update_node_centrality(self, node_uuid: str) -> bool:
+        """
+        Update centrality metrics for a single node.
+        
+        Args:
+            node_uuid: UUID of the node to update
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            response = await self.client.post(
+                f"{self.base_url}/centrality/node/{node_uuid}",
+                json={
+                    "metrics": ["degree", "pagerank", "betweenness"],
+                    "store_results": True
+                }
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                logger.info(f"Updated centrality for node {node_uuid}: {result.get('metrics', {})}")
+                return True
+            else:
+                logger.warning(f"Failed to update centrality for node {node_uuid}: {response.status_code}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"Error updating centrality for node {node_uuid}: {e}")
+            return False
+    
+    async def update_nodes_centrality(self, node_uuids: List[str]) -> int:
+        """
+        Update centrality for multiple nodes.
+        
+        Args:
+            node_uuids: List of node UUIDs to update
+            
+        Returns:
+            Number of successfully updated nodes
+        """
+        if not node_uuids:
+            return 0
+            
+        successful = 0
+        for uuid in node_uuids:
+            if await self.update_node_centrality(uuid):
+                successful += 1
+                
+        logger.info(f"Updated centrality for {successful}/{len(node_uuids)} nodes")
+        return successful
+    
+    async def close(self):
+        """Close the HTTP client."""
+        await self.client.aclose()
 
 
 class RateLimiter:
@@ -155,6 +223,7 @@ class IngestionWorker:
         self.batch_size = batch_size
         self.poll_interval = poll_interval
         self.rate_limiter = RateLimiter()
+        self.centrality_client = CentralityClient()
         self.metrics = QueueMetrics()
         self.running = False
         self._task: Optional[asyncio.Task] = None
@@ -181,6 +250,9 @@ class IngestionWorker:
                 await self._task
             except asyncio.CancelledError:
                 pass
+        
+        # Close centrality client
+        await self.centrality_client.close()
         
         logger.info(f"Worker {self.worker_id} stopped")
     
@@ -282,6 +354,13 @@ class IngestionWorker:
             logger.info(f"Processed episode {payload.get('uuid')}: "
                        f"{len(result.nodes) if result and result.nodes else 0} entities created")
             
+            # Update centrality for newly created nodes
+            if result and result.nodes:
+                node_uuids = [node.uuid for node in result.nodes]
+                if node_uuids:
+                    # Run centrality update asynchronously without blocking
+                    asyncio.create_task(self._update_centrality_async(node_uuids))
+            
         except Exception as e:
             # Classify error type
             if "rate limit" in str(e).lower():
@@ -290,6 +369,16 @@ class IngestionWorker:
                 raise TransientError(f"Connection error: {e}")
             else:
                 raise
+    
+    async def _update_centrality_async(self, node_uuids: List[str]):
+        """
+        Update centrality for nodes asynchronously.
+        This runs in the background and doesn't block task processing.
+        """
+        try:
+            await self.centrality_client.update_nodes_centrality(node_uuids)
+        except Exception as e:
+            logger.error(f"Background centrality update failed: {e}")
     
     async def _process_entity(self, task: IngestionTask):
         """Process an entity creation task"""
@@ -304,6 +393,10 @@ class IngestionWorker:
             )
             
             logger.info(f"Created entity node {node.uuid if node else 'None'}")
+            
+            # Update centrality for the new node
+            if node and node.uuid:
+                asyncio.create_task(self._update_centrality_async([node.uuid]))
             
         except Exception as e:
             if "duplicate" in str(e).lower():
@@ -402,6 +495,10 @@ class IngestionWorker:
             await self.graphiti.add_triplet(source_node, edge, target_node)
             
             logger.info(f"Created relationship: {source_node.name} -> {edge.name} -> {target_node.name}")
+            
+            # Update centrality for both nodes involved in the relationship
+            node_uuids = [source_node.uuid, target_node.uuid]
+            asyncio.create_task(self._update_centrality_async(node_uuids))
             
         except Exception as e:
             if "duplicate" in str(e).lower():
