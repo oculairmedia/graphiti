@@ -12,25 +12,17 @@ RUN apt-get update && \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy project files
-COPY pyproject.toml /app/
-COPY README.md /app/
-
 # Install Python dependencies
-RUN pip install --no-cache-dir uv && \
-    uv pip install --system -e .
-
-# Install additional dashboard dependencies
 RUN pip install --no-cache-dir \
     msgpack \
     httpx \
     fastapi \
     uvicorn \
-    websockets
+    websockets \
+    redis
 
 # Copy the application code
-COPY graphiti_core /app/graphiti_core
-COPY worker /app/worker
+COPY worker/dashboard.py /app/dashboard.py
 
 # Create non-root user
 RUN useradd -m -u 1000 dashboard && chown -R dashboard:dashboard /app
@@ -44,4 +36,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8091/health || exit 1
 
 # Run the dashboard
-CMD ["python", "-u", "worker/dashboard.py"]
+CMD ["python", "-u", "dashboard.py"]
