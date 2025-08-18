@@ -41,7 +41,7 @@ async def update_node_embeddings(driver: FalkorDriver, nodes: List[EntityNode]):
         if node.name_embedding:
             query = """
             MATCH (n:Entity {uuid: $uuid})
-            SET n.name_embedding = $embedding
+            SET n.name_embedding = vecf32($embedding)
             RETURN n.uuid
             """
             await driver.execute_query(
