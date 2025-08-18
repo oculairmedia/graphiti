@@ -35,6 +35,7 @@ class FactResult(BaseModel):
     invalid_at: Optional[str] = None
     created_at: Optional[str] = None
     expired_at: Optional[str] = None
+    score: Optional[float] = None  # Relevance score from search
 
 class SearchResults(BaseModel):
     """Search results response"""
@@ -130,7 +131,7 @@ async def search_proxy(query: SearchQuery) -> SearchResults:
                     "search_methods": ["fulltext", "similarity"],  # Re-enable similarity
                     "reranker": "rrf",
                     "bfs_max_depth": 2,
-                    "sim_min_score": 0.0,
+                    "sim_min_score": 0.3,  # Filter weak semantic matches
                     "mmr_lambda": 0.5
                 },
                 "node_config": {
@@ -139,7 +140,7 @@ async def search_proxy(query: SearchQuery) -> SearchResults:
                     "search_methods": ["fulltext", "similarity"],  # Re-enable similarity
                     "reranker": "rrf",
                     "bfs_max_depth": 2,
-                    "sim_min_score": 0.0,
+                    "sim_min_score": 0.3,  # Filter weak semantic matches
                     "mmr_lambda": 0.5
                 }
             },
@@ -205,7 +206,8 @@ async def search_proxy(query: SearchQuery) -> SearchResults:
                     valid_at=edge.get("valid_at"),
                     invalid_at=edge.get("invalid_at"),
                     created_at=edge.get("created_at"),
-                    expired_at=edge.get("expired_at")
+                    expired_at=edge.get("expired_at"),
+                    score=edge.get("score")  # Include relevance score
                 )
                 facts.append(fact)
             
@@ -223,11 +225,15 @@ async def search_proxy(query: SearchQuery) -> SearchResults:
                         valid_at=node.get("valid_at"),
                         invalid_at=node.get("invalid_at"),
                         created_at=node.get("created_at"),
-                        expired_at=None
+                        expired_at=None,
+                        score=node.get("score")  # Include relevance score
                     )
                     facts.append(fact)
             
             logger.info(f"[SEARCH] Deduplication: {len(rust_result.get('edges', [])) + len(rust_result.get('nodes', []))} -> {len(facts)} facts")
+            
+            # Sort facts by score (highest first) if scores are available
+            facts.sort(key=lambda f: f.score if f.score is not None else 0.0, reverse=True)
             
             # Collect node IDs for webhook
             node_ids = set()
@@ -283,7 +289,7 @@ async def search_nodes(query: NodeSearchQuery) -> NodeSearchResults:
                     "search_methods": ["fulltext", "similarity"],
                     "reranker": "rrf",
                     "bfs_max_depth": 2,
-                    "sim_min_score": 0.0,
+                    "sim_min_score": 0.3,  # Filter weak semantic matches
                     "mmr_lambda": 0.5
                 },
                 "edge_config": {
@@ -292,7 +298,7 @@ async def search_nodes(query: NodeSearchQuery) -> NodeSearchResults:
                     "search_methods": [],
                     "reranker": "rrf",
                     "bfs_max_depth": 2,
-                    "sim_min_score": 0.0,
+                    "sim_min_score": 0.3,  # Filter weak semantic matches
                     "mmr_lambda": 0.5
                 }
             },
@@ -392,7 +398,7 @@ async def get_edges_by_node(node_uuid: str) -> EdgesByNodeResponse:
                     "search_methods": ["fulltext"],
                     "reranker": "rrf",
                     "bfs_max_depth": 1,
-                    "sim_min_score": 0.0,
+                    "sim_min_score": 0.3,  # Filter weak semantic matches
                     "mmr_lambda": 0.5
                 },
                 "node_config": {
@@ -401,7 +407,7 @@ async def get_edges_by_node(node_uuid: str) -> EdgesByNodeResponse:
                     "search_methods": [],
                     "reranker": "rrf",
                     "bfs_max_depth": 1,
-                    "sim_min_score": 0.0,
+                    "sim_min_score": 0.3,  # Filter weak semantic matches
                     "mmr_lambda": 0.5
                 }
             },
