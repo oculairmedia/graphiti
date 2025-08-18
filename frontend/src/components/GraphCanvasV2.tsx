@@ -1547,7 +1547,10 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
           linkColor={config.linkColor || '#9CA3AF'}
           linkArrows={config.edgeArrows || false}
           linkArrowSize={config.edgeArrowScale || 1}
-          linkCurvature={config.curvedLinks ? (config.curvedLinkWeight || 0.5) : 0}
+          curvedLinks={config.curvedLinks || false}
+          curvedLinkSegments={config.curvedLinkSegments || 19}
+          curvedLinkWeight={config.curvedLinkWeight || 0.8}
+          curvedLinkControlPointDistance={config.curvedLinkControlPointDistance || 0.5}
           // Visual configuration
           backgroundColor={config.backgroundColor}
           pointSizeStrategy="auto"
