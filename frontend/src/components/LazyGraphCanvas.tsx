@@ -2,7 +2,7 @@ import React, { Suspense } from 'react';
 import { Skeleton } from './ui/skeleton';
 
 // Import GraphCanvas type for the ref
-import type { GraphCanvasRef } from './GraphCanvas';
+import type { GraphCanvasRef } from '@/types/graphCanvas';
 
 // Lazy load the heavy GraphCanvasV2 component
 const GraphCanvas = React.lazy(() => 
