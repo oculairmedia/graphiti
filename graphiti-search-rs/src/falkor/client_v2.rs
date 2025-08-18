@@ -149,41 +149,96 @@ impl FalkorClientV2 {
             .collect::<Vec<_>>()
             .join(",");
 
-        // WORKAROUND: FalkorDB SDK fails when vector operations return complex types
-        // We need to avoid any query that returns edges with vector properties
-        // Instead, we'll use a two-step approach:
-        // 1. Calculate similarities and get UUIDs (avoiding edge object deserialization)
-        // 2. Fetch full edge data separately
+        // WORKAROUND: FalkorDB SDK v0.1.11 has multiple issues with vector operations:
+        // 1. Cannot deserialize edges containing vector properties
+        // 2. Fails when LIMIT > 1 with vector calculations in WITH clause
+        // 3. ORDER BY with SKIP also causes issues
+        // 
+        // Solution: Get all scores in one query (LIMIT 1), then sort in Rust
         
-        // First, get edge UUIDs sorted by similarity score
-        // We avoid returning the edge object itself to prevent SDK deserialization issues
-        let cypher = format!(
-            "MATCH ()-[r:RELATES_TO]->()
-             WHERE r.fact_embedding IS NOT NULL AND r.uuid IS NOT NULL
-             WITH r.uuid AS uuid_str, (2 - vec.cosineDistance(r.fact_embedding, vecf32([{}])))/2 AS score
-             WHERE score >= {}
-             RETURN uuid_str
-             ORDER BY score DESC
-             LIMIT {}",
-            embedding_str, min_score, limit
-        );
+        let mut edge_scores = Vec::new();
+        
+        // First, get all edges with scores above threshold
+        // We have to get them one at a time due to the LIMIT > 1 bug
+        // But we can't use ORDER BY or SKIP, so we'll collect all and sort later
+        for i in 0..100 {  // Max 100 iterations to prevent infinite loop
+            let cypher = if i == 0 {
+                // First query - no exclusions
+                format!(
+                    "MATCH ()-[r:RELATES_TO]->()
+                     WHERE r.fact_embedding IS NOT NULL
+                     WITH r.uuid AS uuid_str, (2 - vec.cosineDistance(r.fact_embedding, vecf32([{}])))/2 AS score
+                     WHERE score >= {}
+                     RETURN uuid_str, score
+                     LIMIT 1",
+                    embedding_str, min_score
+                )
+            } else {
+                // Subsequent queries - exclude already found UUIDs
+                let exclude_list = edge_scores
+                    .iter()
+                    .map(|(uuid, _): &(String, f32)| format!("'{}'", uuid))
+                    .collect::<Vec<_>>()
+                    .join(",");
+                
+                format!(
+                    "MATCH ()-[r:RELATES_TO]->()
+                     WHERE r.fact_embedding IS NOT NULL AND r.uuid NOT IN [{}]
+                     WITH r.uuid AS uuid_str, (2 - vec.cosineDistance(r.fact_embedding, vecf32([{}])))/2 AS score
+                     WHERE score >= {}
+                     RETURN uuid_str, score
+                     LIMIT 1",
+                    exclude_list, embedding_str, min_score
+                )
+            };
 
-        let result = self.graph.query(&cypher).execute().await?;
-        
-        // Extract UUIDs from the result
-        let mut edge_uuids = Vec::new();
-        for row in result.data {
-            if let Some(falkordb::FalkorValue::String(uuid)) = row.get(0) {
-                edge_uuids.push(uuid.clone());
+            match self.graph.query(&cypher).execute().await {
+                Ok(result) => {
+                    // Extract UUID and score from the single result
+                    let mut found = false;
+                    for row in result.data {
+                        if row.len() >= 2 {
+                            if let (Some(falkordb::FalkorValue::String(uuid)), Some(score_val)) = (row.get(0), row.get(1)) {
+                                let score = match score_val {
+                                    falkordb::FalkorValue::F64(f) => *f as f32,
+                                    falkordb::FalkorValue::I64(i) => *i as f32,
+                                    _ => 0.0,
+                                };
+                                edge_scores.push((uuid.clone(), score));
+                                found = true;
+                                break;
+                            }
+                        }
+                    }
+                    // If no result found, we've exhausted all matches
+                    if !found {
+                        break;
+                    }
+                    
+                    // If we've collected enough results, stop
+                    if edge_scores.len() >= limit {
+                        break;
+                    }
+                }
+                Err(_) => {
+                    // Query failed, stop trying
+                    break;
+                }
             }
         }
+        
+        // Sort by score descending and take only the requested limit
+        edge_scores.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        edge_scores.truncate(limit);
+        
+        // Extract just the UUIDs
+        let edge_uuids: Vec<String> = edge_scores.into_iter().map(|(uuid, _)| uuid).collect();
         
         if edge_uuids.is_empty() {
             return Ok(Vec::new());
         }
         
-        // Step 2: Fetch the full edge data (including nodes) without vector operations
-        // We explicitly exclude fact_embedding from the result to avoid deserialization issues
+        // Step 2: Fetch the full edge data without vector operations
         let uuid_list = edge_uuids
             .iter()
             .map(|u| format!("'{}'", u))
