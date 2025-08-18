@@ -216,7 +216,13 @@ async def search_nodes(query: NodeSearchQuery) -> NodeSearchResults:
                     "mmr_lambda": 0.5
                 },
                 "edge_config": {
-                    "enabled": False  # Disable edge search for node-only queries
+                    "enabled": False,  # Disable edge search for node-only queries
+                    "limit": 0,
+                    "search_methods": [],
+                    "reranker": "rrf",
+                    "bfs_max_depth": 2,
+                    "sim_min_score": 0.0,
+                    "mmr_lambda": 0.5
                 }
             },
             "filters": {}
