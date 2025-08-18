@@ -49,11 +49,11 @@ class NodeResult(BaseModel):
     """Node result matching frontend expectations"""
     uuid: str
     name: str
-    node_type: str
     summary: Optional[str] = None
-    created_at: Optional[str] = None
+    labels: List[str] = Field(default_factory=list)
     group_id: Optional[str] = None
-    centrality: Optional[float] = None
+    created_at: Optional[str] = None
+    attributes: Dict[str, Any] = Field(default_factory=dict)
 
 class NodeSearchResults(BaseModel):
     """Node search results response"""
@@ -272,14 +272,18 @@ async def search_nodes(query: NodeSearchQuery) -> NodeSearchResults:
             # Transform Rust response to frontend format
             nodes = []
             for node in rust_result.get("nodes", []):
+                # Extract node_type as a label
+                node_type = node.get("node_type", "entity")
+                labels = [node_type] if node_type else []
+                
                 node_result = NodeResult(
                     uuid=node.get("uuid", ""),
                     name=node.get("name", ""),
-                    node_type=node.get("node_type", "entity"),
                     summary=node.get("summary"),
-                    created_at=node.get("created_at"),
+                    labels=labels,
                     group_id=node.get("group_id"),
-                    centrality=node.get("centrality")
+                    created_at=node.get("created_at"),
+                    attributes={}  # Rust doesn't return attributes, use empty dict
                 )
                 nodes.append(node_result)
             
