@@ -113,8 +113,7 @@ class WorkerService:
             queue_client=self.queue_client,
             graphiti=self.graphiti,
             worker_count=worker_count,
-            batch_size=batch_size,
-            poll_interval=poll_interval
+            batch_size=batch_size
         )
         
         logger.info("Worker service initialized successfully")

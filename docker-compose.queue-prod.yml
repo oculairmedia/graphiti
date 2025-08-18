@@ -1,0 +1,74 @@
+version: '3.8'
+
+services:
+  # Queued service for high-performance message queue
+  queued:
+    image: ghcr.io/oculairmedia/graphiti-queued:ingestion-queue-system
+    container_name: graphiti-queued
+    restart: unless-stopped
+    ports:
+      - "8093:8080"  # Queue service API
+    volumes:
+      - queued_data:/data  # Persistent queue storage
+    environment:
+      - QUEUED_DATA_DIR=/data
+      - RUST_LOG=queued=info
+    networks:
+      - graphiti_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/queues"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # Worker service for processing queue tasks
+  graphiti-worker:
+    image: ghcr.io/oculairmedia/graphiti-worker:ingestion-queue-system
+    container_name: graphiti-worker-1
+    restart: unless-stopped
+    environment:
+      - QUEUED_URL=http://queued:8080
+      - FALKORDB_HOST=graphiti-falkordb-1
+      - FALKORDB_PORT=6379
+      - FALKORDB_DATABASE=graphiti_migration
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - USE_OLLAMA=false
+      - WORKER_COUNT=4
+      - BATCH_SIZE=10
+      - POLL_INTERVAL=1.0
+      - PYTHONUNBUFFERED=1
+      - DRIVER_TYPE=falkordb
+    depends_on:
+      queued:
+        condition: service_healthy
+    networks:
+      - graphiti_network
+
+  # Dashboard service for monitoring
+  graphiti-dashboard:
+    image: ghcr.io/oculairmedia/graphiti-dashboard:ingestion-queue-system
+    container_name: graphiti-queue-dashboard
+    restart: unless-stopped
+    ports:
+      - "8094:8091"
+    environment:
+      - QUEUED_URL=http://queued:8080
+      - FALKORDB_HOST=graphiti-falkordb-1
+      - FALKORDB_PORT=6379
+      - FALKORDB_DATABASE=graphiti_migration
+      - DASHBOARD_PORT=8091
+      - ENABLE_DASHBOARD=true
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      queued:
+        condition: service_healthy
+    networks:
+      - graphiti_network
+
+volumes:
+  queued_data:
+    driver: local
+
+networks:
+  graphiti_network:
+    external: true
