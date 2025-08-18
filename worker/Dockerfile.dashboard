@@ -21,7 +21,12 @@ RUN pip install --no-cache-dir \
     websockets \
     redis
 
-# Copy the application code
+# Copy the queue client module
+COPY graphiti_core/ingestion/__init__.py /app/graphiti_core/ingestion/__init__.py
+COPY graphiti_core/ingestion/queue_client.py /app/graphiti_core/ingestion/queue_client.py
+COPY graphiti_core/__init__.py /app/graphiti_core/__init__.py
+
+# Copy the dashboard application
 COPY worker/dashboard.py /app/dashboard.py
 
 # Create non-root user
