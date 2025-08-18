@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  queued:
+    image: queued:latest
+    container_name: graphiti-queued
+    restart: unless-stopped
+    ports:
+      - "8093:8080"  # Queue service API
+    volumes:
+      - queued_data:/data  # Persistent queue storage
+    environment:
+      - QUEUED_DATA_DIR=/data
+      - QUEUED_BIND_ADDR=0.0.0.0:8080
+      - RUST_LOG=queued=info
+    networks:
+      - graphiti_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/metrics"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    labels:
+      - homepage.group=Knowledge Management
+      - homepage.name=Queued Service
+      - homepage.icon=si-rabbitmq
+      - homepage.href=http://192.168.50.90:8093
+      - homepage.description=High-performance message queue for ingestion
+
+  # Worker service will be added later once we test the queue
+
+volumes:
+  queued_data:
+    driver: local
+
+networks:
+  graphiti_network:
+    external: true

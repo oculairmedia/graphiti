@@ -17,6 +17,10 @@ try:
     from graph_service.routers import relevance
 except ImportError:
     relevance = None
+try:
+    from graph_service.routers import ingest_queue
+except ImportError:
+    ingest_queue = None
 from graph_service.zep_graphiti import initialize_graphiti
 from graph_service.websocket_manager import manager
 from graph_service.webhooks import webhook_service
@@ -83,6 +87,8 @@ if cached_retrieve:
     app.include_router(cached_retrieve.router)  # Add cached endpoints
 app.include_router(search_proxy.router)  # Use proxy to Rust search service
 app.include_router(ingest.router)
+if ingest_queue:
+    app.include_router(ingest_queue.router, prefix="/api")  # Add queue-based ingestion
 app.include_router(centrality.router)
 app.include_router(nodes.router)
 app.include_router(metrics.router)  # Add metrics endpoints

@@ -1,0 +1,56 @@
+name: Build Complete Queue Stack
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - 'worker/**'
+      - 'queued/**'
+      - 'graphiti_core/ingestion/**'
+      - 'docker-compose.complete.yml'
+      - '.github/workflows/build-queue-stack.yml'
+
+jobs:
+  build-queued:
+    uses: ./.github/workflows/build-queued-service.yml
+    permissions:
+      contents: read
+      packages: write
+
+  build-worker:
+    uses: ./.github/workflows/build-worker-service.yml
+    permissions:
+      contents: read
+      packages: write
+
+  build-dashboard:
+    uses: ./.github/workflows/build-dashboard-service.yml
+    permissions:
+      contents: read
+      packages: write
+
+  deploy-notification:
+    needs: [build-queued, build-worker, build-dashboard]
+    runs-on: ubuntu-latest
+    steps:
+    - name: Summary
+      run: |
+        echo "# 🚀 Queue Stack Build Complete!" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "## Images Built:" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Queued Service: ghcr.io/${{ github.repository }}-queued" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Worker Service: ghcr.io/${{ github.repository }}-worker" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Dashboard Service: ghcr.io/${{ github.repository }}-dashboard" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "## Deployment" >> $GITHUB_STEP_SUMMARY
+        echo "Update your docker-compose.yml to use these images:" >> $GITHUB_STEP_SUMMARY
+        echo '```yaml' >> $GITHUB_STEP_SUMMARY
+        echo "services:" >> $GITHUB_STEP_SUMMARY
+        echo "  queued:" >> $GITHUB_STEP_SUMMARY
+        echo "    image: ghcr.io/${{ github.repository }}-queued:latest" >> $GITHUB_STEP_SUMMARY
+        echo "  worker:" >> $GITHUB_STEP_SUMMARY
+        echo "    image: ghcr.io/${{ github.repository }}-worker:latest" >> $GITHUB_STEP_SUMMARY
+        echo "  dashboard:" >> $GITHUB_STEP_SUMMARY
+        echo "    image: ghcr.io/${{ github.repository }}-dashboard:latest" >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY

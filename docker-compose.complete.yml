@@ -1,0 +1,168 @@
+version: '3.8'
+
+services:
+  # Queued service for high-performance message queue
+  queued:
+    image: queued:latest
+    container_name: graphiti-queued
+    restart: unless-stopped
+    ports:
+      - "8093:8080"  # Queue service API
+    volumes:
+      - queued_data:/data  # Persistent queue storage
+    environment:
+      - QUEUED_DATA_DIR=/data
+      - RUST_LOG=queued=info
+    networks:
+      - graphiti_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/queues"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    labels:
+      - homepage.group=Knowledge Management
+      - homepage.name=Queued Service
+      - homepage.icon=si-rabbitmq
+      - homepage.href=http://192.168.50.90:8093
+      - homepage.description=High-performance message queue for ingestion
+
+  # Worker service for processing queue tasks
+  graphiti-worker:
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
+    container_name: graphiti-worker-1
+    restart: unless-stopped
+    environment:
+      - QUEUED_URL=http://queued:8080
+      - FALKORDB_HOST=graphiti-falkordb
+      - FALKORDB_PORT=6379
+      - FALKORDB_DATABASE=${FALKORDB_DATABASE:-graphiti_migration}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-sk-dummy}
+      - USE_OLLAMA=${USE_OLLAMA:-false}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://100.81.139.20:11434/v1}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-gemma3:12b}
+      - OLLAMA_EMBEDDING_MODEL=${OLLAMA_EMBEDDING_MODEL:-mxbai-embed-large:latest}
+      - WORKER_COUNT=4
+      - BATCH_SIZE=10
+      - POLL_INTERVAL=1.0
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      queued:
+        condition: service_healthy
+      falkordb:
+        condition: service_healthy
+    networks:
+      - graphiti_network
+    labels:
+      - homepage.group=Knowledge Management
+      - homepage.name=Queue Worker 1
+      - homepage.icon=si-kubernetes
+      - homepage.description=Ingestion queue worker
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '2'
+
+  # Optional: Scale with multiple workers
+  graphiti-worker-2:
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
+    container_name: graphiti-worker-2
+    restart: unless-stopped
+    environment:
+      - QUEUED_URL=http://queued:8080
+      - FALKORDB_HOST=graphiti-falkordb
+      - FALKORDB_PORT=6379
+      - FALKORDB_DATABASE=${FALKORDB_DATABASE:-graphiti_migration}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-sk-dummy}
+      - USE_OLLAMA=${USE_OLLAMA:-false}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://100.81.139.20:11434/v1}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-gemma3:12b}
+      - OLLAMA_EMBEDDING_MODEL=${OLLAMA_EMBEDDING_MODEL:-mxbai-embed-large:latest}
+      - WORKER_COUNT=2
+      - BATCH_SIZE=5
+      - POLL_INTERVAL=2.0
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      queued:
+        condition: service_healthy
+      falkordb:
+        condition: service_healthy
+    networks:
+      - graphiti_network
+    labels:
+      - homepage.group=Knowledge Management
+      - homepage.name=Queue Worker 2
+      - homepage.icon=si-kubernetes
+      - homepage.description=Secondary ingestion worker
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1'
+
+  # Dashboard service for monitoring
+  graphiti-dashboard:
+    build:
+      context: .
+      dockerfile: worker/Dockerfile.dashboard
+    container_name: graphiti-queue-dashboard
+    restart: unless-stopped
+    ports:
+      - "8091:8091"
+    environment:
+      - QUEUED_URL=http://queued:8080
+      - FALKORDB_HOST=graphiti-falkordb
+      - FALKORDB_PORT=6379
+      - FALKORDB_DATABASE=${FALKORDB_DATABASE:-graphiti_migration}
+      - DASHBOARD_PORT=8091
+      - ENABLE_DASHBOARD=true
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      queued:
+        condition: service_healthy
+    networks:
+      - graphiti_network
+    labels:
+      - homepage.group=Knowledge Management
+      - homepage.name=Queue Dashboard
+      - homepage.icon=si-grafana
+      - homepage.href=http://192.168.50.90:8091
+      - homepage.description=Ingestion queue monitoring dashboard
+
+  # FalkorDB (required for workers)
+  falkordb:
+    image: falkordb/falkordb:latest
+    container_name: graphiti-falkordb
+    restart: unless-stopped
+    ports:
+      - "6389:6379"
+    volumes:
+      - falkordb_data:/data
+    networks:
+      - graphiti_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    labels:
+      - homepage.group=Knowledge Management
+      - homepage.name=FalkorDB
+      - homepage.icon=si-redis
+      - homepage.href=http://192.168.50.90:6389
+      - homepage.description=Graph database
+
+volumes:
+  queued_data:
+    driver: local
+  falkordb_data:
+    driver: local
+
+networks:
+  graphiti_network:
+    external: true
