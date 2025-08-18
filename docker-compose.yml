@@ -27,6 +27,12 @@ services:
       - FALKORDB_URI=redis://graphiti-falkordb-1:6379
       - USE_FALKORDB=true
       - PORT=8000
+      # Cerebras configuration
+      - USE_CEREBRAS=${USE_CEREBRAS:-false}
+      - CEREBRAS_API_KEY=${CEREBRAS_API_KEY}
+      - CEREBRAS_MODEL=${CEREBRAS_MODEL:-qwen-3-coder-480b}
+      - CEREBRAS_SMALL_MODEL=${CEREBRAS_SMALL_MODEL:-qwen-3-32b}
+      # Ollama configuration (used when USE_CEREBRAS=false)
       - USE_OLLAMA=${USE_OLLAMA:-true}
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://100.81.139.20:11434/v1}
       - OLLAMA_MODEL=${OLLAMA_MODEL:-gemma3:12b}

@@ -21,6 +21,7 @@ from typing import Optional
 from graphiti_core.cross_encoder.openai_reranker_client import OpenAIRerankerClient
 from graphiti_core.embedder import EmbedderClient, OpenAIEmbedder, OpenAIEmbedderConfig
 from graphiti_core.llm_client import LLMClient, LLMConfig, OpenAIClient
+from graphiti_core.llm_client.cerebras_client import CerebrasClient
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +32,31 @@ class GraphitiClientFactory:
     @staticmethod
     def create_llm_client() -> Optional[LLMClient]:
         """Create LLM client based on environment configuration."""
+        # Check for Cerebras configuration
+        if os.getenv('USE_CEREBRAS', '').lower() == 'true':
+            try:
+                cerebras_model = os.getenv('CEREBRAS_MODEL', 'qwen-3-coder-480b')
+                cerebras_small_model = os.getenv('CEREBRAS_SMALL_MODEL', 'qwen-3-32b')
+                cerebras_api_key = os.getenv('CEREBRAS_API_KEY')
+                
+                logger.info(
+                    f'Creating Cerebras LLM client with model {cerebras_model}'
+                )
+                
+                config = LLMConfig(
+                    api_key=cerebras_api_key,
+                    model=cerebras_model,
+                    small_model=cerebras_small_model,
+                    temperature=0.3,  # Lower temperature for more consistent extraction
+                    max_tokens=4000
+                )
+                
+                return CerebrasClient(config=config)
+            except Exception as e:
+                logger.error(f'Failed to create Cerebras LLM client: {e}')
+                logger.info('Falling back to OpenAI LLM client')
+        
+        # Check for Ollama configuration
         if os.getenv('USE_OLLAMA', '').lower() == 'true':
             try:
                 from openai import AsyncOpenAI

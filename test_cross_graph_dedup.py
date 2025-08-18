@@ -8,7 +8,7 @@ import httpx
 import msgpack
 
 QUEUE_URL = "http://localhost:8093"
-GRAPH_URL = "http://localhost:8001"
+GRAPH_URL = "http://localhost:8003"
 
 async def submit_episode(content: str, group_id: str, source_description: str = "test"):
     """Submit an episode to the ingestion queue"""
