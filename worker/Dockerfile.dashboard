@@ -19,15 +19,123 @@ RUN pip install --no-cache-dir \
     fastapi \
     uvicorn \
     websockets \
-    redis
+    redis \
+    pydantic
 
-# Copy the queue client module
-COPY graphiti_core/ingestion/__init__.py /app/graphiti_core/ingestion/__init__.py
-COPY graphiti_core/ingestion/queue_client.py /app/graphiti_core/ingestion/queue_client.py
-COPY graphiti_core/__init__.py /app/graphiti_core/__init__.py
+# Create a standalone version of the dashboard with embedded queue client
+COPY worker/dashboard.py /app/dashboard_original.py
 
-# Copy the dashboard application
-COPY worker/dashboard.py /app/dashboard.py
+# Create the embedded queue client
+RUN cat > /app/dashboard.py << 'EOF'
+"""
+Queue monitoring dashboard service.
+Provides real-time metrics and monitoring for the ingestion queue.
+"""
+
+import os
+import json
+import asyncio
+import logging
+from datetime import datetime
+from typing import Dict, Any, Optional, List
+from dataclasses import dataclass, asdict
+import httpx
+import msgpack
+from fastapi import FastAPI, WebSocket
+from fastapi.responses import HTMLResponse
+import uvicorn
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Embedded QueuedClient
+@dataclass
+class QueueMetrics:
+    """Metrics for queue monitoring"""
+    queue_depth: int = 0
+    processing_rate: float = 0.0
+    error_rate: float = 0.0
+    avg_latency: float = 0.0
+    
+class QueuedClient:
+    """Client for interacting with queued service"""
+    
+    def __init__(self, base_url: str):
+        self.base_url = base_url.rstrip('/')
+        self.client = httpx.AsyncClient(timeout=30.0)
+        
+    async def list_queues(self) -> List[str]:
+        """List all available queues"""
+        response = await self.client.get(f"{self.base_url}/queues")
+        data = msgpack.unpackb(response.content, raw=False)
+        return [q["name"] for q in data.get("queues", [])]
+        
+    async def get_queue_stats(self, queue_name: str) -> Dict[str, Any]:
+        """Get statistics for a specific queue"""
+        try:
+            response = await self.client.get(f"{self.base_url}/queues/{queue_name}/stats")
+            if response.status_code == 200:
+                return msgpack.unpackb(response.content, raw=False)
+        except:
+            pass
+        return {"depth": 0, "processing": 0, "errors": 0}
+
+# Dashboard service
+app = FastAPI(title="Queue Dashboard")
+
+@app.get("/health")
+async def health():
+    return {"status": "healthy"}
+
+@app.get("/")
+async def root():
+    return HTMLResponse(content="""
+    <html>
+        <head>
+            <title>Queue Dashboard</title>
+            <style>
+                body { font-family: Arial, sans-serif; margin: 20px; }
+                .metric { display: inline-block; margin: 10px; padding: 10px; border: 1px solid #ccc; }
+                .queue { margin: 20px 0; padding: 10px; background: #f0f0f0; }
+            </style>
+        </head>
+        <body>
+            <h1>Queue Monitoring Dashboard</h1>
+            <div id="metrics"></div>
+            <script>
+                async function updateMetrics() {
+                    const response = await fetch('/metrics');
+                    const data = await response.json();
+                    document.getElementById('metrics').innerHTML = JSON.stringify(data, null, 2);
+                }
+                setInterval(updateMetrics, 2000);
+                updateMetrics();
+            </script>
+        </body>
+    </html>
+    """)
+
+@app.get("/metrics")
+async def get_metrics():
+    """Get current queue metrics"""
+    queued_url = os.getenv("QUEUED_URL", "http://queued:8080")
+    client = QueuedClient(queued_url)
+    
+    try:
+        queues = await client.list_queues()
+        metrics = {}
+        for queue in queues:
+            stats = await client.get_queue_stats(queue)
+            metrics[queue] = stats
+        return metrics
+    except Exception as e:
+        logger.error(f"Error fetching metrics: {e}")
+        return {"error": str(e)}
+
+if __name__ == "__main__":
+    port = int(os.getenv("DASHBOARD_PORT", "8091"))
+    uvicorn.run(app, host="0.0.0.0", port=port)
+EOF
 
 # Create non-root user
 RUN useradd -m -u 1000 dashboard && chown -R dashboard:dashboard /app
