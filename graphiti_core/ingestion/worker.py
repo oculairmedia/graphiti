@@ -348,13 +348,139 @@ class IngestionWorker:
     
     async def _process_relationship(self, task: IngestionTask):
         """Process a relationship creation task"""
-        # TODO: Implement relationship processing
-        logger.warning(f"Relationship processing not yet implemented for task {task.id}")
+        payload = task.payload
+        
+        try:
+            # Extract source, edge, and target from payload
+            source_data = payload.get('source_node', {})
+            edge_data = payload.get('edge', {})
+            target_data = payload.get('target_node', {})
+            
+            if not all([source_data, edge_data, target_data]):
+                raise PermanentError(f"Missing required data for relationship: source={bool(source_data)}, edge={bool(edge_data)}, target={bool(target_data)}")
+            
+            # Import required classes
+            from graphiti_core.nodes import EntityNode
+            from graphiti_core.edges import EntityEdge
+            from graphiti_core.utils.datetime_utils import utc_now
+            
+            # Create source node
+            source_node = EntityNode(
+                uuid=source_data.get('uuid'),
+                name=source_data.get('name'),
+                group_id=task.group_id,
+                summary=source_data.get('summary', ''),
+                created_at=source_data.get('created_at') or utc_now(),
+                updated_at=source_data.get('updated_at') or utc_now()
+            )
+            
+            # Create target node
+            target_node = EntityNode(
+                uuid=target_data.get('uuid'),
+                name=target_data.get('name'),
+                group_id=task.group_id,
+                summary=target_data.get('summary', ''),
+                created_at=target_data.get('created_at') or utc_now(),
+                updated_at=target_data.get('updated_at') or utc_now()
+            )
+            
+            # Create edge
+            edge = EntityEdge(
+                uuid=edge_data.get('uuid'),
+                source_node_uuid=source_node.uuid,
+                target_node_uuid=target_node.uuid,
+                name=edge_data.get('name', ''),
+                fact=edge_data.get('fact', ''),
+                group_id=task.group_id,
+                created_at=edge_data.get('created_at') or utc_now(),
+                updated_at=edge_data.get('updated_at') or utc_now(),
+                valid_at=edge_data.get('valid_at') or utc_now(),
+                invalid_at=edge_data.get('invalid_at')
+            )
+            
+            # Use add_triplet to create the relationship
+            await self.graphiti.add_triplet(source_node, edge, target_node)
+            
+            logger.info(f"Created relationship: {source_node.name} -> {edge.name} -> {target_node.name}")
+            
+        except Exception as e:
+            if "duplicate" in str(e).lower():
+                logger.debug(f"Relationship already exists: {task.id}")
+            else:
+                raise
     
     async def _process_deduplication(self, task: IngestionTask):
         """Process a deduplication task"""
-        # TODO: Implement deduplication processing
-        logger.warning(f"Deduplication processing not yet implemented for task {task.id}")
+        payload = task.payload
+        
+        try:
+            dedup_type = payload.get('type', 'nodes')  # 'nodes', 'edges', or 'both'
+            group_ids = payload.get('group_ids', [task.group_id] if task.group_id else None)
+            
+            if not group_ids:
+                raise PermanentError("No group IDs specified for deduplication")
+            
+            # Import required utilities
+            from graphiti_core.utils.maintenance.node_operations import dedupe_extracted_nodes
+            from graphiti_core.utils.maintenance.edge_operations import dedupe_extracted_edges
+            from graphiti_core.nodes import EntityNode
+            from graphiti_core.edges import EntityEdge
+            
+            merged_count = 0
+            
+            # Process node deduplication
+            if dedup_type in ['nodes', 'both']:
+                logger.info(f"Starting node deduplication for groups: {group_ids}")
+                
+                # Get all nodes for the specified groups
+                nodes = await EntityNode.get_by_group_ids(self.graphiti.driver, group_ids)
+                
+                if nodes:
+                    # Deduplicate nodes using the built-in utility
+                    # This function groups similar nodes and merges them
+                    deduped_nodes, uuid_map = await dedupe_extracted_nodes(
+                        llm_client=self.graphiti.llm_client,
+                        embedder=self.graphiti.embedder,
+                        extracted_nodes=nodes,
+                        threshold=payload.get('similarity_threshold', 0.8)
+                    )
+                    
+                    # Count merges
+                    merged_count += len(nodes) - len(deduped_nodes)
+                    
+                    logger.info(f"Node deduplication complete: {len(nodes)} -> {len(deduped_nodes)} nodes")
+            
+            # Process edge deduplication
+            if dedup_type in ['edges', 'both']:
+                logger.info(f"Starting edge deduplication for groups: {group_ids}")
+                
+                try:
+                    # Get all edges for the specified groups
+                    edges = await EntityEdge.get_by_group_ids(self.graphiti.driver, group_ids)
+                    
+                    if edges:
+                        # Deduplicate edges using the built-in utility
+                        deduped_edges = await dedupe_extracted_edges(
+                            llm_client=self.graphiti.llm_client,
+                            extracted_edges=edges,
+                            threshold=payload.get('similarity_threshold', 0.8)
+                        )
+                        
+                        # Count merges
+                        merged_count += len(edges) - len(deduped_edges)
+                        
+                        logger.info(f"Edge deduplication complete: {len(edges)} -> {len(deduped_edges)} edges")
+                except Exception as e:
+                    if "not found" in str(e).lower():
+                        logger.info(f"No edges found for deduplication in groups: {group_ids}")
+                    else:
+                        raise
+            
+            logger.info(f"Deduplication task {task.id} completed: {merged_count} entities merged")
+            
+        except Exception as e:
+            logger.error(f"Deduplication failed for task {task.id}: {e}")
+            raise
     
     async def _handle_failure(self, 
                               message_id: str,

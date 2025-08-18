@@ -161,6 +161,75 @@ class QueueProxy:
         }
         
         return await self.send_to_queue(task)
+    
+    async def send_relationship_to_queue(self, source_node: Dict[str, Any], edge: Dict[str, Any], 
+                                         target_node: Dict[str, Any], group_id: str) -> bool:
+        """Send a relationship creation task to the queue
+        
+        Args:
+            source_node: Source node data
+            edge: Edge data
+            target_node: Target node data
+            group_id: Group ID for the relationship
+            
+        Returns:
+            True if successfully queued, False otherwise
+        """
+        # Create task in the format expected by the worker (IngestionTask)
+        task = {
+            "id": f"relationship-{edge.get('uuid', 'unknown')}-{datetime.utcnow().timestamp()}",
+            "type": "relationship",  # TaskType.RELATIONSHIP (lowercase)
+            "payload": {
+                "source_node": source_node,
+                "edge": edge,
+                "target_node": target_node
+            },
+            "group_id": group_id,
+            "priority": 1,  # TaskPriority.NORMAL (numeric value)
+            "retry_count": 0,
+            "max_retries": 3,
+            "created_at": datetime.utcnow().isoformat(),  # Required field
+            "metadata": {
+                "source": "api",
+                "created_at": datetime.utcnow().isoformat()
+            }
+        }
+        
+        return await self.send_to_queue(task)
+    
+    async def send_deduplication_to_queue(self, dedup_type: str, group_ids: list[str], 
+                                          similarity_threshold: float = 0.8) -> bool:
+        """Send a deduplication task to the queue
+        
+        Args:
+            dedup_type: Type of deduplication ('nodes', 'edges', or 'both')
+            group_ids: List of group IDs to deduplicate
+            similarity_threshold: Similarity threshold for merging (0-1)
+            
+        Returns:
+            True if successfully queued, False otherwise
+        """
+        # Create task in the format expected by the worker (IngestionTask)
+        task = {
+            "id": f"dedup-{dedup_type}-{datetime.utcnow().timestamp()}",
+            "type": "deduplication",  # TaskType.DEDUPLICATION (lowercase)
+            "payload": {
+                "type": dedup_type,
+                "group_ids": group_ids,
+                "similarity_threshold": similarity_threshold
+            },
+            "group_id": group_ids[0] if group_ids else None,
+            "priority": 0,  # TaskPriority.LOW (dedup is background task)
+            "retry_count": 0,
+            "max_retries": 1,  # Dedup is less critical, fewer retries
+            "created_at": datetime.utcnow().isoformat(),  # Required field
+            "metadata": {
+                "source": "api",
+                "created_at": datetime.utcnow().isoformat()
+            }
+        }
+        
+        return await self.send_to_queue(task)
 
 
 # Global queue proxy instance
