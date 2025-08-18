@@ -1,26 +1,37 @@
-# Build stage with latest Rust
-FROM rust:latest AS builder
+# Use cargo-chef for proper dependency caching
+FROM lukemathwalker/cargo-chef:latest-rust-1 AS chef
+WORKDIR /app
+
+# Plan stage - prepare the dependency list
+FROM chef AS planner
+# Clone queued repository
+RUN git clone https://github.com/wilsonzlin/queued.git /tmp/queued
+# Copy the source to working directory
+RUN cp -r /tmp/queued/* /app/
+# Prepare the recipe for caching dependencies
+RUN cargo chef prepare --recipe-path recipe.json
+
+# Build stage - cache dependencies
+FROM chef AS builder
 
 # Install build dependencies
 RUN apt-get update && apt-get install -y \
     clang \
     libclang-dev \
-    git \
     && rm -rf /var/lib/apt/lists/*
 
-# Clone queued repository
-RUN git clone https://github.com/wilsonzlin/queued.git /tmp/queued
-WORKDIR /tmp/queued
+# Copy the recipe from planner
+COPY --from=planner /app/recipe.json recipe.json
 
-# Set build optimizations for faster CI builds
-ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
-ENV CARGO_PROFILE_RELEASE_DEBUG=false
-ENV CARGO_PROFILE_RELEASE_LTO=false
-ENV CARGO_PROFILE_RELEASE_CODEGEN_UNITS=256
-ENV CARGO_PROFILE_RELEASE_INCREMENTAL=false
+# Build dependencies - this layer will be cached!
+RUN cargo chef cook --release --recipe-path recipe.json
 
-# Build with limited parallelism to avoid OOM in CI
-RUN cargo build --release -j 1
+# Now copy the actual source code
+RUN git clone https://github.com/wilsonzlin/queued.git /tmp/queued && \
+    cp -r /tmp/queued/* /app/
+
+# Build the actual application - only runs when source changes
+RUN cargo build --release
 
 # Runtime stage
 FROM debian:bookworm-slim
@@ -38,7 +49,7 @@ RUN mkdir -p /data && \
     chown -R queued:queued /data
 
 # Copy the built queued binary from builder stage
-COPY --from=builder --chown=queued:queued /tmp/queued/target/release/queued /usr/local/bin/queued
+COPY --from=builder --chown=queued:queued /app/target/release/queued /usr/local/bin/queued
 
 # Make it executable
 RUN chmod +x /usr/local/bin/queued
