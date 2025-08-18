@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 import os
 import logging
+from graph_service.webhooks import webhook_service
 
 router = APIRouter(tags=["search"])
 logger = logging.getLogger(__name__)
@@ -195,6 +196,27 @@ async def search_proxy(query: SearchQuery) -> SearchResults:
                     )
                     facts.append(fact)
             
+            # Collect node IDs for webhook
+            node_ids = set()
+            for edge in rust_result.get("edges", []):
+                if edge.get("source_node_uuid"):
+                    node_ids.add(edge.get("source_node_uuid"))
+                if edge.get("target_node_uuid"):
+                    node_ids.add(edge.get("target_node_uuid"))
+            for node in rust_result.get("nodes", []):
+                if node.get("uuid"):
+                    node_ids.add(node.get("uuid"))
+            
+            # Emit webhook event for accessed nodes
+            if node_ids:
+                logger.info(f"[SEARCH] Emitting node access for {len(node_ids)} nodes")
+                await webhook_service.emit_node_access(
+                    node_ids=list(node_ids),
+                    access_type="search",
+                    query=query.query,
+                    metadata={"group_ids": query.group_ids}
+                )
+            
             return SearchResults(facts=facts)
             
     except httpx.RequestError as e:
@@ -271,13 +293,15 @@ async def search_nodes(query: NodeSearchQuery) -> NodeSearchResults:
             
             # Transform Rust response to frontend format
             nodes = []
+            node_ids = []
             for node in rust_result.get("nodes", []):
                 # Extract node_type as a label
                 node_type = node.get("node_type", "entity")
                 labels = [node_type] if node_type else []
                 
+                node_uuid = node.get("uuid", "")
                 node_result = NodeResult(
-                    uuid=node.get("uuid", ""),
+                    uuid=node_uuid,
                     name=node.get("name", ""),
                     summary=node.get("summary"),
                     labels=labels,
@@ -286,6 +310,23 @@ async def search_nodes(query: NodeSearchQuery) -> NodeSearchResults:
                     attributes={}  # Rust doesn't return attributes, use empty dict
                 )
                 nodes.append(node_result)
+                if node_uuid:
+                    node_ids.append(node_uuid)
+            
+            # Emit webhook event for accessed nodes
+            if node_ids:
+                logger.info(f"[NODE_SEARCH] Emitting node access for {len(node_ids)} nodes")
+                await webhook_service.emit_node_access(
+                    node_ids=node_ids,
+                    access_type="node_search",
+                    query=query.query,
+                    metadata={
+                        "group_ids": query.group_ids,
+                        "center_node_uuid": query.center_node_uuid,
+                        "entity": query.entity,
+                        "max_nodes": query.max_nodes
+                    }
+                )
             
             return NodeSearchResults(nodes=nodes)
             
@@ -375,6 +416,25 @@ async def get_edges_by_node(node_uuid: str) -> EdgesByNodeResponse:
                     source_edges.append(edge_result)
                 elif edge.get("target_node_uuid") == node_uuid:
                     target_edges.append(edge_result)
+            
+            # Collect node IDs for webhook
+            node_ids = {node_uuid}  # Include the queried node
+            for edge in rust_result.get("edges", []):
+                source_uuid = edge.get("source_node_uuid")
+                target_uuid = edge.get("target_node_uuid")
+                if source_uuid and source_uuid != node_uuid:
+                    node_ids.add(source_uuid)
+                if target_uuid and target_uuid != node_uuid:
+                    node_ids.add(target_uuid)
+            
+            # Emit webhook event for accessed nodes
+            if node_ids:
+                logger.info(f"[EDGES_BY_NODE] Emitting node access for {len(node_ids)} nodes")
+                await webhook_service.emit_node_access(
+                    node_ids=list(node_ids),
+                    access_type="node_edges_access",
+                    metadata={"center_node_uuid": node_uuid}
+                )
             
             return EdgesByNodeResponse(
                 edges=all_edges,
