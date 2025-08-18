@@ -131,6 +131,8 @@ export const NodeStylingTab: React.FC<NodeStylingTabProps> = ({
                 <SelectItem value="by-centrality">📊 By Centrality</SelectItem>
                 <SelectItem value="by-pagerank">🔗 By PageRank</SelectItem>
                 <SelectItem value="by-degree">🌐 By Degree</SelectItem>
+                <SelectItem value="by-betweenness">🌉 By Betweenness</SelectItem>
+                <SelectItem value="by-eigenvector">⭐ By Eigenvector</SelectItem>
                 <SelectItem value="by-community">👥 By Community</SelectItem>
                 <SelectItem value="custom">🎨 Custom Colors</SelectItem>
               </SelectContent>
@@ -152,12 +154,14 @@ export const NodeStylingTab: React.FC<NodeStylingTabProps> = ({
                   {config.colorScheme === 'by-centrality' && 'Colors nodes by centrality metrics - red (high) to blue (low)'}
                   {config.colorScheme === 'by-pagerank' && 'Colors nodes by PageRank score - warmer colors for higher scores'}
                   {config.colorScheme === 'by-degree' && 'Colors nodes by connection count - size correlates with color intensity'}
+                  {config.colorScheme === 'by-betweenness' && 'Colors nodes by betweenness centrality - bridges between communities'}
+                  {config.colorScheme === 'by-eigenvector' && 'Colors nodes by eigenvector centrality - influence within network'}
                   {config.colorScheme === 'by-community' && 'Colors nodes by detected community groups'}
                   {config.colorScheme === 'custom' && 'Uses custom color mapping based on node properties'}
                 </p>
               </div>
 
-              {(config.colorScheme === 'by-centrality' || config.colorScheme === 'by-pagerank' || config.colorScheme === 'by-degree') && (
+              {(config.colorScheme === 'by-centrality' || config.colorScheme === 'by-pagerank' || config.colorScheme === 'by-degree' || config.colorScheme === 'by-betweenness' || config.colorScheme === 'by-eigenvector') && (
                 <div className="grid grid-cols-2 gap-3">
                   <ColorPicker
                     color={config.gradientHighColor}

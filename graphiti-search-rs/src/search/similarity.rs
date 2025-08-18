@@ -79,16 +79,16 @@ pub async fn search_nodes_by_embedding(
         .map_err(|e| SearchError::Database(e.to_string()))
 }
 
-#[instrument(skip(_conn, _embedding))]
+#[instrument(skip(conn, embedding))]
 pub async fn search_edges_by_embedding(
-    _conn: &mut FalkorConnection,
-    _embedding: &[f32],
-    _min_score: f32,
-    _limit: usize,
+    conn: &mut FalkorConnection,
+    embedding: &[f32],
+    min_score: f32,
+    limit: usize,
 ) -> SearchResult<Vec<Edge>> {
-    // For edges, we typically search based on connected nodes' embeddings
-    // This is a simplified implementation
-    Ok(vec![])
+    conn.similarity_search_edges(embedding, limit, min_score)
+        .await
+        .map_err(|e| SearchError::Database(e.to_string()))
 }
 
 #[instrument(skip(_conn, _embedding))]

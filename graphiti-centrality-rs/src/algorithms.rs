@@ -426,23 +426,59 @@ async fn calculate_betweenness_approximation(
         betweenness.insert(uuid.clone(), 0.0);
     }
 
-    // For betweenness, we need to find shortest paths
-    // This is a simplified version that counts paths through each node
-    let path_query = "MATCH path = shortestPath((source)-[*..5]-(target))
-                      WHERE source.uuid <> target.uuid
-                      RETURN nodes(path) as path_nodes
-                      LIMIT 1000"; // Limit for performance
-
-    if let Ok(path_results) = client.execute_query(path_query, None).await {
-        for record in path_results {
-            if let Some(FalkorValue::Array(path_nodes)) = record.get("path_nodes") {
-                // Count intermediate nodes in the path
-                for i in 1..path_nodes.len().saturating_sub(1) {
-                    if let Some(node_map) = path_nodes[i].as_map() {
-                        if let Some(uuid_val) = node_map.get("uuid") {
-                            let uuid = falkor_value_to_string(uuid_val);
-                            if let Some(score) = betweenness.get_mut(&uuid) {
-                                *score += 1.0;
+    // For betweenness centrality, we need to find shortest paths between pairs of nodes
+    // We'll sample a subset of nodes and find all shortest paths between them
+    
+    // First, get a sample of well-connected nodes (higher degree nodes are more likely to be on paths)
+    let sample_nodes_query = if let Some(group_id) = group_id {
+        format!(
+            "MATCH (n) WHERE n.group_id = '{}'
+             OPTIONAL MATCH (n)-[r]-()
+             WITH n, count(r) as degree
+             ORDER BY degree DESC
+             LIMIT 50
+             RETURN n.uuid as uuid",
+            group_id
+        )
+    } else {
+        "MATCH (n)
+         OPTIONAL MATCH (n)-[r]-()
+         WITH n, count(r) as degree
+         ORDER BY degree DESC
+         LIMIT 50
+         RETURN n.uuid as uuid".to_string()
+    };
+    
+    let sample_results = client.execute_query(&sample_nodes_query, None).await?;
+    let sample_uuids: Vec<String> = sample_results
+        .iter()
+        .filter_map(|record| {
+            record.get("uuid").map(|v| falkor_value_to_string(v))
+        })
+        .collect();
+    
+    // Now find shortest paths between all pairs in our sample
+    for i in 0..sample_uuids.len() {
+        for j in i+1..sample_uuids.len() {
+            let path_query = format!(
+                "MATCH (source {{uuid: '{}'}}), (target {{uuid: '{}'}})
+                 MATCH path = shortestPath((source)-[*..15]-(target))
+                 RETURN nodes(path) as path_nodes",
+                sample_uuids[i], sample_uuids[j]
+            );
+            
+            if let Ok(path_results) = client.execute_query(&path_query, None).await {
+                for record in path_results {
+                    if let Some(FalkorValue::Array(path_nodes)) = record.get("path_nodes") {
+                        // Count intermediate nodes in the path (exclude source and target)
+                        for k in 1..path_nodes.len().saturating_sub(1) {
+                            if let Some(node_map) = path_nodes[k].as_map() {
+                                if let Some(uuid_val) = node_map.get("uuid") {
+                                    let uuid = falkor_value_to_string(uuid_val);
+                                    if let Some(score) = betweenness.get_mut(&uuid) {
+                                        *score += 1.0;
+                                    }
+                                }
                             }
                         }
                     }

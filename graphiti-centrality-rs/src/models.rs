@@ -40,6 +40,23 @@ pub struct AllCentralitiesRequest {
     pub store_results: bool,
 }
 
+/// Request for single node centrality calculation
+#[derive(Debug, Deserialize)]
+pub struct SingleNodeRequest {
+    #[serde(default = "default_store_results")]
+    pub store_results: bool,
+    #[serde(default = "default_metrics")]
+    pub metrics: Vec<String>,
+}
+
+/// Response for single node centrality
+#[derive(Debug, Serialize)]
+pub struct SingleNodeResponse {
+    pub node_id: String,
+    pub metrics: HashMap<String, f64>,
+    pub execution_time_ms: u128,
+}
+
 /// Response for single centrality metric
 #[derive(Debug, Serialize)]
 pub struct CentralityResponse {
@@ -101,4 +118,8 @@ fn default_direction() -> String {
 
 fn default_store_results() -> bool {
     true
+}
+
+fn default_metrics() -> Vec<String> {
+    vec!["degree".to_string(), "pagerank".to_string(), "betweenness".to_string()]
 }

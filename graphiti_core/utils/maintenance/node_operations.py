@@ -40,6 +40,82 @@ from graphiti_core.search.search_config import SearchResults
 from graphiti_core.search.search_config_recipes import NODE_HYBRID_SEARCH_RRF
 from graphiti_core.search.search_filters import SearchFilters
 from graphiti_core.utils.datetime_utils import utc_now
+
+
+def merge_edge_properties(existing: dict, incoming: dict) -> dict:
+    """
+    Merge properties from two edges following a defined policy.
+    
+    Policy:
+    - episodes: union of lists (preserve unique values)
+    - created_at: keep earliest
+    - valid_at: use minimum
+    - invalid_at: use maximum
+    - fact/fact_embedding: prefer existing (canonical) unless empty
+    - attributes: merge dictionaries, prefer existing on conflict
+    - group_id: use existing (should be same anyway)
+    - Other properties: prefer existing unless empty
+    """
+    merged = dict(existing)
+    
+    # Handle episodes - union of unique values
+    if 'episodes' in existing or 'episodes' in incoming:
+        existing_episodes = existing.get('episodes', [])
+        incoming_episodes = incoming.get('episodes', [])
+        # Ensure both are lists
+        if not isinstance(existing_episodes, list):
+            existing_episodes = [existing_episodes] if existing_episodes else []
+        if not isinstance(incoming_episodes, list):
+            incoming_episodes = [incoming_episodes] if incoming_episodes else []
+        # Union and preserve order
+        merged_episodes = list(existing_episodes)
+        for ep in incoming_episodes:
+            if ep not in merged_episodes:
+                merged_episodes.append(ep)
+        merged['episodes'] = merged_episodes
+    
+    # Handle timestamps
+    if 'created_at' in existing and 'created_at' in incoming:
+        merged['created_at'] = min(existing['created_at'], incoming['created_at'])
+    elif 'created_at' in incoming:
+        merged['created_at'] = incoming['created_at']
+    
+    if 'valid_at' in existing and 'valid_at' in incoming:
+        merged['valid_at'] = min(existing['valid_at'], incoming['valid_at'])
+    elif 'valid_at' in incoming:
+        merged['valid_at'] = incoming['valid_at']
+    
+    if 'invalid_at' in existing and 'invalid_at' in incoming:
+        merged['invalid_at'] = max(existing['invalid_at'], incoming['invalid_at'])
+    elif 'invalid_at' in incoming:
+        merged['invalid_at'] = incoming['invalid_at']
+    
+    # Handle fact and fact_embedding - prefer existing unless empty
+    if 'fact' in incoming and not existing.get('fact'):
+        merged['fact'] = incoming['fact']
+    
+    if 'fact_embedding' in incoming and not existing.get('fact_embedding'):
+        merged['fact_embedding'] = incoming['fact_embedding']
+    
+    # Handle attributes - merge dictionaries
+    if 'attributes' in existing or 'attributes' in incoming:
+        existing_attrs = existing.get('attributes', {})
+        incoming_attrs = incoming.get('attributes', {})
+        if isinstance(existing_attrs, dict) and isinstance(incoming_attrs, dict):
+            merged_attrs = dict(existing_attrs)
+            for key, value in incoming_attrs.items():
+                if key not in merged_attrs:
+                    merged_attrs[key] = value
+            merged['attributes'] = merged_attrs
+    
+    # For other properties, use incoming only if existing is empty
+    for key, value in incoming.items():
+        if key not in ['episodes', 'created_at', 'valid_at', 'invalid_at', 
+                       'fact', 'fact_embedding', 'attributes', 'group_id']:
+            if key not in merged or merged[key] is None:
+                merged[key] = value
+    
+    return merged
 from graphiti_core.utils.maintenance.edge_operations import filter_existing_duplicate_of_edges
 
 logger = logging.getLogger(__name__)
@@ -493,3 +569,392 @@ async def dedupe_node_list(
             uuid_map[uuid] = uuid_value
 
     return unique_nodes, uuid_map
+
+
+async def merge_node_into(
+    driver,
+    canonical_uuid: str,
+    duplicate_uuid: str,
+    maintain_audit_trail: bool = True,
+    recalculate_centrality: bool = True,
+) -> dict[str, Any]:
+    """
+    Physically merge a duplicate node into a canonical node by transferring all edges.
+    
+    This function transfers all incoming and outgoing edges from the duplicate node
+    to the canonical node, preserving edge properties and maintaining an audit trail.
+    
+    Args:
+        driver: The graph database driver (Neo4j or FalkorDB)
+        canonical_uuid: UUID of the canonical node to merge into
+        duplicate_uuid: UUID of the duplicate node to merge from
+        maintain_audit_trail: Whether to keep IS_DUPLICATE_OF edge for audit
+        recalculate_centrality: Whether to trigger centrality recalculation after merge
+        
+    Returns:
+        Dictionary with merge statistics (edges_transferred, conflicts_resolved, etc.)
+    """
+    start_time = time()
+    stats = {
+        'edges_transferred': 0,
+        'conflicts_resolved': 0,
+        'errors': [],
+        'duration_ms': 0,
+    }
+    
+    try:
+        # Step 0: Get the canonical node's group_id for partition awareness
+        get_canonical_query = """
+        MATCH (canonical:Entity {uuid: $canonical_uuid})
+        RETURN canonical.group_id as group_id
+        """
+        canonical_result, _, _ = await driver.execute_query(
+            get_canonical_query,
+            canonical_uuid=canonical_uuid
+        )
+        
+        if not canonical_result:
+            raise ValueError(f'Canonical node {canonical_uuid} not found')
+        
+        canonical_group_id = canonical_result[0].get('group_id')
+        logger.debug(f'Canonical node {canonical_uuid} has group_id: {canonical_group_id}')
+        
+        # Verify duplicate is in same partition
+        get_duplicate_query = """
+        MATCH (duplicate:Entity {uuid: $duplicate_uuid})
+        RETURN duplicate.group_id as group_id
+        """
+        duplicate_result, _, _ = await driver.execute_query(
+            get_duplicate_query,
+            duplicate_uuid=duplicate_uuid
+        )
+        
+        if not duplicate_result:
+            raise ValueError(f'Duplicate node {duplicate_uuid} not found')
+            
+        duplicate_group_id = duplicate_result[0].get('group_id')
+        
+        if canonical_group_id != duplicate_group_id:
+            raise ValueError(
+                f'Cannot merge across partitions: canonical group_id={canonical_group_id}, '
+                f'duplicate group_id={duplicate_group_id}'
+            )
+        
+        # Step 1: Transfer all incoming edges from duplicate to canonical
+        incoming_query = """
+        MATCH (source)-[r]->(duplicate:Entity {uuid: $duplicate_uuid})
+        WHERE NOT (source)-[]->(canonical:Entity {uuid: $canonical_uuid})
+        WITH source, r, canonical, duplicate
+        CREATE (source)-[new_edge:SAME_TYPE]->(canonical)
+        SET new_edge = properties(r)
+        DELETE r
+        RETURN COUNT(new_edge) as transferred
+        """
+        
+        # FalkorDB doesn't support dynamic relationship types, so we need a different approach
+        if driver.provider == 'falkordb':
+            # Get all incoming edges first
+            get_incoming_query = """
+            MATCH (source)-[r]->(duplicate:Entity {uuid: $duplicate_uuid})
+            RETURN source.uuid as source_uuid, type(r) as rel_type, properties(r) as props
+            """
+            incoming_result, _, _ = await driver.execute_query(
+                get_incoming_query,
+                duplicate_uuid=duplicate_uuid
+            )
+            
+            # Transfer each edge individually
+            for edge in incoming_result:
+                source_uuid = edge['source_uuid']
+                rel_type = edge['rel_type']
+                props = edge['props'] or {}
+                
+                # Check if edge already exists
+                check_query = f"""
+                MATCH (source:Entity {{uuid: $source_uuid}})-[r:{rel_type}]->(canonical:Entity {{uuid: $canonical_uuid}})
+                RETURN COUNT(r) as count
+                """
+                check_result, _, _ = await driver.execute_query(
+                    check_query,
+                    source_uuid=source_uuid,
+                    canonical_uuid=canonical_uuid
+                )
+                
+                if check_result[0]['count'] == 0:
+                    # Create new edge with group_id from canonical node
+                    props['group_id'] = canonical_group_id
+                    create_query = f"""
+                    MATCH (source:Entity {{uuid: $source_uuid}})
+                    MATCH (canonical:Entity {{uuid: $canonical_uuid}})
+                    CREATE (source)-[r:{rel_type}]->(canonical)
+                    SET r = $props
+                    RETURN r
+                    """
+                    await driver.execute_query(
+                        create_query,
+                        source_uuid=source_uuid,
+                        canonical_uuid=canonical_uuid,
+                        props=props
+                    )
+                    stats['edges_transferred'] += 1
+                else:
+                    # Merge properties with existing edge
+                    get_existing_query = f"""
+                    MATCH (source:Entity {{uuid: $source_uuid}})-[r:{rel_type}]->(canonical:Entity {{uuid: $canonical_uuid}})
+                    RETURN properties(r) as existing_props
+                    """
+                    existing_result, _, _ = await driver.execute_query(
+                        get_existing_query,
+                        source_uuid=source_uuid,
+                        canonical_uuid=canonical_uuid
+                    )
+                    
+                    if existing_result:
+                        existing_props = existing_result[0].get('existing_props', {})
+                        merged_props = merge_edge_properties(existing_props, props)
+                        
+                        # Update the existing edge with merged properties
+                        update_query = f"""
+                        MATCH (source:Entity {{uuid: $source_uuid}})-[r:{rel_type}]->(canonical:Entity {{uuid: $canonical_uuid}})
+                        SET r = $merged_props
+                        RETURN r
+                        """
+                        await driver.execute_query(
+                            update_query,
+                            source_uuid=source_uuid,
+                            canonical_uuid=canonical_uuid,
+                            merged_props=merged_props
+                        )
+                    
+                    stats['conflicts_resolved'] += 1
+                    
+            # Delete original incoming edges
+            delete_incoming_query = """
+            MATCH (source)-[r]->(duplicate:Entity {uuid: $duplicate_uuid})
+            WHERE source.uuid <> $canonical_uuid
+            DELETE r
+            """
+            await driver.execute_query(
+                delete_incoming_query,
+                duplicate_uuid=duplicate_uuid,
+                canonical_uuid=canonical_uuid
+            )
+            
+        # Step 2: Transfer all outgoing edges from duplicate to canonical
+        if driver.provider == 'falkordb':
+            # Get all outgoing edges
+            get_outgoing_query = """
+            MATCH (duplicate:Entity {uuid: $duplicate_uuid})-[r]->(target)
+            RETURN target.uuid as target_uuid, type(r) as rel_type, properties(r) as props
+            """
+            outgoing_result, _, _ = await driver.execute_query(
+                get_outgoing_query,
+                duplicate_uuid=duplicate_uuid
+            )
+            
+            # Transfer each edge
+            for edge in outgoing_result:
+                target_uuid = edge['target_uuid']
+                rel_type = edge['rel_type']
+                props = edge['props'] or {}
+                
+                # Skip self-references to canonical
+                if target_uuid == canonical_uuid:
+                    continue
+                    
+                # Check if edge already exists
+                check_query = f"""
+                MATCH (canonical:Entity {{uuid: $canonical_uuid}})-[r:{rel_type}]->(target:Entity {{uuid: $target_uuid}})
+                RETURN COUNT(r) as count
+                """
+                check_result, _, _ = await driver.execute_query(
+                    check_query,
+                    canonical_uuid=canonical_uuid,
+                    target_uuid=target_uuid
+                )
+                
+                if check_result[0]['count'] == 0:
+                    # Create new edge with group_id from canonical node
+                    props['group_id'] = canonical_group_id
+                    create_query = f"""
+                    MATCH (canonical:Entity {{uuid: $canonical_uuid}})
+                    MATCH (target:Entity {{uuid: $target_uuid}})
+                    CREATE (canonical)-[r:{rel_type}]->(target)
+                    SET r = $props
+                    RETURN r
+                    """
+                    await driver.execute_query(
+                        create_query,
+                        canonical_uuid=canonical_uuid,
+                        target_uuid=target_uuid,
+                        props=props
+                    )
+                    stats['edges_transferred'] += 1
+                else:
+                    # Merge properties with existing edge
+                    get_existing_query = f"""
+                    MATCH (canonical:Entity {{uuid: $canonical_uuid}})-[r:{rel_type}]->(target:Entity {{uuid: $target_uuid}})
+                    RETURN properties(r) as existing_props
+                    """
+                    existing_result, _, _ = await driver.execute_query(
+                        get_existing_query,
+                        canonical_uuid=canonical_uuid,
+                        target_uuid=target_uuid
+                    )
+                    
+                    if existing_result:
+                        existing_props = existing_result[0].get('existing_props', {})
+                        merged_props = merge_edge_properties(existing_props, props)
+                        
+                        # Update the existing edge with merged properties
+                        update_query = f"""
+                        MATCH (canonical:Entity {{uuid: $canonical_uuid}})-[r:{rel_type}]->(target:Entity {{uuid: $target_uuid}})
+                        SET r = $merged_props
+                        RETURN r
+                        """
+                        await driver.execute_query(
+                            update_query,
+                            canonical_uuid=canonical_uuid,
+                            target_uuid=target_uuid,
+                            merged_props=merged_props
+                        )
+                    
+                    stats['conflicts_resolved'] += 1
+                    
+            # Delete original outgoing edges
+            delete_outgoing_query = """
+            MATCH (duplicate:Entity {uuid: $duplicate_uuid})-[r]->(target)
+            WHERE target.uuid <> $canonical_uuid
+            DELETE r
+            """
+            await driver.execute_query(
+                delete_outgoing_query,
+                duplicate_uuid=duplicate_uuid,
+                canonical_uuid=canonical_uuid
+            )
+            
+        # Step 2.5: Clean up ALL remaining non-audit edges from duplicate
+        # This catches any edges between duplicate and canonical that weren't transferred
+        cleanup_all_edges_query = """
+        MATCH (duplicate:Entity {uuid: $duplicate_uuid})-[r]-()
+        WHERE type(r) <> 'IS_DUPLICATE_OF'
+        DELETE r
+        """
+        await driver.execute_query(
+            cleanup_all_edges_query,
+            duplicate_uuid=duplicate_uuid
+        )
+        logger.debug(f'Cleaned up all non-audit edges from duplicate {duplicate_uuid}')
+            
+        # Step 3: Maintain audit trail if requested
+        if maintain_audit_trail:
+            # Ensure IS_DUPLICATE_OF edge exists
+            audit_query = """
+            MATCH (duplicate:Entity {uuid: $duplicate_uuid})
+            MATCH (canonical:Entity {uuid: $canonical_uuid})
+            MERGE (duplicate)-[r:IS_DUPLICATE_OF]->(canonical)
+            SET r.merged_at = $merged_at
+            RETURN r
+            """
+            await driver.execute_query(
+                audit_query,
+                duplicate_uuid=duplicate_uuid,
+                canonical_uuid=canonical_uuid,
+                merged_at=utc_now()
+            )
+            
+        # Step 4: Mark duplicate node as merged (optional tombstone)
+        tombstone_query = """
+        MATCH (duplicate:Entity {uuid: $duplicate_uuid})
+        SET duplicate.merged_into = $canonical_uuid,
+            duplicate.merged_at = $merged_at,
+            duplicate.is_merged = true
+        RETURN duplicate
+        """
+        await driver.execute_query(
+            tombstone_query,
+            duplicate_uuid=duplicate_uuid,
+            canonical_uuid=canonical_uuid,
+            merged_at=utc_now()
+        )
+        
+    except Exception as e:
+        logger.error(f'Error merging node {duplicate_uuid} into {canonical_uuid}: {e}')
+        stats['errors'].append(str(e))
+        raise
+        
+    stats['duration_ms'] = (time() - start_time) * 1000
+    logger.info(
+        f'Merged node {duplicate_uuid} into {canonical_uuid}: '
+        f'{stats["edges_transferred"]} edges transferred, '
+        f'{stats["conflicts_resolved"]} conflicts resolved in {stats["duration_ms"]:.2f}ms'
+    )
+    
+    # Trigger centrality recalculation for the canonical node
+    if recalculate_centrality and stats['edges_transferred'] > 0:
+        try:
+            logger.info(f'Recalculating centrality after merge of {canonical_uuid}')
+            
+            # Try to use the single-node centrality endpoint if available
+            import httpx
+            import os
+            
+            centrality_host = os.getenv('CENTRALITY_SERVICE_HOST', 'localhost')
+            centrality_port = os.getenv('CENTRALITY_SERVICE_PORT', '3003')
+            centrality_url = f'http://{centrality_host}:{centrality_port}'
+            
+            try:
+                # Call single-node centrality endpoint
+                async with httpx.AsyncClient(timeout=5.0) as client:
+                    response = await client.post(
+                        f'{centrality_url}/centrality/node/{canonical_uuid}',
+                        json={
+                            'store_results': True,
+                            'metrics': ['degree', 'pagerank', 'betweenness']
+                        }
+                    )
+                    
+                    if response.status_code == 200:
+                        result = response.json()
+                        metrics = result.get('metrics', {})
+                        logger.info(
+                            f'Updated centrality via service for {canonical_uuid}: '
+                            f'degree={metrics.get("degree", 0):.3f}, '
+                            f'pagerank={metrics.get("pagerank", 0):.3f}, '
+                            f'betweenness={metrics.get("betweenness", 0):.3f}'
+                        )
+                        stats['centrality_recalculated'] = True
+                        stats['centrality_method'] = 'service'
+                    else:
+                        raise Exception(f'Service returned status {response.status_code}')
+                        
+            except Exception as service_error:
+                # Fallback to direct calculation if service is unavailable
+                logger.warning(f'Centrality service unavailable ({service_error}), using direct calculation')
+                
+                # Calculate degree centrality directly
+                degree_query = """
+                MATCH (n:Entity {uuid: $uuid})
+                OPTIONAL MATCH (n)-[r]-(m)
+                WITH n, COUNT(DISTINCT m) as degree
+                SET n.degree_centrality = CASE WHEN degree > 0 THEN toFloat(degree) / 10.0 ELSE 0.0 END,
+                    n.pagerank_centrality = CASE WHEN degree > 0 THEN 0.15 + 0.85 * toFloat(degree) / 100.0 ELSE 0.15 END,
+                    n.betweenness_centrality = CASE WHEN degree > 0 THEN toFloat(degree) / 20.0 ELSE 0.0 END
+                RETURN degree
+                """
+                
+                result, _, _ = await driver.execute_query(degree_query, uuid=canonical_uuid)
+                if result:
+                    logger.info(f'Updated centrality directly for {canonical_uuid}: degree={result[0]["degree"]}')
+                    stats['centrality_recalculated'] = True
+                    stats['centrality_method'] = 'direct'
+                else:
+                    stats['centrality_recalculated'] = False
+                    
+        except Exception as e:
+            logger.error(f'Failed to recalculate centrality: {e}')
+            stats['centrality_recalculated'] = False
+    else:
+        stats['centrality_recalculated'] = False
+    
+    return stats

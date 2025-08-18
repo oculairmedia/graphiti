@@ -7,6 +7,7 @@ use crate::models::{Edge, Episode, Node};
 
 /// Parse FalkorDB node response format
 /// Structure: [[["id", id], ["labels", [labels]], ["properties", [[key, val], ...]]]]
+#[allow(dead_code)]
 pub fn parse_nodes_from_falkor(results: Vec<Vec<Value>>) -> Result<Vec<Node>> {
     let mut nodes = Vec::new();
 
@@ -33,6 +34,7 @@ pub fn parse_nodes_from_falkor(results: Vec<Vec<Value>>) -> Result<Vec<Node>> {
 }
 
 /// Parse a single node from FalkorDB format
+#[allow(dead_code)]
 fn parse_single_node(node_data: &Value) -> Result<Option<Node>> {
     // Node data should be a Bulk/Array containing [["id", val], ["labels", [...]], ["properties", [...]]]
     let fields = match node_data {
@@ -117,6 +119,7 @@ fn parse_single_node(node_data: &Value) -> Result<Option<Node>> {
 
 /// Parse node properties from FalkorDB property list
 #[allow(clippy::too_many_arguments)]
+#[allow(dead_code)]
 fn parse_node_properties(
     props: &[Value],
     uuid: &mut String,
@@ -181,6 +184,7 @@ fn parse_node_properties(
 }
 
 /// Parse FalkorDB edge response format
+#[allow(dead_code)]
 pub fn parse_edges_from_falkor(results: Vec<Vec<Value>>) -> Result<Vec<Edge>> {
     let mut edges = Vec::new();
 
@@ -204,6 +208,7 @@ pub fn parse_edges_from_falkor(results: Vec<Vec<Value>>) -> Result<Vec<Edge>> {
 }
 
 /// Parse a single edge from FalkorDB format
+#[allow(dead_code)]
 fn parse_single_edge(
     source_node: &Value,
     edge_data: &Value,
@@ -331,6 +336,7 @@ fn parse_single_edge(
 }
 
 /// Parse edge properties
+#[allow(dead_code)]
 fn parse_edge_properties(
     props: &[Value],
     uuid: &mut String,
@@ -382,6 +388,7 @@ fn parse_edge_properties(
 }
 
 /// Parse FalkorDB episode response format
+#[allow(dead_code)]
 pub fn parse_episodes_from_falkor(results: Vec<Vec<Value>>) -> Result<Vec<Episode>> {
     let mut episodes = Vec::new();
 
@@ -405,6 +412,7 @@ pub fn parse_episodes_from_falkor(results: Vec<Vec<Value>>) -> Result<Vec<Episod
 }
 
 /// Parse a single episode
+#[allow(dead_code)]
 fn parse_single_episode(episode_data: &Value) -> Result<Option<Episode>> {
     // Episode data should be a Bulk/Array
     let fields = match episode_data {
@@ -498,6 +506,7 @@ fn parse_single_episode(episode_data: &Value) -> Result<Option<Episode>> {
 }
 
 /// Helper function to extract string from Redis Value
+#[allow(dead_code)]
 fn extract_string(value: &Value) -> Option<String> {
     match value {
         Value::Data(bytes) => String::from_utf8(bytes.clone()).ok(),
@@ -509,6 +518,7 @@ fn extract_string(value: &Value) -> Option<String> {
 }
 
 /// Create UUID from string, with fallback
+#[allow(dead_code)]
 fn create_uuid(uuid_str: &str) -> Uuid {
     if uuid_str.is_empty() {
         return Uuid::new_v4();

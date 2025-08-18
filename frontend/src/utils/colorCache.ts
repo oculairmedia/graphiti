@@ -150,6 +150,42 @@ export const generateHSLColor = (scheme: string, factor: number, opacity: number
   return result;
 };
 
+// Interpolate between two colors
+export const interpolateColor = (color1: string, color2: string, factor: number): string => {
+  // Ensure factor is between 0 and 1
+  factor = Math.max(0, Math.min(1, factor));
+  
+  // Cache key for interpolation
+  const cacheKey = `interp:${hash(color1)}:${hash(color2)}:${Math.round(factor * 1000)}`;
+  const cached = colorCache.get('interp', hash(cacheKey), 1);
+  if (cached) return cached;
+  
+  // Remove # if present
+  const c1 = color1.replace('#', '');
+  const c2 = color2.replace('#', '');
+  
+  // Parse colors
+  const r1 = parseInt(c1.substring(0, 2), 16);
+  const g1 = parseInt(c1.substring(2, 4), 16);
+  const b1 = parseInt(c1.substring(4, 6), 16);
+  
+  const r2 = parseInt(c2.substring(0, 2), 16);
+  const g2 = parseInt(c2.substring(2, 4), 16);
+  const b2 = parseInt(c2.substring(4, 6), 16);
+  
+  // Interpolate
+  const r = Math.round(r1 + (r2 - r1) * factor);
+  const g = Math.round(g1 + (g2 - g1) * factor);
+  const b = Math.round(b1 + (b2 - b1) * factor);
+  
+  // Convert back to hex
+  const toHex = (n: number) => n.toString(16).padStart(2, '0');
+  const result = `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+  
+  colorCache.set('interp', hash(cacheKey), 1, result);
+  return result;
+};
+
 // Simple hash function for cache keys
 function hash(str: string): number {
   let hash = 0;

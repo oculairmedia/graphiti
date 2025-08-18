@@ -1,3 +1,5 @@
+#![allow(clippy::uninlined_format_args)]
+
 use anyhow::Result;
 use axum::{
     routing::{get, post},
@@ -9,6 +11,7 @@ use tracing::info;
 use tracing_subscriber::{filter::EnvFilter, FmtSubscriber};
 
 mod config;
+mod embeddings;
 mod error;
 mod falkor;
 mod handlers;

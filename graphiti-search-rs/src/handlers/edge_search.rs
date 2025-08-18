@@ -1,7 +1,8 @@
 use axum::{extract::State, Json};
 use serde::{Deserialize, Serialize};
-use tracing::instrument;
+use tracing::{error, info, instrument};
 
+use crate::embeddings::EMBEDDER;
 use crate::error::SearchResult;
 use crate::models::{Edge, EdgeSearchConfig, SearchFilters};
 use crate::search::SearchEngine;
@@ -25,9 +26,33 @@ pub struct EdgeSearchResponse {
 #[instrument(skip(state))]
 pub async fn edge_search_handler(
     State(state): State<AppState>,
-    Json(request): Json<EdgeSearchRequest>,
+    Json(mut request): Json<EdgeSearchRequest>,
 ) -> SearchResult<Json<EdgeSearchResponse>> {
     let start = std::time::Instant::now();
+
+    // Generate embedding if not provided and similarity search is requested
+    if request.query_vector.is_none()
+        && !request.query.is_empty()
+        && request
+            .config
+            .search_methods
+            .iter()
+            .any(|m| matches!(m, crate::models::SearchMethod::Similarity))
+    {
+        info!("Generating embedding for query: {}", request.query);
+        match EMBEDDER.generate_embedding(&request.query).await {
+            Ok(Some(embedding)) => {
+                info!("Generated embedding with {} dimensions", embedding.len());
+                request.query_vector = Some(embedding);
+            }
+            Ok(None) => {
+                info!("No embedding generated, continuing without similarity search");
+            }
+            Err(e) => {
+                error!("Failed to generate embedding: {}, continuing without it", e);
+            }
+        }
+    }
 
     // Create search engine with pools
     let mut engine = SearchEngine::new(state.falkor_pool.clone(), state.redis_pool.clone());

@@ -23,6 +23,7 @@ export interface GraphNode {
   color: string;
   properties: NodeProperties;
   created_at?: string;
+  created_at_timestamp?: number;  // Unix timestamp in milliseconds
   updated_at?: string;
 }
 

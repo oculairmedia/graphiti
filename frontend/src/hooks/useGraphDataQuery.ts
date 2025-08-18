@@ -32,6 +32,32 @@ interface TransformedData {
   links: GraphLink[];
 }
 
+// Compute node size based on the selected sizing strategy
+function computeSizeFromStrategy(node: any, config: any): number {
+  // Return normalized value (0-1 range) - renderer will handle scaling
+  switch (config.sizeMapping) {
+    case 'degree':
+      return node.degree_centrality || 0.1;
+    case 'betweenness':
+      return node.betweenness_centrality || 0.1;
+    case 'pagerank':
+      return node.pagerank_centrality || node.pagerank || 0.1;
+    case 'importance':
+      return node.eigenvector_centrality || 0.1;
+    case 'connections':
+      // Same as degree but could use raw count if available
+      return node.degree_centrality || 0.1;
+    case 'uniform':
+      return 0.5; // Middle value for uniform sizing
+    case 'custom':
+      // Use eigenvector as default for custom
+      return node.eigenvector_centrality || node.pagerank_centrality || node.degree_centrality || 0.1;
+    default:
+      // Safe fallback using best available metric
+      return node.degree_centrality || node.pagerank_centrality || 0.1;
+  }
+}
+
 export function useGraphDataQuery() {
   const { config, updateNodeTypeConfigurations } = useGraphConfig();
   const { getDuckDBConnection, isInitialized: isDuckDBInitialized } = useDuckDB();
@@ -155,6 +181,21 @@ export function useGraphDataQuery() {
               }
             }
             
+            // Normalize temporal fields - ensure both exist
+            if (!plainNode.created_at && plainNode.created_at_timestamp) {
+              const ts = Number(plainNode.created_at_timestamp);
+              if (!Number.isNaN(ts)) {
+                plainNode.created_at = new Date(ts).toISOString();
+              }
+            } else if (plainNode.created_at && !plainNode.created_at_timestamp) {
+              plainNode.created_at_timestamp = new Date(plainNode.created_at).getTime();
+            }
+            
+            // Fallback to synthetic values if both missing
+            if (!plainNode.created_at && !plainNode.created_at_timestamp) {
+              plainNode.created_at_timestamp = Date.now();
+              plainNode.created_at = new Date(plainNode.created_at_timestamp).toISOString();
+            }
             
             return {
               id: plainNode.id,
@@ -163,7 +204,7 @@ export function useGraphDataQuery() {
               name: plainNode.label || plainNode.id,  // Use label as name
               node_type: plainNode.node_type || 'Unknown',
               summary: plainNode.summary || null,
-              size: plainNode.degree_centrality || 1,
+              size: computeSizeFromStrategy(plainNode, config),
               created_at: plainNode.created_at,
               created_at_timestamp: plainNode.created_at_timestamp || null,  // Add timestamp for timeline
               // Store centrality at the root level for direct access
@@ -177,11 +218,13 @@ export function useGraphDataQuery() {
                 pagerank_centrality: plainNode.pagerank_centrality || 0,
                 betweenness_centrality: plainNode.betweenness_centrality || 0,
                 eigenvector_centrality: plainNode.eigenvector_centrality || 0,
-                degree: plainNode.degree_centrality ? Math.round(plainNode.degree_centrality * 100) : 0,  // Convert to count
-                connections: plainNode.degree_centrality ? Math.round(plainNode.degree_centrality * 100) : 0,
-                created: plainNode.created_at,
-                date: plainNode.created_at,
-                created_at_timestamp: plainNode.created_at_timestamp || null,  // Also in properties for timeline
+                // Note: Removed misleading degree/connections properties that were incorrectly 
+                // derived from centrality * 100. Actual edge counts are now computed in GraphViz
+                // using calculateNodeDegrees() for accurate connection counts.
+                created: plainNode.created_at,  // Now guaranteed to exist
+                date: plainNode.created_at,      // Now guaranteed to exist
+                created_at: plainNode.created_at,  // Now guaranteed to exist
+                created_at_timestamp: plainNode.created_at_timestamp  // Now guaranteed to exist
               }
             };
         });
@@ -210,11 +253,11 @@ export function useGraphDataQuery() {
             return {
                 id: `${e.source}-${e.target}`,
                 source: e.source,
-                target: e.target || e.targetidx,
+                target: e.target,  // Always use UUID, no fallback to idx
                 from: e.source,
-                to: e.target || e.targetidx,
+                to: e.target,  // Always use UUID, no fallback to idx
                 sourceIndex: nodeIndexMap.get(String(e.source)) ?? -1,
-                targetIndex: nodeIndexMap.get(String(e.target || e.targetidx)) ?? -1,
+                targetIndex: nodeIndexMap.get(String(e.target)) ?? -1,  // Use actual target UUID
                 edge_type: edgeType,
                 weight: e.weight || 1,
                 strength: strength,  // Add strength for link force variation

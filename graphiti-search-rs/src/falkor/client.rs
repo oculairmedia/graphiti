@@ -7,12 +7,14 @@ use crate::config::Config;
 use crate::falkor::parser;
 use crate::models::{Edge, Episode, Node};
 
+#[allow(dead_code)]
 pub struct FalkorClient {
     _client: Client,
     conn: Connection,
     graph_name: String,
 }
 
+#[allow(dead_code)]
 impl FalkorClient {
     pub async fn new(config: &Config) -> Result<Self> {
         let url = format!("redis://{}:{}", config.falkor_host, config.falkor_port);
@@ -37,13 +39,15 @@ impl FalkorClient {
     pub async fn fulltext_search_nodes(&mut self, query: &str, limit: usize) -> Result<Vec<Node>> {
         // For now, embed the query directly in the Cypher string
         // FalkorDB parameter binding needs specific format
+        // Use toLower for case-insensitive search and search multiple fields
+        let escaped_query = query.replace("'", "\\'").to_lowercase();
         let cypher = format!(
-            "MATCH (n) 
-             WHERE n.name CONTAINS '{}' 
+            "MATCH (n:Entity) 
+             WHERE toLower(n.name) CONTAINS '{}' 
+                OR toLower(n.summary) CONTAINS '{}'
              RETURN n 
              LIMIT {}",
-            query.replace("'", "\\'"), // Escape single quotes
-            limit
+            escaped_query, escaped_query, limit
         );
 
         let results: Vec<Vec<redis::Value>> = redis::cmd("GRAPH.QUERY")
@@ -71,27 +75,40 @@ impl FalkorClient {
         limit: usize,
         min_score: f32,
     ) -> Result<Vec<Node>> {
+        // Convert embedding to comma-separated string
         let embedding_str = embedding
             .iter()
             .map(|v| v.to_string())
             .collect::<Vec<_>>()
             .join(",");
 
+        // Use name_embedding field which is what Graphiti uses for nodes
+        // FalkorDB uses cosineDistance, convert to similarity score: (2 - distance)/2
+        // Note: FalkorDB requires inline vectors, parameters don't work with vecf32()
         let cypher = format!(
             "MATCH (n:Entity) 
-             WHERE n.embedding IS NOT NULL
-             WITH n, vec.cosine_similarity(n.embedding, [{embedding_str}]) AS score
+             WHERE n.name_embedding IS NOT NULL
+             WITH n, (2 - vec.cosineDistance(n.name_embedding, vecf32([{embedding_str}])))/2 AS score
              WHERE score >= {min_score}
              RETURN n, score 
              ORDER BY score DESC 
              LIMIT {limit}"
         );
 
-        let results: Vec<Vec<redis::Value>> = redis::cmd("GRAPH.QUERY")
-            .arg(&self.graph_name)
-            .arg(&cypher)
-            .query_async(&mut self.conn)
-            .await?;
+        // Debug log first part of query to avoid huge logs
+        let query_preview = if cypher.len() > 500 {
+            format!("{}...", &cypher[..500])
+        } else {
+            cypher.clone()
+        };
+        tracing::debug!("Similarity search query preview: {}", query_preview);
+
+        // Use raw command to avoid any escaping issues with the query
+        let mut cmd = redis::cmd("GRAPH.QUERY");
+        cmd.arg(&self.graph_name);
+        cmd.arg(cypher.as_bytes()); // Send as raw bytes to avoid string processing
+
+        let results: Vec<Vec<redis::Value>> = cmd.query_async(&mut self.conn).await?;
 
         self.parse_nodes(results)
     }
@@ -131,14 +148,15 @@ impl FalkorClient {
     #[instrument(skip(self))]
     pub async fn fulltext_search_edges(&mut self, query: &str, limit: usize) -> Result<Vec<Edge>> {
         // For now, embed the query directly in the Cypher string
+        // Use toLower for case-insensitive search
+        let escaped_query = query.replace("'", "\\'").to_lowercase();
         let cypher = format!(
-            "MATCH (a)-[r]->(b)
-             WHERE r.fact CONTAINS '{}' OR r.name CONTAINS '{}'
+            "MATCH (a)-[r:RELATES_TO]->(b)
+             WHERE toLower(r.fact) CONTAINS '{}' 
+                OR toLower(r.name) CONTAINS '{}'
              RETURN a, r, b
              LIMIT {}",
-            query.replace("'", "\\'"),
-            query.replace("'", "\\'"),
-            limit
+            escaped_query, escaped_query, limit
         );
 
         let results: Vec<Vec<redis::Value>> = redis::cmd("GRAPH.QUERY")
@@ -157,14 +175,15 @@ impl FalkorClient {
         limit: usize,
     ) -> Result<Vec<Episode>> {
         // For now, embed the query directly in the Cypher string
+        // Use toLower for case-insensitive search
+        let escaped_query = query.replace("'", "\\'").to_lowercase();
         let cypher = format!(
-            "MATCH (e)
-             WHERE e.content CONTAINS '{}' OR e.name CONTAINS '{}'
+            "MATCH (e:Episode)
+             WHERE toLower(e.content) CONTAINS '{}' 
+                OR toLower(e.name) CONTAINS '{}'
              RETURN e
              LIMIT {}",
-            query.replace("'", "\\'"),
-            query.replace("'", "\\'"),
-            limit
+            escaped_query, escaped_query, limit
         );
 
         let results: Vec<Vec<redis::Value>> = redis::cmd("GRAPH.QUERY")
@@ -182,6 +201,50 @@ impl FalkorClient {
 
     fn parse_edges(&self, results: Vec<Vec<redis::Value>>) -> Result<Vec<Edge>> {
         parser::parse_edges_from_falkor(results)
+    }
+
+    pub async fn similarity_search_edges(
+        &mut self,
+        embedding: &[f32],
+        limit: usize,
+        min_score: f32,
+    ) -> Result<Vec<Edge>> {
+        // Convert embedding to comma-separated string
+        let embedding_str = embedding
+            .iter()
+            .map(|v| v.to_string())
+            .collect::<Vec<_>>()
+            .join(",");
+
+        // Use fact_embedding field which is what Graphiti uses for edges
+        // FalkorDB uses cosineDistance, convert to similarity score: (2 - distance)/2
+        // Note: FalkorDB requires inline vectors, parameters don't work with vecf32()
+        let cypher = format!(
+            "MATCH (a)-[r:RELATES_TO]->(b)
+             WHERE r.fact_embedding IS NOT NULL
+             WITH a, r, b, (2 - vec.cosineDistance(r.fact_embedding, vecf32([{embedding_str}])))/2 AS score
+             WHERE score >= {min_score}
+             RETURN a, r, b, score 
+             ORDER BY score DESC 
+             LIMIT {limit}"
+        );
+
+        // Debug log first part of query to avoid huge logs
+        let query_preview = if cypher.len() > 500 {
+            format!("{}...", &cypher[..500])
+        } else {
+            cypher.clone()
+        };
+        tracing::debug!("Edge similarity search query preview: {}", query_preview);
+
+        // Use raw command to avoid any escaping issues with the query
+        let mut cmd = redis::cmd("GRAPH.QUERY");
+        cmd.arg(&self.graph_name);
+        cmd.arg(cypher.as_bytes()); // Send as raw bytes to avoid string processing
+
+        let results: Vec<Vec<redis::Value>> = cmd.query_async(&mut self.conn).await?;
+
+        self.parse_edges(results)
     }
 
     fn parse_episodes(&self, results: Vec<Vec<redis::Value>>) -> Result<Vec<Episode>> {
