@@ -14,11 +14,11 @@ from typing import Optional
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from graphiti_core import Graphiti
 from graphiti_core.llm_client import OpenAIClient
 from graphiti_core.embedder import OpenAIEmbedder
 from graphiti_core.ingestion.queue_client import QueuedClient
 from graphiti_core.ingestion.worker import IngestionWorker, WorkerPool
+from zep_graphiti import ZepGraphiti
 
 # Configure logging
 logging.basicConfig(
@@ -34,7 +34,7 @@ class WorkerService:
     def __init__(self):
         self.worker_pool: Optional[WorkerPool] = None
         self.queue_client: Optional[QueuedClient] = None
-        self.graphiti: Optional[Graphiti] = None
+        self.graphiti: Optional[ZepGraphiti] = None
         self.running = False
         
     async def initialize(self):
@@ -110,7 +110,7 @@ class WorkerService:
             password=None
         )
         
-        self.graphiti = Graphiti(
+        self.graphiti = ZepGraphiti(
             uri=None,  # Not needed when using graph_driver
             llm_client=llm_client,
             embedder=embedder,
