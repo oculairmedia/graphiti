@@ -1,5 +1,5 @@
-# Build stage
-FROM rust:1.74 AS builder
+# Build stage with latest Rust
+FROM rust:latest AS builder
 
 # Install build dependencies
 RUN apt-get update && apt-get install -y \
@@ -8,14 +8,19 @@ RUN apt-get update && apt-get install -y \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-# Clone and build queued
+# Clone queued repository
 RUN git clone https://github.com/wilsonzlin/queued.git /tmp/queued
 WORKDIR /tmp/queued
 
-# Build with optimizations and reduced debug info to speed up compilation
-ENV CARGO_PROFILE_RELEASE_DEBUG=0
+# Set build optimizations for faster CI builds
+ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
+ENV CARGO_PROFILE_RELEASE_DEBUG=false
 ENV CARGO_PROFILE_RELEASE_LTO=false
-RUN cargo build --release --jobs 2
+ENV CARGO_PROFILE_RELEASE_CODEGEN_UNITS=256
+ENV CARGO_PROFILE_RELEASE_INCREMENTAL=false
+
+# Build with limited parallelism to avoid OOM in CI
+RUN cargo build --release -j 1
 
 # Runtime stage
 FROM debian:bookworm-slim
