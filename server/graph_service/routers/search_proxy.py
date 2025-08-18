@@ -50,10 +50,10 @@ class NodeResult(BaseModel):
     """Node result matching frontend expectations"""
     uuid: str
     name: str
-    summary: Optional[str] = None
+    summary: str = ""  # Always present, defaults to empty string
     labels: List[str] = Field(default_factory=list)
-    group_id: Optional[str] = None
-    created_at: Optional[str] = None
+    group_id: str  # Always present
+    created_at: str  # Always present (ISO format string)
     attributes: Dict[str, Any] = Field(default_factory=dict)
 
 class NodeSearchResults(BaseModel):
@@ -303,10 +303,10 @@ async def search_nodes(query: NodeSearchQuery) -> NodeSearchResults:
                 node_result = NodeResult(
                     uuid=node_uuid,
                     name=node.get("name", ""),
-                    summary=node.get("summary"),
+                    summary=node.get("summary", ""),  # Default to empty string
                     labels=labels,
-                    group_id=node.get("group_id"),
-                    created_at=node.get("created_at"),
+                    group_id=node.get("group_id", ""),  # Default to empty string if missing
+                    created_at=node.get("created_at", ""),  # Default to empty string if missing
                     attributes={}  # Rust doesn't return attributes, use empty dict
                 )
                 nodes.append(node_result)
