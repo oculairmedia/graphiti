@@ -103,9 +103,9 @@ class WorkerService:
         
         # Create FalkorDB driver using environment variables
         falkor_driver = FalkorDriver(
-            host=falkor_host,
-            port=falkor_port,
-            database=falkor_database,
+            host=falkordb_host,
+            port=falkordb_port,
+            database=falkordb_database,
             username=None,  # FalkorDB typically doesn't use auth
             password=None
         )
