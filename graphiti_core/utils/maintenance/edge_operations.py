@@ -47,6 +47,7 @@ logger = logging.getLogger(__name__)
 async def execute_merge_operations(
     driver,
     merge_operations: list[tuple[str, str]],
+    allow_cross_graph_merge: bool = False,
 ) -> dict[str, Any]:
     """
     Execute node merge operations to transfer edges from duplicates to canonical nodes.
@@ -70,7 +71,12 @@ async def execute_merge_operations(
     
     for canonical_uuid, duplicate_uuid in merge_operations:
         try:
-            stats = await merge_node_into(driver, canonical_uuid, duplicate_uuid)
+            stats = await merge_node_into(
+                driver, 
+                canonical_uuid, 
+                duplicate_uuid,
+                allow_cross_graph_merge=allow_cross_graph_merge
+            )
             total_stats['total_merges'] += 1
             total_stats['total_edges_transferred'] += stats['edges_transferred']
             total_stats['total_conflicts_resolved'] += stats['conflicts_resolved']

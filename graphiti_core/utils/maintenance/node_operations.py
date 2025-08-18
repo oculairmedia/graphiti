@@ -259,6 +259,7 @@ async def resolve_extracted_nodes(
     previous_episodes: list[EpisodicNode] | None = None,
     entity_types: dict[str, BaseModel] | None = None,
     existing_nodes_override: list[EntityNode] | None = None,
+    enable_cross_graph_deduplication: bool = False,
 ) -> tuple[list[EntityNode], dict[str, str], list[tuple[EntityNode, EntityNode]]]:
     llm_client = clients.llm_client
     driver = clients.driver
@@ -272,16 +273,30 @@ async def resolve_extracted_nodes(
     if existing_nodes_override is None:
         for node in extracted_nodes:
             # Query for exact name matches
-            exact_query = """
-            MATCH (n:Entity)
-            WHERE n.name = $name AND n.group_id = $group_id
-            RETURN n
-            ORDER BY n.created_at
-            LIMIT 1
-            """
-            records, _, _ = await driver.execute_query(
-                exact_query, name=node.name, group_id=node.group_id
-            )
+            if enable_cross_graph_deduplication:
+                # Cross-graph deduplication: search across all groups
+                exact_query = """
+                MATCH (n:Entity)
+                WHERE n.name = $name
+                RETURN n
+                ORDER BY n.created_at
+                LIMIT 1
+                """
+                records, _, _ = await driver.execute_query(
+                    exact_query, name=node.name
+                )
+            else:
+                # Standard deduplication: only within same group
+                exact_query = """
+                MATCH (n:Entity)
+                WHERE n.name = $name AND n.group_id = $group_id
+                RETURN n
+                ORDER BY n.created_at
+                LIMIT 1
+                """
+                records, _, _ = await driver.execute_query(
+                    exact_query, name=node.name, group_id=node.group_id
+                )
 
             if records and len(records) > 0:
                 # Found exact match - use the existing node
@@ -326,7 +341,7 @@ async def resolve_extracted_nodes(
             search(
                 clients=clients,
                 query=node.name,
-                group_ids=[node.group_id],
+                group_ids=None if enable_cross_graph_deduplication else [node.group_id],
                 search_filter=SearchFilters(),
                 config=NODE_HYBRID_SEARCH_RRF,
             )
@@ -577,6 +592,7 @@ async def merge_node_into(
     duplicate_uuid: str,
     maintain_audit_trail: bool = True,
     recalculate_centrality: bool = True,
+    allow_cross_graph_merge: bool = False,
 ) -> dict[str, Any]:
     """
     Physically merge a duplicate node into a canonical node by transferring all edges.
@@ -634,10 +650,17 @@ async def merge_node_into(
             
         duplicate_group_id = duplicate_result[0].get('group_id')
         
-        if canonical_group_id != duplicate_group_id:
+        if canonical_group_id != duplicate_group_id and not allow_cross_graph_merge:
             raise ValueError(
                 f'Cannot merge across partitions: canonical group_id={canonical_group_id}, '
-                f'duplicate group_id={duplicate_group_id}'
+                f'duplicate group_id={duplicate_group_id}. Set allow_cross_graph_merge=True to enable cross-graph merging.'
+            )
+        
+        # Log cross-graph merge if it's happening
+        if canonical_group_id != duplicate_group_id:
+            logger.info(
+                f'Performing cross-graph merge: {duplicate_uuid} (group: {duplicate_group_id}) -> '
+                f'{canonical_uuid} (group: {canonical_group_id})'
             )
         
         # Step 1: Transfer all incoming edges from duplicate to canonical
