@@ -200,7 +200,7 @@ impl FalkorClientV2 {
                     for row in result.data {
                         if row.len() >= 2 {
                             if let (Some(falkordb::FalkorValue::String(uuid)), Some(score_val)) =
-                                (row.get(0), row.get(1))
+                                (row.first(), row.get(1))
                             {
                                 let score = match score_val {
                                     falkordb::FalkorValue::F64(f) => *f as f32,

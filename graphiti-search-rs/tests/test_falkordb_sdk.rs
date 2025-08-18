@@ -20,7 +20,7 @@ async fn test_falkordb_sdk_similarity_search() -> Result<()> {
         .await?;
 
     let mut graph = client.select_graph(graph_name);
-    println!("✓ Connected to graph: {}", graph_name);
+    println!("✓ Connected to graph: {graph_name}");
 
     // Test similarity search with vecf32()
     println!("\nTesting similarity search with vecf32()...");
@@ -36,12 +36,11 @@ async fn test_falkordb_sdk_similarity_search() -> Result<()> {
     let query = format!(
         "MATCH (n:Entity) 
          WHERE n.name_embedding IS NOT NULL
-         WITH n, (2 - vec.cosineDistance(n.name_embedding, vecf32([{}])))/2 AS score
+         WITH n, (2 - vec.cosineDistance(n.name_embedding, vecf32([{vector_str}])))/2 AS score
          WHERE score >= 0.0
          RETURN n.name, n.uuid, score
          ORDER BY score DESC
-         LIMIT 5",
-        vector_str
+         LIMIT 5"
     );
 
     let result = graph.query(&query).execute().await?;
@@ -57,7 +56,7 @@ async fn test_falkordb_sdk_similarity_search() -> Result<()> {
                 Some(FalkorValue::String(name)),
                 Some(FalkorValue::String(_uuid)),
                 Some(score_val),
-            ) = (row.get(0), row.get(1), row.get(2))
+            ) = (row.first(), row.get(1), row.get(2))
             {
                 let score = match score_val {
                     FalkorValue::F64(f) => *f,
@@ -75,12 +74,11 @@ async fn test_falkordb_sdk_similarity_search() -> Result<()> {
     let edge_query = format!(
         "MATCH (a)-[r:RELATES_TO]->(b)
          WHERE r.fact_embedding IS NOT NULL
-         WITH r, (2 - vec.cosineDistance(r.fact_embedding, vecf32([{}])))/2 AS score
+         WITH r, (2 - vec.cosineDistance(r.fact_embedding, vecf32([{vector_str}])))/2 AS score
          WHERE score >= 0.0
          RETURN r.fact, r.uuid, score
          ORDER BY score DESC
-         LIMIT 5",
-        vector_str
+         LIMIT 5"
     );
 
     let result = graph.query(&edge_query).execute().await?;
@@ -95,7 +93,7 @@ async fn test_falkordb_sdk_similarity_search() -> Result<()> {
                 Some(FalkorValue::String(fact)),
                 Some(FalkorValue::String(_uuid)),
                 Some(score_val),
-            ) = (row.get(0), row.get(1), row.get(2))
+            ) = (row.first(), row.get(1), row.get(2))
             {
                 let score = match score_val {
                     FalkorValue::F64(f) => *f,
