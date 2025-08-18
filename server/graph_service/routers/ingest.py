@@ -13,6 +13,7 @@ from graphiti_core.utils.maintenance.graph_data_operations import clear_data
 from graph_service.config import get_settings
 from graph_service.dto import AddEntityNodeRequest, AddMessagesRequest, Message, Result
 from graph_service.zep_graphiti import ZepGraphitiDep
+from graph_service.queue_proxy import queue_proxy
 
 logger = logging.getLogger(__name__)
 
@@ -263,6 +264,54 @@ async def add_messages(
     request: AddMessagesRequest,
     graphiti: ZepGraphitiDep,
 ) -> Result:
+    settings = get_settings()
+    
+    # If queue is enabled, try to send to queue first
+    if settings.use_queue_for_ingestion:
+        logger.info("Queue-based ingestion enabled, sending messages to queue")
+        
+        # Check if queue is healthy
+        if await queue_proxy.is_healthy():
+            # Send all messages to queue
+            queued_count = 0
+            failed_count = 0
+            
+            for message in request.messages:
+                if await queue_proxy.send_message_to_queue(message, request.group_id):
+                    queued_count += 1
+                    logger.info(f"Message {message.uuid} queued successfully")
+                else:
+                    failed_count += 1
+                    logger.error(f"Failed to queue message {message.uuid}")
+            
+            # If all messages were queued successfully
+            if failed_count == 0:
+                logger.info(f"Successfully queued {queued_count} messages for ingestion")
+                return Result(
+                    message=f"Queued {queued_count} messages for processing",
+                    success=True
+                )
+            
+            # If some failed and fallback is enabled
+            if settings.queue_fallback_to_direct:
+                logger.warning(f"Failed to queue {failed_count} messages, falling back to direct processing")
+                # Continue to direct processing below
+            else:
+                # Return partial success
+                return Result(
+                    message=f"Queued {queued_count} messages, {failed_count} failed",
+                    success=False
+                )
+        else:
+            logger.warning("Queue service is not healthy")
+            if not settings.queue_fallback_to_direct:
+                return Result(
+                    message="Queue service unavailable",
+                    success=False
+                )
+            logger.info("Falling back to direct processing")
+    
+    # Direct processing (original implementation)
     async def add_messages_task(m: Message) -> None:
         print(
             f'=== TASK DEBUG: Processing message - group_id={request.group_id}, name={m.name} ===',
