@@ -97,14 +97,24 @@ class WorkerService:
             llm_client = OpenAIClient()
             embedder = OpenAIEmbedder()
         
-        # Initialize Graphiti - provide a dummy Neo4j URI since we're using FalkorDB via env vars
-        logger.info("Initializing Graphiti...")
-        # The URI is required but when DRIVER_TYPE=falkordb is set, it uses env vars instead
-        dummy_uri = "neo4j://unused:7687"  # This won't be used with DRIVER_TYPE=falkordb
+        # Initialize Graphiti with FalkorDB driver
+        logger.info("Initializing Graphiti with FalkorDB driver...")
+        from graphiti_core.driver.falkordb_driver import FalkorDriver
+        
+        # Create FalkorDB driver using environment variables
+        falkor_driver = FalkorDriver(
+            host=falkor_host,
+            port=falkor_port,
+            database=falkor_database,
+            username=None,  # FalkorDB typically doesn't use auth
+            password=None
+        )
+        
         self.graphiti = Graphiti(
-            uri=dummy_uri,
+            uri=None,  # Not needed when using graph_driver
             llm_client=llm_client,
-            embedder=embedder
+            embedder=embedder,
+            graph_driver=falkor_driver
         )
         
         # Initialize worker pool
