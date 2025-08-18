@@ -264,12 +264,17 @@ class IngestionWorker:
         payload = task.payload
         
         try:
+            # Parse timestamp if it's a string
+            timestamp = payload.get('timestamp')
+            if timestamp and isinstance(timestamp, str):
+                timestamp = datetime.fromisoformat(timestamp)
+            
             result = await self.graphiti.add_episode(
                 uuid=payload.get('uuid'),
                 group_id=task.group_id,
                 name=payload.get('name'),
                 episode_body=payload.get('content'),
-                reference_time=payload.get('timestamp'),
+                reference_time=timestamp,
                 source=EpisodeType.message,
                 source_description=payload.get('source_description')
             )
@@ -323,6 +328,9 @@ class IngestionWorker:
                     payload=op.get('payload'),
                     group_id=task.group_id,
                     priority=task.priority,
+                    retry_count=0,
+                    max_retries=task.max_retries,
+                    created_at=datetime.utcnow(),
                     metadata=task.metadata
                 )
                 
