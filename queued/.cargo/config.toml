@@ -1,0 +1,3 @@
+[patch.crates-io]
+# Fix libloading 0.8.8 compatibility with newer Rust versions
+libloading = { git = "https://github.com/nagisa/rust_libloading.git", branch = "master" }

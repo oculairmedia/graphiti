@@ -1,0 +1,30 @@
+[package]
+name = "libqueued"
+description = "Library for queued"
+license = "SSPL-1.0"
+homepage = "https://github.com/wilsonzlin/queued"
+keywords = ["queue", "message", "fifo"]
+categories = ["database-implementations", "web-programming"]
+repository = "https://github.com/wilsonzlin/queued.git"
+version = "0.13.0"
+authors = ["Wilson Lin <code@wilsonl.in>"]
+edition = "2021"
+
+[badges]
+maintenance = { status = "actively-developed" }
+
+[dependencies]
+chrono = { version = "0.4", features = ["serde"] }
+dashmap = "5.5.0"
+futures = "0.3"
+itertools = "0.10"
+num-derive = "0.4.0"
+num-traits = "0.2.15"
+num_cpus = "1.16.0"
+off64 = "0.6.0"
+parking_lot = "0.12.1"
+rocksdb = "0.21.0"
+serde = { version = "1.0.164", features = ["derive"] }
+serde_bytes = "0.11.12"
+signal-future = "0.1.1"
+tokio = { version = "1", features = ["full"] }

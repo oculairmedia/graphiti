@@ -592,6 +592,7 @@ async def merge_node_into(
     duplicate_uuid: str,
     maintain_audit_trail: bool = True,
     recalculate_centrality: bool = True,
+    delete_duplicate: bool = True,
     allow_cross_graph_merge: bool = False,
 ) -> dict[str, Any]:
     """
@@ -887,19 +888,33 @@ async def merge_node_into(
             )
             
         # Step 4: Mark duplicate node as merged (optional tombstone)
-        tombstone_query = """
-        MATCH (duplicate:Entity {uuid: $duplicate_uuid})
-        SET duplicate.merged_into = $canonical_uuid,
-            duplicate.merged_at = $merged_at,
-            duplicate.is_merged = true
-        RETURN duplicate
-        """
-        await driver.execute_query(
-            tombstone_query,
-            duplicate_uuid=duplicate_uuid,
-            canonical_uuid=canonical_uuid,
-            merged_at=utc_now()
-        )
+        if not delete_duplicate:
+            tombstone_query = """
+            MATCH (duplicate:Entity {uuid: $duplicate_uuid})
+            SET duplicate.merged_into = $canonical_uuid,
+                duplicate.merged_at = $merged_at,
+                duplicate.is_merged = true
+            RETURN duplicate
+            """
+            await driver.execute_query(
+                tombstone_query,
+                duplicate_uuid=duplicate_uuid,
+                canonical_uuid=canonical_uuid,
+                merged_at=utc_now()
+            )
+        else:
+            # Step 5: Physically delete the duplicate node
+            delete_query = """
+            MATCH (duplicate:Entity {uuid: $duplicate_uuid})
+            DETACH DELETE duplicate
+            RETURN COUNT(duplicate) as deleted_count
+            """
+            delete_result, _, _ = await driver.execute_query(
+                delete_query,
+                duplicate_uuid=duplicate_uuid
+            )
+            stats['nodes_deleted'] = delete_result[0].get('deleted_count', 0) if delete_result else 0
+            logger.info(f'Physically deleted duplicate node {duplicate_uuid}')
         
     except Exception as e:
         logger.error(f'Error merging node {duplicate_uuid} into {canonical_uuid}: {e}')

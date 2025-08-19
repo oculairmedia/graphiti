@@ -75,6 +75,7 @@ async def execute_merge_operations(
                 driver, 
                 canonical_uuid, 
                 duplicate_uuid,
+                delete_duplicate=True,
                 allow_cross_graph_merge=allow_cross_graph_merge
             )
             total_stats['total_merges'] += 1
