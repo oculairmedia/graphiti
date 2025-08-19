@@ -16,10 +16,9 @@ var_disk="8"
 var_os="debian"
 var_version="12"
 var_unprivileged="1"
-var_install="falkordb"  # This tells build.func which install script to use
 
-# Override the install script URL since we're not in the community-scripts repo
-# We'll handle this in the description function
+# Use a dummy install script name that we'll override
+var_install="debian"  # Use debian as a base, we'll override the actual installation
 
 header_info "$APP"
 variables
