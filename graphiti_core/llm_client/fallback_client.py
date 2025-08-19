@@ -24,8 +24,8 @@ class FallbackLLMClient(LLMClient):
             primary_client: Primary LLM client to use first
             fallback_client: Backup client to use on failures
         """
-        # Use primary client's config
-        super().__init__(primary_client.config, primary_client.cache)
+        # Use primary client's config and cache settings
+        super().__init__(primary_client.config, primary_client.cache_enabled)
         self.primary_client = primary_client
         self.fallback_client = fallback_client
         self._using_fallback = False
