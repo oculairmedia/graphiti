@@ -1,6 +1,6 @@
 services:
   graph:
-    image: ghcr.io/oculairmedia/graphiti-api:dev
+    image: ghcr.io/oculairmedia/graphiti-api:ingestion-queue-system
     volumes:
       - ./server/graph_service/zep_graphiti.py:/app/server/graph_service/zep_graphiti.py:ro
     ports:

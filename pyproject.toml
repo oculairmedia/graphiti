@@ -29,6 +29,7 @@ Repository = "https://github.com/getzep/graphiti"
 
 [project.optional-dependencies]
 anthropic = ["anthropic>=0.49.0"]
+cerebras = ["cerebras-cloud-sdk>=1.46.0"]
 groq = ["groq>=0.2.0"]
 google-genai = ["google-genai>=1.8.0"]
 falkordb = ["falkordb>=1.1.2,<2.0.0"]
