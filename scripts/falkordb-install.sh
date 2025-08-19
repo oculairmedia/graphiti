@@ -49,7 +49,10 @@ if [[ $EUID -ne 0 ]]; then
    exit 1
 fi
 
-header_info
+# Only show header if running directly (not from LXC script)
+if [[ -z "${PROXMOX_INSTALL}" ]]; then
+    header_info
+fi
 
 function update_script() {
   header_info
@@ -80,33 +83,72 @@ function update_script() {
 function install_falkordb() {
   msg_info "Installing FalkorDB"
   
+  # Install required packages for downloading
+  apt-get update >/dev/null 2>&1
+  apt-get -y install curl wget tar gzip >/dev/null 2>&1
+  
   # Get latest version if not specified
   if [[ -z "$FALKORDB_VERSION" ]]; then
-    FALKORDB_VERSION=$(curl -fsSL https://api.github.com/repos/FalkorDB/FalkorDB/releases/latest | grep -oP '"tag_name": "v\K[0-9]+\.[0-9]+\.[0-9]+')
+    msg_info "Getting latest FalkorDB version"
+    FALKORDB_VERSION=$(curl -fsSL https://api.github.com/repos/FalkorDB/FalkorDB/releases/latest 2>/dev/null | grep -oP '"tag_name": "v\K[0-9]+\.[0-9]+\.[0-9]+' || echo "4.12.3")
+    msg_info "Using FalkorDB version ${FALKORDB_VERSION}"
   fi
   
-  # Download and install FalkorDB
-  cd /tmp
-  DOWNLOAD_URL="https://github.com/FalkorDB/FalkorDB/releases/download/v${FALKORDB_VERSION}/falkordb-v${FALKORDB_VERSION}-linux-x64.tar.gz"
-  wget -O falkordb.tar.gz "$DOWNLOAD_URL" >/dev/null 2>&1
-  tar -xzf falkordb.tar.gz >/dev/null 2>&1
+  # FalkorDB is distributed as a Docker image, we need to install Redis and the module
+  msg_info "Installing Redis base"
+  apt-get -y install redis-server >/dev/null 2>&1
+  systemctl stop redis-server >/dev/null 2>&1
+  systemctl disable redis-server >/dev/null 2>&1
   
-  # Install binaries
-  cp -r falkordb-v${FALKORDB_VERSION}-linux-x64/* /usr/local/
-  chmod +x /usr/local/bin/falkordb-server
-  chmod +x /usr/local/bin/falkordb-cli
+  # Download FalkorDB module
+  cd /tmp
+  msg_info "Downloading FalkorDB module"
+  DOWNLOAD_URL="https://github.com/FalkorDB/FalkorDB/releases/download/v${FALKORDB_VERSION}/falkordb.Linux-ubuntu22.04-x86_64.v${FALKORDB_VERSION}.zip"
+  
+  # Try different download URLs based on version
+  if ! wget -q -O falkordb.zip "$DOWNLOAD_URL" 2>/dev/null; then
+    # Try alternative naming
+    DOWNLOAD_URL="https://github.com/FalkorDB/FalkorDB/releases/download/v${FALKORDB_VERSION}/falkordb.Linux-x86_64.v${FALKORDB_VERSION}.tar.gz"
+    if ! wget -q -O falkordb.tar.gz "$DOWNLOAD_URL" 2>/dev/null; then
+      msg_error "Could not download FalkorDB v${FALKORDB_VERSION}"
+      msg_info "Installing from Docker image instead"
+      
+      # Install Docker to extract the module
+      apt-get -y install docker.io >/dev/null 2>&1
+      docker pull falkordb/falkordb:v${FALKORDB_VERSION} >/dev/null 2>&1
+      
+      # Extract the module from Docker image
+      docker create --name temp-falkor falkordb/falkordb:v${FALKORDB_VERSION} >/dev/null 2>&1
+      docker cp temp-falkor:/usr/lib/redis/modules/falkordb.so /usr/lib/redis/modules/ >/dev/null 2>&1
+      docker rm temp-falkor >/dev/null 2>&1
+      
+      # Clean up Docker
+      apt-get -y remove docker.io >/dev/null 2>&1
+      apt-get -y autoremove >/dev/null 2>&1
+    else
+      tar -xzf falkordb.tar.gz >/dev/null 2>&1
+      mkdir -p /usr/lib/redis/modules
+      find . -name "*.so" -exec cp {} /usr/lib/redis/modules/falkordb.so \; 2>/dev/null
+    fi
+  else
+    apt-get -y install unzip >/dev/null 2>&1
+    unzip -q falkordb.zip >/dev/null 2>&1
+    mkdir -p /usr/lib/redis/modules
+    find . -name "*.so" -exec cp {} /usr/lib/redis/modules/falkordb.so \; 2>/dev/null
+  fi
   
   # Clean up
-  rm -rf /tmp/falkordb*
+  cd /
+  rm -rf /tmp/falkordb* /tmp/temp*
   
-  msg_ok "FalkorDB v${FALKORDB_VERSION} Installed"
+  msg_ok "FalkorDB Module Installed"
 }
 
 function setup_systemd() {
   msg_info "Setting up FalkorDB systemd service"
   
   # Create falkordb user
-  useradd --system --home /var/lib/falkordb --shell /bin/false falkordb >/dev/null 2>&1
+  useradd --system --home /var/lib/falkordb --shell /bin/false falkordb >/dev/null 2>&1 || true
   
   # Create directories
   mkdir -p /var/lib/falkordb
@@ -126,6 +168,7 @@ bind 0.0.0.0
 dir /var/lib/falkordb
 logfile /var/log/falkordb/falkordb.log
 loglevel notice
+daemonize no
 
 # Memory management
 maxmemory-policy noeviction
@@ -134,7 +177,7 @@ save 300 10
 save 60 10000
 
 # Graph module specific settings
-loadmodule /usr/local/lib/falkordb.so
+loadmodule /usr/lib/redis/modules/falkordb.so
 
 # Security (uncomment and set password)
 # requirepass your_secure_password_here
@@ -154,7 +197,7 @@ After=network.target
 Type=notify
 User=falkordb
 Group=falkordb
-ExecStart=/usr/local/bin/falkordb-server /etc/falkordb/falkordb.conf
+ExecStart=/usr/bin/redis-server /etc/falkordb/falkordb.conf
 ExecStop=/bin/kill -s QUIT \$MAINPID
 TimeoutStopSec=0
 Restart=always
@@ -185,19 +228,17 @@ function setup_firewall() {
 
 # Main installation
 main() {
-
-    msg_info "Installing Dependencies"
-    apt-get update >/dev/null 2>&1
-    apt-get -y install curl wget tar gzip ufw >/dev/null 2>&1
-    msg_ok "Dependencies Installed"
-
     install_falkordb
     setup_systemd
     setup_firewall
 
     msg_info "Starting FalkorDB"
     systemctl start falkordb
-    msg_ok "FalkorDB Started"
+    if systemctl is-active --quiet falkordb; then
+        msg_ok "FalkorDB Started"
+    else
+        msg_error "Failed to start FalkorDB - check logs with: journalctl -u falkordb"
+    fi
 
     msg_info "Cleaning up"
     apt-get -y autoremove >/dev/null 2>&1
