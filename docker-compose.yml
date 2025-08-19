@@ -16,15 +16,14 @@ services:
       timeout: 5s
       retries: 3
     depends_on:
-      falkordb:
-        condition: service_healthy
+      # falkordb now external at 192.168.50.113:6379
       graphiti-centrality-rs:
         condition: service_healthy
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY:-sk-dummy}
-      - FALKORDB_HOST=graphiti-falkordb-1
+      - FALKORDB_HOST=192.168.50.113
       - FALKORDB_PORT=6379
-      - FALKORDB_URI=redis://graphiti-falkordb-1:6379
+      - FALKORDB_URI=redis://192.168.50.113:6379
       - USE_FALKORDB=true
       - PORT=8000
       # Cerebras configuration
@@ -62,38 +61,12 @@ services:
       - homepage.icon=si-graphql
       - homepage.href=http://192.168.50.90:8000
       - homepage.description=Knowledge graph API service
-  falkordb:
-    image: falkordb/falkordb:latest
-    container_name: graphiti-falkordb-1
-    mem_limit: 12g  # Increased for large graph
-    mem_reservation: 4g
-    healthcheck:
-      test:
-        - CMD
-        - redis-cli
-        - ping
-      interval: 1s
-      timeout: 3s
-      retries: 10
-      start_period: 3s
-    ports:
-      - 6389:6379 # Redis/FalkorDB port (changed from 6379)
-    volumes:
-      - falkordb_data:/var/lib/falkordb/data
-      - ./falkordb-config.conf:/usr/local/etc/redis/redis.conf:ro  # Custom config
-    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]  # Use custom config
-    environment:
-      - REDIS_URL=redis://192.168.50.90:6389
-      - NEXT_PUBLIC_REDIS_URL=redis://192.168.50.90:6389
-      - NEXT_PUBLIC_API_URL=http://192.168.50.90:6389
-    networks:
-      - graphiti_network
-    labels:
-      - homepage.group=Knowledge Management
-      - homepage.name=FalkorDB
-      - homepage.icon=si-redis
-      - homepage.href=http://192.168.50.90:3100
-      - homepage.description=FalkorDB graph database
+  # FalkorDB is now running in LXC container at 192.168.50.113:6379
+  # Commenting out Docker container configuration
+  # falkordb:
+  #   image: falkordb/falkordb:latest
+  #   container_name: graphiti-falkordb-1
+  #   ... (configuration removed for external instance)
   graph-visualizer-rust:
     image: ghcr.io/oculairmedia/graphiti-rust-visualizer:dev
     container_name: graphiti-visualizer-rust
@@ -101,7 +74,7 @@ services:
     ports:
       - 3000:3000
     environment:
-      - FALKORDB_HOST=graphiti-falkordb-1
+      - FALKORDB_HOST=192.168.50.113
       - FALKORDB_PORT=6379
       - GRAPH_NAME=graphiti_migration
       - RUST_LOG=graph_visualizer=debug,tower_http=debug
@@ -113,9 +86,10 @@ services:
       - CACHE_STRATEGY=${CACHE_STRATEGY:-aggressive}
       - FORCE_FRESH_DATA=${FORCE_FRESH_DATA:-false}
       - REDIS_URL=redis://letta-redis-1:6379/2  # Use DB 2 for visual server cache
-    depends_on:
-      falkordb:
-        condition: service_healthy
+    # FalkorDB is external at 192.168.50.113:6379
+    # depends_on:
+    #   falkordb:
+    #     condition: service_healthy
     networks:
       - graphiti_network
       - letta_network  # For Redis access
@@ -202,14 +176,15 @@ services:
     ports:
       - 3003:3003 # Rust centrality service
     environment:
-      - FALKORDB_HOST=graphiti-falkordb-1
+      - FALKORDB_HOST=192.168.50.113
       - FALKORDB_PORT=6379
       - GRAPH_NAME=graphiti_migration
       - BIND_ADDR=0.0.0.0:3003
       - RUST_LOG=graphiti_centrality=info,debug
-    depends_on:
-      falkordb:
-        condition: service_healthy
+    # FalkorDB is external at 192.168.50.113:6379
+    # depends_on:
+    #   falkordb:
+    #     condition: service_healthy
     networks:
       - graphiti_network
     healthcheck:
@@ -241,7 +216,7 @@ services:
     ports:
       - 3004:3004 # Rust search service
     environment:
-      - FALKORDB_HOST=graphiti-falkordb-1
+      - FALKORDB_HOST=192.168.50.113
       - FALKORDB_PORT=6379
       - GRAPH_NAME=graphiti_migration
       - REDIS_URL=redis://letta-redis-1:6379  # Use separate Redis for cache
@@ -253,9 +228,10 @@ services:
       - RUST_SEARCH_PERCENTAGE=${RUST_SEARCH_PERCENTAGE:-0}  # A/B testing percentage
       - OLLAMA_BASE_URL=${OLLAMA_EMBEDDING_BASE_URL:-http://192.168.50.80:11434/v1}
       - OLLAMA_EMBEDDING_MODEL=${OLLAMA_EMBEDDING_MODEL:-mxbai-embed-large:latest}
-    depends_on:
-      falkordb:
-        condition: service_healthy
+    # FalkorDB is external at 192.168.50.113:6379
+    # depends_on:
+    #   falkordb:
+    #     condition: service_healthy
     networks:
       - graphiti_network
     healthcheck:
@@ -295,9 +271,10 @@ services:
       - RUN_INITIAL_BACKUP=${RUN_INITIAL_BACKUP:-true}
       - ENABLE_DASHBOARD=${ENABLE_DASHBOARD:-true}
       - STATUS_FILE=/var/log/backup_status.json
-    depends_on:
-      falkordb:
-        condition: service_healthy
+    # FalkorDB is external at 192.168.50.113:6379
+    # depends_on:
+    #   falkordb:
+    #     condition: service_healthy
     networks:
       - graphiti_network
     healthcheck:
