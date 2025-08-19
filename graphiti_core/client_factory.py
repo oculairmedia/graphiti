@@ -22,6 +22,7 @@ from graphiti_core.cross_encoder.openai_reranker_client import OpenAIRerankerCli
 from graphiti_core.embedder import EmbedderClient, OpenAIEmbedder, OpenAIEmbedderConfig
 from graphiti_core.llm_client import LLMClient, LLMConfig, OpenAIClient
 from graphiti_core.llm_client.cerebras_client import CerebrasClient
+from graphiti_core.llm_client.fallback_client import FallbackLLMClient
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +33,13 @@ class GraphitiClientFactory:
     @staticmethod
     def create_llm_client() -> Optional[LLMClient]:
         """Create LLM client based on environment configuration."""
-        # Check for Cerebras configuration
+        cerebras_client = None
+        ollama_client = None
+        
+        # Check if we should enable fallback mode
+        use_fallback = os.getenv('ENABLE_FALLBACK', 'true').lower() == 'true'
+        
+        # Try to create Cerebras client
         if os.getenv('USE_CEREBRAS', '').lower() == 'true':
             try:
                 cerebras_model = os.getenv('CEREBRAS_MODEL', 'qwen-3-coder-480b')
@@ -51,13 +58,19 @@ class GraphitiClientFactory:
                     max_tokens=4000
                 )
                 
-                return CerebrasClient(config=config)
+                cerebras_client = CerebrasClient(config=config)
+                
+                # If fallback is disabled, return just Cerebras
+                if not use_fallback:
+                    return cerebras_client
+                    
             except Exception as e:
                 logger.error(f'Failed to create Cerebras LLM client: {e}')
-                logger.info('Falling back to OpenAI LLM client')
+                if not use_fallback:
+                    logger.info('Falling back to OpenAI LLM client')
         
-        # Check for Ollama configuration
-        if os.getenv('USE_OLLAMA', '').lower() == 'true':
+        # Try to create Ollama client (for standalone use or as fallback)
+        if os.getenv('USE_OLLAMA', '').lower() == 'true' or (cerebras_client and use_fallback):
             try:
                 from openai import AsyncOpenAI
 
@@ -74,10 +87,31 @@ class GraphitiClientFactory:
                     model=ollama_model, small_model=ollama_model, temperature=0.7, max_tokens=2000
                 )
 
-                return OpenAIClient(config=config, client=client)
+                ollama_client = OpenAIClient(config=config, client=client)
+                
+                # If we have both Cerebras and Ollama with fallback enabled, create fallback client
+                if cerebras_client and ollama_client and use_fallback:
+                    logger.info('Creating fallback LLM client (Cerebras primary, Ollama backup)')
+                    return FallbackLLMClient(
+                        primary_client=cerebras_client,
+                        fallback_client=ollama_client
+                    )
+                
+                # Return just Ollama if no Cerebras
+                if ollama_client and not cerebras_client:
+                    return ollama_client
+                    
             except Exception as e:
                 logger.error(f'Failed to create Ollama LLM client: {e}')
+                # If we have Cerebras but couldn't create Ollama fallback, return just Cerebras
+                if cerebras_client:
+                    logger.warning('Running without fallback - Ollama unavailable')
+                    return cerebras_client
                 logger.info('Falling back to OpenAI LLM client')
+
+        # If we have just Cerebras without fallback
+        if cerebras_client:
+            return cerebras_client
 
         # Default to OpenAI client
         return OpenAIClient()
