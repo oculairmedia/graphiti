@@ -2,7 +2,7 @@ name: Build and Push Queued Service Container
 
 on:
   push:
-    branches: [ main, ingestion-queue-system ]
+    branches: [ main, ingestion-queue-system, falkordb-corruption-fixes ]
     paths:
       - 'queued/**'
       - '.github/workflows/build-queued-service.yml'
