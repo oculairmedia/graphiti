@@ -30,14 +30,14 @@ EPISODIC_NODE_SAVE_BULK = """
 """
 
 ENTITY_NODE_SAVE = """
-        MERGE (n:Entity {uuid: $entity_data.uuid})
+        MERGE (n:Entity {name: $entity_data.name, group_id: $entity_data.group_id})
         SET n = $entity_data
         SET n.name_embedding = vecf32($entity_data.name_embedding)
         RETURN n.uuid AS uuid"""
 
 ENTITY_NODE_SAVE_BULK = """
     UNWIND $nodes AS node
-    MERGE (n:Entity {uuid: node.uuid})
+    MERGE (n:Entity {name: node.name, group_id: node.group_id})
     SET n = node
     SET n.name_embedding = vecf32(node.name_embedding)
     RETURN n.uuid AS uuid
