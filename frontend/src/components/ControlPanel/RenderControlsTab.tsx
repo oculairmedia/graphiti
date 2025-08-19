@@ -15,8 +15,12 @@ interface RenderControlsTabProps {
     linkWidth: number;
     linkWidthBy: string;
     linkWidthScheme: string;
+    linkWidthMin?: number;
+    linkWidthMax?: number;
     linkOpacity: number;
     linkOpacityScheme: string;
+    linkOpacityMin?: number;
+    linkOpacityMax?: number;
     linkColor: string;
     backgroundColor: string;
     linkColorScheme: string;
@@ -107,6 +111,32 @@ export const RenderControlsTab: React.FC<RenderControlsTabProps> = ({
             <p className="text-xs text-muted-foreground mt-1">Column name for link width values</p>
           </div>
 
+          {config.linkWidthScheme !== 'uniform' && (
+            <>
+              <ControlSlider
+                label="Link Width Min"
+                value={config.linkWidthMin ?? 0.1}
+                min={0.1}
+                max={2}
+                step={0.1}
+                onChange={(value) => onConfigUpdate({ linkWidthMin: value })}
+                formatValue={(v) => v.toFixed(1)}
+              />
+              <p className="text-xs text-muted-foreground -mt-2">Minimum link width for scaling</p>
+
+              <ControlSlider
+                label="Link Width Max"
+                value={config.linkWidthMax ?? 5}
+                min={0.5}
+                max={10}
+                step={0.1}
+                onChange={(value) => onConfigUpdate({ linkWidthMax: value })}
+                formatValue={(v) => v.toFixed(1)}
+              />
+              <p className="text-xs text-muted-foreground -mt-2">Maximum link width for scaling</p>
+            </>
+          )}
+
           <ControlSlider
             label="Link Opacity"
             value={config.linkOpacity * 100}
@@ -133,6 +163,32 @@ export const RenderControlsTab: React.FC<RenderControlsTabProps> = ({
               </SelectContent>
             </Select>
           </div>
+
+          {config.linkOpacityScheme !== 'uniform' && (
+            <>
+              <ControlSlider
+                label="Link Opacity Min"
+                value={(config.linkOpacityMin ?? 0.1) * 100}
+                min={0}
+                max={50}
+                step={5}
+                onChange={(value) => onConfigUpdate({ linkOpacityMin: value / 100 })}
+                formatValue={(v) => `${Math.round(v)}%`}
+              />
+              <p className="text-xs text-muted-foreground -mt-2">Minimum link opacity for scaling</p>
+
+              <ControlSlider
+                label="Link Opacity Max"
+                value={(config.linkOpacityMax ?? 1) * 100}
+                min={50}
+                max={100}
+                step={5}
+                onChange={(value) => onConfigUpdate({ linkOpacityMax: value / 100 })}
+                formatValue={(v) => `${Math.round(v)}%`}
+              />
+              <p className="text-xs text-muted-foreground -mt-2">Maximum link opacity for scaling</p>
+            </>
+          )}
 
           <ColorPicker
             color={config.linkColor}

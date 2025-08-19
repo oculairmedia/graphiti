@@ -161,6 +161,7 @@ class CerebrasClient(LLMClient):
                 'max_completion_tokens': max_tokens or self.max_tokens,
                 'temperature': self.temperature,
                 'top_p': 0.8,  # Recommended for qwen-3-coder-480b
+                # Note: top_k, frequency_penalty, repetition_penalty not supported by Cerebras API
             }
             
             # Add structured output format if response model is provided

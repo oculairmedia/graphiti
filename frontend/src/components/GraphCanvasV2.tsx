@@ -726,53 +726,55 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
         return undefined;
       }
       
-      // Get base width from config
-      const baseWidth = config.linkWidth || 2;
+      // Get min/max from config or use defaults
+      const minWidth = config.linkWidthMin ?? 0.1;
+      const maxWidth = config.linkWidthMax ?? 5;
       
       // Return a function that calculates width based on scheme
       return (edgeType: any, linkIndex: number) => {
         // Note: We access cosmographData inside the function, but the function
         // itself is only recreated when linkWidthScheme changes
-        if (!cosmographData?.links || !cosmographData?.nodes) return baseWidth;
+        if (!cosmographData?.links || !cosmographData?.nodes) return minWidth;
         const link = cosmographData.links[linkIndex];
-        if (!link) return baseWidth;
+        if (!link) return minWidth;
         
         switch (config.linkWidthScheme) {
           case 'by-source-pagerank': {
             const sourceNode = cosmographData.nodes[link.sourceIndex];
-            if (!sourceNode) return baseWidth;
+            if (!sourceNode) return minWidth;
             const pagerank = sourceNode.pagerank_centrality || sourceNode.pagerank || 0;
-            // Scale pagerank (0-1) to width range
-            return baseWidth * 0.5 + (pagerank * baseWidth * 2.5);
+            // Scale pagerank (0-1) to width range using min/max
+            return minWidth + (pagerank * (maxWidth - minWidth));
           }
           
           case 'by-source-centrality': {
             const sourceNode = cosmographData.nodes[link.sourceIndex];
-            if (!sourceNode) return baseWidth;
+            if (!sourceNode) return minWidth;
             const centrality = sourceNode.degree_centrality || 0;
-            // Scale centrality (0-1) to width range
-            return baseWidth * 0.5 + (centrality * baseWidth * 2.5);
+            // Scale centrality (0-1) to width range using min/max
+            return minWidth + (centrality * (maxWidth - minWidth));
           }
           
           case 'by-source-betweenness': {
             const sourceNode = cosmographData.nodes[link.sourceIndex];
-            if (!sourceNode) return baseWidth;
+            if (!sourceNode) return minWidth;
             const betweenness = sourceNode.betweenness_centrality || 0;
-            // Scale betweenness (0-1) to width range
-            return baseWidth * 0.5 + (betweenness * baseWidth * 3.5);
+            // Scale betweenness (0-1) to width range using min/max
+            return minWidth + (betweenness * (maxWidth - minWidth));
           }
           
           case 'by-weight': {
             const weight = link.weight || 1;
-            // Scale weight to width range
-            return baseWidth * 0.5 + (Math.min(weight, 5) * baseWidth * 0.5);
+            // Normalize weight (assuming 0-10 range) and scale to width range
+            const normalizedWeight = Math.min(weight / 10, 1);
+            return minWidth + (normalizedWeight * (maxWidth - minWidth));
           }
           
           default:
-            return baseWidth;
+            return minWidth;
         }
       };
-    }, [config.linkWidthScheme, config.linkWidth]); // Depend on scheme and base width
+    }, [config.linkWidthScheme, config.linkWidth, config.linkWidthMin, config.linkWidthMax]); // Depend on scheme and min/max
     
     // Dynamic link width range based on scheme
     // This is used when linkWidthByFn is NOT provided (uniform case)
@@ -879,18 +881,25 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
         // Step 2: Determine opacity from transparency scheme (using linkOpacityScheme to match control panel)
         let opacity = config.linkOpacity || 0.85;
         
+        // Get min/max opacity from config or use defaults
+        const minOpacity = config.linkOpacityMin ?? 0.1;
+        const maxOpacity = config.linkOpacityMax ?? 1;
+        
         switch (config.linkOpacityScheme) {
           case 'by-source-centrality': {
             const sourceNode = cosmographData.nodes[link.sourceIndex];
             if (!sourceNode) break;
             const centrality = sourceNode.degree_centrality || 0;
-            opacity = 0.2 + (centrality * 0.65); // Range 0.2 to 0.85
+            // Scale centrality (0-1) to opacity range using min/max
+            opacity = minOpacity + (centrality * (maxOpacity - minOpacity));
             break;
           }
           case 'by-distance': {
             // Distance-based opacity - closer nodes have more opaque links
             const weight = link.weight || 1;
-            opacity = Math.max(0.2, Math.min(1, 1 / weight));
+            // Normalize weight (assuming 1-10 range) and invert for opacity
+            const normalizedDistance = Math.min(weight / 10, 1);
+            opacity = maxOpacity - (normalizedDistance * (maxOpacity - minOpacity));
             break;
           }
           case 'uniform':
@@ -908,6 +917,8 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
       config.linkOpacityScheme, 
       config.linkColor, 
       config.linkOpacity,
+      config.linkOpacityMin,
+      config.linkOpacityMax,
       config.nodeTypeColors,  // Add this so edges update when node colors change
       glowingNodes,  // Add for by-source-node highlighting
       config.nodeAccessHighlightColor  // Add for highlight color

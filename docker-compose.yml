@@ -51,7 +51,7 @@ services:
       - ENABLE_CACHE_INVALIDATION=true
       - GRAPHITI_DATA_WEBHOOK_URLS=${GRAPHITI_DATA_WEBHOOK_URLS:-http://graph-visualizer-rust:3000/api/webhooks/data-ingestion,http://host.docker.internal:3000/api/webhooks/data-ingestion}
       # Queue configuration
-      - USE_QUEUE_FOR_INGESTION=${USE_QUEUE_FOR_INGESTION:-false}
+      - USE_QUEUE_FOR_INGESTION=${USE_QUEUE_FOR_INGESTION:-true}
       - QUEUE_URL=http://graphiti-queued:8080
       - QUEUE_FALLBACK_TO_DIRECT=true
     networks:
