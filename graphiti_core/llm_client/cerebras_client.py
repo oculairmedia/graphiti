@@ -31,7 +31,7 @@ from .errors import RateLimitError
 logger = logging.getLogger(__name__)
 
 DEFAULT_CEREBRAS_MODEL = 'qwen-3-coder-480b'
-DEFAULT_CEREBRAS_SMALL_MODEL = 'qwen-3-32b'
+DEFAULT_CEREBRAS_SMALL_MODEL = 'qwen-3-coder-480b'  # Use same model for all tasks
 
 
 class CerebrasClient(LLMClient):
