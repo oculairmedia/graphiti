@@ -91,8 +91,12 @@ const defaultStableConfig: StableConfig = {
   linkWidthBy: 'weight',
   linkWidthScheme: 'uniform',  // New: scheme for link width
   linkWidthScale: 0.5,
+  linkWidthMin: 0.1,  // Minimum link width for non-uniform schemes
+  linkWidthMax: 5,    // Maximum link width for non-uniform schemes
   linkOpacity: 0.85,
   linkOpacityScheme: 'uniform',  // New: scheme for link opacity
+  linkOpacityMin: 0.1,  // Minimum link opacity for non-uniform schemes
+  linkOpacityMax: 1,    // Maximum link opacity for non-uniform schemes
   linkGreyoutOpacity: 0.1,
   linkColor: '#9CA3AF',
   linkColorScheme: 'uniform',
