@@ -1,13 +1,13 @@
-# Use cargo-chef for proper dependency caching
-FROM lukemathwalker/cargo-chef:latest-rust-1 AS chef
+# Use cargo-chef with Rust 1.82 for icu crates compatibility
+FROM lukemathwalker/cargo-chef:latest-rust-1.82 AS chef
 WORKDIR /app
 
 # Plan stage - prepare the dependency list
 FROM chef AS planner
-# Clone queued repository
-RUN git clone https://github.com/wilsonzlin/queued.git /tmp/queued
-# Copy the source to working directory
-RUN cp -r /tmp/queued/* /app/
+# Copy local source files instead of cloning from GitHub
+COPY . /app/
+# Copy cargo config with dependency patches
+COPY .cargo/config.toml ./.cargo/config.toml
 # Prepare the recipe for caching dependencies
 RUN cargo chef prepare --recipe-path recipe.json
 
@@ -22,13 +22,14 @@ RUN apt-get update && apt-get install -y \
 
 # Copy the recipe from planner
 COPY --from=planner /app/recipe.json recipe.json
+# Copy cargo config with dependency patches
+COPY .cargo/config.toml ./.cargo/config.toml
 
 # Build dependencies - this layer will be cached!
 RUN cargo chef cook --release --recipe-path recipe.json
 
-# Now copy the actual source code
-RUN git clone https://github.com/wilsonzlin/queued.git /tmp/queued && \
-    cp -r /tmp/queued/* /app/
+# Copy the actual source code
+COPY . /app/
 
 # Build the actual application - only runs when source changes
 RUN cargo build --release

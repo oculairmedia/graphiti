@@ -53,7 +53,7 @@ services:
       # Queue configuration
       - USE_QUEUE_FOR_INGESTION=${USE_QUEUE_FOR_INGESTION:-true}
       - QUEUE_URL=http://graphiti-queued:8080
-      - QUEUE_FALLBACK_TO_DIRECT=true
+      - QUEUE_FALLBACK_TO_DIRECT=false
     networks:
       - graphiti_network
     labels:
@@ -79,6 +79,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 3
+    mem_limit: 4g
+    memswap_limit: 4g
     labels:
       - homepage.group=Knowledge Management
       - homepage.name=FalkorDB
@@ -265,6 +267,77 @@ services:
       - homepage.icon=si-rust
       - homepage.href=http://192.168.50.90:3004
       - homepage.description=High-performance search with 43x speedup
+  # Queue service for processing ingestion tasks
+  graphiti-queued:
+    image: graphiti-queued:falkordb-corruption-fixes
+    container_name: graphiti-queued
+    restart: unless-stopped
+    ports:
+      - 8059:8080
+    volumes:
+      - queued_data:/data
+    environment:
+      - RUST_LOG=queued=info,debug
+    networks:
+      - graphiti_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/queues"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    labels:
+      - homepage.group=Knowledge Management
+      - homepage.name=Graphiti Queue Service
+      - homepage.icon=si-queue
+      - homepage.href=http://192.168.50.90:8080
+      - homepage.description=Message queue for processing ingestion tasks
+
+  # Worker service that processes queue messages with corruption fix
+  graphiti-worker:
+    image: ghcr.io/oculairmedia/graphiti-worker:falkordb-corruption-fixes
+    container_name: graphiti-worker-1
+    restart: unless-stopped
+    environment:
+      - QUEUED_URL=http://graphiti-queued:8080
+      - FALKORDB_HOST=falkordb
+      - FALKORDB_PORT=6379
+      - FALKORDB_URI=redis://falkordb:6379
+      - USE_FALKORDB=true
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-sk-dummy}
+      # Cerebras configuration (same as API service)
+      - USE_CEREBRAS=${USE_CEREBRAS:-false}
+      - CEREBRAS_API_KEY=${CEREBRAS_API_KEY}
+      - CEREBRAS_MODEL=${CEREBRAS_MODEL:-qwen-3-coder-480b}
+      - CEREBRAS_SMALL_MODEL=${CEREBRAS_SMALL_MODEL:-qwen-3-coder-480b}
+      # Ollama configuration (used when USE_CEREBRAS=false)
+      - USE_OLLAMA=${USE_OLLAMA:-true}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://100.81.139.20:11434/v1}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-gemma3:12b}
+      - OLLAMA_EMBEDDING_MODEL=${OLLAMA_EMBEDDING_MODEL:-mxbai-embed-large:latest}
+      - USE_OLLAMA_EMBEDDINGS=${USE_OLLAMA_EMBEDDINGS:-true}
+      # Dedicated embedding endpoint configuration
+      - USE_DEDICATED_EMBEDDING_ENDPOINT=${USE_DEDICATED_EMBEDDING_ENDPOINT:-true}
+      - OLLAMA_EMBEDDING_BASE_URL=${OLLAMA_EMBEDDING_BASE_URL:-http://192.168.50.80:11434/v1}
+      - OLLAMA_EMBEDDING_API_KEY=${OLLAMA_EMBEDDING_API_KEY:-ollama}
+      - EMBEDDING_ENDPOINT_FALLBACK=${EMBEDDING_ENDPOINT_FALLBACK:-true}
+      - WORKER_COUNT=2
+      - BATCH_SIZE=5
+      - POLL_INTERVAL=1.0
+      - ENABLE_DASHBOARD=false
+      - LOG_LEVEL=INFO
+    depends_on:
+      graphiti-queued:
+        condition: service_healthy
+      falkordb:
+        condition: service_healthy
+    networks:
+      - graphiti_network
+    labels:
+      - homepage.group=Knowledge Management
+      - homepage.name=Graphiti Worker 1
+      - homepage.icon=si-kubernetes
+      - homepage.description=Ingestion worker with corruption fix
+
   # Automated backup service for FalkorDB
   falkordb-backup:
     image: ghcr.io/oculairmedia/graphiti-backup:dev
@@ -313,3 +386,4 @@ volumes:
   falkordb_data: null
   falkordb_backups: null
   backup_status: null
+  queued_data: null
