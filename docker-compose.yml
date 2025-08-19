@@ -1,6 +1,6 @@
 services:
   graph:
-    image: ghcr.io/oculairmedia/graphiti-api:ingestion-queue-system
+    image: ghcr.io/oculairmedia/graphiti-api:falkordb-corruption-fixes
     volumes:
       - ./server/graph_service/zep_graphiti.py:/app/server/graph_service/zep_graphiti.py:ro
     ports:
@@ -16,14 +16,15 @@ services:
       timeout: 5s
       retries: 3
     depends_on:
-      # falkordb now external at 192.168.50.113:6379
+      falkordb:
+        condition: service_healthy
       graphiti-centrality-rs:
         condition: service_healthy
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY:-sk-dummy}
-      - FALKORDB_HOST=192.168.50.113
+      - FALKORDB_HOST=falkordb
       - FALKORDB_PORT=6379
-      - FALKORDB_URI=redis://192.168.50.113:6379
+      - FALKORDB_URI=redis://falkordb:6379
       - USE_FALKORDB=true
       - PORT=8000
       # Cerebras configuration
@@ -61,12 +62,29 @@ services:
       - homepage.icon=si-graphql
       - homepage.href=http://192.168.50.90:8000
       - homepage.description=Knowledge graph API service
-  # FalkorDB is now running in LXC container at 192.168.50.113:6379
-  # Commenting out Docker container configuration
-  # falkordb:
-  #   image: falkordb/falkordb:latest
-  #   container_name: graphiti-falkordb-1
-  #   ... (configuration removed for external instance)
+  falkordb:
+    image: falkordb/falkordb:latest
+    container_name: graphiti-falkordb-1
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - falkordb_data:/data
+    environment:
+      - FALKORDB_ARGS=--save 60 1 --loglevel warning
+    networks:
+      - graphiti_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    labels:
+      - homepage.group=Knowledge Management
+      - homepage.name=FalkorDB
+      - homepage.icon=si-redis
+      - homepage.href=http://192.168.50.90:6379
+      - homepage.description=Graph database storage
   graph-visualizer-rust:
     image: ghcr.io/oculairmedia/graphiti-rust-visualizer:dev
     container_name: graphiti-visualizer-rust
@@ -74,7 +92,7 @@ services:
     ports:
       - 3000:3000
     environment:
-      - FALKORDB_HOST=192.168.50.113
+      - FALKORDB_HOST=falkordb
       - FALKORDB_PORT=6379
       - GRAPH_NAME=graphiti_migration
       - RUST_LOG=graph_visualizer=debug,tower_http=debug
@@ -86,10 +104,9 @@ services:
       - CACHE_STRATEGY=${CACHE_STRATEGY:-aggressive}
       - FORCE_FRESH_DATA=${FORCE_FRESH_DATA:-false}
       - REDIS_URL=redis://letta-redis-1:6379/2  # Use DB 2 for visual server cache
-    # FalkorDB is external at 192.168.50.113:6379
-    # depends_on:
-    #   falkordb:
-    #     condition: service_healthy
+    depends_on:
+      falkordb:
+        condition: service_healthy
     networks:
       - graphiti_network
       - letta_network  # For Redis access
@@ -176,15 +193,14 @@ services:
     ports:
       - 3003:3003 # Rust centrality service
     environment:
-      - FALKORDB_HOST=192.168.50.113
+      - FALKORDB_HOST=falkordb
       - FALKORDB_PORT=6379
       - GRAPH_NAME=graphiti_migration
       - BIND_ADDR=0.0.0.0:3003
       - RUST_LOG=graphiti_centrality=info,debug
-    # FalkorDB is external at 192.168.50.113:6379
-    # depends_on:
-    #   falkordb:
-    #     condition: service_healthy
+    depends_on:
+      falkordb:
+        condition: service_healthy
     networks:
       - graphiti_network
     healthcheck:
@@ -216,7 +232,7 @@ services:
     ports:
       - 3004:3004 # Rust search service
     environment:
-      - FALKORDB_HOST=192.168.50.113
+      - FALKORDB_HOST=falkordb
       - FALKORDB_PORT=6379
       - GRAPH_NAME=graphiti_migration
       - REDIS_URL=redis://letta-redis-1:6379  # Use separate Redis for cache
@@ -228,10 +244,9 @@ services:
       - RUST_SEARCH_PERCENTAGE=${RUST_SEARCH_PERCENTAGE:-0}  # A/B testing percentage
       - OLLAMA_BASE_URL=${OLLAMA_EMBEDDING_BASE_URL:-http://192.168.50.80:11434/v1}
       - OLLAMA_EMBEDDING_MODEL=${OLLAMA_EMBEDDING_MODEL:-mxbai-embed-large:latest}
-    # FalkorDB is external at 192.168.50.113:6379
-    # depends_on:
-    #   falkordb:
-    #     condition: service_healthy
+    depends_on:
+      falkordb:
+        condition: service_healthy
     networks:
       - graphiti_network
     healthcheck:
@@ -271,10 +286,9 @@ services:
       - RUN_INITIAL_BACKUP=${RUN_INITIAL_BACKUP:-true}
       - ENABLE_DASHBOARD=${ENABLE_DASHBOARD:-true}
       - STATUS_FILE=/var/log/backup_status.json
-    # FalkorDB is external at 192.168.50.113:6379
-    # depends_on:
-    #   falkordb:
-    #     condition: service_healthy
+    depends_on:
+      falkordb:
+        condition: service_healthy
     networks:
       - graphiti_network
     healthcheck:
