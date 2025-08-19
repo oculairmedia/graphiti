@@ -107,7 +107,8 @@ class GraphitiClientFactory:
     @staticmethod
     def create_embedder() -> Optional[EmbedderClient]:
         """Create embedder client based on environment configuration."""
-        if os.getenv('USE_OLLAMA', '').lower() == 'true':
+        # Check for Ollama embeddings even if main LLM is Cerebras
+        if os.getenv('USE_OLLAMA_EMBEDDINGS', '').lower() == 'true' or os.getenv('USE_OLLAMA', '').lower() == 'true':
             try:
                 from openai import AsyncOpenAI
 
