@@ -54,8 +54,9 @@ class GraphitiClientFactory:
                     api_key=cerebras_api_key,
                     model=cerebras_model,
                     small_model=cerebras_small_model,
-                    temperature=0.3,  # Lower temperature for more consistent extraction
-                    max_tokens=4000
+                    temperature=0.7,  # Recommended temperature for qwen-3-coder-480b
+                    max_tokens=4000,
+                    # Note: top_p=0.8 recommended but not exposed in current config
                 )
                 
                 cerebras_client = CerebrasClient(config=config)
