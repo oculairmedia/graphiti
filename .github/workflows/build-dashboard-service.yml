@@ -2,7 +2,7 @@ name: Build and Push Dashboard Service Container
 
 on:
   push:
-    branches: [ main, ingestion-queue-system ]
+    branches: [ main, ingestion-queue-system, falkordb-corruption-fixes ]
     paths:
       - 'worker/dashboard.py'
       - 'worker/Dockerfile.dashboard'
