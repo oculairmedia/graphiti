@@ -49,7 +49,9 @@ services:
       - RUST_CENTRALITY_URL=http://graphiti-centrality-rs:3003
       - WORKER_COUNT=1
       - ENABLE_CROSS_GRAPH_DEDUPLICATION=true
-      - BATCH_SIZE=1
+      - BATCH_SIZE=${BATCH_SIZE:-1}  # Dynamic based on LLM
+      - CEREBRAS_BATCH_SIZE=${CEREBRAS_BATCH_SIZE:-2}  # Larger batch for Cerebras
+      - OLLAMA_BATCH_SIZE=${OLLAMA_BATCH_SIZE:-1}  # Smaller batch for Ollama
       - POLL_INTERVAL=2.0
       - PYTHONUNBUFFERED=1
       - DRIVER_TYPE=falkordb
