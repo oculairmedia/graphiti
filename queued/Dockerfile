@@ -6,8 +6,6 @@ WORKDIR /app
 FROM chef AS planner
 # Copy local source files instead of cloning from GitHub
 COPY . /app/
-# Debug: Show what was actually copied
-RUN ls -la /app/ && ls -la /app/queued/ || echo "No /app/queued directory found"
 # Prepare the recipe for caching dependencies
 RUN cargo chef prepare --recipe-path recipe.json
 

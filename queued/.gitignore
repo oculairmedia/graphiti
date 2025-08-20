@@ -1,2 +1,6 @@
-# Ignore the queued binary
-queued
+# Ignore the built queued binary (not the source directory)
+/target/
+/queued/target/
+queued/queued
+**/queued-*
+!queued/
