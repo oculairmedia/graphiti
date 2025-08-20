@@ -88,7 +88,7 @@ class CentralityClient:
             response = await self.client.post(
                 f"{self.base_url}/centrality/node/{node_uuid}",
                 json={
-                    "metrics": ["degree", "pagerank", "betweenness"],
+                    "metrics": ["degree", "pagerank", "betweenness", "eigenvector"],
                     "store_results": True
                 }
             )
@@ -358,12 +358,21 @@ class IngestionWorker:
             logger.info(f"Processed episode {payload.get('uuid')}: "
                        f"{len(result.nodes) if result and result.nodes else 0} entities created")
             
-            # Update centrality for newly created nodes
+            # Update centrality for newly created nodes and episode
+            centrality_uuids = []
+            
+            # Add entity node UUIDs
             if result and result.nodes:
-                node_uuids = [node.uuid for node in result.nodes if node.uuid]
-                if node_uuids:
-                    # Run centrality update asynchronously without blocking
-                    asyncio.create_task(self._update_centrality_async(node_uuids))
+                entity_uuids = [node.uuid for node in result.nodes if node.uuid]
+                centrality_uuids.extend(entity_uuids)
+            
+            # Add episode UUID
+            if result and result.episode and result.episode.uuid:
+                centrality_uuids.append(result.episode.uuid)
+            
+            if centrality_uuids:
+                # Run centrality update asynchronously without blocking
+                asyncio.create_task(self._update_centrality_async(centrality_uuids))
             
             # Track episode count for background deduplication
             self.episode_count += 1
