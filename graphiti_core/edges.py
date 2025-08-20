@@ -21,8 +21,9 @@ from time import time
 from typing import Any
 from uuid import UUID, uuid4
 import re
+import os
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, validator, root_validator
 from typing_extensions import LiteralString
 
 from graphiti_core.driver.driver import GraphDriver
@@ -35,6 +36,7 @@ from graphiti_core.models.edges.edge_db_queries import (
     EPISODIC_EDGE_SAVE,
 )
 from graphiti_core.nodes import Node
+from graphiti_core.utils.uuid_utils import generate_deterministic_edge_uuid
 
 logger = logging.getLogger(__name__)
 
@@ -55,14 +57,47 @@ ENTITY_EDGE_RETURN: LiteralString = """
 
 
 class Edge(BaseModel, ABC):
-    uuid: str = Field(default_factory=lambda: str(uuid4()))
+    uuid: str = Field(default="", description='UUID of the edge')
     group_id: str = Field(description='partition of the graph')
     source_node_uuid: str
     target_node_uuid: str
     created_at: datetime
 
+    @root_validator(pre=True)
+    def generate_uuid_if_needed(cls, values):
+        uuid_value = values.get('uuid', '')
+        
+        # If UUID is already provided and valid, use it
+        if uuid_value and str(uuid_value).strip():
+            try:
+                UUID(uuid_value)  # Validate format
+                return values
+            except ValueError:
+                raise ValueError('Invalid UUID format')
+        
+        # Check if deterministic UUID generation is enabled
+        use_deterministic_uuids = os.getenv('USE_DETERMINISTIC_UUIDS', 'false').lower() == 'true'
+        
+        if use_deterministic_uuids:
+            # Get required fields from values
+            source_uuid = values.get('source_node_uuid')
+            target_uuid = values.get('target_node_uuid')
+            group_id = values.get('group_id')
+            
+            # For EntityEdge, we can use the edge name for more specificity
+            edge_name = values.get('name', 'EDGE')
+            
+            if source_uuid and target_uuid and group_id:
+                # Generate deterministic UUID for edges
+                values['uuid'] = generate_deterministic_edge_uuid(source_uuid, target_uuid, edge_name, group_id)
+                return values
+        
+        # Fall back to random UUID
+        values['uuid'] = str(uuid4())
+        return values
+    
     @validator('uuid')
-    def validate_uuid(cls, v):
+    def validate_uuid_final(cls, v):
         if not v or not v.strip():
             raise ValueError('UUID cannot be empty')
         try:

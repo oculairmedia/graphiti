@@ -22,8 +22,9 @@ from enum import Enum
 from time import time
 from typing import Any
 from uuid import UUID, uuid4
+import os
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, validator, root_validator
 from typing_extensions import LiteralString
 
 from graphiti_core.driver.driver import GraphDriver
@@ -36,6 +37,7 @@ from graphiti_core.models.nodes.node_db_queries import (
     EPISODIC_NODE_SAVE,
 )
 from graphiti_core.utils.datetime_utils import utc_now
+from graphiti_core.utils.uuid_utils import generate_deterministic_uuid
 
 logger = logging.getLogger(__name__)
 
@@ -87,18 +89,46 @@ class EpisodeType(Enum):
 
 
 class Node(BaseModel, ABC):
-    uuid: str = Field(default_factory=lambda: str(uuid4()))
+    uuid: str = Field(default="", description='UUID of the node')
     name: str = Field(description='name of the node')
     group_id: str = Field(description='partition of the graph')
     labels: list[str] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=lambda: utc_now())
 
+    @root_validator(pre=True)
+    def generate_uuid_if_needed(cls, values):
+        uuid_value = values.get('uuid', '')
+        
+        # If UUID is already provided and valid, use it
+        if uuid_value and str(uuid_value).strip():
+            try:
+                UUID(uuid_value)  # Validate format
+                return values
+            except ValueError:
+                raise ValueError('Invalid UUID format')
+        
+        # Check if deterministic UUID generation is enabled
+        use_deterministic_uuids = os.getenv('USE_DETERMINISTIC_UUIDS', 'false').lower() == 'true'
+        
+        if use_deterministic_uuids:
+            # Get name and group_id from values
+            name = values.get('name')
+            group_id = values.get('group_id')
+            
+            if name and group_id:
+                # Generate deterministic UUID
+                values['uuid'] = generate_deterministic_uuid(name, group_id)
+                return values
+        
+        # Fall back to random UUID
+        values['uuid'] = str(uuid4())
+        return values
+    
     @validator('uuid')
-    def validate_uuid(cls, v):
+    def validate_uuid_final(cls, v):
         if not v or not v.strip():
             raise ValueError('UUID cannot be empty')
         try:
-            # Validate UUID format
             UUID(v)
         except ValueError:
             raise ValueError('Invalid UUID format')
