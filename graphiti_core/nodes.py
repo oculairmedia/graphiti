@@ -189,6 +189,43 @@ class EpisodicNode(Node):
         default_factory=list,
     )
 
+    @validator('source_description')
+    def validate_source_description(cls, v):
+        if not v or not v.strip():
+            raise ValueError('Source description cannot be empty')
+        if len(v.strip()) > 1000:
+            raise ValueError('Source description cannot exceed 1000 characters')
+        return v.strip()
+    
+    @validator('content')
+    def validate_content(cls, v):
+        if not v or not v.strip():
+            raise ValueError('Episode content cannot be empty')
+        if len(v.strip()) > 100000:
+            raise ValueError('Episode content cannot exceed 100000 characters')
+        return v.strip()
+    
+    @validator('valid_at')
+    def validate_valid_at(cls, v):
+        if not isinstance(v, datetime):
+            raise ValueError('valid_at must be a datetime object')
+        return v
+    
+    @validator('entity_edges')
+    def validate_entity_edges(cls, v):
+        if not isinstance(v, list):
+            raise ValueError('Entity edges must be a list')
+        for edge_id in v:
+            if not isinstance(edge_id, str):
+                raise ValueError('All entity edge IDs must be strings')
+            if not edge_id.strip():
+                raise ValueError('Entity edge IDs cannot be empty strings')
+            try:
+                UUID(edge_id)
+            except ValueError:
+                raise ValueError(f'Invalid entity edge UUID format: {edge_id}')
+        return v
+
     async def save(self, driver: GraphDriver):
         result = await driver.execute_query(
             EPISODIC_NODE_SAVE,
