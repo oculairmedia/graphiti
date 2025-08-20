@@ -132,11 +132,12 @@ impl FalkorClient {
                 let pagerank = node_scores.get("pagerank").copied().unwrap_or(0.0);
                 let degree = node_scores.get("degree").copied().unwrap_or(0.0);
                 let betweenness = node_scores.get("betweenness").copied().unwrap_or(0.0);
-                let eigenvector = node_scores.get("importance").copied().unwrap_or(0.0);
+                let eigenvector = node_scores.get("eigenvector").copied().unwrap_or(0.0);
+                let importance = node_scores.get("importance").copied().unwrap_or(0.0);
                 
                 batch_data.push(format!(
-                    "{{uuid: '{}', pagerank: {}, degree: {}, betweenness: {}, eigenvector: {}}}",
-                    node_uuid, pagerank, degree, betweenness, eigenvector
+                    "{{uuid: '{}', pagerank: {}, degree: {}, betweenness: {}, eigenvector: {}, importance: {}}}",
+                    node_uuid, pagerank, degree, betweenness, eigenvector, importance
                 ));
             }
             
@@ -147,7 +148,8 @@ impl FalkorClient {
                  SET n.pagerank_centrality = nodeData.pagerank,
                      n.degree_centrality = nodeData.degree,
                      n.betweenness_centrality = nodeData.betweenness,
-                     n.eigenvector_centrality = nodeData.eigenvector",
+                     n.eigenvector_centrality = nodeData.eigenvector,
+                     n.importance_score = nodeData.importance",
                 batch_data.join(", ")
             );
             
@@ -167,7 +169,8 @@ impl FalkorClient {
                                 "pagerank" => "pagerank_centrality",
                                 "degree" => "degree_centrality", 
                                 "betweenness" => "betweenness_centrality",
-                                "importance" => "eigenvector_centrality",
+                                "eigenvector" => "eigenvector_centrality",
+                                "importance" => "importance_score",
                                 _ => &format!("{}_centrality", score_name),
                             };
                             set_clauses.push(format!("n.{} = {}", property_name, score_value));
