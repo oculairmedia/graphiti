@@ -6,8 +6,6 @@ WORKDIR /app
 FROM chef AS planner
 # Copy local source files instead of cloning from GitHub
 COPY . /app/
-# Copy cargo config with dependency patches
-COPY .cargo/config.toml ./.cargo/config.toml
 # Prepare the recipe for caching dependencies
 RUN cargo chef prepare --recipe-path recipe.json
 
@@ -22,8 +20,6 @@ RUN apt-get update && apt-get install -y \
 
 # Copy the recipe from planner
 COPY --from=planner /app/recipe.json recipe.json
-# Copy cargo config with dependency patches
-COPY .cargo/config.toml ./.cargo/config.toml
 
 # Build dependencies - this layer will be cached!
 RUN cargo chef cook --release --recipe-path recipe.json
