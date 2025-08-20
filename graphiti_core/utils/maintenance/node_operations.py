@@ -15,7 +15,10 @@ limitations under the License.
 """
 
 import logging
+import os
+import re
 from contextlib import suppress
+from difflib import SequenceMatcher
 from time import time
 from typing import Any
 from uuid import uuid4, uuid5, NAMESPACE_DNS
@@ -43,6 +46,63 @@ from graphiti_core.search.search_filters import SearchFilters
 from graphiti_core.utils.datetime_utils import utc_now
 
 
+def normalize_entity_name(name: str) -> str:
+    """
+    Normalize entity name for consistent deduplication.
+    
+    This ensures variations like "Claude", "claude", "CLAUDE" all map to the same entity.
+    Also handles common separators and typos.
+    
+    Args:
+        name: Original entity name
+        
+    Returns:
+        Normalized entity name
+    """
+    if not os.getenv('DEDUP_NORMALIZE_NAMES', 'true').lower() == 'true':
+        return name
+    
+    if not name or not name.strip():
+        return name
+    
+    # Convert to lowercase
+    normalized = name.lower()
+    # Replace common separators with underscore
+    normalized = re.sub(r'[-.\s]+', '_', normalized)
+    # Remove special characters except underscores and alphanumeric
+    normalized = re.sub(r'[^a-z0-9_]', '', normalized)
+    # Remove multiple consecutive underscores
+    normalized = re.sub(r'_+', '_', normalized)
+    # Remove leading/trailing underscores
+    normalized = normalized.strip('_')
+    
+    return normalized or name  # Fallback to original if normalization results in empty string
+
+
+def calculate_fuzzy_similarity(name1: str, name2: str) -> float:
+    """
+    Calculate fuzzy similarity between two entity names.
+    
+    Uses SequenceMatcher to handle typos and minor variations.
+    
+    Args:
+        name1: First name to compare
+        name2: Second name to compare
+        
+    Returns:
+        Similarity score between 0.0 and 1.0
+    """
+    if not name1 or not name2:
+        return 0.0
+    
+    # Normalize both names for comparison
+    norm1 = normalize_entity_name(name1)
+    norm2 = normalize_entity_name(name2)
+    
+    # Calculate similarity
+    return SequenceMatcher(None, norm1, norm2).ratio()
+
+
 def generate_deterministic_uuid(name: str, group_id: str) -> str:
     """
     Generate a deterministic UUID based on entity name and group_id.
@@ -62,8 +122,11 @@ def generate_deterministic_uuid(name: str, group_id: str) -> str:
     # This adds some pseudo-randomness while keeping it deterministic
     group_namespace = uuid5(NAMESPACE_DNS, f"graphiti.entity.{group_id}")
     
-    # Generate deterministic UUID based on the name within this namespace
-    entity_uuid = uuid5(group_namespace, name)
+    # Normalize the name for consistent UUID generation
+    normalized_name = normalize_entity_name(name)
+    
+    # Generate deterministic UUID based on the normalized name within this namespace
+    entity_uuid = uuid5(group_namespace, normalized_name)
     
     return str(entity_uuid)
 
@@ -369,10 +432,67 @@ async def resolve_extracted_nodes(
                     # Couldn't parse existing node, add to LLM resolution
                     nodes_needing_llm_resolution.append(node)
             else:
-                # No exact match found - this node will be new, track it for within-episode dedup
-                episode_resolved_nodes[episode_key] = node
-                nodes_needing_llm_resolution.append(node)
-                logger.debug(f"No exact match found for '{node.name}' - will be created as new node")
+                # No exact match found - try fuzzy matching before LLM resolution
+                fuzzy_threshold = float(os.getenv('DEDUP_FUZZY_THRESHOLD', '0.9'))
+                fuzzy_match_found = False
+                
+                if os.getenv('ENABLE_AGGRESSIVE_DEDUP', 'true').lower() == 'true':
+                    # Query for potential fuzzy matches (get more candidates)
+                    if enable_cross_graph_deduplication:
+                        fuzzy_query = """
+                        MATCH (n:Entity)
+                        RETURN n
+                        ORDER BY n.created_at
+                        LIMIT 50
+                        """
+                        fuzzy_records, _, _ = await driver.execute_query(fuzzy_query)
+                    else:
+                        fuzzy_query = """
+                        MATCH (n:Entity)
+                        WHERE n.group_id = $group_id
+                        RETURN n
+                        ORDER BY n.created_at
+                        LIMIT 50
+                        """
+                        fuzzy_records, _, _ = await driver.execute_query(fuzzy_query, group_id=node.group_id)
+                    
+                    # Check fuzzy similarity with existing nodes
+                    for record in fuzzy_records:
+                        n = record.get('n')
+                        if n and hasattr(n, 'properties'):
+                            props = n.properties
+                            existing_name = props.get('name', '')
+                            
+                            # Calculate fuzzy similarity
+                            similarity = calculate_fuzzy_similarity(node.name, existing_name)
+                            
+                            if similarity >= fuzzy_threshold:
+                                # Found fuzzy match - use existing node
+                                existing_node = EntityNode(
+                                    uuid=props.get('uuid'),
+                                    name=props.get('name'),
+                                    labels=props.get('labels', ['Entity']),
+                                    group_id=props.get('group_id'),
+                                    summary=props.get('summary'),
+                                    name_embedding=props.get('name_embedding'),
+                                    created_at=props.get('created_at'),
+                                )
+                                resolved_nodes.append(existing_node)
+                                uuid_map[node.uuid] = existing_node.uuid
+                                node_duplicates.append((node, existing_node))
+                                episode_resolved_nodes[episode_key] = existing_node
+                                fuzzy_match_found = True
+                                logger.debug(
+                                    f"Found fuzzy match for '{node.name}' -> '{existing_name}' "
+                                    f"(similarity: {similarity:.3f}) - using node {existing_node.uuid}"
+                                )
+                                break
+                
+                if not fuzzy_match_found:
+                    # No exact or fuzzy match found - this node will be new
+                    episode_resolved_nodes[episode_key] = node
+                    nodes_needing_llm_resolution.append(node)
+                    logger.debug(f"No exact or fuzzy match found for '{node.name}' - will be created as new node")
         
         logger.debug(f"Serialized processing complete: {len(resolved_nodes)} resolved, {len(nodes_needing_llm_resolution)} need LLM resolution")
     else:
