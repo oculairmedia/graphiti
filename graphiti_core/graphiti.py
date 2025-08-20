@@ -110,7 +110,7 @@ class Graphiti:
         store_raw_episode_content: bool = True,
         graph_driver: GraphDriver | None = None,
         max_coroutines: int | None = None,
-        enable_cross_graph_deduplication: bool = False,
+        enable_cross_graph_deduplication: bool = True,
     ):
         """
         Initialize a Graphiti instance.

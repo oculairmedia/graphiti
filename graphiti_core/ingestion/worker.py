@@ -228,6 +228,9 @@ class IngestionWorker:
         self.metrics = QueueMetrics()
         self.running = False
         self._task: Optional[asyncio.Task] = None
+        # Background deduplication tracking
+        self.episode_count = 0
+        self.dedup_interval = int(os.getenv('DEDUP_EPISODE_INTERVAL', '10'))
         
     async def start(self):
         """Start the worker processing loop"""
@@ -362,6 +365,12 @@ class IngestionWorker:
                     # Run centrality update asynchronously without blocking
                     asyncio.create_task(self._update_centrality_async(node_uuids))
             
+            # Track episode count for background deduplication
+            self.episode_count += 1
+            if self.episode_count % self.dedup_interval == 0:
+                # Run background deduplication
+                asyncio.create_task(self._run_background_deduplication(task.group_id))
+            
         except Exception as e:
             # Classify error type
             if "rate limit" in str(e).lower():
@@ -382,6 +391,49 @@ class IngestionWorker:
             await self.centrality_client.update_nodes_centrality(node_uuids)
         except Exception as e:
             logger.error(f"Background centrality update failed: {e}")
+    
+    async def _run_background_deduplication(self, group_id: str):
+        """
+        Run background deduplication for a specific group.
+        This runs in the background and doesn't block task processing.
+        """
+        try:
+            # Only run if aggressive deduplication is enabled
+            if not os.getenv('ENABLE_AGGRESSIVE_DEDUP', 'true').lower() == 'true':
+                return
+            
+            logger.info(f"Starting background deduplication for group {group_id} after {self.episode_count} episodes")
+            
+            # Import deduplication functions
+            from graphiti_core.utils.maintenance.node_operations import dedupe_extracted_nodes
+            from graphiti_core.nodes import EntityNode
+            
+            # Get entities for this group
+            entities = await EntityNode.get_by_group_ids(self.graphiti.driver, [group_id], limit=100)
+            
+            if len(entities) < 2:
+                logger.debug(f"Skipping deduplication for group {group_id} - only {len(entities)} entities")
+                return
+            
+            # Run deduplication with lower threshold for background processing
+            similarity_threshold = float(os.getenv('DEDUP_SIMILARITY_THRESHOLD', '0.6'))
+            
+            deduped_entities, uuid_map = await dedupe_extracted_nodes(
+                llm_client=self.graphiti.llm_client,
+                embedder=self.graphiti.embedder,
+                extracted_nodes=entities,
+                threshold=similarity_threshold
+            )
+            
+            merged_count = len(entities) - len(deduped_entities)
+            if merged_count > 0:
+                logger.info(f"Background deduplication completed for group {group_id}: "
+                           f"merged {merged_count} entities ({len(entities)} -> {len(deduped_entities)})")
+            else:
+                logger.debug(f"Background deduplication found no duplicates for group {group_id}")
+                
+        except Exception as e:
+            logger.error(f"Background deduplication failed for group {group_id}: {e}")
     
     async def _process_entity(self, task: IngestionTask):
         """Process an entity creation task with proper deduplication"""
@@ -575,7 +627,7 @@ class IngestionWorker:
                         llm_client=self.graphiti.llm_client,
                         embedder=self.graphiti.embedder,
                         extracted_nodes=nodes,
-                        threshold=payload.get('similarity_threshold', 0.8)
+                        threshold=payload.get('similarity_threshold', float(os.getenv('DEDUP_SIMILARITY_THRESHOLD', '0.6')))
                     )
                     
                     # Count merges
@@ -596,7 +648,7 @@ class IngestionWorker:
                         deduped_edges = await dedupe_extracted_edges(
                             llm_client=self.graphiti.llm_client,
                             extracted_edges=edges,
-                            threshold=payload.get('similarity_threshold', 0.8)
+                            threshold=payload.get('similarity_threshold', float(os.getenv('DEDUP_SIMILARITY_THRESHOLD', '0.6')))
                         )
                         
                         # Count merges

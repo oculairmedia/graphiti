@@ -54,6 +54,12 @@ services:
       - USE_QUEUE_FOR_INGESTION=${USE_QUEUE_FOR_INGESTION:-true}
       - QUEUE_URL=http://graphiti-queued:8080
       - QUEUE_FALLBACK_TO_DIRECT=false
+      # Aggressive deduplication configuration
+      - DEDUP_SIMILARITY_THRESHOLD=${DEDUP_SIMILARITY_THRESHOLD:-0.6}
+      - DEDUP_FUZZY_THRESHOLD=${DEDUP_FUZZY_THRESHOLD:-0.9}
+      - ENABLE_AGGRESSIVE_DEDUP=${ENABLE_AGGRESSIVE_DEDUP:-true}
+      - DEDUP_NORMALIZE_NAMES=${DEDUP_NORMALIZE_NAMES:-true}
+      - DEDUP_EPISODE_INTERVAL=${DEDUP_EPISODE_INTERVAL:-10}
     networks:
       - graphiti_network
     labels:
