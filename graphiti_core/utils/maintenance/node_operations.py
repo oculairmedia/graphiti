@@ -18,7 +18,8 @@ import logging
 from contextlib import suppress
 from time import time
 from typing import Any
-from uuid import uuid4
+from uuid import uuid4, uuid5, NAMESPACE_DNS
+import hashlib
 
 import pydantic
 from pydantic import BaseModel, Field
@@ -40,6 +41,31 @@ from graphiti_core.search.search_config import SearchResults
 from graphiti_core.search.search_config_recipes import NODE_HYBRID_SEARCH_RRF
 from graphiti_core.search.search_filters import SearchFilters
 from graphiti_core.utils.datetime_utils import utc_now
+
+
+def generate_deterministic_uuid(name: str, group_id: str) -> str:
+    """
+    Generate a deterministic UUID based on entity name and group_id.
+    
+    This prevents race conditions where multiple workers create different UUIDs
+    for the same entity name. Uses UUID5 with a namespace derived from the 
+    name+group_id combination, ensuring consistent UUIDs across workers.
+    
+    Args:
+        name: Entity name
+        group_id: Entity group ID
+        
+    Returns:
+        Deterministic UUID string
+    """
+    # Create a deterministic namespace based on group_id
+    # This adds some pseudo-randomness while keeping it deterministic
+    group_namespace = uuid5(NAMESPACE_DNS, f"graphiti.entity.{group_id}")
+    
+    # Generate deterministic UUID based on the name within this namespace
+    entity_uuid = uuid5(group_namespace, name)
+    
+    return str(entity_uuid)
 
 
 def merge_edge_properties(existing: dict, incoming: dict) -> dict:
@@ -239,6 +265,7 @@ async def extract_nodes(
         labels: list[str] = list({'Entity', str(entity_type_name)})
 
         new_node = EntityNode(
+            uuid=generate_deterministic_uuid(extracted_entity.name, episode.group_id),
             name=extracted_entity.name,
             group_id=episode.group_id,
             labels=labels,
