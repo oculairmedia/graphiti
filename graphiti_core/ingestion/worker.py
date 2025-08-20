@@ -384,27 +384,61 @@ class IngestionWorker:
             logger.error(f"Background centrality update failed: {e}")
     
     async def _process_entity(self, task: IngestionTask):
-        """Process an entity creation task"""
+        """Process an entity creation task with proper deduplication"""
         payload = task.payload
         
         try:
-            node = await self.graphiti.save_entity_node(
-                uuid=payload.get('uuid'),
-                group_id=task.group_id,
-                name=payload.get('name'),
-                summary=payload.get('summary')
+            entity_name = payload.get('name')
+            entity_summary = payload.get('summary', '')
+            group_id = task.group_id
+            
+            # First check if entity already exists by name and group_id
+            existing_query = """
+            MATCH (n:Entity)
+            WHERE n.name = $name AND n.group_id = $group_id
+            RETURN n
+            ORDER BY n.created_at
+            LIMIT 1
+            """
+            
+            existing_result, _, _ = await self.graphiti.driver.execute_query(
+                existing_query, 
+                name=entity_name, 
+                group_id=group_id
             )
             
-            logger.info(f"Created entity node {node.uuid if node else 'None'}")
-            
-            # Update centrality for the new node
-            if node and node.uuid:
-                asyncio.create_task(self._update_centrality_async([node.uuid]))
+            if existing_result:
+                # Entity already exists, use the existing one
+                existing_node_data = existing_result[0]['n']
+                existing_uuid = existing_node_data.get('uuid')
+                logger.info(f"Entity '{entity_name}' already exists with UUID {existing_uuid}")
+                
+                # Update centrality for existing node
+                if existing_uuid:
+                    asyncio.create_task(self._update_centrality_async([existing_uuid]))
+                    
+                return existing_uuid
+            else:
+                # Entity doesn't exist, create new one
+                node = await self.graphiti.save_entity_node(
+                    uuid=payload.get('uuid'),
+                    group_id=group_id,
+                    name=entity_name,
+                    summary=entity_summary
+                )
+                
+                logger.info(f"Created new entity node {node.uuid if node else 'None'}")
+                
+                # Update centrality for the new node
+                if node and node.uuid:
+                    asyncio.create_task(self._update_centrality_async([node.uuid]))
+                    
+                return node.uuid if node else None
             
         except Exception as e:
             if "duplicate" in str(e).lower():
                 # Duplicate entity is not an error
-                logger.debug(f"Entity already exists: {payload.get('uuid')}")
+                logger.debug(f"Entity already exists: {payload.get('name')}")
             else:
                 raise
     
