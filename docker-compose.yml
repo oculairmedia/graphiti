@@ -195,7 +195,7 @@ services:
   #   command: ["uv", "run", "graphiti_mcp_server.py", "--transport", "sse"]
 
   graphiti-centrality-rs:
-    image: ghcr.io/oculairmedia/graphiti-centrality-rs:dev
+    image: ghcr.io/oculairmedia/graphiti-centrality-rs:main
     container_name: graphiti-centrality-rs
     restart: unless-stopped
     ports:
