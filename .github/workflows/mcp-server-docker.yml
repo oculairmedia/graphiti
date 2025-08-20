@@ -4,8 +4,10 @@ on:
   push:
     paths:
       - "mcp_server/pyproject.toml"
+      - "graphiti_core/**"
     branches:
       - main
+      - data-validation-framework
   pull_request:
     paths:
       - "mcp_server/pyproject.toml"
