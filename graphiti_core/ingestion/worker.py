@@ -318,8 +318,12 @@ class IngestionWorker:
         """
         logger.debug(f"Processing task {task.id} of type {task.type}")
         
-        # Apply rate limiting
-        await self.rate_limiter.acquire(task.group_id)
+        # Apply rate limiting - get effective group_id for consistency
+        effective_group_id = task.group_id or (task.payload.get('group_id') if hasattr(task, 'payload') and task.payload else None)
+        if not effective_group_id:
+            from graphiti_core.helpers import get_default_group_id
+            effective_group_id = get_default_group_id(self.graphiti.driver.provider)
+        await self.rate_limiter.acquire(effective_group_id)
         
         # Route to appropriate handler
         if task.type == TaskType.EPISODE:
@@ -345,9 +349,15 @@ class IngestionWorker:
             if timestamp and isinstance(timestamp, str):
                 timestamp = datetime.fromisoformat(timestamp)
             
+            # Ensure group_id is not None - use payload group_id or default
+            effective_group_id = task.group_id or payload.get('group_id')
+            if not effective_group_id:
+                from graphiti_core.helpers import get_default_group_id
+                effective_group_id = get_default_group_id(self.graphiti.driver.provider)
+            
             result = await self.graphiti.add_episode(
                 uuid=payload.get('uuid'),
-                group_id=task.group_id,
+                group_id=effective_group_id,
                 name=payload.get('name'),
                 episode_body=payload.get('content'),
                 reference_time=timestamp,
@@ -378,12 +388,12 @@ class IngestionWorker:
             self.episode_count += 1
             if self.episode_count % self.dedup_interval == 0:
                 # Run background deduplication
-                asyncio.create_task(self._run_background_deduplication(task.group_id))
+                asyncio.create_task(self._run_background_deduplication(effective_group_id))
             
         except Exception as e:
             # Classify error type
             if "rate limit" in str(e).lower():
-                raise RateLimitError(task.group_id)
+                raise RateLimitError(effective_group_id)
             elif "connection" in str(e).lower() or "timeout" in str(e).lower():
                 raise TransientError(f"Connection error: {e}")
             else:
@@ -451,7 +461,12 @@ class IngestionWorker:
         try:
             entity_name = payload.get('name')
             entity_summary = payload.get('summary', '')
-            group_id = task.group_id
+            
+            # Ensure group_id is not None - use payload group_id or default
+            effective_group_id = task.group_id or payload.get('group_id')
+            if not effective_group_id:
+                from graphiti_core.helpers import get_default_group_id
+                effective_group_id = get_default_group_id(self.graphiti.driver.provider)
             
             # First check if entity already exists by name and group_id
             existing_query = """
@@ -465,7 +480,7 @@ class IngestionWorker:
             existing_result, _, _ = await self.graphiti.driver.execute_query(
                 existing_query, 
                 name=entity_name, 
-                group_id=group_id
+                group_id=effective_group_id
             )
             
             if existing_result:
@@ -483,7 +498,7 @@ class IngestionWorker:
                 # Entity doesn't exist, create new one
                 node = await self.graphiti.save_entity_node(
                     uuid=payload.get('uuid'),
-                    group_id=group_id,
+                    group_id=effective_group_id,
                     name=entity_name,
                     summary=entity_summary
                 )
@@ -542,6 +557,12 @@ class IngestionWorker:
         payload = task.payload
         
         try:
+            # Ensure group_id is not None - use payload group_id or default
+            effective_group_id = task.group_id or payload.get('group_id')
+            if not effective_group_id:
+                from graphiti_core.helpers import get_default_group_id
+                effective_group_id = get_default_group_id(self.graphiti.driver.provider)
+            
             # Extract source, edge, and target from payload
             source_data = payload.get('source_node', {})
             edge_data = payload.get('edge', {})
@@ -558,7 +579,7 @@ class IngestionWorker:
             source_node = EntityNode(
                 uuid=source_data.get('uuid'),
                 name=source_data.get('name'),
-                group_id=task.group_id,
+                group_id=effective_group_id,
                 summary=source_data.get('summary', ''),
                 created_at=source_data.get('created_at') or utc_now(),
                 updated_at=source_data.get('updated_at') or utc_now()
@@ -568,7 +589,7 @@ class IngestionWorker:
             target_node = EntityNode(
                 uuid=target_data.get('uuid'),
                 name=target_data.get('name'),
-                group_id=task.group_id,
+                group_id=effective_group_id,
                 summary=target_data.get('summary', ''),
                 created_at=target_data.get('created_at') or utc_now(),
                 updated_at=target_data.get('updated_at') or utc_now()
@@ -581,7 +602,7 @@ class IngestionWorker:
                 target_node_uuid=target_node.uuid,
                 name=edge_data.get('name', ''),
                 fact=edge_data.get('fact', ''),
-                group_id=task.group_id,
+                group_id=effective_group_id,
                 created_at=edge_data.get('created_at') or utc_now(),
                 updated_at=edge_data.get('updated_at') or utc_now(),
                 valid_at=edge_data.get('valid_at') or utc_now(),
@@ -608,8 +629,14 @@ class IngestionWorker:
         payload = task.payload
         
         try:
+            # Ensure group_id is not None - use payload group_id or default
+            effective_group_id = task.group_id or payload.get('group_id')
+            if not effective_group_id:
+                from graphiti_core.helpers import get_default_group_id
+                effective_group_id = get_default_group_id(self.graphiti.driver.provider)
+            
             dedup_type = payload.get('type', 'nodes')  # 'nodes', 'edges', or 'both'
-            group_ids = payload.get('group_ids', [task.group_id] if task.group_id else None)
+            group_ids = payload.get('group_ids', [effective_group_id] if effective_group_id else None)
             
             if not group_ids:
                 raise PermanentError("No group IDs specified for deduplication")
