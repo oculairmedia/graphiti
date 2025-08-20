@@ -269,10 +269,29 @@ async def resolve_extracted_nodes(
     node_duplicates: list[tuple[EntityNode, EntityNode]] = []
     nodes_needing_llm_resolution: list[EntityNode] = []
 
-    # First, handle exact name matches programmatically
+    # SERIALIZED exact name matching to fix race condition in batch processing
+    # Process each node sequentially to ensure proper deduplication within episodes
     if existing_nodes_override is None:
-        for node in extracted_nodes:
-            # Query for exact name matches
+        logger.debug(f"Starting serialized exact name matching for {len(extracted_nodes)} nodes")
+        
+        # Track nodes we've already resolved within this episode to prevent duplicates
+        episode_resolved_nodes: dict[str, EntityNode] = {}
+        
+        for i, node in enumerate(extracted_nodes):
+            logger.debug(f"Processing node {i+1}/{len(extracted_nodes)}: '{node.name}' (group: {node.group_id})")
+            
+            # First check if we've already resolved this name within this episode
+            episode_key = f"{node.name}|{node.group_id}" if not enable_cross_graph_deduplication else node.name
+            if episode_key in episode_resolved_nodes:
+                # Found within this episode - use the already resolved node
+                existing_node = episode_resolved_nodes[episode_key]
+                resolved_nodes.append(existing_node)
+                uuid_map[node.uuid] = existing_node.uuid
+                node_duplicates.append((node, existing_node))
+                logger.debug(f"Found within-episode match for '{node.name}' - using node {existing_node.uuid}")
+                continue
+            
+            # Query for exact name matches in database
             if enable_cross_graph_deduplication:
                 # Cross-graph deduplication: search across all groups
                 exact_query = """
@@ -315,15 +334,20 @@ async def resolve_extracted_nodes(
                     resolved_nodes.append(existing_node)
                     uuid_map[node.uuid] = existing_node.uuid
                     node_duplicates.append((node, existing_node))
+                    episode_resolved_nodes[episode_key] = existing_node
                     logger.debug(
-                        f"Found exact match for '{node.name}' - using existing node {existing_node.uuid}"
+                        f"Found database match for '{node.name}' - using existing node {existing_node.uuid}"
                     )
                 else:
                     # Couldn't parse existing node, add to LLM resolution
                     nodes_needing_llm_resolution.append(node)
             else:
-                # No exact match found, needs LLM resolution
+                # No exact match found - this node will be new, track it for within-episode dedup
+                episode_resolved_nodes[episode_key] = node
                 nodes_needing_llm_resolution.append(node)
+                logger.debug(f"No exact match found for '{node.name}' - will be created as new node")
+        
+        logger.debug(f"Serialized processing complete: {len(resolved_nodes)} resolved, {len(nodes_needing_llm_resolution)} need LLM resolution")
     else:
         # If override is provided, all nodes need LLM resolution
         nodes_needing_llm_resolution = extracted_nodes
