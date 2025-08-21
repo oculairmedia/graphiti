@@ -111,11 +111,12 @@ class QueueProxy:
             True if successfully queued, False otherwise
         """
         # Create task in the format expected by the worker (IngestionTask)
+        # Only use UUID if explicitly provided (for linking to existing episodes)
         task = {
-            "id": f"msg-{message.uuid}",
+            "id": f"msg-{message.uuid if message.uuid else 'new'}",
             "type": "episode",  # TaskType.EPISODE (lowercase)
             "payload": {
-                "uuid": message.uuid,
+                "uuid": message.uuid,  # None for new episodes, UUID for linking existing ones
                 "name": message.name or "",
                 "content": f"{message.role or ''}({message.role_type}): {message.content}",
                 "timestamp": message.timestamp.isoformat() if message.timestamp else None,

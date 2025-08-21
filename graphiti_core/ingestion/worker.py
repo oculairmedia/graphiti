@@ -216,7 +216,7 @@ class IngestionWorker:
                  worker_id: str,
                  queue_client: QueuedClient,
                  graphiti: Graphiti,
-                 batch_size: int = 10,
+                 batch_size: int = 1,
                  poll_interval: float = 1.0):
         self.worker_id = worker_id
         self.queue = queue_client
@@ -270,7 +270,7 @@ class IngestionWorker:
                 tasks = await self.queue.poll(
                     queue_name="ingestion",
                     count=self.batch_size,
-                    visibility_timeout=300  # 5 minutes
+                    visibility_timeout=1200  # 20 minutes - allow time for entity extraction
                 )
                 
                 if tasks:
@@ -344,10 +344,13 @@ class IngestionWorker:
         payload = task.payload
         
         try:
-            # Skip tasks with invalid UUIDs (old malformed messages)
+            # Skip tasks with malformed task IDs (old malformed messages) 
+            # Allow None UUID for new episodes, but reject explicit "None" strings from old messages
             uuid_value = payload.get('uuid')
-            if not uuid_value or uuid_value == 'null' or str(uuid_value).lower() == 'none':
-                logger.warning(f"Skipping task {task.id} with invalid UUID: {uuid_value}")
+            if (uuid_value is not None and 
+                (uuid_value == 'null' or str(uuid_value).lower() == 'none') and 
+                task.id == 'msg-None'):
+                logger.warning(f"Skipping malformed task {task.id} with invalid UUID: {uuid_value}")
                 raise PermanentError(f"Invalid UUID in task {task.id}")
             
             # Parse timestamp if it's a string
@@ -787,7 +790,7 @@ class WorkerPool:
                  queue_client: QueuedClient,
                  graphiti: Graphiti,
                  worker_count: int = 4,
-                 batch_size: int = 10):
+                 batch_size: int = 1):
         self.queue = queue_client
         self.graphiti = graphiti
         self.worker_count = worker_count

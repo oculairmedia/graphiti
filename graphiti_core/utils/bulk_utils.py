@@ -18,6 +18,8 @@ import logging
 import typing
 from datetime import datetime
 
+logger = logging.getLogger(__name__)
+
 import numpy as np
 from pydantic import BaseModel, Field
 from typing_extensions import Any
@@ -115,9 +117,19 @@ async def add_nodes_and_edges_bulk_tx(
     embedder: EmbedderClient,
     driver: GraphDriver,
 ):
-    episodes = [dict(episode) for episode in episodic_nodes]
+    episodes = [episode.model_dump() for episode in episodic_nodes]
     for episode in episodes:
-        episode['source'] = str(episode['source'].value)
+        # Fix enum serialization - should be just the value, not the enum name
+        if 'source' in episode and isinstance(episode['source'], str) and episode['source'].startswith('EpisodeType.'):
+            episode['source'] = episode['source'].split('.')[-1]  # Extract just 'message' from 'EpisodeType.message'
+    
+    # Debug logging to see what's in the episodes data
+    logger.info(f"Preparing {len(episodes)} episodes for bulk save")
+    if episodes:
+        sample_episode = episodes[0]
+        logger.info(f"Sample episode keys: {list(sample_episode.keys())}")
+        logger.info(f"Sample episode group_id: {sample_episode.get('group_id')}")
+        logger.info(f"Sample episode data: {sample_episode}")
     nodes: list[dict[str, Any]] = []
     for node in entity_nodes:
         if node.name_embedding is None:
