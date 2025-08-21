@@ -362,7 +362,6 @@ class IngestionWorker:
                 effective_group_id = get_default_group_id(self.graphiti.driver.provider)
             
             result = await self.graphiti.add_episode(
-                uuid=payload.get('uuid'),
                 group_id=effective_group_id,
                 name=payload.get('name'),
                 episode_body=payload.get('content'),

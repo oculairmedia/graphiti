@@ -1,6 +1,6 @@
 services:
   graph:
-    image: ghcr.io/oculairmedia/graphiti-api:falkordb-corruption-fixes
+    image: ghcr.io/oculairmedia/graphiti-api:data-validation-framework
     volumes:
       - ./server/graph_service/zep_graphiti.py:/app/server/graph_service/zep_graphiti.py:ro
     ports:
@@ -27,18 +27,15 @@ services:
       - FALKORDB_URI=redis://falkordb:6379
       - USE_FALKORDB=true
       - PORT=8000
-      # Cerebras configuration
       - USE_CEREBRAS=${USE_CEREBRAS:-false}
       - CEREBRAS_API_KEY=${CEREBRAS_API_KEY}
       - CEREBRAS_MODEL=${CEREBRAS_MODEL:-qwen-3-coder-480b}
       - CEREBRAS_SMALL_MODEL=${CEREBRAS_SMALL_MODEL:-qwen-3-coder-480b}
-      # Ollama configuration (used when USE_CEREBRAS=false)
       - USE_OLLAMA=${USE_OLLAMA:-true}
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://100.81.139.20:11434/v1}
       - OLLAMA_MODEL=${OLLAMA_MODEL:-gemma3:12b}
       - OLLAMA_EMBEDDING_MODEL=${OLLAMA_EMBEDDING_MODEL:-mxbai-embed-large:latest}
       - USE_OLLAMA_EMBEDDINGS=${USE_OLLAMA_EMBEDDINGS:-true}
-      # Dedicated embedding endpoint configuration
       - USE_DEDICATED_EMBEDDING_ENDPOINT=${USE_DEDICATED_EMBEDDING_ENDPOINT:-true}
       - OLLAMA_EMBEDDING_BASE_URL=${OLLAMA_EMBEDDING_BASE_URL:-http://192.168.50.80:11434/v1}
       - OLLAMA_EMBEDDING_API_KEY=${OLLAMA_EMBEDDING_API_KEY:-ollama}
@@ -50,11 +47,9 @@ services:
       - USE_RUST_SEARCH=true
       - ENABLE_CACHE_INVALIDATION=true
       - GRAPHITI_DATA_WEBHOOK_URLS=${GRAPHITI_DATA_WEBHOOK_URLS:-http://graph-visualizer-rust:3000/api/webhooks/data-ingestion,http://host.docker.internal:3000/api/webhooks/data-ingestion}
-      # Queue configuration
       - USE_QUEUE_FOR_INGESTION=${USE_QUEUE_FOR_INGESTION:-true}
       - QUEUE_URL=http://graphiti-queued:8080
       - QUEUE_FALLBACK_TO_DIRECT=false
-      # Aggressive deduplication configuration
       - DEDUP_SIMILARITY_THRESHOLD=${DEDUP_SIMILARITY_THRESHOLD:-0.6}
       - DEDUP_FUZZY_THRESHOLD=${DEDUP_FUZZY_THRESHOLD:-0.9}
       - ENABLE_AGGRESSIVE_DEDUP=${ENABLE_AGGRESSIVE_DEDUP:-true}
@@ -73,7 +68,7 @@ services:
     container_name: graphiti-falkordb-1
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - 6379:6379
     volumes:
       - falkordb_data:/data
     environment:
@@ -81,7 +76,10 @@ services:
     networks:
       - graphiti_network
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test:
+        - CMD
+        - redis-cli
+        - ping
       interval: 10s
       timeout: 5s
       retries: 3
@@ -94,7 +92,7 @@ services:
       - homepage.href=http://192.168.50.90:6379
       - homepage.description=Graph database storage
   graph-visualizer-rust:
-    image: ghcr.io/oculairmedia/graphiti-rust-visualizer:dev
+    image: ghcr.io/oculairmedia/graphiti-rust-visualizer:main
     container_name: graphiti-visualizer-rust
     restart: unless-stopped
     ports:
@@ -111,13 +109,13 @@ services:
       - CACHE_TTL_SECONDS=${CACHE_TTL_SECONDS:-300}
       - CACHE_STRATEGY=${CACHE_STRATEGY:-aggressive}
       - FORCE_FRESH_DATA=${FORCE_FRESH_DATA:-false}
-      - REDIS_URL=redis://letta-redis-1:6379/2  # Use DB 2 for visual server cache
+      - REDIS_URL=redis://letta-redis-1:6379/2 # Use DB 2 for visual server cache
     depends_on:
       falkordb:
         condition: service_healthy
     networks:
       - graphiti_network
-      - letta_network  # For Redis access
+      - letta_network # For Redis access
     labels:
       - homepage.group=Knowledge Management
       - homepage.name=Graph Visualizer (Rust)
@@ -125,7 +123,7 @@ services:
       - homepage.href=http://192.168.50.90:3000
       - homepage.description=High-performance Rust-based graph visualization
   frontend:
-    image: ghcr.io/oculairmedia/graphiti-frontend:dev
+    image: ghcr.io/oculairmedia/graphiti-frontend:main
     container_name: graphiti-frontend-app
     restart: unless-stopped
     expose:
@@ -227,7 +225,6 @@ services:
       - homepage.href=http://192.168.50.90:3003
       - homepage.description=High-performance centrality calculations with
         native FalkorDB algorithms
-  
   # High-performance Rust search service (43x faster than Python)
   graphiti-search-rs:
     # build:
@@ -243,13 +240,13 @@ services:
       - FALKORDB_HOST=falkordb
       - FALKORDB_PORT=6379
       - GRAPH_NAME=graphiti_migration
-      - REDIS_URL=redis://letta-redis-1:6379  # Use separate Redis for cache
+      - REDIS_URL=redis://letta-redis-1:6379 # Use separate Redis for cache
       - PORT=3004
       - MAX_CONNECTIONS=200
       - CACHE_TTL=300
       - RUST_LOG=graphiti_search=info,debug
-      - RUST_SEARCH_ENABLED=${RUST_SEARCH_ENABLED:-false}  # Feature flag
-      - RUST_SEARCH_PERCENTAGE=${RUST_SEARCH_PERCENTAGE:-0}  # A/B testing percentage
+      - RUST_SEARCH_ENABLED=${RUST_SEARCH_ENABLED:-false} # Feature flag
+      - RUST_SEARCH_PERCENTAGE=${RUST_SEARCH_PERCENTAGE:-0} # A/B testing percentage
       - OLLAMA_BASE_URL=${OLLAMA_EMBEDDING_BASE_URL:-http://192.168.50.80:11434/v1}
       - OLLAMA_EMBEDDING_MODEL=${OLLAMA_EMBEDDING_MODEL:-mxbai-embed-large:latest}
     depends_on:
@@ -287,7 +284,11 @@ services:
     networks:
       - graphiti_network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/queues"]
+      test:
+        - CMD
+        - curl
+        - -f
+        - http://localhost:8080/queues
       interval: 10s
       timeout: 3s
       retries: 3
@@ -297,10 +298,9 @@ services:
       - homepage.icon=si-queue
       - homepage.href=http://192.168.50.90:8080
       - homepage.description=Message queue for processing ingestion tasks
-
   # Worker service that processes queue messages with corruption fix
   graphiti-worker:
-    image: ghcr.io/oculairmedia/graphiti-worker:falkordb-corruption-fixes
+    image: ghcr.io/oculairmedia/graphiti-worker:data-validation-framework
     container_name: graphiti-worker-1
     restart: unless-stopped
     environment:
@@ -310,18 +310,15 @@ services:
       - FALKORDB_URI=redis://falkordb:6379
       - USE_FALKORDB=true
       - OPENAI_API_KEY=${OPENAI_API_KEY:-sk-dummy}
-      # Cerebras configuration (same as API service)
       - USE_CEREBRAS=${USE_CEREBRAS:-false}
       - CEREBRAS_API_KEY=${CEREBRAS_API_KEY}
       - CEREBRAS_MODEL=${CEREBRAS_MODEL:-qwen-3-coder-480b}
       - CEREBRAS_SMALL_MODEL=${CEREBRAS_SMALL_MODEL:-qwen-3-coder-480b}
-      # Ollama configuration (used when USE_CEREBRAS=false)
       - USE_OLLAMA=${USE_OLLAMA:-true}
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://100.81.139.20:11434/v1}
       - OLLAMA_MODEL=${OLLAMA_MODEL:-gemma3:12b}
       - OLLAMA_EMBEDDING_MODEL=${OLLAMA_EMBEDDING_MODEL:-mxbai-embed-large:latest}
       - USE_OLLAMA_EMBEDDINGS=${USE_OLLAMA_EMBEDDINGS:-true}
-      # Dedicated embedding endpoint configuration
       - USE_DEDICATED_EMBEDDING_ENDPOINT=${USE_DEDICATED_EMBEDDING_ENDPOINT:-true}
       - OLLAMA_EMBEDDING_BASE_URL=${OLLAMA_EMBEDDING_BASE_URL:-http://192.168.50.80:11434/v1}
       - OLLAMA_EMBEDDING_API_KEY=${OLLAMA_EMBEDDING_API_KEY:-ollama}
@@ -343,18 +340,17 @@ services:
       - homepage.name=Graphiti Worker 1
       - homepage.icon=si-kubernetes
       - homepage.description=Ingestion worker with corruption fix
-
   # Automated backup service for FalkorDB
   falkordb-backup:
     image: ghcr.io/oculairmedia/graphiti-backup:dev
     container_name: graphiti-falkordb-backup
     restart: unless-stopped
     ports:
-      - 8091:8080  # Monitoring dashboard
+      - 8091:8080 # Monitoring dashboard
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro  # Docker socket for container access
-      - falkordb_backups:/backups/falkordb            # Backup storage volume
-      - backup_status:/var/log                        # Status files for dashboard
+      - /var/run/docker.sock:/var/run/docker.sock:ro # Docker socket for container access
+      - falkordb_backups:/backups/falkordb # Backup storage volume
+      - backup_status:/var/log # Status files for dashboard
     environment:
       - FALKORDB_CONTAINER_NAME=graphiti-falkordb-1
       - BACKUP_DIR=/backups/falkordb
@@ -371,7 +367,11 @@ services:
     networks:
       - graphiti_network
     healthcheck:
-      test: ["CMD", "sh", "-c", "pgrep crond && curl -f http://localhost:8080/health || exit 1"]
+      test:
+        - CMD
+        - sh
+        - -c
+        - pgrep crond && curl -f http://localhost:8080/health || exit 1
       interval: 60s
       timeout: 10s
       start_period: 30s
@@ -382,7 +382,6 @@ services:
       - homepage.icon=si-databricks
       - homepage.href=http://192.168.50.90:8091
       - homepage.description=Automated backup service with monitoring dashboard
-
 networks:
   graphiti_network:
     driver: bridge
