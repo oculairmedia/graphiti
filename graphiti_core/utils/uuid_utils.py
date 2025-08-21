@@ -314,8 +314,11 @@ def generate_deterministic_edge_uuid(source_uuid: str, target_uuid: str, name: s
     # Create a deterministic namespace based on group_id
     group_namespace = uuid5(NAMESPACE_DNS, f"graphiti.edge.{group_id}")
     
-    # Create deterministic string combining source, target, and edge name
-    edge_key = f"{source_uuid}|{target_uuid}|{name}"
+    # Normalize edge name to prevent UUID collisions from empty/inconsistent names
+    normalized_name = name.strip().upper() if name and name.strip() else 'RELATES_TO'
+    
+    # Create deterministic string combining source, target, and normalized edge name
+    edge_key = f"{source_uuid}|{target_uuid}|{normalized_name}"
     
     # Generate deterministic UUID
     edge_uuid = uuid5(group_namespace, edge_key)
