@@ -413,7 +413,8 @@ class EntityNode(Node):
     @validator('summary')
     def validate_summary(cls, v):
         if v is not None and len(v) > 10000:
-            raise ValueError('Summary cannot exceed 10000 characters')
+            logger.warning(f"Truncating summary from {len(v)} to 10000 characters")
+            return v[:10000]
         return v
     
     @validator('attributes')
