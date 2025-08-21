@@ -1,6 +1,6 @@
 services:
   graph:
-    image: ghcr.io/oculairmedia/graphiti-api:data-validation-framework
+    image: ghcr.io/oculairmedia/graphiti-api:main
     volumes:
       - ./server/graph_service/zep_graphiti.py:/app/server/graph_service/zep_graphiti.py:ro
     ports:
@@ -301,7 +301,7 @@ services:
       - homepage.description=Message queue for processing ingestion tasks
   # Worker service that processes queue messages with corruption fix
   graphiti-worker:
-    image: ghcr.io/oculairmedia/graphiti-worker:data-validation-framework
+    image: ghcr.io/oculairmedia/graphiti-worker:main
     container_name: graphiti-worker-1
     restart: unless-stopped
     environment:
