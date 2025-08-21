@@ -433,8 +433,19 @@ class EntityNode(Node):
                 score = v[field]
                 if not isinstance(score, (int, float)):
                     raise ValueError(f'{field} must be a numeric value')
-                if not (0.0 <= score <= 1.0):
-                    raise ValueError(f'{field} must be between 0.0 and 1.0, got {score}')
+                # Different centrality measures have different valid ranges
+                if field == 'degree_centrality':
+                    # Degree centrality can exceed 1.0 in directed graphs or weighted graphs
+                    if score < 0.0:
+                        raise ValueError(f'{field} must be >= 0.0, got {score}')
+                elif field in ['pagerank_centrality', 'betweenness_centrality', 'eigenvector_centrality']:
+                    # These centrality measures are typically normalized to [0,1]
+                    if not (0.0 <= score <= 1.0):
+                        raise ValueError(f'{field} must be between 0.0 and 1.0, got {score}')
+                elif field == 'importance_score':
+                    # Importance score can be any non-negative value
+                    if score < 0.0:
+                        raise ValueError(f'{field} must be >= 0.0, got {score}')
         
         # Validate other common attributes
         if 'created_at' in v and v['created_at'] is not None:
