@@ -120,7 +120,8 @@ class QueueProxy:
                 "name": message.name or "",
                 "content": f"{message.role or ''}({message.role_type}): {message.content}",
                 "timestamp": message.timestamp.isoformat() if message.timestamp else None,
-                "source_description": message.source_description or ""  # Ensure it's not None
+                "source_description": message.source_description or "",  # Ensure it's not None
+                "group_id": group_id  # Add group_id to payload for worker access
             },
             "group_id": group_id,
             "priority": 1,  # TaskPriority.NORMAL (numeric value)
