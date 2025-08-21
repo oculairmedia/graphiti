@@ -344,6 +344,12 @@ class IngestionWorker:
         payload = task.payload
         
         try:
+            # Skip tasks with invalid UUIDs (old malformed messages)
+            uuid_value = payload.get('uuid')
+            if not uuid_value or uuid_value == 'null' or str(uuid_value).lower() == 'none':
+                logger.warning(f"Skipping task {task.id} with invalid UUID: {uuid_value}")
+                raise PermanentError(f"Invalid UUID in task {task.id}")
+            
             # Parse timestamp if it's a string
             timestamp = payload.get('timestamp')
             if timestamp and isinstance(timestamp, str):
