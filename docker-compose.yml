@@ -72,7 +72,8 @@ services:
     volumes:
       - falkordb_data:/data
     environment:
-      - FALKORDB_ARGS=--save 60 1 --loglevel warning
+      - REDIS_ARGS=--save 60 1 --loglevel warning
+      - FALKORDB_ARGS=NODE_CREATION_BUFFER 64 QUERY_MEM_CAPACITY 134217728 CMD_INFO no OMP_THREAD_COUNT 1
     networks:
       - graphiti_network
     healthcheck:
@@ -83,8 +84,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 3
-    mem_limit: 4g
-    memswap_limit: 4g
+    mem_limit: 8g
+    memswap_limit: 8g
     labels:
       - homepage.group=Knowledge Management
       - homepage.name=FalkorDB
