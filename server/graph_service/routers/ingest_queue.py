@@ -28,7 +28,7 @@ def get_queue_client() -> QueuedClient:
     """Get or create queue client singleton"""
     global _queue_client
     if _queue_client is None:
-        _queue_client = QueuedClient(base_url="http://queued:8080")  # Use container name in Docker
+        _queue_client = QueuedClient(base_url="http://graphiti-queued:8080")  # Use container name in Docker
     return _queue_client
 
 
@@ -208,3 +208,51 @@ async def get_queue_stats():
             "status": "error",
             "error": str(e)
         }
+
+
+@router.post('/queue/clear')
+async def clear_queue(queue_name: str = "ingestion"):
+    """
+    Clear all messages from the specified queue.
+    WARNING: This will delete all pending messages permanently.
+    """
+    client = get_queue_client()
+    
+    try:
+        # Poll all messages and delete them
+        cleared_count = 0
+        batch_size = 100
+        
+        while True:
+            # Poll messages with immediate visibility timeout
+            messages = await client.poll(
+                queue_name=queue_name,
+                count=batch_size,
+                visibility_timeout=1
+            )
+            
+            if not messages:
+                break
+                
+            # Delete all polled messages
+            for message_id, task, poll_tag in messages:
+                success = await client.delete(message_id, poll_tag)
+                if success:
+                    cleared_count += 1
+                else:
+                    logger.warning(f"Failed to delete message {message_id}")
+        
+        logger.info(f"Cleared {cleared_count} messages from queue {queue_name}")
+        return {
+            "queue_name": queue_name,
+            "cleared_count": cleared_count,
+            "status": "success",
+            "message": f"Successfully cleared {cleared_count} messages from queue"
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to clear queue {queue_name}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to clear queue: {str(e)}"
+        )

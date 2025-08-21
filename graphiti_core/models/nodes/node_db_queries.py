@@ -22,7 +22,7 @@ EPISODIC_NODE_SAVE = """
 
 EPISODIC_NODE_SAVE_BULK = """
     UNWIND $episodes AS episode
-    MERGE (n:Episodic {uuid: episode.uuid})
+    MERGE (n:Episodic {uuid: episode.uuid, group_id: episode.group_id})
     SET n = {uuid: episode.uuid, name: episode.name, group_id: episode.group_id, source_description: episode.source_description, 
         source: episode.source, content: episode.content, 
     entity_edges: episode.entity_edges, created_at: episode.created_at, valid_at: episode.valid_at}
@@ -37,7 +37,7 @@ ENTITY_NODE_SAVE = """
 
 ENTITY_NODE_SAVE_BULK = """
     UNWIND $nodes AS node
-    MERGE (n:Entity {uuid: node.uuid})
+    MERGE (n:Entity {uuid: node.uuid, name: node.name, group_id: node.group_id})
     SET n = node
     SET n.name_embedding = vecf32(node.name_embedding)
     RETURN n.uuid AS uuid

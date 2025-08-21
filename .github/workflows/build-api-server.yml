@@ -2,7 +2,7 @@ name: Build and Push API Server Container
 
 on:
   push:
-    branches: [ main, feature/graph-service-performance, feature/webhook-completion, relevance-scoring, falkordb-corruption-fixes ]
+    branches: [ main, feature/graph-service-performance, feature/webhook-completion, relevance-scoring, falkordb-corruption-fixes, data-validation-framework ]
     paths:
       - 'server/**'
       - 'graphiti_core/**'

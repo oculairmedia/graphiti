@@ -18,6 +18,8 @@ import logging
 import typing
 from datetime import datetime
 
+logger = logging.getLogger(__name__)
+
 import numpy as np
 from pydantic import BaseModel, Field
 from typing_extensions import Any
@@ -115,9 +117,28 @@ async def add_nodes_and_edges_bulk_tx(
     embedder: EmbedderClient,
     driver: GraphDriver,
 ):
-    episodes = [dict(episode) for episode in episodic_nodes]
+    episodes = [episode.model_dump() for episode in episodic_nodes]
     for episode in episodes:
-        episode['source'] = str(episode['source'].value)
+        # Fix enum serialization - handle both string and enum object cases
+        if 'source' in episode:
+            source_val = episode['source']
+            if hasattr(source_val, 'value'):  # It's an enum object
+                episode['source'] = source_val.value
+            elif isinstance(source_val, str) and source_val.startswith('EpisodeType.'):
+                episode['source'] = source_val.split('.')[-1]  # Extract just 'message' from 'EpisodeType.message'
+        
+        # Fix datetime serialization - convert datetime objects to ISO strings
+        for key, value in episode.items():
+            if hasattr(value, 'isoformat'):  # datetime objects
+                episode[key] = value.isoformat()
+    
+    # Debug logging to see what's in the episodes data
+    logger.info(f"Preparing {len(episodes)} episodes for bulk save")
+    if episodes:
+        sample_episode = episodes[0]
+        logger.info(f"Sample episode keys: {list(sample_episode.keys())}")
+        logger.info(f"Sample episode group_id: {sample_episode.get('group_id')}")
+        logger.info(f"Sample episode data: {sample_episode}")
     nodes: list[dict[str, Any]] = []
     for node in entity_nodes:
         if node.name_embedding is None:
@@ -157,6 +178,14 @@ async def add_nodes_and_edges_bulk_tx(
         edge_data.update(edge.attributes or {})
         edges.append(edge_data)
 
+    # Debug: Log the exact episodes data being passed to Cypher
+    logger.info(f"About to execute EPISODIC_NODE_SAVE_BULK with {len(episodes)} episodes")
+    if episodes:
+        logger.info(f"First episode data: {episodes[0]}")
+        logger.info(f"First episode type: {type(episodes[0])}")
+        for key, value in episodes[0].items():
+            logger.info(f"  {key}: {value} (type: {type(value)})")
+    
     await tx.run(EPISODIC_NODE_SAVE_BULK, episodes=episodes)
     entity_node_save_bulk = get_entity_node_save_bulk_query(nodes, driver.provider)
     await tx.run(entity_node_save_bulk, nodes=nodes)
