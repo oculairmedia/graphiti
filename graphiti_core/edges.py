@@ -19,9 +19,11 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from time import time
 from typing import Any
-from uuid import uuid4
+from uuid import UUID, uuid4
+import re
+import os
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, validator, root_validator
 from typing_extensions import LiteralString
 
 from graphiti_core.driver.driver import GraphDriver
@@ -34,6 +36,7 @@ from graphiti_core.models.edges.edge_db_queries import (
     EPISODIC_EDGE_SAVE,
 )
 from graphiti_core.nodes import Node
+from graphiti_core.utils.uuid_utils import generate_deterministic_edge_uuid
 
 logger = logging.getLogger(__name__)
 
@@ -54,11 +57,85 @@ ENTITY_EDGE_RETURN: LiteralString = """
 
 
 class Edge(BaseModel, ABC):
-    uuid: str = Field(default_factory=lambda: str(uuid4()))
+    uuid: str = Field(default="", description='UUID of the edge')
     group_id: str = Field(description='partition of the graph')
     source_node_uuid: str
     target_node_uuid: str
     created_at: datetime
+
+    @root_validator(pre=True)
+    def generate_uuid_if_needed(cls, values):
+        uuid_value = values.get('uuid', '')
+        
+        # If UUID is already provided and valid, use it
+        if uuid_value and str(uuid_value).strip():
+            try:
+                UUID(uuid_value)  # Validate format
+                return values
+            except ValueError:
+                raise ValueError('Invalid UUID format')
+        
+        # Check if deterministic UUID generation is enabled
+        use_deterministic_uuids = os.getenv('USE_DETERMINISTIC_UUIDS', 'false').lower() == 'true'
+        
+        if use_deterministic_uuids:
+            # Get required fields from values
+            source_uuid = values.get('source_node_uuid')
+            target_uuid = values.get('target_node_uuid')
+            group_id = values.get('group_id')
+            
+            # For EntityEdge, we can use the edge name for more specificity
+            edge_name = values.get('name', 'EDGE')
+            
+            if source_uuid and target_uuid and group_id:
+                # Generate deterministic UUID for edges
+                values['uuid'] = generate_deterministic_edge_uuid(source_uuid, target_uuid, edge_name, group_id)
+                return values
+        
+        # Fall back to random UUID
+        values['uuid'] = str(uuid4())
+        return values
+    
+    @validator('uuid')
+    def validate_uuid_final(cls, v):
+        if not v or not v.strip():
+            raise ValueError('UUID cannot be empty')
+        try:
+            UUID(v)
+        except ValueError:
+            raise ValueError('Invalid UUID format')
+        return v
+    
+    @validator('group_id')
+    def validate_group_id(cls, v):
+        if not v or not v.strip():
+            raise ValueError('Group ID cannot be empty')
+        # Allow alphanumeric, underscores, hyphens, dots
+        if not re.match(r'^[a-zA-Z0-9_.-]+$', v):
+            raise ValueError('Group ID must contain only alphanumeric characters, underscores, hyphens, and dots')
+        if len(v) > 100:
+            raise ValueError('Group ID cannot exceed 100 characters')
+        return v
+    
+    @validator('source_node_uuid')
+    def validate_source_node_uuid(cls, v):
+        if not v or not v.strip():
+            raise ValueError('Source node UUID cannot be empty')
+        try:
+            UUID(v)
+        except ValueError:
+            raise ValueError('Invalid source node UUID format')
+        return v
+    
+    @validator('target_node_uuid')
+    def validate_target_node_uuid(cls, v):
+        if not v or not v.strip():
+            raise ValueError('Target node UUID cannot be empty')
+        try:
+            UUID(v)
+        except ValueError:
+            raise ValueError('Invalid target node UUID format')
+        return v
 
     @abstractmethod
     async def save(self, driver: GraphDriver): ...
@@ -208,6 +285,64 @@ class EntityEdge(Edge):
     attributes: dict[str, Any] = Field(
         default={}, description='Additional attributes of the edge. Dependent on edge name'
     )
+
+    @validator('name')
+    def validate_name(cls, v):
+        if not v or not v.strip():
+            raise ValueError('Edge name cannot be empty')
+        if len(v.strip()) > 255:
+            raise ValueError('Edge name cannot exceed 255 characters')
+        return v.strip()
+    
+    @validator('fact')
+    def validate_fact(cls, v):
+        if not v or not v.strip():
+            raise ValueError('Edge fact cannot be empty')
+        if len(v.strip()) > 10000:
+            raise ValueError('Edge fact cannot exceed 10000 characters')
+        return v.strip()
+    
+    @validator('fact_embedding')
+    def validate_fact_embedding(cls, v):
+        if v is not None:
+            if not isinstance(v, list):
+                raise ValueError('Fact embedding must be a list of floats')
+            if not all(isinstance(x, (int, float)) for x in v):
+                raise ValueError('Fact embedding must contain only numeric values')
+            if len(v) == 0:
+                raise ValueError('Fact embedding cannot be empty if provided')
+            # Typical embedding dimensions are between 128-4096
+            if len(v) > 4096:
+                raise ValueError('Fact embedding dimension too large (max 4096)')
+        return v
+    
+    @validator('episodes')
+    def validate_episodes(cls, v):
+        if not isinstance(v, list):
+            raise ValueError('Episodes must be a list')
+        for episode_id in v:
+            if not isinstance(episode_id, str):
+                raise ValueError('All episode IDs must be strings')
+            if not episode_id.strip():
+                raise ValueError('Episode IDs cannot be empty strings')
+            try:
+                UUID(episode_id)
+            except ValueError:
+                raise ValueError(f'Invalid episode UUID format: {episode_id}')
+        return v
+    
+    @validator('valid_at', 'invalid_at', 'expired_at')
+    def validate_timestamps(cls, v):
+        # Allow None values for optional timestamps
+        if v is not None and not isinstance(v, datetime):
+            raise ValueError('Timestamp must be a datetime object or None')
+        return v
+    
+    @validator('attributes')
+    def validate_attributes(cls, v):
+        if not isinstance(v, dict):
+            raise ValueError('Attributes must be a dictionary')
+        return v
 
     async def generate_embedding(self, embedder: EmbedderClient):
         start = time()

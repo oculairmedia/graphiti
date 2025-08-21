@@ -15,14 +15,16 @@ limitations under the License.
 """
 
 import logging
+import re
 from abc import ABC, abstractmethod
 from datetime import datetime
 from enum import Enum
 from time import time
 from typing import Any
-from uuid import uuid4
+from uuid import UUID, uuid4
+import os
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, validator, root_validator
 from typing_extensions import LiteralString
 
 from graphiti_core.driver.driver import GraphDriver
@@ -35,6 +37,7 @@ from graphiti_core.models.nodes.node_db_queries import (
     EPISODIC_NODE_SAVE,
 )
 from graphiti_core.utils.datetime_utils import utc_now
+from graphiti_core.utils.uuid_utils import generate_deterministic_uuid
 
 logger = logging.getLogger(__name__)
 
@@ -86,11 +89,80 @@ class EpisodeType(Enum):
 
 
 class Node(BaseModel, ABC):
-    uuid: str = Field(default_factory=lambda: str(uuid4()))
+    uuid: str = Field(default="", description='UUID of the node')
     name: str = Field(description='name of the node')
     group_id: str = Field(description='partition of the graph')
     labels: list[str] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=lambda: utc_now())
+
+    @root_validator(pre=True)
+    def generate_uuid_if_needed(cls, values):
+        uuid_value = values.get('uuid', '')
+        
+        # If UUID is already provided and valid, use it
+        if uuid_value and str(uuid_value).strip():
+            try:
+                UUID(uuid_value)  # Validate format
+                return values
+            except ValueError:
+                raise ValueError('Invalid UUID format')
+        
+        # Check if deterministic UUID generation is enabled
+        use_deterministic_uuids = os.getenv('USE_DETERMINISTIC_UUIDS', 'false').lower() == 'true'
+        
+        if use_deterministic_uuids:
+            # Get name and group_id from values
+            name = values.get('name')
+            group_id = values.get('group_id')
+            
+            if name and group_id:
+                # Generate deterministic UUID
+                values['uuid'] = generate_deterministic_uuid(name, group_id)
+                return values
+        
+        # Fall back to random UUID
+        values['uuid'] = str(uuid4())
+        return values
+    
+    @validator('uuid')
+    def validate_uuid_final(cls, v):
+        if not v or not v.strip():
+            raise ValueError('UUID cannot be empty')
+        try:
+            UUID(v)
+        except ValueError:
+            raise ValueError('Invalid UUID format')
+        return v
+    
+    @validator('name')
+    def validate_name(cls, v):
+        if not v or not v.strip():
+            raise ValueError('Name cannot be empty')
+        if len(v.strip()) > 255:
+            raise ValueError('Name cannot exceed 255 characters')
+        return v.strip()
+    
+    @validator('group_id')
+    def validate_group_id(cls, v):
+        if not v or not v.strip():
+            raise ValueError('Group ID cannot be empty')
+        # Allow alphanumeric, underscores, hyphens, dots
+        if not re.match(r'^[a-zA-Z0-9_.-]+$', v):
+            raise ValueError('Group ID must contain only alphanumeric characters, underscores, hyphens, and dots')
+        if len(v) > 100:
+            raise ValueError('Group ID cannot exceed 100 characters')
+        return v
+    
+    @validator('labels')
+    def validate_labels(cls, v):
+        if not isinstance(v, list):
+            raise ValueError('Labels must be a list')
+        for label in v:
+            if not isinstance(label, str):
+                raise ValueError('All labels must be strings')
+            if not label.strip():
+                raise ValueError('Labels cannot be empty strings')
+        return v
 
     @abstractmethod
     async def save(self, driver: GraphDriver): ...
@@ -146,6 +218,43 @@ class EpisodicNode(Node):
         description='list of entity edges referenced in this episode',
         default_factory=list,
     )
+
+    @validator('source_description')
+    def validate_source_description(cls, v):
+        if not v or not v.strip():
+            raise ValueError('Source description cannot be empty')
+        if len(v.strip()) > 1000:
+            raise ValueError('Source description cannot exceed 1000 characters')
+        return v.strip()
+    
+    @validator('content')
+    def validate_content(cls, v):
+        if not v or not v.strip():
+            raise ValueError('Episode content cannot be empty')
+        if len(v.strip()) > 100000:
+            raise ValueError('Episode content cannot exceed 100000 characters')
+        return v.strip()
+    
+    @validator('valid_at')
+    def validate_valid_at(cls, v):
+        if not isinstance(v, datetime):
+            raise ValueError('valid_at must be a datetime object')
+        return v
+    
+    @validator('entity_edges')
+    def validate_entity_edges(cls, v):
+        if not isinstance(v, list):
+            raise ValueError('Entity edges must be a list')
+        for edge_id in v:
+            if not isinstance(edge_id, str):
+                raise ValueError('All entity edge IDs must be strings')
+            if not edge_id.strip():
+                raise ValueError('Entity edge IDs cannot be empty strings')
+            try:
+                UUID(edge_id)
+            except ValueError:
+                raise ValueError(f'Invalid entity edge UUID format: {edge_id}')
+        return v
 
     async def save(self, driver: GraphDriver):
         result = await driver.execute_query(
@@ -286,6 +395,53 @@ class EntityNode(Node):
     attributes: dict[str, Any] = Field(
         default={}, description='Additional attributes of the node. Dependent on node labels'
     )
+    
+    @validator('name_embedding')
+    def validate_name_embedding(cls, v):
+        if v is not None:
+            if not isinstance(v, list):
+                raise ValueError('Name embedding must be a list of floats')
+            if not all(isinstance(x, (int, float)) for x in v):
+                raise ValueError('Name embedding must contain only numeric values')
+            if len(v) == 0:
+                raise ValueError('Name embedding cannot be empty if provided')
+            # Typical embedding dimensions are between 128-4096
+            if len(v) > 4096:
+                raise ValueError('Name embedding dimension too large (max 4096)')
+        return v
+    
+    @validator('summary')
+    def validate_summary(cls, v):
+        if v is not None and len(v) > 10000:
+            logger.warning(f"Truncating summary from {len(v)} to 10000 characters")
+            return v[:10000]
+        return v
+    
+    @validator('attributes')
+    def validate_attributes(cls, v):
+        if not isinstance(v, dict):
+            raise ValueError('Attributes must be a dictionary')
+        
+        # Validate centrality scores if present
+        centrality_fields = [
+            'pagerank_centrality', 'degree_centrality', 'betweenness_centrality', 
+            'eigenvector_centrality', 'importance_score'
+        ]
+        
+        for field in centrality_fields:
+            if field in v:
+                score = v[field]
+                if not isinstance(score, (int, float)):
+                    raise ValueError(f'{field} must be a numeric value')
+                if not (0.0 <= score <= 1.0):
+                    raise ValueError(f'{field} must be between 0.0 and 1.0, got {score}')
+        
+        # Validate other common attributes
+        if 'created_at' in v and v['created_at'] is not None:
+            if not isinstance(v['created_at'], (datetime, str)):
+                raise ValueError('created_at must be a datetime or ISO string')
+        
+        return v
 
     async def generate_name_embedding(self, embedder: EmbedderClient):
         start = time()

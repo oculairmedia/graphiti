@@ -22,6 +22,7 @@ from typing_extensions import LiteralString
 from graphiti_core.driver.driver import GraphDriver
 from graphiti_core.graph_queries import get_fulltext_indices, get_range_indices
 from graphiti_core.helpers import parse_db_date, semaphore_gather
+from graphiti_core.utils.constraints import get_all_constraints
 from graphiti_core.nodes import EpisodeType, EpisodicNode
 
 EPISODE_WINDOW_LEN = 3
@@ -54,17 +55,50 @@ async def build_indices_and_constraints(driver: GraphDriver, delete_existing: bo
     range_indices: list[LiteralString] = get_range_indices(driver.provider)
 
     fulltext_indices: list[LiteralString] = get_fulltext_indices(driver.provider)
+    
+    constraint_queries: list[LiteralString] = get_all_constraints(driver.provider)
 
-    index_queries: list[LiteralString] = range_indices + fulltext_indices
+    all_queries: list[LiteralString] = range_indices + fulltext_indices
 
+    # Execute indices and fulltext queries first
     await semaphore_gather(
         *[
             driver.execute_query(
                 query,
             )
-            for query in index_queries
+            for query in all_queries
         ]
     )
+    
+    # For FalkorDB, constraints need special handling with graph key substitution
+    if driver.provider == 'falkordb' and constraint_queries:
+        # Get the graph database name for constraint commands
+        graph_key = getattr(driver, '_database', 'default_db')
+        
+        for query in constraint_queries:
+            try:
+                if '{graph_key}' in query:
+                    # Replace placeholder with actual graph key for FalkorDB commands
+                    command = query.format(graph_key=graph_key)
+                    # Execute the GRAPH.CONSTRAINT command directly
+                    await driver.client.execute_command(*command.split())
+                else:
+                    # Fallback to regular query execution
+                    await driver.execute_query(query)
+            except Exception as e:
+                # Log constraint creation failures but don't stop the process
+                # Some constraints may already exist, which is expected
+                logger.info(f"Constraint creation result: {e}")
+    elif constraint_queries:
+        # For Neo4j, execute constraints normally
+        await semaphore_gather(
+            *[
+                driver.execute_query(
+                    query,
+                )
+                for query in constraint_queries
+            ]
+        )
 
 
 async def clear_data(driver: GraphDriver, group_ids: list[str] | None = None):

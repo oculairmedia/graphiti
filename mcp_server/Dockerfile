@@ -27,14 +27,14 @@ ENV UV_COMPILE_BYTECODE=1 \
 RUN groupadd -r app && useradd -r -d /app -g app app
 
 # Copy project files for dependency installation (better caching)
-COPY pyproject.toml uv.lock ./
+COPY mcp_server/pyproject.toml mcp_server/uv.lock ./
 
 # Install dependencies first (better layer caching)
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev
 
 # Copy application code
-COPY graphiti_mcp_server.py ./
+COPY mcp_server/graphiti_mcp_server.py ./
 
 # Change ownership to app user
 RUN chown -Rv app:app /app

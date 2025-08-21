@@ -2,10 +2,11 @@ name: Build and Push Dashboard Service Container
 
 on:
   push:
-    branches: [ main, ingestion-queue-system, falkordb-corruption-fixes ]
+    branches: [ main, ingestion-queue-system, falkordb-corruption-fixes, data-validation-framework ]
     paths:
       - 'worker/dashboard.py'
       - 'worker/Dockerfile.dashboard'
+      - 'graphiti_core/ingestion/**'
       - '.github/workflows/build-dashboard-service.yml'
   pull_request:
     branches: [ main ]

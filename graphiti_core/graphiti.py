@@ -462,6 +462,9 @@ class Graphiti:
                     valid_at=reference_time,
                 )
             )
+            
+            # Debug logging for group_id
+            logger.info(f"Created EpisodicNode with group_id: {episode.group_id} (uuid: {episode.uuid})")
 
             # Create default edge type map
             edge_type_map_default = (
