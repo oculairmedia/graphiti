@@ -6,12 +6,16 @@ on:
     paths:
       - 'worker/**'
       - 'graphiti_core/ingestion/**'
+      - 'graphiti_core/models/**'
+      - 'graphiti_core/utils/**'
       - '.github/workflows/build-worker-service.yml'
   pull_request:
     branches: [ main ]
     paths:
       - 'worker/**'
       - 'graphiti_core/ingestion/**'
+      - 'graphiti_core/models/**'
+      - 'graphiti_core/utils/**'
   workflow_dispatch:
   workflow_call:
 
