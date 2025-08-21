@@ -300,9 +300,7 @@ services:
       - homepage.description=Message queue for processing ingestion tasks
   # Worker service that processes queue messages with corruption fix
   graphiti-worker:
-    build:
-      context: .
-      dockerfile: worker/Dockerfile
+    image: ghcr.io/oculairmedia/graphiti-worker:data-validation-framework
     container_name: graphiti-worker-1
     restart: unless-stopped
     environment:
