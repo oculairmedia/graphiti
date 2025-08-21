@@ -361,6 +361,8 @@ class IngestionWorker:
                 from graphiti_core.helpers import get_default_group_id
                 effective_group_id = get_default_group_id(self.graphiti.driver.provider)
             
+            logger.info(f"Processing episode with group_id: {effective_group_id} (task.group_id: {task.group_id}, payload.group_id: {payload.get('group_id')})")
+            
             result = await self.graphiti.add_episode(
                 group_id=effective_group_id,
                 name=payload.get('name'),
