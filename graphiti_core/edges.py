@@ -84,8 +84,13 @@ class Edge(BaseModel, ABC):
             target_uuid = values.get('target_node_uuid')
             group_id = values.get('group_id')
             
-            # For EntityEdge, we can use the edge name for more specificity
-            edge_name = values.get('name', 'EDGE')
+            # Check if this is an EpisodicEdge (no name field) vs EntityEdge (has name field)
+            if 'name' not in values:
+                # For EpisodicEdges, use 'MENTIONS' as the edge type
+                edge_name = 'MENTIONS'
+            else:
+                # For EntityEdges, use the actual name or default to 'RELATES_TO'
+                edge_name = values.get('name', 'RELATES_TO')
             
             if source_uuid and target_uuid and group_id:
                 # Generate deterministic UUID for edges
