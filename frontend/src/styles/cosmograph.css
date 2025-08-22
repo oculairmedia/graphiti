@@ -6,20 +6,37 @@
   text-stroke-color: var(--cosmograph-border-color, rgba(0,0,0,0.5)) !important;
 }
 
-/* Disable animations on timeline during data updates */
+/* Disable jarring animations on timeline during data updates */
 .cosmograph-timeline-no-animation,
 .cosmograph-timeline-no-animation * {
   transition: none !important;
   animation: none !important;
 }
 
-/* Prevent the color rise animation */
+/* Smooth bar updates - subtle grow effect for new data */
+.cosmograph-timeline:not(.cosmograph-timeline-no-animation) svg rect {
+  transition: height 0.3s ease-out, y 0.3s ease-out !important;
+  animation: none !important;
+}
+
+/* Prevent jarring canvas transitions */
 .cosmograph-timeline canvas {
   transition: none !important;
 }
 
-.cosmograph-timeline svg rect,
-.cosmograph-timeline svg path {
-  transition: none !important;
-  animation: none !important;
+/* Smooth timeline bar growth animation */
+@keyframes timeline-bar-grow {
+  from {
+    transform: scaleY(0);
+    transform-origin: bottom;
+  }
+  to {
+    transform: scaleY(1);
+    transform-origin: bottom;
+  }
+}
+
+/* Apply subtle grow animation only when not in no-animation mode */
+.cosmograph-timeline:not(.cosmograph-timeline-no-animation) svg rect[height] {
+  animation: timeline-bar-grow 0.4s ease-out;
 }
