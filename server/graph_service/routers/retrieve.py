@@ -82,7 +82,7 @@ async def get_edges_by_node(node_uuid: str, graphiti: ZepGraphitiDep) -> EdgesBy
 
 
 @router.get('/episodes/{group_id}', status_code=status.HTTP_200_OK)
-async def get_episodes(group_id: str, last_n: int = 10, graphiti: ZepGraphitiDep) -> Dict[str, Any]:
+async def get_episodes(group_id: str, graphiti: ZepGraphitiDep, last_n: int = 10) -> Dict[str, Any]:
     episodes_data = await graphiti.retrieve_episodes(
         group_ids=[group_id], last_n=last_n, reference_time=datetime.now(timezone.utc)  # type: ignore[call-arg]
     )
