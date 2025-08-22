@@ -26,6 +26,7 @@ services:
       - FALKORDB_PORT=6379
       - FALKORDB_URI=redis://falkordb:6379
       - USE_FALKORDB=true
+      - USE_DETERMINISTIC_UUIDS=true
       - PORT=8000
       - USE_CEREBRAS=${USE_CEREBRAS:-false}
       - CEREBRAS_API_KEY=${CEREBRAS_API_KEY}
@@ -72,8 +73,10 @@ services:
     volumes:
       - falkordb_data:/data
     environment:
-      - REDIS_ARGS=--save 60 1 --loglevel warning
-      - FALKORDB_ARGS=NODE_CREATION_BUFFER 64 QUERY_MEM_CAPACITY 134217728 CMD_INFO no OMP_THREAD_COUNT 1
+      - REDIS_ARGS=--save 60 1 --loglevel warning --maxmemory 1g
+        --maxmemory-policy allkeys-lru
+      - FALKORDB_ARGS=NODE_CREATION_BUFFER 128 QUERY_MEM_CAPACITY 8388608
+        CMD_INFO no OMP_THREAD_COUNT 1 CACHE_SIZE 5
     networks:
       - graphiti_network
     healthcheck:
@@ -84,8 +87,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 3
-    mem_limit: 8g
-    memswap_limit: 8g
+    mem_limit: 2g
+    memswap_limit: 2g
     labels:
       - homepage.group=Knowledge Management
       - homepage.name=FalkorDB
@@ -167,7 +170,7 @@ services:
     container_name: graphiti-mcp
     restart: unless-stopped
     ports:
-      - "3010:3010" # MCP Server HTTP endpoint
+      - 3010:3010 # MCP Server HTTP endpoint
     environment:
       - FALKORDB_HOST=falkordb
       - FALKORDB_PORT=6379
@@ -212,8 +215,16 @@ services:
       - homepage.icon=si-openai
       - homepage.href=http://192.168.50.90:3010
       - homepage.description=Model Context Protocol server for AI assistants
-    command: ["uv", "run", "graphiti_mcp_server.py", "--transport", "http", "--host", "0.0.0.0", "--port", "3010"]
-
+    command:
+      - uv
+      - run
+      - graphiti_mcp_server.py
+      - --transport
+      - http
+      - --host
+      - 0.0.0.0
+      - --port
+      - "3010"
   graphiti-centrality-rs:
     image: ghcr.io/oculairmedia/graphiti-centrality-rs:main
     container_name: graphiti-centrality-rs
@@ -253,7 +264,7 @@ services:
     #   context: ./graphiti-search-rs
     #   dockerfile: Dockerfile
     # Use GitHub Actions build with FalkorDB SDK:
-    image: ghcr.io/oculairmedia/graphiti-search-rs:relevance-scoring
+    image: ghcr.io/oculairmedia/graphiti-search-rs:main
     container_name: graphiti-search-rs
     restart: unless-stopped
     ports:
@@ -294,7 +305,7 @@ services:
       - homepage.description=High-performance search with 43x speedup
   # Queue service for processing ingestion tasks
   graphiti-queued:
-    image: graphiti-queued:falkordb-corruption-fixes
+    image: ghcr.io/oculairmedia/graphiti-queued:main
     container_name: graphiti-queued
     restart: unless-stopped
     ports:
