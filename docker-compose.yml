@@ -201,7 +201,7 @@ services:
         - CMD
         - curl
         - -f
-        - http://localhost:3010/health
+        - http://localhost:3010/mcp
       interval: 30s
       timeout: 10s
       retries: 3
@@ -212,7 +212,7 @@ services:
       - homepage.icon=si-openai
       - homepage.href=http://192.168.50.90:3010
       - homepage.description=Model Context Protocol server for AI assistants
-    command: ["uv", "run", "graphiti_mcp_server.py", "--transport", "sse", "--host", "0.0.0.0", "--port", "3010"]
+    command: ["uv", "run", "graphiti_mcp_server.py", "--transport", "http", "--host", "0.0.0.0", "--port", "3010"]
 
   graphiti-centrality-rs:
     image: ghcr.io/oculairmedia/graphiti-centrality-rs:main
