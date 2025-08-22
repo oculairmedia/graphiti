@@ -435,7 +435,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
           <div className={`fixed bottom-0 z-50 transition-all duration-300`}
             style={{
               left: leftPanelCollapsed ? '48px' : '320px',
-              right: '48px' // Fixed right margin after removing right panel
+              right: selectedNode ? '420px' : '0px' // No margin when no node details panel
             }}
           >
             <React.Suspense fallback={<div className="h-20 bg-background/80 backdrop-blur-sm" />}>
@@ -461,7 +461,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
           <div className={`fixed bottom-0 z-50 transition-all duration-300`}
             style={{
               left: leftPanelCollapsed ? '48px' : '320px',
-              right: '48px', // Fixed right margin after removing right panel
+              right: selectedNode ? '420px' : '0px', // No margin when no node details panel
               height: '180px'
             }}
           >

@@ -239,7 +239,7 @@ export const GraphTimeline = forwardRef<GraphTimelineHandle, GraphTimelineProps>
 
     return (
       <div className={`border-t border-border shadow-lg transition-all duration-300 ${className}`} 
-           style={{ height: isExpanded ? '180px' : '120px' }}>
+           style={{ height: isExpanded ? '180px' : '80px' }}>
         
         {/* Unified Controls Bar with all actions */}
         <div className="flex items-center justify-between px-4 py-2 bg-background/80 backdrop-blur-sm border-b border-border">
@@ -429,7 +429,7 @@ export const GraphTimeline = forwardRef<GraphTimelineHandle, GraphTimelineProps>
         </div>
 
         {/* Timeline Component - Memoized to prevent re-renders */}
-        <div style={{ height: isExpanded ? '120px' : '60px', padding: '0 16px' }}>
+        <div style={{ height: isExpanded ? '120px' : '40px', padding: '0 16px' }}>
           <MemoizedTimeline
             ref={timelineRef}
             useLinksData={false}
@@ -453,12 +453,12 @@ export const GraphTimeline = forwardRef<GraphTimelineHandle, GraphTimelineProps>
             }}
             
             // Appearance
-            padding={{ top: 5, bottom: 5, left: 0, right: 0 }}
-            barCount={isExpanded ? 60 : 40}
-            barRadius={2}
+            padding={{ top: isExpanded ? 5 : 2, bottom: isExpanded ? 5 : 2, left: 0, right: 0 }}
+            barCount={isExpanded ? 60 : 30}
+            barRadius={isExpanded ? 2 : 1}
             barPadding={0.1}
-            axisTickHeight={isExpanded ? 20 : 15}
-            barTopMargin={isExpanded ? 20 : 10}
+            axisTickHeight={isExpanded ? 20 : 10}
+            barTopMargin={isExpanded ? 20 : 5}
             
             // Custom styling with transparent background
             className={`cosmograph-timeline ${updateMode === 'instant' ? 'cosmograph-timeline-no-animation' : ''}`}
