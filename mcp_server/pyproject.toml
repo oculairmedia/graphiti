@@ -9,4 +9,5 @@ dependencies = [
     "openai>=1.68.2",
     "graphiti-core>=0.14.0",
     "azure-identity>=1.21.0",
+    "httpx>=0.28.1",
 ]

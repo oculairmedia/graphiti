@@ -1,0 +1,18 @@
+{
+  "name": "graphiti-mcp-server",
+  "transport": "http",
+  "endpoint": "http://localhost:3010/mcp",
+  "description": "Graphiti MCP Server with HTTP transport",
+  "environment": {
+    "OPENAI_API_KEY": "your-openai-api-key-here",
+    "GRAPH_API_URL": "http://localhost:8003"
+  },
+  "command": [
+    "python", 
+    "graphiti_mcp_server.py",
+    "--transport", "http",
+    "--host", "0.0.0.0", 
+    "--port", "3010",
+    "--group-id", "default"
+  ]
+}

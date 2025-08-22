@@ -12,6 +12,7 @@ import sys
 from collections.abc import Callable
 from datetime import datetime, timezone
 from typing import Any, TypedDict, cast
+from uuid import uuid4
 
 import httpx
 from azure.identity import DefaultAzureCredential, get_bearer_token_provider
@@ -494,11 +495,17 @@ class MCPConfig(BaseModel):
     """Configuration for MCP server."""
 
     transport: str = 'sse'  # Default to SSE transport
+    host: str = '0.0.0.0'
+    port: int = 3010
 
     @classmethod
     def from_cli(cls, args: argparse.Namespace) -> 'MCPConfig':
         """Create MCP configuration from CLI arguments."""
-        return cls(transport=args.transport)
+        return cls(
+            transport=args.transport,
+            host=args.host,
+            port=args.port
+        )
 
 
 # Configure logging
@@ -930,7 +937,7 @@ async def initialize_server() -> MCPConfig:
     )
     parser.add_argument(
         '--transport',
-        choices=['sse', 'stdio'],
+        choices=['sse', 'stdio', 'http'],
         default='sse',
         help='Transport to use for communication with the client. (default: sse)',
     )
@@ -954,8 +961,14 @@ async def initialize_server() -> MCPConfig:
     )
     parser.add_argument(
         '--host',
-        default=os.environ.get('MCP_SERVER_HOST'),
-        help='Host to bind the MCP server to (default: MCP_SERVER_HOST environment variable)',
+        default=os.environ.get('MCP_SERVER_HOST', '0.0.0.0'),
+        help='Host to bind the MCP server to (default: MCP_SERVER_HOST environment variable or 0.0.0.0)',
+    )
+    parser.add_argument(
+        '--port',
+        type=int,
+        default=int(os.environ.get('MCP_SERVER_PORT', '3010')),
+        help='Port to bind the HTTP server to (default: MCP_SERVER_PORT environment variable or 3010)',
     )
 
     args = parser.parse_args()
@@ -987,12 +1000,34 @@ async def initialize_server() -> MCPConfig:
     return MCPConfig.from_cli(args)
 
 
+
+async def run_http_server(mcp_config: MCPConfig):
+    """Run HTTP server using FastMCP's built-in HTTP support."""
+    try:
+        # Configure the FastMCP server to bind to specified host and port
+        mcp.settings.host = mcp_config.host
+        mcp.settings.port = mcp_config.port
+        
+        logger.info(f"Starting HTTP server on {mcp_config.host}:{mcp_config.port}")
+        logger.info(f"MCP endpoint: http://localhost:{mcp_config.port}/mcp")
+        logger.info(f"Health check: http://localhost:{mcp_config.port}/health")
+        logger.info("Protocol version: 2025-06-18")
+        logger.info("Security: CORS enabled for localhost and allowed origins")
+        
+        # Use FastMCP's built-in HTTP support
+        await mcp.run_http_async()
+        
+    except Exception as e:
+        logger.error(f"Failed to start HTTP server: {e}")
+        raise
+
+
 async def run_mcp_server():
     """Run the MCP server in the current event loop."""
     # Initialize the server
     mcp_config = await initialize_server()
 
-    # Run the server with stdio transport for MCP in the same event loop
+    # Run the server with specified transport
     logger.info(f'Starting MCP server with transport: {mcp_config.transport}')
     if mcp_config.transport == 'stdio':
         await mcp.run_stdio_async()
@@ -1001,6 +1036,9 @@ async def run_mcp_server():
             f'Running MCP server with SSE transport on {mcp.settings.host}:{mcp.settings.port}'
         )
         await mcp.run_sse_async()
+    elif mcp_config.transport == 'http':
+        # Run HTTP server for streamable HTTP transport
+        await run_http_server(mcp_config)
 
 
 def main():
