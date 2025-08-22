@@ -2,10 +2,6 @@ name: Debug Frontend Build
 
 on:
   workflow_dispatch:
-  push:
-    branches: [ feature/real-time-node-glow ]
-    paths:
-      - '.github/workflows/build-frontend-debug.yml'
 
 jobs:
   debug-npm:

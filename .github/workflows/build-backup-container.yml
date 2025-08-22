@@ -2,7 +2,6 @@ name: Build and Push Backup Container
 
 on:
   push:
-    branches: [ main, relevance-scoring ]
     paths:
       - 'Dockerfile.backup'
       - 'scripts/backup_falkordb.sh'
@@ -10,7 +9,6 @@ on:
       - 'scripts/docker-entrypoint-backup.sh'
       - '.github/workflows/build-backup-container.yml'
   pull_request:
-    branches: [ main ]
     paths:
       - 'Dockerfile.backup'
       - 'scripts/*.sh'
@@ -58,7 +56,6 @@ jobs:
           type=ref,event=pr
           type=sha
           type=raw,value=latest,enable={{is_default_branch}}
-          type=raw,value=dev,enable=${{ github.ref == 'refs/heads/relevance-scoring' }}
 
     - name: Build and push Docker image
       uses: docker/build-push-action@v5

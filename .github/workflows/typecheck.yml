@@ -5,9 +5,7 @@ permissions:
 
 on:
   push:
-    branches: ["main", "feature/graph-service-performance"]
   pull_request:
-    branches: ["main"]
 
 jobs:
   type-check:

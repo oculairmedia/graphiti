@@ -2,12 +2,10 @@ name: Build and Push Frontend Container
 
 on:
   push:
-    branches: [ main, feature/real-time-node-glow, feature/duckdb-realtime-updates, feature/graph-service-performance, feature/webhook-completion, relevance-scoring ]
     paths:
       - 'frontend/**'
       - '.github/workflows/build-frontend.yml'
   pull_request:
-    branches: [ main ]
     paths:
       - 'frontend/**'
   workflow_dispatch:
@@ -61,8 +59,7 @@ jobs:
           type=ref,event=branch
           type=ref,event=pr
           type=sha
-          type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
-          type=raw,value=dev,enable=${{ github.ref == 'refs/heads/relevance-scoring' }}
+          type=raw,value=latest,enable={{is_default_branch}}
 
     - name: Build and push Docker image
       uses: docker/build-push-action@v5
