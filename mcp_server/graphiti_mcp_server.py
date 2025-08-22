@@ -1021,8 +1021,8 @@ async def run_http_server(mcp_config: MCPConfig):
         mcp.settings.host = mcp_config.host
         mcp.settings.port = mcp_config.port
         
-        # Use FastMCP's run method with just transport
-        mcp.run(transport="http")
+        # Use FastMCP's run method with streamable-http transport
+        mcp.run(transport="streamable-http")
         
     except Exception as e:
         logger.error(f"Failed to start HTTP server: {e}")
