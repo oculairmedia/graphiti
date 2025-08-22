@@ -81,8 +81,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Comment out broken routers, use proxy instead
-# app.include_router(retrieve.router)
+# Comment out broken routers, use proxy instead  
+app.include_router(retrieve.router)  # Re-enable for episodes endpoint
 if cached_retrieve:
     app.include_router(cached_retrieve.router)  # Add cached endpoints
 app.include_router(search_proxy.router)  # Use proxy to Rust search service
