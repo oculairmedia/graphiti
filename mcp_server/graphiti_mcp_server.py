@@ -710,11 +710,11 @@ async def search_memory_nodes(
             simplified_node = {
                 'uuid': node.get('uuid', ''),
                 'name': node.get('name', ''),
-                'summary': (node.get('summary', '') or '')[:200] + ('...' if len(node.get('summary', '') or '') > 200 else ''),  # Truncate summary to 200 chars
+                'summary': (node.get('summary', '') or '')[:50] + ('...' if len(node.get('summary', '') or '') > 50 else ''),  # Truncate summary to 50 chars
                 'labels': node.get('labels', []),
                 'group_id': node.get('group_id', ''),
                 'created_at': node.get('created_at', ''),
-                'attributes': {k: str(v)[:100] + ('...' if len(str(v)) > 100 else '') for k, v in (node.get('attributes', {}) or {}).items()}  # Truncate attribute values
+                'attributes': {}  # Remove attributes entirely to reduce size
             }
             simplified_nodes.append(simplified_node)
 
@@ -782,11 +782,13 @@ async def search_memory_facts(
         for fact in facts:
             simplified_fact = {}
             for key, value in fact.items():
-                if isinstance(value, str) and len(value) > 200:
-                    simplified_fact[key] = value[:200] + '...'
+                if key in ['uuid', 'relation_type', 'source_node_uuid', 'target_node_uuid', 'group_id', 'created_at']:
+                    simplified_fact[key] = value
+                elif isinstance(value, str) and len(value) > 50:
+                    simplified_fact[key] = value[:50] + '...'
                 elif isinstance(value, dict):
-                    # Truncate nested dict values
-                    simplified_fact[key] = {k: (str(v)[:100] + '...' if len(str(v)) > 100 else str(v)) for k, v in value.items()}
+                    # Skip complex nested dicts to reduce size
+                    simplified_fact[key] = {'...': 'truncated'}
                 else:
                     simplified_fact[key] = value
             simplified_facts.append(simplified_fact)
