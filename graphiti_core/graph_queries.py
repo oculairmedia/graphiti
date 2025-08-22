@@ -104,11 +104,12 @@ def get_vector_cosine_func_query(vec1, vec2, db_type: str = 'neo4j') -> str:
             # Don't wrap query parameters starting with $
             if vec_param.startswith('$'):
                 return False
-            # Don't wrap UNWIND parameters (contain dot but are from UNWIND clauses like edge.fact_embedding)
-            # These are identifiable as they contain a dot but don't have a prefix like 'n.' or 'e.'
-            if '.' in vec_param and not vec_param.startswith(('n.', 'e.', 'm.', 'source.', 'target.')):
+            # Don't wrap UNWIND parameters (these use common UNWIND aliases)
+            # UNWIND parameters typically use names like: edge.*, node.*, entity.*, relationship.*
+            if vec_param.startswith(('edge.', 'node.', 'entity.', 'relationship.', 'item.')):
                 return False
-            # Wrap actual graph properties (n.name_embedding, e.fact_embedding, etc.)
+            # Wrap graph properties (anything else with a dot, like n.name_embedding, e.fact_embedding, r.fact_embedding, etc.)
+            # Also wrap parameters without dots (though this should be rare for vectors)
             return True
         
         falkor_vec1 = f'vecf32({vec1})' if should_wrap_in_vecf32(vec1) else vec1
