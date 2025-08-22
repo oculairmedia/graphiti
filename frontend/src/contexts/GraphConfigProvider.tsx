@@ -293,8 +293,7 @@ export function GraphConfigProvider({ children }: { children: ReactNode }) {
       console.log('GraphConfigProvider: Loading persisted config', {
         hasNodeTypeColors: !!persistedConfig.nodeTypeColors,
         nodeTypeColorsCount: Object.keys(persistedConfig.nodeTypeColors || {}).length,
-        nodeTypeColors: persistedConfig.nodeTypeColors,
-        filteredNodeTypes: persistedConfig.filteredNodeTypes
+        colorScheme: persistedConfig.colorScheme
       });
       
       const { stable: loadedStable, dynamic: loadedDynamic } = splitConfig(persistedConfig);
@@ -361,10 +360,6 @@ export function GraphConfigProvider({ children }: { children: ReactNode }) {
       // Persist immediately within setState to ensure we capture the right values
       setTimeout(() => {
         const fullConfig = { ...newConfig, ...dynamicConfigRef.current };
-        console.log('GraphConfigProvider: Persisting stable config', {
-          updateKeys: Object.keys(updates),
-          example: updates[Object.keys(updates)[0]]
-        });
         setPersistedConfig(fullConfig);
       }, 0);
       
