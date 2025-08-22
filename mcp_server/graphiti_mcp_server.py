@@ -18,9 +18,11 @@ import httpx
 from azure.identity import DefaultAzureCredential, get_bearer_token_provider
 from dotenv import load_dotenv
 from graphiti_core import Graphiti
-from graphiti_core.embedder.openai_embedder import AzureOpenAIEmbedderClient, OpenAIEmbedderClient, OpenAIEmbedderConfig
+from graphiti_core.embedder.azure_openai import AzureOpenAIEmbedderClient
+from graphiti_core.embedder.openai import OpenAIEmbedder, OpenAIEmbedderConfig
+from graphiti_core.llm_client.azure_openai_client import AzureOpenAILLMClient
 from graphiti_core.llm_client.base import LLMClient
-from graphiti_core.llm_client.openai_client import AzureOpenAILLMClient, OpenAILLMClient, OpenAIClient
+from graphiti_core.llm_client.openai_client import OpenAIClient
 from mcp.server.fastmcp import FastMCP
 from openai import AsyncAzureOpenAI
 from pydantic import BaseModel, Field
