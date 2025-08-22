@@ -116,6 +116,9 @@ With options:
 
 ```bash
 uv run graphiti_mcp_server.py --model gpt-4.1-mini --transport sse
+
+# Or for HTTP transport
+uv run graphiti_mcp_server.py --transport http --port 3010
 ```
 
 Available arguments:
@@ -123,7 +126,9 @@ Available arguments:
 - `--model`: Overrides the `MODEL_NAME` environment variable.
 - `--small-model`: Overrides the `SMALL_MODEL_NAME` environment variable.
 - `--temperature`: Overrides the `LLM_TEMPERATURE` environment variable.
-- `--transport`: Choose the transport method (sse or stdio, default: sse)
+- `--transport`: Choose the transport method (sse, stdio, or http, default: sse)
+- `--host`: Host to bind the server to (default: 0.0.0.0 for HTTP, localhost for others)
+- `--port`: Port to bind the HTTP server to (default: 3010, only used with --transport http)
 - `--group-id`: Set a namespace for the graph (optional). If not provided, defaults to "default".
 - `--destroy-graph`: If set, destroys all Graphiti graphs on startup.
 - `--use-custom-entities`: Enable entity extraction using the predefined ENTITY_TYPES
@@ -247,6 +252,19 @@ For SSE transport (HTTP-based), you can use this configuration:
     "graphiti-memory": {
       "transport": "sse",
       "url": "http://localhost:8000/sse"
+    }
+  }
+}
+```
+
+For HTTP transport (Streamable HTTP), you can use this configuration:
+
+```json
+{
+  "mcpServers": {
+    "graphiti-memory": {
+      "transport": "http",
+      "url": "http://localhost:3010/mcp"
     }
   }
 }
