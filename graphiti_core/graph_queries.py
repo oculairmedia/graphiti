@@ -98,7 +98,23 @@ def get_nodes_query(db_type: str = 'neo4j', name: str = '', query: str | None = 
 def get_vector_cosine_func_query(vec1, vec2, db_type: str = 'neo4j') -> str:
     if db_type == 'falkordb':
         # FalkorDB uses a different syntax for regular cosine similarity and Neo4j uses normalized cosine similarity
-        return f'(2 - vec.cosineDistance({vec1}, vecf32({vec2})))/2'
+        # For FalkorDB, we need to ensure both vectors are properly formatted
+        # If vec1 or vec2 start with a parameter prefix (like 'edge.' or 'node.'), wrap them in vecf32()
+        falkor_vec1 = vec1
+        falkor_vec2 = vec2
+        
+        # Check if vec1 is a parameter from UNWIND that needs conversion
+        if any(vec1.startswith(prefix) for prefix in ['edge.', 'node.', 'comm.']):
+            falkor_vec1 = f'vecf32({vec1})'
+        
+        # Check if vec2 is a parameter from UNWIND that needs conversion
+        if any(vec2.startswith(prefix) for prefix in ['edge.', 'node.', 'comm.']):
+            falkor_vec2 = f'vecf32({vec2})'
+        elif not vec2.startswith('$'):
+            # If it's not a direct parameter ($param), wrap it in vecf32
+            falkor_vec2 = f'vecf32({vec2})'
+        
+        return f'(2 - vec.cosineDistance({falkor_vec1}, {falkor_vec2}))/2'
     else:
         return f'vector.similarity.cosine({vec1}, {vec2})'
 
