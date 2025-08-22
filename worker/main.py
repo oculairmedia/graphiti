@@ -50,7 +50,7 @@ class WorkerService:
         if os.getenv("USE_OLLAMA", "true").lower() == "true":
             llm_client = OllamaClient(
                 base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1"),
-                model=os.getenv("OLLAMA_MODEL", "gemma3:12b"),
+                model=os.getenv("OLLAMA_MODEL", "gpt-oss:20b"),
                 temperature=0.7
             )
             embedder = OllamaEmbedder(

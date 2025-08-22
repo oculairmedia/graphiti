@@ -34,7 +34,7 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - USE_OLLAMA=${USE_OLLAMA:-false}
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://100.81.139.20:11434/v1}
-      - OLLAMA_MODEL=${OLLAMA_MODEL:-gemma3:12b}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-gpt-oss:20b}
       - OLLAMA_EMBEDDING_MODEL=${OLLAMA_EMBEDDING_MODEL:-mxbai-embed-large:latest}
       - WORKER_COUNT=4
       - BATCH_SIZE=10
@@ -91,7 +91,7 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - USE_OLLAMA=${USE_OLLAMA:-false}
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://100.81.139.20:11434/v1}
-      - OLLAMA_MODEL=${OLLAMA_MODEL:-gemma3:12b}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-gpt-oss:20b}
       - DRIVER_TYPE=falkordb
     depends_on:
       falkordb:
