@@ -626,17 +626,25 @@ async def add_memory(
         effective_group_id = group_id if group_id is not None else config.group_id
         group_id_str = str(effective_group_id) if effective_group_id is not None else 'default'
 
-        # Prepare request payload
-        payload = {
-            'name': name,
-            'episode_body': episode_body,
-            'group_id': group_id_str,
-            'source': source,
+        # Prepare request payload according to AddMessagesRequest schema
+        from datetime import datetime, timezone
+        
+        message = {
+            'content': episode_body,
+            'role_type': 'system',
+            'role': name,
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'source_description': source_description,
+            'name': name
         }
-
+        
         if uuid:
-            payload['uuid'] = uuid
+            message['uuid'] = uuid
+            
+        payload = {
+            'group_id': group_id_str,
+            'messages': [message]
+        }
 
         # Send request to FastAPI server
         response = await http_client.post('/messages', json=payload)
