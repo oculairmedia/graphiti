@@ -5,19 +5,13 @@ on:
     branches: [ main, ingestion-queue-system, falkordb-corruption-fixes, data-validation-framework ]
     paths:
       - 'worker/**'
-      - 'graphiti_core/ingestion/**'
-      - 'graphiti_core/models/**'
-      - 'graphiti_core/utils/**'
-      - 'graphiti_core/driver/**'
+      - 'graphiti_core/**'
       - '.github/workflows/build-worker-service.yml'
   pull_request:
     branches: [ main ]
     paths:
       - 'worker/**'
-      - 'graphiti_core/ingestion/**'
-      - 'graphiti_core/models/**'
-      - 'graphiti_core/utils/**'
-      - 'graphiti_core/driver/**'
+      - 'graphiti_core/**'
   workflow_dispatch:
   workflow_call:
 
