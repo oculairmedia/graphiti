@@ -116,8 +116,22 @@ class Node(BaseModel, ABC):
             group_id = values.get('group_id')
             
             if name and group_id:
-                # Generate deterministic UUID
-                values['uuid'] = generate_deterministic_uuid(name, group_id)
+                # For EpisodicNode, include content to ensure unique UUIDs for different episodes
+                # This prevents information loss when multiple episodes have the same name
+                if cls.__name__ == 'EpisodicNode':
+                    content = values.get('content', '')
+                    valid_at = values.get('valid_at')
+                    
+                    # Create a unique identifier that includes content hash and timestamp
+                    import hashlib
+                    content_hash = hashlib.md5(content.encode('utf-8')).hexdigest()[:8]
+                    timestamp_str = str(valid_at) if valid_at else str(utc_now())
+                    unique_name = f"{name}_{content_hash}_{timestamp_str}"
+                    
+                    values['uuid'] = generate_deterministic_uuid(unique_name, group_id)
+                else:
+                    # For other node types, use original logic
+                    values['uuid'] = generate_deterministic_uuid(name, group_id)
                 return values
         
         # Fall back to random UUID
