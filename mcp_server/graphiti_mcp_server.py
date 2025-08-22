@@ -1011,21 +1011,17 @@ async def initialize_server() -> MCPConfig:
 async def run_http_server(mcp_config: MCPConfig):
     """Run HTTP server using FastMCP's built-in HTTP support."""
     try:
-        # Configure the FastMCP server to bind to specified host and port
-        mcp.settings.host = mcp_config.host
-        mcp.settings.port = mcp_config.port
-        
         logger.info(f"Starting HTTP server on {mcp_config.host}:{mcp_config.port}")
         logger.info(f"MCP endpoint: http://localhost:{mcp_config.port}/mcp")
         logger.info(f"Health check: http://localhost:{mcp_config.port}/health")
         logger.info("Protocol version: 2025-06-18")
         logger.info("Security: CORS enabled for localhost and allowed origins")
         
-        # Use FastMCP's streamable HTTP transport
-        await mcp.run_streamable_http_async(
+        # Use FastMCP's run_async method with HTTP transport
+        await mcp.run_async(
+            transport="http",
             host=mcp_config.host,
-            port=mcp_config.port,
-            path="/mcp"  # Set the endpoint path
+            port=mcp_config.port
         )
         
     except Exception as e:
