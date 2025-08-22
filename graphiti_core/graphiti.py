@@ -624,10 +624,17 @@ class Graphiti:
                 else {('Entity', 'Entity'): []}
             )
 
-            episodes = [
-                await EpisodicNode.get_by_uuid(self.driver, episode.uuid)
-                if episode.uuid is not None
-                else EpisodicNode(
+            # Filter out episodes that already exist to prevent duplicate processing
+            new_episodes = []
+            for episode in bulk_episodes:
+                if episode.uuid is not None:
+                    existing_episode = await EpisodicNode.get_by_uuid(self.driver, episode.uuid)
+                    if existing_episode is not None:
+                        logger.info(f"Skipping already processed episode: {episode.uuid}")
+                        continue  # Skip this episode as it's already been processed
+                
+                # Create new episode (either UUID is None or episode doesn't exist in DB)
+                new_episode = EpisodicNode(
                     name=episode.name,
                     labels=[],
                     source=episode.source,
@@ -637,8 +644,18 @@ class Graphiti:
                     created_at=now,
                     valid_at=episode.reference_time,
                 )
-                for episode in bulk_episodes
-            ]
+                # If episode had a UUID, preserve it for deterministic processing
+                if episode.uuid is not None:
+                    new_episode.uuid = episode.uuid
+                    
+                new_episodes.append(new_episode)
+            
+            episodes = new_episodes
+            
+            # Early return if no new episodes to process
+            if not episodes:
+                logger.info("No new episodes to process - all episodes already exist")
+                return
 
             episodes_by_uuid: dict[str, EpisodicNode] = {
                 episode.uuid: episode for episode in episodes

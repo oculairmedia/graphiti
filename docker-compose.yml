@@ -310,6 +310,7 @@ services:
       - FALKORDB_PORT=6379
       - FALKORDB_URI=redis://falkordb:6379
       - USE_FALKORDB=true
+      - USE_DETERMINISTIC_UUIDS=true
       - OPENAI_API_KEY=${OPENAI_API_KEY:-sk-dummy}
       - USE_CEREBRAS=${USE_CEREBRAS:-false}
       - CEREBRAS_API_KEY=${CEREBRAS_API_KEY}
