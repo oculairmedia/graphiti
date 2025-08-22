@@ -126,12 +126,12 @@ async def add_nodes_and_edges_bulk_tx(
                 episode['source'] = source_val.value
             elif isinstance(source_val, str) and source_val.startswith('EpisodeType.'):
                 episode['source'] = source_val.split('.')[-1]  # Extract just 'message' from 'EpisodeType.message'
-        
+
         # Fix datetime serialization - convert datetime objects to ISO strings
         for key, value in episode.items():
             if hasattr(value, 'isoformat'):  # datetime objects
                 episode[key] = value.isoformat()
-    
+
     # Debug logging to see what's in the episodes data
     logger.info(f"Preparing {len(episodes)} episodes for bulk save")
     if episodes:
@@ -178,6 +178,40 @@ async def add_nodes_and_edges_bulk_tx(
         edge_data.update(edge.attributes or {})
         edges.append(edge_data)
 
+    # De-duplicate EntityEdges by UUID to prevent unique constraint violations in bulk save
+    # This handles duplicates that can slip through when multiple extraction paths
+    # produce the same (source,target,name,group_id) relation within a batch
+    unique_edges: dict[str, dict[str, Any]] = {}
+    duplicates_count = 0
+    for e in edges:
+        uuid_val = e.get('uuid')
+        if not uuid_val:
+            continue
+        if uuid_val in unique_edges:
+            duplicates_count += 1
+            # Merge lightweight fields where safe
+            existing = unique_edges[uuid_val]
+            # Merge episodes lists if present
+            eps_new = e.get('episodes') or []
+            eps_existing = existing.get('episodes') or []
+            if isinstance(eps_new, list) and isinstance(eps_existing, list):
+                existing['episodes'] = list({*eps_existing, *eps_new})
+            # Keep earliest created_at if both present
+            ca_new = e.get('created_at')
+            ca_existing = existing.get('created_at')
+            if ca_new and ca_existing and ca_new < ca_existing:
+                existing['created_at'] = ca_new
+            # Prefer non-empty fact/fact_embedding if missing on existing
+            if not existing.get('fact') and e.get('fact'):
+                existing['fact'] = e['fact']
+            if not existing.get('fact_embedding') and e.get('fact_embedding'):
+                existing['fact_embedding'] = e['fact_embedding']
+        else:
+            unique_edges[uuid_val] = e
+    if duplicates_count:
+        logger.info(f"De-duplicated {duplicates_count} EntityEdges in-batch (by uuid)")
+    edges = list(unique_edges.values())
+
     # Debug: Log the exact episodes data being passed to Cypher
     logger.info(f"About to execute EPISODIC_NODE_SAVE_BULK with {len(episodes)} episodes")
     if episodes:
@@ -185,7 +219,7 @@ async def add_nodes_and_edges_bulk_tx(
         logger.info(f"First episode type: {type(episodes[0])}")
         for key, value in episodes[0].items():
             logger.info(f"  {key}: {value} (type: {type(value)})")
-    
+
     await tx.run(EPISODIC_NODE_SAVE_BULK, episodes=episodes)
     entity_node_save_bulk = get_entity_node_save_bulk_query(nodes, driver.provider)
     await tx.run(entity_node_save_bulk, nodes=nodes)
