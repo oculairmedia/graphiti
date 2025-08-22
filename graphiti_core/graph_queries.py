@@ -99,15 +99,15 @@ def get_vector_cosine_func_query(vec1, vec2, db_type: str = 'neo4j') -> str:
     if db_type == 'falkordb':
         # FalkorDB uses a different syntax for regular cosine similarity and Neo4j uses normalized cosine similarity
         # For FalkorDB: graph properties are already stored as Vectorf32, so DON'T wrap them
-        # Query parameters ($param) are Lists, so DON'T wrap them
+        # Query parameters ($param) are Lists that NEED wrapping when used in vector operations
         # UNWIND parameters (edge.*, node.*) are Lists that need conversion, so DO wrap them
         def should_wrap_in_vecf32(vec_param: str) -> bool:
             # Graph properties (n.*, e.*, r.*, etc.) are already stored as Vectorf32 - DON'T wrap
             if '.' in vec_param and not vec_param.startswith(('edge.', 'node.', 'entity.', 'relationship.', 'item.')):
                 return False
-            # Query parameters ($*) are Lists - DON'T wrap 
+            # Query parameters ($*) are Lists that need wrapping when used in vector operations
             if vec_param.startswith('$'):
-                return False
+                return True
             # UNWIND parameters (edge.*, node.*, etc.) are Lists that need conversion - DO wrap
             if vec_param.startswith(('edge.', 'node.', 'entity.', 'relationship.', 'item.')):
                 return True
