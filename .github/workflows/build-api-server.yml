@@ -2,7 +2,6 @@ name: Build and Push API Server Container
 
 on:
   push:
-    branches: [ main, feature/graph-service-performance, feature/webhook-completion, relevance-scoring, falkordb-corruption-fixes, data-validation-framework ]
     paths:
       - 'server/**'
       - 'graphiti_core/**'
@@ -10,7 +9,6 @@ on:
       - 'pyproject.toml'
       - '.github/workflows/build-api-server.yml'
   pull_request:
-    branches: [ main ]
     paths:
       - 'server/**'
       - 'graphiti_core/**'
@@ -57,7 +55,6 @@ jobs:
           type=ref,event=pr
           type=sha
           type=raw,value=latest,enable={{is_default_branch}}
-          type=raw,value=dev,enable=${{ github.ref == 'refs/heads/relevance-scoring' }}
 
     - name: Build and push Docker image
       uses: docker/build-push-action@v5

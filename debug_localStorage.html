@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug localStorage</title>
+</head>
+<body>
+    <h1>Debug localStorage</h1>
+    <div id="output"></div>
+    
+    <script>
+        function debugLocalStorage() {
+            const output = document.getElementById('output');
+            
+            // Check for graphiti config keys
+            const keys = Object.keys(localStorage).filter(key => key.includes('graphiti'));
+            
+            let html = '<h2>Graphiti localStorage Keys:</h2>';
+            if (keys.length === 0) {
+                html += '<p>No graphiti keys found</p>';
+            } else {
+                keys.forEach(key => {
+                    const value = localStorage.getItem(key);
+                    html += `<h3>${key}</h3>`;
+                    try {
+                        const parsed = JSON.parse(value);
+                        html += `<pre>${JSON.stringify(parsed, null, 2)}</pre>`;
+                    } catch (e) {
+                        html += `<pre>${value}</pre>`;
+                    }
+                });
+            }
+            
+            output.innerHTML = html;
+        }
+        
+        debugLocalStorage();
+        
+        // Also check for the config persistence key
+        const persistedConfig = localStorage.getItem('graphiti.config');
+        if (persistedConfig) {
+            console.log('Found persisted config:', JSON.parse(persistedConfig));
+        } else {
+            console.log('No persisted config found');
+        }
+    </script>
+</body>
+</html>

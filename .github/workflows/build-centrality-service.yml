@@ -2,12 +2,10 @@ name: Build and Push Centrality Service Container
 
 on:
   push:
-    branches: [ main, feature/graph-service-performance, relevance-scoring ]
     paths:
       - 'graphiti-centrality-rs/**'
       - '.github/workflows/build-centrality-service.yml'
   pull_request:
-    branches: [ main ]
     paths:
       - 'graphiti-centrality-rs/**'
   workflow_dispatch:
@@ -54,7 +52,6 @@ jobs:
           type=ref,event=pr
           type=sha
           type=raw,value=latest,enable={{is_default_branch}}
-          type=raw,value=dev,enable=${{ github.ref == 'refs/heads/relevance-scoring' }}
 
     - name: Build and push Docker image
       uses: docker/build-push-action@v5
