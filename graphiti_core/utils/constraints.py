@@ -39,8 +39,8 @@ def get_unique_constraints(db_type: str = 'neo4j') -> list[LiteralString]:
             # Unique constraint on Community UUID - prevents duplicate communities
             'GRAPH.CONSTRAINT CREATE {graph_key} UNIQUE NODE Community PROPERTIES 1 uuid',
             
-            # Unique constraint on RELATES_TO edge UUID - prevents duplicate relationships
-            'GRAPH.CONSTRAINT CREATE {graph_key} UNIQUE RELATIONSHIP RELATES_TO PROPERTIES 1 uuid',
+            # RELATES_TO edge UUID constraint removed - episodes can legitimately relate to same entities
+            # 'GRAPH.CONSTRAINT CREATE {graph_key} UNIQUE RELATIONSHIP RELATES_TO PROPERTIES 1 uuid',
             
             # MENTIONS edge UUID constraint removed - episodes can legitimately mention same entities
             # 'GRAPH.CONSTRAINT CREATE {graph_key} UNIQUE RELATIONSHIP MENTIONS PROPERTIES 1 uuid',
@@ -64,8 +64,8 @@ def get_unique_constraints(db_type: str = 'neo4j') -> list[LiteralString]:
             # Unique constraint on Community UUID
             'CREATE CONSTRAINT community_uuid_unique IF NOT EXISTS FOR (n:Community) REQUIRE n.uuid IS UNIQUE',
             
-            # Unique constraint on RELATES_TO edge UUID
-            'CREATE CONSTRAINT relates_to_uuid_unique IF NOT EXISTS FOR ()-[e:RELATES_TO]-() REQUIRE e.uuid IS UNIQUE',
+            # RELATES_TO edge UUID constraint removed - episodes can legitimately relate to same entities
+            # 'CREATE CONSTRAINT relates_to_uuid_unique IF NOT EXISTS FOR ()-[e:RELATES_TO]-() REQUIRE e.uuid IS UNIQUE',
             
             # MENTIONS edge UUID constraint removed - episodes can legitimately mention same entities
             # 'CREATE CONSTRAINT mentions_uuid_unique IF NOT EXISTS FOR ()-[e:MENTIONS]-() REQUIRE e.uuid IS UNIQUE',
