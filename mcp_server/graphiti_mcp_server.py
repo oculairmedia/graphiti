@@ -1021,9 +1021,8 @@ async def run_http_server(mcp_config: MCPConfig):
         logger.info("Protocol version: 2025-06-18")
         logger.info("Security: CORS enabled for localhost and allowed origins")
         
-        # Use FastMCP's HTTP transport with proper parameters
-        await mcp.run_http_async(
-            transport="http",  # Use streamable HTTP transport
+        # Use FastMCP's streamable HTTP transport
+        await mcp.run_streamable_http_async(
             host=mcp_config.host,
             port=mcp_config.port,
             path="/mcp"  # Set the endpoint path
