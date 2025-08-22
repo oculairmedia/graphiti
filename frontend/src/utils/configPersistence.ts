@@ -388,7 +388,7 @@ export const createDifferentialConfig = <T extends Record<string, unknown>>(
   const diff: Partial<T> = {};
   
   // Always include certain critical fields
-  const alwaysIncludeFields = ['nodeTypeColors', 'nodeTypeVisibility', 'filteredNodeTypes'];
+  const alwaysIncludeFields = ['nodeTypeColors', 'nodeTypeVisibility', 'filteredNodeTypes', 'colorScheme'];
   
   for (const key in current) {
     // Special handling for fields that should always be included if they have content
