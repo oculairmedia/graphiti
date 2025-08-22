@@ -98,19 +98,21 @@ def get_nodes_query(db_type: str = 'neo4j', name: str = '', query: str | None = 
 def get_vector_cosine_func_query(vec1, vec2, db_type: str = 'neo4j') -> str:
     if db_type == 'falkordb':
         # FalkorDB uses a different syntax for regular cosine similarity and Neo4j uses normalized cosine similarity
-        # For FalkorDB: only wrap actual graph properties (e.g., n.name_embedding, e.fact_embedding) in vecf32()
-        # Do NOT wrap query parameters ($param) or UNWIND parameters (edge.fact_embedding, node.name_embedding)
+        # For FalkorDB: graph properties are already stored as Vectorf32, so DON'T wrap them
+        # Query parameters ($param) are Lists, so DON'T wrap them
+        # UNWIND parameters (edge.*, node.*) are Lists that need conversion, so DO wrap them
         def should_wrap_in_vecf32(vec_param: str) -> bool:
-            # Don't wrap query parameters starting with $
+            # Graph properties (n.*, e.*, r.*, etc.) are already stored as Vectorf32 - DON'T wrap
+            if '.' in vec_param and not vec_param.startswith(('edge.', 'node.', 'entity.', 'relationship.', 'item.')):
+                return False
+            # Query parameters ($*) are Lists - DON'T wrap 
             if vec_param.startswith('$'):
                 return False
-            # Don't wrap UNWIND parameters (these use common UNWIND aliases)
-            # UNWIND parameters typically use names like: edge.*, node.*, entity.*, relationship.*
+            # UNWIND parameters (edge.*, node.*, etc.) are Lists that need conversion - DO wrap
             if vec_param.startswith(('edge.', 'node.', 'entity.', 'relationship.', 'item.')):
-                return False
-            # Wrap graph properties (anything else with a dot, like n.name_embedding, e.fact_embedding, r.fact_embedding, etc.)
-            # Also wrap parameters without dots (though this should be rare for vectors)
-            return True
+                return True
+            # Default: don't wrap (conservative approach)
+            return False
         
         falkor_vec1 = f'vecf32({vec1})' if should_wrap_in_vecf32(vec1) else vec1
         falkor_vec2 = f'vecf32({vec2})' if should_wrap_in_vecf32(vec2) else vec2
