@@ -1017,13 +1017,12 @@ async def run_http_server(mcp_config: MCPConfig):
         logger.info("Protocol version: 2025-06-18")
         logger.info("Security: CORS enabled for localhost and allowed origins")
         
-        # Use FastMCP's run method with HTTP transport - this is synchronous but we're in async context
-        # So we need to call it without await, it will block until server stops
-        mcp.run(
-            transport="http",
-            host=mcp_config.host,
-            port=mcp_config.port
-        )
+        # Configure FastMCP settings first
+        mcp.settings.host = mcp_config.host
+        mcp.settings.port = mcp_config.port
+        
+        # Use FastMCP's run method with just transport
+        mcp.run(transport="http")
         
     except Exception as e:
         logger.error(f"Failed to start HTTP server: {e}")
