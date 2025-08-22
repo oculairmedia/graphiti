@@ -55,6 +55,10 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
   
   // Track if Cosmograph context is ready for timeline
   const [isContextReady, setIsContextReady] = useState(false);
+  
+  // Track recent data updates to optimize timeline animation mode
+  const lastDataUpdateTime = useRef<number>(0);
+  const [timelineUpdateMode, setTimelineUpdateMode] = useState<'instant' | 'animated'>('animated');
 
   // Handle context ready state from GraphCanvas
   const handleContextReady = useCallback((ready: boolean) => {
@@ -288,6 +292,20 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
         nodes: transformedData.nodes,
         links: transformedData.links
       };
+      
+      // Track data update frequency for timeline optimization
+      const now = Date.now();
+      const timeSinceLastUpdate = now - lastDataUpdateTime.current;
+      lastDataUpdateTime.current = now;
+      
+      // If updates are happening frequently (< 3 seconds apart), use instant mode
+      // Otherwise, allow smooth animations
+      if (timeSinceLastUpdate < 3000) {
+        setTimelineUpdateMode('instant');
+      } else {
+        // Delay switching back to animated mode to avoid flickering
+        setTimeout(() => setTimelineUpdateMode('animated'), 5000);
+      }
     }
     
     return transformedData || { nodes: [], links: [] };
@@ -450,6 +468,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
                 onTimeRangeChange={(range) => {
                   // Handle timeline range changes
                 }}
+                updateMode={timelineUpdateMode}
                 className=""
               />
             </React.Suspense>
