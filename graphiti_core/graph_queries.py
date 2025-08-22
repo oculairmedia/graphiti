@@ -98,9 +98,21 @@ def get_nodes_query(db_type: str = 'neo4j', name: str = '', query: str | None = 
 def get_vector_cosine_func_query(vec1, vec2, db_type: str = 'neo4j') -> str:
     if db_type == 'falkordb':
         # FalkorDB uses a different syntax for regular cosine similarity and Neo4j uses normalized cosine similarity
-        # For FalkorDB: wrap graph properties/UNWIND params in vecf32(), but NOT query parameters ($param)
-        falkor_vec1 = f'vecf32({vec1})' if not vec1.startswith('$') else vec1
-        falkor_vec2 = f'vecf32({vec2})' if not vec2.startswith('$') else vec2
+        # For FalkorDB: only wrap actual graph properties (e.g., n.name_embedding, e.fact_embedding) in vecf32()
+        # Do NOT wrap query parameters ($param) or UNWIND parameters (edge.fact_embedding, node.name_embedding)
+        def should_wrap_in_vecf32(vec_param: str) -> bool:
+            # Don't wrap query parameters starting with $
+            if vec_param.startswith('$'):
+                return False
+            # Don't wrap UNWIND parameters (contain dot but are from UNWIND clauses like edge.fact_embedding)
+            # These are identifiable as they contain a dot but don't have a prefix like 'n.' or 'e.'
+            if '.' in vec_param and not vec_param.startswith(('n.', 'e.', 'm.', 'source.', 'target.')):
+                return False
+            # Wrap actual graph properties (n.name_embedding, e.fact_embedding, etc.)
+            return True
+        
+        falkor_vec1 = f'vecf32({vec1})' if should_wrap_in_vecf32(vec1) else vec1
+        falkor_vec2 = f'vecf32({vec2})' if should_wrap_in_vecf32(vec2) else vec2
         return f'(2 - vec.cosineDistance({falkor_vec1}, {falkor_vec2}))/2'
     else:
         return f'vector.similarity.cosine({vec1}, {vec2})'
