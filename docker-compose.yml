@@ -169,16 +169,30 @@ services:
     ports:
       - "3010:3010" # MCP Server HTTP endpoint
     environment:
-      - NEO4J_URI=bolt://falkordb:6379
-      - NEO4J_USER=default
-      - NEO4J_PASSWORD=
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-sk-dummy}
-      - MODEL_NAME=${MODEL_NAME:-gpt-4o-mini}
-      - SMALL_MODEL_NAME=${SMALL_MODEL_NAME:-gpt-4o-mini}
+      - FALKORDB_HOST=falkordb
+      - FALKORDB_PORT=6379
+      - FALKORDB_URI=redis://falkordb:6379
+      - USE_FALKORDB=true
+      - USE_CEREBRAS=${USE_CEREBRAS:-false}
+      - CEREBRAS_API_KEY=${CEREBRAS_API_KEY}
+      - CEREBRAS_MODEL=${CEREBRAS_MODEL:-qwen-3-coder-480b}
+      - CEREBRAS_SMALL_MODEL=${CEREBRAS_SMALL_MODEL:-qwen-3-coder-480b}
+      - USE_OLLAMA=${USE_OLLAMA:-true}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://100.81.139.20:11434/v1}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-gemma3:12b}
+      - OLLAMA_EMBEDDING_MODEL=${OLLAMA_EMBEDDING_MODEL:-mxbai-embed-large:latest}
+      - USE_OLLAMA_EMBEDDINGS=${USE_OLLAMA_EMBEDDINGS:-true}
+      - USE_DEDICATED_EMBEDDING_ENDPOINT=${USE_DEDICATED_EMBEDDING_ENDPOINT:-true}
+      - OLLAMA_EMBEDDING_BASE_URL=${OLLAMA_EMBEDDING_BASE_URL:-http://192.168.50.80:11434/v1}
+      - OLLAMA_EMBEDDING_API_KEY=${OLLAMA_EMBEDDING_API_KEY:-ollama}
+      - EMBEDDING_ENDPOINT_FALLBACK=${EMBEDDING_ENDPOINT_FALLBACK:-true}
       - SEMAPHORE_LIMIT=${SEMAPHORE_LIMIT:-5}
       - MCP_SERVER_PORT=3010
+      - GRAPH_API_URL=http://graph:8000
     depends_on:
       falkordb:
+        condition: service_healthy
+      graph:
         condition: service_healthy
     networks:
       - graphiti_network
@@ -198,7 +212,7 @@ services:
       - homepage.icon=si-openai
       - homepage.href=http://192.168.50.90:3010
       - homepage.description=Model Context Protocol server for AI assistants
-    command: ["uv", "run", "graphiti_mcp_server.py", "--transport", "http", "--host", "0.0.0.0", "--port", "3010"]
+    command: ["uv", "run", "graphiti_mcp_server.py", "--transport", "sse", "--host", "0.0.0.0", "--port", "3010"]
 
   graphiti-centrality-rs:
     image: ghcr.io/oculairmedia/graphiti-centrality-rs:main
