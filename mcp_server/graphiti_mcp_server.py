@@ -704,7 +704,21 @@ async def search_memory_nodes(
         result = response.json()
         nodes = result.get('nodes', [])
 
-        return NodeSearchResponse(message='Nodes retrieved successfully', nodes=nodes)
+        # Create simplified node results to reduce response size
+        simplified_nodes = []
+        for node in nodes:
+            simplified_node = {
+                'uuid': node.get('uuid', ''),
+                'name': node.get('name', ''),
+                'summary': (node.get('summary', '') or '')[:200] + ('...' if len(node.get('summary', '') or '') > 200 else ''),  # Truncate summary to 200 chars
+                'labels': node.get('labels', []),
+                'group_id': node.get('group_id', ''),
+                'created_at': node.get('created_at', ''),
+                'attributes': {k: str(v)[:100] + ('...' if len(str(v)) > 100 else '') for k, v in (node.get('attributes', {}) or {}).items()}  # Truncate attribute values
+            }
+            simplified_nodes.append(simplified_node)
+
+        return NodeSearchResponse(message='Nodes retrieved successfully', nodes=simplified_nodes)
 
     except httpx.HTTPStatusError as e:
         error_msg = f'HTTP error {e.response.status_code}: {e.response.text}'
@@ -763,7 +777,21 @@ async def search_memory_facts(
         result = response.json()
         facts = result.get('edges', [])
 
-        return FactSearchResponse(message='Facts retrieved successfully', facts=facts)
+        # Create simplified fact results to reduce response size
+        simplified_facts = []
+        for fact in facts:
+            simplified_fact = {}
+            for key, value in fact.items():
+                if isinstance(value, str) and len(value) > 200:
+                    simplified_fact[key] = value[:200] + '...'
+                elif isinstance(value, dict):
+                    # Truncate nested dict values
+                    simplified_fact[key] = {k: (str(v)[:100] + '...' if len(str(v)) > 100 else str(v)) for k, v in value.items()}
+                else:
+                    simplified_fact[key] = value
+            simplified_facts.append(simplified_fact)
+
+        return FactSearchResponse(message='Facts retrieved successfully', facts=simplified_facts)
 
     except httpx.HTTPStatusError as e:
         error_msg = f'HTTP error {e.response.status_code}: {e.response.text}'
