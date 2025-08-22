@@ -98,9 +98,10 @@ def get_nodes_query(db_type: str = 'neo4j', name: str = '', query: str | None = 
 def get_vector_cosine_func_query(vec1, vec2, db_type: str = 'neo4j') -> str:
     if db_type == 'falkordb':
         # FalkorDB uses a different syntax for regular cosine similarity and Neo4j uses normalized cosine similarity
-        # For FalkorDB, we need to wrap vectors in vecf32() but ONLY for the cosine distance function
-        # Both stored properties (e.g., n.embedding) and UNWIND parameters (e.g., edge.embedding) need wrapping
-        return f'(2 - vec.cosineDistance(vecf32({vec1}), vecf32({vec2})))/2'
+        # For FalkorDB: wrap graph properties/UNWIND params in vecf32(), but NOT query parameters ($param)
+        falkor_vec1 = f'vecf32({vec1})' if not vec1.startswith('$') else vec1
+        falkor_vec2 = f'vecf32({vec2})' if not vec2.startswith('$') else vec2
+        return f'(2 - vec.cosineDistance({falkor_vec1}, {falkor_vec2}))/2'
     else:
         return f'vector.similarity.cosine({vec1}, {vec2})'
 
