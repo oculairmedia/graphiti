@@ -15,35 +15,19 @@ services:
     ports:
       - "${FALKORDB_PORT:-6379}:6379"
     volumes:
-      - falkordb_data:/data
-    command: 
-      - falkordb-server
-      - --save
-      - "60"
-      - "1" 
-      - --save
-      - "300"
-      - "10"
-      - --save
-      - "900"
-      - "100"
-      - --appendonly
-      - "yes"
-      - --appendfsync
-      - "everysec"
-      - --loglevel
-      - "warning"
-      - --maxmemory
-      - "1g"
-      - --maxmemory-policy
-      - "allkeys-lru"
+      - falkordb_data:/var/lib/falkordb/data
+    environment:
+      - REDIS_ARGS=--save 60 1 --save 300 10 --save 900 100 --appendonly yes --appendfsync everysec --loglevel warning --maxmemory 2g --maxmemory-policy allkeys-lru
+      - FALKORDB_ARGS=NODE_CREATION_BUFFER 128 QUERY_MEM_CAPACITY 8388608 CMD_INFO no OMP_THREAD_COUNT 1 CACHE_SIZE 5
     networks:
       - graphiti_network
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 3
+    mem_limit: 2g
+    memswap_limit: 2g
     labels:
       - homepage.group=Knowledge Management
       - homepage.name=FalkorDB
