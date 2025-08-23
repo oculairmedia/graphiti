@@ -1,0 +1,180 @@
+# =============================================================================
+# Docker Compose Development Override
+# =============================================================================
+# This file automatically extends docker-compose.base.yml for development.
+# Contains development services and local build configurations.
+
+version: '3.8'
+
+services:
+  # =============================================================================
+  # Development API Services
+  # =============================================================================
+  graph:
+    image: ghcr.io/oculairmedia/graphiti-api:main
+    container_name: graphiti-api-dev
+    restart: unless-stopped
+    ports:
+      - "${API_PORT:-8003}:8000"
+    volumes:
+      - ./server/graph_service/zep_graphiti.py:/app/server/graph_service/zep_graphiti.py:ro
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-sk-dummy}
+      - FALKORDB_HOST=${FALKORDB_HOST:-falkordb}
+      - FALKORDB_PORT=${FALKORDB_PORT:-6379}
+      - FALKORDB_URI=${FALKORDB_URI:-redis://falkordb:6379}
+      - FALKORDB_DATABASE=${FALKORDB_DATABASE:-graphiti_migration}
+      - USE_FALKORDB=${USE_FALKORDB:-true}
+      - NEO4J_DATABASE=${NEO4J_DATABASE:-neo4j}
+      - USE_DETERMINISTIC_UUIDS=${USE_DETERMINISTIC_UUIDS:-true}
+      - PORT=8000
+      - USE_CEREBRAS=${USE_CEREBRAS:-false}
+      - CEREBRAS_API_KEY=${CEREBRAS_API_KEY}
+      - CEREBRAS_MODEL=${CEREBRAS_MODEL:-qwen-3-coder-480b}
+      - CEREBRAS_SMALL_MODEL=${CEREBRAS_SMALL_MODEL:-qwen-3-coder-480b}
+      - USE_OLLAMA=${USE_OLLAMA:-true}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://100.81.139.20:11434/v1}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-gemma3:12b}
+      - OLLAMA_EMBEDDING_MODEL=${OLLAMA_EMBEDDING_MODEL:-mxbai-embed-large:latest}
+      - USE_OLLAMA_EMBEDDINGS=${USE_OLLAMA_EMBEDDINGS:-true}
+      - USE_DEDICATED_EMBEDDING_ENDPOINT=${USE_DEDICATED_EMBEDDING_ENDPOINT:-true}
+      - OLLAMA_EMBEDDING_BASE_URL=${OLLAMA_EMBEDDING_BASE_URL:-http://192.168.50.80:11434/v1}
+      - OLLAMA_EMBEDDING_API_KEY=${OLLAMA_EMBEDDING_API_KEY:-ollama}
+      - EMBEDDING_ENDPOINT_FALLBACK=${EMBEDDING_ENDPOINT_FALLBACK:-true}
+      - USE_RUST_CENTRALITY=${USE_RUST_CENTRALITY:-true}
+      - RUST_CENTRALITY_URL=${RUST_CENTRALITY_URL:-http://graphiti-centrality-rs:3003}
+      - RUST_SERVER_URL=${RUST_SERVER_URL:-http://graph-visualizer-rust:3000}
+      - RUST_SEARCH_URL=${RUST_SEARCH_URL:-http://graphiti-search-rs:3004}
+      - USE_RUST_SEARCH=${USE_RUST_SEARCH:-true}
+      - NODE_LIMIT=${NODE_LIMIT:-100000}
+      - EDGE_LIMIT=${EDGE_LIMIT:-100000}
+      - MIN_DEGREE_CENTRALITY=${MIN_DEGREE_CENTRALITY:-0}
+      - CACHE_ENABLED=${CACHE_ENABLED:-true}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - ENABLE_DEBUG_LOGGING=${ENABLE_DEBUG_LOGGING:-false}
+    networks:
+      - graphiti_network
+    depends_on:
+      falkordb:
+        condition: service_healthy
+      graphiti-centrality-rs:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthcheck')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    labels:
+      - homepage.group=Knowledge Management
+      - homepage.name=Graphiti API (Dev)
+      - homepage.icon=si-fastapi
+      - homepage.href=http://192.168.50.90:${API_PORT:-8003}
+      - homepage.description=Development API server
+
+  # =============================================================================
+  # Development MCP Server
+  # =============================================================================
+  graphiti-mcp:
+    image: ghcr.io/oculairmedia/graphiti-mcp:main
+    container_name: graphiti-mcp-dev
+    restart: unless-stopped
+    ports:
+      - "${MCP_PORT:-3010}:3010"
+    environment:
+      - FALKORDB_HOST=${FALKORDB_HOST:-falkordb}
+      - FALKORDB_PORT=${FALKORDB_PORT:-6379}
+      - FALKORDB_URI=${FALKORDB_URI:-redis://falkordb:6379}
+      - FALKORDB_DATABASE=${FALKORDB_DATABASE:-graphiti_migration}
+      - USE_FALKORDB=${USE_FALKORDB:-true}
+      - NEO4J_DATABASE=${NEO4J_DATABASE:-neo4j}
+      - USE_CEREBRAS=${USE_CEREBRAS:-false}
+      - CEREBRAS_API_KEY=${CEREBRAS_API_KEY}
+      - CEREBRAS_MODEL=${CEREBRAS_MODEL:-qwen-3-coder-480b}
+      - CEREBRAS_SMALL_MODEL=${CEREBRAS_SMALL_MODEL:-qwen-3-coder-480b}
+      - USE_OLLAMA=${USE_OLLAMA:-true}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://100.81.139.20:11434/v1}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-gemma3:12b}
+      - OLLAMA_EMBEDDING_MODEL=${OLLAMA_EMBEDDING_MODEL:-mxbai-embed-large:latest}
+      - USE_OLLAMA_EMBEDDINGS=${USE_OLLAMA_EMBEDDINGS:-true}
+      - USE_DEDICATED_EMBEDDING_ENDPOINT=${USE_DEDICATED_EMBEDDING_ENDPOINT:-true}
+      - OLLAMA_EMBEDDING_BASE_URL=${OLLAMA_EMBEDDING_BASE_URL:-http://192.168.50.80:11434/v1}
+      - OLLAMA_EMBEDDING_API_KEY=${OLLAMA_EMBEDDING_API_KEY:-ollama}
+      - EMBEDDING_ENDPOINT_FALLBACK=${EMBEDDING_ENDPOINT_FALLBACK:-true}
+      - SEMAPHORE_LIMIT=${SEMAPHORE_LIMIT:-5}
+      - MCP_SERVER_PORT=3010
+      - GRAPH_API_URL=http://graph:8000
+    networks:
+      - graphiti_network
+    depends_on:
+      falkordb:
+        condition: service_healthy
+    labels:
+      - homepage.group=Knowledge Management
+      - homepage.name=MCP Server (Dev)
+      - homepage.icon=si-rss
+      - homepage.href=http://192.168.50.90:${MCP_PORT:-3010}
+      - homepage.description=Development MCP server
+
+  # =============================================================================
+  # Development Frontend
+  # =============================================================================
+  frontend-dev:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: development
+    container_name: graphiti-frontend-dev
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-8080}:8080"
+    environment:
+      - NODE_ENV=development
+      - VITE_API_BASE_URL=http://graph-visualizer-rust:3000
+      - VITE_WS_URL=ws://graph-visualizer-rust:3000/ws
+      - HOT_RELOAD=${HOT_RELOAD:-true}
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
+    networks:
+      - graphiti_network
+    depends_on:
+      - graph-visualizer-rust
+    profiles:
+      - frontend
+    labels:
+      - homepage.group=Knowledge Management
+      - homepage.name=Frontend (Dev)
+      - homepage.icon=si-react
+      - homepage.href=http://192.168.50.90:${FRONTEND_PORT:-8080}
+      - homepage.description=Development React frontend
+
+  # =============================================================================
+  # Development Tools
+  # =============================================================================
+  redisinsight:
+    image: redislabs/redisinsight:latest
+    container_name: graphiti-redisinsight-dev
+    restart: unless-stopped
+    ports:
+      - "${REDISINSIGHT_PORT:-8001}:8001"
+    volumes:
+      - redisinsight_data:/db
+    networks:
+      - graphiti_network
+    depends_on:
+      - falkordb
+      - redis
+    profiles:
+      - tools
+    labels:
+      - homepage.group=Knowledge Management
+      - homepage.name=Redis Insight
+      - homepage.icon=si-redis
+      - homepage.href=http://192.168.50.90:${REDISINSIGHT_PORT:-8001}
+      - homepage.description=Database management tool
+
+volumes:
+  redisinsight_data:
+    driver: local
+    labels:
+      - description=Redis Insight configuration data

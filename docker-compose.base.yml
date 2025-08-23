@@ -1,0 +1,178 @@
+# =============================================================================
+# Docker Compose Base Configuration
+# =============================================================================
+# This file contains the common services shared across all deployment modes.
+# Use with override files for specific deployment scenarios.
+
+version: '3.8'
+
+services:
+  # =============================================================================
+  # Core Database Services
+  # =============================================================================
+  falkordb:
+    image: falkordb/falkordb:latest
+    container_name: graphiti-falkordb
+    restart: unless-stopped
+    ports:
+      - "${FALKORDB_PORT:-6379}:6379"
+    volumes:
+      - falkordb_data:/data
+    environment:
+      - REDIS_ARGS=${REDIS_ARGS:---save 60 1 --save 300 10 --save 900 100 --appendonly yes --appendfsync everysec --loglevel warning --maxmemory 1g --maxmemory-policy allkeys-lru}
+    command: ["sh", "-c", "falkordb-server $REDIS_ARGS"]
+    networks:
+      - graphiti_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    labels:
+      - homepage.group=Knowledge Management
+      - homepage.name=FalkorDB
+      - homepage.icon=si-redis
+      - homepage.href=http://192.168.50.90:${FALKORDB_PORT:-6379}
+      - homepage.description=Graph database
+
+  # =============================================================================
+  # Rust Services
+  # =============================================================================
+  graph-visualizer-rust:
+    image: ghcr.io/oculairmedia/graphiti-rust-visualizer:main
+    container_name: graphiti-visualizer-rust
+    restart: unless-stopped
+    ports:
+      - "${RUST_SERVER_PORT:-3000}:3000"
+    environment:
+      - FALKORDB_HOST=${FALKORDB_HOST:-falkordb}
+      - FALKORDB_PORT=${FALKORDB_PORT:-6379}
+      - GRAPH_NAME=${FALKORDB_DATABASE:-graphiti_migration}
+      - NODE_LIMIT=${NODE_LIMIT:-100000}
+      - EDGE_LIMIT=${EDGE_LIMIT:-100000}
+      - MIN_DEGREE_CENTRALITY=${MIN_DEGREE_CENTRALITY:-0}
+      - CACHE_ENABLED=${CACHE_ENABLED:-true}
+      - RUST_LOG=${RUST_LOG:-info}
+    networks:
+      - graphiti_network
+    depends_on:
+      falkordb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    labels:
+      - homepage.group=Knowledge Management
+      - homepage.name=Graph Visualizer
+      - homepage.icon=si-graphql
+      - homepage.href=http://192.168.50.90:${RUST_SERVER_PORT:-3000}
+      - homepage.description=Rust-powered graph visualization server
+
+  graphiti-centrality-rs:
+    image: ghcr.io/oculairmedia/graphiti-centrality:main
+    container_name: graphiti-centrality-rs
+    restart: unless-stopped
+    ports:
+      - "${RUST_CENTRALITY_PORT:-3003}:3003"
+    environment:
+      - FALKORDB_HOST=${FALKORDB_HOST:-falkordb}
+      - FALKORDB_PORT=${FALKORDB_PORT:-6379}
+      - GRAPH_NAME=${FALKORDB_DATABASE:-graphiti_migration}
+      - RUST_LOG=${RUST_LOG:-info}
+    networks:
+      - graphiti_network
+    depends_on:
+      falkordb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3003/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    labels:
+      - homepage.group=Knowledge Management
+      - homepage.name=Centrality Service
+      - homepage.icon=si-databricks
+      - homepage.href=http://192.168.50.90:${RUST_CENTRALITY_PORT:-3003}
+      - homepage.description=Graph centrality calculations
+
+  graphiti-search-rs:
+    image: ghcr.io/oculairmedia/graphiti-search:main
+    container_name: graphiti-search-rs
+    restart: unless-stopped
+    ports:
+      - "${RUST_SEARCH_PORT:-3004}:3004"
+    environment:
+      - FALKORDB_HOST=${FALKORDB_HOST:-falkordb}
+      - FALKORDB_PORT=${FALKORDB_PORT:-6379}
+      - GRAPH_NAME=${FALKORDB_DATABASE:-graphiti_migration}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379}
+      - RUST_LOG=${RUST_LOG:-info}
+    networks:
+      - graphiti_network
+    depends_on:
+      falkordb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3004/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    labels:
+      - homepage.group=Knowledge Management
+      - homepage.name=Search Service
+      - homepage.icon=si-elasticsearch
+      - homepage.href=http://192.168.50.90:${RUST_SEARCH_PORT:-3004}
+      - homepage.description=High-performance graph search
+
+  # =============================================================================
+  # Shared Infrastructure
+  # =============================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: graphiti-redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6380}:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --appendfsync everysec
+    networks:
+      - graphiti_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    labels:
+      - homepage.group=Knowledge Management
+      - homepage.name=Redis Cache
+      - homepage.icon=si-redis
+      - homepage.description=Caching and session storage
+
+# =============================================================================
+# Shared Volumes
+# =============================================================================
+volumes:
+  falkordb_data:
+    driver: local
+    labels:
+      - description=FalkorDB persistent data
+  redis_data:
+    driver: local
+    labels:
+      - description=Redis cache data
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  graphiti_network:
+    driver: bridge
+    labels:
+      - description=Graphiti application network
