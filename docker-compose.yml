@@ -1,34 +1,170 @@
+# =============================================================================
+# Graphiti Knowledge Graph Platform - Main Configuration
+# =============================================================================
+# Dockge-compatible single-file Docker Compose configuration
+# Includes all services: database, API, visualization, and processing services
+# Compatible with environment variable management and service profiles
+
 services:
-  graph:
-    image: ghcr.io/oculairmedia/graphiti-api:main
-    volumes:
-      - ./server/graph_service/zep_graphiti.py:/app/server/graph_service/zep_graphiti.py:ro
+  # =============================================================================
+  # Core Database Services
+  # =============================================================================
+  falkordb:
+    image: falkordb/falkordb:latest
+    container_name: graphiti-falkordb
+    restart: unless-stopped
     ports:
-      - 8003:8000
+      - "${FALKORDB_PORT:-6379}:6379"
+    volumes:
+      - falkordb_data:/data
+    command: 
+      - falkordb-server
+      - --save
+      - "60"
+      - "1" 
+      - --save
+      - "300"
+      - "10"
+      - --save
+      - "900"
+      - "100"
+      - --appendonly
+      - "yes"
+      - --appendfsync
+      - "everysec"
+      - --loglevel
+      - "warning"
+      - --maxmemory
+      - "1g"
+      - --maxmemory-policy
+      - "allkeys-lru"
+    networks:
+      - graphiti_network
     healthcheck:
-      test:
-        - CMD
-        - python
-        - -c
-        - import urllib.request;
-          urllib.request.urlopen('http://localhost:8000/healthcheck')
+      test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
-      retries: 3
+      retries: 5
+    labels:
+      - homepage.group=Knowledge Management
+      - homepage.name=FalkorDB
+      - homepage.icon=si-redis
+      - homepage.href=http://${HOMEPAGE_HOST:-192.168.50.90}:${FALKORDB_PORT:-6379}
+      - homepage.description=Graph database
+
+  # =============================================================================
+  # Rust Services
+  # =============================================================================
+  graph-visualizer-rust:
+    image: ghcr.io/oculairmedia/graphiti-rust-visualizer:main
+    container_name: graphiti-visualizer-rust
+    restart: unless-stopped
+    ports:
+      - "${RUST_SERVER_PORT:-3000}:3000"
+    environment:
+      - FALKORDB_HOST=${FALKORDB_HOST:-falkordb}
+      - FALKORDB_PORT=${FALKORDB_PORT:-6379}
+      - GRAPH_NAME=${FALKORDB_DATABASE:-graphiti_migration}
+      - NODE_LIMIT=${NODE_LIMIT:-100000}
+      - EDGE_LIMIT=${EDGE_LIMIT:-100000}
+      - MIN_DEGREE_CENTRALITY=${MIN_DEGREE_CENTRALITY:-0}
+      - CACHE_ENABLED=${CACHE_ENABLED:-true}
+      - RUST_LOG=${RUST_LOG:-info}
+    networks:
+      - graphiti_network
     depends_on:
       falkordb:
         condition: service_healthy
-      graphiti-centrality-rs:
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/stats"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    labels:
+      - homepage.group=Knowledge Management
+      - homepage.name=Graph Visualizer
+      - homepage.icon=si-graphql
+      - homepage.href=http://${HOMEPAGE_HOST:-192.168.50.90}:${RUST_SERVER_PORT:-3000}
+      - homepage.description=Rust-powered graph visualization server
+
+  graphiti-centrality-rs:
+    image: ghcr.io/oculairmedia/graphiti-centrality-rs:main
+    container_name: graphiti-centrality-rs
+    restart: unless-stopped
+    ports:
+      - "${RUST_CENTRALITY_PORT:-3003}:3003"
+    environment:
+      - FALKORDB_HOST=${FALKORDB_HOST:-falkordb}
+      - FALKORDB_PORT=${FALKORDB_PORT:-6379}
+      - GRAPH_NAME=${FALKORDB_DATABASE:-graphiti_migration}
+      - RUST_LOG=${RUST_LOG:-info}
+    networks:
+      - graphiti_network
+    depends_on:
+      falkordb:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3003/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    labels:
+      - homepage.group=Knowledge Management
+      - homepage.name=Centrality Service
+      - homepage.icon=si-databricks
+      - homepage.href=http://${HOMEPAGE_HOST:-192.168.50.90}:${RUST_CENTRALITY_PORT:-3003}
+      - homepage.description=Graph centrality calculations
+
+  graphiti-search-rs:
+    image: ghcr.io/oculairmedia/graphiti-search-rs:main
+    container_name: graphiti-search-rs
+    restart: unless-stopped
+    ports:
+      - "${RUST_SEARCH_PORT:-3004}:3004"
+    environment:
+      - FALKORDB_HOST=${FALKORDB_HOST:-falkordb}
+      - FALKORDB_PORT=${FALKORDB_PORT:-6379}
+      - GRAPH_NAME=${FALKORDB_DATABASE:-graphiti_migration}
+      - REDIS_URL=${REDIS_URL:-redis://falkordb:6379}
+      - RUST_LOG=${RUST_LOG:-info}
+    networks:
+      - graphiti_network
+    depends_on:
+      falkordb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3004/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    labels:
+      - homepage.group=Knowledge Management
+      - homepage.name=Search Service
+      - homepage.icon=si-elasticsearch
+      - homepage.href=http://${HOMEPAGE_HOST:-192.168.50.90}:${RUST_SEARCH_PORT:-3004}
+      - homepage.description=High-performance graph search
+
+  # =============================================================================
+  # API and Processing Services
+  # =============================================================================
+  graph:
+    image: ghcr.io/oculairmedia/graphiti-api:main
+    container_name: graphiti-api
+    restart: unless-stopped
+    ports:
+      - "${API_PORT:-8003}:8000"
+    volumes:
+      - ./server/graph_service/zep_graphiti.py:/app/server/graph_service/zep_graphiti.py:ro
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY:-sk-dummy}
-      - FALKORDB_HOST=falkordb
-      - FALKORDB_PORT=6379
-      - FALKORDB_URI=redis://falkordb:6379
+      - FALKORDB_HOST=${FALKORDB_HOST:-falkordb}
+      - FALKORDB_PORT=${FALKORDB_PORT:-6379}
+      - FALKORDB_URI=${FALKORDB_URI:-redis://falkordb:6379}
       - FALKORDB_DATABASE=${FALKORDB_DATABASE:-graphiti_migration}
-      - USE_FALKORDB=true
+      - USE_FALKORDB=${USE_FALKORDB:-true}
       - NEO4J_DATABASE=${NEO4J_DATABASE:-neo4j}
-      - USE_DETERMINISTIC_UUIDS=true
+      - USE_DETERMINISTIC_UUIDS=${USE_DETERMINISTIC_UUIDS:-true}
       - PORT=8000
       - USE_CEREBRAS=${USE_CEREBRAS:-false}
       - CEREBRAS_API_KEY=${CEREBRAS_API_KEY}
@@ -45,14 +181,19 @@ services:
       - EMBEDDING_ENDPOINT_FALLBACK=${EMBEDDING_ENDPOINT_FALLBACK:-true}
       - USE_RUST_CENTRALITY=${USE_RUST_CENTRALITY:-true}
       - RUST_CENTRALITY_URL=${RUST_CENTRALITY_URL:-http://graphiti-centrality-rs:3003}
-      - RUST_SERVER_URL=http://graph-visualizer-rust:3000
-      - RUST_SEARCH_URL=http://graphiti-search-rs:3004
-      - USE_RUST_SEARCH=true
-      - ENABLE_CACHE_INVALIDATION=true
-      - GRAPHITI_DATA_WEBHOOK_URLS=${GRAPHITI_DATA_WEBHOOK_URLS:-http://graph-visualizer-rust:3000/api/webhooks/data-ingestion,http://host.docker.internal:3000/api/webhooks/data-ingestion}
+      - RUST_SERVER_URL=${RUST_SERVER_URL:-http://graph-visualizer-rust:3000}
+      - RUST_SEARCH_URL=${RUST_SEARCH_URL:-http://graphiti-search-rs:3004}
+      - USE_RUST_SEARCH=${USE_RUST_SEARCH:-true}
+      - NODE_LIMIT=${NODE_LIMIT:-100000}
+      - EDGE_LIMIT=${EDGE_LIMIT:-100000}
+      - MIN_DEGREE_CENTRALITY=${MIN_DEGREE_CENTRALITY:-0}
+      - CACHE_ENABLED=${CACHE_ENABLED:-true}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - ENABLE_DEBUG_LOGGING=${ENABLE_DEBUG_LOGGING:-false}
+      - ENABLE_CACHE_INVALIDATION=${ENABLE_CACHE_INVALIDATION:-true}
+      - GRAPHITI_DATA_WEBHOOK_URLS=${GRAPHITI_DATA_WEBHOOK_URLS:-http://graph-visualizer-rust:3000/api/webhooks/data-ingestion}
       - USE_QUEUE_FOR_INGESTION=${USE_QUEUE_FOR_INGESTION:-true}
-      - QUEUE_URL=http://graphiti-queued:8080
-      - QUEUE_FALLBACK_TO_DIRECT=false
+      - QUEUED_URL=http://graphiti-queued:8080
       - DEDUP_SIMILARITY_THRESHOLD=${DEDUP_SIMILARITY_THRESHOLD:-0.6}
       - DEDUP_FUZZY_THRESHOLD=${DEDUP_FUZZY_THRESHOLD:-0.9}
       - ENABLE_AGGRESSIVE_DEDUP=${ENABLE_AGGRESSIVE_DEDUP:-true}
@@ -60,124 +201,37 @@ services:
       - DEDUP_EPISODE_INTERVAL=${DEDUP_EPISODE_INTERVAL:-10}
     networks:
       - graphiti_network
-    labels:
-      - homepage.group=Knowledge Management
-      - homepage.name=Graphiti API
-      - homepage.icon=si-graphql
-      - homepage.href=http://192.168.50.90:8000
-      - homepage.description=Knowledge graph API service
-  falkordb:
-    image: falkordb/falkordb:latest
-    container_name: graphiti-falkordb-1
-    restart: unless-stopped
-    ports:
-      - 6379:6379
-    volumes:
-      - falkordb_data:/var/lib/falkordb/data
-    environment:
-      - REDIS_ARGS=--save 60 1 --save 300 10 --save 900 100 --appendonly yes --appendfsync everysec --loglevel warning --maxmemory 1g --maxmemory-policy allkeys-lru
-      - FALKORDB_ARGS=NODE_CREATION_BUFFER 128 QUERY_MEM_CAPACITY 8388608
-        CMD_INFO no OMP_THREAD_COUNT 1 CACHE_SIZE 5
-    networks:
-      - graphiti_network
-    healthcheck:
-      test:
-        - CMD
-        - redis-cli
-        - ping
-      interval: 10s
-      timeout: 5s
-      retries: 3
-    mem_limit: 2g
-    memswap_limit: 2g
-    labels:
-      - homepage.group=Knowledge Management
-      - homepage.name=FalkorDB
-      - homepage.icon=si-redis
-      - homepage.href=http://192.168.50.90:6379
-      - homepage.description=Graph database storage
-  graph-visualizer-rust:
-    image: ghcr.io/oculairmedia/graphiti-rust-visualizer:main
-    container_name: graphiti-visualizer-rust
-    restart: unless-stopped
-    ports:
-      - 3000:3000
-    environment:
-      - FALKORDB_HOST=falkordb
-      - FALKORDB_PORT=6379
-      - GRAPH_NAME=graphiti_migration
-      - RUST_LOG=graph_visualizer=debug,tower_http=debug
-      - NODE_LIMIT=${NODE_LIMIT:-100000}
-      - EDGE_LIMIT=${EDGE_LIMIT:-100000}
-      - MIN_DEGREE_CENTRALITY=${MIN_DEGREE_CENTRALITY:-0.0}
-      - CACHE_ENABLED=${CACHE_ENABLED:-true}
-      - CACHE_TTL_SECONDS=${CACHE_TTL_SECONDS:-300}
-      - CACHE_STRATEGY=${CACHE_STRATEGY:-aggressive}
-      - FORCE_FRESH_DATA=${FORCE_FRESH_DATA:-false}
-      - REDIS_URL=redis://letta-redis-1:6379/2 # Use DB 2 for visual server cache
     depends_on:
       falkordb:
         condition: service_healthy
-    networks:
-      - graphiti_network
-      - letta_network # For Redis access
+      graphiti-centrality-rs:
+        condition: service_healthy
+      graphiti-queued:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthcheck')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
     labels:
       - homepage.group=Knowledge Management
-      - homepage.name=Graph Visualizer (Rust)
-      - homepage.icon=si-rust
-      - homepage.href=http://192.168.50.90:3000
-      - homepage.description=High-performance Rust-based graph visualization
-  frontend:
-    image: ghcr.io/oculairmedia/graphiti-frontend:main
-    container_name: graphiti-frontend-app
-    restart: unless-stopped
-    expose:
-      - 80
-    environment:
-      - NODE_ENV=production
-      - VITE_WS_URL=ws://192.168.50.90:8088/rust-ws
-      - VITE_API_BASE_URL=http://192.168.50.90:8088/api
-      - VITE_GRAPHITI_WS_URL=ws://192.168.50.90:8088/ws
-    depends_on:
-      - graph-visualizer-rust
-    networks:
-      - graphiti_network
-    labels:
-      - homepage.group=Knowledge Management
-      - homepage.name=Graphiti Frontend App
-      - homepage.icon=si-react
-      - homepage.description=React frontend application
-  nginx:
-    image: nginx:alpine
-    container_name: graphiti-nginx
-    restart: unless-stopped
-    ports:
-      - 8088:80
-    volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-    depends_on:
-      - frontend
-      - graph-visualizer-rust
-    networks:
-      - graphiti_network
-    labels:
-      - homepage.group=Knowledge Management
-      - homepage.name=Graphiti Nginx Proxy
-      - homepage.icon=si-nginx
-      - homepage.href=http://192.168.50.90:8088
-      - homepage.description=Reverse proxy for Graphiti services
+      - homepage.name=Graphiti API
+      - homepage.icon=si-fastapi
+      - homepage.href=http://${HOMEPAGE_HOST:-192.168.50.90}:${API_PORT:-8003}
+      - homepage.description=Knowledge graph API service
+
   graphiti-mcp:
     image: ghcr.io/oculairmedia/graphiti-mcp:main
     container_name: graphiti-mcp
     restart: unless-stopped
     ports:
-      - 3010:3010 # MCP Server HTTP endpoint
+      - "${MCP_PORT:-3010}:3010"
     environment:
-      - FALKORDB_HOST=falkordb
-      - FALKORDB_PORT=6379
-      - FALKORDB_URI=redis://falkordb:6379
+      - FALKORDB_HOST=${FALKORDB_HOST:-falkordb}
+      - FALKORDB_PORT=${FALKORDB_PORT:-6379}
+      - FALKORDB_URI=${FALKORDB_URI:-redis://falkordb:6379}
       - FALKORDB_DATABASE=${FALKORDB_DATABASE:-graphiti_migration}
-      - USE_FALKORDB=true
+      - USE_FALKORDB=${USE_FALKORDB:-true}
       - NEO4J_DATABASE=${NEO4J_DATABASE:-neo4j}
       - USE_CEREBRAS=${USE_CEREBRAS:-false}
       - CEREBRAS_API_KEY=${CEREBRAS_API_KEY}
@@ -195,159 +249,57 @@ services:
       - SEMAPHORE_LIMIT=${SEMAPHORE_LIMIT:-5}
       - MCP_SERVER_PORT=3010
       - GRAPH_API_URL=http://graph:8000
+    networks:
+      - graphiti_network
     depends_on:
       falkordb:
         condition: service_healthy
-      graph:
-        condition: service_healthy
-    networks:
-      - graphiti_network
-    healthcheck:
-      test:
-        - CMD
-        - curl
-        - -f
-        - http://localhost:3010/mcp
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-    labels:
-      - homepage.group=AI Services
-      - homepage.name=Graphiti MCP Server
-      - homepage.icon=si-openai
-      - homepage.href=http://192.168.50.90:3010
-      - homepage.description=Model Context Protocol server for AI assistants
-    command:
-      - uv
-      - run
-      - graphiti_mcp_server.py
-      - --transport
-      - http
-      - --host
-      - 0.0.0.0
-      - --port
-      - "3010"
-  graphiti-centrality-rs:
-    image: ghcr.io/oculairmedia/graphiti-centrality-rs:main
-    container_name: graphiti-centrality-rs
-    restart: unless-stopped
-    ports:
-      - 3003:3003 # Rust centrality service
-    environment:
-      - FALKORDB_HOST=falkordb
-      - FALKORDB_PORT=6379
-      - GRAPH_NAME=graphiti_migration
-      - BIND_ADDR=0.0.0.0:3003
-      - RUST_LOG=graphiti_centrality=info,debug
-    depends_on:
-      falkordb:
-        condition: service_healthy
-    networks:
-      - graphiti_network
-    healthcheck:
-      test:
-        - CMD
-        - curl
-        - -f
-        - http://localhost:3003/health
-      interval: 10s
-      timeout: 5s
-      retries: 3
     labels:
       - homepage.group=Knowledge Management
-      - homepage.name=Centrality Service (Rust)
-      - homepage.icon=si-rust
-      - homepage.href=http://192.168.50.90:3003
-      - homepage.description=High-performance centrality calculations with
-        native FalkorDB algorithms
-  # High-performance Rust search service (43x faster than Python)
-  graphiti-search-rs:
-    # build:
-    #   context: ./graphiti-search-rs
-    #   dockerfile: Dockerfile
-    # Use GitHub Actions build with FalkorDB SDK:
-    image: ghcr.io/oculairmedia/graphiti-search-rs:main
-    container_name: graphiti-search-rs
-    restart: unless-stopped
-    ports:
-      - 3004:3004 # Rust search service
-    environment:
-      - FALKORDB_HOST=falkordb
-      - FALKORDB_PORT=6379
-      - GRAPH_NAME=graphiti_migration
-      - REDIS_URL=redis://letta-redis-1:6379 # Use separate Redis for cache
-      - PORT=3004
-      - MAX_CONNECTIONS=200
-      - CACHE_TTL=300
-      - RUST_LOG=graphiti_search=info,debug
-      - RUST_SEARCH_ENABLED=${RUST_SEARCH_ENABLED:-false} # Feature flag
-      - RUST_SEARCH_PERCENTAGE=${RUST_SEARCH_PERCENTAGE:-0} # A/B testing percentage
-      - OLLAMA_BASE_URL=${OLLAMA_EMBEDDING_BASE_URL:-http://192.168.50.80:11434/v1}
-      - OLLAMA_EMBEDDING_MODEL=${OLLAMA_EMBEDDING_MODEL:-mxbai-embed-large:latest}
-    depends_on:
-      falkordb:
-        condition: service_healthy
-    networks:
-      - graphiti_network
-    healthcheck:
-      test:
-        - CMD
-        - curl
-        - -f
-        - http://localhost:3004/health
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-    labels:
-      - homepage.group=Knowledge Management
-      - homepage.name=Search Service (Rust)
-      - homepage.icon=si-rust
-      - homepage.href=http://192.168.50.90:3004
-      - homepage.description=High-performance search with 43x speedup
-  # Queue service for processing ingestion tasks
+      - homepage.name=MCP Server
+      - homepage.icon=si-rss
+      - homepage.href=http://${HOMEPAGE_HOST:-192.168.50.90}:${MCP_PORT:-3010}
+      - homepage.description=Model Context Protocol server
+
+  # =============================================================================
+  # Queue and Worker Services
+  # =============================================================================
   graphiti-queued:
     image: ghcr.io/oculairmedia/graphiti-queued:main
     container_name: graphiti-queued
     restart: unless-stopped
     ports:
-      - 8059:8080
+      - "${QUEUE_PORT:-8093}:8080"
     volumes:
       - queued_data:/data
     environment:
-      - RUST_LOG=queued=info,debug
+      - QUEUED_DATA_DIR=/data
+      - QUEUED_BIND_ADDR=0.0.0.0:8080
+      - RUST_LOG=${RUST_LOG:-info}
     networks:
       - graphiti_network
     healthcheck:
-      test:
-        - CMD
-        - curl
-        - -f
-        - http://localhost:8080/queues
+      test: ["CMD", "curl", "-f", "http://localhost:8080/queues"]
       interval: 10s
-      timeout: 3s
+      timeout: 5s
       retries: 3
     labels:
       - homepage.group=Knowledge Management
-      - homepage.name=Graphiti Queue Service
+      - homepage.name=Queue Service
       - homepage.icon=si-queue
-      - homepage.href=http://192.168.50.90:8080
-      - homepage.description=Message queue for processing ingestion tasks
-  # Worker service that processes queue messages with corruption fix
+      - homepage.href=http://${HOMEPAGE_HOST:-192.168.50.90}:${QUEUE_PORT:-8093}
+      - homepage.description=Message queue for ingestion processing
+
   graphiti-worker:
     image: ghcr.io/oculairmedia/graphiti-worker:main
-    container_name: graphiti-worker-1
+    container_name: graphiti-worker
     restart: unless-stopped
     environment:
       - QUEUED_URL=http://graphiti-queued:8080
-      - FALKORDB_HOST=falkordb
-      - FALKORDB_PORT=6379
-      - FALKORDB_URI=redis://falkordb:6379
+      - FALKORDB_HOST=${FALKORDB_HOST:-falkordb}
+      - FALKORDB_PORT=${FALKORDB_PORT:-6379}
       - FALKORDB_DATABASE=${FALKORDB_DATABASE:-graphiti_migration}
-      - USE_FALKORDB=true
-      - NEO4J_DATABASE=${NEO4J_DATABASE:-neo4j}
-      - USE_DETERMINISTIC_UUIDS=true
+      - USE_FALKORDB=${USE_FALKORDB:-true}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-sk-dummy}
       - USE_CEREBRAS=${USE_CEREBRAS:-false}
       - CEREBRAS_API_KEY=${CEREBRAS_API_KEY}
@@ -362,72 +314,112 @@ services:
       - OLLAMA_EMBEDDING_BASE_URL=${OLLAMA_EMBEDDING_BASE_URL:-http://192.168.50.80:11434/v1}
       - OLLAMA_EMBEDDING_API_KEY=${OLLAMA_EMBEDDING_API_KEY:-ollama}
       - EMBEDDING_ENDPOINT_FALLBACK=${EMBEDDING_ENDPOINT_FALLBACK:-true}
-      - WORKER_COUNT=2
-      - BATCH_SIZE=5
-      - POLL_INTERVAL=1.0
-      - ENABLE_DASHBOARD=false
-      - LOG_LEVEL=INFO
+      - WORKER_COUNT=${WORKER_COUNT:-2}
+      - BATCH_SIZE=${BATCH_SIZE:-5}
+      - POLL_INTERVAL=${POLL_INTERVAL:-2.0}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    networks:
+      - graphiti_network
     depends_on:
       graphiti-queued:
         condition: service_healthy
       falkordb:
         condition: service_healthy
-    networks:
-      - graphiti_network
     labels:
       - homepage.group=Knowledge Management
-      - homepage.name=Graphiti Worker 1
-      - homepage.icon=si-kubernetes
-      - homepage.description=Ingestion worker with corruption fix
-  # Automated backup service for FalkorDB
-  falkordb-backup:
-    image: ghcr.io/oculairmedia/graphiti-backup:dev
-    container_name: graphiti-falkordb-backup
+      - homepage.name=Worker
+      - homepage.icon=si-worker
+      - homepage.description=Ingestion queue worker
+
+  # =============================================================================
+  # Reverse Proxy and Load Balancing
+  # =============================================================================
+  nginx:
+    image: nginx:alpine
+    container_name: graphiti-nginx
     restart: unless-stopped
     ports:
-      - 8091:8080 # Monitoring dashboard
+      - "${NGINX_HTTP_PORT:-8088}:80"
+      - "${NGINX_HTTPS_PORT:-8443}:443"
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro # Docker socket for container access
-      - falkordb_backups:/backups/falkordb # Backup storage volume
-      - backup_status:/var/log # Status files for dashboard
-    environment:
-      - FALKORDB_CONTAINER_NAME=graphiti-falkordb-1
-      - BACKUP_DIR=/backups/falkordb
-      - BACKUP_RETENTION_DAYS=${BACKUP_RETENTION_DAYS:-7}
-      - BACKUP_RETENTION_WEEKLY=${BACKUP_RETENTION_WEEKLY:-4}
-      - BACKUP_RETENTION_MONTHLY=${BACKUP_RETENTION_MONTHLY:-3}
-      - BACKUP_WEBHOOK_URL=${BACKUP_WEBHOOK_URL:-}
-      - RUN_INITIAL_BACKUP=${RUN_INITIAL_BACKUP:-true}
-      - ENABLE_DASHBOARD=${ENABLE_DASHBOARD:-true}
-      - STATUS_FILE=/var/log/backup_status.json
-    depends_on:
-      falkordb:
-        condition: service_healthy
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - nginx_logs:/var/log/nginx
     networks:
       - graphiti_network
-    healthcheck:
-      test:
-        - CMD
-        - sh
-        - -c
-        - pgrep crond && curl -f http://localhost:8080/health || exit 1
-      interval: 60s
-      timeout: 10s
-      start_period: 30s
-      retries: 3
+    depends_on:
+      - graph
+      - graph-visualizer-rust
+    profiles:
+      - proxy
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
     labels:
       - homepage.group=Knowledge Management
-      - homepage.name=FalkorDB Backup Service
-      - homepage.icon=si-databricks
-      - homepage.href=http://192.168.50.90:8091
-      - homepage.description=Automated backup service with monitoring dashboard
+      - homepage.name=Nginx Proxy
+      - homepage.icon=si-nginx
+      - homepage.href=http://${HOMEPAGE_HOST:-192.168.50.90}:${NGINX_HTTP_PORT:-8088}
+      - homepage.description=Reverse proxy and load balancer
+
+  # =============================================================================
+  # Optional Services (Profiles)
+  # =============================================================================
+  # Frontend service (profile-based)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: development
+    container_name: graphiti-frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-8080}:8080"
+    environment:
+      - NODE_ENV=development
+      - VITE_API_BASE_URL=http://graph-visualizer-rust:3000
+      - VITE_WS_URL=ws://graph-visualizer-rust:3000/ws
+      - HOT_RELOAD=${HOT_RELOAD:-true}
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
+    networks:
+      - graphiti_network
+    depends_on:
+      - graph-visualizer-rust
+    profiles:
+      - frontend
+    labels:
+      - homepage.group=Knowledge Management
+      - homepage.name=Frontend
+      - homepage.icon=si-react
+      - homepage.href=http://${HOMEPAGE_HOST:-192.168.50.90}:${FRONTEND_PORT:-8080}
+      - homepage.description=React frontend interface
+
+# =============================================================================
+# Shared Volumes
+# =============================================================================
+volumes:
+  falkordb_data:
+    driver: local
+    labels:
+      - description=FalkorDB persistent data
+  queued_data:
+    driver: local
+    labels:
+      - description=Queue service persistent data
+  nginx_logs:
+    driver: local
+    labels:
+      - description=Nginx access and error logs
+
+# =============================================================================
+# Networks
+# =============================================================================
 networks:
   graphiti_network:
     driver: bridge
-  letta_network:
-    external: true
-volumes:
-  falkordb_data: null
-  falkordb_backups: null
-  backup_status: null
-  queued_data: null
+    labels:
+      - description=Graphiti application network
