@@ -358,21 +358,14 @@ services:
   # =============================================================================
   # Frontend service (profile-based)
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-      target: development
+    image: ghcr.io/oculairmedia/graphiti-frontend:main
     restart: unless-stopped
     ports:
-      - "${FRONTEND_PORT:-8084}:3000"
+      - "${FRONTEND_PORT:-8084}:80"
     environment:
-      - NODE_ENV=development
+      - NODE_ENV=production
       - VITE_API_BASE_URL=http://graph-visualizer-rust:3000
       - VITE_WS_URL=ws://graph-visualizer-rust:3000/ws
-      - HOT_RELOAD=${HOT_RELOAD:-true}
-    volumes:
-      - ./frontend/src:/app/src
-      - ./frontend/public:/app/public
     networks:
       - graphiti_network
     depends_on:
