@@ -4,8 +4,6 @@
 # Use this file for frontend-only deployments focused on visualization.
 # Usage: docker-compose -f docker-compose.base.yml -f docker-compose.frontend.override.yml up
 
-version: '3.8'
-
 services:
   # =============================================================================
   # Frontend Application

@@ -4,8 +4,6 @@
 # Use this file for production deployments with optimized configurations.
 # Usage: docker-compose -f docker-compose.base.yml -f docker-compose.prod.override.yml up
 
-version: '3.8'
-
 services:
   # =============================================================================
   # Production Message Queue
@@ -38,7 +36,7 @@ services:
       - homepage.group=Knowledge Management
       - homepage.name=Message Queue
       - homepage.icon=si-rabbitmq
-      - homepage.href=http://192.168.50.90:${QUEUE_PORT:-8093}
+      - homepage.href=http://${HOMEPAGE_HOST:-192.168.50.90}:${QUEUE_PORT:-8093}
       - homepage.description=High-performance message queue
 
   # =============================================================================
@@ -46,7 +44,6 @@ services:
   # =============================================================================
   graphiti-worker:
     image: ghcr.io/oculairmedia/graphiti-worker:latest
-    container_name: graphiti-worker-1
     restart: unless-stopped
     environment:
       - QUEUED_URL=http://queued:8080
@@ -59,7 +56,7 @@ services:
       - CEREBRAS_MODEL=${CEREBRAS_MODEL:-qwen-3-coder-480b}
       - CEREBRAS_SMALL_MODEL=${CEREBRAS_SMALL_MODEL:-qwen-3-coder-480b}
       - USE_OLLAMA=${USE_OLLAMA:-true}
-      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://100.81.139.20:11434/v1}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://${OLLAMA_EXTERNAL_HOST:-100.81.139.20}:11434/v1}
       - OLLAMA_MODEL=${OLLAMA_MODEL:-gemma3:12b}
       - OLLAMA_EMBEDDING_MODEL=${OLLAMA_EMBEDDING_MODEL:-mxbai-embed-large:latest}
       - USE_OLLAMA_EMBEDDINGS=${USE_OLLAMA_EMBEDDINGS:-true}
@@ -108,7 +105,7 @@ services:
       - USE_CEREBRAS=${USE_CEREBRAS:-false}
       - CEREBRAS_API_KEY=${CEREBRAS_API_KEY}
       - USE_OLLAMA=${USE_OLLAMA:-true}
-      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://100.81.139.20:11434/v1}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://${OLLAMA_EXTERNAL_HOST:-100.81.139.20}:11434/v1}
       - OLLAMA_MODEL=${OLLAMA_MODEL:-gemma3:12b}
       - USE_QUEUE_FOR_INGESTION=${USE_QUEUE_FOR_INGESTION:-true}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
@@ -137,7 +134,7 @@ services:
       - homepage.group=Knowledge Management
       - homepage.name=Graphiti API
       - homepage.icon=si-fastapi
-      - homepage.href=http://192.168.50.90:${API_PORT:-8000}
+      - homepage.href=http://${HOMEPAGE_HOST:-192.168.50.90}:${API_PORT:-8000}
       - homepage.description=Production API server
 
   # =============================================================================
@@ -172,7 +169,7 @@ services:
       - homepage.group=Knowledge Management
       - homepage.name=Queue Dashboard
       - homepage.icon=si-grafana
-      - homepage.href=http://192.168.50.90:${DASHBOARD_PORT:-8091}
+      - homepage.href=http://${HOMEPAGE_HOST:-192.168.50.90}:${DASHBOARD_PORT:-8091}
       - homepage.description=Queue monitoring dashboard
 
   # =============================================================================
@@ -207,7 +204,7 @@ services:
       - homepage.group=Knowledge Management
       - homepage.name=Frontend
       - homepage.icon=si-react
-      - homepage.href=http://192.168.50.90:${FRONTEND_PORT:-8088}
+      - homepage.href=http://${HOMEPAGE_HOST:-192.168.50.90}:${FRONTEND_PORT:-8088}
       - homepage.description=Production React frontend
 
   # =============================================================================
@@ -240,12 +237,32 @@ services:
       - homepage.group=Knowledge Management
       - homepage.name=Nginx Proxy
       - homepage.icon=si-nginx
-      - homepage.href=http://192.168.50.90:${PROXY_HTTP_PORT:-80}
+      - homepage.href=http://${HOMEPAGE_HOST:-192.168.50.90}:${PROXY_HTTP_PORT:-80}
       - homepage.description=Reverse proxy for production
 
   # Override base services for production optimization
   falkordb:
-    command: ["sh", "-c", "falkordb-server --save 60 1 --save 300 10 --save 900 100 --appendonly yes --appendfsync everysec --loglevel notice --maxmemory 2g --maxmemory-policy allkeys-lru"]
+    command:
+      - falkordb-server
+      - --save
+      - "60"
+      - "1"
+      - --save
+      - "300"
+      - "10"
+      - --save
+      - "900"
+      - "100"
+      - --appendonly
+      - "yes"
+      - --appendfsync
+      - "everysec"
+      - --loglevel
+      - "notice"
+      - --maxmemory
+      - "2g"
+      - --maxmemory-policy
+      - "allkeys-lru"
     deploy:
       resources:
         limits:
