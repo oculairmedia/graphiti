@@ -26,6 +26,7 @@ from graphiti_core.llm_client.client import LLMClient
 from graphiti_core.llm_client.openai_client import OpenAIClient
 from mcp.server.fastmcp import FastMCP
 from mcp import McpError, ErrorCode
+from mcp.types import ProgressToken, ProgressNotification
 import traceback
 from openai import AsyncAzureOpenAI
 from pydantic import BaseModel, Field
@@ -580,6 +581,73 @@ def create_operation_context(operation: str, **kwargs) -> dict:
     context.update(kwargs)
     return context
 
+
+class ProgressReporter:
+    """Helper class for reporting operation progress."""
+    
+    def __init__(self, operation_name: str, progress_token: ProgressToken | None = None):
+        self.operation_name = operation_name
+        self.progress_token = progress_token
+        self.started_at = datetime.now(timezone.utc)
+        self.current_step = 0
+        self.total_steps = 0
+        
+    async def start(self, total_steps: int):
+        """Start progress reporting."""
+        self.total_steps = total_steps
+        self.current_step = 0
+        
+        if self.progress_token:
+            await self._send_progress(f"Starting {self.operation_name}...", 0)
+        
+        context = create_operation_context(self.operation_name, total_steps=total_steps)
+        logger.info(f"Starting {self.operation_name} with {total_steps} steps", extra=context)
+    
+    async def step(self, message: str):
+        """Report progress for the current step."""
+        self.current_step += 1
+        progress = self.current_step / self.total_steps if self.total_steps > 0 else 0
+        
+        if self.progress_token:
+            await self._send_progress(message, progress)
+            
+        context = create_operation_context(
+            self.operation_name, 
+            step=self.current_step, 
+            total_steps=self.total_steps,
+            progress=progress
+        )
+        logger.info(f"Step {self.current_step}/{self.total_steps}: {message}", extra=context)
+    
+    async def complete(self, message: str = "Operation completed"):
+        """Report operation completion."""
+        if self.progress_token:
+            await self._send_progress(message, 1.0)
+            
+        duration = (datetime.now(timezone.utc) - self.started_at).total_seconds()
+        context = create_operation_context(
+            self.operation_name, 
+            completed=True,
+            duration_seconds=duration,
+            total_steps=self.total_steps
+        )
+        logger.info(f"{self.operation_name} completed in {duration:.2f}s", extra=context)
+    
+    async def _send_progress(self, message: str, progress: float):
+        """Send progress notification to MCP client."""
+        try:
+            # This would be sent via the MCP transport
+            # For now, we'll use structured logging
+            progress_context = create_operation_context(
+                self.operation_name,
+                progress=progress,
+                message=message,
+                progress_token=str(self.progress_token) if self.progress_token else None
+            )
+            logger.debug(f"Progress: {message} ({progress:.1%})", extra=progress_context)
+        except Exception as e:
+            logger.warning(f"Failed to send progress notification: {e}")
+
 # Create global config instance - will be properly initialized later
 config = GraphitiConfig()
 
@@ -783,6 +851,7 @@ async def add_memory(
     source: str = Field('text', description="Source type (text, json, message)"),
     source_description: str = Field('', description="Description of the source"),
     uuid: str | None = Field(None, description="Optional UUID for the episode"),
+    _progress_token: ProgressToken | None = Field(None, description="Progress token for reporting operation progress"),
 ) -> SuccessResponse:
     """Add an episode to memory via FastAPI server.
 
@@ -801,7 +870,14 @@ async def add_memory(
 
     async def _execute_add_memory():
         """Internal function to execute add_memory with proper error handling."""
+        # Initialize progress reporter
+        progress = ProgressReporter('add_memory', _progress_token)
+        await progress.start(3)  # 3 steps: prepare, send, confirm
+        
         try:
+            # Step 1: Prepare request data
+            await progress.step("Preparing episode data")
+            
             # Use the provided group_id or fall back to the default from config
             effective_group_id = group_id if group_id is not None else config.group_id
             group_id_str = str(effective_group_id) if effective_group_id is not None else 'default'
@@ -824,13 +900,17 @@ async def add_memory(
                 'messages': [message]
             }
 
-            # Send request to FastAPI server
+            # Step 2: Send to FastAPI server
+            await progress.step("Sending episode to memory store")
             response = await http_client.post('/messages', json=payload)
             response.raise_for_status()
 
+            # Step 3: Process response
+            await progress.step("Confirming episode storage")
             result = response.json()
             logger.info(f"Episode '{name}' added successfully via FastAPI")
-
+            
+            await progress.complete(f"Episode '{name}' successfully added to memory")
             return SuccessResponse(message=f"Episode '{name}' added successfully")
 
         except httpx.HTTPStatusError as e:
