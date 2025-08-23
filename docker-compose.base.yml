@@ -88,7 +88,7 @@ services:
       - homepage.description=Rust-powered graph visualization server
 
   graphiti-centrality-rs:
-    image: ghcr.io/oculairmedia/graphiti-centrality:main
+    image: ghcr.io/oculairmedia/graphiti-centrality-rs:main
     container_name: graphiti-centrality-rs
     restart: unless-stopped
     ports:
@@ -116,7 +116,7 @@ services:
       - homepage.description=Graph centrality calculations
 
   graphiti-search-rs:
-    image: ghcr.io/oculairmedia/graphiti-search:main
+    image: ghcr.io/oculairmedia/graphiti-search-rs:main
     container_name: graphiti-search-rs
     restart: unless-stopped
     ports:
