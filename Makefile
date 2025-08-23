@@ -147,16 +147,16 @@ validate-env:
 # Validate Docker Compose configurations
 validate-compose:
 	@echo "🔍 Validating Docker Compose configurations..."
-	@set -a; test -f .env && source .env; set +a; \
-	 docker compose -f $(COMPOSE_BASE) config > /dev/null && echo "✅ Base config: OK" || echo "❌ Base config: Invalid"
-	@set -a; test -f .env && source .env; set +a; \
-	 docker compose -f $(COMPOSE_BASE) -f $(COMPOSE_DEV) config > /dev/null && echo "✅ Dev config: OK" || echo "❌ Dev config: Invalid"
-	@set -a; test -f .env && source .env; set +a; \
-	 docker compose -f $(COMPOSE_BASE) -f $(COMPOSE_PROD) config > /dev/null && echo "✅ Prod config: OK" || echo "❌ Prod config: Invalid"
-	@set -a; test -f .env && source .env; set +a; \
-	 docker compose -f $(COMPOSE_BASE) -f $(COMPOSE_FRONTEND) config > /dev/null && echo "✅ Frontend config: OK" || echo "❌ Frontend config: Invalid"
-	@set -a; test -f .env && source .env; set +a; \
-	 docker compose -f $(COMPOSE_BASE) -f $(COMPOSE_QUEUE) config > /dev/null && echo "✅ Queue config: OK" || echo "❌ Queue config: Invalid"
+	@bash -c 'set -a; test -f .env && . .env; set +a; \
+	 docker compose -f $(COMPOSE_BASE) config > /dev/null' && echo "✅ Base config: OK" || echo "❌ Base config: Invalid"
+	@bash -c 'set -a; test -f .env && . .env; set +a; \
+	 docker compose -f $(COMPOSE_BASE) -f $(COMPOSE_DEV) config > /dev/null' && echo "✅ Dev config: OK" || echo "❌ Dev config: Invalid"
+	@bash -c 'set -a; test -f .env && . .env; set +a; \
+	 docker compose -f $(COMPOSE_BASE) -f $(COMPOSE_PROD) config > /dev/null' && echo "✅ Prod config: OK" || echo "❌ Prod config: Invalid"
+	@bash -c 'set -a; test -f .env && . .env; set +a; \
+	 docker compose -f $(COMPOSE_BASE) -f $(COMPOSE_FRONTEND) config > /dev/null' && echo "✅ Frontend config: OK" || echo "❌ Frontend config: Invalid"
+	@bash -c 'set -a; test -f .env && . .env; set +a; \
+	 docker compose -f $(COMPOSE_BASE) -f $(COMPOSE_QUEUE) config > /dev/null' && echo "✅ Queue config: OK" || echo "❌ Queue config: Invalid"
 
 # Reset development environment
 reset-dev: docker-clean setup
