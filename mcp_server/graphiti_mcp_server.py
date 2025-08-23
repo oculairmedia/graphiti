@@ -608,14 +608,29 @@ mcp = FastMCP(
 # HTTP client for FastAPI server
 http_client: httpx.AsyncClient | None = None
 
+# Semaphore for concurrent operations (matching the one used in the main config)
+operation_semaphore: asyncio.Semaphore | None = None
+
 
 async def initialize_graphiti():
-    """Initialize the HTTP client for FastAPI server."""
-    global http_client, config
+    """Initialize the HTTP client for FastAPI server with connection pooling."""
+    global http_client, config, operation_semaphore
 
     try:
-        # Initialize HTTP client for FastAPI server
-        http_client = httpx.AsyncClient(base_url=config.api.base_url, timeout=30.0)
+        # Configure connection limits for better performance
+        limits = httpx.Limits(max_keepalive_connections=5, max_connections=10)
+        timeout = httpx.Timeout(30.0, read=60.0)  # Longer read timeout for large responses
+        
+        # Initialize HTTP client for FastAPI server with connection pooling
+        http_client = httpx.AsyncClient(
+            base_url=config.api.base_url, 
+            timeout=timeout,
+            limits=limits,
+            http2=True  # Enable HTTP/2 if available
+        )
+        
+        # Initialize semaphore for concurrent operations
+        operation_semaphore = asyncio.Semaphore(SEMAPHORE_LIMIT)
 
         # Test connection to FastAPI server
         response = await http_client.get('/healthcheck')
@@ -635,6 +650,28 @@ async def initialize_graphiti():
         logger.error(f'Failed to initialize connection to FastAPI server: {str(e)}')
         raise
 
+
+async def cleanup_graphiti():
+    """Cleanup HTTP client and resources."""
+    global http_client
+    
+    if http_client is not None:
+        logger.info('Closing HTTP client connection')
+        await http_client.aclose()
+        http_client = None
+
+
+async def execute_with_semaphore(operation_name: str, operation_func):
+    """Execute an async operation with semaphore-based concurrency control."""
+    global operation_semaphore
+    
+    if operation_semaphore is None:
+        logger.warning(f'Operation semaphore not initialized for {operation_name}, proceeding without concurrency control')
+        return await operation_func()
+    
+    async with operation_semaphore:
+        logger.debug(f'Executing {operation_name} with semaphore (remaining permits: {operation_semaphore._value})')
+        return await operation_func()
 
 # Removed queue processing functions - now using direct FastAPI calls
 
@@ -663,48 +700,51 @@ async def add_memory(
     if http_client is None:
         raise McpError(ErrorCode.INTERNAL_ERROR, 'HTTP client not initialized')
 
-    try:
-        # Use the provided group_id or fall back to the default from config
-        effective_group_id = group_id if group_id is not None else config.group_id
-        group_id_str = str(effective_group_id) if effective_group_id is not None else 'default'
+    async def _execute_add_memory():
+        """Internal function to execute add_memory with proper error handling."""
+        try:
+            # Use the provided group_id or fall back to the default from config
+            effective_group_id = group_id if group_id is not None else config.group_id
+            group_id_str = str(effective_group_id) if effective_group_id is not None else 'default'
 
-        # Prepare request payload according to AddMessagesRequest schema
-        from datetime import datetime, timezone
-        
-        message = {
-            'content': episode_body,
-            'role_type': 'system',
-            'role': name,
-            'timestamp': datetime.now(timezone.utc).isoformat(),
-            'source_description': source_description,
-            'name': name
-        }
-        
-        if uuid:
-            message['uuid'] = uuid
+            # Prepare request payload according to AddMessagesRequest schema
+            message = {
+                'content': episode_body,
+                'role_type': 'system',
+                'role': name,
+                'timestamp': datetime.now(timezone.utc).isoformat(),
+                'source_description': source_description,
+                'name': name
+            }
             
-        payload = {
-            'group_id': group_id_str,
-            'messages': [message]
-        }
+            if uuid:
+                message['uuid'] = uuid
+                
+            payload = {
+                'group_id': group_id_str,
+                'messages': [message]
+            }
 
-        # Send request to FastAPI server
-        response = await http_client.post('/messages', json=payload)
-        response.raise_for_status()
+            # Send request to FastAPI server
+            response = await http_client.post('/messages', json=payload)
+            response.raise_for_status()
 
-        result = response.json()
-        logger.info(f"Episode '{name}' added successfully via FastAPI")
+            result = response.json()
+            logger.info(f"Episode '{name}' added successfully via FastAPI")
 
-        return SuccessResponse(message=f"Episode '{name}' added successfully")
+            return SuccessResponse(message=f"Episode '{name}' added successfully")
 
-    except httpx.HTTPStatusError as e:
-        error_msg = f'HTTP error {e.response.status_code}: {e.response.text}'
-        logger.error(f'Error adding episode via FastAPI: {error_msg}')
-        raise McpError(ErrorCode.INTERNAL_ERROR, f'Error adding episode: {error_msg}')
-    except Exception as e:
-        error_msg = str(e)
-        logger.error(f'Error adding episode: {error_msg}')
-        raise McpError(ErrorCode.INTERNAL_ERROR, f'Error adding episode: {error_msg}')
+        except httpx.HTTPStatusError as e:
+            error_msg = f'HTTP error {e.response.status_code}: {e.response.text}'
+            logger.error(f'Error adding episode via FastAPI: {error_msg}')
+            raise McpError(ErrorCode.INTERNAL_ERROR, f'Error adding episode: {error_msg}')
+        except Exception as e:
+            error_msg = str(e)
+            logger.error(f'Error adding episode: {error_msg}')
+            raise McpError(ErrorCode.INTERNAL_ERROR, f'Error adding episode: {error_msg}')
+    
+    # Execute with concurrency control
+    return await execute_with_semaphore('add_memory', _execute_add_memory)
 
 
 @mcp.tool()
@@ -1110,25 +1150,38 @@ async def run_http_server(mcp_config: MCPConfig):
 
 
 async def run_mcp_server():
-    """Run the MCP server in the current event loop."""
-    # Initialize the server
-    mcp_config = await initialize_server()
+    """Run the MCP server in the current event loop with proper cleanup."""
+    mcp_config = None
+    
+    try:
+        # Initialize the server
+        mcp_config = await initialize_server()
 
-    # Run the server with specified transport
-    logger.info(f'Starting MCP server with transport: {mcp_config.transport}')
-    if mcp_config.transport == 'stdio':
-        await mcp.run_stdio_async()
-    elif mcp_config.transport == 'sse':
-        # Configure FastMCP settings for SSE
-        mcp.settings.host = mcp_config.host
-        mcp.settings.port = mcp_config.port
-        logger.info(
-            f'Running MCP server with SSE transport on {mcp.settings.host}:{mcp.settings.port}'
-        )
-        await mcp.run_sse_async()
-    elif mcp_config.transport == 'http':
-        # Run HTTP server for streamable HTTP transport
-        await run_http_server(mcp_config)
+        # Run the server with specified transport
+        logger.info(f'Starting MCP server with transport: {mcp_config.transport}')
+        if mcp_config.transport == 'stdio':
+            await mcp.run_stdio_async()
+        elif mcp_config.transport == 'sse':
+            # Configure FastMCP settings for SSE
+            mcp.settings.host = mcp_config.host
+            mcp.settings.port = mcp_config.port
+            logger.info(
+                f'Running MCP server with SSE transport on {mcp.settings.host}:{mcp.settings.port}'
+            )
+            await mcp.run_sse_async()
+        elif mcp_config.transport == 'http':
+            # Run HTTP server for streamable HTTP transport
+            await run_http_server(mcp_config)
+            
+    except KeyboardInterrupt:
+        logger.info('Received interrupt signal, shutting down gracefully...')
+    except Exception as e:
+        logger.error(f'Unexpected error in MCP server: {e}')
+        raise
+    finally:
+        # Cleanup resources
+        logger.info('Cleaning up resources...')
+        await cleanup_graphiti()
 
 
 def main():
