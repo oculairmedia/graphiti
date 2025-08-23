@@ -983,8 +983,8 @@ async def initialize_server() -> MCPConfig:
     parser.add_argument(
         '--transport',
         choices=['sse', 'stdio', 'http'],
-        default='sse',
-        help='Transport to use for communication with the client. (default: sse)',
+        default=os.environ.get('MCP_TRANSPORT', 'http'),
+        help='Transport to use for communication with the client. (default: MCP_TRANSPORT environment variable or http)',
     )
     parser.add_argument(
         '--model', help=f'Model name to use with the LLM client. (default: {DEFAULT_LLM_MODEL})'
@@ -1014,12 +1014,6 @@ async def initialize_server() -> MCPConfig:
         type=int,
         default=int(os.environ.get('MCP_SERVER_PORT', '3010')),
         help='Port to bind the HTTP server to (default: MCP_SERVER_PORT environment variable or 3010)',
-    )
-    parser.add_argument(
-        '--transport',
-        choices=['stdio', 'sse', 'http'],
-        default=os.environ.get('MCP_TRANSPORT', 'http'),
-        help='Transport protocol to use (default: MCP_TRANSPORT environment variable or http)',
     )
 
     args = parser.parse_args()
