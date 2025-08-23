@@ -25,6 +25,7 @@ from graphiti_core.llm_client.azure_openai_client import AzureOpenAILLMClient
 from graphiti_core.llm_client.client import LLMClient
 from graphiti_core.llm_client.openai_client import OpenAIClient
 from mcp.server.fastmcp import FastMCP
+from mcp import McpError, ErrorCode
 from openai import AsyncAzureOpenAI
 from pydantic import BaseModel, Field
 
@@ -121,43 +122,84 @@ ENTITY_TYPES: dict[str, BaseModel] = {
 }
 
 
-# Type definitions for API responses
-class ErrorResponse(TypedDict):
-    error: str
+# Pydantic models for structured output
+class MemoryRequest(BaseModel):
+    """Request model for adding episodes to memory."""
+    name: str = Field(..., description="Name of the episode")
+    episode_body: str = Field(..., description="The content of the episode to persist to memory")
+    group_id: str | None = Field(None, description="A unique ID for this graph. If not provided, uses the default group_id from CLI")
+    source: str = Field('text', description="Source type (text, json, message)")
+    source_description: str = Field('', description="Description of the source")
+    uuid: str | None = Field(None, description="Optional UUID for the episode")
 
 
-class SuccessResponse(TypedDict):
-    message: str
+class NodeSearchRequest(BaseModel):
+    """Request model for searching nodes."""
+    query: str = Field(..., description="The search query")
+    group_ids: list[str] | None = Field(None, description="Optional list of group IDs to filter results")
+    max_nodes: int = Field(10, description="Maximum number of nodes to return (default: 10)")
+    center_node_uuid: str | None = Field(None, description="Optional UUID of a node to center the search around")
+    entity: str = Field('', description="Optional single entity type to filter results")
 
 
-class NodeResult(TypedDict):
+class FactSearchRequest(BaseModel):
+    """Request model for searching facts."""
+    query: str = Field(..., description="The search query")
+    group_ids: list[str] | None = Field(None, description="Optional list of group IDs to filter results")
+    max_facts: int = Field(10, description="Maximum number of facts to return (default: 10)")
+    center_node_uuid: str | None = Field(None, description="Optional UUID of a node to center the search around")
+
+
+class EpisodesRequest(BaseModel):
+    """Request model for getting episodes."""
+    group_id: str | None = Field(None, description="ID of the group to retrieve episodes from. If not provided, uses the default group_id.")
+    last_n: int = Field(10, description="Number of most recent episodes to retrieve (default: 10)")
+
+
+# Response models
+class NodeResult(BaseModel):
+    """Node search result."""
     uuid: str
     name: str
     summary: str
     labels: list[str]
     group_id: str
     created_at: str
-    attributes: dict[str, Any]
+    attributes: dict[str, Any] = Field(default_factory=dict)
 
 
-class NodeSearchResponse(TypedDict):
+class NodeSearchResponse(BaseModel):
+    """Response for node search."""
     message: str
     nodes: list[NodeResult]
 
 
-class FactSearchResponse(TypedDict):
+class FactSearchResponse(BaseModel):
+    """Response for fact search."""
     message: str
     facts: list[dict[str, Any]]
 
 
-class EpisodeSearchResponse(TypedDict):
+class EpisodeSearchResponse(BaseModel):
+    """Response for episode search."""
     message: str
     episodes: list[dict[str, Any]]
 
 
-class StatusResponse(TypedDict):
+class StatusResponse(BaseModel):
+    """Response for status check."""
     status: str
     message: str
+
+
+class SuccessResponse(BaseModel):
+    """Generic success response."""
+    message: str
+
+
+# Type definitions for API responses (legacy - will be replaced by Pydantic models)
+class ErrorResponse(TypedDict):
+    error: str
 
 
 def create_azure_credential_token_provider() -> Callable[[], str]:
@@ -599,13 +641,13 @@ async def initialize_graphiti():
 
 @mcp.tool()
 async def add_memory(
-    name: str,
-    episode_body: str,
-    group_id: str | None = None,
-    source: str = 'text',
-    source_description: str = '',
-    uuid: str | None = None,
-) -> SuccessResponse | ErrorResponse:
+    name: str = Field(..., description="Name of the episode"),
+    episode_body: str = Field(..., description="The content of the episode to persist to memory"),
+    group_id: str | None = Field(None, description="A unique ID for this graph. If not provided, uses the default group_id from CLI"),
+    source: str = Field('text', description="Source type (text, json, message)"),
+    source_description: str = Field('', description="Description of the source"),
+    uuid: str | None = Field(None, description="Optional UUID for the episode"),
+) -> SuccessResponse:
     """Add an episode to memory via FastAPI server.
 
     Args:
@@ -619,7 +661,7 @@ async def add_memory(
     global http_client
 
     if http_client is None:
-        return ErrorResponse(error='HTTP client not initialized')
+        raise McpError(ErrorCode.INTERNAL_ERROR, 'HTTP client not initialized')
 
     try:
         # Use the provided group_id or fall back to the default from config
@@ -658,21 +700,21 @@ async def add_memory(
     except httpx.HTTPStatusError as e:
         error_msg = f'HTTP error {e.response.status_code}: {e.response.text}'
         logger.error(f'Error adding episode via FastAPI: {error_msg}')
-        return ErrorResponse(error=f'Error adding episode: {error_msg}')
+        raise McpError(ErrorCode.INTERNAL_ERROR, f'Error adding episode: {error_msg}')
     except Exception as e:
         error_msg = str(e)
         logger.error(f'Error adding episode: {error_msg}')
-        return ErrorResponse(error=f'Error adding episode: {error_msg}')
+        raise McpError(ErrorCode.INTERNAL_ERROR, f'Error adding episode: {error_msg}')
 
 
 @mcp.tool()
 async def search_memory_nodes(
-    query: str,
-    group_ids: list[str] | None = None,
-    max_nodes: int = 10,
-    center_node_uuid: str | None = None,
-    entity: str = '',
-) -> NodeSearchResponse | ErrorResponse:
+    query: str = Field(..., description="The search query"),
+    group_ids: list[str] | None = Field(None, description="Optional list of group IDs to filter results"),
+    max_nodes: int = Field(10, description="Maximum number of nodes to return (default: 10)"),
+    center_node_uuid: str | None = Field(None, description="Optional UUID of a node to center the search around"),
+    entity: str = Field('', description="Optional single entity type to filter results"),
+) -> NodeSearchResponse:
     """Search the graph memory for relevant nodes via FastAPI server.
 
     Args:
@@ -685,7 +727,7 @@ async def search_memory_nodes(
     global http_client
 
     if http_client is None:
-        return ErrorResponse(error='HTTP client not initialized')
+        raise McpError(ErrorCode.INTERNAL_ERROR, 'HTTP client not initialized')
 
     try:
         # Use the provided group_ids or fall back to the default from config if none provided
@@ -712,39 +754,39 @@ async def search_memory_nodes(
         result = response.json()
         nodes = result.get('nodes', [])
 
-        # Create simplified node results to reduce response size
-        simplified_nodes = []
+        # Create structured node results using Pydantic models
+        structured_nodes = []
         for node in nodes:
-            simplified_node = {
-                'uuid': node.get('uuid', ''),
-                'name': node.get('name', ''),
-                'summary': (node.get('summary', '') or '')[:50] + ('...' if len(node.get('summary', '') or '') > 50 else ''),  # Truncate summary to 50 chars
-                'labels': node.get('labels', []),
-                'group_id': node.get('group_id', ''),
-                'created_at': node.get('created_at', ''),
-                'attributes': {}  # Remove attributes entirely to reduce size
-            }
-            simplified_nodes.append(simplified_node)
+            node_result = NodeResult(
+                uuid=node.get('uuid', ''),
+                name=node.get('name', ''),
+                summary=(node.get('summary', '') or '')[:50] + ('...' if len(node.get('summary', '') or '') > 50 else ''),
+                labels=node.get('labels', []),
+                group_id=node.get('group_id', ''),
+                created_at=node.get('created_at', ''),
+                attributes={}  # Remove attributes entirely to reduce size
+            )
+            structured_nodes.append(node_result)
 
-        return NodeSearchResponse(message='Nodes retrieved successfully', nodes=simplified_nodes)
+        return NodeSearchResponse(message='Nodes retrieved successfully', nodes=structured_nodes)
 
     except httpx.HTTPStatusError as e:
         error_msg = f'HTTP error {e.response.status_code}: {e.response.text}'
         logger.error(f'Error searching nodes via FastAPI: {error_msg}')
-        return ErrorResponse(error=f'Error searching nodes: {error_msg}')
+        raise McpError(ErrorCode.INTERNAL_ERROR, f'Error searching nodes: {error_msg}')
     except Exception as e:
         error_msg = str(e)
         logger.error(f'Error searching nodes: {error_msg}')
-        return ErrorResponse(error=f'Error searching nodes: {error_msg}')
+        raise McpError(ErrorCode.INTERNAL_ERROR, f'Error searching nodes: {error_msg}')
 
 
 @mcp.tool()
 async def search_memory_facts(
-    query: str,
-    group_ids: list[str] | None = None,
-    max_facts: int = 10,
-    center_node_uuid: str | None = None,
-) -> FactSearchResponse | ErrorResponse:
+    query: str = Field(..., description="The search query"),
+    group_ids: list[str] | None = Field(None, description="Optional list of group IDs to filter results"),
+    max_facts: int = Field(10, description="Maximum number of facts to return (default: 10)"),
+    center_node_uuid: str | None = Field(None, description="Optional UUID of a node to center the search around"),
+) -> FactSearchResponse:
     """Search the graph memory for relevant facts via FastAPI server.
 
     Args:
@@ -756,12 +798,12 @@ async def search_memory_facts(
     global http_client
 
     if http_client is None:
-        return ErrorResponse(error='HTTP client not initialized')
+        raise McpError(ErrorCode.INTERNAL_ERROR, 'HTTP client not initialized')
 
     try:
         # Validate max_facts parameter
         if max_facts <= 0:
-            return ErrorResponse(error='max_facts must be a positive integer')
+            raise McpError(ErrorCode.INVALID_PARAMS, 'max_facts must be a positive integer')
 
         # Use the provided group_ids or fall back to the default from config if none provided
         effective_group_ids = (
@@ -806,11 +848,11 @@ async def search_memory_facts(
     except httpx.HTTPStatusError as e:
         error_msg = f'HTTP error {e.response.status_code}: {e.response.text}'
         logger.error(f'Error searching facts via FastAPI: {error_msg}')
-        return ErrorResponse(error=f'Error searching facts: {error_msg}')
+        raise McpError(ErrorCode.INTERNAL_ERROR, f'Error searching facts: {error_msg}')
     except Exception as e:
         error_msg = str(e)
         logger.error(f'Error searching facts: {error_msg}')
-        return ErrorResponse(error=f'Error searching facts: {error_msg}')
+        raise McpError(ErrorCode.INTERNAL_ERROR, f'Error searching facts: {error_msg}')
 
 
 @mcp.tool()
@@ -823,7 +865,7 @@ async def delete_entity_edge(uuid: str) -> SuccessResponse | ErrorResponse:
     global http_client
 
     if http_client is None:
-        return ErrorResponse(error='HTTP client not initialized')
+        raise McpError(ErrorCode.INTERNAL_ERROR, 'HTTP client not initialized')
 
     try:
         # Send DELETE request to FastAPI server
@@ -835,11 +877,11 @@ async def delete_entity_edge(uuid: str) -> SuccessResponse | ErrorResponse:
     except httpx.HTTPStatusError as e:
         error_msg = f'HTTP error {e.response.status_code}: {e.response.text}'
         logger.error(f'Error deleting entity edge via FastAPI: {error_msg}')
-        return ErrorResponse(error=f'Error deleting entity edge: {error_msg}')
+        raise McpError(ErrorCode.INTERNAL_ERROR, f'Error deleting entity edge: {error_msg}')
     except Exception as e:
         error_msg = str(e)
         logger.error(f'Error deleting entity edge: {error_msg}')
-        return ErrorResponse(error=f'Error deleting entity edge: {error_msg}')
+        raise McpError(ErrorCode.INTERNAL_ERROR, f'Error deleting entity edge: {error_msg}')
 
 
 @mcp.tool()
@@ -852,7 +894,7 @@ async def delete_episode(uuid: str) -> SuccessResponse | ErrorResponse:
     global http_client
 
     if http_client is None:
-        return ErrorResponse(error='HTTP client not initialized')
+        raise McpError(ErrorCode.INTERNAL_ERROR, 'HTTP client not initialized')
 
     try:
         # Send DELETE request to FastAPI server
@@ -864,11 +906,11 @@ async def delete_episode(uuid: str) -> SuccessResponse | ErrorResponse:
     except httpx.HTTPStatusError as e:
         error_msg = f'HTTP error {e.response.status_code}: {e.response.text}'
         logger.error(f'Error deleting episode via FastAPI: {error_msg}')
-        return ErrorResponse(error=f'Error deleting episode: {error_msg}')
+        raise McpError(ErrorCode.INTERNAL_ERROR, f'Error deleting episode: {error_msg}')
     except Exception as e:
         error_msg = str(e)
         logger.error(f'Error deleting episode: {error_msg}')
-        return ErrorResponse(error=f'Error deleting episode: {error_msg}')
+        raise McpError(ErrorCode.INTERNAL_ERROR, f'Error deleting episode: {error_msg}')
 
 
 @mcp.tool()
@@ -881,7 +923,7 @@ async def get_entity_edge(uuid: str) -> dict[str, Any] | ErrorResponse:
     global http_client
 
     if http_client is None:
-        return ErrorResponse(error='HTTP client not initialized')
+        raise McpError(ErrorCode.INTERNAL_ERROR, 'HTTP client not initialized')
 
     try:
         # Send GET request to FastAPI server
@@ -893,11 +935,11 @@ async def get_entity_edge(uuid: str) -> dict[str, Any] | ErrorResponse:
     except httpx.HTTPStatusError as e:
         error_msg = f'HTTP error {e.response.status_code}: {e.response.text}'
         logger.error(f'Error getting entity edge via FastAPI: {error_msg}')
-        return ErrorResponse(error=f'Error getting entity edge: {error_msg}')
+        raise McpError(ErrorCode.INTERNAL_ERROR, f'Error getting entity edge: {error_msg}')
     except Exception as e:
         error_msg = str(e)
         logger.error(f'Error getting entity edge: {error_msg}')
-        return ErrorResponse(error=f'Error getting entity edge: {error_msg}')
+        raise McpError(ErrorCode.INTERNAL_ERROR, f'Error getting entity edge: {error_msg}')
 
 
 @mcp.tool()
@@ -913,14 +955,14 @@ async def get_episodes(
     global http_client
 
     if http_client is None:
-        return ErrorResponse(error='HTTP client not initialized')
+        raise McpError(ErrorCode.INTERNAL_ERROR, 'HTTP client not initialized')
 
     try:
         # Use the provided group_id or fall back to the default from config
         effective_group_id = group_id if group_id is not None else config.group_id
 
         if not isinstance(effective_group_id, str):
-            return ErrorResponse(error='Group ID must be a string')
+            raise McpError(ErrorCode.INVALID_PARAMS, 'Group ID must be a string')
 
         # Send GET request to FastAPI server
         response = await http_client.get(
@@ -936,14 +978,14 @@ async def get_episodes(
     except httpx.HTTPStatusError as e:
         error_msg = f'HTTP error {e.response.status_code}: {e.response.text}'
         logger.error(f'Error getting episodes via FastAPI: {error_msg}')
-        return ErrorResponse(error=f'Error getting episodes: {error_msg}')
+        raise McpError(ErrorCode.INTERNAL_ERROR, f'Error getting episodes: {error_msg}')
     except Exception as e:
         error_msg = str(e)
         logger.error(f'Error getting episodes: {error_msg}')
-        return ErrorResponse(error=f'Error getting episodes: {error_msg}')
+        raise McpError(ErrorCode.INTERNAL_ERROR, f'Error getting episodes: {error_msg}')
 
 
-@mcp.resource('http://graphiti/status')
+@mcp.resource(uri='graphiti://status')
 async def get_status() -> StatusResponse:
     """Get the status of the Graphiti MCP server and FastAPI connection."""
     global http_client
