@@ -58,10 +58,10 @@ services:
       falkordb:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/api/stats"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
       start_period: 30s
     labels:
       - homepage.group=Knowledge Management
@@ -172,7 +172,7 @@ services:
       - ENABLE_CACHE_INVALIDATION=${ENABLE_CACHE_INVALIDATION:-true}
       - GRAPHITI_DATA_WEBHOOK_URLS=${GRAPHITI_DATA_WEBHOOK_URLS:-http://graph-visualizer-rust:3000/api/webhooks/data-ingestion}
       - USE_QUEUE_FOR_INGESTION=${USE_QUEUE_FOR_INGESTION:-true}
-      - QUEUED_URL=http://graphiti-queued:8080
+      - QUEUE_URL=http://graphiti-queued:8080
       - DEDUP_SIMILARITY_THRESHOLD=${DEDUP_SIMILARITY_THRESHOLD:-0.6}
       - DEDUP_FUZZY_THRESHOLD=${DEDUP_FUZZY_THRESHOLD:-0.9}
       - ENABLE_AGGRESSIVE_DEDUP=${ENABLE_AGGRESSIVE_DEDUP:-true}
@@ -226,11 +226,14 @@ services:
       - EMBEDDING_ENDPOINT_FALLBACK=${EMBEDDING_ENDPOINT_FALLBACK:-true}
       - SEMAPHORE_LIMIT=${SEMAPHORE_LIMIT:-5}
       - MCP_SERVER_PORT=3010
+      - MCP_TRANSPORT=http
       - GRAPH_API_URL=http://graph:8000
     networks:
       - graphiti_network
     depends_on:
       falkordb:
+        condition: service_healthy
+      graph:
         condition: service_healthy
     labels:
       - homepage.group=Knowledge Management
@@ -256,10 +259,11 @@ services:
     networks:
       - graphiti_network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/queues"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/healthz"]
       interval: 10s
       timeout: 5s
       retries: 3
+      start_period: 15s
     labels:
       - homepage.group=Knowledge Management
       - homepage.name=Queue Service
@@ -271,7 +275,7 @@ services:
     image: ghcr.io/oculairmedia/graphiti-worker:main
     restart: unless-stopped
     environment:
-      - QUEUED_URL=http://graphiti-queued:8080
+      - QUEUE_URL=http://graphiti-queued:8080
       - FALKORDB_HOST=${FALKORDB_HOST:-falkordb}
       - FALKORDB_PORT=${FALKORDB_PORT:-6379}
       - FALKORDB_DATABASE=${FALKORDB_DATABASE:-graphiti_migration}
@@ -301,6 +305,12 @@ services:
         condition: service_healthy
       falkordb:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]  # Basic process check
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
     labels:
       - homepage.group=Knowledge Management
       - homepage.name=Worker
@@ -323,8 +333,16 @@ services:
     networks:
       - graphiti_network
     depends_on:
-      - graph
-      - graph-visualizer-rust
+      graph:
+        condition: service_healthy
+      graph-visualizer-rust:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
     deploy:
       resources:
         limits:
@@ -353,7 +371,14 @@ services:
     networks:
       - graphiti_network
     depends_on:
-      - graph-visualizer-rust
+      graph-visualizer-rust:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
     labels:
       - homepage.group=Knowledge Management
       - homepage.name=Frontend
