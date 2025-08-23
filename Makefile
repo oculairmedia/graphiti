@@ -11,6 +11,8 @@ PYRIGHT = $(UV) run pyright
 COMPOSE_BASE = docker-compose.base.yml
 COMPOSE_DEV = docker-compose.override.yml
 COMPOSE_PROD = docker-compose.prod.override.yml
+COMPOSE_FRONTEND = docker-compose.frontend.override.yml
+COMPOSE_QUEUE = docker-compose.queue.override.yml
 
 # Default target
 all: format lint test
@@ -69,53 +71,53 @@ check: format lint test
 # Start development environment with Docker
 docker-dev:
 	@echo "🐳 Starting development services..."
-	docker-compose -f $(COMPOSE_BASE) -f $(COMPOSE_DEV) up -d
+	docker compose -f $(COMPOSE_BASE) -f $(COMPOSE_DEV) up -d
 
 # Start production environment with Docker
 docker-prod:
 	@echo "🐳 Starting production services..."
-	docker-compose -f $(COMPOSE_BASE) -f $(COMPOSE_PROD) up -d
+	docker compose -f $(COMPOSE_BASE) -f $(COMPOSE_PROD) up -d
 
 # Start frontend-only environment
 docker-frontend:
 	@echo "🐳 Starting frontend services..."
-	docker-compose -f $(COMPOSE_BASE) -f docker-compose.frontend.override.yml up -d
+	docker compose -f $(COMPOSE_BASE) -f $(COMPOSE_FRONTEND) up -d
 
 # Start queue-only environment
 docker-queue:
 	@echo "🐳 Starting queue services..."
-	docker-compose -f $(COMPOSE_BASE) -f docker-compose.queue.override.yml up -d
+	docker compose -f $(COMPOSE_BASE) -f $(COMPOSE_QUEUE) up -d
 
 # Stop all services
 docker-stop:
 	@echo "🛑 Stopping all services..."
-	docker-compose -f $(COMPOSE_BASE) -f $(COMPOSE_DEV) down
+	docker compose -f $(COMPOSE_BASE) -f $(COMPOSE_DEV) down
 
 # Clean up Docker resources
 docker-clean:
 	@echo "🧹 Cleaning up Docker resources..."
-	docker-compose -f $(COMPOSE_BASE) -f $(COMPOSE_DEV) down -v
+	docker compose -f $(COMPOSE_BASE) -f $(COMPOSE_DEV) down -v
 	docker system prune -f
 
 # View service logs
 docker-logs:
 	@echo "📋 Viewing service logs..."
-	docker-compose -f $(COMPOSE_BASE) -f $(COMPOSE_DEV) logs -f
+	docker compose -f $(COMPOSE_BASE) -f $(COMPOSE_DEV) logs -f
 
 # Show service status
 docker-status:
 	@echo "📊 Service status:"
-	docker-compose -f $(COMPOSE_BASE) -f $(COMPOSE_DEV) ps
+	docker compose -f $(COMPOSE_BASE) -f $(COMPOSE_DEV) ps
 
 # Rebuild and restart services
 docker-rebuild:
 	@echo "🔄 Rebuilding and restarting services..."
-	docker-compose -f $(COMPOSE_BASE) -f $(COMPOSE_DEV) up -d --build
+	docker compose -f $(COMPOSE_BASE) -f $(COMPOSE_DEV) up -d --build
 
 # Pull latest images
 docker-pull:
 	@echo "📥 Pulling latest images..."
-	docker-compose -f $(COMPOSE_BASE) -f $(COMPOSE_DEV) pull
+	docker compose -f $(COMPOSE_BASE) -f $(COMPOSE_DEV) pull
 
 # =============================================================================
 # Development Utilities
@@ -126,7 +128,7 @@ health-check:
 	@echo "🏥 Checking service health..."
 	@curl -f -s http://localhost:8003/healthcheck && echo "✅ API Server: OK" || echo "❌ API Server: Failed"
 	@curl -f -s http://localhost:3000/health && echo "✅ Rust Visualizer: OK" || echo "❌ Rust Visualizer: Failed"
-	@redis-cli -h localhost -p 6379 ping > /dev/null && echo "✅ FalkorDB: OK" || echo "❌ FalkorDB: Failed"
+	@docker compose -f $(COMPOSE_BASE) -f $(COMPOSE_DEV) exec -T falkordb redis-cli ping > /dev/null && echo "✅ FalkorDB: OK" || echo "❌ FalkorDB: Failed"
 
 # Open development URLs in browser
 open-dev:
@@ -141,6 +143,20 @@ validate-env:
 	@test -f .env && echo "✅ .env file exists" || echo "❌ .env file missing"
 	@grep -q "OPENAI_API_KEY" .env && echo "✅ OPENAI_API_KEY configured" || echo "❌ OPENAI_API_KEY missing"
 	@grep -q "FALKORDB_HOST" .env && echo "✅ FALKORDB_HOST configured" || echo "❌ FALKORDB_HOST missing"
+
+# Validate Docker Compose configurations
+validate-compose:
+	@echo "🔍 Validating Docker Compose configurations..."
+	@set -a; test -f .env && source .env; set +a; \
+	 docker compose -f $(COMPOSE_BASE) config > /dev/null && echo "✅ Base config: OK" || echo "❌ Base config: Invalid"
+	@set -a; test -f .env && source .env; set +a; \
+	 docker compose -f $(COMPOSE_BASE) -f $(COMPOSE_DEV) config > /dev/null && echo "✅ Dev config: OK" || echo "❌ Dev config: Invalid"
+	@set -a; test -f .env && source .env; set +a; \
+	 docker compose -f $(COMPOSE_BASE) -f $(COMPOSE_PROD) config > /dev/null && echo "✅ Prod config: OK" || echo "❌ Prod config: Invalid"
+	@set -a; test -f .env && source .env; set +a; \
+	 docker compose -f $(COMPOSE_BASE) -f $(COMPOSE_FRONTEND) config > /dev/null && echo "✅ Frontend config: OK" || echo "❌ Frontend config: Invalid"
+	@set -a; test -f .env && source .env; set +a; \
+	 docker compose -f $(COMPOSE_BASE) -f $(COMPOSE_QUEUE) config > /dev/null && echo "✅ Queue config: OK" || echo "❌ Queue config: Invalid"
 
 # Reset development environment
 reset-dev: docker-clean setup
@@ -176,6 +192,7 @@ help:
 	@echo "🛠️  Utilities:"
 	@echo "  health-check   - Check service health"
 	@echo "  validate-env   - Validate environment config"
+	@echo "  validate-compose - Validate Docker Compose configurations"
 	@echo "  open-dev       - Open development URLs"
 	@echo "  reset-dev      - Reset development environment"
 	@echo "  help           - Show this help message"

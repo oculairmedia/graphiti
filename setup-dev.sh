@@ -51,6 +51,20 @@ error() {
 }
 
 # =============================================================================
+# Docker Compose Command Detection
+# =============================================================================
+get_docker_compose_cmd() {
+    if docker compose version &> /dev/null; then
+        echo "docker compose"
+    elif command -v docker-compose &> /dev/null; then
+        echo "docker-compose"
+    else
+        error "Neither 'docker compose' nor 'docker-compose' is available"
+        exit 1
+    fi
+}
+
+# =============================================================================
 # System Requirements Check
 # =============================================================================
 check_requirements() {
@@ -63,8 +77,8 @@ check_requirements() {
         missing_deps+=("docker")
     fi
     
-    # Check Docker Compose
-    if ! command -v docker-compose &> /dev/null && ! docker compose version &> /dev/null; then
+    # Check Docker Compose (prefer v2 plugin, fallback to standalone)
+    if ! docker compose version &> /dev/null && ! command -v docker-compose &> /dev/null; then
         missing_deps+=("docker-compose")
     fi
     
@@ -149,15 +163,18 @@ setup_docker_services() {
         exit 1
     fi
     
+    # Get Docker Compose command
+    local compose_cmd=$(get_docker_compose_cmd)
+    
     # Pull latest images
     info "Pulling latest Docker images..."
-    docker-compose -f "$COMPOSE_BASE" -f "$COMPOSE_DEV" pull || {
+    $compose_cmd -f "$COMPOSE_BASE" -f "$COMPOSE_DEV" pull || {
         warning "Failed to pull some images, continuing with existing images"
     }
     
     # Build any local images if needed
     info "Building local images..."
-    docker-compose -f "$COMPOSE_BASE" -f "$COMPOSE_DEV" build || {
+    $compose_cmd -f "$COMPOSE_BASE" -f "$COMPOSE_DEV" build || {
         warning "Failed to build some images, continuing"
     }
     
@@ -197,22 +214,28 @@ wait_for_service() {
 setup_database() {
     info "Setting up development database..."
     
-    # Start database services first
-    docker-compose -f "$COMPOSE_BASE" -f "$COMPOSE_DEV" up -d falkordb redis
+    # Get Docker Compose command
+    local compose_cmd=$(get_docker_compose_cmd)
     
-    # Wait for database to be ready
-    wait_for_service "FalkorDB" "redis://localhost:${FALKORDB_PORT:-6379}" 15 2 || {
-        # Try alternative health check
-        info "Trying alternative health check for FalkorDB..."
-        sleep 5
-        if docker-compose -f "$COMPOSE_BASE" -f "$COMPOSE_DEV" ps falkordb | grep -q "healthy\|Up"; then
-            success "FalkorDB is running"
-        else
-            error "FalkorDB failed to start properly"
-            docker-compose -f "$COMPOSE_BASE" -f "$COMPOSE_DEV" logs falkordb
+    # Start database services first
+    $compose_cmd -f "$COMPOSE_BASE" -f "$COMPOSE_DEV" up -d falkordb redis
+    
+    # Wait for database to be ready - use docker health check instead of URL
+    info "Waiting for FalkorDB to be healthy..."
+    local attempts=0
+    while [[ $attempts -lt 30 ]]; do
+        if $compose_cmd -f "$COMPOSE_BASE" -f "$COMPOSE_DEV" ps falkordb | grep -q "healthy"; then
+            success "FalkorDB is healthy"
+            break
+        elif [[ $attempts -eq 29 ]]; then
+            error "FalkorDB failed to become healthy after 30 attempts"
+            $compose_cmd -f "$COMPOSE_BASE" -f "$COMPOSE_DEV" logs falkordb
             return 1
         fi
-    }
+        echo -n "."
+        sleep 2
+        ((attempts++))
+    done
     
     success "Database services are running"
 }
@@ -225,18 +248,21 @@ start_services() {
     
     info "Starting Graphiti services in $services_mode mode..."
     
+    # Get Docker Compose command
+    local compose_cmd=$(get_docker_compose_cmd)
+    
     case "$services_mode" in
         "dev"|"development")
             # Start core development services
-            docker-compose -f "$COMPOSE_BASE" -f "$COMPOSE_DEV" up -d
+            $compose_cmd -f "$COMPOSE_BASE" -f "$COMPOSE_DEV" up -d
             ;;
         "minimal")
             # Start only essential services
-            docker-compose -f "$COMPOSE_BASE" -f "$COMPOSE_DEV" up -d falkordb redis graph-visualizer-rust
+            $compose_cmd -f "$COMPOSE_BASE" -f "$COMPOSE_DEV" up -d falkordb redis graph-visualizer-rust
             ;;
         "full")
             # Start all services including optional ones
-            docker-compose -f "$COMPOSE_BASE" -f "$COMPOSE_DEV" --profile tools --profile frontend up -d
+            $compose_cmd -f "$COMPOSE_BASE" -f "$COMPOSE_DEV" --profile tools --profile frontend up -d
             ;;
         *)
             error "Unknown services mode: $services_mode"
@@ -313,8 +339,9 @@ display_status() {
     echo "=== Graphiti Development Environment Status ==="
     echo ""
     
-    # Show running services
-    docker-compose -f "$COMPOSE_BASE" -f "$COMPOSE_DEV" ps
+    # Get Docker Compose command and show running services
+    local compose_cmd=$(get_docker_compose_cmd)
+    $compose_cmd -f "$COMPOSE_BASE" -f "$COMPOSE_DEV" ps
     
     echo ""
     echo "=== Access URLs ==="

@@ -4,8 +4,6 @@
 # Use this file for queue-only deployments with minimal services.
 # Usage: docker-compose -f docker-compose.base.yml -f docker-compose.queue.override.yml up
 
-version: '3.8'
-
 services:
   # =============================================================================
   # Queue Services Only

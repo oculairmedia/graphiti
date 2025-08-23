@@ -4,8 +4,6 @@
 # This file contains the common services shared across all deployment modes.
 # Use with override files for specific deployment scenarios.
 
-version: '3.8'
-
 services:
   # =============================================================================
   # Core Database Services
@@ -18,9 +16,27 @@ services:
       - "${FALKORDB_PORT:-6379}:6379"
     volumes:
       - falkordb_data:/data
-    environment:
-      - REDIS_ARGS=${REDIS_ARGS:---save 60 1 --save 300 10 --save 900 100 --appendonly yes --appendfsync everysec --loglevel warning --maxmemory 1g --maxmemory-policy allkeys-lru}
-    command: ["sh", "-c", "falkordb-server $REDIS_ARGS"]
+    command: 
+      - falkordb-server
+      - --save
+      - "60"
+      - "1" 
+      - --save
+      - "300"
+      - "10"
+      - --save
+      - "900"
+      - "100"
+      - --appendonly
+      - "yes"
+      - --appendfsync
+      - "everysec"
+      - --loglevel
+      - "warning"
+      - --maxmemory
+      - "1g"
+      - --maxmemory-policy
+      - "allkeys-lru"
     networks:
       - graphiti_network
     healthcheck:
@@ -32,7 +48,7 @@ services:
       - homepage.group=Knowledge Management
       - homepage.name=FalkorDB
       - homepage.icon=si-redis
-      - homepage.href=http://192.168.50.90:${FALKORDB_PORT:-6379}
+      - homepage.href=http://${HOMEPAGE_HOST:-192.168.50.90}:${FALKORDB_PORT:-6379}
       - homepage.description=Graph database
 
   # =============================================================================
@@ -68,7 +84,7 @@ services:
       - homepage.group=Knowledge Management
       - homepage.name=Graph Visualizer
       - homepage.icon=si-graphql
-      - homepage.href=http://192.168.50.90:${RUST_SERVER_PORT:-3000}
+      - homepage.href=http://${HOMEPAGE_HOST:-192.168.50.90}:${RUST_SERVER_PORT:-3000}
       - homepage.description=Rust-powered graph visualization server
 
   graphiti-centrality-rs:
@@ -96,7 +112,7 @@ services:
       - homepage.group=Knowledge Management
       - homepage.name=Centrality Service
       - homepage.icon=si-databricks
-      - homepage.href=http://192.168.50.90:${RUST_CENTRALITY_PORT:-3003}
+      - homepage.href=http://${HOMEPAGE_HOST:-192.168.50.90}:${RUST_CENTRALITY_PORT:-3003}
       - homepage.description=Graph centrality calculations
 
   graphiti-search-rs:
@@ -127,7 +143,7 @@ services:
       - homepage.group=Knowledge Management
       - homepage.name=Search Service
       - homepage.icon=si-elasticsearch
-      - homepage.href=http://192.168.50.90:${RUST_SEARCH_PORT:-3004}
+      - homepage.href=http://${HOMEPAGE_HOST:-192.168.50.90}:${RUST_SEARCH_PORT:-3004}
       - homepage.description=High-performance graph search
 
   # =============================================================================
