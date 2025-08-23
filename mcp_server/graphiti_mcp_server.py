@@ -501,7 +501,7 @@ class GraphitiConfig(BaseModel):
 class MCPConfig(BaseModel):
     """Configuration for MCP server."""
 
-    transport: str = 'sse'  # Default to SSE transport
+    transport: str = 'http'  # Default to HTTP transport
     host: str = '0.0.0.0'
     port: int = 3010
 
@@ -1015,6 +1015,12 @@ async def initialize_server() -> MCPConfig:
         default=int(os.environ.get('MCP_SERVER_PORT', '3010')),
         help='Port to bind the HTTP server to (default: MCP_SERVER_PORT environment variable or 3010)',
     )
+    parser.add_argument(
+        '--transport',
+        choices=['stdio', 'sse', 'http'],
+        default=os.environ.get('MCP_TRANSPORT', 'http'),
+        help='Transport protocol to use (default: MCP_TRANSPORT environment variable or http)',
+    )
 
     args = parser.parse_args()
 
@@ -1077,6 +1083,9 @@ async def run_mcp_server():
     if mcp_config.transport == 'stdio':
         await mcp.run_stdio_async()
     elif mcp_config.transport == 'sse':
+        # Configure FastMCP settings for SSE
+        mcp.settings.host = mcp_config.host
+        mcp.settings.port = mcp_config.port
         logger.info(
             f'Running MCP server with SSE transport on {mcp.settings.host}:{mcp.settings.port}'
         )
