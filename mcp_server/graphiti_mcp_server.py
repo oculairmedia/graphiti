@@ -694,10 +694,14 @@ http_client: httpx.AsyncClient | None = None
 # Semaphore for concurrent operations (matching the one used in the main config)
 operation_semaphore: asyncio.Semaphore | None = None
 
+# Resource system
+from resources import ResourceManager, EntityResourceHandler, EntityListResourceHandler, EntityRecentResourceHandler
+resource_manager: ResourceManager | None = None
+
 
 async def initialize_graphiti():
     """Initialize the HTTP client for FastAPI server with connection pooling."""
-    global http_client, config, operation_semaphore
+    global http_client, config, operation_semaphore, resource_manager
 
     try:
         # Configure connection limits for better performance
@@ -728,6 +732,16 @@ async def initialize_graphiti():
 
         logger.info(f'Using group_id: {config.group_id}')
         logger.info(f'Using FastAPI endpoint: {config.api.base_url}')
+        
+        # Initialize resource system
+        resource_manager = ResourceManager(http_client, config)
+        
+        # Register entity resource handlers
+        resource_manager.register_handler(EntityResourceHandler(http_client, config))
+        resource_manager.register_handler(EntityListResourceHandler(http_client, config))
+        resource_manager.register_handler(EntityRecentResourceHandler(http_client, config))
+        
+        logger.info('Resource system initialized with entity handlers')
 
     except Exception as e:
         logger.error(f'Failed to initialize connection to FastAPI server: {str(e)}')
