@@ -68,14 +68,17 @@ class ZepGraphiti(Graphiti):
             parsed = urlparse(uri)
             host = parsed.hostname or 'localhost'
             port = parsed.port or 6379
-            # Use graphiti_migration database instead of default_db
-            driver = FalkorDriver(host=host, port=port, username='', password='', database='graphiti_migration')
-            logger.info(f'Using FalkorDB driver with host: {host}, port: {port}, database: graphiti_migration')
+            # Get database name from environment variable
+            database = os.getenv('FALKORDB_DATABASE', 'graphiti_migration')
+            driver = FalkorDriver(host=host, port=port, username='', password='', database=database)
+            logger.info(f'Using FalkorDB driver with host: {host}, port: {port}, database: {database}')
         else:
             if not NEO4J_AVAILABLE:
                 raise ImportError('Neo4j driver not available. Install neo4j package.')
-            driver = Neo4jDriver(uri, user, password)  # type: ignore[assignment]
-            logger.info(f'Using Neo4j driver with URI: {uri}')
+            # Get database name from environment variable
+            database = os.getenv('NEO4J_DATABASE', 'neo4j')
+            driver = Neo4jDriver(uri, user, password, database)  # type: ignore[assignment]
+            logger.info(f'Using Neo4j driver with URI: {uri}, database: {database}')
 
         super().__init__(uri=uri, user=user, password=password, graph_driver=driver, llm_client=llm_client, embedder=embedder)
 
