@@ -26,6 +26,7 @@ from graphiti_core.llm_client.client import LLMClient
 from graphiti_core.llm_client.openai_client import OpenAIClient
 from mcp.server.fastmcp import FastMCP
 from mcp import McpError, ErrorCode
+import traceback
 from openai import AsyncAzureOpenAI
 from pydantic import BaseModel, Field
 
@@ -565,6 +566,20 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Environment-based settings
+PRODUCTION_MODE = os.environ.get('PRODUCTION_MODE', 'false').lower() == 'true'
+
+
+def create_operation_context(operation: str, **kwargs) -> dict:
+    """Create logging context for operations."""
+    context = {
+        'operation': operation,
+        'timestamp': datetime.now(timezone.utc).isoformat(),
+        'production_mode': PRODUCTION_MODE
+    }
+    context.update(kwargs)
+    return context
+
 # Create global config instance - will be properly initialized later
 config = GraphitiConfig()
 
@@ -661,8 +676,52 @@ async def cleanup_graphiti():
         http_client = None
 
 
+def mask_sensitive_error(error_msg: str, operation: str) -> str:
+    """Mask sensitive information in error messages for production."""
+    if not PRODUCTION_MODE:
+        return error_msg
+    
+    # In production, return generic error messages to avoid information leakage
+    sensitive_patterns = [
+        'api_key', 'token', 'password', 'secret', 'credential',
+        'authorization', 'bearer', 'oauth', 'key='
+    ]
+    
+    error_lower = error_msg.lower()
+    if any(pattern in error_lower for pattern in sensitive_patterns):
+        return f"Authentication error occurred during {operation}"
+    
+    # Generic error for HTTP errors that might contain sensitive info
+    if 'http error' in error_lower:
+        return f"Service communication error during {operation}"
+    
+    return error_msg
+
+
+def categorize_error(exception: Exception) -> ErrorCode:
+    """Categorize exceptions into appropriate MCP error codes."""
+    if isinstance(exception, httpx.TimeoutException):
+        return ErrorCode.REQUEST_TIMEOUT
+    elif isinstance(exception, httpx.HTTPStatusError):
+        status_code = exception.response.status_code
+        if status_code == 400:
+            return ErrorCode.INVALID_PARAMS
+        elif status_code == 401 or status_code == 403:
+            return ErrorCode.INVALID_PARAMS  # Authentication/authorization issues
+        elif status_code == 404:
+            return ErrorCode.INVALID_PARAMS  # Resource not found
+        elif status_code >= 500:
+            return ErrorCode.INTERNAL_ERROR  # Server errors
+        else:
+            return ErrorCode.INTERNAL_ERROR
+    elif isinstance(exception, (ValueError, TypeError)):
+        return ErrorCode.INVALID_PARAMS
+    else:
+        return ErrorCode.INTERNAL_ERROR
+
+
 async def execute_with_semaphore(operation_name: str, operation_func):
-    """Execute an async operation with semaphore-based concurrency control."""
+    """Execute an async operation with semaphore-based concurrency control and comprehensive error handling."""
     global operation_semaphore
     
     if operation_semaphore is None:
@@ -672,6 +731,46 @@ async def execute_with_semaphore(operation_name: str, operation_func):
     async with operation_semaphore:
         logger.debug(f'Executing {operation_name} with semaphore (remaining permits: {operation_semaphore._value})')
         return await operation_func()
+
+
+async def execute_with_retry(operation_name: str, operation_func, max_retries: int = 2):
+    """Execute an operation with retry logic for transient errors."""
+    last_exception = None
+    
+    for attempt in range(max_retries + 1):
+        try:
+            return await operation_func()
+        except Exception as e:
+            last_exception = e
+            
+            # Only retry for specific transient errors
+            if isinstance(e, (httpx.TimeoutException, httpx.ConnectError)):
+                if attempt < max_retries:
+                    wait_time = 2 ** attempt  # Exponential backoff
+                    logger.warning(f'Transient error in {operation_name} (attempt {attempt + 1}/{max_retries + 1}), retrying in {wait_time}s: {str(e)}')
+                    await asyncio.sleep(wait_time)
+                    continue
+            
+            # For non-retryable errors, break immediately
+            break
+    
+    # If we get here, all retries failed
+    error_code = categorize_error(last_exception)
+    masked_error = mask_sensitive_error(str(last_exception), operation_name)
+    
+    # Log the full error with structured context for debugging
+    error_context = create_operation_context(
+        operation_name,
+        attempts=max_retries + 1,
+        error_type=type(last_exception).__name__,
+        error_code=error_code.value
+    )
+    
+    logger.error(f'Operation failed after retries', extra=error_context)
+    if not PRODUCTION_MODE:
+        logger.debug(f'Full traceback for {operation_name}: {traceback.format_exc()}', extra=error_context)
+    
+    raise McpError(error_code, masked_error)
 
 # Removed queue processing functions - now using direct FastAPI calls
 
@@ -743,8 +842,11 @@ async def add_memory(
             logger.error(f'Error adding episode: {error_msg}')
             raise McpError(ErrorCode.INTERNAL_ERROR, f'Error adding episode: {error_msg}')
     
-    # Execute with concurrency control
-    return await execute_with_semaphore('add_memory', _execute_add_memory)
+    # Execute with concurrency control and retry logic for transient errors
+    async def _execute_with_retry():
+        return await execute_with_retry('add_memory', _execute_add_memory)
+    
+    return await execute_with_semaphore('add_memory', _execute_with_retry)
 
 
 @mcp.tool()
