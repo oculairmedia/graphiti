@@ -1,0 +1,117 @@
+# =============================================================================
+# Docker Compose Frontend-Only Override
+# =============================================================================
+# Use this file for frontend-only deployments focused on visualization.
+# Usage: docker-compose -f docker-compose.base.yml -f docker-compose.frontend.override.yml up
+
+version: '3.8'
+
+services:
+  # =============================================================================
+  # Frontend Application
+  # =============================================================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: production
+    container_name: graphiti-frontend-vis
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-8080}:80"
+    environment:
+      - NODE_ENV=production
+      - VITE_API_BASE_URL=http://graph-visualizer-rust:3000
+      - VITE_WS_URL=ws://graph-visualizer-rust:3000/ws
+      - VITE_GRAPHITI_WS_URL=ws://graph-visualizer-rust:3000/ws
+    networks:
+      - graphiti_network
+    depends_on:
+      - graph-visualizer-rust
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    volumes:
+      - frontend_logs:/var/log/nginx
+    labels:
+      - homepage.group=Knowledge Management
+      - homepage.name=Graph Frontend
+      - homepage.icon=si-react
+      - homepage.href=http://192.168.50.90:${FRONTEND_PORT:-8080}
+      - homepage.description=Graph visualization interface
+
+  # =============================================================================
+  # Optional Load Balancer
+  # =============================================================================
+  nginx-lb:
+    image: nginx:alpine
+    container_name: graphiti-nginx-lb
+    restart: unless-stopped
+    ports:
+      - "${LB_HTTP_PORT:-80}:80"
+      - "${LB_HTTPS_PORT:-443}:443"
+    volumes:
+      - ./nginx/frontend-lb.conf:/etc/nginx/nginx.conf:ro
+      - nginx_lb_logs:/var/log/nginx
+    networks:
+      - graphiti_network
+    depends_on:
+      - frontend
+    profiles:
+      - load-balancer
+    labels:
+      - homepage.group=Knowledge Management
+      - homepage.name=Load Balancer
+      - homepage.icon=si-nginx
+      - homepage.href=http://192.168.50.90:${LB_HTTP_PORT:-80}
+      - homepage.description=Frontend load balancer
+
+  # =============================================================================
+  # Database Management UI
+  # =============================================================================
+  redisinsight:
+    image: redislabs/redisinsight:latest
+    container_name: graphiti-redisinsight-frontend
+    restart: unless-stopped
+    ports:
+      - "${REDISINSIGHT_PORT:-8001}:8001"
+    volumes:
+      - redisinsight_data:/db
+    networks:
+      - graphiti_network
+    depends_on:
+      - falkordb
+    profiles:
+      - tools
+    labels:
+      - homepage.group=Knowledge Management
+      - homepage.name=Database UI
+      - homepage.icon=si-redis
+      - homepage.href=http://192.168.50.90:${REDISINSIGHT_PORT:-8001}
+      - homepage.description=Graph database management
+
+  # Disable services not needed for frontend-only deployment
+  graphiti-search-rs:
+    profiles:
+      - disabled
+
+  redis:
+    profiles:
+      - disabled
+
+volumes:
+  frontend_logs:
+    driver: local
+    labels:
+      - description=Frontend Nginx access logs
+  nginx_lb_logs:
+    driver: local
+    labels:
+      - description=Load balancer logs
+  redisinsight_data:
+    driver: local
+    labels:
+      - description=Redis Insight configuration
