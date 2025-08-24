@@ -180,9 +180,19 @@ impl DuckDBStore {
                 .and_then(|v| v.as_f64())
                 .unwrap_or(0.0);
             
-            let eigenvector = node.properties.get("eigenvector_centrality")
-                .and_then(|v| v.as_f64())
-                .unwrap_or(0.0);
+            let eigenvector = if let Some(raw_eigenvector) = node.properties.get("eigenvector_centrality") {
+                println!("DEBUG DuckDB: raw eigenvector value: {:?}", raw_eigenvector);
+                if let Some(converted) = raw_eigenvector.as_f64() {
+                    println!("DEBUG DuckDB: converted eigenvector to f64: {}", converted);
+                    converted
+                } else {
+                    println!("DEBUG DuckDB: failed to convert eigenvector to f64: {:?}", raw_eigenvector);
+                    0.0
+                }
+            } else {
+                println!("DEBUG DuckDB: no eigenvector_centrality in node properties");
+                0.0
+            };
             
             let color = self.get_node_color(&node.node_type);
             let size = 4.0 + (degree * 20.0); // Size based on centrality
