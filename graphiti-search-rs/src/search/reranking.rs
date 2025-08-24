@@ -43,7 +43,7 @@ pub fn centrality_boosted_rerank<T: Clone>(
     }
 
     let query = query_embedding.unwrap_or(&[]);
-    
+
     let mut scored_items: Vec<(T, f32)> = items
         .into_iter()
         .map(|item| {
@@ -57,21 +57,21 @@ pub fn centrality_boosted_rerank<T: Clone>(
             } else {
                 1.0 // No query bias, treat all as equally relevant
             };
-            
+
             // Get centrality score and apply boost
             let centrality = get_centrality(&item).unwrap_or(0.0);
             let centrality_boost = centrality * boost_factor;
-            
+
             // Combined score: base relevance + centrality boost
             let final_score = relevance_score + centrality_boost;
-            
+
             (item, final_score)
         })
         .collect();
 
     // Sort by combined score (descending)
     scored_items.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-    
+
     // Return top results
     scored_items
         .into_iter()
@@ -266,8 +266,6 @@ pub fn rerank_nodes(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use uuid::Uuid;
-    use chrono::Utc;
 
     #[derive(Debug, Clone)]
     struct MockNode {
