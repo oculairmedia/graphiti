@@ -1271,6 +1271,422 @@ async def get_status() -> StatusResponse:
         )
 
 
+# PHASE 3: PROMPTS SYSTEM - Query Prompts (GRAPH-109)
+
+@mcp.prompt()
+async def query_knowledge(
+    topic: str = Field(..., description="Topic or subject to search for in the knowledge graph"),
+    max_results: int = Field(10, description="Maximum number of results to return", ge=1, le=50),
+    include_facts: bool = Field(True, description="Whether to include related facts/relationships"),
+    group_id: str | None = Field(None, description="Optional group ID to filter results")
+) -> str:
+    """Search for comprehensive information about a topic in the knowledge graph.
+    
+    This prompt searches both nodes (entities) and facts (relationships) to provide
+    a comprehensive view of what the knowledge graph knows about a specific topic.
+    
+    Usage examples:
+    - /query_knowledge "docker containers" 
+    - /query_knowledge "machine learning algorithms" --max_results 15 --include_facts false
+    - /query_knowledge "project requirements" --group_id "project-alpha"
+    """
+    global http_client
+    
+    if http_client is None:
+        return "❌ Error: Knowledge graph connection not available"
+    
+    try:
+        # Use provided group_id or default
+        effective_group_id = group_id if group_id is not None else config.group_id
+        effective_group_ids = [effective_group_id] if effective_group_id else []
+        
+        results = []
+        
+        # Search for nodes (entities) related to the topic
+        node_payload = {
+            'query': topic,
+            'group_ids': effective_group_ids,
+            'num_results': max_results
+        }
+        
+        node_response = await http_client.post('/search/nodes', json=node_payload)
+        node_response.raise_for_status()
+        node_data = node_response.json()
+        nodes = node_data.get('nodes', [])
+        
+        if nodes:
+            results.append(f"## 🎯 Entities found for '{topic}':")
+            for i, node in enumerate(nodes[:max_results], 1):
+                name = node.get('name', 'Unknown')
+                summary = node.get('summary', 'No summary available')
+                labels = ', '.join(node.get('labels', []))
+                results.append(f"{i}. **{name}** ({labels})")
+                if summary and len(summary) > 0:
+                    # Truncate long summaries
+                    truncated_summary = summary[:200] + '...' if len(summary) > 200 else summary
+                    results.append(f"   {truncated_summary}")
+        
+        # Search for facts/relationships if requested
+        if include_facts:
+            fact_payload = {
+                'query': topic,
+                'group_ids': effective_group_ids,
+                'num_results': max_results
+            }
+            
+            fact_response = await http_client.post('/search', json=fact_payload)
+            fact_response.raise_for_status()
+            fact_data = fact_response.json()
+            facts = fact_data.get('edges', [])
+            
+            if facts:
+                results.append(f"\n## 🔗 Related relationships for '{topic}':")
+                for i, fact in enumerate(facts[:max_results], 1):
+                    relation_type = fact.get('relation_type', 'related_to')
+                    source_name = fact.get('source_name', 'Unknown')
+                    target_name = fact.get('target_name', 'Unknown')
+                    results.append(f"{i}. {source_name} **{relation_type}** {target_name}")
+        
+        if not nodes and not facts:
+            return f"🤷 No information found for '{topic}' in the knowledge graph. Try different keywords or check if the data has been added to the graph."
+        
+        # Add summary footer
+        node_count = len(nodes)
+        fact_count = len(facts) if include_facts else 0
+        summary_footer = f"\n---\n📊 **Summary**: Found {node_count} entities"
+        if include_facts:
+            summary_footer += f" and {fact_count} relationships"
+        summary_footer += f" for '{topic}'"
+        
+        if effective_group_id:
+            summary_footer += f" in group '{effective_group_id}'"
+            
+        results.append(summary_footer)
+        
+        return '\n'.join(results)
+        
+    except httpx.HTTPStatusError as e:
+        error_msg = f'HTTP error {e.response.status_code}: {e.response.text}'
+        logger.error(f'Error in query_knowledge: {error_msg}')
+        return f"❌ Error searching knowledge graph: {error_msg}"
+    except Exception as e:
+        error_msg = str(e)
+        logger.error(f'Error in query_knowledge: {error_msg}')
+        return f"❌ Error searching knowledge graph: {error_msg}"
+
+
+@mcp.prompt()
+async def find_connections(
+    entity_name: str = Field(..., description="Name of the entity to find connections for"),
+    max_connections: int = Field(10, description="Maximum number of connections to return", ge=1, le=25),
+    connection_depth: int = Field(1, description="Depth of connections to explore (1=direct, 2=second-degree)", ge=1, le=3),
+    group_id: str | None = Field(None, description="Optional group ID to filter results")
+) -> str:
+    """Find and explore connections between entities in the knowledge graph.
+    
+    This prompt finds an entity and shows its relationships to other entities,
+    helping to understand the network of connections around a specific item.
+    
+    Usage examples:
+    - /find_connections "Alice Johnson"
+    - /find_connections "Docker" --max_connections 15 --connection_depth 2
+    - /find_connections "Project Alpha" --group_id "work-projects"
+    """
+    global http_client
+    
+    if http_client is None:
+        return "❌ Error: Knowledge graph connection not available"
+    
+    try:
+        # Use provided group_id or default
+        effective_group_id = group_id if group_id is not None else config.group_id
+        effective_group_ids = [effective_group_id] if effective_group_id else []
+        
+        results = []
+        
+        # First, search for the entity to get its UUID
+        entity_payload = {
+            'query': entity_name,
+            'group_ids': effective_group_ids,
+            'num_results': 5
+        }
+        
+        entity_response = await http_client.post('/search/nodes', json=entity_payload)
+        entity_response.raise_for_status()
+        entity_data = entity_response.json()
+        entities = entity_data.get('nodes', [])
+        
+        if not entities:
+            return f"🤷 Entity '{entity_name}' not found in the knowledge graph. Try a different name or check if the entity exists."
+        
+        # Use the first matching entity
+        target_entity = entities[0]
+        target_uuid = target_entity.get('uuid')
+        target_name = target_entity.get('name', entity_name)
+        target_labels = ', '.join(target_entity.get('labels', []))
+        
+        results.append(f"## 🎯 Found entity: **{target_name}** ({target_labels})")
+        
+        if target_entity.get('summary'):
+            summary = target_entity['summary'][:150] + '...' if len(target_entity['summary']) > 150 else target_entity['summary']
+            results.append(f"*{summary}*\n")
+        
+        # Search for connections using the entity's UUID as center
+        connections_payload = {
+            'query': entity_name,
+            'group_ids': effective_group_ids,
+            'num_results': max_connections,
+            'center_node_uuid': target_uuid
+        }
+        
+        # Get relationships/facts centered on this entity
+        fact_response = await http_client.post('/search', json=connections_payload)
+        fact_response.raise_for_status()
+        fact_data = fact_response.json()
+        facts = fact_data.get('edges', [])
+        
+        if facts:
+            results.append(f"## 🔗 Direct connections from '{target_name}':")
+            
+            # Group connections by relationship type
+            connections_by_type = {}
+            for fact in facts[:max_connections]:
+                relation_type = fact.get('relation_type', 'related_to')
+                source_uuid = fact.get('source_node_uuid')
+                target_fact_uuid = fact.get('target_node_uuid')
+                
+                # Determine if this entity is source or target
+                if source_uuid == target_uuid:
+                    # This entity is the source
+                    connected_name = fact.get('target_name', 'Unknown')
+                    direction = '→'
+                else:
+                    # This entity is the target  
+                    connected_name = fact.get('source_name', 'Unknown')
+                    direction = '←'
+                    
+                if relation_type not in connections_by_type:
+                    connections_by_type[relation_type] = []
+                connections_by_type[relation_type].append(f"{direction} {connected_name}")
+            
+            for relation_type, connections in connections_by_type.items():
+                results.append(f"\n**{relation_type.replace('_', ' ').title()}:**")
+                for connection in connections:
+                    results.append(f"  {connection}")
+        else:
+            results.append(f"🤷 No direct connections found for '{target_name}'")
+        
+        # Add summary
+        connection_count = len(facts)
+        results.append(f"\n---\n📊 **Summary**: Found {connection_count} connections for '{target_name}'")
+        
+        if effective_group_id:
+            results.append(f"Searched in group: '{effective_group_id}'")
+            
+        return '\n'.join(results)
+        
+    except httpx.HTTPStatusError as e:
+        error_msg = f'HTTP error {e.response.status_code}: {e.response.text}'
+        logger.error(f'Error in find_connections: {error_msg}')
+        return f"❌ Error finding connections: {error_msg}"
+    except Exception as e:
+        error_msg = str(e)
+        logger.error(f'Error in find_connections: {error_msg}')
+        return f"❌ Error finding connections: {error_msg}"
+
+
+@mcp.prompt()
+async def explore_domain(
+    domain: str = Field(..., description="Domain or area to explore (e.g., 'machine learning', 'project management')"),
+    focus_type: str = Field("overview", description="Type of exploration: 'overview', 'entities', 'relationships', 'patterns'"),
+    max_items: int = Field(15, description="Maximum number of items to return", ge=1, le=50),
+    group_id: str | None = Field(None, description="Optional group ID to filter results")
+) -> str:
+    """Explore a knowledge domain to understand its structure and key components.
+    
+    This prompt provides different views of a knowledge domain, helping to understand
+    the landscape of information available about a particular area.
+    
+    Usage examples:
+    - /explore_domain "artificial intelligence"
+    - /explore_domain "customer feedback" --focus_type "relationships" 
+    - /explore_domain "software architecture" --focus_type "patterns" --max_items 20
+    """
+    global http_client
+    
+    if http_client is None:
+        return "❌ Error: Knowledge graph connection not available"
+    
+    try:
+        # Use provided group_id or default
+        effective_group_id = group_id if group_id is not None else config.group_id  
+        effective_group_ids = [effective_group_id] if effective_group_id else []
+        
+        results = []
+        results.append(f"# 🌐 Exploring Domain: '{domain}'")
+        results.append(f"**Focus**: {focus_type.title()} | **Max Items**: {max_items}")
+        
+        if effective_group_id:
+            results.append(f"**Group**: {effective_group_id}")
+            
+        results.append("")
+        
+        if focus_type in ["overview", "entities"]:
+            # Search for entities in this domain
+            node_payload = {
+                'query': domain,
+                'group_ids': effective_group_ids,
+                'num_results': max_items
+            }
+            
+            node_response = await http_client.post('/search/nodes', json=node_payload)
+            node_response.raise_for_status()
+            node_data = node_response.json()
+            nodes = node_data.get('nodes', [])
+            
+            if nodes:
+                results.append(f"## 🎯 Key Entities in '{domain}':")
+                
+                # Group entities by label/type if available
+                entities_by_type = {}
+                for node in nodes:
+                    labels = node.get('labels', ['Entity'])
+                    primary_label = labels[0] if labels else 'Entity'
+                    
+                    if primary_label not in entities_by_type:
+                        entities_by_type[primary_label] = []
+                    
+                    name = node.get('name', 'Unknown')
+                    summary = node.get('summary', '')
+                    summary_preview = summary[:100] + '...' if len(summary) > 100 else summary
+                    
+                    entities_by_type[primary_label].append({
+                        'name': name,
+                        'summary': summary_preview
+                    })
+                
+                for entity_type, entities in entities_by_type.items():
+                    results.append(f"\n**{entity_type}** ({len(entities)}):")
+                    for entity in entities:
+                        results.append(f"  • **{entity['name']}**")
+                        if entity['summary']:
+                            results.append(f"    {entity['summary']}")
+        
+        if focus_type in ["overview", "relationships"]:
+            # Search for relationships in this domain
+            fact_payload = {
+                'query': domain,
+                'group_ids': effective_group_ids,
+                'num_results': max_items
+            }
+            
+            fact_response = await http_client.post('/search', json=fact_payload)
+            fact_response.raise_for_status()
+            fact_data = fact_response.json()
+            facts = fact_data.get('edges', [])
+            
+            if facts:
+                results.append(f"\n## 🔗 Key Relationships in '{domain}':")
+                
+                # Group relationships by type
+                relationships_by_type = {}
+                for fact in facts:
+                    relation_type = fact.get('relation_type', 'related_to')
+                    source_name = fact.get('source_name', 'Unknown')
+                    target_name = fact.get('target_name', 'Unknown')
+                    
+                    if relation_type not in relationships_by_type:
+                        relationships_by_type[relation_type] = []
+                    
+                    relationships_by_type[relation_type].append(f"{source_name} → {target_name}")
+                
+                for relation_type, relationships in relationships_by_type.items():
+                    results.append(f"\n**{relation_type.replace('_', ' ').title()}** ({len(relationships)}):")
+                    for relationship in relationships[:5]:  # Show top 5 per type
+                        results.append(f"  • {relationship}")
+                    if len(relationships) > 5:
+                        results.append(f"  • ... and {len(relationships) - 5} more")
+        
+        if focus_type == "patterns":
+            # Try to identify patterns by analyzing entity types and relationship patterns
+            # This is a simplified pattern analysis
+            combined_payload = {
+                'query': domain,
+                'group_ids': effective_group_ids,
+                'num_results': max_items
+            }
+            
+            # Get both nodes and facts for pattern analysis
+            node_response = await http_client.post('/search/nodes', json=combined_payload)
+            fact_response = await http_client.post('/search', json=combined_payload)
+            
+            node_response.raise_for_status()
+            fact_response.raise_for_status()
+            
+            nodes = node_response.json().get('nodes', [])
+            facts = fact_response.json().get('edges', [])
+            
+            results.append(f"## 📊 Patterns in '{domain}':")
+            
+            # Analyze entity type distribution
+            if nodes:
+                entity_types = {}
+                for node in nodes:
+                    labels = node.get('labels', ['Entity'])
+                    for label in labels:
+                        entity_types[label] = entity_types.get(label, 0) + 1
+                
+                results.append(f"\n**Entity Type Distribution**:")
+                for entity_type, count in sorted(entity_types.items(), key=lambda x: x[1], reverse=True):
+                    percentage = (count / len(nodes)) * 100
+                    results.append(f"  • {entity_type}: {count} ({percentage:.1f}%)")
+            
+            # Analyze relationship patterns
+            if facts:
+                relation_types = {}
+                for fact in facts:
+                    relation_type = fact.get('relation_type', 'related_to')
+                    relation_types[relation_type] = relation_types.get(relation_type, 0) + 1
+                
+                results.append(f"\n**Relationship Patterns**:")
+                for relation_type, count in sorted(relation_types.items(), key=lambda x: x[1], reverse=True):
+                    percentage = (count / len(facts)) * 100
+                    results.append(f"  • {relation_type.replace('_', ' ').title()}: {count} ({percentage:.1f}%)")
+        
+        # Add summary statistics
+        node_count = 0
+        fact_count = 0
+        
+        if focus_type in ["overview", "entities", "patterns"]:
+            try:
+                node_response = await http_client.post('/search/nodes', json={'query': domain, 'group_ids': effective_group_ids, 'num_results': 100})
+                node_count = len(node_response.json().get('nodes', []))
+            except:
+                pass
+        
+        if focus_type in ["overview", "relationships", "patterns"]:
+            try:
+                fact_response = await http_client.post('/search', json={'query': domain, 'group_ids': effective_group_ids, 'num_results': 100})
+                fact_count = len(fact_response.json().get('edges', []))
+            except:
+                pass
+        
+        results.append(f"\n---")
+        results.append(f"📊 **Domain Statistics**: {node_count} entities, {fact_count} relationships")
+        results.append(f"🔍 **Exploration Type**: {focus_type.title()}")
+        
+        return '\n'.join(results)
+        
+    except httpx.HTTPStatusError as e:
+        error_msg = f'HTTP error {e.response.status_code}: {e.response.text}'
+        logger.error(f'Error in explore_domain: {error_msg}')
+        return f"❌ Error exploring domain: {error_msg}"
+    except Exception as e:
+        error_msg = str(e)
+        logger.error(f'Error in explore_domain: {error_msg}')
+        return f"❌ Error exploring domain: {error_msg}"
+
+
 async def initialize_server() -> MCPConfig:
     """Parse CLI arguments and initialize the Graphiti server configuration."""
     global config
