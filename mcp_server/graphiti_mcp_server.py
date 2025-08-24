@@ -899,7 +899,7 @@ async def add_memory(
     source: str = Field('text', description="Source type (text, json, message)"),
     source_description: str = Field('', description="Description of the source"),
     uuid: str | None = Field(None, description="Optional UUID for the episode"),
-    _progress_token: ProgressToken | None = Field(None, description="Progress token for reporting operation progress"),
+    progress_token: ProgressToken | None = Field(None, description="Progress token for reporting operation progress"),
 ) -> SuccessResponse:
     """Add an episode to memory via FastAPI server.
 
@@ -919,7 +919,7 @@ async def add_memory(
     async def _execute_add_memory():
         """Internal function to execute add_memory with proper error handling."""
         # Initialize progress reporter
-        progress = ProgressReporter('add_memory', _progress_token)
+        progress = ProgressReporter('add_memory', progress_token)
         await progress.start(3)  # 3 steps: prepare, send, confirm
         
         try:
