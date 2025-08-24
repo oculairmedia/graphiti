@@ -127,6 +127,12 @@ async def search_memory_nodes(
     max_nodes: int = Field(10, description="Maximum number of nodes to return (default: 10)"),
     center_node_uuid: str | None = Field(None, description="Optional UUID of a node to center the search around"),
     entity: str = Field('', description="Optional single entity type to filter results"),
+    reranker: str = Field("rrf", description="Reranking strategy: rrf, mmr, centrality_boosted, cross_encoder, episode_mentions, node_distance"),
+    search_methods: list[str] = Field(["fulltext", "similarity"], description="Search methods to use: fulltext, similarity, bfs"),
+    centrality_boost_factor: float = Field(1.0, description="Boost factor for centrality-based reranking (higher = more structural importance)"),
+    mmr_lambda: float = Field(0.5, description="MMR diversity parameter: 0=max diversity, 1=max relevance"),
+    similarity_threshold: float = Field(0.3, description="Minimum similarity score for semantic matches"),
+    bfs_max_depth: int = Field(2, description="Maximum depth for breadth-first search traversal"),
 ) -> NodeSearchResponse:
     """Search the graph memory for relevant nodes via FastAPI server.
 
@@ -136,6 +142,12 @@ async def search_memory_nodes(
         max_nodes: Maximum number of nodes to return (default: 10)
         center_node_uuid: Optional UUID of a node to center the search around
         entity: Optional single entity type to filter results
+        reranker: Reranking strategy for results ordering
+        search_methods: Search methods to combine
+        centrality_boost_factor: How much to boost structurally important nodes
+        mmr_lambda: Balance between relevance and diversity
+        similarity_threshold: Minimum semantic similarity for matches
+        bfs_max_depth: Maximum graph traversal depth
     """
     if http_client is None:
         raise McpError(ErrorCode.INTERNAL_ERROR, 'HTTP client not initialized')
@@ -146,17 +158,28 @@ async def search_memory_nodes(
             group_ids if group_ids is not None else [config.group_id] if config.group_id else []
         )
 
-        # Prepare request payload
+        # Prepare advanced search configuration
+        search_config = {
+            'reranker': reranker,
+            'search_methods': search_methods,
+            'centrality_boost_factor': centrality_boost_factor,
+            'mmr_lambda': mmr_lambda,
+            'similarity_threshold': similarity_threshold,
+            'bfs_max_depth': bfs_max_depth
+        }
+        
+        # Prepare request payload with advanced configuration
         payload = {
             'query': query,
             'group_ids': effective_group_ids,
-            'num_results': max_nodes,
+            'max_nodes': max_nodes,  # Fixed parameter name to match Python server
+            'config': search_config
         }
 
         if center_node_uuid:
             payload['center_node_uuid'] = center_node_uuid
         if entity:
-            payload['entity_types'] = [entity]
+            payload['entity'] = entity  # Fixed parameter name
 
         # Send request to FastAPI server
         response = await http_client.post('/search/nodes', json=payload)
@@ -197,6 +220,12 @@ async def search_memory_facts(
     group_ids: list[str] | None = Field(None, description="Optional list of group IDs to filter results"),
     max_facts: int = Field(10, description="Maximum number of facts to return (default: 10)"),
     center_node_uuid: str | None = Field(None, description="Optional UUID of a node to center the search around"),
+    reranker: str = Field("rrf", description="Reranking strategy: rrf, mmr, cross_encoder, node_distance, episode_mentions"),
+    search_methods: list[str] = Field(["fulltext", "similarity"], description="Search methods to use: fulltext, similarity, bfs"),
+    centrality_boost_factor: float = Field(1.0, description="Boost factor for centrality-based reranking (higher = more structural importance)"),
+    mmr_lambda: float = Field(0.5, description="MMR diversity parameter: 0=max diversity, 1=max relevance"),
+    similarity_threshold: float = Field(0.3, description="Minimum similarity score for semantic matches"),
+    bfs_max_depth: int = Field(2, description="Maximum depth for breadth-first search traversal"),
 ) -> FactSearchResponse:
     """Search the graph memory for relevant facts via FastAPI server.
 
@@ -205,6 +234,12 @@ async def search_memory_facts(
         group_ids: Optional list of group IDs to filter results
         max_facts: Maximum number of facts to return (default: 10)
         center_node_uuid: Optional UUID of a node to center the search around
+        reranker: Reranking strategy for results ordering
+        search_methods: Search methods to combine
+        centrality_boost_factor: How much to boost structurally important nodes
+        mmr_lambda: Balance between relevance and diversity
+        similarity_threshold: Minimum semantic similarity for matches
+        bfs_max_depth: Maximum graph traversal depth
     """
     if http_client is None:
         raise McpError(ErrorCode.INTERNAL_ERROR, 'HTTP client not initialized')
@@ -219,11 +254,22 @@ async def search_memory_facts(
             group_ids if group_ids is not None else [config.group_id] if config.group_id else []
         )
 
-        # Prepare request payload
+        # Prepare advanced search configuration
+        search_config = {
+            'reranker': reranker,
+            'search_methods': search_methods,
+            'centrality_boost_factor': centrality_boost_factor,
+            'mmr_lambda': mmr_lambda,
+            'similarity_threshold': similarity_threshold,
+            'bfs_max_depth': bfs_max_depth
+        }
+        
+        # Prepare request payload with advanced configuration
         payload = {
             'query': query,
             'group_ids': effective_group_ids,
-            'num_results': max_facts,
+            'max_facts': max_facts,  # Fixed parameter name to match Python server
+            'config': search_config
         }
 
         if center_node_uuid:
@@ -262,6 +308,100 @@ async def search_memory_facts(
         error_msg = str(e)
         logger.error(f'Error searching facts: {error_msg}')
         raise McpError(ErrorCode.INTERNAL_ERROR, f'Error searching facts: {error_msg}')
+
+
+@mcp.tool()
+async def search_important_nodes(
+    query: str = Field(..., description="The search query"),
+    group_ids: list[str] | None = Field(None, description="Optional list of group IDs to filter results"),
+    max_nodes: int = Field(10, description="Maximum number of nodes to return (default: 10)"),
+    boost_factor: float = Field(2.0, description="How strongly to boost structurally important nodes (default: 2.0)"),
+) -> NodeSearchResponse:
+    """Search for nodes with centrality-based boosting to find structurally important entities.
+    
+    This is a convenience wrapper that pre-configures search to prioritize nodes that are
+    central to the graph structure (high betweenness, degree, or eigenvector centrality).
+    Use this when you want to find the most important bridge entities or hubs.
+    
+    Args:
+        query: The search query
+        group_ids: Optional list of group IDs to filter results
+        max_nodes: Maximum number of nodes to return
+        boost_factor: How much to boost central nodes (higher = more emphasis on structure)
+    """
+    return await search_memory_nodes(
+        query=query,
+        group_ids=group_ids,
+        max_nodes=max_nodes,
+        reranker="centrality_boosted",
+        search_methods=["fulltext", "similarity"],
+        centrality_boost_factor=boost_factor,
+        mmr_lambda=0.7,  # Slight preference for relevance over diversity
+        similarity_threshold=0.2,  # Lower threshold to catch more potential matches
+        bfs_max_depth=2
+    )
+
+
+@mcp.tool()
+async def search_diverse_facts(
+    query: str = Field(..., description="The search query"),
+    group_ids: list[str] | None = Field(None, description="Optional list of group IDs to filter results"),
+    max_facts: int = Field(15, description="Maximum number of facts to return (default: 15)"),
+    diversity_level: float = Field(0.3, description="Diversity level: 0=max diversity, 1=max relevance (default: 0.3)"),
+) -> FactSearchResponse:
+    """Search for facts with MMR diversity to get a broad range of different information.
+    
+    This uses Maximal Marginal Relevance (MMR) to balance relevance with diversity,
+    ensuring you get varied facts rather than many similar ones. Good for exploration.
+    
+    Args:
+        query: The search query
+        group_ids: Optional list of group IDs to filter results
+        max_facts: Maximum number of facts to return
+        diversity_level: How much to prioritize diversity vs relevance
+    """
+    return await search_memory_facts(
+        query=query,
+        group_ids=group_ids,
+        max_facts=max_facts,
+        reranker="mmr",
+        search_methods=["fulltext", "similarity"],
+        centrality_boost_factor=1.0,
+        mmr_lambda=diversity_level,
+        similarity_threshold=0.25,
+        bfs_max_depth=2
+    )
+
+
+@mcp.tool()
+async def search_by_similarity(
+    query: str = Field(..., description="The search query"),
+    group_ids: list[str] | None = Field(None, description="Optional list of group IDs to filter results"),
+    max_nodes: int = Field(10, description="Maximum number of nodes to return (default: 10)"),
+    similarity_threshold: float = Field(0.5, description="Minimum semantic similarity (default: 0.5)"),
+) -> NodeSearchResponse:
+    """Search nodes using only semantic similarity, no keyword matching.
+    
+    This focuses purely on meaning and context rather than exact word matches.
+    Use when you want conceptually related content even if it uses different terminology.
+    
+    Args:
+        query: The search query  
+        group_ids: Optional list of group IDs to filter results
+        max_nodes: Maximum number of nodes to return
+        similarity_threshold: Minimum semantic similarity required
+    """
+    return await search_memory_nodes(
+        query=query,
+        group_ids=group_ids,
+        max_nodes=max_nodes,
+        reranker="rrf",
+        search_methods=["similarity"],  # Only semantic search
+        centrality_boost_factor=1.0,
+        mmr_lambda=0.8,  # Prefer relevance for semantic search
+        similarity_threshold=similarity_threshold,
+        bfs_max_depth=1
+    )
 
 
 @mcp.tool()

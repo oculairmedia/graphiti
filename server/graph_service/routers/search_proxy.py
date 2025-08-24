@@ -10,6 +10,7 @@ from typing import Optional, List, Dict, Any, Set
 import os
 import logging
 from graph_service.webhooks import webhook_service
+from graph_service.dto.retrieve import SearchQuery, NodeSearchQuery, SearchConfig, NodeReranker, SearchMethod
 from difflib import SequenceMatcher
 import hashlib
 
@@ -20,11 +21,7 @@ logger = logging.getLogger(__name__)
 # Use environment variable or fallback to localhost for development
 RUST_SEARCH_URL = os.getenv('RUST_SEARCH_URL', 'http://localhost:3004')
 
-class SearchQuery(BaseModel):
-    """Search query matching the expected format"""
-    query: str = Field(description="Search query text")
-    max_facts: int = Field(default=10, description="Maximum number of facts to return")
-    group_ids: Optional[List[str]] = Field(default=None, description="Group IDs to filter by")
+# Remove local SearchQuery - using from dto.retrieve now
 
 class FactResult(BaseModel):
     """Individual fact from search results"""
@@ -41,13 +38,7 @@ class SearchResults(BaseModel):
     """Search results response"""
     facts: List[FactResult]
 
-class NodeSearchQuery(BaseModel):
-    """Node search query matching frontend expectations"""
-    query: str = Field(description="Search query text")
-    max_nodes: int = Field(default=10, description="Maximum number of nodes to return")
-    group_ids: Optional[List[str]] = Field(default=None, description="Group IDs to filter by")
-    center_node_uuid: Optional[str] = Field(default=None, description="Center node UUID for graph search")
-    entity: Optional[str] = Field(default=None, description="Entity type filter")
+# Remove local NodeSearchQuery - using from dto.retrieve now
 
 class NodeResult(BaseModel):
     """Node result matching frontend expectations"""
@@ -118,30 +109,30 @@ async def search_proxy(query: SearchQuery) -> SearchResults:
         # Don't generate embeddings here - let Rust service handle it
         # The Rust service has Ollama embedding generation built-in
         
-        # Transform request to Rust service format with full config
+        # Use configuration from request or defaults
+        config = query.config or SearchConfig()
+        
+        # Transform request to Rust service format with configurable options
         rust_request = {
             "query": query.query,
             "config": {
                 "limit": query.max_facts,
                 "reranker_min_score": 0.0,
-                "alpha": 0.5,  # Balance between semantic and keyword search
                 "edge_config": {
-                    "enabled": True,
-                    "limit": query.max_facts,
-                    "search_methods": ["fulltext", "similarity"],  # Re-enable similarity
-                    "reranker": "rrf",
-                    "bfs_max_depth": 2,
-                    "sim_min_score": 0.3,  # Filter weak semantic matches
-                    "mmr_lambda": 0.5
+                    "search_methods": [method.value for method in config.search_methods],
+                    "reranker": config.reranker.value,
+                    "bfs_max_depth": config.bfs_max_depth,
+                    "sim_min_score": config.similarity_threshold,
+                    "mmr_lambda": config.mmr_lambda,
+                    "centrality_boost_factor": config.centrality_boost_factor
                 },
                 "node_config": {
-                    "enabled": True,
-                    "limit": query.max_facts,
-                    "search_methods": ["fulltext", "similarity"],  # Re-enable similarity
-                    "reranker": "rrf",
-                    "bfs_max_depth": 2,
-                    "sim_min_score": 0.3,  # Filter weak semantic matches
-                    "mmr_lambda": 0.5
+                    "search_methods": [method.value for method in config.search_methods],
+                    "reranker": config.reranker.value,
+                    "bfs_max_depth": config.bfs_max_depth,
+                    "sim_min_score": config.similarity_threshold,
+                    "mmr_lambda": config.mmr_lambda,
+                    "centrality_boost_factor": config.centrality_boost_factor
                 }
             },
             "filters": {}
@@ -276,29 +267,28 @@ async def search_nodes(query: NodeSearchQuery) -> NodeSearchResults:
     Matches the frontend GraphitiClient expectations.
     """
     try:
-        # Transform request to Rust service format
+        # Use configuration from request or defaults
+        config = query.config or SearchConfig()
+        
+        # Transform request to Rust service format with configurable options
         rust_request = {
             "query": query.query,
             "config": {
                 "limit": query.max_nodes,
                 "reranker_min_score": 0.0,
-                "alpha": 0.5,
                 "node_config": {
-                    "enabled": True,
-                    "limit": query.max_nodes,
-                    "search_methods": ["fulltext", "similarity"],
-                    "reranker": "rrf",
-                    "bfs_max_depth": 2,
-                    "sim_min_score": 0.3,  # Filter weak semantic matches
-                    "mmr_lambda": 0.5
+                    "search_methods": [method.value for method in config.search_methods],
+                    "reranker": config.reranker.value,
+                    "bfs_max_depth": config.bfs_max_depth,
+                    "sim_min_score": config.similarity_threshold,
+                    "mmr_lambda": config.mmr_lambda,
+                    "centrality_boost_factor": config.centrality_boost_factor
                 },
                 "edge_config": {
-                    "enabled": False,  # Disable edge search for node-only queries
-                    "limit": 0,
-                    "search_methods": [],
+                    "search_methods": [],  # Disable edge search for node-only queries
                     "reranker": "rrf",
-                    "bfs_max_depth": 2,
-                    "sim_min_score": 0.3,  # Filter weak semantic matches
+                    "bfs_max_depth": 1,
+                    "sim_min_score": 0.3,
                     "mmr_lambda": 0.5
                 }
             },

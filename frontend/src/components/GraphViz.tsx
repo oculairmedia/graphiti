@@ -28,6 +28,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
   // Component rendering
   
   const { applyLayout, zoomIn, zoomOut, fitView } = useGraphConfig();
+  const { config } = useGraphConfig();
   
   // UI State
   const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);
@@ -504,7 +505,10 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
             }}
           >
             <React.Suspense fallback={<div className="w-96 h-96 bg-background/80 backdrop-blur-sm rounded-lg animate-pulse" />}>
-              <CentralityStatsProvider nodes={transformedData.nodes}>
+              <CentralityStatsProvider 
+                nodes={transformedData.nodes} 
+                scalingMethod={config.scalingMethod as any || 'iqr'}
+              >
                 <NodeDetailsPanel
                   node={selectedNode}
                   connections={selectedNodeConnections}

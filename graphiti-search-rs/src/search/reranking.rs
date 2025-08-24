@@ -29,6 +29,57 @@ pub fn reciprocal_rank_fusion<T: Clone>(
     results.into_iter().map(|(item, _)| item).collect()
 }
 
+/// Centrality-based boosting for structurally important nodes
+pub fn centrality_boosted_rerank<T: Clone>(
+    items: Vec<T>,
+    query_embedding: Option<&[f32]>,
+    get_embedding: impl Fn(&T) -> Option<&[f32]> + Sync,
+    get_centrality: impl Fn(&T) -> Option<f32> + Sync,
+    boost_factor: f32,
+    limit: usize,
+) -> Vec<T> {
+    if items.is_empty() {
+        return items;
+    }
+
+    let query = query_embedding.unwrap_or(&[]);
+    
+    let mut scored_items: Vec<(T, f32)> = items
+        .into_iter()
+        .map(|item| {
+            // Calculate base relevance score
+            let relevance_score = if !query.is_empty() {
+                if let Some(item_emb) = get_embedding(&item) {
+                    cosine_similarity_simd(query, item_emb)
+                } else {
+                    0.5 // Default relevance for items without embeddings
+                }
+            } else {
+                1.0 // No query bias, treat all as equally relevant
+            };
+            
+            // Get centrality score and apply boost
+            let centrality = get_centrality(&item).unwrap_or(0.0);
+            let centrality_boost = centrality * boost_factor;
+            
+            // Combined score: base relevance + centrality boost
+            let final_score = relevance_score + centrality_boost;
+            
+            (item, final_score)
+        })
+        .collect();
+
+    // Sort by combined score (descending)
+    scored_items.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+    
+    // Return top results
+    scored_items
+        .into_iter()
+        .take(limit)
+        .map(|(item, _)| item)
+        .collect()
+}
+
 /// Maximal Marginal Relevance (MMR) for diversity-aware reranking
 pub fn maximal_marginal_relevance<T: Clone>(
     items: Vec<T>,
@@ -164,6 +215,7 @@ pub fn rerank_nodes(
     reranker: &NodeReranker,
     query_vector: Option<&[f32]>,
     mmr_lambda: f32,
+    centrality_boost_factor: f32,
 ) -> SearchResult<Vec<Node>> {
     match reranker {
         NodeReranker::Rrf => Ok(reciprocal_rank_fusion(method_results, 60.0, |node| {
@@ -192,6 +244,17 @@ pub fn rerank_nodes(
             }
             Ok(result)
         }
+        NodeReranker::CentralityBoosted => {
+            let all_nodes: Vec<Node> = method_results.into_iter().flatten().collect();
+            Ok(centrality_boosted_rerank(
+                all_nodes,
+                query_vector,
+                |node| node.embedding.as_deref(),
+                |node| node.centrality,
+                centrality_boost_factor,
+                100,
+            ))
+        }
         NodeReranker::NodeDistance | NodeReranker::EpisodeMentions => {
             // Would require additional context
             let all_nodes: Vec<Node> = method_results.into_iter().flatten().collect();
@@ -203,6 +266,15 @@ pub fn rerank_nodes(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use uuid::Uuid;
+    use chrono::Utc;
+
+    #[derive(Debug, Clone)]
+    struct MockNode {
+        id: String,
+        centrality: Option<f32>,
+        embedding: Option<Vec<f32>>,
+    }
 
     #[test]
     fn test_rrf() {
@@ -214,5 +286,41 @@ mod tests {
 
         // "c" should rank highest as it appears in all lists
         assert_eq!(result[0], "c");
+    }
+
+    #[test]
+    fn test_centrality_boosted_rerank() {
+        let nodes = vec![
+            MockNode {
+                id: "low_centrality".to_string(),
+                centrality: Some(0.1),
+                embedding: Some(vec![1.0, 0.0, 0.0]),
+            },
+            MockNode {
+                id: "high_centrality".to_string(),
+                centrality: Some(0.8),
+                embedding: Some(vec![0.5, 0.5, 0.0]),
+            },
+            MockNode {
+                id: "medium_centrality".to_string(),
+                centrality: Some(0.4),
+                embedding: Some(vec![0.8, 0.2, 0.0]),
+            },
+        ];
+
+        let query_embedding = vec![1.0, 0.0, 0.0]; // Should match low_centrality best
+        let boost_factor = 2.0;
+
+        let result = centrality_boosted_rerank(
+            nodes,
+            Some(&query_embedding),
+            |node| node.embedding.as_deref(),
+            |node| node.centrality,
+            boost_factor,
+            10,
+        );
+
+        // Despite lower semantic similarity, high_centrality should rank first due to boost
+        assert_eq!(result[0].id, "high_centrality");
     }
 }

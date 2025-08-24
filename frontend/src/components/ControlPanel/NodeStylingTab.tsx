@@ -28,6 +28,10 @@ interface NodeStylingTabProps {
     minNodeSize: number;
     maxNodeSize: number;
     sizeMultiplier: number;
+    scalingMethod?: string;
+    useQuantileScaling?: boolean;
+    useThresholdScaling?: boolean;
+    quantileBins?: number;
   };
   nodeTypes: NodeType[];
   onNodeTypeColorChange: (type: string, color: string) => void;
@@ -183,6 +187,87 @@ export const NodeStylingTab: React.FC<NodeStylingTabProps> = ({
           )}
         </CardContent>
       </Card>
+
+      {/* Centrality Scaling Method */}
+      {(config.colorScheme === 'by-centrality' || config.colorScheme === 'by-pagerank' || config.colorScheme === 'by-degree' || config.colorScheme === 'by-betweenness' || config.colorScheme === 'by-eigenvector') && (
+        <Card className="glass border-border/30">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm flex items-center space-x-2">
+              <Palette className="h-4 w-4 text-primary" />
+              <span>Scaling Method</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <Label className="text-xs text-muted-foreground">Outlier-Resistant Scaling</Label>
+              <Select 
+                value={config.scalingMethod || 'iqr'} 
+                onValueChange={(value) => onConfigUpdate({ scalingMethod: value })}
+              >
+                <SelectTrigger className="h-8 bg-secondary/30">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="glass">
+                  <SelectItem value="iqr">📊 IQR (Interquartile Range)</SelectItem>
+                  <SelectItem value="winsorized">🎯 Winsorized (95th Percentile)</SelectItem>
+                  <SelectItem value="mad">🔸 MAD (Median Absolute Deviation)</SelectItem>
+                  <SelectItem value="moving-average">📈 Moving Average (Top 10%)</SelectItem>
+                  <SelectItem value="raw">🔄 Raw (Absolute Maximum)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="p-3 rounded-lg bg-secondary/20 border border-border/30">
+              <p className="text-xs text-muted-foreground">
+                {(config.scalingMethod === 'iqr' || !config.scalingMethod) && '📊 Uses Q3 + 1.5×IQR as scaling maximum - robust against outliers'}
+                {config.scalingMethod === 'winsorized' && '🎯 Uses 95th percentile as maximum - caps extreme values'}
+                {config.scalingMethod === 'mad' && '🔸 Uses median + 3×MAD as maximum - extremely outlier-resistant'}
+                {config.scalingMethod === 'moving-average' && '📈 Uses average of top 10% values - smoother scaling'}
+                {config.scalingMethod === 'raw' && '🔄 Uses absolute maximum value - sensitive to outliers'}
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">Advanced D3 Scaling</Label>
+              <div className="flex items-center space-x-4">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="quantile-scaling"
+                    checked={config.useQuantileScaling || false}
+                    onCheckedChange={(checked) => onConfigUpdate({ useQuantileScaling: checked })}
+                  />
+                  <Label htmlFor="quantile-scaling" className="text-xs">Quantile Scaling</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="threshold-scaling"
+                    checked={config.useThresholdScaling || false}
+                    onCheckedChange={(checked) => onConfigUpdate({ useThresholdScaling: checked })}
+                  />
+                  <Label htmlFor="threshold-scaling" className="text-xs">Threshold Scaling</Label>
+                </div>
+              </div>
+            </div>
+
+            {config.useQuantileScaling && (
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                  <Label className="text-xs text-muted-foreground">Quantile Bins</Label>
+                  <Badge variant="outline" className="text-xs">{config.quantileBins || 5}</Badge>
+                </div>
+                <Slider
+                  min={3}
+                  max={10}
+                  step={1}
+                  value={[config.quantileBins || 5]}
+                  onValueChange={([value]) => onConfigUpdate({ quantileBins: value })}
+                  className="w-full"
+                />
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Size Mapping */}
       <Card className="glass border-border/30">

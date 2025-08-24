@@ -351,10 +351,13 @@ const NodeDetailsPanelComponent: React.FC<NodeDetailsPanelProps> = ({
                                                 metric === 'pagerank' ? 'pagerank' :
                                                 metric === 'eigenvector' ? 'eigenvector' : 'degree';
                                 
-                                const stats = centralityStats?.[statsKey] || { min: 0, max: 1, mean: 0.5, scalingMax: 1 };
-                                const maxValue = Math.max(stats.scalingMax, 0.000001); // Use moving average of top 10% for smoother scaling
+                                const stats = centralityStats?.[statsKey] || { 
+                                  min: 0, max: 1, mean: 0.5, median: 0.5, q1: 0.25, q3: 0.75, 
+                                  iqr: 0.5, mad: 0.25, scalingMax: 1, scalingMethod: 'iqr' as const
+                                };
+                                const maxValue = Math.max(stats.scalingMax, 0.000001);
                                 
-                                // Scale to percentage based on moving average of top values
+                                // Scale to percentage based on robust scaling method
                                 const scaledPercentage = Math.min(100, (Number(value) / maxValue) * 100);
                                 
                                 // Format display value based on magnitude
@@ -373,7 +376,7 @@ const NodeDetailsPanelComponent: React.FC<NodeDetailsPanelProps> = ({
                                         <span className="text-xs text-primary font-medium">
                                           {scaledPercentage.toFixed(1)}%
                                         </span>
-                                        <div className="text-[10px] text-muted-foreground" title="Scaled against average of top 10% values">
+                                        <div className="text-[10px] text-muted-foreground" title={`Scaled using ${stats.scalingMethod} method (max: ${stats.scalingMax.toFixed(4)})`}>
                                           ({displayValue})
                                         </div>
                                       </div>

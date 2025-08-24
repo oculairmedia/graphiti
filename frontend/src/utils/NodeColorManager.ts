@@ -11,6 +11,7 @@
 
 import { interpolateColor, hexToRgba } from './colorCache';
 import { generateNodeTypeColor } from './nodeTypeColors';
+import { scaleQuantile, scaleThreshold, ScaleQuantile, ScaleThreshold } from 'd3-scale';
 
 export interface ColorSchemeConfig {
   scheme: 'by-type' | 'by-centrality' | 'by-pagerank' | 'by-degree' | 'by-betweenness' | 'by-eigenvector' | 'by-community' | 'by-temporal' | 'custom';
@@ -23,6 +24,10 @@ export interface ColorSchemeConfig {
   normalizeMetrics?: boolean;
   gradientHighColor?: string;  // Add for compatibility with config
   gradientLowColor?: string;   // Add for compatibility with config
+  useQuantileScaling?: boolean; // Enable D3 quantile-based color mapping
+  quantileBins?: number;       // Number of quantile bins (default: 5)
+  useThresholdScaling?: boolean; // Enable D3 threshold-based color mapping
+  customThresholds?: number[];  // Custom thresholds for threshold scaling
 }
 
 export interface NodeMetrics {
@@ -49,6 +54,11 @@ interface MetricStats {
   min: number;
   max: number;
   mean: number;
+  median: number;
+  q1: number;
+  q3: number;
+  iqr: number;
+  mad: number;
   stdDev: number;
   scalingMax: number;
   percentiles: {
@@ -70,6 +80,8 @@ export class NodeColorManager {
   private colorCache = new Map<string, string>();
   private transitions = new Map<string, ColorTransition>();
   private metricStats = new Map<string, MetricStats>();
+  private quantileScales = new Map<string, ScaleQuantile<string, never>>();
+  private thresholdScales = new Map<string, ScaleThreshold<number, string, never>>();
   private animationFrame: number | null = null;
   private colorFunction: ((node: NodeMetrics) => string) | null = null;
 
@@ -84,6 +96,8 @@ export class NodeColorManager {
   updateConfig(config: Partial<ColorSchemeConfig>) {
     this.config = { ...this.config, ...config };
     this.colorCache.clear();
+    this.quantileScales.clear();
+    this.thresholdScales.clear();
     this.buildColorFunction();
   }
 
@@ -94,6 +108,8 @@ export class NodeColorManager {
     this.nodes = nodes;
     this.calculateMetricStats();
     this.colorCache.clear();
+    this.quantileScales.clear();
+    this.thresholdScales.clear();
   }
 
   /**
@@ -115,21 +131,37 @@ export class NodeColorManager {
 
       if (values.length === 0) return;
 
-      // Calculate moving average of top 10% values for smoother scaling
-      const topPercentileCount = Math.max(1, Math.ceil(values.length * 0.1));
-      const topValues = values.slice(-topPercentileCount);
-      const scalingMax = topValues.reduce((sum, val) => sum + val, 0) / topValues.length;
+      // Basic statistics
+      const min = values[0];
+      const max = values[values.length - 1];
+      const mean = values.reduce((a, b) => a + b, 0) / values.length;
+      const median = this.getPercentile(values, 0.50);
+      const q1 = this.getPercentile(values, 0.25);
+      const q3 = this.getPercentile(values, 0.75);
+      const iqr = q3 - q1;
+      
+      // MAD calculation
+      const deviations = values.map(val => Math.abs(val - median)).sort((a, b) => a - b);
+      const mad = this.getPercentile(deviations, 0.5);
+      
+      // Use IQR-based scaling (Q3 + 1.5 * IQR) as default
+      const scalingMax = Math.max(q3 + 1.5 * iqr, min + 0.000001);
 
       const stats: MetricStats = {
-        min: values[0],
-        max: values[values.length - 1],
-        mean: values.reduce((a, b) => a + b, 0) / values.length,
+        min,
+        max,
+        mean,
+        median,
+        q1,
+        q3,
+        iqr,
+        mad,
         stdDev: 0,
         scalingMax,
         percentiles: {
-          p25: this.getPercentile(values, 0.25),
-          p50: this.getPercentile(values, 0.50),
-          p75: this.getPercentile(values, 0.75),
+          p25: q1,
+          p50: median,
+          p75: q3,
           p90: this.getPercentile(values, 0.90),
           p95: this.getPercentile(values, 0.95),
           p99: this.getPercentile(values, 0.99)
@@ -142,6 +174,75 @@ export class NodeColorManager {
 
       this.metricStats.set(metric, stats);
     });
+    
+    // Build D3 quantile and threshold scales
+    this.buildD3Scales();
+  }
+
+  /**
+   * Build D3 quantile and threshold scales for metrics
+   */
+  private buildD3Scales() {
+    const metrics = [
+      'degree_centrality',
+      'pagerank_centrality',
+      'betweenness_centrality',
+      'eigenvector_centrality'
+    ];
+
+    metrics.forEach(metric => {
+      const values = this.nodes
+        .map(n => n[metric] as number)
+        .filter(v => v !== undefined && v !== null);
+
+      if (values.length === 0) return;
+
+      // Create color range for quantile/threshold scales
+      const bins = this.config.quantileBins || 5;
+      const colorRange = this.generateColorRange(bins);
+
+      // Build quantile scale
+      if (this.config.useQuantileScaling) {
+        const quantileScale = scaleQuantile<string>()
+          .domain(values)
+          .range(colorRange);
+        this.quantileScales.set(metric, quantileScale);
+      }
+
+      // Build threshold scale
+      if (this.config.useThresholdScaling && this.config.customThresholds) {
+        const thresholdScale = scaleThreshold<number, string>()
+          .domain(this.config.customThresholds)
+          .range(colorRange);
+        this.thresholdScales.set(metric, thresholdScale);
+      } else if (this.config.useThresholdScaling) {
+        // Auto-generate thresholds using percentiles
+        const stats = this.metricStats.get(metric);
+        if (stats) {
+          const thresholds = [stats.percentiles.p25, stats.percentiles.p50, stats.percentiles.p75, stats.percentiles.p90];
+          const thresholdScale = scaleThreshold<number, string>()
+            .domain(thresholds)
+            .range(colorRange);
+          this.thresholdScales.set(metric, thresholdScale);
+        }
+      }
+    });
+  }
+
+  /**
+   * Generate color range for D3 scales
+   */
+  private generateColorRange(bins: number): string[] {
+    const lowColor = this.config.gradientLowColor || this.config.lowColor || '#4ECDC4';
+    const highColor = this.config.gradientHighColor || this.config.highColor || '#E63946';
+    
+    const colors: string[] = [];
+    for (let i = 0; i < bins; i++) {
+      const ratio = i / (bins - 1);
+      colors.push(interpolateColor(lowColor, highColor, ratio));
+    }
+    
+    return colors;
   }
 
   /**
@@ -210,6 +311,20 @@ export class NodeColorManager {
   private buildMetricColorFunction(metricName: string) {
     return (node: NodeMetrics): string => {
       const value = node[metricName] as number || 0;
+      
+      // Check for D3 quantile scaling first
+      if (this.config.useQuantileScaling && this.quantileScales.has(metricName)) {
+        const quantileScale = this.quantileScales.get(metricName)!;
+        return quantileScale(value);
+      }
+      
+      // Check for D3 threshold scaling
+      if (this.config.useThresholdScaling && this.thresholdScales.has(metricName)) {
+        const thresholdScale = this.thresholdScales.get(metricName)!;
+        return thresholdScale(value);
+      }
+      
+      // Fall back to traditional scaling
       const stats = this.metricStats.get(metricName);
       
       if (!stats || stats.scalingMax === stats.min) {

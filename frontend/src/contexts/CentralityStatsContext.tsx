@@ -1,11 +1,57 @@
 import React, { createContext, useContext, useMemo, ReactNode } from 'react';
 import { GraphNode } from '../api/types';
 
+export type ScalingMethod = 'moving-average' | 'iqr' | 'winsorized' | 'mad' | 'raw';
+
 interface CentralityStats {
-  degree: { min: number; max: number; mean: number; scalingMax: number };
-  betweenness: { min: number; max: number; mean: number; scalingMax: number };
-  pagerank: { min: number; max: number; mean: number; scalingMax: number };
-  eigenvector: { min: number; max: number; mean: number; scalingMax: number };
+  degree: { 
+    min: number; 
+    max: number; 
+    mean: number; 
+    median: number;
+    q1: number;
+    q3: number;
+    iqr: number;
+    mad: number;
+    scalingMax: number;
+    scalingMethod: ScalingMethod;
+  };
+  betweenness: { 
+    min: number; 
+    max: number; 
+    mean: number; 
+    median: number;
+    q1: number;
+    q3: number;
+    iqr: number;
+    mad: number;
+    scalingMax: number;
+    scalingMethod: ScalingMethod;
+  };
+  pagerank: { 
+    min: number; 
+    max: number; 
+    mean: number; 
+    median: number;
+    q1: number;
+    q3: number;
+    iqr: number;
+    mad: number;
+    scalingMax: number;
+    scalingMethod: ScalingMethod;
+  };
+  eigenvector: { 
+    min: number; 
+    max: number; 
+    mean: number; 
+    median: number;
+    q1: number;
+    q3: number;
+    iqr: number;
+    mad: number;
+    scalingMax: number;
+    scalingMethod: ScalingMethod;
+  };
 }
 
 const CentralityStatsContext = createContext<CentralityStats | null>(null);
@@ -13,12 +59,68 @@ const CentralityStatsContext = createContext<CentralityStats | null>(null);
 interface CentralityStatsProviderProps {
   children: ReactNode;
   nodes: GraphNode[];
+  scalingMethod?: ScalingMethod;
 }
 
 /**
- * Calculate centrality statistics for all metrics
+ * Calculate percentile from sorted array
  */
-function calculateCentralityStats(nodes: GraphNode[]): CentralityStats {
+function getPercentile(sortedValues: number[], percentile: number): number {
+  const index = percentile * (sortedValues.length - 1);
+  const lower = Math.floor(index);
+  const upper = Math.ceil(index);
+  const weight = index % 1;
+  
+  if (upper >= sortedValues.length) return sortedValues[sortedValues.length - 1];
+  if (lower < 0) return sortedValues[0];
+  
+  return sortedValues[lower] * (1 - weight) + sortedValues[upper] * weight;
+}
+
+/**
+ * Calculate Median Absolute Deviation
+ */
+function calculateMAD(values: number[], median: number): number {
+  const deviations = values.map(val => Math.abs(val - median));
+  deviations.sort((a, b) => a - b);
+  const mad = getPercentile(deviations, 0.5);
+  return mad;
+}
+
+/**
+ * Calculate robust scaling maximum based on method
+ */
+function calculateScalingMax(values: number[], method: ScalingMethod, stats: any): number {
+  switch (method) {
+    case 'iqr':
+      // Use Q3 + 1.5 * IQR as scaling maximum (outlier fence)
+      return stats.q3 + 1.5 * stats.iqr;
+    
+    case 'winsorized':
+      // Use 95th percentile for winsorization
+      return getPercentile(values, 0.95);
+    
+    case 'mad':
+      // Use median + 3 * 1.4826 * MAD (equivalent to 3 sigma for normal distribution)
+      return stats.median + 3 * 1.4826 * stats.mad;
+    
+    case 'raw':
+      // Use absolute maximum
+      return stats.max;
+    
+    case 'moving-average':
+    default:
+      // Use moving average of top 10% (existing behavior)
+      const topPercentileCount = Math.max(1, Math.ceil(values.length * 0.1));
+      const topValues = values.slice(-topPercentileCount);
+      return topValues.reduce((sum, val) => sum + val, 0) / topValues.length;
+  }
+}
+
+/**
+ * Calculate centrality statistics for all metrics with robust scaling
+ */
+function calculateCentralityStats(nodes: GraphNode[], scalingMethod: ScalingMethod = 'iqr'): CentralityStats {
   const metrics = {
     degree: 'degree_centrality',
     betweenness: 'betweenness_centrality', 
@@ -40,21 +142,40 @@ function calculateCentralityStats(nodes: GraphNode[]): CentralityStats {
     });
 
     if (values.length === 0) {
-      stats[key as keyof CentralityStats] = { min: 0, max: 0, mean: 0, scalingMax: 0 };
+      stats[key as keyof CentralityStats] = { 
+        min: 0, max: 0, mean: 0, median: 0, q1: 0, q3: 0, iqr: 0, mad: 0, 
+        scalingMax: 0, scalingMethod 
+      };
       return;
     }
 
     values.sort((a, b) => a - b);
+    
+    // Basic statistics
     const min = values[0];
     const max = values[values.length - 1];
     const mean = values.reduce((sum, val) => sum + val, 0) / values.length;
+    const median = getPercentile(values, 0.5);
+    
+    // Quartiles and IQR
+    const q1 = getPercentile(values, 0.25);
+    const q3 = getPercentile(values, 0.75);
+    const iqr = q3 - q1;
+    
+    // MAD calculation
+    const mad = calculateMAD(values, median);
+    
+    // Robust statistics object
+    const robustStats = { min, max, mean, median, q1, q3, iqr, mad };
+    
+    // Calculate scaling maximum based on method
+    const scalingMax = Math.max(calculateScalingMax(values, scalingMethod, robustStats), min + 0.000001);
 
-    // Calculate moving average of top 10% of values for smoother scaling
-    const topPercentileCount = Math.max(1, Math.ceil(values.length * 0.1));
-    const topValues = values.slice(-topPercentileCount);
-    const scalingMax = topValues.reduce((sum, val) => sum + val, 0) / topValues.length;
-
-    stats[key as keyof CentralityStats] = { min, max, mean, scalingMax };
+    stats[key as keyof CentralityStats] = { 
+      ...robustStats, 
+      scalingMax, 
+      scalingMethod 
+    };
   });
 
   return stats;
@@ -62,19 +183,24 @@ function calculateCentralityStats(nodes: GraphNode[]): CentralityStats {
 
 export const CentralityStatsProvider: React.FC<CentralityStatsProviderProps> = ({ 
   children, 
-  nodes 
+  nodes,
+  scalingMethod = 'iqr'
 }) => {
   const stats = useMemo(() => {
     if (!nodes || nodes.length === 0) {
+      const defaultStats = {
+        min: 0, max: 1, mean: 0.5, median: 0.5, q1: 0.25, q3: 0.75, 
+        iqr: 0.5, mad: 0.25, scalingMax: 1, scalingMethod
+      };
       return {
-        degree: { min: 0, max: 1, mean: 0.5, scalingMax: 1 },
-        betweenness: { min: 0, max: 1, mean: 0.5, scalingMax: 1 },
-        pagerank: { min: 0, max: 1, mean: 0.5, scalingMax: 1 },
-        eigenvector: { min: 0, max: 1, mean: 0.5, scalingMax: 1 }
+        degree: defaultStats,
+        betweenness: defaultStats,
+        pagerank: defaultStats,
+        eigenvector: defaultStats
       };
     }
-    return calculateCentralityStats(nodes);
-  }, [nodes]);
+    return calculateCentralityStats(nodes, scalingMethod);
+  }, [nodes, scalingMethod]);
 
   return (
     <CentralityStatsContext.Provider value={stats}>
