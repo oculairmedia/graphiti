@@ -18,12 +18,7 @@ import httpx
 from azure.identity import DefaultAzureCredential, get_bearer_token_provider
 from dotenv import load_dotenv
 from graphiti_core import Graphiti
-from graphiti_core.embedder.azure_openai import AzureOpenAIEmbedderClient
-from graphiti_core.embedder.client import EmbedderClient
-from graphiti_core.embedder.openai import OpenAIEmbedder, OpenAIEmbedderConfig
-from graphiti_core.llm_client.azure_openai_client import AzureOpenAILLMClient
-from graphiti_core.llm_client.client import LLMClient
-from graphiti_core.llm_client.openai_client import OpenAIClient
+# Removed unused LLM/embedder imports - MCP server only uses HTTP calls to FastAPI endpoint
 from mcp.server.fastmcp import FastMCP
 from mcp import McpError
 try:
@@ -37,15 +32,11 @@ except ImportError:
         REQUEST_TIMEOUT = -32000
 from mcp.types import ProgressToken, ProgressNotification
 import traceback
-from openai import AsyncAzureOpenAI
 from pydantic import BaseModel, Field
 
 load_dotenv()
 
 
-DEFAULT_LLM_MODEL = 'gpt-4.1-mini'
-SMALL_LLM_MODEL = 'gpt-4.1-nano'
-DEFAULT_EMBEDDER_MODEL = 'text-embedding-3-small'
 
 # Semaphore limit for concurrent Graphiti operations.
 # Decrease this if you're experiencing 429 rate limit errors from your LLM provider.
@@ -224,275 +215,15 @@ def create_azure_credential_token_provider() -> Callable[[], str]:
 # Server configuration classes
 # The configuration system has a hierarchy:
 # - GraphitiConfig is the top-level configuration
-#   - LLMConfig handles all OpenAI/LLM related settings
-#   - EmbedderConfig manages embedding settings
+#   - GraphAPIConfig handles connection to the FastAPI server
 #   - FalkorDBConfig manages database connection details
 #   - Various other settings like group_id and feature flags
 # Configuration values are loaded from:
 # 1. Default values in the class definitions
 # 2. Environment variables (loaded via load_dotenv())
 # 3. Command line arguments (which override environment variables)
-class GraphitiLLMConfig(BaseModel):
-    """Configuration for the LLM client.
-
-    Centralizes all LLM-specific configuration parameters including API keys and model selection.
-    """
-
-    api_key: str | None = None
-    model: str = DEFAULT_LLM_MODEL
-    small_model: str = SMALL_LLM_MODEL
-    temperature: float = 0.0
-    azure_openai_endpoint: str | None = None
-    azure_openai_deployment_name: str | None = None
-    azure_openai_api_version: str | None = None
-    azure_openai_use_managed_identity: bool = False
-
-    @classmethod
-    def from_env(cls) -> 'GraphitiLLMConfig':
-        """Create LLM configuration from environment variables."""
-        # Get model from environment, or use default if not set or empty
-        model_env = os.environ.get('MODEL_NAME', '')
-        model = model_env if model_env.strip() else DEFAULT_LLM_MODEL
-
-        # Get small_model from environment, or use default if not set or empty
-        small_model_env = os.environ.get('SMALL_MODEL_NAME', '')
-        small_model = small_model_env if small_model_env.strip() else SMALL_LLM_MODEL
-
-        azure_openai_endpoint = os.environ.get('AZURE_OPENAI_ENDPOINT', None)
-        azure_openai_api_version = os.environ.get('AZURE_OPENAI_API_VERSION', None)
-        azure_openai_deployment_name = os.environ.get('AZURE_OPENAI_DEPLOYMENT_NAME', None)
-        azure_openai_use_managed_identity = (
-            os.environ.get('AZURE_OPENAI_USE_MANAGED_IDENTITY', 'false').lower() == 'true'
-        )
-
-        if azure_openai_endpoint is None:
-            # Setup for OpenAI API
-            # Log if empty model was provided
-            if model_env == '':
-                logger.debug(
-                    f'MODEL_NAME environment variable not set, using default: {DEFAULT_LLM_MODEL}'
-                )
-            elif not model_env.strip():
-                logger.warning(
-                    f'Empty MODEL_NAME environment variable, using default: {DEFAULT_LLM_MODEL}'
-                )
-
-            return cls(
-                api_key=os.environ.get('OPENAI_API_KEY'),
-                model=model,
-                small_model=small_model,
-                temperature=float(os.environ.get('LLM_TEMPERATURE', '0.0')),
-            )
-        else:
-            # Setup for Azure OpenAI API
-            # Log if empty deployment name was provided
-            if azure_openai_deployment_name is None:
-                logger.error('AZURE_OPENAI_DEPLOYMENT_NAME environment variable not set')
-
-                raise ValueError('AZURE_OPENAI_DEPLOYMENT_NAME environment variable not set')
-            if not azure_openai_use_managed_identity:
-                # api key
-                api_key = os.environ.get('OPENAI_API_KEY', None)
-            else:
-                # Managed identity
-                api_key = None
-
-            return cls(
-                azure_openai_use_managed_identity=azure_openai_use_managed_identity,
-                azure_openai_endpoint=azure_openai_endpoint,
-                api_key=api_key,
-                azure_openai_api_version=azure_openai_api_version,
-                azure_openai_deployment_name=azure_openai_deployment_name,
-                model=model,
-                small_model=small_model,
-                temperature=float(os.environ.get('LLM_TEMPERATURE', '0.0')),
-            )
-
-    @classmethod
-    def from_cli_and_env(cls, args: argparse.Namespace) -> 'GraphitiLLMConfig':
-        """Create LLM configuration from CLI arguments, falling back to environment variables."""
-        # Start with environment-based config
-        config = cls.from_env()
-
-        # CLI arguments override environment variables when provided
-        if hasattr(args, 'model') and args.model:
-            # Only use CLI model if it's not empty
-            if args.model.strip():
-                config.model = args.model
-            else:
-                # Log that empty model was provided and default is used
-                logger.warning(f'Empty model name provided, using default: {DEFAULT_LLM_MODEL}')
-
-        if hasattr(args, 'small_model') and args.small_model:
-            if args.small_model.strip():
-                config.small_model = args.small_model
-            else:
-                logger.warning(f'Empty small_model name provided, using default: {SMALL_LLM_MODEL}')
-
-        if hasattr(args, 'temperature') and args.temperature is not None:
-            config.temperature = args.temperature
-
-        return config
-
-    def create_client(self) -> LLMClient:
-        """Create an LLM client based on this configuration.
-
-        Returns:
-            LLMClient instance
-        """
-
-        if self.azure_openai_endpoint is not None:
-            # Azure OpenAI API setup
-            if self.azure_openai_use_managed_identity:
-                # Use managed identity for authentication
-                token_provider = create_azure_credential_token_provider()
-                return AzureOpenAILLMClient(
-                    azure_client=AsyncAzureOpenAI(
-                        azure_endpoint=self.azure_openai_endpoint,
-                        azure_deployment=self.azure_openai_deployment_name,
-                        api_version=self.azure_openai_api_version,
-                        azure_ad_token_provider=token_provider,
-                    ),
-                    config=LLMConfig(
-                        api_key=self.api_key,
-                        model=self.model,
-                        small_model=self.small_model,
-                        temperature=self.temperature,
-                    ),
-                )
-            elif self.api_key:
-                # Use API key for authentication
-                return AzureOpenAILLMClient(
-                    azure_client=AsyncAzureOpenAI(
-                        azure_endpoint=self.azure_openai_endpoint,
-                        azure_deployment=self.azure_openai_deployment_name,
-                        api_version=self.azure_openai_api_version,
-                        api_key=self.api_key,
-                    ),
-                    config=LLMConfig(
-                        api_key=self.api_key,
-                        model=self.model,
-                        small_model=self.small_model,
-                        temperature=self.temperature,
-                    ),
-                )
-            else:
-                raise ValueError('OPENAI_API_KEY must be set when using Azure OpenAI API')
-
-        if not self.api_key:
-            raise ValueError('OPENAI_API_KEY must be set when using OpenAI API')
-
-        llm_client_config = LLMConfig(
-            api_key=self.api_key, model=self.model, small_model=self.small_model
-        )
-
-        # Set temperature
-        llm_client_config.temperature = self.temperature
-
-        return OpenAIClient(config=llm_client_config)
 
 
-class GraphitiEmbedderConfig(BaseModel):
-    """Configuration for the embedder client.
-
-    Centralizes all embedding-related configuration parameters.
-    """
-
-    model: str = DEFAULT_EMBEDDER_MODEL
-    api_key: str | None = None
-    azure_openai_endpoint: str | None = None
-    azure_openai_deployment_name: str | None = None
-    azure_openai_api_version: str | None = None
-    azure_openai_use_managed_identity: bool = False
-
-    @classmethod
-    def from_env(cls) -> 'GraphitiEmbedderConfig':
-        """Create embedder configuration from environment variables."""
-
-        # Get model from environment, or use default if not set or empty
-        model_env = os.environ.get('EMBEDDER_MODEL_NAME', '')
-        model = model_env if model_env.strip() else DEFAULT_EMBEDDER_MODEL
-
-        azure_openai_endpoint = os.environ.get('AZURE_OPENAI_EMBEDDING_ENDPOINT', None)
-        azure_openai_api_version = os.environ.get('AZURE_OPENAI_EMBEDDING_API_VERSION', None)
-        azure_openai_deployment_name = os.environ.get(
-            'AZURE_OPENAI_EMBEDDING_DEPLOYMENT_NAME', None
-        )
-        azure_openai_use_managed_identity = (
-            os.environ.get('AZURE_OPENAI_USE_MANAGED_IDENTITY', 'false').lower() == 'true'
-        )
-        if azure_openai_endpoint is not None:
-            # Setup for Azure OpenAI API
-            # Log if empty deployment name was provided
-            azure_openai_deployment_name = os.environ.get(
-                'AZURE_OPENAI_EMBEDDING_DEPLOYMENT_NAME', None
-            )
-            if azure_openai_deployment_name is None:
-                logger.error('AZURE_OPENAI_EMBEDDING_DEPLOYMENT_NAME environment variable not set')
-
-                raise ValueError(
-                    'AZURE_OPENAI_EMBEDDING_DEPLOYMENT_NAME environment variable not set'
-                )
-
-            if not azure_openai_use_managed_identity:
-                # api key
-                api_key = os.environ.get('AZURE_OPENAI_EMBEDDING_API_KEY', None) or os.environ.get(
-                    'OPENAI_API_KEY', None
-                )
-            else:
-                # Managed identity
-                api_key = None
-
-            return cls(
-                azure_openai_use_managed_identity=azure_openai_use_managed_identity,
-                azure_openai_endpoint=azure_openai_endpoint,
-                api_key=api_key,
-                azure_openai_api_version=azure_openai_api_version,
-                azure_openai_deployment_name=azure_openai_deployment_name,
-            )
-        else:
-            return cls(
-                model=model,
-                api_key=os.environ.get('OPENAI_API_KEY'),
-            )
-
-    def create_client(self) -> EmbedderClient | None:
-        if self.azure_openai_endpoint is not None:
-            # Azure OpenAI API setup
-            if self.azure_openai_use_managed_identity:
-                # Use managed identity for authentication
-                token_provider = create_azure_credential_token_provider()
-                return AzureOpenAIEmbedderClient(
-                    azure_client=AsyncAzureOpenAI(
-                        azure_endpoint=self.azure_openai_endpoint,
-                        azure_deployment=self.azure_openai_deployment_name,
-                        api_version=self.azure_openai_api_version,
-                        azure_ad_token_provider=token_provider,
-                    ),
-                    model=self.model,
-                )
-            elif self.api_key:
-                # Use API key for authentication
-                return AzureOpenAIEmbedderClient(
-                    azure_client=AsyncAzureOpenAI(
-                        azure_endpoint=self.azure_openai_endpoint,
-                        azure_deployment=self.azure_openai_deployment_name,
-                        api_version=self.azure_openai_api_version,
-                        api_key=self.api_key,
-                    ),
-                    model=self.model,
-                )
-            else:
-                logger.error('OPENAI_API_KEY must be set when using Azure OpenAI API')
-                return None
-        else:
-            # OpenAI API setup
-            if not self.api_key:
-                return None
-
-            embedder_config = OpenAIEmbedderConfig(api_key=self.api_key, embedding_model=self.model)
-
-            return OpenAIEmbedder(config=embedder_config)
 
 
 class GraphAPIConfig(BaseModel):
@@ -514,8 +245,6 @@ class GraphitiConfig(BaseModel):
     Centralizes all configuration parameters for the Graphiti client.
     """
 
-    llm: GraphitiLLMConfig = Field(default_factory=GraphitiLLMConfig)
-    embedder: GraphitiEmbedderConfig = Field(default_factory=GraphitiEmbedderConfig)
     api: GraphAPIConfig = Field(default_factory=GraphAPIConfig)
     group_id: str | None = None
     use_custom_entities: bool = False
@@ -525,8 +254,6 @@ class GraphitiConfig(BaseModel):
     def from_env(cls) -> 'GraphitiConfig':
         """Create a configuration instance from environment variables."""
         return cls(
-            llm=GraphitiLLMConfig.from_env(),
-            embedder=GraphitiEmbedderConfig.from_env(),
             api=GraphAPIConfig.from_env(),
         )
 
@@ -544,9 +271,6 @@ class GraphitiConfig(BaseModel):
 
         config.use_custom_entities = args.use_custom_entities
         config.destroy_graph = args.destroy_graph
-
-        # Update LLM config using CLI args
-        config.llm = GraphitiLLMConfig.from_cli_and_env(args)
 
         return config
 
@@ -3635,7 +3359,7 @@ async def initialize_server() -> MCPConfig:
     global config
 
     parser = argparse.ArgumentParser(
-        description='Run the Graphiti MCP server with optional LLM client'
+        description='Run the Graphiti MCP server'
     )
     parser.add_argument(
         '--group-id',
@@ -3647,18 +3371,6 @@ async def initialize_server() -> MCPConfig:
         choices=['sse', 'stdio', 'http'],
         default=os.environ.get('MCP_TRANSPORT', 'http'),
         help='Transport to use for communication with the client. (default: MCP_TRANSPORT environment variable or http)',
-    )
-    parser.add_argument(
-        '--model', help=f'Model name to use with the LLM client. (default: {DEFAULT_LLM_MODEL})'
-    )
-    parser.add_argument(
-        '--small-model',
-        help=f'Small model name to use with the LLM client. (default: {SMALL_LLM_MODEL})',
-    )
-    parser.add_argument(
-        '--temperature',
-        type=float,
-        help='Temperature setting for the LLM (0.0-2.0). Lower values make output more deterministic. (default: 0.7)',
     )
     parser.add_argument('--destroy-graph', action='store_true', help='Destroy all Graphiti graphs')
     parser.add_argument(
