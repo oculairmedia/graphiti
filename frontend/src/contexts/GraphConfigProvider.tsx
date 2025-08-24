@@ -150,6 +150,10 @@ const defaultStableConfig: StableConfig = {
   colorScheme: 'by-type',
   gradientHighColor: '#FF0000',
   gradientLowColor: '#0000FF',
+  scalingMethod: 'iqr',
+  useQuantileScaling: false,
+  useThresholdScaling: false,
+  quantileBins: 5,
   
   // Hover and focus
   hoveredPointCursor: 'pointer',

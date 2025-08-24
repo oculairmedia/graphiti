@@ -186,12 +186,13 @@ impl SearchEngine {
             method_results.push(nodes);
         }
 
-        // Apply reranking
+        // Apply reranking with centrality boost factor
         let reranked = reranking::rerank_nodes(
             method_results,
             &config.reranker,
             query_vector,
             config.mmr_lambda,
+            config.centrality_boost_factor.unwrap_or(1.0),
         )?;
 
         Ok(reranked)

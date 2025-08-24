@@ -81,6 +81,7 @@ pub struct NodeSearchConfig {
     pub bfs_max_depth: usize,
     pub sim_min_score: f32,
     pub mmr_lambda: f32,
+    pub centrality_boost_factor: Option<f32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -121,6 +122,7 @@ pub enum NodeReranker {
     CrossEncoder,
     EpisodeMentions,
     NodeDistance,
+    CentralityBoosted,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

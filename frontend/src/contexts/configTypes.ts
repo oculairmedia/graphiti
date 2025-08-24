@@ -83,6 +83,10 @@ export interface StableConfig {
   colorScheme: string;
   gradientHighColor: string;
   gradientLowColor: string;
+  scalingMethod: string;
+  useQuantileScaling: boolean;
+  useThresholdScaling: boolean;
+  quantileBins: number;
   
   // Hover and focus styling
   hoveredPointCursor: string;
