@@ -98,7 +98,7 @@ services:
       - homepage.description=Graph centrality calculations
 
   graphiti-search-rs:
-    image: ghcr.io/oculairmedia/graphiti-search-rs:main
+    image: ghcr.io/oculairmedia/graphiti-search-rs:feature-mcp-fastmcp-enhancement
     restart: unless-stopped
     ports:
       - "${RUST_SEARCH_PORT:-3004}:3004"
@@ -200,7 +200,7 @@ services:
       - homepage.description=Knowledge graph API service
 
   graphiti-mcp:
-    image: ghcr.io/oculairmedia/graphiti-mcp:main
+    image: ghcr.io/oculairmedia/graphiti-mcp:feature-mcp-fastmcp-enhancement
     restart: unless-stopped
     ports:
       - "${MCP_PORT:-3010}:3010"
