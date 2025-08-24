@@ -26,7 +26,15 @@ from graphiti_core.llm_client.client import LLMClient
 from graphiti_core.llm_client.openai_client import OpenAIClient
 from mcp.server.fastmcp import FastMCP
 from mcp import McpError
-from mcp.types import ErrorCode
+try:
+    from mcp.types import ErrorCode
+except ImportError:
+    # Define ErrorCode enum if not available
+    from enum import Enum
+    class ErrorCode(Enum):
+        INTERNAL_ERROR = -32603
+        INVALID_PARAMS = -32602
+        REQUEST_TIMEOUT = -32000
 from mcp.types import ProgressToken, ProgressNotification
 import traceback
 from openai import AsyncAzureOpenAI
