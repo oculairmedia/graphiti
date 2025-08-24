@@ -1687,6 +1687,639 @@ async def explore_domain(
         return f"❌ Error exploring domain: {error_msg}"
 
 
+# PHASE 3: PROMPTS SYSTEM - Analysis Prompts (GRAPH-110)
+
+@mcp.prompt()
+async def analyze_patterns(
+    domain: str = Field(..., description="Domain or topic to analyze patterns for"),
+    pattern_type: str = Field("relationship", description="Type of patterns to analyze: 'relationship', 'entity', 'temporal', 'all'"),
+    min_frequency: int = Field(2, description="Minimum frequency for pattern to be reported", ge=1, le=100),
+    group_id: str | None = Field(None, description="Optional group ID to filter results")
+) -> str:
+    """Analyze patterns and trends in the knowledge graph for a specific domain.
+    
+    This prompt performs advanced pattern analysis to identify recurring themes,
+    common relationships, and structural patterns in the knowledge graph data.
+    
+    Usage examples:
+    - /analyze_patterns "software development" 
+    - /analyze_patterns "customer interactions" --pattern_type "temporal" --min_frequency 5
+    - /analyze_patterns "project management" --pattern_type "all" --group_id "work-data"
+    """
+    global http_client
+    
+    if http_client is None:
+        return "❌ Error: Knowledge graph connection not available"
+    
+    try:
+        # Use provided group_id or default
+        effective_group_id = group_id if group_id is not None else config.group_id
+        effective_group_ids = [effective_group_id] if effective_group_id else []
+        
+        results = []
+        results.append(f"# 📊 Pattern Analysis: '{domain}'")
+        results.append(f"**Pattern Type**: {pattern_type.title()} | **Min Frequency**: {min_frequency}")
+        
+        if effective_group_id:
+            results.append(f"**Group**: {effective_group_id}")
+        
+        results.append("")
+        
+        # Get data for pattern analysis
+        search_payload = {
+            'query': domain,
+            'group_ids': effective_group_ids,
+            'num_results': 50  # Get more data for better pattern analysis
+        }
+        
+        nodes = []
+        facts = []
+        
+        if pattern_type in ["entity", "all"]:
+            # Get entities for entity pattern analysis
+            node_response = await http_client.post('/search/nodes', json=search_payload)
+            node_response.raise_for_status()
+            nodes = node_response.json().get('nodes', [])
+        
+        if pattern_type in ["relationship", "temporal", "all"]:
+            # Get facts for relationship pattern analysis
+            fact_response = await http_client.post('/search', json=search_payload)
+            fact_response.raise_for_status()
+            facts = fact_response.json().get('edges', [])
+        
+        patterns_found = []
+        
+        # Entity Pattern Analysis
+        if pattern_type in ["entity", "all"] and nodes:
+            results.append("## 🎯 Entity Patterns")
+            
+            # Analyze entity type patterns
+            entity_type_counts = {}
+            attribute_patterns = {}
+            
+            for node in nodes:
+                # Count entity types
+                labels = node.get('labels', ['Entity'])
+                for label in labels:
+                    entity_type_counts[label] = entity_type_counts.get(label, 0) + 1
+                
+                # Analyze naming patterns (simple analysis)
+                name = node.get('name', '').lower()
+                if len(name) > 0:
+                    # Common word analysis
+                    words = name.split()
+                    for word in words:
+                        if len(word) > 3:  # Skip short words
+                            key = f"name_contains_{word}"
+                            attribute_patterns[key] = attribute_patterns.get(key, 0) + 1
+            
+            # Report entity type patterns above threshold
+            results.append("\n**Entity Type Patterns:**")
+            for entity_type, count in sorted(entity_type_counts.items(), key=lambda x: x[1], reverse=True):
+                if count >= min_frequency:
+                    percentage = (count / len(nodes)) * 100
+                    results.append(f"  • {entity_type}: {count} occurrences ({percentage:.1f}%)")
+                    patterns_found.append(f"Entity type '{entity_type}' appears {count} times")
+            
+            # Report naming patterns above threshold
+            significant_patterns = {k: v for k, v in attribute_patterns.items() if v >= min_frequency}
+            if significant_patterns:
+                results.append("\n**Naming Patterns:**")
+                for pattern, count in sorted(significant_patterns.items(), key=lambda x: x[1], reverse=True)[:10]:
+                    word = pattern.replace('name_contains_', '')
+                    results.append(f"  • Names containing '{word}': {count} entities")
+                    patterns_found.append(f"Naming pattern '{word}' appears {count} times")
+        
+        # Relationship Pattern Analysis  
+        if pattern_type in ["relationship", "all"] and facts:
+            results.append("\n## 🔗 Relationship Patterns")
+            
+            # Analyze relationship types
+            relation_type_counts = {}
+            relationship_direction_patterns = {}
+            
+            for fact in facts:
+                relation_type = fact.get('relation_type', 'related_to')
+                relation_type_counts[relation_type] = relation_type_counts.get(relation_type, 0) + 1
+                
+                # Analyze directional patterns (simplified)
+                source_name = fact.get('source_name', '').lower()
+                target_name = fact.get('target_name', '').lower()
+                
+                # Pattern: what types of things relate to what
+                pattern_key = f"{relation_type}_pattern"
+                if pattern_key not in relationship_direction_patterns:
+                    relationship_direction_patterns[pattern_key] = []
+                relationship_direction_patterns[pattern_key].append((source_name, target_name))
+            
+            # Report relationship type patterns
+            results.append("\n**Relationship Type Patterns:**")
+            for relation_type, count in sorted(relation_type_counts.items(), key=lambda x: x[1], reverse=True):
+                if count >= min_frequency:
+                    percentage = (count / len(facts)) * 100
+                    results.append(f"  • {relation_type.replace('_', ' ').title()}: {count} occurrences ({percentage:.1f}%)")
+                    patterns_found.append(f"Relationship '{relation_type}' appears {count} times")
+        
+        # Temporal Pattern Analysis (simplified)
+        if pattern_type in ["temporal", "all"] and facts:
+            results.append("\n## ⏰ Temporal Patterns")
+            
+            # Analyze creation time patterns (if available)
+            time_patterns = {}
+            for fact in facts:
+                created_at = fact.get('created_at', '')
+                if created_at:
+                    try:
+                        # Extract date patterns (simplified - just by date)
+                        date_part = created_at.split('T')[0] if 'T' in created_at else created_at[:10]
+                        time_patterns[date_part] = time_patterns.get(date_part, 0) + 1
+                    except:
+                        continue
+            
+            if time_patterns:
+                # Find dates with activity above threshold
+                significant_dates = {date: count for date, count in time_patterns.items() if count >= min_frequency}
+                if significant_dates:
+                    results.append("\n**High-Activity Dates:**")
+                    for date, count in sorted(significant_dates.items(), key=lambda x: x[1], reverse=True)[:10]:
+                        results.append(f"  • {date}: {count} relationships created")
+                        patterns_found.append(f"High activity on {date} with {count} relationships")
+        
+        # Pattern Summary
+        if patterns_found:
+            results.append(f"\n## 📈 Pattern Summary")
+            results.append(f"**Patterns Discovered**: {len(patterns_found)}")
+            results.append(f"**Analysis Scope**: {len(nodes)} entities, {len(facts)} relationships")
+            
+            # Top insights
+            results.append("\n**Key Insights:**")
+            for i, pattern in enumerate(patterns_found[:5], 1):
+                results.append(f"  {i}. {pattern}")
+            
+            if len(patterns_found) > 5:
+                results.append(f"  ... and {len(patterns_found) - 5} more patterns")
+        else:
+            results.append(f"\n🤷 No significant patterns found for '{domain}' with minimum frequency {min_frequency}")
+            results.append("Try lowering the minimum frequency or exploring a different domain.")
+        
+        return '\n'.join(results)
+        
+    except httpx.HTTPStatusError as e:
+        error_msg = f'HTTP error {e.response.status_code}: {e.response.text}'
+        logger.error(f'Error in analyze_patterns: {error_msg}')
+        return f"❌ Error analyzing patterns: {error_msg}"
+    except Exception as e:
+        error_msg = str(e)
+        logger.error(f'Error in analyze_patterns: {error_msg}')
+        return f"❌ Error analyzing patterns: {error_msg}"
+
+
+@mcp.prompt()
+async def compare_entities(
+    entity1: str = Field(..., description="Name of the first entity to compare"),
+    entity2: str = Field(..., description="Name of the second entity to compare"),
+    comparison_depth: str = Field("detailed", description="Depth of comparison: 'basic', 'detailed', 'comprehensive'"),
+    group_id: str | None = Field(None, description="Optional group ID to filter results")
+) -> str:
+    """Compare two entities in the knowledge graph to understand their similarities and differences.
+    
+    This prompt provides detailed comparison analysis between entities, including
+    their attributes, relationships, and contextual differences.
+    
+    Usage examples:
+    - /compare_entities "Docker" "Kubernetes"
+    - /compare_entities "Alice Johnson" "Bob Smith" --comparison_depth "comprehensive"
+    - /compare_entities "Project Alpha" "Project Beta" --group_id "work-projects"
+    """
+    global http_client
+    
+    if http_client is None:
+        return "❌ Error: Knowledge graph connection not available"
+    
+    try:
+        # Use provided group_id or default
+        effective_group_id = group_id if group_id is not None else config.group_id
+        effective_group_ids = [effective_group_id] if effective_group_id else []
+        
+        results = []
+        results.append(f"# ⚖️ Entity Comparison: '{entity1}' vs '{entity2}'")
+        results.append(f"**Comparison Depth**: {comparison_depth.title()}")
+        
+        if effective_group_id:
+            results.append(f"**Group**: {effective_group_id}")
+        
+        results.append("")
+        
+        # Search for both entities
+        entity1_data = None
+        entity2_data = None
+        entity1_facts = []
+        entity2_facts = []
+        
+        # Find entity 1
+        search1_payload = {
+            'query': entity1,
+            'group_ids': effective_group_ids,
+            'num_results': 5
+        }
+        
+        entity1_response = await http_client.post('/search/nodes', json=search1_payload)
+        entity1_response.raise_for_status()
+        entity1_nodes = entity1_response.json().get('nodes', [])
+        
+        if entity1_nodes:
+            entity1_data = entity1_nodes[0]  # Use first match
+            
+            # Get relationships for entity 1 if detailed comparison
+            if comparison_depth in ["detailed", "comprehensive"]:
+                facts1_payload = {
+                    'query': entity1,
+                    'group_ids': effective_group_ids,
+                    'num_results': 20,
+                    'center_node_uuid': entity1_data.get('uuid')
+                }
+                facts1_response = await http_client.post('/search', json=facts1_payload)
+                facts1_response.raise_for_status()
+                entity1_facts = facts1_response.json().get('edges', [])
+        
+        # Find entity 2
+        search2_payload = {
+            'query': entity2,
+            'group_ids': effective_group_ids,
+            'num_results': 5
+        }
+        
+        entity2_response = await http_client.post('/search/nodes', json=search2_payload)
+        entity2_response.raise_for_status()
+        entity2_nodes = entity2_response.json().get('nodes', [])
+        
+        if entity2_nodes:
+            entity2_data = entity2_nodes[0]  # Use first match
+            
+            # Get relationships for entity 2 if detailed comparison
+            if comparison_depth in ["detailed", "comprehensive"]:
+                facts2_payload = {
+                    'query': entity2,
+                    'group_ids': effective_group_ids,
+                    'num_results': 20,
+                    'center_node_uuid': entity2_data.get('uuid')
+                }
+                facts2_response = await http_client.post('/search', json=facts2_payload)
+                facts2_response.raise_for_status()
+                entity2_facts = facts2_response.json().get('edges', [])
+        
+        # Check if both entities were found
+        if not entity1_data and not entity2_data:
+            return f"❌ Neither '{entity1}' nor '{entity2}' found in the knowledge graph."
+        elif not entity1_data:
+            return f"❌ Entity '{entity1}' not found in the knowledge graph."
+        elif not entity2_data:
+            return f"❌ Entity '{entity2}' not found in the knowledge graph."
+        
+        # Basic comparison
+        results.append("## 📋 Basic Information")
+        results.append(f"### {entity1_data.get('name', entity1)}")
+        results.append(f"**Type**: {', '.join(entity1_data.get('labels', ['Unknown']))}")
+        if entity1_data.get('summary'):
+            summary1 = entity1_data['summary'][:200] + '...' if len(entity1_data['summary']) > 200 else entity1_data['summary']
+            results.append(f"**Summary**: {summary1}")
+        
+        results.append(f"\n### {entity2_data.get('name', entity2)}")
+        results.append(f"**Type**: {', '.join(entity2_data.get('labels', ['Unknown']))}")
+        if entity2_data.get('summary'):
+            summary2 = entity2_data['summary'][:200] + '...' if len(entity2_data['summary']) > 200 else entity2_data['summary']
+            results.append(f"**Summary**: {summary2}")
+        
+        # Type comparison
+        labels1 = set(entity1_data.get('labels', []))
+        labels2 = set(entity2_data.get('labels', []))
+        
+        common_types = labels1 & labels2
+        unique_to_1 = labels1 - labels2
+        unique_to_2 = labels2 - labels1
+        
+        results.append("\n## 🏷️ Type Comparison")
+        if common_types:
+            results.append(f"**Common Types**: {', '.join(common_types)}")
+        if unique_to_1:
+            results.append(f"**Unique to {entity1_data.get('name', entity1)}**: {', '.join(unique_to_1)}")
+        if unique_to_2:
+            results.append(f"**Unique to {entity2_data.get('name', entity2)}**: {', '.join(unique_to_2)}")
+        
+        # Detailed comparison - relationships
+        if comparison_depth in ["detailed", "comprehensive"] and (entity1_facts or entity2_facts):
+            results.append("\n## 🔗 Relationship Comparison")
+            
+            # Analyze relationship patterns for each entity
+            def analyze_relationships(facts, entity_name):
+                relation_types = {}
+                connected_entities = set()
+                
+                for fact in facts:
+                    relation_type = fact.get('relation_type', 'related_to')
+                    relation_types[relation_type] = relation_types.get(relation_type, 0) + 1
+                    
+                    # Add connected entities
+                    source_name = fact.get('source_name', '')
+                    target_name = fact.get('target_name', '')
+                    connected_entities.add(source_name if source_name != entity_name else target_name)
+                
+                return relation_types, connected_entities
+            
+            rel1_types, connected1 = analyze_relationships(entity1_facts, entity1_data.get('name', entity1))
+            rel2_types, connected2 = analyze_relationships(entity2_facts, entity2_data.get('name', entity2))
+            
+            # Compare relationship types
+            results.append(f"### {entity1_data.get('name', entity1)} Relationships")
+            if rel1_types:
+                for rel_type, count in sorted(rel1_types.items(), key=lambda x: x[1], reverse=True)[:5]:
+                    results.append(f"  • {rel_type.replace('_', ' ').title()}: {count}")
+            else:
+                results.append("  • No relationships found")
+            
+            results.append(f"\n### {entity2_data.get('name', entity2)} Relationships")
+            if rel2_types:
+                for rel_type, count in sorted(rel2_types.items(), key=lambda x: x[1], reverse=True)[:5]:
+                    results.append(f"  • {rel_type.replace('_', ' ').title()}: {count}")
+            else:
+                results.append("  • No relationships found")
+            
+            # Find common connections
+            common_connections = connected1 & connected2
+            if common_connections:
+                results.append(f"\n### 🤝 Common Connections")
+                for connection in sorted(common_connections)[:10]:
+                    if connection:  # Skip empty connections
+                        results.append(f"  • {connection}")
+        
+        # Comprehensive comparison - additional analysis
+        if comparison_depth == "comprehensive":
+            results.append("\n## 📊 Comprehensive Analysis")
+            
+            # Connection count comparison
+            conn1_count = len(entity1_facts)
+            conn2_count = len(entity2_facts)
+            
+            results.append(f"**Connection Density**:")
+            results.append(f"  • {entity1_data.get('name', entity1)}: {conn1_count} relationships")
+            results.append(f"  • {entity2_data.get('name', entity2)}: {conn2_count} relationships")
+            
+            if conn1_count > 0 or conn2_count > 0:
+                more_connected = entity1_data.get('name', entity1) if conn1_count > conn2_count else entity2_data.get('name', entity2)
+                results.append(f"  • {more_connected} is more highly connected")
+            
+            # Attribute comparison (if available)
+            attrs1 = entity1_data.get('attributes', {})
+            attrs2 = entity2_data.get('attributes', {})
+            
+            if attrs1 or attrs2:
+                results.append(f"\n**Attributes Comparison**:")
+                all_keys = set(attrs1.keys()) | set(attrs2.keys())
+                for key in sorted(all_keys):
+                    val1 = attrs1.get(key, '—')
+                    val2 = attrs2.get(key, '—')
+                    results.append(f"  • {key}: {val1} | {val2}")
+        
+        # Summary
+        results.append(f"\n---")
+        results.append(f"📊 **Comparison Summary**:")
+        results.append(f"  • Type similarity: {'High' if common_types else 'Low'}")
+        if comparison_depth in ["detailed", "comprehensive"]:
+            common_connections = len(set([f.get('target_name', '') for f in entity1_facts]) & 
+                                   set([f.get('target_name', '') for f in entity2_facts]))
+            results.append(f"  • Shared connections: {common_connections}")
+            results.append(f"  • Relationship complexity: {len(entity1_facts)} vs {len(entity2_facts)}")
+        
+        return '\n'.join(results)
+        
+    except httpx.HTTPStatusError as e:
+        error_msg = f'HTTP error {e.response.status_code}: {e.response.text}'
+        logger.error(f'Error in compare_entities: {error_msg}')
+        return f"❌ Error comparing entities: {error_msg}"
+    except Exception as e:
+        error_msg = str(e)
+        logger.error(f'Error in compare_entities: {error_msg}')
+        return f"❌ Error comparing entities: {error_msg}"
+
+
+@mcp.prompt()
+async def summarize_episode(
+    episode_identifier: str = Field(..., description="Episode ID, name, or search term to identify the episode"),
+    summary_style: str = Field("balanced", description="Summary style: 'brief', 'balanced', 'detailed', 'bullet_points'"),
+    focus_areas: str = Field("all", description="Areas to focus on: 'all', 'entities', 'events', 'insights', 'outcomes'"),
+    group_id: str | None = Field(None, description="Optional group ID to filter results")
+) -> str:
+    """Summarize a specific episode or memory from the knowledge graph.
+    
+    This prompt provides intelligent summarization of episodes, extracting key
+    information, entities, and insights in the requested format and focus.
+    
+    Usage examples:
+    - /summarize_episode "meeting-2024-03-15"
+    - /summarize_episode "customer feedback session" --summary_style "bullet_points" --focus_areas "insights"
+    - /summarize_episode "project review" --summary_style "detailed" --group_id "work-sessions"
+    """
+    global http_client
+    
+    if http_client is None:
+        return "❌ Error: Knowledge graph connection not available"
+    
+    try:
+        # Use provided group_id or default
+        effective_group_id = group_id if group_id is not None else config.group_id
+        
+        results = []
+        results.append(f"# 📄 Episode Summary: '{episode_identifier}'")
+        results.append(f"**Style**: {summary_style.title()} | **Focus**: {focus_areas.title()}")
+        
+        if effective_group_id:
+            results.append(f"**Group**: {effective_group_id}")
+        
+        results.append("")
+        
+        episode_data = None
+        
+        # Try to find the episode - first by exact ID, then by search
+        try:
+            # Try direct episode lookup if it looks like a UUID
+            if len(episode_identifier) > 20 and '-' in episode_identifier:
+                episode_response = await http_client.get(f'/episode/{episode_identifier}')
+                if episode_response.status_code == 200:
+                    episode_data = episode_response.json()
+        except:
+            pass
+        
+        # If not found by ID, search for episodes
+        if not episode_data:
+            search_params = {'last_n': 50}
+            episodes_response = await http_client.get(f'/episodes/{effective_group_id}', params=search_params)
+            episodes_response.raise_for_status()
+            episodes = episodes_response.json().get('episodes', [])
+            
+            # Find matching episode by name or content
+            for episode in episodes:
+                name = episode.get('name', '').lower()
+                content = episode.get('content', '').lower()
+                search_term = episode_identifier.lower()
+                
+                if (search_term in name or 
+                    search_term in content or
+                    name == search_term or
+                    episode.get('uuid', '') == episode_identifier):
+                    episode_data = episode
+                    break
+        
+        if not episode_data:
+            return f"❌ Episode '{episode_identifier}' not found. Try a different identifier or check if the episode exists."
+        
+        # Extract episode information
+        episode_name = episode_data.get('name', 'Untitled Episode')
+        episode_content = episode_data.get('content', '')
+        episode_uuid = episode_data.get('uuid', '')
+        created_at = episode_data.get('created_at', '')
+        
+        # Basic episode info
+        results.append(f"## 📝 Episode: {episode_name}")
+        if created_at:
+            results.append(f"**Created**: {created_at}")
+        if episode_uuid:
+            results.append(f"**ID**: {episode_uuid[:8]}...")
+        
+        results.append("")
+        
+        # Analyze content based on focus areas
+        content_length = len(episode_content)
+        
+        if focus_areas in ["all", "events"] and episode_content:
+            if summary_style == "brief":
+                # Brief summary - first 200 characters
+                brief_content = episode_content[:200] + '...' if content_length > 200 else episode_content
+                results.append(f"**Brief Summary**: {brief_content}")
+            
+            elif summary_style == "balanced":
+                # Balanced summary - key sentences
+                sentences = episode_content.split('. ')
+                if len(sentences) > 3:
+                    key_sentences = sentences[:2] + [sentences[-1]]  # First 2 and last sentence
+                    summary_content = '. '.join(key_sentences)
+                else:
+                    summary_content = episode_content
+                
+                summary_content = summary_content[:500] + '...' if len(summary_content) > 500 else summary_content
+                results.append(f"**Summary**: {summary_content}")
+            
+            elif summary_style == "detailed":
+                # Detailed summary - full content with structure
+                results.append("**Detailed Content**:")
+                # Break into paragraphs if long
+                if content_length > 300:
+                    paragraphs = episode_content.split('\n\n')
+                    for i, paragraph in enumerate(paragraphs[:5], 1):  # Max 5 paragraphs
+                        if paragraph.strip():
+                            results.append(f"\n{i}. {paragraph.strip()}")
+                else:
+                    results.append(f"\n{episode_content}")
+            
+            elif summary_style == "bullet_points":
+                # Bullet points - key information
+                results.append("**Key Points**:")
+                # Simple sentence splitting for bullet points
+                sentences = episode_content.split('. ')
+                for sentence in sentences[:10]:  # Max 10 bullets
+                    if len(sentence.strip()) > 10:  # Skip very short fragments
+                        results.append(f"  • {sentence.strip()}")
+        
+        # Entity analysis
+        if focus_areas in ["all", "entities"]:
+            # Search for entities related to this episode content
+            entity_search_payload = {
+                'query': episode_content[:200],  # Use first part of content for search
+                'group_ids': [effective_group_id] if effective_group_id else [],
+                'num_results': 10
+            }
+            
+            try:
+                entity_response = await http_client.post('/search/nodes', json=entity_search_payload)
+                entity_response.raise_for_status()
+                entities = entity_response.json().get('nodes', [])
+                
+                if entities:
+                    results.append(f"\n## 🎯 Related Entities")
+                    entity_types = {}
+                    
+                    for entity in entities[:8]:  # Show top 8 entities
+                        name = entity.get('name', 'Unknown')
+                        labels = entity.get('labels', ['Entity'])
+                        primary_label = labels[0] if labels else 'Entity'
+                        
+                        if primary_label not in entity_types:
+                            entity_types[primary_label] = []
+                        entity_types[primary_label].append(name)
+                    
+                    for entity_type, names in entity_types.items():
+                        results.append(f"**{entity_type}**: {', '.join(names)}")
+            except:
+                pass  # Skip entity analysis if it fails
+        
+        # Insights extraction
+        if focus_areas in ["all", "insights"]:
+            results.append(f"\n## 💡 Key Insights")
+            
+            # Simple keyword-based insight extraction
+            insight_keywords = {
+                'decision': '🎯 Decision',
+                'problem': '⚠️ Problem',
+                'solution': '✅ Solution', 
+                'action': '🚀 Action',
+                'outcome': '📊 Outcome',
+                'lesson': '📚 Lesson',
+                'risk': '⚡ Risk',
+                'opportunity': '🌟 Opportunity'
+            }
+            
+            insights_found = []
+            content_lower = episode_content.lower()
+            
+            for keyword, icon in insight_keywords.items():
+                if keyword in content_lower:
+                    # Find sentences containing the keyword
+                    sentences = episode_content.split('.')
+                    for sentence in sentences:
+                        if keyword in sentence.lower() and len(sentence.strip()) > 20:
+                            insights_found.append(f"  {icon}: {sentence.strip()}")
+                            break
+            
+            if insights_found:
+                for insight in insights_found[:5]:  # Max 5 insights
+                    results.append(insight)
+            else:
+                results.append("  • No specific insights detected. Content may require human analysis.")
+        
+        # Episode statistics
+        results.append(f"\n---")
+        results.append(f"📊 **Episode Statistics**:")
+        results.append(f"  • Content length: {content_length} characters")
+        
+        # Word count approximation
+        word_count = len(episode_content.split()) if episode_content else 0
+        results.append(f"  • Estimated words: {word_count}")
+        
+        # Reading time approximation (200 words per minute)
+        reading_time = max(1, word_count // 200)
+        results.append(f"  • Estimated reading time: {reading_time} minute{'s' if reading_time != 1 else ''}")
+        
+        return '\n'.join(results)
+        
+    except httpx.HTTPStatusError as e:
+        error_msg = f'HTTP error {e.response.status_code}: {e.response.text}'
+        logger.error(f'Error in summarize_episode: {error_msg}')
+        return f"❌ Error summarizing episode: {error_msg}"
+    except Exception as e:
+        error_msg = str(e)
+        logger.error(f'Error in summarize_episode: {error_msg}')
+        return f"❌ Error summarizing episode: {error_msg}"
+
+
 async def initialize_server() -> MCPConfig:
     """Parse CLI arguments and initialize the Graphiti server configuration."""
     global config
