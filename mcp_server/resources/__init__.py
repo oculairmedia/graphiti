@@ -6,21 +6,24 @@ as accessible resources via URI patterns.
 """
 
 from .base import ResourceManager, BaseResourceHandler
-from .entities import EntityResourceHandler, EntityListResourceHandler
+from .entities import EntityResourceHandler, EntityListResourceHandler, EntityRecentResourceHandler
 from .episodes import EpisodeResourceHandler, EpisodeListResourceHandler
 from .search import SearchResourceHandler, NodeSearchResourceHandler, FactSearchResourceHandler
-from .analytics import AnalyticsResourceHandler, CentralityResourceHandler
+from .analytics import GraphStatsResourceHandler, NodeMetricsResourceHandler, TemporalAnalyticsResourceHandler, GroupAnalyticsResourceHandler
 
 __all__ = [
     'ResourceManager',
     'BaseResourceHandler',
     'EntityResourceHandler',
-    'EntityListResourceHandler', 
+    'EntityListResourceHandler',
+    'EntityRecentResourceHandler',
     'EpisodeResourceHandler',
     'EpisodeListResourceHandler',
     'SearchResourceHandler',
     'NodeSearchResourceHandler',
     'FactSearchResourceHandler',
-    'AnalyticsResourceHandler',
-    'CentralityResourceHandler',
+    'GraphStatsResourceHandler',
+    'NodeMetricsResourceHandler',
+    'TemporalAnalyticsResourceHandler',
+    'GroupAnalyticsResourceHandler',
 ]
