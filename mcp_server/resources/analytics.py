@@ -1,107 +1,357 @@
 """
-Analytics resource handlers for MCP.
+Analytics resource handlers for MCP resources system.
+Provides graph analytics, statistics, and metrics via URI patterns.
 """
 
 import json
-import httpx
+import re
 from datetime import datetime, timezone
-from typing import Dict, Any, List, Optional
-from .base import BaseResourceHandler, ResourceInfo, ResourceContent
+from typing import Any, Dict
+import httpx
+
+from .base import BaseResourceHandler, ResourceContent, ResourceInfo
 
 
-class CentralityResourceHandler(BaseResourceHandler):
-    """Handler for entity centrality analytics."""
+class GraphStatsResourceHandler(BaseResourceHandler):
+    """Handles graph statistics via graphiti://analytics/graph-stats pattern."""
     
     @property
     def uri_pattern(self) -> str:
-        return r"graphiti://analytics/centrality/{entity_id}"
-    
-    @property 
-    def name(self) -> str:
-        return "centrality"
-    
-    @property
-    def description(self) -> str:
-        return "Centrality analytics for specific entity"
+        return r"graphiti://analytics/graph-stats"
     
     async def get_resource_info(self, uri: str) -> ResourceInfo:
-        """Get centrality resource information."""
-        params = self.extract_params(uri)
-        entity_id = params.get('entity_id', 'unknown')
-        
         return ResourceInfo(
             uri=uri,
-            name=f"centrality_{entity_id}",
-            title=f"Centrality Analysis: {entity_id}",
-            description=f"Centrality analytics for entity: {entity_id}",
+            name="Graph Statistics",
+            description="Overall graph statistics including node count, edge count, and group information",
             mimeType="application/json",
-            annotations={
-                "entity_id": entity_id,
-                "resource_type": "centrality"
-            }
+            modified=datetime.now(timezone.utc).isoformat()
         )
     
     async def get_resource_content(self, uri: str) -> ResourceContent:
-        """Get centrality analytics content."""
-        params = self.extract_params(uri)
-        entity_id = params.get('entity_id', '')
-        
-        # For now, return a placeholder - will be implemented in full system
-        return ResourceContent(
-            text=json.dumps({
-                "entity_id": entity_id,
-                "message": "Centrality analytics resource handler - implementation pending",
-                "resource_uri": uri,
-                "resource_type": "centrality"
-            }, indent=2),
-            mimeType="application/json"
-        )
+        try:
+            # Get graph stats from FastAPI endpoint
+            response = await self.http_client.get('/analytics/graph-stats')
+            response.raise_for_status()
+            
+            stats_data = response.json()
+            
+            # Format the response as structured JSON
+            content_data = {
+                "uri": uri,
+                "type": "graph-statistics",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "statistics": stats_data,
+                "metadata": {
+                    "source": "graphiti-fastapi",
+                    "query_time": datetime.now(timezone.utc).isoformat()
+                }
+            }
+            
+            return ResourceContent(
+                uri=uri,
+                mimeType="application/json", 
+                text=json.dumps(content_data, indent=2)
+            )
+            
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:
+                error_data = {
+                    "uri": uri,
+                    "error": "Graph statistics not found",
+                    "status_code": 404,
+                    "timestamp": datetime.now(timezone.utc).isoformat()
+                }
+            else:
+                error_data = {
+                    "uri": uri,
+                    "error": f"HTTP error {e.response.status_code}: {e.response.text}",
+                    "status_code": e.response.status_code,
+                    "timestamp": datetime.now(timezone.utc).isoformat()
+                }
+            return ResourceContent(
+                uri=uri,
+                mimeType="application/json",
+                text=json.dumps(error_data, indent=2)
+            )
+        except Exception as e:
+            error_data = {
+                "uri": uri,
+                "error": f"Internal error: {str(e)}",
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+            return ResourceContent(
+                uri=uri,
+                mimeType="application/json",
+                text=json.dumps(error_data, indent=2)
+            )
 
 
-class AnalyticsResourceHandler(BaseResourceHandler):
-    """Handler for general analytics resources."""
+class NodeMetricsResourceHandler(BaseResourceHandler):
+    """Handles node metrics via graphiti://analytics/nodes/{node_id}/metrics pattern."""
     
     @property
     def uri_pattern(self) -> str:
-        return r"graphiti://analytics/{analysis_type}"
-    
-    @property
-    def name(self) -> str:
-        return "analytics"
-    
-    @property
-    def description(self) -> str:
-        return "General analytics and patterns"
+        return r"graphiti://analytics/nodes/([^/]+)/metrics"
     
     async def get_resource_info(self, uri: str) -> ResourceInfo:
-        """Get analytics resource information."""
-        params = self.extract_params(uri)
-        analysis_type = params.get('analysis_type', 'unknown')
-        
+        node_id = self._extract_node_id(uri)
         return ResourceInfo(
             uri=uri,
-            name=f"analytics_{analysis_type}",
-            title=f"Analytics: {analysis_type}",
-            description=f"Analytics for: {analysis_type}",
+            name=f"Node Metrics: {node_id}",
+            description=f"Metrics and analytics for node {node_id}",
             mimeType="application/json",
-            annotations={
-                "analysis_type": analysis_type,
-                "resource_type": "analytics"
-            }
+            modified=datetime.now(timezone.utc).isoformat()
         )
     
     async def get_resource_content(self, uri: str) -> ResourceContent:
-        """Get analytics content."""
-        params = self.extract_params(uri)
-        analysis_type = params.get('analysis_type', '')
-        
-        # For now, return a placeholder - will be implemented in full system
-        return ResourceContent(
-            text=json.dumps({
-                "analysis_type": analysis_type,
-                "message": "General analytics resource handler - implementation pending",
-                "resource_uri": uri,
-                "resource_type": "analytics"
-            }, indent=2),
-            mimeType="application/json"
+        try:
+            node_id = self._extract_node_id(uri)
+            
+            # Get node metrics from FastAPI endpoint
+            response = await self.http_client.get(f'/analytics/nodes/{node_id}/metrics')
+            response.raise_for_status()
+            
+            metrics_data = response.json()
+            
+            # Format the response as structured JSON
+            content_data = {
+                "uri": uri,
+                "type": "node-metrics",
+                "node_id": node_id,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "metrics": metrics_data,
+                "metadata": {
+                    "source": "graphiti-fastapi",
+                    "query_time": datetime.now(timezone.utc).isoformat()
+                }
+            }
+            
+            return ResourceContent(
+                uri=uri,
+                mimeType="application/json",
+                text=json.dumps(content_data, indent=2)
+            )
+            
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:
+                error_data = {
+                    "uri": uri,
+                    "error": f"Node metrics not found for {self._extract_node_id(uri)}",
+                    "node_id": self._extract_node_id(uri),
+                    "status_code": 404,
+                    "timestamp": datetime.now(timezone.utc).isoformat()
+                }
+            else:
+                error_data = {
+                    "uri": uri,
+                    "error": f"HTTP error {e.response.status_code}: {e.response.text}",
+                    "node_id": self._extract_node_id(uri),
+                    "status_code": e.response.status_code,
+                    "timestamp": datetime.now(timezone.utc).isoformat()
+                }
+            return ResourceContent(
+                uri=uri,
+                mimeType="application/json",
+                text=json.dumps(error_data, indent=2)
+            )
+        except Exception as e:
+            error_data = {
+                "uri": uri,
+                "error": f"Internal error: {str(e)}",
+                "node_id": self._extract_node_id(uri) if self._extract_node_id(uri) else "unknown",
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+            return ResourceContent(
+                uri=uri,
+                mimeType="application/json",
+                text=json.dumps(error_data, indent=2)
+            )
+    
+    def _extract_node_id(self, uri: str) -> str:
+        """Extract node ID from URI pattern."""
+        pattern = re.compile(r"graphiti://analytics/nodes/([^/]+)/metrics")
+        match = pattern.match(uri)
+        if match:
+            return match.group(1)
+        return ""
+
+
+class TemporalAnalyticsResourceHandler(BaseResourceHandler):
+    """Handles temporal analytics via graphiti://analytics/temporal/{time_range} pattern."""
+    
+    @property
+    def uri_pattern(self) -> str:
+        return r"graphiti://analytics/temporal/([^/]+)"
+    
+    async def get_resource_info(self, uri: str) -> ResourceInfo:
+        time_range = self._extract_time_range(uri)
+        return ResourceInfo(
+            uri=uri,
+            name=f"Temporal Analytics: {time_range}",
+            description=f"Temporal analytics and trends for {time_range}",
+            mimeType="application/json",
+            modified=datetime.now(timezone.utc).isoformat()
         )
+    
+    async def get_resource_content(self, uri: str) -> ResourceContent:
+        try:
+            time_range = self._extract_time_range(uri)
+            
+            # Get temporal analytics from FastAPI endpoint
+            response = await self.http_client.get(f'/analytics/temporal/{time_range}')
+            response.raise_for_status()
+            
+            analytics_data = response.json()
+            
+            # Format the response as structured JSON
+            content_data = {
+                "uri": uri,
+                "type": "temporal-analytics",
+                "time_range": time_range,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "analytics": analytics_data,
+                "metadata": {
+                    "source": "graphiti-fastapi",
+                    "query_time": datetime.now(timezone.utc).isoformat()
+                }
+            }
+            
+            return ResourceContent(
+                uri=uri,
+                mimeType="application/json",
+                text=json.dumps(content_data, indent=2)
+            )
+            
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:
+                error_data = {
+                    "uri": uri,
+                    "error": f"Temporal analytics not found for {self._extract_time_range(uri)}",
+                    "time_range": self._extract_time_range(uri),
+                    "status_code": 404,
+                    "timestamp": datetime.now(timezone.utc).isoformat()
+                }
+            else:
+                error_data = {
+                    "uri": uri,
+                    "error": f"HTTP error {e.response.status_code}: {e.response.text}",
+                    "time_range": self._extract_time_range(uri),
+                    "status_code": e.response.status_code,
+                    "timestamp": datetime.now(timezone.utc).isoformat()
+                }
+            return ResourceContent(
+                uri=uri,
+                mimeType="application/json",
+                text=json.dumps(error_data, indent=2)
+            )
+        except Exception as e:
+            error_data = {
+                "uri": uri,
+                "error": f"Internal error: {str(e)}",
+                "time_range": self._extract_time_range(uri) if self._extract_time_range(uri) else "unknown",
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+            return ResourceContent(
+                uri=uri,
+                mimeType="application/json",
+                text=json.dumps(error_data, indent=2)
+            )
+    
+    def _extract_time_range(self, uri: str) -> str:
+        """Extract time range from URI pattern."""
+        pattern = re.compile(r"graphiti://analytics/temporal/([^/]+)")
+        match = pattern.match(uri)
+        if match:
+            return match.group(1)
+        return ""
+
+
+class GroupAnalyticsResourceHandler(BaseResourceHandler):
+    """Handles group analytics via graphiti://analytics/groups/{group_id} pattern."""
+    
+    @property
+    def uri_pattern(self) -> str:
+        return r"graphiti://analytics/groups/([^/]+)"
+    
+    async def get_resource_info(self, uri: str) -> ResourceInfo:
+        group_id = self._extract_group_id(uri)
+        return ResourceInfo(
+            uri=uri,
+            name=f"Group Analytics: {group_id}",
+            description=f"Analytics and statistics for group {group_id}",
+            mimeType="application/json",
+            modified=datetime.now(timezone.utc).isoformat()
+        )
+    
+    async def get_resource_content(self, uri: str) -> ResourceContent:
+        try:
+            group_id = self._extract_group_id(uri)
+            
+            # Get group analytics from FastAPI endpoint
+            response = await self.http_client.get(f'/analytics/groups/{group_id}')
+            response.raise_for_status()
+            
+            analytics_data = response.json()
+            
+            # Format the response as structured JSON
+            content_data = {
+                "uri": uri,
+                "type": "group-analytics",
+                "group_id": group_id,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "analytics": analytics_data,
+                "metadata": {
+                    "source": "graphiti-fastapi",
+                    "query_time": datetime.now(timezone.utc).isoformat()
+                }
+            }
+            
+            return ResourceContent(
+                uri=uri,
+                mimeType="application/json",
+                text=json.dumps(content_data, indent=2)
+            )
+            
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:
+                error_data = {
+                    "uri": uri,
+                    "error": f"Group analytics not found for {self._extract_group_id(uri)}",
+                    "group_id": self._extract_group_id(uri),
+                    "status_code": 404,
+                    "timestamp": datetime.now(timezone.utc).isoformat()
+                }
+            else:
+                error_data = {
+                    "uri": uri,
+                    "error": f"HTTP error {e.response.status_code}: {e.response.text}",
+                    "group_id": self._extract_group_id(uri),
+                    "status_code": e.response.status_code,
+                    "timestamp": datetime.now(timezone.utc).isoformat()
+                }
+            return ResourceContent(
+                uri=uri,
+                mimeType="application/json",
+                text=json.dumps(error_data, indent=2)
+            )
+        except Exception as e:
+            error_data = {
+                "uri": uri,
+                "error": f"Internal error: {str(e)}",
+                "group_id": self._extract_group_id(uri) if self._extract_group_id(uri) else "unknown",
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+            return ResourceContent(
+                uri=uri,
+                mimeType="application/json",
+                text=json.dumps(error_data, indent=2)
+            )
+    
+    def _extract_group_id(self, uri: str) -> str:
+        """Extract group ID from URI pattern."""
+        pattern = re.compile(r"graphiti://analytics/groups/([^/]+)")
+        match = pattern.match(uri)
+        if match:
+            return match.group(1)
+        return ""
