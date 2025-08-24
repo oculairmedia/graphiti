@@ -698,7 +698,8 @@ operation_semaphore: asyncio.Semaphore | None = None
 from resources import (ResourceManager, EntityResourceHandler, EntityListResourceHandler, EntityRecentResourceHandler,
                       EpisodeResourceHandler, EpisodeListResourceHandler, NodeSearchResourceHandler, 
                       FactSearchResourceHandler, SearchResourceHandler, GraphStatsResourceHandler,
-                      NodeMetricsResourceHandler, TemporalAnalyticsResourceHandler, GroupAnalyticsResourceHandler)
+                      NodeMetricsResourceHandler, TemporalAnalyticsResourceHandler, GroupAnalyticsResourceHandler,
+                      WildcardResourceHandler, ParameterizedResourceHandler, DynamicResourceHandler, TemplateRegistryResourceHandler)
 resource_manager: ResourceManager | None = None
 
 
@@ -759,7 +760,13 @@ async def initialize_graphiti():
         resource_manager.register_handler(TemporalAnalyticsResourceHandler(http_client, config))
         resource_manager.register_handler(GroupAnalyticsResourceHandler(http_client, config))
         
-        logger.info('Resource system initialized with entity, episode, search, and analytics handlers')
+        # Register template resource handlers
+        resource_manager.register_handler(WildcardResourceHandler(http_client, config))
+        resource_manager.register_handler(ParameterizedResourceHandler(http_client, config))
+        resource_manager.register_handler(DynamicResourceHandler(http_client, config))
+        resource_manager.register_handler(TemplateRegistryResourceHandler(http_client, config))
+        
+        logger.info('Resource system initialized with entity, episode, search, analytics, and template handlers')
 
     except Exception as e:
         logger.error(f'Failed to initialize connection to FastAPI server: {str(e)}')
