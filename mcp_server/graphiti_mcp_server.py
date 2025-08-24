@@ -25,7 +25,8 @@ from graphiti_core.llm_client.azure_openai_client import AzureOpenAILLMClient
 from graphiti_core.llm_client.client import LLMClient
 from graphiti_core.llm_client.openai_client import OpenAIClient
 from mcp.server.fastmcp import FastMCP
-from mcp import McpError, ErrorCode
+from mcp import McpError
+from mcp.types import ErrorCode
 from mcp.types import ProgressToken, ProgressNotification
 import traceback
 from openai import AsyncAzureOpenAI
