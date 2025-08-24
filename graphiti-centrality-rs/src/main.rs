@@ -1,5 +1,5 @@
-use graphiti_centrality::server;
 use graphiti_centrality::models::DatabaseConfig;
+use graphiti_centrality::server;
 use std::env;
 use tracing::info;
 use tracing_subscriber::{filter::EnvFilter, FmtSubscriber};
@@ -29,8 +29,7 @@ async fn main() -> anyhow::Result<()> {
             .unwrap_or_else(|_| "6379".to_string())
             .parse()
             .unwrap_or(6379),
-        graph_name: env::var("GRAPH_NAME")
-            .unwrap_or_else(|_| "graphiti_migration".to_string()),
+        graph_name: env::var("GRAPH_NAME").unwrap_or_else(|_| "graphiti_migration".to_string()),
         username: env::var("FALKORDB_USERNAME").ok(),
         password: env::var("FALKORDB_PASSWORD").ok(),
     };
@@ -46,7 +45,7 @@ async fn main() -> anyhow::Result<()> {
         Ok(state) => {
             info!("✅ Database connection successful");
             state
-        },
+        }
         Err(e) => {
             info!("❌ Database connection failed: {}", e);
             return Err(anyhow::anyhow!("Database connection failed: {}", e));
@@ -65,15 +64,16 @@ async fn main() -> anyhow::Result<()> {
         Ok(listener) => {
             info!("✅ TCP listener bound successfully");
             listener
-        },
+        }
         Err(e) => {
             info!("❌ Failed to bind TCP listener: {}", e);
             return Err(anyhow::anyhow!("Failed to bind TCP listener: {}", e));
         }
     };
-    
+
     info!("🌐 Starting HTTP server...");
-    axum::serve(listener, app).await
+    axum::serve(listener, app)
+        .await
         .map_err(|e| anyhow::anyhow!("HTTP server error: {}", e))?;
     info!("Server stopped");
 

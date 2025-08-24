@@ -14,8 +14,7 @@ async fn create_test_client() -> FalkorClient {
             .unwrap_or_else(|_| "6379".to_string())
             .parse()
             .unwrap_or(6379),
-        graph_name: env::var("GRAPH_NAME")
-            .unwrap_or_else(|_| "graphiti_migration".to_string()),
+        graph_name: env::var("GRAPH_NAME").unwrap_or_else(|_| "graphiti_migration".to_string()),
         username: env::var("FALKORDB_USERNAME").ok(),
         password: env::var("FALKORDB_PASSWORD").ok(),
     };
@@ -200,10 +199,16 @@ async fn test_group_id_filtering() {
 
     match result {
         Ok(scores) => {
-            println!("Group filtering test passed with {} nodes", scores.nodes_processed);
+            println!(
+                "Group filtering test passed with {} nodes",
+                scores.nodes_processed
+            );
         }
         Err(e) => {
-            println!("Group filtering test failed (expected if no test_group data): {}", e);
+            println!(
+                "Group filtering test failed (expected if no test_group data): {}",
+                e
+            );
         }
     }
 }

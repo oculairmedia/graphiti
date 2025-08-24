@@ -112,7 +112,11 @@ async fn pagerank_endpoint(
                     })
                     .collect();
 
-                if let Err(e) = state.client.store_centrality_scores(&formatted_scores).await {
+                if let Err(e) = state
+                    .client
+                    .store_centrality_scores(&formatted_scores)
+                    .await
+                {
                     error!("Failed to store PageRank scores: {}", e);
                 }
             }
@@ -169,7 +173,11 @@ async fn degree_endpoint(
                     })
                     .collect();
 
-                if let Err(e) = state.client.store_centrality_scores(&formatted_scores).await {
+                if let Err(e) = state
+                    .client
+                    .store_centrality_scores(&formatted_scores)
+                    .await
+                {
                     error!("Failed to store degree centrality scores: {}", e);
                 }
             }
@@ -218,7 +226,11 @@ async fn betweenness_endpoint(
                     })
                     .collect();
 
-                if let Err(e) = state.client.store_centrality_scores(&formatted_scores).await {
+                if let Err(e) = state
+                    .client
+                    .store_centrality_scores(&formatted_scores)
+                    .await
+                {
                     error!("Failed to store betweenness centrality scores: {}", e);
                 }
             }
@@ -281,9 +293,10 @@ fn handle_error(error: CentralityError) -> (StatusCode, Json<serde_json::Value>)
             "Database connection error",
         ),
         CentralityError::InvalidParameter { .. } => (StatusCode::BAD_REQUEST, "Invalid parameter"),
-        CentralityError::AlgorithmFailed { .. } => {
-            (StatusCode::INTERNAL_SERVER_ERROR, "Algorithm execution failed")
-        }
+        CentralityError::AlgorithmFailed { .. } => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Algorithm execution failed",
+        ),
         CentralityError::GraphNotFound { .. } => (StatusCode::NOT_FOUND, "Graph not found"),
         CentralityError::NoNodesFound => (StatusCode::NOT_FOUND, "No nodes found"),
         CentralityError::Serialization(_) => {
@@ -309,10 +322,10 @@ async fn single_node_endpoint(
     Json(request): Json<SingleNodeRequest>,
 ) -> impl IntoResponse {
     let start = Instant::now();
-    
+
     // Calculate requested metrics for the single node
     let mut metrics = HashMap::new();
-    
+
     // Calculate degree centrality if requested
     if request.metrics.contains(&"degree".to_string()) {
         match calculate_single_node_degree(&state.client, &node_uuid).await {
@@ -320,12 +333,15 @@ async fn single_node_endpoint(
                 metrics.insert("degree".to_string(), degree);
             }
             Err(e) => {
-                error!("Failed to calculate degree centrality for {}: {}", node_uuid, e);
+                error!(
+                    "Failed to calculate degree centrality for {}: {}",
+                    node_uuid, e
+                );
                 return handle_error(e).into_response();
             }
         }
     }
-    
+
     // Calculate PageRank if requested (simplified local calculation)
     if request.metrics.contains(&"pagerank".to_string()) {
         match calculate_single_node_pagerank(&state.client, &node_uuid).await {
@@ -338,7 +354,7 @@ async fn single_node_endpoint(
             }
         }
     }
-    
+
     // Calculate betweenness if requested (simplified local calculation)
     if request.metrics.contains(&"betweenness".to_string()) {
         match calculate_single_node_betweenness(&state.client, &node_uuid).await {
@@ -351,19 +367,19 @@ async fn single_node_endpoint(
             }
         }
     }
-    
+
     // Store results if requested
     if request.store_results && !metrics.is_empty() {
         let mut scores_map = HashMap::new();
         scores_map.insert(node_uuid.clone(), metrics.clone());
-        
+
         if let Err(e) = state.client.store_centrality_scores(&scores_map).await {
             error!("Failed to store centrality scores for {}: {}", node_uuid, e);
         }
     }
-    
+
     let execution_time_ms = start.elapsed().as_millis();
-    
+
     Json(SingleNodeResponse {
         node_id: node_uuid,
         metrics,
@@ -373,10 +389,7 @@ async fn single_node_endpoint(
 }
 
 // Helper functions for single node calculations
-async fn calculate_single_node_degree(
-    client: &FalkorClient,
-    node_uuid: &str,
-) -> Result<f64> {
+async fn calculate_single_node_degree(client: &FalkorClient, node_uuid: &str) -> Result<f64> {
     let query = format!(
         r#"
         MATCH (n {{uuid: '{}'}})
@@ -385,9 +398,9 @@ async fn calculate_single_node_degree(
         "#,
         node_uuid
     );
-    
+
     let result = client.execute_query(&query, None).await?;
-    
+
     if let Some(row) = result.first() {
         if let Some(degree_value) = row.get("degree") {
             if let Some(degree) = crate::client::falkor_value_to_i64(degree_value) {
@@ -396,28 +409,22 @@ async fn calculate_single_node_degree(
             }
         }
     }
-    
+
     Ok(0.0)
 }
 
-async fn calculate_single_node_pagerank(
-    client: &FalkorClient,
-    node_uuid: &str,
-) -> Result<f64> {
+async fn calculate_single_node_pagerank(client: &FalkorClient, node_uuid: &str) -> Result<f64> {
     // Simplified PageRank calculation based on degree
     let degree = calculate_single_node_degree(client, node_uuid).await?;
-    
+
     // Simple formula: base pagerank + scaled degree contribution
     Ok(0.15 + 0.85 * (degree / 100.0).min(1.0))
 }
 
-async fn calculate_single_node_betweenness(
-    client: &FalkorClient,
-    node_uuid: &str,
-) -> Result<f64> {
+async fn calculate_single_node_betweenness(client: &FalkorClient, node_uuid: &str) -> Result<f64> {
     // Simplified betweenness calculation based on degree
     let degree = calculate_single_node_degree(client, node_uuid).await?;
-    
+
     // Simple approximation
     Ok((degree / 20.0).min(1.0))
 }
