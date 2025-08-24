@@ -2,10 +2,10 @@ import React, { createContext, useContext, useMemo, ReactNode } from 'react';
 import { GraphNode } from '../api/types';
 
 interface CentralityStats {
-  degree: { min: number; max: number; mean: number };
-  betweenness: { min: number; max: number; mean: number };
-  pagerank: { min: number; max: number; mean: number };
-  eigenvector: { min: number; max: number; mean: number };
+  degree: { min: number; max: number; mean: number; scalingMax: number };
+  betweenness: { min: number; max: number; mean: number; scalingMax: number };
+  pagerank: { min: number; max: number; mean: number; scalingMax: number };
+  eigenvector: { min: number; max: number; mean: number; scalingMax: number };
 }
 
 const CentralityStatsContext = createContext<CentralityStats | null>(null);
@@ -40,7 +40,7 @@ function calculateCentralityStats(nodes: GraphNode[]): CentralityStats {
     });
 
     if (values.length === 0) {
-      stats[key as keyof CentralityStats] = { min: 0, max: 0, mean: 0 };
+      stats[key as keyof CentralityStats] = { min: 0, max: 0, mean: 0, scalingMax: 0 };
       return;
     }
 
@@ -49,7 +49,12 @@ function calculateCentralityStats(nodes: GraphNode[]): CentralityStats {
     const max = values[values.length - 1];
     const mean = values.reduce((sum, val) => sum + val, 0) / values.length;
 
-    stats[key as keyof CentralityStats] = { min, max, mean };
+    // Calculate moving average of top 10% of values for smoother scaling
+    const topPercentileCount = Math.max(1, Math.ceil(values.length * 0.1));
+    const topValues = values.slice(-topPercentileCount);
+    const scalingMax = topValues.reduce((sum, val) => sum + val, 0) / topValues.length;
+
+    stats[key as keyof CentralityStats] = { min, max, mean, scalingMax };
   });
 
   return stats;
@@ -62,10 +67,10 @@ export const CentralityStatsProvider: React.FC<CentralityStatsProviderProps> = (
   const stats = useMemo(() => {
     if (!nodes || nodes.length === 0) {
       return {
-        degree: { min: 0, max: 1, mean: 0.5 },
-        betweenness: { min: 0, max: 1, mean: 0.5 },
-        pagerank: { min: 0, max: 1, mean: 0.5 },
-        eigenvector: { min: 0, max: 1, mean: 0.5 }
+        degree: { min: 0, max: 1, mean: 0.5, scalingMax: 1 },
+        betweenness: { min: 0, max: 1, mean: 0.5, scalingMax: 1 },
+        pagerank: { min: 0, max: 1, mean: 0.5, scalingMax: 1 },
+        eigenvector: { min: 0, max: 1, mean: 0.5, scalingMax: 1 }
       };
     }
     return calculateCentralityStats(nodes);

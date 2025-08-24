@@ -50,6 +50,7 @@ interface MetricStats {
   max: number;
   mean: number;
   stdDev: number;
+  scalingMax: number;
   percentiles: {
     p25: number;
     p50: number;
@@ -114,11 +115,17 @@ export class NodeColorManager {
 
       if (values.length === 0) return;
 
+      // Calculate moving average of top 10% values for smoother scaling
+      const topPercentileCount = Math.max(1, Math.ceil(values.length * 0.1));
+      const topValues = values.slice(-topPercentileCount);
+      const scalingMax = topValues.reduce((sum, val) => sum + val, 0) / topValues.length;
+
       const stats: MetricStats = {
         min: values[0],
         max: values[values.length - 1],
         mean: values.reduce((a, b) => a + b, 0) / values.length,
         stdDev: 0,
+        scalingMax,
         percentiles: {
           p25: this.getPercentile(values, 0.25),
           p50: this.getPercentile(values, 0.50),
@@ -205,19 +212,19 @@ export class NodeColorManager {
       const value = node[metricName] as number || 0;
       const stats = this.metricStats.get(metricName);
       
-      if (!stats || stats.max === stats.min) {
+      if (!stats || stats.scalingMax === stats.min) {
         return this.config.lowColor || '#4ECDC4';
       }
 
       let normalized: number;
       
       // Special handling for eigenvector centrality with very small values
-      if (metricName === 'eigenvector_centrality' && stats.max < 0.1) {
+      if (metricName === 'eigenvector_centrality' && stats.scalingMax < 0.1) {
         // Use logarithmic scaling for better visual differentiation of small values
         const epsilon = 0.000001; // Small constant to avoid log(0)
         const logValue = Math.log10(Math.max(value, epsilon));
         const logMin = Math.log10(Math.max(stats.min, epsilon));
-        const logMax = Math.log10(Math.max(stats.max, epsilon));
+        const logMax = Math.log10(Math.max(stats.scalingMax, epsilon));
         
         if (logMax === logMin) {
           normalized = 0.5; // Fallback for edge case
@@ -233,11 +240,11 @@ export class NodeColorManager {
         } else if (value <= stats.percentiles.p75) {
           normalized = 0.5 + 0.25 * (value - stats.percentiles.p50) / (stats.percentiles.p75 - stats.percentiles.p50);
         } else {
-          normalized = 0.75 + 0.25 * (value - stats.percentiles.p75) / (stats.max - stats.percentiles.p75);
+          normalized = 0.75 + 0.25 * (value - stats.percentiles.p75) / (stats.scalingMax - stats.percentiles.p75);
         }
       } else {
-        // Simple linear normalization
-        normalized = (value - stats.min) / (stats.max - stats.min);
+        // Simple linear normalization using moving average of top 10%
+        normalized = Math.min(1, (value - stats.min) / (stats.scalingMax - stats.min));
       }
 
       // Apply color gradient - use gradientHighColor/gradientLowColor first, then fallback
