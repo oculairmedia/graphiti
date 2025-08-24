@@ -221,8 +221,13 @@ impl SearchEngine {
                     .await
                     .map_err(|e| anyhow::anyhow!("Failed to get connection: {}", e))?;
 
-                let episodes =
-                    fulltext::search_episodes(&mut falkor_conn, &query_str, &filters_clone, limit_clone).await?;
+                let episodes = fulltext::search_episodes(
+                    &mut falkor_conn,
+                    &query_str,
+                    &filters_clone,
+                    limit_clone,
+                )
+                .await?;
 
                 if episodes.is_empty() {
                     Ok(None)
