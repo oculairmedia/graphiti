@@ -16,6 +16,14 @@ class WildcardResourceHandler(BaseResourceHandler):
     """Handles wildcard patterns via graphiti://templates/wildcard/* patterns."""
     
     @property
+    def name(self) -> str:
+        return "wildcard-templates"
+    
+    @property
+    def description(self) -> str:
+        return "Dynamic template resources supporting wildcard patterns and parameter extraction"
+    
+    @property
     def uri_pattern(self) -> str:
         return r"graphiti://templates/wildcard/(.*)"
     
@@ -85,6 +93,14 @@ class WildcardResourceHandler(BaseResourceHandler):
 
 class ParameterizedResourceHandler(BaseResourceHandler):
     """Handles parameterized templates via graphiti://templates/params/{template_name}/{params} patterns."""
+    
+    @property
+    def name(self) -> str:
+        return "parameterized-templates"
+    
+    @property
+    def description(self) -> str:
+        return "Template resources with structured parameter parsing and validation"
     
     @property
     def uri_pattern(self) -> str:
@@ -162,6 +178,14 @@ class ParameterizedResourceHandler(BaseResourceHandler):
 
 class DynamicResourceHandler(BaseResourceHandler):
     """Handles dynamic resource generation via graphiti://templates/dynamic/{resource_type} patterns."""
+    
+    @property
+    def name(self) -> str:
+        return "dynamic-resources"
+    
+    @property
+    def description(self) -> str:
+        return "Dynamically generated resources based on graph content and user requirements"
     
     @property
     def uri_pattern(self) -> str:
@@ -341,6 +365,14 @@ class DynamicResourceHandler(BaseResourceHandler):
 
 class TemplateRegistryResourceHandler(BaseResourceHandler):
     """Handles template registry via graphiti://templates/registry pattern."""
+    
+    @property
+    def name(self) -> str:
+        return "template-registry"
+    
+    @property
+    def description(self) -> str:
+        return "Central registry of all available resource templates and patterns"
     
     @property
     def uri_pattern(self) -> str:
