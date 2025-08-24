@@ -504,7 +504,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
             }}
           >
             <React.Suspense fallback={<div className="w-96 h-96 bg-background/80 backdrop-blur-sm rounded-lg animate-pulse" />}>
-              <CentralityStatsProvider nodes={nodes}>
+              <CentralityStatsProvider nodes={transformedData.nodes}>
                 <NodeDetailsPanel
                   node={selectedNode}
                   connections={selectedNodeConnections}
