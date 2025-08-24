@@ -39,10 +39,15 @@ impl FalkorClientV2 {
     }
 
     #[instrument(skip(self))]
-    pub async fn fulltext_search_nodes(&mut self, query: &str, group_ids: Option<&[String]>, limit: usize) -> Result<Vec<Node>> {
+    pub async fn fulltext_search_nodes(
+        &mut self,
+        query: &str,
+        group_ids: Option<&[String]>,
+        limit: usize,
+    ) -> Result<Vec<Node>> {
         // FalkorDB SDK doesn't support parameters well, use direct string interpolation
         let escaped_query = query.replace('\'', "\\'").to_lowercase();
-        
+
         // Build group filter clause
         let group_filter = if let Some(groups) = group_ids {
             if !groups.is_empty() {
@@ -58,7 +63,7 @@ impl FalkorClientV2 {
         } else {
             String::new()
         };
-        
+
         let cypher = format!(
             "MATCH (n:Entity) 
              WHERE (toLower(n.name) CONTAINS '{}' 
@@ -152,10 +157,15 @@ impl FalkorClientV2 {
     }
 
     #[instrument(skip(self))]
-    pub async fn fulltext_search_edges(&mut self, query: &str, group_ids: Option<&[String]>, limit: usize) -> Result<Vec<Edge>> {
+    pub async fn fulltext_search_edges(
+        &mut self,
+        query: &str,
+        group_ids: Option<&[String]>,
+        limit: usize,
+    ) -> Result<Vec<Edge>> {
         // FalkorDB SDK doesn't support parameters well, use direct string interpolation
         let escaped_query = query.replace('\'', "\\'").to_lowercase();
-        
+
         // Build group filter clause
         let group_filter = if let Some(groups) = group_ids {
             if !groups.is_empty() {
@@ -171,7 +181,7 @@ impl FalkorClientV2 {
         } else {
             String::new()
         };
-        
+
         let cypher = format!(
             "MATCH (a)-[r:RELATES_TO]->(b)
              WHERE (toLower(r.fact) CONTAINS '{}' 
@@ -338,7 +348,7 @@ impl FalkorClientV2 {
     ) -> Result<Vec<Episode>> {
         // FalkorDB SDK doesn't support parameters well, use direct string interpolation
         let escaped_query = query.replace('\'', "\\'").to_lowercase();
-        
+
         // Build group filter clause
         let group_filter = if let Some(groups) = group_ids {
             if !groups.is_empty() {
@@ -354,7 +364,7 @@ impl FalkorClientV2 {
         } else {
             String::new()
         };
-        
+
         let cypher = format!(
             "MATCH (e:Episode)
              WHERE (toLower(e.content) CONTAINS '{}' 
