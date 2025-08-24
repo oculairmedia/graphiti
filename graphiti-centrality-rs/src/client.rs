@@ -46,10 +46,7 @@ impl FalkorClient {
         debug!("Executing query: {}", query);
 
         let mut graph = self.client.select_graph(&self.graph_name);
-        let result = graph
-            .query(query)
-            .execute()
-            .await?;
+        let result = graph.query(query).execute().await?;
 
         let mut records = Vec::new();
 
@@ -114,19 +111,22 @@ impl FalkorClient {
         &self,
         scores: &HashMap<String, HashMap<String, f64>>,
     ) -> Result<()> {
-        info!("Storing centrality scores for {} nodes using batch updates", scores.len());
+        info!(
+            "Storing centrality scores for {} nodes using batch updates",
+            scores.len()
+        );
 
         // Process in batches of 500 nodes for optimal performance
         const BATCH_SIZE: usize = 500;
         let mut processed = 0;
-        
+
         // Convert scores to a vector for easier batching
         let score_entries: Vec<(&String, &HashMap<String, f64>)> = scores.iter().collect();
-        
+
         for chunk in score_entries.chunks(BATCH_SIZE) {
             // Build batch update data
             let mut batch_data = Vec::new();
-            
+
             for (node_uuid, node_scores) in chunk {
                 // Extract all centrality values with defaults
                 let pagerank = node_scores.get("pagerank").copied().unwrap_or(0.0);
@@ -134,13 +134,13 @@ impl FalkorClient {
                 let betweenness = node_scores.get("betweenness").copied().unwrap_or(0.0);
                 let eigenvector = node_scores.get("eigenvector").copied().unwrap_or(0.0);
                 let importance = node_scores.get("importance").copied().unwrap_or(0.0);
-                
+
                 batch_data.push(format!(
                     "{{uuid: '{}', pagerank: {}, degree: {}, betweenness: {}, eigenvector: {}, importance: {}}}",
                     node_uuid, pagerank, degree, betweenness, eigenvector, importance
                 ));
             }
-            
+
             // Use UNWIND for batch updates - much more efficient than individual queries
             let batch_query = format!(
                 "UNWIND [{}] AS nodeData
@@ -152,12 +152,16 @@ impl FalkorClient {
                      n.importance_score = nodeData.importance",
                 batch_data.join(", ")
             );
-            
+
             // Execute batch update
             match self.execute_query(&batch_query, None).await {
                 Ok(_) => {
                     processed += chunk.len();
-                    debug!("Batch update completed for {} nodes (total: {})", chunk.len(), processed);
+                    debug!(
+                        "Batch update completed for {} nodes (total: {})",
+                        chunk.len(),
+                        processed
+                    );
                 }
                 Err(e) => {
                     warn!("Failed to store batch of {} scores: {}", chunk.len(), e);
@@ -167,7 +171,7 @@ impl FalkorClient {
                         for (score_name, score_value) in node_scores.iter() {
                             let property_name = match score_name.as_str() {
                                 "pagerank" => "pagerank_centrality",
-                                "degree" => "degree_centrality", 
+                                "degree" => "degree_centrality",
                                 "betweenness" => "betweenness_centrality",
                                 "eigenvector" => "eigenvector_centrality",
                                 "importance" => "importance_score",
@@ -175,14 +179,14 @@ impl FalkorClient {
                             };
                             set_clauses.push(format!("n.{} = {}", property_name, score_value));
                         }
-                        
+
                         if !set_clauses.is_empty() {
                             let fallback_query = format!(
                                 "MATCH (n {{uuid: '{}'}}) SET {}",
                                 node_uuid,
                                 set_clauses.join(", ")
                             );
-                            
+
                             if let Err(e) = self.execute_query(&fallback_query, None).await {
                                 warn!("Fallback update also failed for node {}: {}", node_uuid, e);
                             } else {
@@ -192,14 +196,21 @@ impl FalkorClient {
                     }
                 }
             }
-            
+
             // Log progress for large datasets
             if scores.len() > 1000 && processed % 1000 == 0 {
-                info!("Stored centrality scores for {}/{} nodes", processed, scores.len());
+                info!(
+                    "Stored centrality scores for {}/{} nodes",
+                    processed,
+                    scores.len()
+                );
             }
         }
 
-        info!("Centrality scores stored successfully for {} nodes", processed);
+        info!(
+            "Centrality scores stored successfully for {} nodes",
+            processed
+        );
         Ok(())
     }
 

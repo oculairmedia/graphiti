@@ -5,7 +5,7 @@ High-performance centrality calculations for Graphiti using FalkorDB's native al
 
 This library provides:
 - PageRank centrality using FalkorDB's built-in algorithm
-- Optimized degree centrality calculations  
+- Optimized degree centrality calculations
 - Betweenness centrality with sampling
 - Composite importance scoring
 

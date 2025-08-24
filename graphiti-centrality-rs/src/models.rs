@@ -121,5 +121,9 @@ fn default_store_results() -> bool {
 }
 
 fn default_metrics() -> Vec<String> {
-    vec!["degree".to_string(), "pagerank".to_string(), "betweenness".to_string()]
+    vec![
+        "degree".to_string(),
+        "pagerank".to_string(),
+        "betweenness".to_string(),
+    ]
 }

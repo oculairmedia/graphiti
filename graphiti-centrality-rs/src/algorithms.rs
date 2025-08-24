@@ -1,4 +1,6 @@
-use crate::client::{falkor_value_to_f64, falkor_value_to_i64, falkor_value_to_string, FalkorClient};
+use crate::client::{
+    falkor_value_to_f64, falkor_value_to_i64, falkor_value_to_string, FalkorClient,
+};
 use crate::error::{CentralityError, Result};
 use crate::models::CentralityScores;
 use falkordb::FalkorValue;
@@ -19,7 +21,7 @@ pub async fn calculate_pagerank(
     // Use FalkorDB's native PageRank algorithm
     let graph_name = client.graph_name();
     let native_algorithm = format!(
-        "CALL algo.pageRank('{}', {{max_iter: {}, dampingFactor: {}}})", 
+        "CALL algo.pageRank('{}', {{max_iter: {}, dampingFactor: {}}})",
         graph_name, iterations, damping_factor
     );
 
@@ -28,7 +30,7 @@ pub async fn calculate_pagerank(
     // Execute the algorithm (stores results in node properties)
     if let Ok(_) = client.execute_query(&native_algorithm, None).await {
         info!("FalkorDB native PageRank completed, retrieving results");
-        
+
         // Now retrieve the stored results
         let results_query = if let Some(group_id) = group_id {
             format!(
@@ -97,7 +99,10 @@ async fn calculate_pagerank_custom(
     damping_factor: f64,
     max_iterations: u32,
 ) -> Result<CentralityScores> {
-    info!("Starting custom PageRank calculation with damping_factor={}, iterations={}", damping_factor, max_iterations);
+    info!(
+        "Starting custom PageRank calculation with damping_factor={}, iterations={}",
+        damping_factor, max_iterations
+    );
 
     // Get all nodes and their connections
     let nodes_query = if let Some(group_id) = group_id {
@@ -124,18 +129,14 @@ async fn calculate_pagerank_custom(
 
     debug!("Getting nodes with query: {}", nodes_query);
     let node_results = client.execute_query(&nodes_query, None).await?;
-    
+
     debug!("Getting edges with query: {}", edges_query);
     let edge_results = client.execute_query(&edges_query, None).await?;
 
     // Build node list and adjacency information
     let nodes: Vec<String> = node_results
         .iter()
-        .filter_map(|record| {
-            record
-                .get("uuid")
-                .map(|v| falkor_value_to_string(v))
-        })
+        .filter_map(|record| record.get("uuid").map(|v| falkor_value_to_string(v)))
         .collect();
 
     if nodes.is_empty() {
@@ -160,7 +161,7 @@ async fn calculate_pagerank_custom(
         if let (Some(source_val), Some(target_val)) = (record.get("source"), record.get("target")) {
             let source = falkor_value_to_string(source_val);
             let target = falkor_value_to_string(target_val);
-            
+
             if let Some(links) = out_links.get_mut(&source) {
                 links.push(target);
                 *out_degree.get_mut(&source).unwrap() += 1;
@@ -170,7 +171,8 @@ async fn calculate_pagerank_custom(
 
     // Initialize PageRank scores
     let initial_score = 1.0 / node_count as f64;
-    let mut scores: HashMap<String, f64> = nodes.iter()
+    let mut scores: HashMap<String, f64> = nodes
+        .iter()
         .map(|node| (node.clone(), initial_score))
         .collect();
 
@@ -182,7 +184,7 @@ async fn calculate_pagerank_custom(
 
         for node in &nodes {
             let mut rank = (1.0 - damping_factor) / node_count as f64;
-            
+
             // Sum contributions from incoming links
             for other_node in &nodes {
                 if let Some(links) = out_links.get(other_node) {
@@ -206,8 +208,12 @@ async fn calculate_pagerank_custom(
 
         // Check for convergence
         let avg_diff = total_diff / node_count as f64;
-        debug!("Iteration {}: average difference = {:.8}", iteration + 1, avg_diff);
-        
+        debug!(
+            "Iteration {}: average difference = {:.8}",
+            iteration + 1,
+            avg_diff
+        );
+
         if avg_diff < 1e-6 {
             info!("PageRank converged after {} iterations", iteration + 1);
             break;
@@ -215,7 +221,10 @@ async fn calculate_pagerank_custom(
     }
 
     let processed = scores.len();
-    info!("Custom PageRank calculation completed for {} nodes", processed);
+    info!(
+        "Custom PageRank calculation completed for {} nodes",
+        processed
+    );
 
     Ok(CentralityScores {
         scores,
@@ -230,7 +239,10 @@ pub async fn calculate_degree_centrality(
     group_id: Option<&str>,
 ) -> Result<CentralityScores> {
     let start = Instant::now();
-    info!("Starting degree centrality calculation for direction: {}", direction);
+    info!(
+        "Starting degree centrality calculation for direction: {}",
+        direction
+    );
 
     let query = match direction {
         "both" => {
@@ -275,7 +287,12 @@ pub async fn calculate_degree_centrality(
                     .to_string()
             }
         }
-        _ => return Err(CentralityError::invalid_parameter(format!("Invalid direction: {}. Must be 'in', 'out', or 'both'", direction))),
+        _ => {
+            return Err(CentralityError::invalid_parameter(format!(
+                "Invalid direction: {}. Must be 'in', 'out', or 'both'",
+                direction
+            )))
+        }
     };
 
     debug!("Executing degree centrality query: {}", query);
@@ -325,9 +342,9 @@ pub async fn calculate_betweenness_centrality(
     // Use FalkorDB's native betweenness algorithm
     let graph_name = client.graph_name();
     let native_algorithm = format!("CALL algo.betweenness('{}')", graph_name);
-    
+
     debug!("Running native betweenness: {}", native_algorithm);
-    
+
     if let Ok(_) = client.execute_query(&native_algorithm, None).await {
         info!("FalkorDB native betweenness completed, retrieving results");
         return calculate_betweenness_native(client, group_id).await;
@@ -343,7 +360,7 @@ async fn calculate_betweenness_native(
     group_id: Option<&str>,
 ) -> Result<CentralityScores> {
     let start = Instant::now();
-    
+
     // Retrieve the stored betweenness results (algo.betweenness stores in node.betweenness property)
     let query = if let Some(group_id) = group_id {
         format!(
@@ -405,11 +422,7 @@ async fn calculate_betweenness_approximation(
     let node_results = client.execute_query(&nodes_query, None).await?;
     let mut node_uuids: Vec<String> = node_results
         .iter()
-        .filter_map(|record| {
-            record
-                .get("uuid")
-                .map(|v| falkor_value_to_string(v))
-        })
+        .filter_map(|record| record.get("uuid").map(|v| falkor_value_to_string(v)))
         .collect();
 
     // Apply sampling if requested
@@ -428,7 +441,7 @@ async fn calculate_betweenness_approximation(
 
     // For betweenness centrality, we need to find shortest paths between pairs of nodes
     // We'll sample a subset of nodes and find all shortest paths between them
-    
+
     // First, get a sample of well-connected nodes (higher degree nodes are more likely to be on paths)
     let sample_nodes_query = if let Some(group_id) = group_id {
         format!(
@@ -446,27 +459,26 @@ async fn calculate_betweenness_approximation(
          WITH n, count(r) as degree
          ORDER BY degree DESC
          LIMIT 50
-         RETURN n.uuid as uuid".to_string()
+         RETURN n.uuid as uuid"
+            .to_string()
     };
-    
+
     let sample_results = client.execute_query(&sample_nodes_query, None).await?;
     let sample_uuids: Vec<String> = sample_results
         .iter()
-        .filter_map(|record| {
-            record.get("uuid").map(|v| falkor_value_to_string(v))
-        })
+        .filter_map(|record| record.get("uuid").map(|v| falkor_value_to_string(v)))
         .collect();
-    
+
     // Now find shortest paths between all pairs in our sample
     for i in 0..sample_uuids.len() {
-        for j in i+1..sample_uuids.len() {
+        for j in i + 1..sample_uuids.len() {
             let path_query = format!(
                 "MATCH (source {{uuid: '{}'}}), (target {{uuid: '{}'}})
                  MATCH path = shortestPath((source)-[*..15]-(target))
                  RETURN nodes(path) as path_nodes",
                 sample_uuids[i], sample_uuids[j]
             );
-            
+
             if let Ok(path_results) = client.execute_query(&path_query, None).await {
                 for record in path_results {
                     if let Some(FalkorValue::Array(path_nodes)) = record.get("path_nodes") {
@@ -503,6 +515,201 @@ async fn calculate_betweenness_approximation(
     })
 }
 
+/// Graph connectivity types for choosing appropriate centrality algorithm
+#[derive(Debug, Clone)]
+enum GraphConnectivity {
+    WeaklyConnected, // Single weakly connected component
+    Disconnected,    // Multiple components
+}
+
+/// Analyze graph connectivity using FalkorDB's WCC algorithm
+async fn analyze_graph_connectivity(
+    client: &FalkorClient,
+    group_id: Option<&str>,
+) -> Result<GraphConnectivity> {
+    let wcc_query = if let Some(group_id) = group_id {
+        format!(
+            "CALL algo.wcc({{
+                nodeLabels: [],
+                relationshipTypes: []
+            }})
+            YIELD node, componentId
+            WHERE node.group_id = '{}'
+            RETURN componentId, count(*) as size
+            ORDER BY size DESC",
+            group_id
+        )
+    } else {
+        "CALL algo.wcc({
+            nodeLabels: [],
+            relationshipTypes: []
+        })
+        YIELD node, componentId
+        RETURN componentId, count(*) as size
+        ORDER BY size DESC"
+            .to_string()
+    };
+
+    debug!("Analyzing graph connectivity with WCC");
+    let results = client.execute_query(&wcc_query, None).await?;
+
+    if results.len() <= 1 {
+        Ok(GraphConnectivity::WeaklyConnected)
+    } else {
+        Ok(GraphConnectivity::Disconnected)
+    }
+}
+
+/// Calculate damped eigenvector centrality (PageRank-style) for non-strongly connected graphs
+async fn calculate_damped_eigenvector_centrality(
+    client: &FalkorClient,
+    group_id: Option<&str>,
+    max_iterations: u32,
+    tolerance: f64,
+    damping_factor: f64,
+) -> Result<CentralityScores> {
+    let start = Instant::now();
+    info!(
+        "Starting damped eigenvector centrality calculation with damping={}",
+        damping_factor
+    );
+
+    // Get nodes with both in-neighbors and out-degree
+    let query = if let Some(group_id) = group_id {
+        format!(
+            "MATCH (n) WHERE n.group_id = '{}'
+             OPTIONAL MATCH (n)<-[r_in]-(m_in) WHERE m_in.group_id = '{}'
+             WITH n, collect(DISTINCT m_in.uuid) as in_neighbors
+             OPTIONAL MATCH (n)-[r_out]->(m_out) WHERE m_out.group_id = '{}'
+             RETURN n.uuid as node, in_neighbors, count(m_out) as out_degree",
+            group_id, group_id, group_id
+        )
+    } else {
+        "MATCH (n)
+         OPTIONAL MATCH (n)<-[r_in]-(m_in)
+         WITH n, collect(DISTINCT m_in.uuid) as in_neighbors
+         OPTIONAL MATCH (n)-[r_out]->(m_out)
+         RETURN n.uuid as node, in_neighbors, count(m_out) as out_degree"
+            .to_string()
+    };
+
+    let results = client.execute_query(&query, None).await?;
+
+    let mut adjacency: HashMap<String, Vec<String>> = HashMap::new();
+    let mut out_degrees: HashMap<String, f64> = HashMap::new();
+    let mut all_nodes: HashSet<String> = HashSet::new();
+
+    for record in results {
+        if let Some(node_val) = record.get("node") {
+            let node = falkor_value_to_string(node_val);
+            all_nodes.insert(node.clone());
+
+            // Get in-neighbors
+            let in_neighbors =
+                if let Some(FalkorValue::Array(neighbors_array)) = record.get("in_neighbors") {
+                    neighbors_array
+                        .iter()
+                        .filter_map(|v| {
+                            if let FalkorValue::String(s) = v {
+                                Some(s.clone())
+                            } else {
+                                None
+                            }
+                        })
+                        .collect()
+                } else {
+                    Vec::new()
+                };
+
+            // Get out-degree
+            let out_degree = if let Some(degree_val) = record.get("out_degree") {
+                falkor_value_to_f64(degree_val).unwrap_or(0.0).max(1.0) // Avoid division by zero
+            } else {
+                1.0
+            };
+
+            adjacency.insert(node.clone(), in_neighbors);
+            out_degrees.insert(node, out_degree);
+        }
+    }
+
+    if all_nodes.is_empty() {
+        return Err(CentralityError::NoNodesFound);
+    }
+
+    let node_count = all_nodes.len();
+    let uniform_value = (1.0 - damping_factor) / node_count as f64;
+
+    // Initialize scores uniformly
+    let mut scores: HashMap<String, f64> = HashMap::new();
+    for node in &all_nodes {
+        scores.insert(node.clone(), 1.0 / node_count as f64);
+    }
+
+    // Power iteration with damping
+    for iteration in 0..max_iterations {
+        let mut new_scores: HashMap<String, f64> = HashMap::new();
+
+        for node in &all_nodes {
+            let mut score = uniform_value; // Damping term: (1-d)/N
+
+            // Add contributions from in-neighbors
+            if let Some(in_neighbors) = adjacency.get(node) {
+                for neighbor in in_neighbors {
+                    if let Some(neighbor_score) = scores.get(neighbor) {
+                        let neighbor_out_degree = out_degrees.get(neighbor).unwrap_or(&1.0);
+                        score += damping_factor * (neighbor_score / neighbor_out_degree);
+                    }
+                }
+            }
+
+            new_scores.insert(node.clone(), score);
+        }
+
+        // Calculate convergence (L1 and max difference)
+        let mut l1_diff = 0.0;
+        let mut max_diff: f64 = 0.0;
+
+        for node in &all_nodes {
+            let old_score = scores.get(node).unwrap_or(&0.0);
+            let new_score = new_scores.get(node).unwrap_or(&0.0);
+            let diff = (old_score - new_score).abs();
+            l1_diff += diff;
+            max_diff = max_diff.max(diff);
+        }
+
+        let avg_diff = l1_diff / node_count as f64;
+        debug!(
+            "Iteration {}: L1 avg={:.8}, max diff={:.8}",
+            iteration + 1,
+            avg_diff,
+            max_diff
+        );
+
+        scores = new_scores;
+
+        // Enhanced convergence criteria
+        if avg_diff < tolerance && max_diff < tolerance * 10.0 {
+            info!(
+                "Damped eigenvector centrality converged after {} iterations",
+                iteration + 1
+            );
+            break;
+        }
+    }
+
+    let duration = start.elapsed();
+    info!(
+        "Damped eigenvector centrality calculation completed in {:?} for {} nodes",
+        duration, node_count
+    );
+
+    Ok(CentralityScores {
+        scores,
+        nodes_processed: node_count,
+    })
+}
+
 /// Calculate eigenvector centrality using power iteration method
 pub async fn calculate_eigenvector_centrality(
     client: &FalkorClient,
@@ -510,75 +717,108 @@ pub async fn calculate_eigenvector_centrality(
     max_iterations: u32,
     tolerance: f64,
 ) -> Result<CentralityScores> {
-    let start = Instant::now();
+    let _start = Instant::now();
     info!("Starting eigenvector centrality calculation");
 
-    // First, get all nodes and their connections
+    // Analyze graph connectivity to choose appropriate algorithm
+    let connectivity = analyze_graph_connectivity(client, group_id).await?;
+
+    match connectivity {
+        GraphConnectivity::WeaklyConnected => {
+            info!("Graph is weakly connected, using pure eigenvector centrality");
+            calculate_pure_eigenvector_centrality(client, group_id, max_iterations, tolerance).await
+        }
+        GraphConnectivity::Disconnected => {
+            info!("Graph has multiple components, using damped eigenvector centrality");
+            calculate_damped_eigenvector_centrality(
+                client,
+                group_id,
+                max_iterations,
+                tolerance,
+                0.85,
+            )
+            .await
+        }
+    }
+}
+
+/// Calculate pure eigenvector centrality for strongly/weakly connected graphs
+async fn calculate_pure_eigenvector_centrality(
+    client: &FalkorClient,
+    group_id: Option<&str>,
+    max_iterations: u32,
+    tolerance: f64,
+) -> Result<CentralityScores> {
+    let start = Instant::now();
+    info!("Starting pure eigenvector centrality calculation");
+
+    // First, get all nodes and their incoming connections (for eigenvector centrality)
     let adjacency_query = if let Some(group_id) = group_id {
         format!(
             "MATCH (n) WHERE n.group_id = '{}' 
-             OPTIONAL MATCH (n)-[r]-(m)
+             OPTIONAL MATCH (n)<-[r]-(m)
              WHERE m.group_id = '{}'
-             RETURN n.uuid as node, collect(DISTINCT m.uuid) as neighbors",
+             RETURN n.uuid as node, collect(DISTINCT m.uuid) as in_neighbors",
             group_id, group_id
         )
     } else {
         "MATCH (n)
-         OPTIONAL MATCH (n)-[r]-(m)
-         RETURN n.uuid as node, collect(DISTINCT m.uuid) as neighbors"
+         OPTIONAL MATCH (n)<-[r]-(m)
+         RETURN n.uuid as node, collect(DISTINCT m.uuid) as in_neighbors"
             .to_string()
     };
 
     debug!("Fetching adjacency list for eigenvector centrality");
     let results = client.execute_query(&adjacency_query, None).await?;
-    
+
     // Build adjacency list
     let mut adjacency: HashMap<String, Vec<String>> = HashMap::new();
     let mut all_nodes: HashSet<String> = HashSet::new();
-    
+
     for record in results {
         if let Some(node_val) = record.get("node") {
             let node = falkor_value_to_string(node_val);
             all_nodes.insert(node.clone());
-            
-            // Get neighbors
-            let neighbors = if let Some(FalkorValue::Array(neighbors_array)) = record.get("neighbors") {
-                neighbors_array
-                    .iter()
-                    .filter_map(|v| {
-                        if let FalkorValue::String(s) = v {
-                            Some(s.clone())
-                        } else {
-                            None
-                        }
-                    })
-                    .collect()
-            } else {
-                Vec::new()
-            };
-            
+
+            // Get in-neighbors (nodes that point to this node)
+            let neighbors =
+                if let Some(FalkorValue::Array(neighbors_array)) = record.get("in_neighbors") {
+                    neighbors_array
+                        .iter()
+                        .filter_map(|v| {
+                            if let FalkorValue::String(s) = v {
+                                Some(s.clone())
+                            } else {
+                                None
+                            }
+                        })
+                        .collect()
+                } else {
+                    Vec::new()
+                };
+
             adjacency.insert(node, neighbors);
         }
     }
-    
+
     if all_nodes.is_empty() {
         return Err(CentralityError::NoNodesFound);
     }
-    
+
     let node_count = all_nodes.len();
     info!("Computing eigenvector centrality for {} nodes", node_count);
-    
+
     // Initialize scores to 1/sqrt(n)
     let initial_value = 1.0 / (node_count as f64).sqrt();
     let mut scores: HashMap<String, f64> = HashMap::new();
     for node in &all_nodes {
         scores.insert(node.clone(), initial_value);
     }
-    
+
     // Power iteration
     for iteration in 0..max_iterations {
         let mut new_scores: HashMap<String, f64> = HashMap::new();
-        
+
         // Calculate new scores: score[v] = sum of neighbors' scores
         for node in &all_nodes {
             let mut score = 0.0;
@@ -591,14 +831,10 @@ pub async fn calculate_eigenvector_centrality(
             }
             new_scores.insert(node.clone(), score);
         }
-        
+
         // Calculate L2 norm for normalization
-        let norm: f64 = new_scores
-            .values()
-            .map(|s| s * s)
-            .sum::<f64>()
-            .sqrt();
-        
+        let norm: f64 = new_scores.values().map(|s| s * s).sum::<f64>().sqrt();
+
         // Normalize scores
         if norm > 0.0 {
             for score in new_scores.values_mut() {
@@ -611,34 +847,46 @@ pub async fn calculate_eigenvector_centrality(
                 *score = initial_value;
             }
         }
-        
-        // Check for convergence
-        let mut total_diff = 0.0;
+
+        // Enhanced convergence check (L1 and max difference)
+        let mut l1_diff = 0.0;
+        let mut max_diff: f64 = 0.0;
+
         for node in &all_nodes {
             let old_score = scores.get(node).unwrap_or(&0.0);
             let new_score = new_scores.get(node).unwrap_or(&0.0);
-            total_diff += (old_score - new_score).abs();
+            let diff = (old_score - new_score).abs();
+            l1_diff += diff;
+            max_diff = max_diff.max(diff);
         }
-        
-        let avg_diff = total_diff / node_count as f64;
-        debug!("Iteration {}: average difference = {:.8}", iteration + 1, avg_diff);
-        
+
+        let avg_diff = l1_diff / node_count as f64;
+        debug!(
+            "Iteration {}: L1 avg={:.8}, max diff={:.8}",
+            iteration + 1,
+            avg_diff,
+            max_diff
+        );
+
         // Update scores for next iteration
         scores = new_scores;
-        
-        // Check convergence
-        if avg_diff < tolerance {
-            info!("Eigenvector centrality converged after {} iterations", iteration + 1);
+
+        // Enhanced convergence criteria - both L1 and max difference must be small
+        if avg_diff < tolerance && max_diff < tolerance * 10.0 {
+            info!(
+                "Pure eigenvector centrality converged after {} iterations",
+                iteration + 1
+            );
             break;
         }
     }
-    
+
     let duration = start.elapsed();
     info!(
         "Eigenvector centrality calculation completed in {:?} for {} nodes",
         duration, node_count
     );
-    
+
     Ok(CentralityScores {
         scores,
         nodes_processed: node_count,
@@ -663,13 +911,13 @@ pub async fn calculate_all_centralities(
     let sample_size = if *node_count > 100 { Some(50) } else { None };
 
     let betweenness = calculate_betweenness_centrality(client, group_id, sample_size).await?;
-    
+
     // Calculate true eigenvector centrality
     let eigenvector = calculate_eigenvector_centrality(client, group_id, 100, 1e-6).await?;
 
     // Find max degree for normalization
     let max_degree = degree.scores.values().fold(0.0_f64, |a, &b| a.max(b));
-    
+
     // Combine all scores
     let mut all_scores = HashMap::new();
     let all_nodes: std::collections::HashSet<String> = pagerank
@@ -687,23 +935,31 @@ pub async fn calculate_all_centralities(
         // PageRank is already normalized by the algorithm
         let pagerank_score = pagerank.scores.get(&node_id).copied().unwrap_or(0.0);
         node_scores.insert("pagerank".to_string(), pagerank_score);
-        
+
         // Normalize degree centrality to [0,1] by dividing by max degree
         let degree_raw = degree.scores.get(&node_id).copied().unwrap_or(0.0);
-        let degree_normalized = if max_degree > 0.0 { degree_raw / max_degree } else { 0.0 };
+        let degree_normalized = if max_degree > 0.0 {
+            degree_raw / max_degree
+        } else {
+            0.0
+        };
         node_scores.insert("degree".to_string(), degree_normalized);
-        
+
         // Betweenness is already normalized in the approximation function
         let betweenness_score = betweenness.scores.get(&node_id).copied().unwrap_or(0.0);
         node_scores.insert("betweenness".to_string(), betweenness_score);
-        
+
         // True eigenvector centrality (already normalized by power iteration)
         let eigenvector_score = eigenvector.scores.get(&node_id).copied().unwrap_or(0.0);
         node_scores.insert("eigenvector".to_string(), eigenvector_score);
 
         // Calculate importance as a weighted combination
         // This is a composite metric, not eigenvector centrality
-        let importance = (0.4 * pagerank_score + 0.3 * eigenvector_score + 0.2 * degree_normalized + 0.1 * betweenness_score).min(1.0);
+        let importance = (0.4 * pagerank_score
+            + 0.3 * eigenvector_score
+            + 0.2 * degree_normalized
+            + 0.1 * betweenness_score)
+            .min(1.0);
         node_scores.insert("importance".to_string(), importance);
 
         all_scores.insert(node_id, node_scores);
