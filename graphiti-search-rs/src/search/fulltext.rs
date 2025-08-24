@@ -1,6 +1,6 @@
 use crate::error::SearchResult;
 use crate::falkor::FalkorConnection;
-use crate::models::{Edge, Episode, Node};
+use crate::models::{Edge, Episode, Node, SearchFilters};
 use regex::Regex;
 use tracing::instrument;
 
@@ -37,10 +37,11 @@ fn sanitize_lucene_query(query: &str) -> String {
 pub async fn search_nodes(
     conn: &mut FalkorConnection,
     query: &str,
+    filters: &SearchFilters,
     limit: usize,
 ) -> SearchResult<Vec<Node>> {
     let sanitized_query = sanitize_lucene_query(query);
-    conn.fulltext_search_nodes(&sanitized_query, limit)
+    conn.fulltext_search_nodes(&sanitized_query, filters.group_ids.as_deref(), limit)
         .await
         .map_err(|e| crate::error::SearchError::Database(e.to_string()))
 }
@@ -49,10 +50,11 @@ pub async fn search_nodes(
 pub async fn search_edges(
     conn: &mut FalkorConnection,
     query: &str,
+    filters: &SearchFilters,
     limit: usize,
 ) -> SearchResult<Vec<Edge>> {
     let sanitized_query = sanitize_lucene_query(query);
-    conn.fulltext_search_edges(&sanitized_query, limit)
+    conn.fulltext_search_edges(&sanitized_query, filters.group_ids.as_deref(), limit)
         .await
         .map_err(|e| crate::error::SearchError::Database(e.to_string()))
 }
@@ -61,10 +63,11 @@ pub async fn search_edges(
 pub async fn search_episodes(
     conn: &mut FalkorConnection,
     query: &str,
+    filters: &SearchFilters,
     limit: usize,
 ) -> SearchResult<Vec<Episode>> {
     let sanitized_query = sanitize_lucene_query(query);
-    conn.fulltext_search_episodes(&sanitized_query, limit)
+    conn.fulltext_search_episodes(&sanitized_query, filters.group_ids.as_deref(), limit)
         .await
         .map_err(|e| crate::error::SearchError::Database(e.to_string()))
 }

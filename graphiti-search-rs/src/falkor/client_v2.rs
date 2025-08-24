@@ -39,16 +39,33 @@ impl FalkorClientV2 {
     }
 
     #[instrument(skip(self))]
-    pub async fn fulltext_search_nodes(&mut self, query: &str, limit: usize) -> Result<Vec<Node>> {
+    pub async fn fulltext_search_nodes(&mut self, query: &str, group_ids: Option<&[String]>, limit: usize) -> Result<Vec<Node>> {
         // FalkorDB SDK doesn't support parameters well, use direct string interpolation
         let escaped_query = query.replace('\'', "\\'").to_lowercase();
+        
+        // Build group filter clause
+        let group_filter = if let Some(groups) = group_ids {
+            if !groups.is_empty() {
+                let group_list = groups
+                    .iter()
+                    .map(|g| format!("'{}'", g.replace('\'', "\\'")))
+                    .collect::<Vec<_>>()
+                    .join(",");
+                format!(" AND n.group_id IN [{}]", group_list)
+            } else {
+                String::new()
+            }
+        } else {
+            String::new()
+        };
+        
         let cypher = format!(
             "MATCH (n:Entity) 
-             WHERE toLower(n.name) CONTAINS '{}' 
-                OR toLower(n.summary) CONTAINS '{}'
+             WHERE (toLower(n.name) CONTAINS '{}' 
+                OR toLower(n.summary) CONTAINS '{}'){}
              RETURN n 
              LIMIT {}",
-            escaped_query, escaped_query, limit
+            escaped_query, escaped_query, group_filter, limit
         );
 
         let result = self.graph.query(&cypher).execute().await?;
@@ -62,6 +79,7 @@ impl FalkorClientV2 {
         embedding: &[f32],
         limit: usize,
         min_score: f32,
+        group_ids: Option<&[String]>,
     ) -> Result<Vec<Node>> {
         // Build the vector string inline since FalkorDB params only support strings
         let embedding_str = embedding
@@ -70,16 +88,32 @@ impl FalkorClientV2 {
             .collect::<Vec<_>>()
             .join(",");
 
+        // Build group filter clause
+        let group_filter = if let Some(groups) = group_ids {
+            if !groups.is_empty() {
+                let group_list = groups
+                    .iter()
+                    .map(|g| format!("'{}'", g.replace('\'', "\\'")))
+                    .collect::<Vec<_>>()
+                    .join(",");
+                format!(" AND n.group_id IN [{}]", group_list)
+            } else {
+                String::new()
+            }
+        } else {
+            String::new()
+        };
+
         // Use inline vecf32() function to ensure proper vector type
         let cypher = format!(
             "MATCH (n:Entity) 
-             WHERE n.name_embedding IS NOT NULL
+             WHERE n.name_embedding IS NOT NULL{}
              WITH n, (2 - vec.cosineDistance(n.name_embedding, vecf32([{}])))/2 AS score
              WHERE score >= {}
              RETURN n, score 
              ORDER BY score DESC 
              LIMIT {}",
-            embedding_str, min_score, limit
+            group_filter, embedding_str, min_score, limit
         );
 
         let result = self.graph.query(&cypher).execute().await?;
@@ -118,16 +152,33 @@ impl FalkorClientV2 {
     }
 
     #[instrument(skip(self))]
-    pub async fn fulltext_search_edges(&mut self, query: &str, limit: usize) -> Result<Vec<Edge>> {
+    pub async fn fulltext_search_edges(&mut self, query: &str, group_ids: Option<&[String]>, limit: usize) -> Result<Vec<Edge>> {
         // FalkorDB SDK doesn't support parameters well, use direct string interpolation
         let escaped_query = query.replace('\'', "\\'").to_lowercase();
+        
+        // Build group filter clause
+        let group_filter = if let Some(groups) = group_ids {
+            if !groups.is_empty() {
+                let group_list = groups
+                    .iter()
+                    .map(|g| format!("'{}'", g.replace('\'', "\\'")))
+                    .collect::<Vec<_>>()
+                    .join(",");
+                format!(" AND r.group_id IN [{}]", group_list)
+            } else {
+                String::new()
+            }
+        } else {
+            String::new()
+        };
+        
         let cypher = format!(
             "MATCH (a)-[r:RELATES_TO]->(b)
-             WHERE toLower(r.fact) CONTAINS '{}' 
-                OR toLower(r.name) CONTAINS '{}'
+             WHERE (toLower(r.fact) CONTAINS '{}' 
+                OR toLower(r.name) CONTAINS '{}'){}
              RETURN a, r, b
              LIMIT {}",
-            escaped_query, escaped_query, limit
+            escaped_query, escaped_query, group_filter, limit
         );
 
         let result = self.graph.query(&cypher).execute().await?;
@@ -141,6 +192,7 @@ impl FalkorClientV2 {
         embedding: &[f32],
         limit: usize,
         min_score: f32,
+        group_ids: Option<&[String]>,
     ) -> Result<Vec<Edge>> {
         // Build the vector string inline
         let embedding_str = embedding
@@ -148,6 +200,22 @@ impl FalkorClientV2 {
             .map(|v| v.to_string())
             .collect::<Vec<_>>()
             .join(",");
+
+        // Build group filter clause
+        let group_filter = if let Some(groups) = group_ids {
+            if !groups.is_empty() {
+                let group_list = groups
+                    .iter()
+                    .map(|g| format!("'{}'", g.replace('\'', "\\'")))
+                    .collect::<Vec<_>>()
+                    .join(",");
+                format!(" AND r.group_id IN [{}]", group_list)
+            } else {
+                String::new()
+            }
+        } else {
+            String::new()
+        };
 
         // WORKAROUND: FalkorDB SDK v0.1.11 has multiple issues with vector operations:
         // 1. Cannot deserialize edges containing vector properties
@@ -167,12 +235,12 @@ impl FalkorClientV2 {
                 // First query - no exclusions
                 format!(
                     "MATCH ()-[r:RELATES_TO]->()
-                     WHERE r.fact_embedding IS NOT NULL
+                     WHERE r.fact_embedding IS NOT NULL{}
                      WITH r.uuid AS uuid_str, (2 - vec.cosineDistance(r.fact_embedding, vecf32([{}])))/2 AS score
                      WHERE score >= {}
                      RETURN uuid_str, score
                      LIMIT 1",
-                    embedding_str, min_score
+                    group_filter, embedding_str, min_score
                 )
             } else {
                 // Subsequent queries - exclude already found UUIDs
@@ -184,12 +252,12 @@ impl FalkorClientV2 {
 
                 format!(
                     "MATCH ()-[r:RELATES_TO]->()
-                     WHERE r.fact_embedding IS NOT NULL AND r.uuid NOT IN [{}]
+                     WHERE r.fact_embedding IS NOT NULL AND r.uuid NOT IN [{}]{}
                      WITH r.uuid AS uuid_str, (2 - vec.cosineDistance(r.fact_embedding, vecf32([{}])))/2 AS score
                      WHERE score >= {}
                      RETURN uuid_str, score
                      LIMIT 1",
-                    exclude_list, embedding_str, min_score
+                    exclude_list, group_filter, embedding_str, min_score
                 )
             };
 
@@ -265,17 +333,35 @@ impl FalkorClientV2 {
     pub async fn fulltext_search_episodes(
         &mut self,
         query: &str,
+        group_ids: Option<&[String]>,
         limit: usize,
     ) -> Result<Vec<Episode>> {
         // FalkorDB SDK doesn't support parameters well, use direct string interpolation
         let escaped_query = query.replace('\'', "\\'").to_lowercase();
+        
+        // Build group filter clause
+        let group_filter = if let Some(groups) = group_ids {
+            if !groups.is_empty() {
+                let group_list = groups
+                    .iter()
+                    .map(|g| format!("'{}'", g.replace('\'', "\\'")))
+                    .collect::<Vec<_>>()
+                    .join(",");
+                format!(" AND e.group_id IN [{}]", group_list)
+            } else {
+                String::new()
+            }
+        } else {
+            String::new()
+        };
+        
         let cypher = format!(
             "MATCH (e:Episode)
-             WHERE toLower(e.content) CONTAINS '{}' 
-                OR toLower(e.name) CONTAINS '{}'
+             WHERE (toLower(e.content) CONTAINS '{}' 
+                OR toLower(e.name) CONTAINS '{}'){}
              RETURN e
              LIMIT {}",
-            escaped_query, escaped_query, limit
+            escaped_query, escaped_query, group_filter, limit
         );
 
         let result = self.graph.query(&cypher).execute().await?;

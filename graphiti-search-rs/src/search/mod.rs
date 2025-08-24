@@ -101,7 +101,7 @@ impl SearchEngine {
         &mut self,
         query: &str,
         config: &EdgeSearchConfig,
-        _filters: &SearchFilters,
+        filters: &SearchFilters,
         query_vector: Option<&[f32]>,
     ) -> SearchResult<Vec<Edge>> {
         // Direct execution without cache
@@ -114,13 +114,14 @@ impl SearchEngine {
         for method in &config.search_methods {
             let edges = match method {
                 SearchMethod::Fulltext => {
-                    fulltext::search_edges(&mut falkor_conn, query, 100).await?
+                    fulltext::search_edges(&mut falkor_conn, query, filters, 100).await?
                 }
                 SearchMethod::Similarity if query_vector.is_some() => {
                     similarity::search_edges_by_embedding(
                         &mut falkor_conn,
                         query_vector.unwrap(),
                         config.sim_min_score,
+                        filters,
                         100,
                     )
                     .await?
@@ -150,7 +151,7 @@ impl SearchEngine {
         &mut self,
         query: &str,
         config: &NodeSearchConfig,
-        _filters: &SearchFilters,
+        filters: &SearchFilters,
         query_vector: Option<&[f32]>,
     ) -> SearchResult<Vec<Node>> {
         // Direct execution without cache
@@ -163,13 +164,14 @@ impl SearchEngine {
         for method in &config.search_methods {
             let nodes = match method {
                 SearchMethod::Fulltext => {
-                    fulltext::search_nodes(&mut falkor_conn, query, 100).await?
+                    fulltext::search_nodes(&mut falkor_conn, query, filters, 100).await?
                 }
                 SearchMethod::Similarity if query_vector.is_some() => {
                     similarity::search_nodes_by_embedding(
                         &mut falkor_conn,
                         query_vector.unwrap(),
                         config.sim_min_score,
+                        filters,
                         100,
                     )
                     .await?
@@ -198,7 +200,7 @@ impl SearchEngine {
     pub async fn search_episodes(
         &mut self,
         query: &str,
-        _filters: &SearchFilters,
+        filters: &SearchFilters,
         limit: usize,
     ) -> SearchResult<Vec<Episode>> {
         // Create cache key
@@ -207,6 +209,7 @@ impl SearchEngine {
         // Clone values needed in the closure
         let query_str = query.to_string();
         let limit_clone = limit;
+        let filters_clone = filters.clone();
         let falkor_pool = self.falkor_pool.clone();
 
         // Use enhanced cache
@@ -219,7 +222,7 @@ impl SearchEngine {
                     .map_err(|e| anyhow::anyhow!("Failed to get connection: {}", e))?;
 
                 let episodes =
-                    fulltext::search_episodes(&mut falkor_conn, &query_str, limit_clone).await?;
+                    fulltext::search_episodes(&mut falkor_conn, &query_str, &filters_clone, limit_clone).await?;
 
                 if episodes.is_empty() {
                     Ok(None)
@@ -236,7 +239,7 @@ impl SearchEngine {
         &mut self,
         _query: &str,
         config: &CommunitySearchConfig,
-        _filters: &SearchFilters,
+        filters: &SearchFilters,
         query_vector: Option<&[f32]>,
     ) -> SearchResult<Vec<Community>> {
         // Communities are typically searched via similarity
@@ -249,6 +252,7 @@ impl SearchEngine {
                 &mut falkor_conn,
                 embedding,
                 config.sim_min_score,
+                filters,
                 50,
             )
             .await
