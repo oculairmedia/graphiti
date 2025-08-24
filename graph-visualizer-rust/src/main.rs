@@ -357,8 +357,16 @@ async fn main() -> anyhow::Result<()> {
                 }
                 
                 // Add eigenvector centrality from row index 8
-                if let Some(eigenvector) = row.get(8).and_then(|v| v.to_f64()) {
-                    properties.insert("eigenvector_centrality".to_string(), serde_json::Value::from(eigenvector));
+                if let Some(raw_eigenvector) = row.get(8) {
+                    println!("DEBUG: raw eigenvector value: {:?}", raw_eigenvector);
+                    if let Some(eigenvector) = raw_eigenvector.to_f64() {
+                        println!("DEBUG: converted eigenvector to f64: {}", eigenvector);
+                        properties.insert("eigenvector_centrality".to_string(), serde_json::Value::from(eigenvector));
+                    } else {
+                        println!("DEBUG: failed to convert eigenvector to f64: {:?}", raw_eigenvector);
+                    }
+                } else {
+                    println!("DEBUG: no eigenvector value at index 8");
                 }
                 
                 // Add name to properties so frontend can access it
