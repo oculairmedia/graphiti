@@ -10,6 +10,7 @@ from .entities import EntityResourceHandler, EntityListResourceHandler, EntityRe
 from .episodes import EpisodeResourceHandler, EpisodeListResourceHandler
 from .search import SearchResourceHandler, NodeSearchResourceHandler, FactSearchResourceHandler
 from .analytics import GraphStatsResourceHandler, NodeMetricsResourceHandler, TemporalAnalyticsResourceHandler, GroupAnalyticsResourceHandler
+from .templates import WildcardResourceHandler, ParameterizedResourceHandler, DynamicResourceHandler, TemplateRegistryResourceHandler
 
 __all__ = [
     'ResourceManager',
@@ -26,4 +27,8 @@ __all__ = [
     'NodeMetricsResourceHandler',
     'TemporalAnalyticsResourceHandler',
     'GroupAnalyticsResourceHandler',
+    'WildcardResourceHandler',
+    'ParameterizedResourceHandler',
+    'DynamicResourceHandler',
+    'TemplateRegistryResourceHandler',
 ]
