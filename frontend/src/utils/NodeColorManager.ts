@@ -201,7 +201,7 @@ export class NodeColorManager {
       const bins = this.config.quantileBins || 5;
       const colorRange = this.generateColorRange(bins);
 
-      // Build quantile scale
+      // Build quantile scale for better color distribution
       if (this.config.useQuantileScaling) {
         const quantileScale = scaleQuantile<string>()
           .domain(values)
@@ -230,7 +230,7 @@ export class NodeColorManager {
   }
 
   /**
-   * Generate color range for D3 scales
+   * Generate color range for D3 scales with better visual distribution
    */
   private generateColorRange(bins: number): string[] {
     const lowColor = this.config.gradientLowColor || this.config.lowColor || '#4ECDC4';
@@ -238,7 +238,8 @@ export class NodeColorManager {
     
     const colors: string[] = [];
     for (let i = 0; i < bins; i++) {
-      const ratio = i / (bins - 1);
+      // Use power curve for better visual distribution
+      const ratio = Math.pow(i / (bins - 1), 0.8);
       colors.push(interpolateColor(lowColor, highColor, ratio));
     }
     
@@ -347,15 +348,17 @@ export class NodeColorManager {
           normalized = Math.max(0, Math.min(1, (logValue - logMin) / (logMax - logMin)));
         }
       } else if (this.config.normalizeMetrics) {
-        // Use percentile-based normalization for better distribution
+        // Use percentile-based normalization with better distribution
         if (value <= stats.percentiles.p25) {
-          normalized = 0.25 * (value - stats.min) / (stats.percentiles.p25 - stats.min);
+          normalized = 0.15 * (value - stats.min) / (stats.percentiles.p25 - stats.min);
         } else if (value <= stats.percentiles.p50) {
-          normalized = 0.25 + 0.25 * (value - stats.percentiles.p25) / (stats.percentiles.p50 - stats.percentiles.p25);
+          normalized = 0.15 + 0.25 * (value - stats.percentiles.p25) / (stats.percentiles.p50 - stats.percentiles.p25);
         } else if (value <= stats.percentiles.p75) {
-          normalized = 0.5 + 0.25 * (value - stats.percentiles.p50) / (stats.percentiles.p75 - stats.percentiles.p50);
+          normalized = 0.4 + 0.3 * (value - stats.percentiles.p50) / (stats.percentiles.p75 - stats.percentiles.p50);
+        } else if (value <= stats.percentiles.p90) {
+          normalized = 0.7 + 0.2 * (value - stats.percentiles.p75) / (stats.percentiles.p90 - stats.percentiles.p75);
         } else {
-          normalized = 0.75 + 0.25 * (value - stats.percentiles.p75) / (stats.scalingMax - stats.percentiles.p75);
+          normalized = 0.9 + 0.1 * (value - stats.percentiles.p90) / (stats.scalingMax - stats.percentiles.p90);
         }
       } else {
         // Simple linear normalization using moving average of top 10%
