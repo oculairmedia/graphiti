@@ -733,7 +733,7 @@ async def search_memory_nodes(
         payload = {
             'query': query,
             'group_ids': effective_group_ids,
-            'num_results': max_nodes,
+            'max_nodes': max_nodes,
         }
 
         if center_node_uuid:
@@ -808,7 +808,7 @@ async def search_memory_facts(
         payload = {
             'query': query,
             'group_ids': effective_group_ids,
-            'num_results': max_facts,
+            'max_facts': max_facts,
         }
 
         if center_node_uuid:
@@ -1039,7 +1039,7 @@ async def query_knowledge(
         node_payload = {
             'query': topic,
             'group_ids': effective_group_ids,
-            'num_results': max_results
+            'max_nodes': max_results
         }
         
         node_response = await http_client.post('/search/nodes', json=node_payload)
@@ -1064,7 +1064,7 @@ async def query_knowledge(
             fact_payload = {
                 'query': topic,
                 'group_ids': effective_group_ids,
-                'num_results': max_results
+                'max_facts': max_results
             }
             
             fact_response = await http_client.post('/search', json=fact_payload)
@@ -1141,7 +1141,7 @@ async def find_connections(
         entity_payload = {
             'query': entity_name,
             'group_ids': effective_group_ids,
-            'num_results': 5
+            'max_nodes': 5
         }
         
         entity_response = await http_client.post('/search/nodes', json=entity_payload)
@@ -1168,7 +1168,7 @@ async def find_connections(
         connections_payload = {
             'query': entity_name,
             'group_ids': effective_group_ids,
-            'num_results': max_connections,
+            'max_facts': max_connections,
             'center_node_uuid': target_uuid
         }
         
@@ -1269,7 +1269,7 @@ async def explore_domain(
             node_payload = {
                 'query': domain,
                 'group_ids': effective_group_ids,
-                'num_results': max_items
+                'max_nodes': max_items
             }
             
             node_response = await http_client.post('/search/nodes', json=node_payload)
@@ -1310,7 +1310,7 @@ async def explore_domain(
             fact_payload = {
                 'query': domain,
                 'group_ids': effective_group_ids,
-                'num_results': max_items
+                'max_facts': max_items
             }
             
             fact_response = await http_client.post('/search', json=fact_payload)
@@ -1346,7 +1346,7 @@ async def explore_domain(
             combined_payload = {
                 'query': domain,
                 'group_ids': effective_group_ids,
-                'num_results': max_items
+                'max_nodes': max_items
             }
             
             # Get both nodes and facts for pattern analysis
@@ -1392,14 +1392,14 @@ async def explore_domain(
         
         if focus_type in ["overview", "entities", "patterns"]:
             try:
-                node_response = await http_client.post('/search/nodes', json={'query': domain, 'group_ids': effective_group_ids, 'num_results': 100})
+                node_response = await http_client.post('/search/nodes', json={'query': domain, 'group_ids': effective_group_ids, 'max_nodes': 100})
                 node_count = len(node_response.json().get('nodes', []))
             except:
                 pass
         
         if focus_type in ["overview", "relationships", "patterns"]:
             try:
-                fact_response = await http_client.post('/search', json={'query': domain, 'group_ids': effective_group_ids, 'num_results': 100})
+                fact_response = await http_client.post('/search', json={'query': domain, 'group_ids': effective_group_ids, 'max_facts': 100})
                 fact_count = len(fact_response.json().get('edges', []))
             except:
                 pass
@@ -1462,7 +1462,7 @@ async def analyze_patterns(
         search_payload = {
             'query': domain,
             'group_ids': effective_group_ids,
-            'num_results': 50  # Get more data for better pattern analysis
+            'max_nodes': 50  # Get more data for better pattern analysis
         }
         
         nodes = []
@@ -1653,7 +1653,7 @@ async def compare_entities(
         search1_payload = {
             'query': entity1,
             'group_ids': effective_group_ids,
-            'num_results': 5
+            'max_nodes': 5
         }
         
         entity1_response = await http_client.post('/search/nodes', json=search1_payload)
@@ -1668,7 +1668,7 @@ async def compare_entities(
                 facts1_payload = {
                     'query': entity1,
                     'group_ids': effective_group_ids,
-                    'num_results': 20,
+                    'max_facts': 20,
                     'center_node_uuid': entity1_data.get('uuid')
                 }
                 facts1_response = await http_client.post('/search', json=facts1_payload)
@@ -1679,7 +1679,7 @@ async def compare_entities(
         search2_payload = {
             'query': entity2,
             'group_ids': effective_group_ids,
-            'num_results': 5
+            'max_nodes': 5
         }
         
         entity2_response = await http_client.post('/search/nodes', json=search2_payload)
@@ -1694,7 +1694,7 @@ async def compare_entities(
                 facts2_payload = {
                     'query': entity2,
                     'group_ids': effective_group_ids,
-                    'num_results': 20,
+                    'max_facts': 20,
                     'center_node_uuid': entity2_data.get('uuid')
                 }
                 facts2_response = await http_client.post('/search', json=facts2_payload)
@@ -1968,7 +1968,7 @@ async def summarize_episode(
             entity_search_payload = {
                 'query': episode_content[:200],  # Use first part of content for search
                 'group_ids': [effective_group_id] if effective_group_id else [],
-                'num_results': 10
+                'max_nodes': 10
             }
             
             try:
