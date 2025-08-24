@@ -211,7 +211,20 @@ export class NodeColorManager {
 
       let normalized: number;
       
-      if (this.config.normalizeMetrics) {
+      // Special handling for eigenvector centrality with very small values
+      if (metricName === 'eigenvector_centrality' && stats.max < 0.1) {
+        // Use logarithmic scaling for better visual differentiation of small values
+        const epsilon = 0.000001; // Small constant to avoid log(0)
+        const logValue = Math.log10(Math.max(value, epsilon));
+        const logMin = Math.log10(Math.max(stats.min, epsilon));
+        const logMax = Math.log10(Math.max(stats.max, epsilon));
+        
+        if (logMax === logMin) {
+          normalized = 0.5; // Fallback for edge case
+        } else {
+          normalized = Math.max(0, Math.min(1, (logValue - logMin) / (logMax - logMin)));
+        }
+      } else if (this.config.normalizeMetrics) {
         // Use percentile-based normalization for better distribution
         if (value <= stats.percentiles.p25) {
           normalized = 0.25 * (value - stats.min) / (stats.percentiles.p25 - stats.min);
