@@ -729,41 +729,22 @@ async def search_memory_nodes(
             group_ids if group_ids is not None else [config.group_id] if config.group_id else []
         )
 
-        # Prepare Rust service format request payload
+        # Prepare request payload for Python proxy
         payload = {
             'query': query,
-            'config': {
-                'limit': max_nodes,
-                'reranker_min_score': 0.0,
-                'node_config': {
-                    'search_methods': ['fulltext', 'similarity'],
-                    'reranker': 'rrf',
-                    'bfs_max_depth': 2,
-                    'sim_min_score': 0.3,
-                    'mmr_lambda': 0.5,
-                    'centrality_boost_factor': 1.0
-                },
-                'edge_config': {
-                    'search_methods': [],
-                    'reranker': 'rrf',
-                    'bfs_max_depth': 1,
-                    'sim_min_score': 0.3,
-                    'mmr_lambda': 0.5
-                }
-            },
-            'filters': {}
+            'max_nodes': max_nodes,
         }
 
-        # Add filters if provided
+        # Add optional parameters if provided
         if effective_group_ids:
-            payload['filters']['group_ids'] = effective_group_ids
+            payload['group_ids'] = effective_group_ids
         if center_node_uuid:
-            payload['filters']['center_node_uuid'] = center_node_uuid
+            payload['center_node_uuid'] = center_node_uuid
         if entity:
-            payload['filters']['entity_type'] = entity
+            payload['entity'] = entity
 
-        # Send request to Rust search service directly
-        response = await http_client.post('/search', json=payload)
+        # Send request to Python proxy endpoint
+        response = await http_client.post('/search/nodes', json=payload)
         response.raise_for_status()
 
         result = response.json()
@@ -825,37 +806,17 @@ async def search_memory_facts(
             group_ids if group_ids is not None else [config.group_id] if config.group_id else []
         )
 
-        # Prepare Rust service format request payload
+        # Prepare request payload for Python proxy  
         payload = {
             'query': query,
-            'config': {
-                'limit': max_facts,
-                'reranker_min_score': 0.0,
-                'node_config': {
-                    'search_methods': [],
-                    'reranker': 'rrf',
-                    'bfs_max_depth': 1,
-                    'sim_min_score': 0.3,
-                    'mmr_lambda': 0.5
-                },
-                'edge_config': {
-                    'search_methods': ['fulltext', 'similarity'],
-                    'reranker': 'rrf',
-                    'bfs_max_depth': 2,
-                    'sim_min_score': 0.3,
-                    'mmr_lambda': 0.5
-                }
-            },
-            'filters': {}
+            'group_ids': effective_group_ids,
+            'max_facts': max_facts,
         }
 
-        # Add filters if provided
-        if effective_group_ids:
-            payload['filters']['group_ids'] = effective_group_ids
         if center_node_uuid:
-            payload['filters']['center_node_uuid'] = center_node_uuid
+            payload['center_node_uuid'] = center_node_uuid
 
-        # Send request to Rust search service directly
+        # Send request to Python proxy endpoint for facts
         response = await http_client.post('/search', json=payload)
         response.raise_for_status()
 
