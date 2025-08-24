@@ -16,6 +16,14 @@ class GraphStatsResourceHandler(BaseResourceHandler):
     """Handles graph statistics via graphiti://analytics/graph-stats pattern."""
     
     @property
+    def name(self) -> str:
+        return "graph-stats"
+    
+    @property
+    def description(self) -> str:
+        return "Overall graph statistics including node count, edge count, and group information"
+    
+    @property
     def uri_pattern(self) -> str:
         return r"graphiti://analytics/graph-stats"
     
@@ -89,6 +97,14 @@ class GraphStatsResourceHandler(BaseResourceHandler):
 
 class NodeMetricsResourceHandler(BaseResourceHandler):
     """Handles node metrics via graphiti://analytics/nodes/{node_id}/metrics pattern."""
+    
+    @property
+    def name(self) -> str:
+        return "node-metrics"
+    
+    @property
+    def description(self) -> str:
+        return "Detailed metrics for individual nodes including centrality scores and relationships"
     
     @property
     def uri_pattern(self) -> str:
@@ -181,6 +197,14 @@ class TemporalAnalyticsResourceHandler(BaseResourceHandler):
     """Handles temporal analytics via graphiti://analytics/temporal/{time_range} pattern."""
     
     @property
+    def name(self) -> str:
+        return "temporal-analytics"
+    
+    @property
+    def description(self) -> str:
+        return "Time-based analytics showing graph evolution and activity patterns over different time ranges"
+    
+    @property
     def uri_pattern(self) -> str:
         return r"graphiti://analytics/temporal/([^/]+)"
     
@@ -269,6 +293,14 @@ class TemporalAnalyticsResourceHandler(BaseResourceHandler):
 
 class GroupAnalyticsResourceHandler(BaseResourceHandler):
     """Handles group analytics via graphiti://analytics/groups/{group_id} pattern."""
+    
+    @property
+    def name(self) -> str:
+        return "group-analytics"
+    
+    @property
+    def description(self) -> str:
+        return "Analytics and statistics for specific graph groups including node distributions and activity metrics"
     
     @property
     def uri_pattern(self) -> str:
