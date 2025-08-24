@@ -16,6 +16,7 @@ import { useNodeCentralityWithFallback } from '@/hooks/useCentrality';
 import { SummaryEditor, SummaryEditButton } from './SummaryEditor';
 import { graphClient } from '../api/graphClient';
 import { useToast } from '@/hooks/use-toast';
+import { useCentralityStats } from '../contexts/CentralityStatsContext';
 
 interface NodeDetailsPanelProps {
   node: GraphNode;
@@ -162,6 +163,9 @@ const NodeDetailsPanelComponent: React.FC<NodeDetailsPanelProps> = ({
     node.properties,
     nodeCentrality
   );
+
+  // Get centrality statistics for proper scaling
+  const centralityStats = useCentralityStats();
 
   // Use real node data with deferred value for expensive property calculations
   const nodeProperties = node.properties || {};
@@ -336,22 +340,51 @@ const NodeDetailsPanelComponent: React.FC<NodeDetailsPanelProps> = ({
                                   Live Data
                                 </Badge>
                               )}
-                              {Object.entries(data.centrality).map(([metric, value]) => (
-                                <div key={metric}>
-                                  <div className="flex justify-between items-center mb-1">
-                                    <span className="text-xs capitalize">
-                                      {metric.replace(/([A-Z])/g, ' $1')}
-                                    </span>
-                                    <span className="text-xs text-primary font-medium">
-                                      {(Number(value) * 100).toFixed(1)}%
-                                    </span>
+                              {/* Scale info */}
+                              <div className="text-[10px] text-muted-foreground mb-2 italic">
+                                Bars scaled relative to maximum values in current graph
+                              </div>
+                              {Object.entries(data.centrality).map(([metric, value]) => {
+                                // Map metric names to stats keys
+                                const statsKey = metric === 'degree' ? 'degree' :
+                                                metric === 'betweenness' ? 'betweenness' :
+                                                metric === 'pagerank' ? 'pagerank' :
+                                                metric === 'eigenvector' ? 'eigenvector' : 'degree';
+                                
+                                const stats = centralityStats?.[statsKey] || { min: 0, max: 1, mean: 0.5 };
+                                const maxValue = Math.max(stats.max, 0.000001); // Avoid division by zero
+                                
+                                // Scale to percentage based on actual max in dataset
+                                const scaledPercentage = Math.min(100, (Number(value) / maxValue) * 100);
+                                
+                                // Format display value based on magnitude
+                                const numValue = Number(value);
+                                const displayValue = numValue < 0.01 
+                                  ? numValue.toExponential(2)
+                                  : (numValue * 100).toFixed(2) + '%';
+                                
+                                return (
+                                  <div key={metric}>
+                                    <div className="flex justify-between items-center mb-1">
+                                      <span className="text-xs capitalize">
+                                        {metric.replace(/([A-Z])/g, ' $1')}
+                                      </span>
+                                      <div className="text-right">
+                                        <span className="text-xs text-primary font-medium">
+                                          {scaledPercentage.toFixed(1)}%
+                                        </span>
+                                        <div className="text-[10px] text-muted-foreground">
+                                          ({displayValue})
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <Progress 
+                                      value={scaledPercentage} 
+                                      className="h-1.5"
+                                    />
                                   </div>
-                                  <Progress 
-                                    value={Number(value) * 100} 
-                                    className="h-1.5"
-                                  />
-                                </div>
-                              ))}
+                                );
+                              })}
                             </>
                           )}
                         </div>

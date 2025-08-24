@@ -10,6 +10,7 @@ const FilterPanel = React.lazy(() => import('./FilterPanel').then(m => ({ defaul
 const StatsPanel = React.lazy(() => import('./StatsPanel').then(m => ({ default: m.StatsPanel })));
 const NodeDetailsPanel = React.lazy(() => import('./NodeDetailsPanel').then(m => ({ default: m.NodeDetailsPanel })));
 import { GraphNavBar } from './GraphNavBar';
+import { CentralityStatsProvider } from '../contexts/CentralityStatsContext';
 
 // Lazy load heavy components
 const GraphTimeline = React.lazy(() => import('./GraphTimeline').then(m => ({ default: m.GraphTimeline })));
@@ -503,12 +504,14 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
             }}
           >
             <React.Suspense fallback={<div className="w-96 h-96 bg-background/80 backdrop-blur-sm rounded-lg animate-pulse" />}>
-              <NodeDetailsPanel
-                node={selectedNode}
-                connections={selectedNodeConnections}
-                onClose={() => clearAllSelections()}
-                onShowNeighbors={handleShowNeighbors}
-              />
+              <CentralityStatsProvider nodes={nodes}>
+                <NodeDetailsPanel
+                  node={selectedNode}
+                  connections={selectedNodeConnections}
+                  onClose={() => clearAllSelections()}
+                  onShowNeighbors={handleShowNeighbors}
+                />
+              </CentralityStatsProvider>
             </React.Suspense>
           </div>
         )}
