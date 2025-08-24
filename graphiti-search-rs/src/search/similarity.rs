@@ -1,6 +1,6 @@
 use crate::error::{SearchError, SearchResult};
 use crate::falkor::FalkorConnection;
-use crate::models::{Community, Edge, Node};
+use crate::models::{Community, Edge, Node, SearchFilters};
 use rayon::prelude::*;
 use std::sync::Arc;
 use tracing::instrument;
@@ -72,9 +72,10 @@ pub async fn search_nodes_by_embedding(
     conn: &mut FalkorConnection,
     embedding: &[f32],
     min_score: f32,
+    filters: &SearchFilters,
     limit: usize,
 ) -> SearchResult<Vec<Node>> {
-    conn.similarity_search_nodes(embedding, limit, min_score)
+    conn.similarity_search_nodes(embedding, limit, min_score, filters.group_ids.as_deref())
         .await
         .map_err(|e| SearchError::Database(e.to_string()))
 }
@@ -84,9 +85,10 @@ pub async fn search_edges_by_embedding(
     conn: &mut FalkorConnection,
     embedding: &[f32],
     min_score: f32,
+    filters: &SearchFilters,
     limit: usize,
 ) -> SearchResult<Vec<Edge>> {
-    conn.similarity_search_edges(embedding, limit, min_score)
+    conn.similarity_search_edges(embedding, limit, min_score, filters.group_ids.as_deref())
         .await
         .map_err(|e| SearchError::Database(e.to_string()))
 }
@@ -96,6 +98,7 @@ pub async fn search_communities_by_embedding(
     _conn: &mut FalkorConnection,
     _embedding: &[f32],
     _min_score: f32,
+    _filters: &SearchFilters,
     _limit: usize,
 ) -> SearchResult<Vec<Community>> {
     // Community search by embedding
