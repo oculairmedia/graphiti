@@ -704,18 +704,11 @@ http_client: httpx.AsyncClient | None = None
 operation_semaphore: asyncio.Semaphore | None = None
 
 # Resource system
-try:
-    from resources import (ResourceManager, EntityResourceHandler, EntityListResourceHandler, EntityRecentResourceHandler,
-                          EpisodeResourceHandler, EpisodeListResourceHandler, NodeSearchResourceHandler, 
-                          FactSearchResourceHandler, SearchResourceHandler, GraphStatsResourceHandler,
-                          NodeMetricsResourceHandler, TemporalAnalyticsResourceHandler, GroupAnalyticsResourceHandler,
-                          WildcardResourceHandler, ParameterizedResourceHandler, DynamicResourceHandler, TemplateRegistryResourceHandler)
-except ImportError:
-    from .resources import (ResourceManager, EntityResourceHandler, EntityListResourceHandler, EntityRecentResourceHandler,
-                           EpisodeResourceHandler, EpisodeListResourceHandler, NodeSearchResourceHandler, 
-                           FactSearchResourceHandler, SearchResourceHandler, GraphStatsResourceHandler,
-                           NodeMetricsResourceHandler, TemporalAnalyticsResourceHandler, GroupAnalyticsResourceHandler,
-                           WildcardResourceHandler, ParameterizedResourceHandler, DynamicResourceHandler, TemplateRegistryResourceHandler)
+from resources import (ResourceManager, EntityResourceHandler, EntityListResourceHandler, EntityRecentResourceHandler,
+                      EpisodeResourceHandler, EpisodeListResourceHandler, NodeSearchResourceHandler, 
+                      FactSearchResourceHandler, SearchResourceHandler, GraphStatsResourceHandler,
+                      NodeMetricsResourceHandler, TemporalAnalyticsResourceHandler, GroupAnalyticsResourceHandler,
+                      WildcardResourceHandler, ParameterizedResourceHandler, DynamicResourceHandler, TemplateRegistryResourceHandler)
 resource_manager: ResourceManager | None = None
 
 
