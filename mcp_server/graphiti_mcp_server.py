@@ -726,7 +726,7 @@ async def initialize_graphiti():
             base_url=config.api.base_url, 
             timeout=timeout,
             limits=limits,
-            http2=True  # Enable HTTP/2 if available
+            http2=False  # Disable HTTP/2 to avoid h2 dependency requirement
         )
         
         # Initialize semaphore for concurrent operations
