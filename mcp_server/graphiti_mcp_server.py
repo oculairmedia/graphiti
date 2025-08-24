@@ -729,20 +729,41 @@ async def search_memory_nodes(
             group_ids if group_ids is not None else [config.group_id] if config.group_id else []
         )
 
-        # Prepare request payload
+        # Prepare Rust service format request payload
         payload = {
             'query': query,
-            'group_ids': effective_group_ids,
-            'max_nodes': max_nodes,
+            'config': {
+                'limit': max_nodes,
+                'reranker_min_score': 0.0,
+                'node_config': {
+                    'search_methods': ['fulltext', 'similarity'],
+                    'reranker': 'rrf',
+                    'bfs_max_depth': 2,
+                    'sim_min_score': 0.3,
+                    'mmr_lambda': 0.5,
+                    'centrality_boost_factor': 1.0
+                },
+                'edge_config': {
+                    'search_methods': [],
+                    'reranker': 'rrf',
+                    'bfs_max_depth': 1,
+                    'sim_min_score': 0.3,
+                    'mmr_lambda': 0.5
+                }
+            },
+            'filters': {}
         }
 
+        # Add filters if provided
+        if effective_group_ids:
+            payload['filters']['group_ids'] = effective_group_ids
         if center_node_uuid:
-            payload['center_node_uuid'] = center_node_uuid
+            payload['filters']['center_node_uuid'] = center_node_uuid
         if entity:
-            payload['entity_types'] = [entity]
+            payload['filters']['entity_type'] = entity
 
-        # Send request to FastAPI server
-        response = await http_client.post('/search/nodes', json=payload)
+        # Send request to Rust search service directly
+        response = await http_client.post('/search', json=payload)
         response.raise_for_status()
 
         result = response.json()
@@ -804,17 +825,37 @@ async def search_memory_facts(
             group_ids if group_ids is not None else [config.group_id] if config.group_id else []
         )
 
-        # Prepare request payload
+        # Prepare Rust service format request payload
         payload = {
             'query': query,
-            'group_ids': effective_group_ids,
-            'max_facts': max_facts,
+            'config': {
+                'limit': max_facts,
+                'reranker_min_score': 0.0,
+                'node_config': {
+                    'search_methods': [],
+                    'reranker': 'rrf',
+                    'bfs_max_depth': 1,
+                    'sim_min_score': 0.3,
+                    'mmr_lambda': 0.5
+                },
+                'edge_config': {
+                    'search_methods': ['fulltext', 'similarity'],
+                    'reranker': 'rrf',
+                    'bfs_max_depth': 2,
+                    'sim_min_score': 0.3,
+                    'mmr_lambda': 0.5
+                }
+            },
+            'filters': {}
         }
 
+        # Add filters if provided
+        if effective_group_ids:
+            payload['filters']['group_ids'] = effective_group_ids
         if center_node_uuid:
-            payload['center_node_uuid'] = center_node_uuid
+            payload['filters']['center_node_uuid'] = center_node_uuid
 
-        # Send request to FastAPI server
+        # Send request to Rust search service directly
         response = await http_client.post('/search', json=payload)
         response.raise_for_status()
 
