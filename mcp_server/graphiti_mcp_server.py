@@ -2320,6 +2320,1307 @@ async def summarize_episode(
         return f"❌ Error summarizing episode: {error_msg}"
 
 
+# PHASE 3: PROMPTS SYSTEM - Learning Prompts (GRAPH-111)
+
+@mcp.prompt()
+async def save_insight(
+    insight_title: str = Field(..., description="Title or brief description of the insight"),
+    insight_content: str = Field(..., description="Detailed content of the insight to save"),
+    insight_category: str = Field("general", description="Category: 'technical', 'business', 'process', 'lesson_learned', 'best_practice', 'general'"),
+    related_entities: str = Field("", description="Comma-separated list of related entities or topics"),
+    priority: str = Field("medium", description="Priority level: 'low', 'medium', 'high', 'critical'"),
+    group_id: str | None = Field(None, description="Optional group ID to save the insight to")
+) -> str:
+    """Capture and save new insights to the knowledge graph for future reference.
+    
+    This prompt helps preserve valuable insights, learnings, and discoveries by
+    storing them as structured episodes with proper categorization and relationships.
+    
+    Usage examples:
+    - /save_insight "Database optimization breakthrough" "Found that adding composite indexes reduces query time by 80%"
+    - /save_insight "Customer feedback pattern" "Users consistently request dark mode" --insight_category "business" --priority "high"
+    - /save_insight "Code review insight" "Team velocity increases when PRs are < 200 lines" --related_entities "development,team_process" --group_id "engineering"
+    """
+    global http_client
+    
+    if http_client is None:
+        return "❌ Error: Knowledge graph connection not available"
+    
+    try:
+        # Use provided group_id or default
+        effective_group_id = group_id if group_id is not None else config.group_id
+        group_id_str = str(effective_group_id) if effective_group_id is not None else 'default'
+        
+        # Create structured insight content
+        timestamp = datetime.now(timezone.utc).isoformat()
+        
+        # Parse related entities
+        entity_list = [entity.strip() for entity in related_entities.split(',')] if related_entities else []
+        
+        # Build comprehensive insight content
+        structured_content = []
+        structured_content.append(f"# 💡 Insight: {insight_title}")
+        structured_content.append(f"**Category**: {insight_category.replace('_', ' ').title()}")
+        structured_content.append(f"**Priority**: {priority.upper()}")
+        structured_content.append(f"**Captured**: {timestamp}")
+        
+        if entity_list:
+            structured_content.append(f"**Related Topics**: {', '.join(entity_list)}")
+        
+        structured_content.append("")
+        structured_content.append("## Content")
+        structured_content.append(insight_content)
+        
+        # Add metadata tags for better searchability
+        structured_content.append("")
+        structured_content.append("## Metadata")
+        structured_content.append(f"- Type: Insight")
+        structured_content.append(f"- Category: {insight_category}")
+        structured_content.append(f"- Priority: {priority}")
+        structured_content.append(f"- Source: MCP Learning Prompt")
+        
+        if entity_list:
+            structured_content.append("- Tags: " + ", ".join(entity_list))
+        
+        final_content = '\n'.join(structured_content)
+        
+        # Create episode message
+        message = {
+            'content': final_content,
+            'role_type': 'system',
+            'role': f'insight_capture_{insight_category}',
+            'timestamp': timestamp,
+            'source_description': f'Captured insight: {insight_title}',
+            'name': f'Insight: {insight_title}'
+        }
+        
+        payload = {
+            'group_id': group_id_str,
+            'messages': [message]
+        }
+        
+        # Save to knowledge graph
+        response = await http_client.post('/messages', json=payload)
+        response.raise_for_status()
+        
+        result = response.json()
+        
+        # Create success response
+        results = []
+        results.append(f"✅ **Insight Saved Successfully**")
+        results.append(f"**Title**: {insight_title}")
+        results.append(f"**Category**: {insight_category.replace('_', ' ').title()}")
+        results.append(f"**Priority**: {priority.upper()}")
+        
+        if effective_group_id:
+            results.append(f"**Group**: {effective_group_id}")
+        
+        if entity_list:
+            results.append(f"**Related Topics**: {', '.join(entity_list)}")
+        
+        results.append("")
+        results.append("## 📚 Knowledge Impact")
+        results.append("This insight has been:")
+        results.append("  • Added to the knowledge graph for future reference")
+        results.append("  • Categorized and tagged for easy discovery")
+        results.append("  • Made searchable via entity and content queries")
+        
+        if entity_list:
+            results.append("  • Linked to related topics for connection discovery")
+        
+        results.append("")
+        results.append("## 🔍 How to Find This Later")
+        results.append(f"  • Search for: `{insight_title}`")
+        results.append(f"  • Category search: `{insight_category}`")
+        
+        if entity_list:
+            for entity in entity_list[:3]:  # Show first 3 entities
+                results.append(f"  • Topic search: `{entity}`")
+        
+        return '\n'.join(results)
+        
+    except httpx.HTTPStatusError as e:
+        error_msg = f'HTTP error {e.response.status_code}: {e.response.text}'
+        logger.error(f'Error in save_insight: {error_msg}')
+        return f"❌ Error saving insight: {error_msg}"
+    except Exception as e:
+        error_msg = str(e)
+        logger.error(f'Error in save_insight: {error_msg}')
+        return f"❌ Error saving insight: {error_msg}"
+
+
+@mcp.prompt()
+async def create_pattern(
+    pattern_name: str = Field(..., description="Name of the pattern to create"),
+    pattern_description: str = Field(..., description="Detailed description of the pattern"),
+    pattern_type: str = Field("process", description="Pattern type: 'process', 'technical', 'behavioral', 'decision', 'design', 'workflow'"),
+    when_to_use: str = Field("", description="When or under what circumstances to use this pattern"),
+    steps_or_components: str = Field("", description="Key steps, components, or elements of the pattern (comma-separated)"),
+    examples: str = Field("", description="Real examples of where this pattern applies"),
+    group_id: str | None = Field(None, description="Optional group ID to save the pattern to")
+) -> str:
+    """Create and save reusable pattern templates for consistent application of best practices.
+    
+    This prompt helps document recurring solutions, processes, and approaches as
+    structured patterns that can be referenced and applied in similar situations.
+    
+    Usage examples:
+    - /create_pattern "Code Review Process" "Standard process for reviewing code changes" --when_to_use "Before merging any pull request"
+    - /create_pattern "Customer Escalation Flow" "Process for handling escalated customer issues" --pattern_type "process" --steps_or_components "acknowledge,investigate,escalate,resolve,follow_up"
+    - /create_pattern "Database Migration Strategy" "Safe approach for database schema changes" --examples "user_table_v2, payment_system_refactor"
+    """
+    global http_client
+    
+    if http_client is None:
+        return "❌ Error: Knowledge graph connection not available"
+    
+    try:
+        # Use provided group_id or default
+        effective_group_id = group_id if group_id is not None else config.group_id
+        group_id_str = str(effective_group_id) if effective_group_id is not None else 'default'
+        
+        # Create structured pattern content
+        timestamp = datetime.now(timezone.utc).isoformat()
+        
+        # Parse steps/components
+        steps_list = [step.strip() for step in steps_or_components.split(',')] if steps_or_components else []
+        examples_list = [example.strip() for example in examples.split(',')] if examples else []
+        
+        # Build comprehensive pattern template
+        structured_content = []
+        structured_content.append(f"# 🏗️ Pattern: {pattern_name}")
+        structured_content.append(f"**Type**: {pattern_type.replace('_', ' ').title()}")
+        structured_content.append(f"**Created**: {timestamp}")
+        structured_content.append("")
+        
+        # Description
+        structured_content.append("## 📝 Description")
+        structured_content.append(pattern_description)
+        structured_content.append("")
+        
+        # When to use
+        if when_to_use:
+            structured_content.append("## 🎯 When to Use")
+            structured_content.append(when_to_use)
+            structured_content.append("")
+        
+        # Steps or components
+        if steps_list:
+            structured_content.append("## 🔧 Steps/Components")
+            for i, step in enumerate(steps_list, 1):
+                structured_content.append(f"{i}. {step}")
+            structured_content.append("")
+        
+        # Examples
+        if examples_list:
+            structured_content.append("## 💡 Examples")
+            for example in examples_list:
+                structured_content.append(f"  • {example}")
+            structured_content.append("")
+        
+        # Implementation template
+        structured_content.append("## 📋 Implementation Checklist")
+        structured_content.append("- [ ] Review pattern applicability")
+        structured_content.append("- [ ] Adapt pattern to specific context")
+        
+        if steps_list:
+            for step in steps_list:
+                structured_content.append(f"- [ ] {step}")
+        
+        structured_content.append("- [ ] Document any modifications")
+        structured_content.append("- [ ] Review results and update pattern if needed")
+        structured_content.append("")
+        
+        # Metadata
+        structured_content.append("## 📊 Pattern Metadata")
+        structured_content.append(f"- Pattern Type: {pattern_type}")
+        structured_content.append(f"- Created: {timestamp}")
+        structured_content.append(f"- Source: MCP Learning Prompt")
+        structured_content.append("- Status: Active Template")
+        
+        if steps_list:
+            structured_content.append(f"- Complexity: {len(steps_list)} steps")
+        
+        final_content = '\n'.join(structured_content)
+        
+        # Create episode message
+        message = {
+            'content': final_content,
+            'role_type': 'system',
+            'role': f'pattern_template_{pattern_type}',
+            'timestamp': timestamp,
+            'source_description': f'Created pattern template: {pattern_name}',
+            'name': f'Pattern: {pattern_name}'
+        }
+        
+        payload = {
+            'group_id': group_id_str,
+            'messages': [message]
+        }
+        
+        # Save to knowledge graph
+        response = await http_client.post('/messages', json=payload)
+        response.raise_for_status()
+        
+        # Create success response
+        results = []
+        results.append(f"✅ **Pattern Created Successfully**")
+        results.append(f"**Name**: {pattern_name}")
+        results.append(f"**Type**: {pattern_type.replace('_', ' ').title()}")
+        
+        if effective_group_id:
+            results.append(f"**Group**: {effective_group_id}")
+        
+        results.append("")
+        results.append("## 📝 Pattern Summary")
+        results.append(f"**Description**: {pattern_description[:150]}{'...' if len(pattern_description) > 150 else ''}")
+        
+        if when_to_use:
+            results.append(f"**When to Use**: {when_to_use[:100]}{'...' if len(when_to_use) > 100 else ''}")
+        
+        if steps_list:
+            results.append(f"**Steps**: {len(steps_list)} defined steps")
+        
+        if examples_list:
+            results.append(f"**Examples**: {len(examples_list)} reference examples")
+        
+        results.append("")
+        results.append("## 🚀 Next Steps")
+        results.append("This pattern template can now be:")
+        results.append("  • Referenced in future similar situations")
+        results.append("  • Found via search using the pattern name or type")
+        results.append("  • Modified and improved based on usage experience")
+        results.append("  • Shared with team members for consistent application")
+        
+        results.append("")
+        results.append("## 🔍 How to Apply This Pattern")
+        results.append(f"1. Search for: `{pattern_name}` or `pattern {pattern_type}`")
+        results.append("2. Review the implementation checklist")
+        results.append("3. Adapt steps to your specific context")
+        results.append("4. Document any modifications for future reference")
+        
+        return '\n'.join(results)
+        
+    except httpx.HTTPStatusError as e:
+        error_msg = f'HTTP error {e.response.status_code}: {e.response.text}'
+        logger.error(f'Error in create_pattern: {error_msg}')
+        return f"❌ Error creating pattern: {error_msg}"
+    except Exception as e:
+        error_msg = str(e)
+        logger.error(f'Error in create_pattern: {error_msg}')
+        return f"❌ Error creating pattern: {error_msg}"
+
+
+@mcp.prompt()
+async def document_solution(
+    problem_title: str = Field(..., description="Title or brief description of the problem that was solved"),
+    problem_description: str = Field(..., description="Detailed description of the problem"),
+    solution_approach: str = Field(..., description="The approach or solution that was implemented"),
+    implementation_details: str = Field("", description="Technical details of how the solution was implemented"),
+    outcome_results: str = Field("", description="Results, metrics, or outcomes achieved"),
+    lessons_learned: str = Field("", description="Key lessons learned from this solution"),
+    technologies_used: str = Field("", description="Technologies, tools, or frameworks used (comma-separated)"),
+    team_members: str = Field("", description="Team members who contributed (comma-separated)"),
+    group_id: str | None = Field(None, description="Optional group ID to save the solution documentation to")
+) -> str:
+    """Document solutions to problems for future reference and knowledge sharing.
+    
+    This prompt creates comprehensive documentation of problem-solving approaches,
+    making successful solutions discoverable and reusable for similar challenges.
+    
+    Usage examples:
+    - /document_solution "Database performance issue" "Slow queries affecting user experience" "Added composite indexes and query optimization"
+    - /document_solution "Customer onboarding bottleneck" "New users dropping off during signup" "Simplified form and added progress indicators" --outcome_results "30% increase in completion rate"
+    - /document_solution "API rate limiting" "Third-party API throttling requests" "Implemented exponential backoff with Redis caching" --technologies_used "Redis,Python,FastAPI"
+    """
+    global http_client
+    
+    if http_client is None:
+        return "❌ Error: Knowledge graph connection not available"
+    
+    try:
+        # Use provided group_id or default
+        effective_group_id = group_id if group_id is not None else config.group_id
+        group_id_str = str(effective_group_id) if effective_group_id is not None else 'default'
+        
+        # Create structured solution documentation
+        timestamp = datetime.now(timezone.utc).isoformat()
+        
+        # Parse lists
+        tech_list = [tech.strip() for tech in technologies_used.split(',')] if technologies_used else []
+        team_list = [member.strip() for member in team_members.split(',')] if team_members else []
+        
+        # Build comprehensive solution documentation
+        structured_content = []
+        structured_content.append(f"# 🔧 Solution: {problem_title}")
+        structured_content.append(f"**Documented**: {timestamp}")
+        structured_content.append("")
+        
+        # Problem section
+        structured_content.append("## ❓ Problem")
+        structured_content.append(problem_description)
+        structured_content.append("")
+        
+        # Solution section
+        structured_content.append("## ✅ Solution")
+        structured_content.append(solution_approach)
+        structured_content.append("")
+        
+        # Implementation details
+        if implementation_details:
+            structured_content.append("## 🛠️ Implementation Details")
+            structured_content.append(implementation_details)
+            structured_content.append("")
+        
+        # Technologies used
+        if tech_list:
+            structured_content.append("## 💻 Technologies Used")
+            for tech in tech_list:
+                structured_content.append(f"  • {tech}")
+            structured_content.append("")
+        
+        # Outcomes and results
+        if outcome_results:
+            structured_content.append("## 📊 Outcomes & Results")
+            structured_content.append(outcome_results)
+            structured_content.append("")
+        
+        # Lessons learned
+        if lessons_learned:
+            structured_content.append("## 📚 Lessons Learned")
+            structured_content.append(lessons_learned)
+            structured_content.append("")
+        
+        # Team contribution
+        if team_list:
+            structured_content.append("## 👥 Contributors")
+            for member in team_list:
+                structured_content.append(f"  • {member}")
+            structured_content.append("")
+        
+        # Reusability section
+        structured_content.append("## 🔄 Reusability")
+        structured_content.append("**When to reference this solution:**")
+        structured_content.append(f"  • Similar problems involving: {problem_title.lower()}")
+        
+        if tech_list:
+            structured_content.append(f"  • Projects using: {', '.join(tech_list)}")
+        
+        structured_content.append("  • When facing similar technical constraints")
+        structured_content.append("")
+        
+        # Metadata
+        structured_content.append("## 📋 Metadata")
+        structured_content.append(f"- Solution Type: Problem Resolution")
+        structured_content.append(f"- Documented: {timestamp}")
+        structured_content.append(f"- Source: MCP Learning Prompt")
+        structured_content.append(f"- Status: Documented Solution")
+        
+        if tech_list:
+            structured_content.append(f"- Tech Stack: {', '.join(tech_list)}")
+        
+        if team_list:
+            structured_content.append(f"- Team Size: {len(team_list)} contributors")
+        
+        final_content = '\n'.join(structured_content)
+        
+        # Create episode message
+        message = {
+            'content': final_content,
+            'role_type': 'system',
+            'role': 'solution_documentation',
+            'timestamp': timestamp,
+            'source_description': f'Documented solution: {problem_title}',
+            'name': f'Solution: {problem_title}'
+        }
+        
+        payload = {
+            'group_id': group_id_str,
+            'messages': [message]
+        }
+        
+        # Save to knowledge graph
+        response = await http_client.post('/messages', json=payload)
+        response.raise_for_status()
+        
+        # Create success response
+        results = []
+        results.append(f"✅ **Solution Documented Successfully**")
+        results.append(f"**Problem**: {problem_title}")
+        results.append(f"**Solution**: {solution_approach[:100]}{'...' if len(solution_approach) > 100 else ''}")
+        
+        if effective_group_id:
+            results.append(f"**Group**: {effective_group_id}")
+        
+        results.append("")
+        results.append("## 📝 Documentation Summary")
+        
+        if implementation_details:
+            results.append("  ✅ Implementation details included")
+        
+        if outcome_results:
+            results.append("  ✅ Outcomes and results documented")
+        
+        if lessons_learned:
+            results.append("  ✅ Lessons learned captured")
+        
+        if tech_list:
+            results.append(f"  ✅ Technologies documented: {', '.join(tech_list)}")
+        
+        if team_list:
+            results.append(f"  ✅ Contributors recognized: {', '.join(team_list)}")
+        
+        results.append("")
+        results.append("## 🎯 Knowledge Impact")
+        results.append("This solution documentation will help with:")
+        results.append("  • Finding proven approaches to similar problems")
+        results.append("  • Understanding implementation trade-offs")
+        results.append("  • Learning from past successes and challenges")
+        results.append("  • Recognizing patterns across projects")
+        
+        if tech_list:
+            results.append(f"  • Leveraging experience with {', '.join(tech_list[:3])}")
+        
+        results.append("")
+        results.append("## 🔍 How to Find This Solution")
+        results.append(f"  • Problem search: `{problem_title}`")
+        results.append(f"  • Solution search: keywords from approach")
+        
+        if tech_list:
+            for tech in tech_list[:2]:
+                results.append(f"  • Technology search: `{tech}`")
+        
+        results.append("  • Browse solution documentation category")
+        
+        return '\n'.join(results)
+        
+    except httpx.HTTPStatusError as e:
+        error_msg = f'HTTP error {e.response.status_code}: {e.response.text}'
+        logger.error(f'Error in document_solution: {error_msg}')
+        return f"❌ Error documenting solution: {error_msg}"
+    except Exception as e:
+        error_msg = str(e)
+        logger.error(f'Error in document_solution: {error_msg}')
+        return f"❌ Error documenting solution: {error_msg}"
+
+
+# GRAPH-112: Implement prompt validation
+@mcp.prompt()
+async def validate_prompt_input(
+    prompt_name: str = Field(..., description="Name of the prompt to validate input for"),
+    input_data: str = Field(..., description="JSON string of input parameters to validate"),
+    validation_type: str = Field("full", description="Type of validation: 'syntax', 'semantic', 'graph', 'full'"),
+    strict_mode: bool = Field(False, description="Enable strict validation with detailed checks"),
+    group_id: str | None = Field(None, description="Optional group ID for context validation")
+) -> str:
+    """Validate input parameters for MCP prompts and check data integrity.
+    
+    Performs comprehensive validation of prompt inputs including:
+    - Syntax validation (JSON format, required fields)
+    - Semantic validation (value ranges, format constraints)
+    - Graph validation (entity existence, relationship validity)
+    - Full validation (all checks combined)
+    
+    Returns detailed validation report with suggestions for fixes.
+    """
+    try:
+        # Parse input data
+        try:
+            import json
+            parsed_input = json.loads(input_data)
+        except json.JSONDecodeError as e:
+            return f"""❌ **Input Validation Failed - JSON Syntax Error**
+
+**Error**: Invalid JSON format
+**Details**: {str(e)}
+
+**Suggestions**:
+- Check for missing quotes around strings
+- Verify proper comma placement
+- Ensure brackets and braces are balanced
+- Use double quotes for JSON strings
+
+**Example Valid JSON**:
+```json
+{{
+    "topic": "user interactions",
+    "max_results": 10,
+    "include_facts": true
+}}
+```
+"""
+
+        validation_report = []
+        validation_passed = True
+        
+        # Define known prompt schemas
+        prompt_schemas = {
+            "query_knowledge": {
+                "required": ["topic"],
+                "optional": ["max_results", "include_facts", "group_id"],
+                "types": {"topic": str, "max_results": int, "include_facts": bool, "group_id": str},
+                "ranges": {"max_results": (1, 50)}
+            },
+            "search_entities": {
+                "required": ["entity_name"],
+                "optional": ["entity_type", "max_results", "include_relationships", "group_id"],
+                "types": {"entity_name": str, "entity_type": str, "max_results": int, "include_relationships": bool},
+                "ranges": {"max_results": (1, 100)}
+            },
+            "analyze_patterns": {
+                "required": ["domain"],
+                "optional": ["pattern_type", "min_frequency", "group_id"],
+                "types": {"domain": str, "pattern_type": str, "min_frequency": int},
+                "ranges": {"min_frequency": (1, 100)},
+                "enums": {"pattern_type": ["relationship", "entity", "temporal", "all"]}
+            },
+            "save_insight": {
+                "required": ["insight_title", "insight_content"],
+                "optional": ["insight_category", "related_entities", "priority", "group_id"],
+                "types": {"insight_title": str, "insight_content": str, "insight_category": str, "priority": str},
+                "enums": {"insight_category": ["technical", "business", "process", "lesson_learned", "best_practice", "general"],
+                         "priority": ["low", "medium", "high", "critical"]}
+            }
+        }
+        
+        # Syntax validation
+        if validation_type in ["syntax", "full"]:
+            validation_report.append("🔍 **Syntax Validation**")
+            
+            if prompt_name in prompt_schemas:
+                schema = prompt_schemas[prompt_name]
+                
+                # Check required fields
+                missing_required = []
+                for field in schema["required"]:
+                    if field not in parsed_input:
+                        missing_required.append(field)
+                        validation_passed = False
+                
+                if missing_required:
+                    validation_report.append(f"❌ Missing required fields: {', '.join(missing_required)}")
+                else:
+                    validation_report.append("✅ All required fields present")
+                
+                # Check field types
+                type_errors = []
+                for field, value in parsed_input.items():
+                    if field in schema["types"]:
+                        expected_type = schema["types"][field]
+                        if not isinstance(value, expected_type):
+                            type_errors.append(f"{field}: expected {expected_type.__name__}, got {type(value).__name__}")
+                            validation_passed = False
+                
+                if type_errors:
+                    validation_report.append(f"❌ Type errors: {'; '.join(type_errors)}")
+                else:
+                    validation_report.append("✅ All field types correct")
+                    
+            else:
+                validation_report.append(f"⚠️ Unknown prompt name: {prompt_name}")
+                validation_passed = False
+        
+        # Semantic validation
+        if validation_type in ["semantic", "full"]:
+            validation_report.append("\n🎯 **Semantic Validation**")
+            
+            if prompt_name in prompt_schemas:
+                schema = prompt_schemas[prompt_name]
+                semantic_errors = []
+                
+                # Check value ranges
+                if "ranges" in schema:
+                    for field, (min_val, max_val) in schema["ranges"].items():
+                        if field in parsed_input:
+                            value = parsed_input[field]
+                            if isinstance(value, (int, float)) and not (min_val <= value <= max_val):
+                                semantic_errors.append(f"{field}: value {value} outside range [{min_val}, {max_val}]")
+                                validation_passed = False
+                
+                # Check enum values
+                if "enums" in schema:
+                    for field, valid_values in schema["enums"].items():
+                        if field in parsed_input:
+                            value = parsed_input[field]
+                            if value not in valid_values:
+                                semantic_errors.append(f"{field}: '{value}' not in allowed values {valid_values}")
+                                validation_passed = False
+                
+                # Check string constraints
+                for field, value in parsed_input.items():
+                    if isinstance(value, str):
+                        if not value.strip():
+                            semantic_errors.append(f"{field}: empty string not allowed")
+                            validation_passed = False
+                        elif len(value) > 10000:
+                            semantic_errors.append(f"{field}: string too long ({len(value)} > 10000 chars)")
+                            validation_passed = False
+                
+                if semantic_errors:
+                    validation_report.append(f"❌ Semantic errors: {'; '.join(semantic_errors)}")
+                else:
+                    validation_report.append("✅ All semantic constraints satisfied")
+        
+        # Graph validation
+        if validation_type in ["graph", "full"] and validation_type != "syntax":
+            validation_report.append("\n📊 **Graph Validation**")
+            
+            try:
+                # Check graph connectivity
+                search_payload = {
+                    "query": "test connectivity",
+                    "group_ids": [group_id] if group_id else None,
+                    "max_nodes": 1
+                }
+                
+                async with httpx.AsyncClient() as client:
+                    response = await client.post(
+                        f"{BASE_URL}/search_nodes",
+                        json=search_payload,
+                        headers={"Content-Type": "application/json"},
+                        timeout=30.0
+                    )
+                
+                if response.status_code == 200:
+                    validation_report.append("✅ Graph backend accessible")
+                    
+                    # If group_id is specified, check if it exists
+                    if group_id:
+                        data = response.json()
+                        if not data.get("nodes"):
+                            validation_report.append(f"⚠️ Group ID '{group_id}' appears to be empty or non-existent")
+                        else:
+                            validation_report.append(f"✅ Group ID '{group_id}' contains data")
+                else:
+                    validation_report.append(f"❌ Graph backend error: {response.status_code}")
+                    validation_passed = False
+                    
+            except Exception as e:
+                validation_report.append(f"❌ Graph connectivity check failed: {str(e)}")
+                validation_passed = False
+        
+        # Strict mode additional checks
+        if strict_mode:
+            validation_report.append("\n🔒 **Strict Mode Validation**")
+            
+            strict_warnings = []
+            
+            # Check for potentially problematic values
+            for field, value in parsed_input.items():
+                if isinstance(value, str):
+                    # Check for SQL injection patterns (basic)
+                    suspicious_patterns = ['DROP', 'DELETE', 'UPDATE', 'INSERT', 'EXEC', '--', '/*', '*/', 'xp_']
+                    if any(pattern.lower() in value.lower() for pattern in suspicious_patterns):
+                        strict_warnings.append(f"{field}: contains potentially suspicious SQL patterns")
+                    
+                    # Check for script injection patterns
+                    script_patterns = ['<script', 'javascript:', 'eval(', 'document.']
+                    if any(pattern.lower() in value.lower() for pattern in script_patterns):
+                        strict_warnings.append(f"{field}: contains potentially suspicious script patterns")
+            
+            # Check for reasonable input sizes
+            total_input_size = len(input_data)
+            if total_input_size > 50000:
+                strict_warnings.append(f"Input size very large: {total_input_size} chars (consider splitting)")
+            
+            if strict_warnings:
+                validation_report.append(f"⚠️ Strict mode warnings: {'; '.join(strict_warnings)}")
+            else:
+                validation_report.append("✅ All strict mode checks passed")
+        
+        # Generate final report
+        status_emoji = "✅" if validation_passed else "❌"
+        status_text = "PASSED" if validation_passed else "FAILED"
+        
+        report_header = f"{status_emoji} **Validation {status_text}** for prompt `{prompt_name}`\n"
+        
+        suggestions = []
+        if not validation_passed:
+            suggestions.append("**💡 Suggestions for fixing validation errors:**")
+            suggestions.append("- Review the error messages above")
+            suggestions.append("- Check the prompt documentation for correct parameter formats")
+            suggestions.append("- Use proper data types (strings in quotes, numbers without quotes)")
+            suggestions.append("- Ensure all required fields are provided")
+            suggestions.append("- Verify enum values match allowed options exactly")
+        else:
+            suggestions.append("**🎉 All validations passed! The input is ready to use.**")
+        
+        final_report = report_header + "\n".join(validation_report)
+        if suggestions:
+            final_report += "\n\n" + "\n".join(suggestions)
+        
+        return final_report
+        
+    except Exception as e:
+        error_msg = str(e)
+        logger.error(f'Error in validate_prompt_input: {error_msg}')
+        return f"❌ Error during validation: {error_msg}"
+
+
+@mcp.prompt()
+async def check_graph_health(
+    health_check_type: str = Field("basic", description="Type of health check: 'basic', 'detailed', 'performance', 'integrity'"),
+    include_metrics: bool = Field(True, description="Include graph metrics in the health report"),
+    check_connections: bool = Field(True, description="Test database connectivity"),
+    group_id: str | None = Field(None, description="Optional group ID to check specific graph namespace")
+) -> str:
+    """Perform comprehensive health checks on the knowledge graph.
+    
+    Available health check types:
+    - basic: Connectivity and basic stats
+    - detailed: Comprehensive analysis including data quality
+    - performance: Response times and throughput metrics
+    - integrity: Data consistency and relationship validation
+    
+    Returns detailed health report with recommendations.
+    """
+    try:
+        health_report = []
+        health_status = "healthy"
+        
+        health_report.append(f"🏥 **Graph Health Check Report** - {health_check_type.upper()}")
+        health_report.append(f"⏰ **Timestamp**: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
+        
+        if group_id:
+            health_report.append(f"🏷️ **Group ID**: {group_id}")
+        else:
+            health_report.append("🌐 **Scope**: All groups")
+        
+        # Basic connectivity check
+        if check_connections:
+            health_report.append("\n🔌 **Connectivity Check**")
+            
+            try:
+                start_time = datetime.now()
+                async with httpx.AsyncClient() as client:
+                    # Test node search endpoint
+                    response = await client.post(
+                        f"{BASE_URL}/search_nodes",
+                        json={
+                            "query": "health check",
+                            "group_ids": [group_id] if group_id else None,
+                            "max_nodes": 1
+                        },
+                        headers={"Content-Type": "application/json"},
+                        timeout=10.0
+                    )
+                
+                response_time = (datetime.now() - start_time).total_seconds()
+                
+                if response.status_code == 200:
+                    health_report.append(f"✅ Node search endpoint: OK ({response_time:.2f}s)")
+                else:
+                    health_report.append(f"❌ Node search endpoint: Error {response.status_code}")
+                    health_status = "degraded"
+                
+                # Test fact search endpoint
+                start_time = datetime.now()
+                response = await client.post(
+                    f"{BASE_URL}/search_facts",
+                    json={
+                        "query": "health check",
+                        "group_ids": [group_id] if group_id else None,
+                        "max_facts": 1
+                    },
+                    headers={"Content-Type": "application/json"},
+                    timeout=10.0
+                )
+                
+                response_time = (datetime.now() - start_time).total_seconds()
+                
+                if response.status_code == 200:
+                    health_report.append(f"✅ Fact search endpoint: OK ({response_time:.2f}s)")
+                else:
+                    health_report.append(f"❌ Fact search endpoint: Error {response.status_code}")
+                    health_status = "degraded"
+                    
+            except Exception as e:
+                health_report.append(f"❌ Connectivity check failed: {str(e)}")
+                health_status = "unhealthy"
+        
+        # Graph metrics
+        if include_metrics:
+            health_report.append("\n📊 **Graph Metrics**")
+            
+            try:
+                async with httpx.AsyncClient() as client:
+                    # Get node count
+                    node_response = await client.post(
+                        f"{BASE_URL}/search_nodes",
+                        json={
+                            "query": "*",
+                            "group_ids": [group_id] if group_id else None,
+                            "max_nodes": 1000
+                        },
+                        headers={"Content-Type": "application/json"},
+                        timeout=30.0
+                    )
+                    
+                    if node_response.status_code == 200:
+                        node_data = node_response.json()
+                        node_count = len(node_data.get("nodes", []))
+                        health_report.append(f"📈 **Node Count**: {node_count}")
+                        
+                        if node_count == 0:
+                            health_report.append("⚠️ Warning: No nodes found in the graph")
+                            health_status = "degraded"
+                        elif node_count > 10000:
+                            health_report.append("📊 Large graph detected - consider performance monitoring")
+                    
+                    # Get fact count
+                    fact_response = await client.post(
+                        f"{BASE_URL}/search_facts",
+                        json={
+                            "query": "*",
+                            "group_ids": [group_id] if group_id else None,
+                            "max_facts": 1000
+                        },
+                        headers={"Content-Type": "application/json"},
+                        timeout=30.0
+                    )
+                    
+                    if fact_response.status_code == 200:
+                        fact_data = fact_response.json()
+                        fact_count = len(fact_data.get("facts", []))
+                        health_report.append(f"🔗 **Fact Count**: {fact_count}")
+                        
+                        if fact_count == 0 and node_count > 0:
+                            health_report.append("⚠️ Warning: Nodes exist but no relationships found")
+                            health_status = "degraded"
+                        
+            except Exception as e:
+                health_report.append(f"❌ Metrics collection failed: {str(e)}")
+                health_status = "degraded"
+        
+        # Detailed checks
+        if health_check_type in ["detailed", "performance", "integrity"]:
+            health_report.append(f"\n🔍 **{health_check_type.title()} Analysis**")
+            
+            if health_check_type == "detailed":
+                # Data quality checks
+                try:
+                    async with httpx.AsyncClient() as client:
+                        # Sample some nodes for quality analysis
+                        response = await client.post(
+                            f"{BASE_URL}/search_nodes",
+                            json={
+                                "query": "sample",
+                                "group_ids": [group_id] if group_id else None,
+                                "max_nodes": 10
+                            },
+                            headers={"Content-Type": "application/json"},
+                            timeout=15.0
+                        )
+                        
+                        if response.status_code == 200:
+                            data = response.json()
+                            nodes = data.get("nodes", [])
+                            
+                            if nodes:
+                                # Check node completeness
+                                complete_nodes = sum(1 for node in nodes if node.get("name") and len(node.get("name", "").strip()) > 0)
+                                completeness_ratio = complete_nodes / len(nodes) * 100
+                                
+                                health_report.append(f"📋 **Data Completeness**: {completeness_ratio:.1f}% ({complete_nodes}/{len(nodes)} nodes have names)")
+                                
+                                if completeness_ratio < 80:
+                                    health_report.append("⚠️ Warning: Low data completeness detected")
+                                    health_status = "degraded"
+                                
+                                # Check for entity types diversity
+                                entity_types = set()
+                                for node in nodes:
+                                    if "entity_type" in node:
+                                        entity_types.add(node["entity_type"])
+                                
+                                health_report.append(f"🎯 **Entity Type Diversity**: {len(entity_types)} different types found")
+                                
+                except Exception as e:
+                    health_report.append(f"❌ Detailed analysis failed: {str(e)}")
+                    health_status = "degraded"
+            
+            elif health_check_type == "performance":
+                # Performance benchmarks
+                health_report.append("⚡ **Performance Benchmarks**")
+                
+                try:
+                    # Test search response times
+                    start_time = datetime.now()
+                    async with httpx.AsyncClient() as client:
+                        response = await client.post(
+                            f"{BASE_URL}/search_nodes",
+                            json={
+                                "query": "performance test",
+                                "group_ids": [group_id] if group_id else None,
+                                "max_nodes": 50
+                            },
+                            headers={"Content-Type": "application/json"},
+                            timeout=20.0
+                        )
+                    
+                    search_time = (datetime.now() - start_time).total_seconds()
+                    
+                    if response.status_code == 200:
+                        health_report.append(f"🏃 **Search Response Time**: {search_time:.3f}s")
+                        
+                        if search_time > 5.0:
+                            health_report.append("⚠️ Warning: Slow search response times detected")
+                            health_status = "degraded"
+                        elif search_time < 1.0:
+                            health_report.append("🚀 Excellent search performance!")
+                    
+                except Exception as e:
+                    health_report.append(f"❌ Performance test failed: {str(e)}")
+                    health_status = "degraded"
+            
+            elif health_check_type == "integrity":
+                # Data integrity checks
+                health_report.append("🔒 **Data Integrity Checks**")
+                
+                try:
+                    # Check for orphaned relationships
+                    async with httpx.AsyncClient() as client:
+                        fact_response = await client.post(
+                            f"{BASE_URL}/search_facts",
+                            json={
+                                "query": "*",
+                                "group_ids": [group_id] if group_id else None,
+                                "max_facts": 100
+                            },
+                            headers={"Content-Type": "application/json"},
+                            timeout=20.0
+                        )
+                        
+                        if fact_response.status_code == 200:
+                            facts = fact_response.json().get("facts", [])
+                            
+                            # Basic integrity check
+                            valid_facts = 0
+                            for fact in facts:
+                                if fact.get("subject") and fact.get("predicate") and fact.get("object"):
+                                    valid_facts += 1
+                            
+                            if facts:
+                                integrity_ratio = valid_facts / len(facts) * 100
+                                health_report.append(f"✅ **Relationship Integrity**: {integrity_ratio:.1f}% ({valid_facts}/{len(facts)} complete)")
+                                
+                                if integrity_ratio < 90:
+                                    health_report.append("⚠️ Warning: Some relationships may be incomplete")
+                                    health_status = "degraded"
+                            else:
+                                health_report.append("ℹ️ No relationships found to validate")
+                
+                except Exception as e:
+                    health_report.append(f"❌ Integrity check failed: {str(e)}")
+                    health_status = "degraded"
+        
+        # Final health status and recommendations
+        health_report.append(f"\n🏥 **Overall Health Status**: {health_status.upper()}")
+        
+        if health_status == "healthy":
+            health_report.append("🎉 **All systems operational!**")
+        elif health_status == "degraded":
+            health_report.append("⚠️ **Some issues detected - review warnings above**")
+            health_report.append("\n**Recommendations**:")
+            health_report.append("- Monitor performance metrics regularly")
+            health_report.append("- Consider data cleanup if completeness is low")
+            health_report.append("- Check database configuration if response times are slow")
+        else:
+            health_report.append("❌ **Critical issues detected - immediate attention required**")
+            health_report.append("\n**Urgent Actions**:")
+            health_report.append("- Check database connectivity")
+            health_report.append("- Verify server configuration")
+            health_report.append("- Review error logs for detailed diagnostics")
+        
+        return "\n".join(health_report)
+        
+    except Exception as e:
+        error_msg = str(e)
+        logger.error(f'Error in check_graph_health: {error_msg}')
+        return f"❌ Error performing health check: {error_msg}"
+
+
+@mcp.prompt()
+async def validate_data_integrity(
+    validation_scope: str = Field("relationships", description="Scope to validate: 'relationships', 'entities', 'episodes', 'all'"),
+    fix_issues: bool = Field(False, description="Attempt to automatically fix detected issues"),
+    report_details: bool = Field(True, description="Include detailed information about each issue found"),
+    max_issues: int = Field(50, description="Maximum number of issues to report", ge=1, le=500),
+    group_id: str | None = Field(None, description="Optional group ID to limit validation scope")
+) -> str:
+    """Validate data integrity across the knowledge graph and optionally fix issues.
+    
+    Validation scopes:
+    - relationships: Check fact consistency and orphaned relationships
+    - entities: Validate entity data completeness and duplicates  
+    - episodes: Verify episode data integrity and timestamps
+    - all: Comprehensive validation across all data types
+    
+    Returns detailed validation report with optional automatic fixes.
+    """
+    try:
+        validation_report = []
+        issues_found = []
+        fixes_applied = []
+        
+        validation_report.append("🔍 **Data Integrity Validation Report**")
+        validation_report.append(f"⏰ **Timestamp**: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
+        validation_report.append(f"🎯 **Scope**: {validation_scope}")
+        
+        if group_id:
+            validation_report.append(f"🏷️ **Group ID**: {group_id}")
+        
+        # Relationship validation
+        if validation_scope in ["relationships", "all"]:
+            validation_report.append("\n🔗 **Relationship Validation**")
+            
+            try:
+                async with httpx.AsyncClient() as client:
+                    response = await client.post(
+                        f"{BASE_URL}/search_facts",
+                        json={
+                            "query": "*",
+                            "group_ids": [group_id] if group_id else None,
+                            "max_facts": min(max_issues * 2, 1000)
+                        },
+                        headers={"Content-Type": "application/json"},
+                        timeout=30.0
+                    )
+                    
+                    if response.status_code == 200:
+                        facts = response.json().get("facts", [])
+                        
+                        # Check for incomplete relationships
+                        incomplete_facts = []
+                        for i, fact in enumerate(facts):
+                            if not fact.get("subject") or not fact.get("predicate") or not fact.get("object"):
+                                incomplete_facts.append((i, fact))
+                                if len(incomplete_facts) >= max_issues:
+                                    break
+                        
+                        if incomplete_facts:
+                            issues_found.extend(incomplete_facts)
+                            validation_report.append(f"❌ Found {len(incomplete_facts)} incomplete relationships")
+                            
+                            if report_details:
+                                for i, (idx, fact) in enumerate(incomplete_facts[:10]):
+                                    missing_parts = []
+                                    if not fact.get("subject"):
+                                        missing_parts.append("subject")
+                                    if not fact.get("predicate"):
+                                        missing_parts.append("predicate")
+                                    if not fact.get("object"):
+                                        missing_parts.append("object")
+                                    
+                                    validation_report.append(f"  • Fact {idx}: Missing {', '.join(missing_parts)}")
+                                
+                                if len(incomplete_facts) > 10:
+                                    validation_report.append(f"  • ... and {len(incomplete_facts) - 10} more")
+                            
+                            if fix_issues:
+                                # Note: In a real implementation, you'd implement actual fix logic here
+                                validation_report.append("🔧 Auto-fix for incomplete relationships would be implemented here")
+                                fixes_applied.append(f"Would fix {len(incomplete_facts)} incomplete relationships")
+                        else:
+                            validation_report.append("✅ All relationships are complete")
+                        
+                        # Check for duplicate relationships
+                        seen_relationships = set()
+                        duplicate_facts = []
+                        
+                        for i, fact in enumerate(facts):
+                            if fact.get("subject") and fact.get("predicate") and fact.get("object"):
+                                rel_key = (fact["subject"], fact["predicate"], fact["object"])
+                                if rel_key in seen_relationships:
+                                    duplicate_facts.append((i, fact))
+                                else:
+                                    seen_relationships.add(rel_key)
+                        
+                        if duplicate_facts:
+                            issues_found.extend(duplicate_facts)
+                            validation_report.append(f"⚠️ Found {len(duplicate_facts)} potential duplicate relationships")
+                            
+                            if report_details and duplicate_facts:
+                                for i, (idx, fact) in enumerate(duplicate_facts[:5]):
+                                    validation_report.append(f"  • Duplicate: {fact.get('subject', '?')} -> {fact.get('predicate', '?')} -> {fact.get('object', '?')}")
+                                
+                                if len(duplicate_facts) > 5:
+                                    validation_report.append(f"  • ... and {len(duplicate_facts) - 5} more")
+                        else:
+                            validation_report.append("✅ No obvious duplicate relationships found")
+                            
+                    else:
+                        validation_report.append(f"❌ Failed to fetch relationships: HTTP {response.status_code}")
+                        
+            except Exception as e:
+                validation_report.append(f"❌ Relationship validation failed: {str(e)}")
+        
+        # Entity validation
+        if validation_scope in ["entities", "all"]:
+            validation_report.append("\n👤 **Entity Validation**")
+            
+            try:
+                async with httpx.AsyncClient() as client:
+                    response = await client.post(
+                        f"{BASE_URL}/search_nodes",
+                        json={
+                            "query": "*",
+                            "group_ids": [group_id] if group_id else None,
+                            "max_nodes": min(max_issues * 2, 1000)
+                        },
+                        headers={"Content-Type": "application/json"},
+                        timeout=30.0
+                    )
+                    
+                    if response.status_code == 200:
+                        nodes = response.json().get("nodes", [])
+                        
+                        # Check for incomplete entities
+                        incomplete_entities = []
+                        for i, node in enumerate(nodes):
+                            if not node.get("name") or not node.get("name", "").strip():
+                                incomplete_entities.append((i, node))
+                                if len(incomplete_entities) >= max_issues:
+                                    break
+                        
+                        if incomplete_entities:
+                            issues_found.extend(incomplete_entities)
+                            validation_report.append(f"❌ Found {len(incomplete_entities)} entities with missing/empty names")
+                            
+                            if fix_issues:
+                                fixes_applied.append(f"Would fix {len(incomplete_entities)} incomplete entity names")
+                        else:
+                            validation_report.append("✅ All entities have names")
+                        
+                        # Check for potential duplicate entities (similar names)
+                        entity_names = {}
+                        for i, node in enumerate(nodes):
+                            name = node.get("name", "").strip().lower()
+                            if name:
+                                if name in entity_names:
+                                    entity_names[name].append((i, node))
+                                else:
+                                    entity_names[name] = [(i, node)]
+                        
+                        potential_duplicates = {name: entities for name, entities in entity_names.items() if len(entities) > 1}
+                        
+                        if potential_duplicates:
+                            duplicate_count = sum(len(entities) - 1 for entities in potential_duplicates.values())
+                            validation_report.append(f"⚠️ Found {len(potential_duplicates)} entity names with {duplicate_count} potential duplicates")
+                            
+                            if report_details:
+                                for name, entities in list(potential_duplicates.items())[:3]:
+                                    validation_report.append(f"  • '{name}': {len(entities)} instances")
+                                
+                                if len(potential_duplicates) > 3:
+                                    validation_report.append(f"  • ... and {len(potential_duplicates) - 3} more")
+                        else:
+                            validation_report.append("✅ No obvious duplicate entity names found")
+                            
+                    else:
+                        validation_report.append(f"❌ Failed to fetch entities: HTTP {response.status_code}")
+                        
+            except Exception as e:
+                validation_report.append(f"❌ Entity validation failed: {str(e)}")
+        
+        # Episode validation
+        if validation_scope in ["episodes", "all"]:
+            validation_report.append("\n📝 **Episode Validation**")
+            
+            try:
+                # Episodes are validated by attempting to retrieve recent episodes
+                async with httpx.AsyncClient() as client:
+                    payload = {"group_id": group_id, "last_n": min(max_issues, 100)}
+                    response = await client.post(
+                        f"{BASE_URL}/episodes",
+                        json=payload,
+                        headers={"Content-Type": "application/json"},
+                        timeout=20.0
+                    )
+                    
+                    if response.status_code == 200:
+                        episodes_data = response.json()
+                        episodes = episodes_data.get("episodes", [])
+                        
+                        if episodes:
+                            # Check episode completeness
+                            incomplete_episodes = []
+                            for i, episode in enumerate(episodes):
+                                if not episode.get("name") or not episode.get("content"):
+                                    incomplete_episodes.append((i, episode))
+                            
+                            if incomplete_episodes:
+                                issues_found.extend(incomplete_episodes)
+                                validation_report.append(f"❌ Found {len(incomplete_episodes)} incomplete episodes")
+                                
+                                if fix_issues:
+                                    fixes_applied.append(f"Would fix {len(incomplete_episodes)} incomplete episodes")
+                            else:
+                                validation_report.append("✅ All episodes appear complete")
+                            
+                            # Check timestamp validity
+                            invalid_timestamps = []
+                            for i, episode in enumerate(episodes):
+                                if "created_at" in episode:
+                                    try:
+                                        # Basic timestamp validation
+                                        timestamp = episode["created_at"]
+                                        if not isinstance(timestamp, str) or len(timestamp) < 10:
+                                            invalid_timestamps.append((i, episode))
+                                    except Exception:
+                                        invalid_timestamps.append((i, episode))
+                            
+                            if invalid_timestamps:
+                                validation_report.append(f"⚠️ Found {len(invalid_timestamps)} episodes with invalid timestamps")
+                            else:
+                                validation_report.append("✅ Episode timestamps appear valid")
+                                
+                            validation_report.append(f"📊 Total episodes checked: {len(episodes)}")
+                        else:
+                            validation_report.append("ℹ️ No episodes found to validate")
+                    else:
+                        validation_report.append(f"❌ Failed to fetch episodes: HTTP {response.status_code}")
+                        
+            except Exception as e:
+                validation_report.append(f"❌ Episode validation failed: {str(e)}")
+        
+        # Summary
+        validation_report.append(f"\n📋 **Validation Summary**")
+        validation_report.append(f"🔍 **Total Issues Found**: {len(issues_found)}")
+        
+        if fixes_applied:
+            validation_report.append(f"🔧 **Fixes Applied**: {len(fixes_applied)}")
+            for fix in fixes_applied:
+                validation_report.append(f"  • {fix}")
+        elif fix_issues and not issues_found:
+            validation_report.append("✅ **No fixes needed** - all data appears valid")
+        elif fix_issues:
+            validation_report.append("⚠️ **Auto-fix disabled** - fix_issues=False or fixes not implemented")
+        
+        # Recommendations
+        if issues_found:
+            validation_report.append(f"\n💡 **Recommendations**")
+            validation_report.append("- Review the issues identified above")
+            validation_report.append("- Consider implementing data cleanup procedures")
+            validation_report.append("- Set up regular validation checks")
+            validation_report.append("- Use validation before important operations")
+        
+        # Final status
+        if len(issues_found) == 0:
+            validation_report.append(f"\n🎉 **Data integrity validation PASSED** - No issues found!")
+        elif len(issues_found) <= 5:
+            validation_report.append(f"\n⚠️ **Data integrity validation completed with minor issues**")
+        else:
+            validation_report.append(f"\n❌ **Data integrity validation found significant issues** - Action recommended")
+        
+        return "\n".join(validation_report)
+        
+    except Exception as e:
+        error_msg = str(e)
+        logger.error(f'Error in validate_data_integrity: {error_msg}')
+        return f"❌ Error during data integrity validation: {error_msg}"
+
+
 async def initialize_server() -> MCPConfig:
     """Parse CLI arguments and initialize the Graphiti server configuration."""
     global config

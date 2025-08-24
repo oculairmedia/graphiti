@@ -2,7 +2,7 @@ name: Build and Push MCP Server Container
 
 on:
   push:
-    branches: [ main, data-validation-framework ]
+    branches: [ main, data-validation-framework, feature/mcp-fastmcp-enhancement ]
     paths:
       - 'mcp_server/**'
       - 'graphiti_core/**'
