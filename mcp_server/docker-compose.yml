@@ -14,7 +14,7 @@ services:
       start_period: 15s
 
   graphiti-mcp:
-    image: ghcr.io/oculairmedia/graphiti-mcp:feature-mcp-fastmcp-enhancement
+    image: ghcr.io/oculairmedia/graphiti-mcp:main
     build:
       context: .
       dockerfile: Dockerfile
