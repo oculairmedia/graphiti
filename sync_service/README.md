@@ -331,3 +331,6 @@ This sync service is tracked in Huly project **GRAPH** under the "Neo4j-FalkorDB
 ## License
 
 Copyright 2024, Zep Software, Inc. Licensed under the Apache License 2.0.
+
+---
+*Last updated: August 25, 2025 - Build trigger test*
