@@ -724,10 +724,8 @@ async def search_memory_nodes(
         raise McpError(ErrorCode.INTERNAL_ERROR, 'HTTP client not initialized')
 
     try:
-        # Use the provided group_ids or fall back to the default from config if none provided
-        effective_group_ids = (
-            group_ids if group_ids is not None else [config.group_id] if config.group_id else []
-        )
+        # Use the provided group_ids or default to empty (search all groups)
+        effective_group_ids = group_ids if group_ids is not None else []
 
         # Prepare request payload for Python proxy
         payload = {
@@ -801,10 +799,8 @@ async def search_memory_facts(
         if max_facts <= 0:
             raise McpError(ErrorCode.INVALID_PARAMS, 'max_facts must be a positive integer')
 
-        # Use the provided group_ids or fall back to the default from config if none provided
-        effective_group_ids = (
-            group_ids if group_ids is not None else [config.group_id] if config.group_id else []
-        )
+        # Use the provided group_ids or default to empty (search all groups)
+        effective_group_ids = group_ids if group_ids is not None else []
 
         # Prepare request payload for Python proxy  
         payload = {
