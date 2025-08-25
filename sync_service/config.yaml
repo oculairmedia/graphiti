@@ -16,13 +16,16 @@ falkordb:
   database: "graphiti_migration"
 
 sync:
-  interval_seconds: 300  # 5 minutes
-  batch_size: 1000
-  full_sync_on_startup: false
-  enable_incremental: true
-  enable_continuous: true
-  max_retries: 3
-  retry_delay_seconds: 30
+  interval_seconds: 180  # 3 minutes (more frequent backup)
+  batch_size: 500        # Smaller batches for reliability
+  full_sync_on_startup: false  # Disable automatic startup sync (we'll handle intelligently)
+  enable_incremental: false    # Forward sync disabled
+  enable_continuous: true      # Enable continuous sync
+  sync_direction: "reverse"    # FalkorDB → Neo4j (reverse sync)
+  enable_reverse_incremental: true  # Enable reverse incremental sync
+  max_retries: 5          # More retries for reliability
+  retry_delay_seconds: 15 # Faster retry recovery
+  auto_recovery: true     # Enable automatic disaster recovery
 
 logging:
   level: "INFO"
