@@ -65,6 +65,10 @@ class HealthServer:
         self.app.router.add_post('/api/sync/full', self.trigger_full_sync)
         self.app.router.add_post('/api/sync/incremental', self.trigger_incremental_sync)
         
+        # Reverse sync endpoints
+        self.app.router.add_post('/api/sync/reverse/full', self.trigger_reverse_full_sync)
+        self.app.router.add_post('/api/sync/reverse/incremental', self.trigger_reverse_incremental_sync)
+        
         # WebSocket endpoint for real-time updates
         self.app.router.add_get('/ws/updates', self.websocket_handler)
         
@@ -264,6 +268,68 @@ class HealthServer:
             return web.json_response(result)
         except Exception as e:
             logger.error(f"Failed to trigger incremental sync: {e}")
+            return web.json_response({"error": str(e)}, status=500)
+            
+    async def trigger_reverse_full_sync(self, request: Request) -> Response:
+        """Trigger a reverse full sync operation (FalkorDB → Neo4j)."""
+        try:
+            # Parse request parameters
+            data = await request.json() if request.has_body else {}
+            clear_target = data.get('clear_target', False)
+            force_override_safety = data.get('force_override_safety', False)
+            safety_threshold = data.get('safety_threshold', 0.5)
+            
+            operation_stats = await self.sync_orchestrator.sync_reverse_full(
+                clear_target=clear_target,
+                force_override_safety=force_override_safety,
+                safety_threshold=safety_threshold
+            )
+            
+            # Convert to serializable format
+            result = {
+                "mode": operation_stats.mode.value,
+                "status": operation_stats.status.value,
+                "duration_seconds": operation_stats.duration_seconds,
+                "total_items_processed": operation_stats.total_items_processed,
+                "success_rate": operation_stats.success_rate,
+                "errors": operation_stats.errors
+            }
+            
+            return web.json_response(result)
+        except Exception as e:
+            logger.error(f"Failed to trigger reverse full sync: {e}")
+            return web.json_response({"error": str(e)}, status=500)
+            
+    async def trigger_reverse_incremental_sync(self, request: Request) -> Response:
+        """Trigger a reverse incremental sync operation (FalkorDB → Neo4j)."""
+        try:
+            # Parse request parameters
+            data = await request.json() if request.has_body else {}
+            safety_threshold = data.get('safety_threshold', 0.5)
+            since_timestamp = None
+            
+            if 'since_timestamp' in data:
+                from datetime import datetime
+                since_timestamp = datetime.fromisoformat(data['since_timestamp'].replace('Z', '+00:00'))
+            
+            operation_stats = await self.sync_orchestrator.sync_reverse_incremental(
+                since_timestamp=since_timestamp,
+                safety_threshold=safety_threshold
+            )
+            
+            # Convert to serializable format
+            result = {
+                "mode": operation_stats.mode.value,
+                "status": operation_stats.status.value,
+                "duration_seconds": operation_stats.duration_seconds,
+                "total_items_processed": operation_stats.total_items_processed,
+                "success_rate": operation_stats.success_rate,
+                "errors": operation_stats.errors
+            }
+            
+            return web.json_response(result)
+        except Exception as e:
+            logger.error(f"Failed to trigger reverse incremental sync: {e}")
             return web.json_response({"error": str(e)}, status=500)
             
     async def websocket_handler(self, request: Request) -> WebSocketResponse:
