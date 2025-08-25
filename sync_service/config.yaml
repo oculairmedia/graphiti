@@ -4,7 +4,7 @@
 neo4j:
   uri: "bolt://neo4j:7687"
   user: "neo4j"
-  password: "graphiti123" 
+  password: "demodemo" 
   database: "neo4j"
   pool_size: 10
 
