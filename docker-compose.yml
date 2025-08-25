@@ -282,8 +282,8 @@ services:
     image: ghcr.io/oculairmedia/graphiti-sync:main
     restart: unless-stopped
     ports:
-      - "${SYNC_HEALTH_PORT:-8080}:8080"
-      - "${SYNC_METRICS_PORT:-8081}:8081"
+      - "${SYNC_HEALTH_PORT:-8082}:8080"
+      - "${SYNC_METRICS_PORT:-8083}:8081"
     volumes:
       - sync_logs:/app/logs
       - ./sync_service/config.yaml:/app/config.yaml:ro
