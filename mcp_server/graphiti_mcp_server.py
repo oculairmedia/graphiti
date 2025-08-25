@@ -661,32 +661,13 @@ async def add_memory(
             effective_group_id = group_id if group_id is not None else config.group_id
             group_id_str = str(effective_group_id) if effective_group_id is not None else 'default'
 
-            # Enhance content with Chutes AI analysis if available
-            enhanced_description = source_description
-            if CHUTES_AVAILABLE and get_chutes_client and len(episode_body) > 50:
-                try:
-                    chutes = get_chutes_client()
-                    # Extract entities from the content for better organization
-                    entities = await chutes.extract_entities(episode_body)
-                    if entities:
-                        entity_str = ", ".join(entities[:5])  # Limit to top 5 entities
-                        enhanced_description = f"{source_description} | Key entities: {entity_str}"
-                    
-                    # If content is very long, create a summary
-                    if len(episode_body) > 1000:
-                        summary = await chutes.summarize_context(episode_body, 200)
-                        if summary:
-                            enhanced_description += f" | Summary: {summary}"
-                except Exception as e:
-                    logging.warning(f"Content enhancement failed: {e}")
-
             # Prepare request payload according to AddMessagesRequest schema
             message = {
                 'content': episode_body,
                 'role_type': 'system',
                 'role': name,
                 'timestamp': datetime.now(timezone.utc).isoformat(),
-                'source_description': enhanced_description,
+                'source_description': source_description,
                 'name': name
             }
             
