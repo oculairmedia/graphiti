@@ -41,7 +41,6 @@ class FalkorDBConfig(BaseModel):
     username: Optional[str] = Field(default=None, description="FalkorDB username")
     password: Optional[str] = Field(default=None, description="FalkorDB password")
     database: str = Field(default="graphiti_cache", description="FalkorDB graph name")
-    pool_size: int = Field(default=5, description="Connection pool size", ge=1, le=50)
     
     @validator('host')
     def validate_host(cls, v):
