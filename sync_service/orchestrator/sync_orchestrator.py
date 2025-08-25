@@ -12,8 +12,8 @@ from typing import Any, Dict, List, Optional, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
 
-from ..extractors.neo4j_extractor import Neo4jExtractor, ExtractionStats, SyncMetadata
-from ..loaders.falkordb_loader import FalkorDBLoader, LoadingStats
+from extractors.neo4j_extractor import Neo4jExtractor, ExtractionStats, SyncMetadata
+from loaders.falkordb_loader import FalkorDBLoader, LoadingStats
 
 logger = logging.getLogger(__name__)
 

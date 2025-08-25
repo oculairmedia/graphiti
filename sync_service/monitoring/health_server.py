@@ -14,8 +14,8 @@ from aiohttp import web, WSMsgType
 from aiohttp.web import Request, Response, WebSocketResponse
 import psutil
 
-from ..config.settings import MonitoringConfig
-from ..orchestrator.sync_orchestrator import SyncOrchestrator
+from config.settings import MonitoringConfig
+from orchestrator.sync_orchestrator import SyncOrchestrator
 
 logger = logging.getLogger(__name__)
 

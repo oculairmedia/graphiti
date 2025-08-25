@@ -12,10 +12,10 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-from .config.settings import load_config, validate_config, SyncServiceConfig
-from .monitoring.logging_setup import setup_logging, get_sync_logger
-from .monitoring.health_server import HealthServer
-from .orchestrator.sync_orchestrator import SyncOrchestrator
+from config.settings import load_config, validate_config, SyncServiceConfig
+from monitoring.logging_setup import setup_logging, get_sync_logger
+from monitoring.health_server import HealthServer
+from orchestrator.sync_orchestrator import SyncOrchestrator
 
 logger = logging.getLogger(__name__)
 

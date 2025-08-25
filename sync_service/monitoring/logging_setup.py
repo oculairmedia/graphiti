@@ -14,7 +14,7 @@ from datetime import datetime
 from typing import Any, Dict, Optional
 from pathlib import Path
 
-from ..config.settings import LoggingConfig
+from config.settings import LoggingConfig
 
 
 class JSONFormatter(logging.Formatter):
