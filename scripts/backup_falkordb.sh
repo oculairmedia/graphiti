@@ -7,8 +7,8 @@
 set -e
 
 # Configuration (can be overridden by environment variables)
-CONTAINER_NAME="${CONTAINER_NAME:-graphiti-falkordb}"
-BACKUP_DIR="${BACKUP_DIR:-/backups/falkordb}"
+CONTAINER_NAME="${CONTAINER_NAME:-graphiti-falkordb-1}"
+BACKUP_DIR="${BACKUP_DIR:-/opt/stacks/graphiti/backups/falkordb}"
 BACKUP_RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-7}"
 BACKUP_RETENTION_WEEKLY="${BACKUP_RETENTION_WEEKLY:-4}"  # Keep 4 weekly backups
 BACKUP_RETENTION_MONTHLY="${BACKUP_RETENTION_MONTHLY:-3}" # Keep 3 monthly backups
@@ -90,7 +90,7 @@ backup_rdb() {
     fi
     
     # Copy the RDB file
-    docker cp "$CONTAINER_NAME:/data/falkordb.rdb" "$backup_path"
+    docker cp "$CONTAINER_NAME:/var/lib/falkordb/data/dump.rdb" "$backup_path"
     
     # Verify backup
     if [[ -f "$backup_path" && -s "$backup_path" ]]; then
