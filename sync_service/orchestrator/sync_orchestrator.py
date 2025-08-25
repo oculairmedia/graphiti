@@ -13,7 +13,9 @@ from dataclasses import dataclass, field
 from enum import Enum
 
 from extractors.neo4j_extractor import Neo4jExtractor, ExtractionStats, SyncMetadata
+from extractors.falkordb_extractor import FalkorDBExtractor
 from loaders.falkordb_loader import FalkorDBLoader, LoadingStats
+from loaders.neo4j_loader import Neo4jLoader
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +25,8 @@ class SyncMode(Enum):
     INCREMENTAL = "incremental"
     FULL = "full" 
     DIFFERENTIAL = "differential"
+    REVERSE_FULL = "reverse_full"                # FalkorDB → Neo4j full sync
+    REVERSE_INCREMENTAL = "reverse_incremental"  # FalkorDB → Neo4j incremental sync
 
 
 class SyncStatus(Enum):
@@ -519,3 +523,267 @@ class SyncOrchestrator:
             "total_items_processed": total_items,
             "last_sync_timestamp": self.last_sync_timestamp,
         }
+        
+    async def _validate_sync_safety(
+        self, 
+        source_stats: Dict[str, int], 
+        target_stats: Dict[str, int],
+        safety_threshold: float = 0.5
+    ) -> Tuple[bool, str]:
+        """
+        Validate sync safety to prevent catastrophic data loss.
+        
+        Args:
+            source_stats: Statistics from source database
+            target_stats: Statistics from target database
+            safety_threshold: Maximum allowed reduction ratio (default 0.5 = 50%)
+            
+        Returns:
+            Tuple of (is_safe, reason)
+        """
+        # Calculate total node counts
+        source_total = sum(v for k, v in source_stats.items() if k.endswith('_nodes'))
+        target_total = sum(v for k, v in target_stats.items() if k.endswith('_nodes'))
+        
+        # If target is empty, allow any sync
+        if target_total == 0:
+            return True, "Target database is empty - sync allowed"
+            
+        # If source is empty, this would delete everything - block unless explicitly allowed
+        if source_total == 0:
+            return False, f"Source database is empty but target has {target_total} nodes - would delete all data"
+            
+        # Calculate reduction percentage
+        reduction_ratio = (target_total - source_total) / target_total
+        
+        if reduction_ratio > safety_threshold:
+            return False, (f"Safety check failed: Sync would reduce node count by "
+                          f"{reduction_ratio*100:.1f}% ({target_total} → {source_total}), "
+                          f"exceeding {safety_threshold*100:.1f}% threshold")
+        
+        if reduction_ratio > 0.1:  # Warn for reductions over 10%
+            logger.warning(f"Significant data reduction detected: {reduction_ratio*100:.1f}% "
+                          f"({target_total} → {source_total})")
+                          
+        return True, f"Sync safety validated: {reduction_ratio*100:.1f}% change ({target_total} → {source_total})"
+        
+    async def sync_reverse_full(
+        self, 
+        clear_target: bool = False,
+        force_override_safety: bool = False,
+        safety_threshold: float = 0.5
+    ) -> SyncOperationStats:
+        """
+        Perform full reverse sync from FalkorDB to Neo4j with safety checks.
+        
+        Args:
+            clear_target: Whether to clear Neo4j before sync
+            force_override_safety: Override safety checks (use with caution)
+            safety_threshold: Safety threshold for data reduction (default 50%)
+            
+        Returns:
+            Statistics for the sync operation
+        """
+        operation_stats = SyncOperationStats(
+            mode=SyncMode.REVERSE_FULL,
+            started_at=datetime.utcnow()
+        )
+        
+        self.current_operation = operation_stats
+        operation_stats.status = SyncStatus.RUNNING
+        
+        try:
+            logger.info("Starting reverse full synchronization (FalkorDB → Neo4j)")
+            
+            # Initialize connections
+            async with FalkorDBExtractor(**self.falkordb_config, batch_size=self.batch_size) as extractor:
+                async with Neo4jLoader(**self.neo4j_config, batch_size=self.batch_size) as loader:
+                    
+                    # Get statistics for safety check
+                    if not force_override_safety:
+                        logger.info("Performing safety validation")
+                        source_metadata = await extractor.get_sync_metadata()
+                        target_stats = await loader.get_database_statistics()
+                        
+                        source_stats = {
+                            "entity_nodes": source_metadata.total_entity_nodes,
+                            "episodic_nodes": source_metadata.total_episodic_nodes,
+                            "community_nodes": source_metadata.total_community_nodes,
+                            "entity_edges": source_metadata.total_entity_edges,
+                            "episodic_edges": source_metadata.total_episodic_edges,
+                        }
+                        
+                        is_safe, reason = await self._validate_sync_safety(source_stats, target_stats, safety_threshold)
+                        
+                        if not is_safe:
+                            operation_stats.status = SyncStatus.FAILED
+                            operation_stats.errors.append(f"Safety check failed: {reason}")
+                            logger.error(f"Reverse sync blocked: {reason}")
+                            raise RuntimeError(f"Reverse sync safety check failed: {reason}")
+                        else:
+                            logger.info(f"Safety check passed: {reason}")
+                    
+                    # Clear target if requested
+                    if clear_target:
+                        logger.info("Clearing Neo4j database")
+                        await loader.clear_all_data()
+                        
+                    # Create indices
+                    logger.info("Creating Neo4j indices")
+                    await loader.create_indices()
+                    
+                    # Extract all data from FalkorDB
+                    logger.info("Extracting data from FalkorDB")
+                    data_generator, extraction_stats = await extractor.extract_all_data()
+                    
+                    # Initialize loading stats
+                    loading_stats = LoadingStats()
+                    start_time = asyncio.get_event_loop().time()
+                    
+                    # Process data in batches
+                    async for data_type, batch in data_generator:
+                        try:
+                            loaded_count = await loader.load_batch(data_type, batch)
+                            
+                            # Update loading stats
+                            if data_type == "entity_nodes":
+                                loading_stats.entity_nodes_loaded += loaded_count
+                            elif data_type == "episodic_nodes":
+                                loading_stats.episodic_nodes_loaded += loaded_count
+                            elif data_type == "community_nodes":
+                                loading_stats.community_nodes_loaded += loaded_count
+                            elif data_type == "entity_edges":
+                                loading_stats.entity_edges_loaded += loaded_count
+                            elif data_type == "episodic_edges":
+                                loading_stats.episodic_edges_loaded += loaded_count
+                                
+                            logger.debug(f"Loaded batch of {loaded_count} {data_type}")
+                            
+                        except Exception as e:
+                            loading_stats.errors += 1
+                            logger.error(f"Failed to load batch of {data_type}: {e}")
+                            
+                    # Calculate final loading time
+                    end_time = asyncio.get_event_loop().time()
+                    loading_stats.loading_time_seconds = end_time - start_time
+                    
+                    # Update operation statistics
+                    operation_stats.extraction_stats = extraction_stats
+                    operation_stats.loading_stats = loading_stats
+                    operation_stats.status = SyncStatus.COMPLETED
+                    operation_stats.completed_at = datetime.utcnow()
+                    operation_stats.calculate_metrics()
+                    
+                    logger.info(f"Reverse full sync completed: {operation_stats.total_items_processed} items "
+                               f"in {operation_stats.duration_seconds:.2f}s "
+                               f"({operation_stats.success_rate:.1%} success rate)")
+                    
+        except Exception as e:
+            operation_stats.status = SyncStatus.FAILED
+            operation_stats.completed_at = datetime.utcnow()
+            operation_stats.errors.append(f"Reverse full sync failed: {str(e)}")
+            logger.error(f"Reverse full sync failed: {e}")
+            
+        finally:
+            # Update sync timestamp and history
+            if operation_stats.status == SyncStatus.COMPLETED:
+                self.last_sync_timestamp = operation_stats.completed_at
+                
+            self.sync_history.append(operation_stats)
+            self.current_operation = None
+            
+        return operation_stats
+        
+    async def sync_reverse_incremental(
+        self, 
+        since_timestamp: Optional[datetime] = None,
+        safety_threshold: float = 0.5
+    ) -> SyncOperationStats:
+        """
+        Perform incremental reverse sync from FalkorDB to Neo4j.
+        
+        Args:
+            since_timestamp: Only sync data modified after this timestamp
+            safety_threshold: Safety threshold for data reduction
+            
+        Returns:
+            Statistics for the sync operation
+        """
+        operation_stats = SyncOperationStats(
+            mode=SyncMode.REVERSE_INCREMENTAL,
+            started_at=datetime.utcnow()
+        )
+        
+        self.current_operation = operation_stats
+        operation_stats.status = SyncStatus.RUNNING
+        
+        # Use last sync timestamp if none provided
+        if since_timestamp is None:
+            since_timestamp = self.last_sync_timestamp
+            
+        try:
+            logger.info(f"Starting reverse incremental sync (FalkorDB → Neo4j) since {since_timestamp}")
+            
+            async with FalkorDBExtractor(**self.falkordb_config, batch_size=self.batch_size) as extractor:
+                async with Neo4jLoader(**self.neo4j_config, batch_size=self.batch_size) as loader:
+                    
+                    # Extract incremental data from FalkorDB
+                    data_generator, extraction_stats = await extractor.extract_all_data(since_timestamp)
+                    
+                    # Initialize loading stats
+                    loading_stats = LoadingStats()
+                    start_time = asyncio.get_event_loop().time()
+                    
+                    # Process data in batches
+                    async for data_type, batch in data_generator:
+                        try:
+                            loaded_count = await loader.load_batch(data_type, batch)
+                            
+                            # Update loading stats
+                            if data_type == "entity_nodes":
+                                loading_stats.entity_nodes_loaded += loaded_count
+                            elif data_type == "episodic_nodes":
+                                loading_stats.episodic_nodes_loaded += loaded_count
+                            elif data_type == "community_nodes":
+                                loading_stats.community_nodes_loaded += loaded_count
+                            elif data_type == "entity_edges":
+                                loading_stats.entity_edges_loaded += loaded_count
+                            elif data_type == "episodic_edges":
+                                loading_stats.episodic_edges_loaded += loaded_count
+                                
+                            logger.debug(f"Loaded batch of {loaded_count} {data_type}")
+                            
+                        except Exception as e:
+                            loading_stats.errors += 1
+                            logger.error(f"Failed to load batch of {data_type}: {e}")
+                            
+                    # Calculate final loading time
+                    end_time = asyncio.get_event_loop().time()
+                    loading_stats.loading_time_seconds = end_time - start_time
+                    
+                    # Update operation statistics
+                    operation_stats.extraction_stats = extraction_stats
+                    operation_stats.loading_stats = loading_stats
+                    operation_stats.status = SyncStatus.COMPLETED
+                    operation_stats.completed_at = datetime.utcnow()
+                    operation_stats.calculate_metrics()
+                    
+                    logger.info(f"Reverse incremental sync completed: {operation_stats.total_items_processed} items "
+                               f"in {operation_stats.duration_seconds:.2f}s "
+                               f"({operation_stats.success_rate:.1%} success rate)")
+                    
+        except Exception as e:
+            operation_stats.status = SyncStatus.FAILED
+            operation_stats.completed_at = datetime.utcnow()
+            operation_stats.errors.append(f"Reverse incremental sync failed: {str(e)}")
+            logger.error(f"Reverse incremental sync failed: {e}")
+            
+        finally:
+            # Update sync timestamp and history
+            if operation_stats.status == SyncStatus.COMPLETED:
+                self.last_sync_timestamp = operation_stats.completed_at
+                
+            self.sync_history.append(operation_stats)
+            self.current_operation = None
+            
+        return operation_stats
