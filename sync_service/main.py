@@ -57,7 +57,6 @@ class SyncService:
                 'username': self.config.falkordb.username,
                 'password': self.config.falkordb.password,
                 'database': self.config.falkordb.database,
-                'pool_size': self.config.falkordb.pool_size,
             }
             
             self.orchestrator = SyncOrchestrator(
