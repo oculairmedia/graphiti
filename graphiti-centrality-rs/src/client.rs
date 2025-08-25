@@ -116,8 +116,8 @@ impl FalkorClient {
             scores.len()
         );
 
-        // Process in batches of 500 nodes for optimal performance
-        const BATCH_SIZE: usize = 500;
+        // Process in batches of 100 nodes for reliable FalkorDB updates
+        const BATCH_SIZE: usize = 100;
         let mut processed = 0;
 
         // Convert scores to a vector for easier batching
