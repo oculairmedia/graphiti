@@ -1,5 +1,5 @@
 # Multi-stage build for Neo4j-FalkorDB Sync Service
-FROM python:3.11-slim as builder
+FROM python:3.11-slim AS builder
 
 # Set working directory
 WORKDIR /app
@@ -20,6 +20,11 @@ FROM python:3.11-slim
 LABEL maintainer="Graphiti Team"
 LABEL description="Neo4j to FalkorDB synchronization service"
 LABEL version="1.0.0"
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user
 RUN groupadd -r syncuser && useradd -r -g syncuser syncuser
