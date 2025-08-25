@@ -13,7 +13,7 @@ chmod +x "$BACKUP_SCRIPT"
 
 # Create log directory
 sudo mkdir -p /var/log
-sudo mkdir -p /backups/falkordb
+sudo mkdir -p /opt/stacks/graphiti/backups/falkordb
 
 echo "🔧 Setting up FalkorDB automated backups..."
 
@@ -46,10 +46,10 @@ crontab -l | grep -A 10 "FalkorDB Automated Backups" || echo "No FalkorDB backup
 
 echo ""
 echo "📁 Backup locations:"
-echo "   Daily:    /backups/falkordb/daily/"
-echo "   Weekly:   /backups/falkordb/weekly/"
-echo "   Monthly:  /backups/falkordb/monthly/"
-echo "   Snapshots: /backups/falkordb/snapshots/"
+echo "   Daily:    /opt/stacks/graphiti/backups/falkordb/daily/"
+echo "   Weekly:   /opt/stacks/graphiti/backups/falkordb/weekly/"
+echo "   Monthly:  /opt/stacks/graphiti/backups/falkordb/monthly/"
+echo "   Snapshots: /opt/stacks/graphiti/backups/falkordb/snapshots/"
 
 echo ""
 echo "📊 Manual backup commands:"
