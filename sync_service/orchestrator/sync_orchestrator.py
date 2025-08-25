@@ -226,8 +226,8 @@ class SyncOrchestrator:
                 database=self.falkordb_config['database']
             )
             
-            falkor_stats = await falkor_extractor.get_stats()
-            falkor_node_count = falkor_stats.get('total_nodes', 0)
+            falkor_metadata = await falkor_extractor.get_sync_metadata()
+            falkor_node_count = falkor_metadata.total_entity_nodes + falkor_metadata.total_episodic_nodes + falkor_metadata.total_community_nodes
             
             # Check Neo4j node count
             neo4j_extractor = Neo4jExtractor(
@@ -238,8 +238,8 @@ class SyncOrchestrator:
                 pool_size=self.neo4j_config.get('pool_size', 10)
             )
             
-            neo4j_stats = await neo4j_extractor.get_stats()
-            neo4j_node_count = neo4j_stats.get('total_nodes', 0)
+            neo4j_metadata = await neo4j_extractor.get_sync_metadata()
+            neo4j_node_count = neo4j_metadata.total_entity_nodes + neo4j_metadata.total_episodic_nodes + neo4j_metadata.total_community_nodes
             
             # Disaster recovery needed if FalkorDB is empty but Neo4j has data
             needs_recovery = falkor_node_count < 10 and neo4j_node_count > 100
@@ -798,7 +798,7 @@ class SyncOrchestrator:
                     logger.info(f"Connected to Neo4j")
                     
                     # Get current counts for comparison
-                    extractor_stats = await extractor.get_stats()
+                    extractor_stats = await extractor.get_sync_metadata()
                     logger.info(f"FalkorDB stats: {extractor_stats}")
                     
                     loader_stats = await loader.get_database_statistics()
