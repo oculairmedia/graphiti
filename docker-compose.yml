@@ -19,6 +19,8 @@ services:
     environment:
       - REDIS_ARGS=--save 60 1 --save 300 10 --save 900 100 --appendonly yes --appendfsync everysec --loglevel warning --maxmemory 2g --maxmemory-policy allkeys-lru
       - FALKORDB_ARGS=NODE_CREATION_BUFFER 128 QUERY_MEM_CAPACITY 8388608 CMD_INFO no OMP_THREAD_COUNT 1 CACHE_SIZE 5
+    mem_limit: 2g
+    memswap_limit: 2g
     networks:
       - graphiti_network
     healthcheck:
@@ -26,8 +28,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 3
-    mem_limit: 2g
-    memswap_limit: 2g
     labels:
       - homepage.group=Knowledge Management
       - homepage.name=FalkorDB
@@ -58,7 +58,7 @@ services:
       falkordb:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/stats"]
       interval: 15s
       timeout: 5s
       retries: 5
@@ -226,6 +226,7 @@ services:
       - EMBEDDING_ENDPOINT_FALLBACK=${EMBEDDING_ENDPOINT_FALLBACK:-true}
       - SEMAPHORE_LIMIT=${SEMAPHORE_LIMIT:-5}
       - MCP_SERVER_PORT=3010
+      - CHUTES_API_KEY=${CHUTES_API_KEY}
       - MCP_TRANSPORT=http
       - GRAPH_API_URL=http://graph:8000
     networks:
@@ -257,7 +258,9 @@ services:
       - QUEUED_BIND_ADDR=0.0.0.0:8080
       - RUST_LOG=${RUST_LOG:-info}
     networks:
-      - graphiti_network
+      graphiti_network:
+        aliases:
+          - queued
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/healthz"]
       interval: 10s
