@@ -66,6 +66,9 @@ class SyncService:
                 sync_interval_seconds=self.config.sync.interval_seconds,
                 max_retries=self.config.sync.max_retries,
                 retry_delay_seconds=self.config.sync.retry_delay_seconds,
+                sync_direction=self.config.sync.sync_direction,
+                enable_reverse_incremental=self.config.sync.enable_reverse_incremental,
+                auto_recovery=self.config.sync.auto_recovery,
             )
             
             # Initialize health server
@@ -76,6 +79,24 @@ class SyncService:
             
             # Start health server
             await self.health_server.start()
+            
+            # Intelligent startup sync logic
+            if self.config.sync.auto_recovery:
+                sync_logger.info("Checking if disaster recovery is needed...")
+                if await self.orchestrator.check_disaster_recovery_needed():
+                    sync_logger.warning("Performing disaster recovery: Neo4j → FalkorDB")
+                    operation_stats = await self.orchestrator.sync_full()
+                    if operation_stats.status.value == "completed":
+                        sync_logger.log_sync_complete(
+                            "disaster_recovery",
+                            operation_stats.duration_seconds,
+                            operation_stats.total_items_processed,
+                            operation_stats.success_rate
+                        )
+                    else:
+                        sync_logger.log_sync_error("disaster_recovery", Exception("Disaster recovery failed"))
+                else:
+                    sync_logger.info("No disaster recovery needed, databases are in sync")
             
             # Perform initial sync if configured
             if self.config.sync.full_sync_on_startup:

@@ -114,6 +114,9 @@ class SyncOrchestrator:
         sync_interval_seconds: int = 300,
         max_retries: int = 3,
         retry_delay_seconds: int = 30,
+        sync_direction: str = "forward",
+        enable_reverse_incremental: bool = False,
+        auto_recovery: bool = True,
     ):
         """
         Initialize sync orchestrator.
@@ -125,6 +128,9 @@ class SyncOrchestrator:
             sync_interval_seconds: Interval between automatic syncs
             max_retries: Maximum retry attempts for failed operations
             retry_delay_seconds: Delay between retry attempts
+            sync_direction: Sync direction ("forward" for Neo4j→FalkorDB, "reverse" for FalkorDB→Neo4j)
+            enable_reverse_incremental: Enable reverse incremental sync
+            auto_recovery: Enable automatic disaster recovery
         """
         self.neo4j_config = neo4j_config
         self.falkordb_config = falkordb_config
@@ -132,6 +138,9 @@ class SyncOrchestrator:
         self.sync_interval_seconds = sync_interval_seconds
         self.max_retries = max_retries
         self.retry_delay_seconds = retry_delay_seconds
+        self.sync_direction = sync_direction
+        self.enable_reverse_incremental = enable_reverse_incremental
+        self.auto_recovery = auto_recovery
         
         # State tracking
         self.last_sync_timestamp: Optional[datetime] = None
@@ -179,8 +188,15 @@ class SyncOrchestrator:
         """Background task for continuous sync operations."""
         while not self._stop_requested:
             try:
-                # Perform incremental sync
-                await self.sync_incremental()
+                # Perform sync based on configured direction
+                if self.sync_direction == "reverse" and self.enable_reverse_incremental:
+                    logger.info("Performing reverse incremental sync (FalkorDB → Neo4j)")
+                    await self.sync_reverse_incremental()
+                elif self.sync_direction == "forward":
+                    logger.info("Performing forward incremental sync (Neo4j → FalkorDB)")
+                    await self.sync_incremental()
+                else:
+                    logger.warning(f"No sync performed - direction: {self.sync_direction}, reverse_incremental: {self.enable_reverse_incremental}")
                 
                 # Wait for next sync interval
                 await asyncio.sleep(self.sync_interval_seconds)
@@ -192,6 +208,52 @@ class SyncOrchestrator:
                 logger.error(f"Error in continuous sync loop: {e}")
                 # Wait before retrying
                 await asyncio.sleep(self.retry_delay_seconds)
+    
+    async def check_disaster_recovery_needed(self) -> bool:
+        """
+        Check if disaster recovery is needed (FalkorDB is empty but Neo4j has data).
+        
+        Returns:
+            True if disaster recovery is needed
+        """
+        try:
+            # Check FalkorDB node count
+            falkor_extractor = FalkorDBExtractor(
+                host=self.falkordb_config['host'],
+                port=self.falkordb_config['port'],
+                username=self.falkordb_config.get('username'),
+                password=self.falkordb_config.get('password'),
+                database=self.falkordb_config['database']
+            )
+            
+            falkor_stats = await falkor_extractor.get_stats()
+            falkor_node_count = falkor_stats.get('total_nodes', 0)
+            
+            # Check Neo4j node count
+            neo4j_extractor = Neo4jExtractor(
+                uri=self.neo4j_config['uri'],
+                user=self.neo4j_config['user'], 
+                password=self.neo4j_config['password'],
+                database=self.neo4j_config['database'],
+                pool_size=self.neo4j_config.get('pool_size', 10)
+            )
+            
+            neo4j_stats = await neo4j_extractor.get_stats()
+            neo4j_node_count = neo4j_stats.get('total_nodes', 0)
+            
+            # Disaster recovery needed if FalkorDB is empty but Neo4j has data
+            needs_recovery = falkor_node_count < 10 and neo4j_node_count > 100
+            
+            if needs_recovery:
+                logger.warning(f"Disaster recovery needed: FalkorDB has {falkor_node_count} nodes, Neo4j has {neo4j_node_count} nodes")
+            else:
+                logger.info(f"No disaster recovery needed: FalkorDB has {falkor_node_count} nodes, Neo4j has {neo4j_node_count} nodes")
+            
+            return needs_recovery
+            
+        except Exception as e:
+            logger.error(f"Failed to check disaster recovery status: {e}")
+            return False
                 
     async def sync_full(self, clear_cache: bool = True) -> SyncOperationStats:
         """
@@ -725,11 +787,23 @@ class SyncOrchestrator:
             
         try:
             logger.info(f"Starting reverse incremental sync (FalkorDB → Neo4j) since {since_timestamp}")
+            logger.info(f"FalkorDB config: {self.falkordb_config}")
+            logger.info(f"Neo4j config: {self.neo4j_config}")
             
             # Filter out pool_size for Neo4jLoader (doesn't support it)
             neo4j_loader_config = {k: v for k, v in self.neo4j_config.items() if k != 'pool_size'}
             async with FalkorDBExtractor(**self.falkordb_config, batch_size=self.batch_size) as extractor:
+                logger.info(f"Connected to FalkorDB with database: {extractor.database}")
                 async with Neo4jLoader(**neo4j_loader_config, batch_size=self.batch_size) as loader:
+                    logger.info(f"Connected to Neo4j")
+                    
+                    # Get current counts for comparison
+                    extractor_stats = await extractor.get_stats()
+                    logger.info(f"FalkorDB stats: {extractor_stats}")
+                    
+                    loader_stats = await loader.get_database_statistics()
+                    logger.info(f"Neo4j stats: {loader_stats}")
+                    
                     
                     # Extract incremental data from FalkorDB
                     data_generator, extraction_stats = await extractor.extract_all_data(since_timestamp)

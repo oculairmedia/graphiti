@@ -166,7 +166,7 @@ async def main():
 
     # FalkorDB configuration
     falkor_host = os.getenv('FALKORDB_HOST', 'localhost')
-    falkor_port = int(os.getenv('FALKORDB_PORT', '6389'))
+    falkor_port = int(os.getenv('FALKORDB_PORT', '6379'))
     falkor_database = os.getenv('FALKORDB_DATABASE', 'graphiti_migration')
 
     print('=== Neo4j to FalkorDB Migration ===')

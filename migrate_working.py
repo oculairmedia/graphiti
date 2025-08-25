@@ -111,7 +111,7 @@ async def migrate_data(neo4j_driver: Neo4jDriver, falkor_graph, limit: int = Non
         rels_query = f"""
         MATCH (s)-[r]->(t) 
         WHERE s.uuid IS NOT NULL AND t.uuid IS NOT NULL
-        RETURN s.uuid as source_uuid, t.uuid as target_uuid, type(r) as rel_type
+        RETURN s.uuid as source_uuid, t.uuid as target_uuid, type(r) as rel_type, properties(r) as props
         """
 
         if limit:
@@ -132,11 +132,22 @@ async def migrate_data(neo4j_driver: Neo4jDriver, falkor_graph, limit: int = Non
                     source_uuid = record['source_uuid']
                     target_uuid = record['target_uuid']
                     rel_type = record['rel_type']
+                    props = record['props']
 
-                    # Simple relationship creation
+                    # Format properties for Cypher
+                    if props:
+                        prop_list = []
+                        for key, value in props.items():
+                            formatted_value = format_value(value)
+                            prop_list.append(f"{key}: {formatted_value}")
+                        prop_string = "{" + ", ".join(prop_list) + "}"
+                    else:
+                        prop_string = ""
+
+                    # Relationship creation with properties
                     rel_query = f"""
                     MATCH (s {{uuid: '{source_uuid}'}}), (t {{uuid: '{target_uuid}'}})
-                    CREATE (s)-[:{rel_type}]->(t)
+                    CREATE (s)-[:{rel_type} {prop_string}]->(t)
                     """
 
                     falkor_graph.query(rel_query)
@@ -172,7 +183,7 @@ async def main():
     neo4j_driver = Neo4jDriver(uri=neo4j_uri, user=neo4j_user, password=neo4j_password)
 
     # Create FalkorDB connection
-    falkor_db = FalkorDB(host='localhost', port=6389)
+    falkor_db = FalkorDB(host='localhost', port=6379)
     falkor_graph = falkor_db.select_graph('graphiti_migration')
 
     try:

@@ -56,7 +56,7 @@ class FalkorDBExtractor:
         port: int = 6379,
         username: Optional[str] = None,
         password: Optional[str] = None,
-        database: str = "graphiti_cache",
+        database: str = "graphiti_migration",
         batch_size: int = 1000,
     ):
         """
