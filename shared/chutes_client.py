@@ -106,7 +106,7 @@ Guidelines:
         if context:
             messages[0]["content"] += f"\nContext: {context}"
             
-        return await self.complete_chat(messages, system_prompt=system_prompt, max_tokens=200)
+        return await self.complete_chat(messages, system_prompt=system_prompt, max_tokens=2000)
     
     async def summarize_context(self, content: str, max_length: int = 500) -> str:
         """Summarize content while preserving key information
