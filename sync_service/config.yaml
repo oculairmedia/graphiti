@@ -13,7 +13,7 @@ falkordb:
   port: 6379
   username: null
   password: null
-  database: "graphiti_cache"
+  database: "graphiti_migration"
 
 sync:
   interval_seconds: 300  # 5 minutes
