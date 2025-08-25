@@ -149,6 +149,10 @@ class SyncOrchestrator:
         self.is_running = False
         self._stop_requested = False
         
+        # Change detection for continuous sync
+        self.last_source_counts: Dict[str, int] = {}
+        self.last_target_counts: Dict[str, int] = {}
+        
         # Background task
         self._sync_task: Optional[asyncio.Task] = None
         
@@ -188,13 +192,23 @@ class SyncOrchestrator:
         """Background task for continuous sync operations."""
         while not self._stop_requested:
             try:
+                # Check for data changes before deciding sync method
+                changes_detected = await self._detect_data_changes()
+                
                 # Perform sync based on configured direction
                 if self.sync_direction == "reverse" and self.enable_reverse_incremental:
-                    logger.info("Performing reverse incremental sync (FalkorDB → Neo4j)")
-                    await self.sync_reverse_incremental()
+                    if changes_detected:
+                        logger.info("Data changes detected - performing full reverse sync (FalkorDB → Neo4j)")
+                        # Use sync_reverse_incremental with no timestamp to get all data
+                        await self.sync_reverse_incremental(since_timestamp=None)
+                    else:
+                        logger.debug("No data changes detected - skipping sync")
                 elif self.sync_direction == "forward":
-                    logger.info("Performing forward incremental sync (Neo4j → FalkorDB)")
-                    await self.sync_incremental()
+                    if changes_detected:
+                        logger.info("Data changes detected - performing incremental sync (Neo4j → FalkorDB)")
+                        await self.sync_incremental()
+                    else:
+                        logger.debug("No data changes detected - skipping sync")
                 else:
                     logger.warning(f"No sync performed - direction: {self.sync_direction}, reverse_incremental: {self.enable_reverse_incremental}")
                 
@@ -208,6 +222,92 @@ class SyncOrchestrator:
                 logger.error(f"Error in continuous sync loop: {e}")
                 # Wait before retrying
                 await asyncio.sleep(self.retry_delay_seconds)
+    
+    async def _detect_data_changes(self) -> bool:
+        """
+        Detect if data has changed since last sync by comparing node/edge counts.
+        Similar to how the Rust visualizer detects changes.
+        
+        Returns:
+            True if changes detected, False otherwise
+        """
+        try:
+            if self.sync_direction == "reverse":
+                # Check FalkorDB (source) and Neo4j (target) counts
+                source_extractor = FalkorDBExtractor(
+                    host=self.falkordb_config['host'],
+                    port=self.falkordb_config['port'],
+                    username=self.falkordb_config.get('username'),
+                    password=self.falkordb_config.get('password'),
+                    database=self.falkordb_config['database']
+                )
+                
+                async with source_extractor:
+                    source_metadata = await source_extractor.get_sync_metadata()
+                    current_source_counts = {
+                        'entity_nodes': source_metadata.total_entity_nodes,
+                        'episodic_nodes': source_metadata.total_episodic_nodes,
+                        'community_nodes': source_metadata.total_community_nodes,
+                        'entity_edges': source_metadata.total_entity_edges,
+                        'episodic_edges': source_metadata.total_episodic_edges,
+                    }
+                
+                neo4j_loader_config = {k: v for k, v in self.neo4j_config.items() if k != 'pool_size'}
+                target_loader = Neo4jLoader(**neo4j_loader_config)
+                
+                async with target_loader:
+                    current_target_counts = await target_loader.get_database_statistics()
+                
+            else:
+                # Forward sync: Neo4j (source) → FalkorDB (target)
+                source_extractor = Neo4jExtractor(**self.neo4j_config)
+                
+                async with source_extractor:
+                    source_metadata = await source_extractor.get_sync_metadata()
+                    current_source_counts = {
+                        'entity_nodes': source_metadata.total_entity_nodes,
+                        'episodic_nodes': source_metadata.total_episodic_nodes,
+                        'community_nodes': source_metadata.total_community_nodes,
+                        'entity_edges': source_metadata.total_entity_edges,
+                        'episodic_edges': source_metadata.total_episodic_edges,
+                    }
+                
+                target_loader = FalkorDBLoader(**self.falkordb_config)
+                async with target_loader:
+                    target_metadata = await target_loader.get_sync_metadata()
+                    current_target_counts = {
+                        'entity_nodes': target_metadata.total_entity_nodes,
+                        'episodic_nodes': target_metadata.total_episodic_nodes,
+                        'community_nodes': target_metadata.total_community_nodes,
+                        'entity_edges': target_metadata.total_entity_edges,
+                        'episodic_edges': target_metadata.total_episodic_edges,
+                    }
+            
+            # Check if counts have changed
+            source_changed = (not self.last_source_counts or 
+                            current_source_counts != self.last_source_counts)
+            target_changed = (not self.last_target_counts or 
+                            current_target_counts != self.last_target_counts)
+            
+            changes_detected = source_changed or target_changed
+            
+            if changes_detected:
+                logger.info(f"Data changes detected:")
+                if source_changed:
+                    logger.info(f"  Source counts changed: {self.last_source_counts} → {current_source_counts}")
+                if target_changed:
+                    logger.info(f"  Target counts changed: {self.last_target_counts} → {current_target_counts}")
+                
+                # Update stored counts
+                self.last_source_counts = current_source_counts
+                self.last_target_counts = current_target_counts
+            
+            return changes_detected
+            
+        except Exception as e:
+            logger.error(f"Failed to detect data changes: {e}")
+            # On error, assume changes to be safe
+            return True
     
     async def check_disaster_recovery_needed(self) -> bool:
         """
