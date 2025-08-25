@@ -595,9 +595,11 @@ class SyncOrchestrator:
         try:
             logger.info("Starting reverse full synchronization (FalkorDB → Neo4j)")
             
-            # Initialize connections
+            # Initialize connections  
+            # Filter out pool_size for Neo4jLoader (doesn't support it)
+            neo4j_loader_config = {k: v for k, v in self.neo4j_config.items() if k != 'pool_size'}
             async with FalkorDBExtractor(**self.falkordb_config, batch_size=self.batch_size) as extractor:
-                async with Neo4jLoader(**self.neo4j_config, batch_size=self.batch_size) as loader:
+                async with Neo4jLoader(**neo4j_loader_config, batch_size=self.batch_size) as loader:
                     
                     # Get statistics for safety check
                     if not force_override_safety:
@@ -724,8 +726,10 @@ class SyncOrchestrator:
         try:
             logger.info(f"Starting reverse incremental sync (FalkorDB → Neo4j) since {since_timestamp}")
             
+            # Filter out pool_size for Neo4jLoader (doesn't support it)
+            neo4j_loader_config = {k: v for k, v in self.neo4j_config.items() if k != 'pool_size'}
             async with FalkorDBExtractor(**self.falkordb_config, batch_size=self.batch_size) as extractor:
-                async with Neo4jLoader(**self.neo4j_config, batch_size=self.batch_size) as loader:
+                async with Neo4jLoader(**neo4j_loader_config, batch_size=self.batch_size) as loader:
                     
                     # Extract incremental data from FalkorDB
                     data_generator, extraction_stats = await extractor.extract_all_data(since_timestamp)
