@@ -57,6 +57,9 @@ class SyncConfig(BaseModel):
     full_sync_on_startup: bool = Field(default=False, description="Perform full sync on startup")
     enable_incremental: bool = Field(default=True, description="Enable incremental sync")
     enable_continuous: bool = Field(default=True, description="Enable continuous sync")
+    sync_direction: str = Field(default="forward", description="Sync direction: forward (Neo4j→FalkorDB) or reverse (FalkorDB→Neo4j)")
+    enable_reverse_incremental: bool = Field(default=False, description="Enable reverse incremental sync")
+    auto_recovery: bool = Field(default=True, description="Enable automatic disaster recovery (Neo4j→FalkorDB when FalkorDB is empty)")
     max_retries: int = Field(default=3, description="Maximum retry attempts", ge=1, le=10)
     retry_delay_seconds: int = Field(default=30, description="Delay between retries", ge=1)
     
@@ -68,6 +71,14 @@ class SyncConfig(BaseModel):
         if v > 86400:  # 24 hours
             raise ValueError('Sync interval cannot exceed 24 hours')
         return v
+    
+    @validator('sync_direction')
+    def validate_sync_direction(cls, v):
+        """Validate sync direction."""
+        valid_directions = ['forward', 'reverse']
+        if v.lower() not in valid_directions:
+            raise ValueError(f'Sync direction must be one of: {valid_directions}')
+        return v.lower()
 
 
 class LoggingConfig(BaseModel):
@@ -156,6 +167,9 @@ def load_config_from_env() -> SyncServiceConfig:
         'SYNC_FULL_ON_STARTUP': 'sync.full_sync_on_startup',
         'SYNC_ENABLE_INCREMENTAL': 'sync.enable_incremental',
         'SYNC_ENABLE_CONTINUOUS': 'sync.enable_continuous',
+        'SYNC_DIRECTION': 'sync.sync_direction',
+        'SYNC_ENABLE_REVERSE_INCREMENTAL': 'sync.enable_reverse_incremental',
+        'SYNC_AUTO_RECOVERY': 'sync.auto_recovery',
         'SYNC_MAX_RETRIES': 'sync.max_retries',
         'SYNC_RETRY_DELAY': 'sync.retry_delay_seconds',
         
