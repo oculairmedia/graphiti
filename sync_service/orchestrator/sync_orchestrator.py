@@ -193,20 +193,44 @@ class SyncOrchestrator:
         while not self._stop_requested:
             try:
                 # Check for data changes before deciding sync method
-                changes_detected = await self._detect_data_changes()
+                changes_detected, current_source_counts, current_target_counts = await self._detect_data_changes()
                 
                 # Perform sync based on configured direction
                 if self.sync_direction == "reverse" and self.enable_reverse_incremental:
                     if changes_detected:
                         logger.info("Data changes detected - performing full reverse sync (FalkorDB → Neo4j)")
                         # Use sync_reverse_incremental with no timestamp to get all data
-                        await self.sync_reverse_incremental(since_timestamp=None)
+                        stats = await self.sync_reverse_incremental(since_timestamp=None)
+                        
+                        # Update stored counts only after successful sync
+                        if stats.status == SyncStatus.COMPLETED:
+                            self.last_source_counts = current_source_counts
+                            self.last_target_counts = current_target_counts
+                            logger.info(f"Sync completed successfully - updated stored counts")
+                            
+                            # Verify sync success by checking final alignment
+                            _, final_source_counts, final_target_counts = await self._detect_data_changes()
+                            final_source_total = sum(final_source_counts.values())
+                            final_target_total = sum(final_target_counts.values())
+                            
+                            if final_source_total == final_target_total:
+                                logger.info(f"✅ Databases fully aligned: {final_source_total} items each")
+                            else:
+                                logger.warning(f"⚠️  Databases still misaligned: source={final_source_total}, target={final_target_total}")
+                        else:
+                            logger.error(f"Sync failed with status: {stats.status}")
                     else:
                         logger.debug("No data changes detected - skipping sync")
                 elif self.sync_direction == "forward":
                     if changes_detected:
                         logger.info("Data changes detected - performing incremental sync (Neo4j → FalkorDB)")
-                        await self.sync_incremental()
+                        stats = await self.sync_incremental()
+                        
+                        # Update stored counts only after successful sync
+                        if stats.status == SyncStatus.COMPLETED:
+                            self.last_source_counts = current_source_counts
+                            self.last_target_counts = current_target_counts
+                            logger.info(f"Forward sync completed successfully - updated stored counts")
                     else:
                         logger.debug("No data changes detected - skipping sync")
                 else:
@@ -223,13 +247,13 @@ class SyncOrchestrator:
                 # Wait before retrying
                 await asyncio.sleep(self.retry_delay_seconds)
     
-    async def _detect_data_changes(self) -> bool:
+    async def _detect_data_changes(self) -> Tuple[bool, Dict[str, int], Dict[str, int]]:
         """
         Detect if data has changed since last sync by comparing node/edge counts.
         Similar to how the Rust visualizer detects changes.
         
         Returns:
-            True if changes detected, False otherwise
+            Tuple of (changes_detected, current_source_counts, current_target_counts)
         """
         try:
             if self.sync_direction == "reverse":
@@ -283,31 +307,31 @@ class SyncOrchestrator:
                         'episodic_edges': target_metadata.total_episodic_edges,
                     }
             
-            # Check if counts have changed
-            source_changed = (not self.last_source_counts or 
-                            current_source_counts != self.last_source_counts)
-            target_changed = (not self.last_target_counts or 
-                            current_target_counts != self.last_target_counts)
+            # Check if sync is needed by comparing source vs target directly
+            source_total = sum(current_source_counts.values())
+            target_total = sum(current_target_counts.values())
             
-            changes_detected = source_changed or target_changed
+            # Also check individual metrics for more granular detection
+            counts_match = all(
+                current_source_counts.get(key, 0) == current_target_counts.get(key, 0)
+                for key in set(current_source_counts.keys()) | set(current_target_counts.keys())
+            )
+            
+            changes_detected = not counts_match or source_total != target_total
             
             if changes_detected:
-                logger.info(f"Data changes detected:")
-                if source_changed:
-                    logger.info(f"  Source counts changed: {self.last_source_counts} → {current_source_counts}")
-                if target_changed:
-                    logger.info(f"  Target counts changed: {self.last_target_counts} → {current_target_counts}")
-                
-                # Update stored counts
-                self.last_source_counts = current_source_counts
-                self.last_target_counts = current_target_counts
+                logger.info(f"Sync needed - databases not aligned:")
+                logger.info(f"  Source (FalkorDB): {current_source_counts} (total: {source_total})")
+                logger.info(f"  Target (Neo4j): {current_target_counts} (total: {target_total})")
+            else:
+                logger.debug(f"Databases aligned - no sync needed")
             
-            return changes_detected
+            return changes_detected, current_source_counts, current_target_counts
             
         except Exception as e:
             logger.error(f"Failed to detect data changes: {e}")
-            # On error, assume changes to be safe
-            return True
+            # On error, assume changes to be safe and return empty counts
+            return True, {}, {}
     
     async def check_disaster_recovery_needed(self) -> bool:
         """
