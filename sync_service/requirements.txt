@@ -1,0 +1,16 @@
+# Neo4j-FalkorDB Sync Service Dependencies
+
+# Core dependencies
+neo4j>=5.0.0,<6.0.0
+falkordb>=1.1.0,<2.0.0
+asyncio
+pydantic>=2.0.0,<3.0.0
+pyyaml>=6.0.0
+python-dateutil>=2.8.0
+
+# HTTP server and monitoring
+aiohttp>=3.8.0,<4.0.0
+psutil>=5.9.0
+
+# Logging and configuration
+structlog>=23.0.0
