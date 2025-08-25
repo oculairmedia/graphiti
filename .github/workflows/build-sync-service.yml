@@ -1,0 +1,130 @@
+name: Build and Push Sync Service Container
+
+on:
+  push:
+    branches: [ main, feature/neo4j-falkordb-hybrid ]
+    paths:
+      - 'sync_service/**'
+      - 'graphiti_core/**'
+      - '.github/workflows/build-sync-service.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'sync_service/**'
+      - 'graphiti_core/**'
+  workflow_dispatch:
+  workflow_call:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}-sync
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        persist-credentials: false
+        fetch-depth: 1
+        submodules: false
+
+    - name: Debug - List sync service directory contents
+      run: |
+        echo "=== Sync Service directory structure ==="
+        ls -la sync_service/
+        echo "=== Configuration files ==="
+        find sync_service/ -name "*.yml" -o -name "*.yaml" -o -name "*.toml" -o -name "Dockerfile"
+        echo "=== Python modules ==="
+        find sync_service/ -name "*.py" | head -10
+        echo "=== Requirements ==="
+        cat sync_service/requirements.txt
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to the Container registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha
+          type=raw,value=latest,enable={{is_default_branch}}
+
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./sync_service/Dockerfile
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: |
+          type=gha
+          type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache
+        cache-to: |
+          type=gha,mode=max
+          type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache,mode=max
+        platforms: linux/amd64
+        build-args: |
+          BUILDKIT_PROGRESS=plain
+
+    - name: Output image details
+      if: success()
+      run: |
+        echo "✅ Sync service image successfully built and pushed!"
+        echo "📦 Registry: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
+        echo "🏷️  Tags: ${{ steps.meta.outputs.tags }}"
+
+    - name: Validate configuration
+      if: success()
+      run: |
+        echo "🔍 Validating sync service configuration..."
+        # Test configuration validation
+        docker run --rm --name sync-config-test \
+          -e NEO4J_URI=bolt://test:7687 \
+          -e FALKORDB_HOST=test \
+          -e SYNC_ENABLE_CONTINUOUS=false \
+          --entrypoint python \
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} \
+          -c "
+          from sync_service.config.settings import load_config, validate_config;
+          config = load_config();
+          validate_config(config);
+          print('✅ Configuration validation passed')
+          "
+
+    - name: Test container health
+      if: success()
+      run: |
+        echo "🔍 Testing container health..."
+        # Test that the service can import all modules
+        docker run --rm --name sync-import-test \
+          -e NEO4J_URI=bolt://test:7687 \
+          -e FALKORDB_HOST=test \
+          -e SYNC_ENABLE_CONTINUOUS=false \
+          --entrypoint python \
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} \
+          -c "
+          import sync_service.main;
+          import sync_service.orchestrator.sync_orchestrator;
+          import sync_service.extractors.neo4j_extractor;
+          import sync_service.loaders.falkordb_loader;
+          import sync_service.monitoring.health_server;
+          print('✅ All sync service modules imported successfully')
+          "

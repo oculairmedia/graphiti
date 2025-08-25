@@ -1,0 +1,40 @@
+# Sync Service Configuration
+# This file provides default configuration values that can be overridden by environment variables
+
+neo4j:
+  uri: "bolt://neo4j:7687"
+  user: "neo4j"
+  password: "graphiti123" 
+  database: "neo4j"
+  pool_size: 10
+
+falkordb:
+  host: "falkordb"
+  port: 6379
+  username: null
+  password: null
+  database: "graphiti_cache"
+  pool_size: 5
+
+sync:
+  interval_seconds: 300  # 5 minutes
+  batch_size: 1000
+  full_sync_on_startup: false
+  enable_incremental: true
+  enable_continuous: true
+  max_retries: 3
+  retry_delay_seconds: 30
+
+logging:
+  level: "INFO"
+  format: "json"
+  file_path: null  # Log to stdout if null
+  max_file_size_mb: 100
+  backup_count: 5
+
+monitoring:
+  health_port: 8080
+  health_path: "/health"
+  metrics_enabled: true
+  metrics_port: 8081
+  metrics_path: "/metrics"
