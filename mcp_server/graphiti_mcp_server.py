@@ -36,7 +36,14 @@ from pydantic import BaseModel, Field
 
 load_dotenv()
 
-
+# Import Chutes AI client for LLM enhancements
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'shared'))
+try:
+    from chutes_client import get_chutes_client, is_chutes_available
+    CHUTES_AVAILABLE = is_chutes_available()
+except ImportError:
+    CHUTES_AVAILABLE = False
+    get_chutes_client = None
 
 # Semaphore limit for concurrent Graphiti operations.
 # Decrease this if you're experiencing 429 rate limit errors from your LLM provider.
@@ -654,13 +661,32 @@ async def add_memory(
             effective_group_id = group_id if group_id is not None else config.group_id
             group_id_str = str(effective_group_id) if effective_group_id is not None else 'default'
 
+            # Enhance content with Chutes AI analysis if available
+            enhanced_description = source_description
+            if CHUTES_AVAILABLE and get_chutes_client and len(episode_body) > 50:
+                try:
+                    chutes = get_chutes_client()
+                    # Extract entities from the content for better organization
+                    entities = await chutes.extract_entities(episode_body)
+                    if entities:
+                        entity_str = ", ".join(entities[:5])  # Limit to top 5 entities
+                        enhanced_description = f"{source_description} | Key entities: {entity_str}"
+                    
+                    # If content is very long, create a summary
+                    if len(episode_body) > 1000:
+                        summary = await chutes.summarize_context(episode_body, 200)
+                        if summary:
+                            enhanced_description += f" | Summary: {summary}"
+                except Exception as e:
+                    logging.warning(f"Content enhancement failed: {e}")
+
             # Prepare request payload according to AddMessagesRequest schema
             message = {
                 'content': episode_body,
                 'role_type': 'system',
                 'role': name,
                 'timestamp': datetime.now(timezone.utc).isoformat(),
-                'source_description': source_description,
+                'source_description': enhanced_description,
                 'name': name
             }
             
@@ -727,9 +753,22 @@ async def search_memory_nodes(
         # Use the provided group_ids or default to empty (search all groups)
         effective_group_ids = group_ids if group_ids is not None else []
 
+        # Enhance query with Chutes AI if available
+        enhanced_query = query
+        if CHUTES_AVAILABLE and get_chutes_client:
+            try:
+                chutes = get_chutes_client()
+                context = f"Entity type: {entity}" if entity else "General graph search"
+                enhanced_query = await chutes.enhance_query(query, context)
+                if not enhanced_query.strip():
+                    enhanced_query = query  # Fallback to original if enhancement fails
+            except Exception as e:
+                logging.warning(f"Query enhancement failed, using original query: {e}")
+                enhanced_query = query
+
         # Prepare request payload for Python proxy
         payload = {
-            'query': query,
+            'query': enhanced_query,
             'max_nodes': max_nodes,
         }
 
@@ -802,9 +841,21 @@ async def search_memory_facts(
         # Use the provided group_ids or default to empty (search all groups)
         effective_group_ids = group_ids if group_ids is not None else []
 
+        # Enhance query with Chutes AI if available
+        enhanced_query = query
+        if CHUTES_AVAILABLE and get_chutes_client:
+            try:
+                chutes = get_chutes_client()
+                enhanced_query = await chutes.enhance_query(query, "Fact/relationship search in knowledge graph")
+                if not enhanced_query.strip():
+                    enhanced_query = query  # Fallback to original if enhancement fails
+            except Exception as e:
+                logging.warning(f"Query enhancement failed, using original query: {e}")
+                enhanced_query = query
+
         # Prepare request payload for Python proxy  
         payload = {
-            'query': query,
+            'query': enhanced_query,
             'group_ids': effective_group_ids,
             'max_facts': max_facts,
         }
