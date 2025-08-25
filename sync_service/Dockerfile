@@ -58,4 +58,4 @@ USER syncuser
 EXPOSE 8080 8081
 
 # Default command
-CMD ["python", "-m", "sync_service.main", "/app/config.yaml"]
+CMD ["python", "main.py", "/app/config.yaml"]
