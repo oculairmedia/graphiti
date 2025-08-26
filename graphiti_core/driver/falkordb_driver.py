@@ -37,6 +37,47 @@ from graphiti_core.driver.driver import GraphDriver, GraphDriverSession
 logger = logging.getLogger(__name__)
 
 
+def _is_vector_list(val: Any) -> bool:
+    """Detect if a value is a vector (list or tuple of numbers)."""
+    try:
+        return (
+            isinstance(val, (list, tuple))
+            and len(val) > 0
+            and all(isinstance(x, (float, int)) for x in val)
+        )
+    except Exception:
+        return False
+
+
+def _flatten_params(kwargs: dict[str, Any]) -> dict[str, Any]:
+    """Flatten nested params dictionaries that come from execute_query calls."""
+    params = dict(kwargs)
+    nested = params.pop('params', None)
+    if isinstance(nested, dict):
+        for k, v in nested.items():
+            if k not in params:
+                params[k] = v
+    return params
+
+
+def _wrap_vector_params_in_query(query: str, params: dict[str, Any]) -> str:
+    """Wrap any $key in the query with vecf32($key) when the param is a vector-like list.
+    
+    This fixes FalkorDB type mismatch errors where Python lists need to be converted
+    to VectorF32 types for vector operations.
+    """
+    for key, val in params.items():
+        if _is_vector_list(val):
+            needle = f"${key}"
+            wrapped = f"vecf32({needle})"
+            # Skip if already wrapped to avoid double-wrapping
+            if wrapped in query:
+                continue
+            # Replace bare $key with vecf32($key)
+            query = query.replace(needle, wrapped)
+    return query
+
+
 class FalkorDriverSession(GraphDriverSession):
     def __init__(self, graph: FalkorGraph):
         self.graph = graph
@@ -61,11 +102,13 @@ class FalkorDriverSession(GraphDriverSession):
         if isinstance(query, list):
             for cypher, params in query:
                 params = convert_datetimes_to_strings(params)
-                await self.graph.query(str(cypher), params)  # type: ignore[reportUnknownArgumentType]
+                cypher = _wrap_vector_params_in_query(str(cypher), params)
+                await self.graph.query(cypher, params)  # type: ignore[reportUnknownArgumentType]
         else:
-            params = dict(kwargs)
+            params = _flatten_params(dict(kwargs))
             params = convert_datetimes_to_strings(params)
-            await self.graph.query(str(query), params)  # type: ignore[reportUnknownArgumentType]
+            query = _wrap_vector_params_in_query(str(query), params)
+            await self.graph.query(query, params)  # type: ignore[reportUnknownArgumentType]
         # Assuming `graph.query` is async (ideal); otherwise, wrap in executor
         return None
 
@@ -109,8 +152,14 @@ class FalkorDriver(GraphDriver):
         graph_name = kwargs.pop('database_', self._database)
         graph = self._get_graph(graph_name)
 
-        # Convert datetime objects to ISO strings (FalkorDB does not support datetime objects directly)
-        params = convert_datetimes_to_strings(dict(kwargs))
+        # 1) Flatten params dicts (handle nested params parameter)
+        raw_params = _flatten_params(kwargs)
+
+        # 2) Convert datetime objects to ISO strings (FalkorDB does not support datetime objects directly)
+        params = convert_datetimes_to_strings(raw_params)
+
+        # 3) Driver-level wrapping for vector params (fixes "expected Vectorf32 but was List" errors)
+        cypher_query_ = _wrap_vector_params_in_query(cypher_query_, params)
 
         try:
             result = await graph.query(cypher_query_, params)  # type: ignore[reportUnknownArgumentType]
