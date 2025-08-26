@@ -94,8 +94,8 @@ class GraphitiClientFactory:
         # 2. Try to create Chutes AI client (second priority)
         if use_chutes_lower == 'true':
             try:
-                chutes_model = os.getenv('CHUTES_MODEL', 'glm-4-flash')
-                chutes_small_model = os.getenv('CHUTES_SMALL_MODEL', 'glm-4-flash')
+                chutes_model = os.getenv('CHUTES_MODEL', 'zai-org/GLM-4.5-FP8')
+                chutes_small_model = os.getenv('CHUTES_SMALL_MODEL', 'zai-org/GLM-4.5-FP8')
                 chutes_api_key = os.getenv('CHUTES_API_KEY')
                 chutes_base_url = os.getenv('CHUTES_BASE_URL', 'https://llm.chutes.ai/v1')
                 
