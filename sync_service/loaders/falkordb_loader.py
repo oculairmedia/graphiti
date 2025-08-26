@@ -126,6 +126,23 @@ class FalkorDBLoader:
             return obj
         else:
             return obj
+    
+    def _safe_value_for_query(self, value: Any) -> str:
+        """Convert a value to a safely escaped string for direct query insertion."""
+        if value is None:
+            return 'NULL'
+        elif isinstance(value, bool):
+            return 'true' if value else 'false'
+        elif isinstance(value, (int, float)):
+            return str(value)
+        elif isinstance(value, str):
+            # Escape quotes and backslashes for string literals
+            escaped = value.replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n').replace('\r', '\\r')
+            return f'"{escaped}"'
+        else:
+            # Convert to string and escape
+            escaped = str(value).replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n').replace('\r', '\\r')
+            return f'"{escaped}"'
             
     async def create_indices(self) -> None:
         """Create indices for optimal query performance."""
@@ -202,33 +219,31 @@ class FalkorDBLoader:
                 # Convert datetimes to strings
                 node = self._convert_datetimes_to_strings(node)
                 
-                # Build properties string for Cypher
+                # Build properties string for direct query insertion (no parameters)
                 props = []
-                params = {"uuid": node["uuid"]}
+                uuid_val = self._safe_value_for_query(node["uuid"])
                 
                 for key, value in node.items():
                     if key not in ["uuid", "labels"]:
-                        param_key = f"prop_{key}"
-                        props.append(f"{key}: ${param_key}")
-                        params[param_key] = value
+                        safe_value = self._safe_value_for_query(value)
+                        props.append(f"{key}: {safe_value}")
                         
-                props_str = "{" + ", ".join(props) + "}"
+                props_str = "{uuid: " + uuid_val + ", " + ", ".join(props) + "}"
                 
-                # Upsert query - merge on UUID
+                # Upsert query - merge on UUID (no parameters to avoid parsing issues)
                 query = f"""
-                MERGE (n:Entity {{uuid: $uuid}})
+                MERGE (n:Entity {{uuid: {uuid_val}}})
                 SET n = {props_str}
                 RETURN n.uuid as uuid
                 """
                 
-                await self.graph.query(query, params)
+                await self.graph.query(query)
                 loaded_count += 1
                 
             except Exception as e:
                 logger.error(f"Failed to load entity node {node.get('uuid', 'unknown')}: {e}")
                 logger.debug(f"Failing node data: {node}")
-                logger.debug(f"Query: {query}")
-                logger.debug(f"Params: {params}")
+                logger.debug(f"Generated query: {query}")
                 
         logger.debug(f"Loaded {loaded_count}/{len(nodes)} entity nodes")
         return loaded_count
@@ -253,33 +268,31 @@ class FalkorDBLoader:
                 # Convert datetimes to strings
                 node = self._convert_datetimes_to_strings(node)
                 
-                # Build properties string for Cypher
+                # Build properties string for direct query insertion (no parameters)
                 props = []
-                params = {"uuid": node["uuid"]}
+                uuid_val = self._safe_value_for_query(node["uuid"])
                 
                 for key, value in node.items():
                     if key not in ["uuid", "labels"]:
-                        param_key = f"prop_{key}"
-                        props.append(f"{key}: ${param_key}")
-                        params[param_key] = value
+                        safe_value = self._safe_value_for_query(value)
+                        props.append(f"{key}: {safe_value}")
                         
-                props_str = "{" + ", ".join(props) + "}"
+                props_str = "{uuid: " + uuid_val + ", " + ", ".join(props) + "}"
                 
-                # Upsert query - merge on UUID
+                # Upsert query - merge on UUID (no parameters to avoid parsing issues)
                 query = f"""
-                MERGE (n:Episodic {{uuid: $uuid}})
+                MERGE (n:Episodic {{uuid: {uuid_val}}})
                 SET n = {props_str}
                 RETURN n.uuid as uuid
                 """
                 
-                await self.graph.query(query, params)
+                await self.graph.query(query)
                 loaded_count += 1
                 
             except Exception as e:
                 logger.error(f"Failed to load episodic node {node.get('uuid', 'unknown')}: {e}")
                 logger.debug(f"Failing node data: {node}")
-                logger.debug(f"Query: {query}")
-                logger.debug(f"Params: {params}")
+                logger.debug(f"Generated query: {query}")
                 
         logger.debug(f"Loaded {loaded_count}/{len(nodes)} episodic nodes")
         return loaded_count
