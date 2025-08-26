@@ -103,7 +103,7 @@ class FalkorDBLoader:
         await self.disconnect()
         
     def _convert_datetimes_to_strings(self, obj: Any) -> Any:
-        """Convert datetime objects to ISO strings for FalkorDB compatibility."""
+        """Convert datetime objects to FalkorDB-compatible strings."""
         if isinstance(obj, dict):
             return {k: self._convert_datetimes_to_strings(v) for k, v in obj.items()}
         elif isinstance(obj, list):
@@ -111,7 +111,19 @@ class FalkorDBLoader:
         elif isinstance(obj, tuple):
             return tuple(self._convert_datetimes_to_strings(item) for item in obj)
         elif isinstance(obj, datetime):
-            return obj.isoformat()
+            # FalkorDB prefers simpler datetime format without microseconds and timezone
+            return obj.strftime('%Y-%m-%dT%H:%M:%S')
+        elif isinstance(obj, str):
+            # Handle string datetimes that might be malformed
+            if 'T' in obj and (':' in obj or '+' in obj or '-' in obj[-6:]):
+                try:
+                    # Try to parse and reformat
+                    dt = datetime.fromisoformat(obj.replace('Z', '+00:00'))
+                    return dt.strftime('%Y-%m-%dT%H:%M:%S')
+                except (ValueError, TypeError):
+                    # If parsing fails, sanitize the string to remove problematic characters
+                    return obj.replace('+00:00', '').replace('Z', '').split('.')[0]
+            return obj
         else:
             return obj
             
@@ -214,6 +226,9 @@ class FalkorDBLoader:
                 
             except Exception as e:
                 logger.error(f"Failed to load entity node {node.get('uuid', 'unknown')}: {e}")
+                logger.debug(f"Failing node data: {node}")
+                logger.debug(f"Query: {query}")
+                logger.debug(f"Params: {params}")
                 
         logger.debug(f"Loaded {loaded_count}/{len(nodes)} entity nodes")
         return loaded_count
@@ -262,6 +277,9 @@ class FalkorDBLoader:
                 
             except Exception as e:
                 logger.error(f"Failed to load episodic node {node.get('uuid', 'unknown')}: {e}")
+                logger.debug(f"Failing node data: {node}")
+                logger.debug(f"Query: {query}")
+                logger.debug(f"Params: {params}")
                 
         logger.debug(f"Loaded {loaded_count}/{len(nodes)} episodic nodes")
         return loaded_count
@@ -310,6 +328,9 @@ class FalkorDBLoader:
                 
             except Exception as e:
                 logger.error(f"Failed to load community node {node.get('uuid', 'unknown')}: {e}")
+                logger.debug(f"Failing node data: {node}")
+                logger.debug(f"Query: {query}")  
+                logger.debug(f"Params: {params}")
                 
         logger.debug(f"Loaded {loaded_count}/{len(nodes)} community nodes")
         return loaded_count
@@ -366,7 +387,11 @@ class FalkorDBLoader:
                     logger.warning(f"Could not create edge {edge['uuid']} - nodes may not exist")
                     
             except Exception as e:
+                # Log more details about the failing edge for debugging
                 logger.error(f"Failed to load entity edge {edge.get('uuid', 'unknown')}: {e}")
+                logger.debug(f"Failing edge data: {edge}")
+                logger.debug(f"Query: {query}")
+                logger.debug(f"Params: {params}")
                 
         logger.debug(f"Loaded {loaded_count}/{len(edges)} entity edges")
         return loaded_count
@@ -423,7 +448,11 @@ class FalkorDBLoader:
                     logger.warning(f"Could not create edge {edge['uuid']} - nodes may not exist")
                     
             except Exception as e:
+                # Log more details about the failing edge for debugging
                 logger.error(f"Failed to load episodic edge {edge.get('uuid', 'unknown')}: {e}")
+                logger.debug(f"Failing edge data: {edge}")
+                logger.debug(f"Query: {query}")
+                logger.debug(f"Params: {params}")
                 
         logger.debug(f"Loaded {loaded_count}/{len(edges)} episodic edges")
         return loaded_count
