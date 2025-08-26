@@ -2,7 +2,7 @@ name: Build and Push Worker Service Container
 
 on:
   push:
-    branches: [ main, ingestion-queue-system, falkordb-corruption-fixes, data-validation-framework ]
+    branches: [ main, ingestion-queue-system, falkordb-corruption-fixes, data-validation-framework, feature/chutes-ai-integration ]
     paths:
       - 'worker/**'
       - 'graphiti_core/**'
