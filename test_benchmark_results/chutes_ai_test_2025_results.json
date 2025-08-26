@@ -1,0 +1,133 @@
+{
+  "benchmark_metrics": {
+    "run_id": "chutes_ai_test_2025",
+    "start_time": "2025-08-26 18:14:13.311867",
+    "end_time": "2025-08-26 18:15:26.865459",
+    "total_episodes_processed": 3,
+    "successful_episodes": 0,
+    "failed_episodes": 3,
+    "episodes_per_second": 0.04078658728182847,
+    "episode_metrics": [
+      {
+        "episode_id": "828730f6-8bdb-46e5-af7c-8b96fe7dbc84",
+        "processing_start": "2025-08-26 18:14:13.316473",
+        "processing_end": "2025-08-26 18:14:27.477101",
+        "total_duration_ms": 14160.628,
+        "entity_extraction_time_ms": null,
+        "edge_extraction_time_ms": null,
+        "deduplication_time_ms": null,
+        "entities_created": 0,
+        "edges_created": 0,
+        "llm_calls": 0,
+        "embedding_calls": 0,
+        "memory_used_mb": null,
+        "errors": [
+          "Unknown function 'vector.similarity.cosine'"
+        ]
+      },
+      {
+        "episode_id": "9d6060e5-4e32-4cba-9d5a-791d68d20cd1",
+        "processing_start": "2025-08-26 18:14:27.477201",
+        "processing_end": "2025-08-26 18:14:46.460875",
+        "total_duration_ms": 18983.674,
+        "entity_extraction_time_ms": null,
+        "edge_extraction_time_ms": null,
+        "deduplication_time_ms": null,
+        "entities_created": 0,
+        "edges_created": 0,
+        "llm_calls": 0,
+        "embedding_calls": 0,
+        "memory_used_mb": null,
+        "errors": [
+          "Unknown function 'vector.similarity.cosine'"
+        ]
+      },
+      {
+        "episode_id": "515283b8-a717-4f6f-b987-308918973166",
+        "processing_start": "2025-08-26 18:14:46.460958",
+        "processing_end": "2025-08-26 18:15:26.865255",
+        "total_duration_ms": 40404.297,
+        "entity_extraction_time_ms": null,
+        "edge_extraction_time_ms": null,
+        "deduplication_time_ms": null,
+        "entities_created": 0,
+        "edges_created": 0,
+        "llm_calls": 0,
+        "embedding_calls": 0,
+        "memory_used_mb": null,
+        "errors": [
+          "Unknown function 'vector.similarity.cosine'"
+        ]
+      }
+    ],
+    "llm_metrics": {
+      "total_calls": 0,
+      "total_tokens_used": 0,
+      "total_cost_usd": 0.0,
+      "avg_latency_ms": 0.0,
+      "provider_breakdown": {},
+      "error_rate": 0.0,
+      "rate_limit_hits": 0
+    },
+    "embedding_metrics": {
+      "total_calls": 0,
+      "total_vectors_generated": 0,
+      "avg_latency_ms": 0.0,
+      "batch_sizes": [],
+      "error_rate": 0.0
+    },
+    "graph_metrics": {
+      "nodes_would_create": 0,
+      "edges_would_create": 0,
+      "nodes_would_update": 0,
+      "edges_would_update": 0,
+      "deduplication_savings": 0,
+      "write_operations_intercepted": 0
+    },
+    "resource_metrics": {
+      "peak_memory_mb": 0.0,
+      "avg_cpu_percent": 0.0,
+      "disk_io_mb": 0.0,
+      "network_io_mb": 0.0
+    },
+    "hyperparameters": {}
+  },
+  "summary_stats": {
+    "total_episodes": 3,
+    "success_rate": 0.0,
+    "avg_episode_duration_ms": 24516.199666666664,
+    "min_episode_duration_ms": 14160.628,
+    "max_episode_duration_ms": 40404.297,
+    "episodes_per_second": 0.04078658728182847,
+    "total_entities_created": 0,
+    "total_edges_created": 0
+  },
+  "config": {
+    "run_id": "chutes_ai_test_2025",
+    "description": "Test of Chutes AI with dry-run benchmarking system",
+    "episodes_source": "database",
+    "episodes_limit": 3,
+    "episodes_filter": {},
+    "batch_size": 1,
+    "max_concurrent_episodes": 1,
+    "enable_profiling": false,
+    "collect_memory_stats": false,
+    "hyperparameters": {},
+    "output_dir": "test_benchmark_results",
+    "export_formats": [
+      "json"
+    ],
+    "save_detailed_metrics": true,
+    "profile_llm_calls": true,
+    "profile_embedding_calls": true,
+    "profile_database_operations": true
+  },
+  "aggregate_metrics": {
+    "total_write_operations": 8,
+    "avg_llm_call_time_ms": 0,
+    "avg_embedding_call_time_ms": 0,
+    "write_operation_types": {
+      "OTHER": 8
+    }
+  }
+}

@@ -1,0 +1,107 @@
+{
+  "evaluation_id": "chutes_eval_20250826_182807",
+  "model": "zai-org/GLM-4.5-FP8",
+  "start_time": "2025-08-26T18:28:07.324424",
+  "test_episodes": [
+    {
+      "uuid": "b506fe3e-9fb4-405f-8f50-03112dbc3440",
+      "name": "Emmanuel Umukoro and Claude Conversation",
+      "content_length": 1074,
+      "source": "message",
+      "group_id": "emmanuel_claude_session"
+    },
+    {
+      "uuid": "e0e02f8d-e07c-4a19-bebd-60d354548870",
+      "name": "Claude_mcp__huly-mcp__huly_search_issues_2025-08-26T00:14:35.289918",
+      "content_length": 6630,
+      "source": "message",
+      "group_id": "claude_conversations"
+    },
+    {
+      "uuid": "fe9b5323-bdbb-4006-b103-b039f9ef20eb",
+      "name": "Graphiti Visualization Architecture",
+      "content_length": 1657,
+      "source": "message",
+      "group_id": "default"
+    },
+    {
+      "uuid": "f8ae5324-c71c-495d-9001-086d33778cff",
+      "name": "Graphiti Infrastructure and Services",
+      "content_length": 1838,
+      "source": "message",
+      "group_id": "default"
+    },
+    {
+      "uuid": "312ee1de-d3b9-464d-b01c-3c7dbd558499",
+      "name": "Graphiti Development and Performance",
+      "content_length": 1602,
+      "source": "message",
+      "group_id": "default"
+    }
+  ],
+  "entity_extraction_results": {
+    "extraction_results": [
+      {
+        "episode_uuid": "b506fe3e-9fb4-405f-8f50-03112dbc3440",
+        "error": "'episode_content'",
+        "success": false
+      },
+      {
+        "episode_uuid": "e0e02f8d-e07c-4a19-bebd-60d354548870",
+        "error": "'episode_content'",
+        "success": false
+      },
+      {
+        "episode_uuid": "fe9b5323-bdbb-4006-b103-b039f9ef20eb",
+        "error": "'episode_content'",
+        "success": false
+      },
+      {
+        "episode_uuid": "f8ae5324-c71c-495d-9001-086d33778cff",
+        "error": "'episode_content'",
+        "success": false
+      },
+      {
+        "episode_uuid": "312ee1de-d3b9-464d-b01c-3c7dbd558499",
+        "error": "'episode_content'",
+        "success": false
+      }
+    ],
+    "summary": {
+      "total_episodes": 5,
+      "successful_extractions": 0,
+      "avg_entities_per_episode": 0.0,
+      "avg_response_time_ms": 0.0,
+      "structured_compliance_rate": 0.0
+    }
+  },
+  "deduplication_results": {
+    "deduplication_results": [
+      {
+        "test_case": "apple_variants",
+        "error": "'previous_episodes'",
+        "success": false
+      }
+    ],
+    "summary": {
+      "test_cases_run": 1,
+      "successful_cases": 0
+    }
+  },
+  "relationship_extraction_results": [],
+  "performance_metrics": {
+    "total_llm_calls": 5,
+    "total_tokens_used": 0,
+    "avg_response_time_ms": 0.0,
+    "successful_extractions": 0,
+    "failed_extractions": 5,
+    "structured_output_compliance": 0.0
+  },
+  "quality_metrics": {
+    "entity_precision": 0.0,
+    "entity_recall": 0.0,
+    "relationship_accuracy": 0.0,
+    "deduplication_accuracy": 0.0
+  },
+  "end_time": "2025-08-26T18:28:07.539907"
+}

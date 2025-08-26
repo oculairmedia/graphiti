@@ -14,8 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
+import ast
 import json
 import logging
+import re
 import typing
 from typing import ClassVar
 
@@ -86,6 +88,146 @@ class ChutesClient(LLMClient):
         else:
             self.client = client
 
+    def _parse_chutes_response(self, content: str) -> dict[str, typing.Any] | None:
+        """
+        Robust parser for Chutes AI responses that can handle multiple formats.
+        
+        Chutes often returns Python dict format instead of JSON, so we try multiple strategies:
+        1. Standard JSON parsing
+        2. Python dict string evaluation (ast.literal_eval)
+        3. Manual conversion of Python syntax to JSON
+        4. Regex extraction of structured data
+        
+        Args:
+            content: Raw response content from Chutes AI
+            
+        Returns:
+            Parsed dictionary if successful, None if all strategies fail
+        """
+        content = content.strip()
+        
+        # Strategy 1: Try standard JSON parsing first
+        try:
+            return json.loads(content)
+        except json.JSONDecodeError:
+            logger.debug('Standard JSON parsing failed, trying alternative strategies')
+        
+        # Strategy 2: Try Python dict evaluation (handles True/False, single quotes)
+        if content.startswith('{') and content.endswith('}'):
+            try:
+                result = ast.literal_eval(content)
+                if isinstance(result, dict):
+                    logger.info('Successfully parsed as Python dict using ast.literal_eval')
+                    return result
+            except (ValueError, SyntaxError):
+                logger.debug('ast.literal_eval failed, trying manual conversion')
+        
+        # Strategy 3: Manual conversion of Python syntax to JSON
+        try:
+            # Replace Python boolean/null values with JSON equivalents
+            json_content = content
+            json_content = json_content.replace("True", "true")
+            json_content = json_content.replace("False", "false")
+            json_content = json_content.replace("None", "null")
+            
+            # Replace single quotes with double quotes (careful with nested quotes)
+            # This is a simplified approach - could be more robust
+            json_content = re.sub(r"'([^']*)':", r'"\1":', json_content)  # Keys
+            json_content = re.sub(r":\s*'([^']*)'", r': "\1"', json_content)  # Values
+            
+            result = json.loads(json_content)
+            logger.info('Successfully converted Python syntax to JSON')
+            return result
+        except (json.JSONDecodeError, Exception):
+            logger.debug('Manual JSON conversion failed, trying regex extraction')
+        
+        # Strategy 4: Regex extraction for common patterns
+        # Look for dictionary-like structures even if not perfectly formatted
+        
+        # Try to find entities array pattern
+        entities_match = re.search(r"'entities':\s*\[(.*?)\]", content, re.DOTALL)
+        if entities_match:
+            try:
+                entities_content = entities_match.group(1)
+                # Try to build a basic structure
+                return {'entities': self._extract_entities_from_text(entities_content)}
+            except Exception:
+                pass
+        
+        # Try to find duplicates array pattern
+        duplicates_match = re.search(r"'duplicates':\s*\[(.*?)\]", content, re.DOTALL)
+        if duplicates_match:
+            try:
+                duplicates_content = duplicates_match.group(1)
+                return {'duplicates': self._extract_duplicates_from_text(duplicates_content)}
+            except Exception:
+                pass
+        
+        # Try to find relationships array pattern
+        relationships_match = re.search(r"'relationships':\s*\[(.*?)\]", content, re.DOTALL)
+        if relationships_match:
+            try:
+                relationships_content = relationships_match.group(1)
+                return {'relationships': self._extract_relationships_from_text(relationships_content)}
+            except Exception:
+                pass
+        
+        logger.warning('All parsing strategies failed')
+        return None
+    
+    def _extract_entities_from_text(self, text: str) -> list[dict[str, str]]:
+        """Extract entities from malformed text using regex patterns."""
+        entities = []
+        
+        # Look for entity dict patterns like {'name': 'value', 'type': 'value', 'context': 'value'}
+        entity_pattern = r"\{'name':\s*'([^']*)',\s*'type':\s*'([^']*)',\s*'context':\s*'([^']*)'\}"
+        matches = re.findall(entity_pattern, text)
+        
+        for name, entity_type, context in matches:
+            entities.append({
+                'name': name,
+                'type': entity_type,
+                'context': context
+            })
+        
+        return entities
+    
+    def _extract_duplicates_from_text(self, text: str) -> list[dict]:
+        """Extract duplicates from malformed text using regex patterns."""
+        duplicates = []
+        
+        # Pattern for duplicate entries
+        duplicate_pattern = r"\{'index':\s*(\d+),\s*'is_duplicate':\s*(True|False),\s*'confidence':\s*([\d.]+),\s*'reason':\s*'([^']*)'\}"
+        matches = re.findall(duplicate_pattern, text)
+        
+        for index, is_dup, confidence, reason in matches:
+            duplicates.append({
+                'index': int(index),
+                'is_duplicate': is_dup == 'True',
+                'confidence': float(confidence),
+                'reason': reason
+            })
+        
+        return duplicates
+    
+    def _extract_relationships_from_text(self, text: str) -> list[dict[str, str]]:
+        """Extract relationships from malformed text using regex patterns."""
+        relationships = []
+        
+        # Pattern for relationship entries
+        rel_pattern = r"\{'source':\s*'([^']*)',\s*'target':\s*'([^']*)',\s*'relationship_type':\s*'([^']*)',\s*'context':\s*'([^']*)'\}"
+        matches = re.findall(rel_pattern, text)
+        
+        for source, target, rel_type, context in matches:
+            relationships.append({
+                'source': source,
+                'target': target, 
+                'relationship_type': rel_type,
+                'context': context
+            })
+        
+        return relationships
+
     async def _generate_response(
         self,
         messages: list[Message],
@@ -102,6 +244,8 @@ class ChutesClient(LLMClient):
                 openai_messages.append({'role': 'system', 'content': m.content})
         try:
             logger.debug(f'Making request to Chutes AI with model: {self.model or DEFAULT_MODEL}')
+            
+            # Make the API request
             response = await self.client.chat.completions.create(
                 model=self.model or DEFAULT_MODEL,
                 messages=openai_messages,
@@ -121,13 +265,15 @@ class ChutesClient(LLMClient):
                 logger.warning('Received empty response content from Chutes AI')
                 raise ValueError('Empty response content from Chutes AI')
             
-            try:
-                parsed_response = json.loads(result)
-                logger.debug(f'Successfully parsed JSON response from Chutes AI')
+            # Try multiple parsing strategies to extract valid format
+            parsed_response = self._parse_chutes_response(result)
+            if parsed_response is not None:
+                logger.debug(f'Successfully parsed Chutes AI response')
                 return parsed_response
-            except json.JSONDecodeError as json_err:
-                logger.error(f'JSON parsing failed for Chutes AI response. Content: {repr(result[:500])}...')
-                raise ValueError(f'Invalid JSON response from Chutes AI: {json_err}') from json_err
+            
+            # If all parsing strategies fail, this is a wasted request
+            logger.error(f'All parsing strategies failed for Chutes response: {repr(result[:500])}...')
+            raise ValueError(f'Could not extract valid format from Chutes AI response')
                 
         except openai.RateLimitError as e:
             logger.warning(f'Chutes AI rate limit hit: {e}')
@@ -172,6 +318,18 @@ class ChutesClient(LLMClient):
             except (openai.APITimeoutError, openai.APIConnectionError, openai.InternalServerError):
                 # Let OpenAI's client handle these retries
                 raise
+            except ValueError as e:
+                # Don't retry on JSON parsing errors or empty responses - these waste requests
+                error_msg = str(e).lower()
+                if any(keyword in error_msg for keyword in ['json', 'empty response', 'malformed response']):
+                    logger.error(f'Non-retryable error (would waste API requests): {e}')
+                    raise
+                # Other ValueError types can be retried
+                last_error = e
+                if retry_count >= self.MAX_RETRIES:
+                    logger.error(f'Max retries ({self.MAX_RETRIES}) exceeded. Last error: {e}')
+                    raise
+                retry_count += 1
             except Exception as e:
                 last_error = e
 

@@ -1,0 +1,47 @@
+{
+  "evaluation_id": "chutes_comprehensive_20250826_184346",
+  "model": "zai-org/GLM-4.5-FP8",
+  "start_time": "2025-08-26T18:43:46.165180",
+  "tasks": {
+    "entity_extraction": {
+      "success": true,
+      "response_time_ms": 30815.706729888916,
+      "content": "{'entities': [{'name': 'quarterly board meeting', 'type': 'event', 'context': 'During the quarterly board meeting on March 15th, 2024'}, {'name': 'March 15th, 2024', 'type': 'date', 'context': 'During the quarterly board meeting on March 15th, 2024'}, {'name': 'Sarah Johnson', 'type': 'person', 'context': 'CEO Sarah Johnson announced that TechCorp Inc. would be partnering'}, {'name': 'TechCorp Inc.', 'type': 'organization', 'context': 'CEO Sarah Johnson announced that TechCorp Inc. would be partnering'}, {'name': 'Microsoft Azure', 'type': 'organization', 'context': 'partnering with Microsoft Azure to deploy their new AI platform'}, {'name': 'Microsoft Azure', 'type': 'technology', 'context': 'partnering with Microsoft Azure to deploy their new AI platform'}, {'name': 'AI platform', 'type': 'technology', 'context': 'deploy their new AI platform across data centers'}, {'name': 'San Francisco', 'type': 'location', 'context': 'data centers in San Francisco and New York'}, {'name': 'New York', 'type': 'location', 'context': 'data centers in San Francisco and New York'}, {'name': 'Project Phoenix', 'type': 'event', 'context': 'The project, codenamed \"Project Phoenix\", will utilize'}, {'name': 'OpenAI', 'type': 'organization', 'context': \"utilize OpenAI's GPT-4 technology\"}, {'name': 'GPT-4', 'type': 'technology', 'context': \"utilize OpenAI's GPT-4 technology\"}, {'name': 'Michael Chen', 'type': 'person', 'context': 'managed by the engineering team led by Dr. Michael Chen'}, {'name': 'Q2 2024', 'type': 'date', 'context': 'scheduled to begin in Q2 2024 with an initial budget'}, {'name': '$2.5 million', 'type': 'amount', 'context': 'initial budget of $2.5 million'}]}",
+      "timeout_used": 45,
+      "parsed_json": false,
+      "entities_found": 0
+    },
+    "entity_deduplication": {
+      "success": false,
+      "error": "Exception: name 're' is not defined",
+      "response_time_ms": 0
+    },
+    "relationship_extraction": {
+      "success": false,
+      "error": "Timeout after 45s",
+      "response_time_ms": 45045.570373535156,
+      "timeout_used": 45
+    },
+    "entity_summarization": {
+      "success": false,
+      "error": "Exception: name 're' is not defined",
+      "response_time_ms": 0
+    },
+    "temporal_reasoning": {
+      "success": false,
+      "error": "Exception: name 're' is not defined",
+      "response_time_ms": 0
+    }
+  },
+  "end_time": "2025-08-26T18:46:07.681616",
+  "summary": {
+    "total_tasks": 5,
+    "successful_tasks": 1,
+    "success_rate": 0.2,
+    "avg_response_time_ms": 30815.706729888916,
+    "json_compliance_rate": 0.0,
+    "successful_task_names": [
+      "entity_extraction"
+    ]
+  }
+}

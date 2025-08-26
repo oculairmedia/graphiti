@@ -1,0 +1,58 @@
+{
+  "evaluation_id": "chutes_comprehensive_20250826_184833",
+  "model": "zai-org/GLM-4.5-FP8",
+  "start_time": "2025-08-26T18:48:33.309302",
+  "tasks": {
+    "entity_extraction": {
+      "success": true,
+      "response_time_ms": 26166.566133499146,
+      "content": "{'entities': [{'name': 'quarterly board meeting', 'type': 'event', 'context': 'During the quarterly board meeting on March 15th, 2024'}, {'name': 'March 15th, 2024', 'type': 'date', 'context': 'During the quarterly board meeting on March 15th, 2024'}, {'name': 'Sarah Johnson', 'type': 'person', 'context': 'CEO Sarah Johnson announced that TechCorp Inc. would be partnering'}, {'name': 'TechCorp Inc.', 'type': 'organization', 'context': 'CEO Sarah Johnson announced that TechCorp Inc. would be partnering'}, {'name': 'Microsoft Azure', 'type': 'organization', 'context': 'partnering with Microsoft Azure to deploy their new AI platform'}, {'name': 'Microsoft Azure', 'type': 'technology', 'context': 'partnering with Microsoft Azure to deploy their new AI platform'}, {'name': 'AI platform', 'type': 'technology', 'context': 'deploy their new AI platform across data centers'}, {'name': 'San Francisco', 'type': 'location', 'context': 'data centers in San Francisco and New York'}, {'name': 'New York', 'type': 'location', 'context': 'data centers in San Francisco and New York'}, {'name': 'Project Phoenix', 'type': 'event', 'context': \"The project, codenamed 'Project Phoenix', will utilize\"}, {'name': 'OpenAI', 'type': 'organization', 'context': \"utilize OpenAI's GPT-4 technology\"}, {'name': 'GPT-4', 'type': 'technology', 'context': \"OpenAI's GPT-4 technology\"}, {'name': 'Michael Chen', 'type': 'person', 'context': 'managed by the engineering team led by Dr. Michael Chen'}, {'name': 'Q2 2024', 'type': 'date', 'context': 'scheduled to begin in Q2 2024 with an initial budget'}, {'name': '$2.5 million', 'type': 'amount', 'context': 'initial budget of $2.5 million'}]}",
+      "timeout_used": 60,
+      "parsed_json": false,
+      "entities_found": 0
+    },
+    "entity_deduplication": {
+      "success": true,
+      "response_time_ms": 20453.88889312744,
+      "content": "{'duplicates': [{'index': 1, 'is_duplicate': True, 'confidence': 0.95, 'reason': 'Same company, minor punctuation difference'}, {'index': 2, 'is_duplicate': True, 'confidence': 0.9, 'reason': 'Same company name in all caps, matching location in summary'}, {'index': 3, 'is_duplicate': True, 'confidence': 0.8, 'reason': 'Former company name of Apple Inc, similar business description'}, {'index': 4, 'is_duplicate': False, 'confidence': 1.0, 'reason': 'Different company (Microsoft)'}, {'index': 5, 'is_duplicate': False, 'confidence': 0.95, 'reason': 'Different industry (agricultural vs technology)'}]}",
+      "timeout_used": 60,
+      "parsed_json": false
+    },
+    "relationship_extraction": {
+      "success": true,
+      "response_time_ms": 38432.0068359375,
+      "content": "{'relationships': [{'source': 'John Smith', 'target': 'Software Engineer', 'relationship_type': 'works_as', 'context': 'John Smith works as a Software Engineer at Google in Mountain View.'}, {'source': 'John Smith', 'target': 'Google', 'relationship_type': 'works_at', 'context': 'John Smith works as a Software Engineer at Google in Mountain View.'}, {'source': 'Google', 'target': 'Mountain View', 'relationship_type': 'located_in', 'context': 'John Smith works as a Software Engineer at Google in Mountain View.'}, {'source': 'John Smith', 'target': 'Lisa Wong', 'relationship_type': 'reports_to', 'context': 'He reports to his manager Lisa Wong, who heads the AI Research division.'}, {'source': 'Lisa Wong', 'target': 'AI Research division', 'relationship_type': 'heads', 'context': 'He reports to his manager Lisa Wong, who heads the AI Research division.'}, {'source': 'John Smith', 'target': 'Stanford University', 'relationship_type': 'graduated_from', 'context': 'John graduated from Stanford University in 2020 with a degree in Computer Science.'}, {'source': 'John Smith', 'target': '2020', 'relationship_type': 'graduated_in', 'context': 'John graduated from Stanford University in 2020 with a degree in Computer Science.'}, {'source': 'John Smith', 'target': 'Computer Science', 'relationship_type': 'has_degree_in', 'context': 'John graduated from Stanford University in 2020 with a degree in Computer Science.'}, {'source': 'John Smith', 'target': 'Facebook', 'relationship_type': 'previously_worked_at', 'context': 'He previously worked at Facebook before joining Google in 2021.'}, {'source': 'John Smith', 'target': 'Google', 'relationship_type': 'joined_in', 'context': 'He previously worked at Facebook before joining Google in 2021.'}, {'source': 'Google', 'target': 'Mountain View, California', 'relationship_type': 'headquartered_in', 'context': 'Google is headquartered in Mountain View, California and was founded by Larry Page and Sergey Brin.'}, {'source': 'Google', 'target': 'Larry Page', 'relationship_type': 'founded_by', 'context': 'Google is headquartered in Mountain View, California and was founded by Larry Page and Sergey Brin.'}, {'source': 'Google', 'target': 'Sergey Brin', 'relationship_type': 'founded_by', 'context': 'Google is headquartered in Mountain View, California and was founded by Larry Page and Sergey Brin.'}]}",
+      "timeout_used": 75,
+      "parsed_json": false
+    },
+    "entity_summarization": {
+      "success": true,
+      "response_time_ms": 12837.852239608765,
+      "content": "{'entity_name': 'Microsoft', 'summary': 'Microsoft is a technology company actively involved in AI development, cloud computing services through Azure, and productivity software with their Office suite. Led by CEO Satya Nadella, the company is expanding its cloud services to new regions and has partnered with OpenAI to integrate advanced AI technologies into their offerings.', 'key_attributes': ['Active in AI development with new initiatives', 'Azure cloud services expanding geographically', 'Led by CEO Satya Nadella', 'Office suite productivity software continues to receive updates', 'Partnership with OpenAI for AI integration'], 'confidence_score': 0.95}",
+      "timeout_used": 60,
+      "parsed_json": false
+    },
+    "temporal_reasoning": {
+      "success": true,
+      "response_time_ms": 23768.784523010254,
+      "content": "{'timeline': [{'period': 'Jan 1, 2024 - Mar 14, 2024', 'employer': 'Apple', 'status': 'valid'}, {'period': 'Mar 15, 2024 - present', 'employer': 'Google', 'status': 'valid'}], 'invalidated_relationships': [{'relationship': 'John works at Apple', 'invalidated_date': 'Mar 15, 2024', 'reasoning': 'Statement 2 indicates John started at Google on March 15, 2024, and statement 3 confirms he left Apple in March 2024'}]}",
+      "timeout_used": 60,
+      "parsed_json": false
+    }
+  },
+  "end_time": "2025-08-26T18:50:34.968932",
+  "summary": {
+    "total_tasks": 5,
+    "successful_tasks": 5,
+    "success_rate": 1.0,
+    "avg_response_time_ms": 24331.81972503662,
+    "json_compliance_rate": 0.0,
+    "successful_task_names": [
+      "entity_extraction",
+      "entity_deduplication",
+      "relationship_extraction",
+      "entity_summarization",
+      "temporal_reasoning"
+    ]
+  }
+}

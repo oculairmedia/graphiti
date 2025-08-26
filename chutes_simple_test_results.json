@@ -1,0 +1,24 @@
+{
+  "timestamp": "2025-08-26T18:37:48.796502",
+  "model": "zai-org/GLM-4.5-FP8",
+  "results": [
+    {
+      "test_num": 1,
+      "response_time_ms": 16903.701543807983,
+      "json_valid": false,
+      "success": false
+    },
+    {
+      "test_num": 2,
+      "response_time_ms": 18111.736297607422,
+      "json_valid": false,
+      "success": false
+    },
+    {
+      "test_num": 3,
+      "response_time_ms": 29447.394371032715,
+      "json_valid": false,
+      "success": false
+    }
+  ]
+}

@@ -334,6 +334,87 @@ to enable Neo4j's parallel runtime feature for several of our search queries.
 Note that this feature is not supported for Neo4j Community edition or for smaller AuraDB instances,
 as such this feature is off by default.
 
+## 📊 Dry-Run Benchmarking
+
+Graphiti includes a comprehensive dry-run benchmarking system that enables safe performance testing and hyperparameter tuning against production data without any risk of modification. This system creates a shadow of the ingestion pipeline that queries real data but intercepts all write operations.
+
+### Features
+
+- **Safe Production Testing**: Query real database data without making any modifications
+- **Comprehensive Metrics**: Detailed timing, resource usage, and performance statistics
+- **Hyperparameter Tuning**: Systematic testing of LLM parameters (temperature, tokens, etc.)
+- **Multiple Export Formats**: JSON, CSV, and HTML performance profiles
+- **Database Comparison**: Compare performance between Neo4j and FalkorDB
+- **CLI Interface**: Easy-to-use command-line tools for all operations
+
+### Quick Start
+
+Run a basic benchmark with 50 episodes:
+
+```bash
+python3 cli/benchmark.py run --episodes-limit 50 --database-type falkor
+```
+
+### Hyperparameter Tuning
+
+Test different temperature and token limit combinations:
+
+```bash
+python3 cli/benchmark.py tune \
+  --temperature 0.0 --temperature 0.3 --temperature 0.7 \
+  --max-tokens 1000 --max-tokens 2000 \
+  --episodes-limit 20
+```
+
+### Database Backend Comparison
+
+Compare Neo4j vs FalkorDB performance:
+
+```bash
+python3 cli/benchmark.py compare --episodes-limit 100
+```
+
+### Python API
+
+```python
+from graphiti_core.graphiti import Graphiti
+from graphiti_core.driver.falkordb_driver import FalkorDriver
+from graphiti_core.benchmarking import DryRunConfig, DryRunWorker
+
+# Create Graphiti instance
+driver = FalkorDriver(host='localhost', port=6379)
+graphiti = Graphiti(graph_driver=driver, llm_client=llm_client, embedder=embedder)
+
+# Configure benchmark
+config = DryRunConfig(
+    episodes_limit=50,
+    batch_size=5,
+    enable_profiling=True,
+    hyperparameters={'temperature': 0.3, 'max_tokens': 2000}
+)
+
+# Run benchmark
+worker = DryRunWorker(graphiti, config)
+results = await worker.run_benchmark()
+
+# View results
+print(f"Success rate: {results.get_summary_stats()['success_rate']*100:.1f}%")
+```
+
+### Safety Features
+
+- **Write Interception**: All CREATE, MERGE, SET, DELETE operations are blocked
+- **Read-Only Access**: Full access to production data for realistic benchmarking  
+- **Runtime Limits**: Configurable episode and time limits prevent runaway processes
+- **Validation**: Configuration validation ensures safe execution
+
+### Documentation
+
+For complete documentation, examples, and advanced usage patterns, see:
+- [Dry-Run Benchmarking Guide](docs/DRY_RUN_BENCHMARKING_GUIDE.md)
+- [Example Scripts](examples/dry_run_benchmark.py)
+- [CLI Reference](cli/commands/benchmark.py)
+
 ## Using Graphiti with Azure OpenAI
 
 Graphiti supports Azure OpenAI for both LLM inference and embeddings. Azure deployments often require different endpoints for LLM and embedding services, and separate deployments for default and small models.
