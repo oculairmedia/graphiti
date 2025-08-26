@@ -1,10 +1,12 @@
 import React from 'react';
-import { Database, RefreshCw, Cpu, Zap } from 'lucide-react';
+import { Database, RefreshCw, Cpu, Zap, Activity } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
+import { useQueueStatus } from '@/hooks/useQueueStatus';
 
 interface QueryControlsTabProps {
   config: {
@@ -29,6 +31,7 @@ export const QueryControlsTab: React.FC<QueryControlsTabProps> = ({
   onRefreshGraph,
   onQuickQuery,
 }) => {
+  const { queueStatus, isLoading: queueLoading, error: queueError } = useQueueStatus();
   return (
     <div className="space-y-4">
       <Card className="glass border-border/30">
@@ -167,6 +170,72 @@ export const QueryControlsTab: React.FC<QueryControlsTabProps> = ({
               ⚡ Fast Load (5K)
             </Button>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* System Status */}
+      <Card className="glass border-border/30">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm flex items-center space-x-2">
+            <Activity className="h-4 w-4 text-primary" />
+            <span>Queue Status</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {queueLoading ? (
+            <div className="flex justify-center items-center py-2">
+              <div className="animate-pulse text-xs text-muted-foreground">Loading...</div>
+            </div>
+          ) : queueError ? (
+            <div className="text-xs text-red-400">
+              Queue unavailable
+            </div>
+          ) : queueStatus ? (
+            <div className="space-y-2">
+              <div className="flex justify-between items-center">
+                <span className="text-xs text-muted-foreground">Status</span>
+                <Badge 
+                  variant={queueStatus.status === 'processing' ? 'default' : 'secondary'}
+                  className={`text-xs h-5 ${
+                    queueStatus.status === 'processing' ? 'bg-green-500/20 text-green-400 border-green-500/30' :
+                    queueStatus.status === 'idle' ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' :
+                    'bg-gray-500/20 text-gray-400 border-gray-500/30'
+                  }`}
+                >
+                  {queueStatus.status}
+                </Badge>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Pending</span>
+                  <span className="text-primary font-mono">{queueStatus.visible_messages}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Processing</span>
+                  <span className="text-primary font-mono">{queueStatus.invisible_messages}</span>
+                </div>
+              </div>
+              {queueStatus.total_processed > 0 && (
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-muted-foreground">Success Rate</span>
+                  <Badge 
+                    variant="outline"
+                    className={`text-xs h-5 ${
+                      queueStatus.success_rate >= 95 ? 'text-green-400 border-green-500/30' :
+                      queueStatus.success_rate >= 80 ? 'text-yellow-400 border-yellow-500/30' :
+                      'text-red-400 border-red-500/30'
+                    }`}
+                  >
+                    {queueStatus.success_rate.toFixed(0)}%
+                  </Badge>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="text-xs text-muted-foreground">
+              No queue data available
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
