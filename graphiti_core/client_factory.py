@@ -26,6 +26,7 @@ from graphiti_core.cross_encoder.openai_reranker_client import OpenAIRerankerCli
 from graphiti_core.embedder import EmbedderClient, OpenAIEmbedder, OpenAIEmbedderConfig
 from graphiti_core.llm_client import LLMClient, LLMConfig, OpenAIClient
 from graphiti_core.llm_client.cerebras_client import CerebrasClient
+from graphiti_core.llm_client.chutes_client import ChutesClient
 from graphiti_core.llm_client.fallback_client import FallbackLLMClient
 
 logger = logging.getLogger(__name__)
@@ -40,6 +41,7 @@ class GraphitiClientFactory:
         logger.info("=== GraphitiClientFactory.create_llm_client() called ===")
         cerebras_client = None
         ollama_client = None
+        chutes_client = None
         
         # Check if we should enable fallback mode
         use_fallback = os.getenv('ENABLE_FALLBACK', 'true').lower() == 'true'
@@ -47,20 +49,29 @@ class GraphitiClientFactory:
         # Debug environment variables
         use_cerebras_raw = os.getenv('USE_CEREBRAS', '')
         use_cerebras_lower = use_cerebras_raw.lower()
-        logger.info(f'Environment check: USE_CEREBRAS="{use_cerebras_raw}" -> "{use_cerebras_lower}" -> {use_cerebras_lower == "true"}')
+        use_chutes_raw = os.getenv('USE_CHUTES', '')
+        use_chutes_lower = use_chutes_raw.lower()
+        use_ollama_raw = os.getenv('USE_OLLAMA', '')
+        use_ollama_lower = use_ollama_raw.lower()
         
-        # Try to create Cerebras client
+        logger.info(f'Environment check: USE_CEREBRAS="{use_cerebras_raw}" -> "{use_cerebras_lower}" -> {use_cerebras_lower == "true"}')
+        logger.info(f'Environment check: USE_CHUTES="{use_chutes_raw}" -> "{use_chutes_lower}" -> {use_chutes_lower == "true"}')
+        logger.info(f'Environment check: USE_OLLAMA="{use_ollama_raw}" -> "{use_ollama_lower}" -> {use_ollama_lower == "true"}')
+        logger.info(f'Fallback enabled: {use_fallback}')
+        
+        # Try to create all requested clients (no early returns for cascading)
+        available_clients = []
+        client_names = []
+        
+        # 1. Try to create Cerebras client (highest priority)
         if use_cerebras_lower == 'true':
             try:
                 cerebras_model = os.getenv('CEREBRAS_MODEL', 'qwen-3-coder-480b')
                 cerebras_small_model = os.getenv('CEREBRAS_SMALL_MODEL', 'qwen-3-32b')
                 cerebras_api_key = os.getenv('CEREBRAS_API_KEY')
                 
-                logger.info(
-                    f'Creating Cerebras LLM client with model {cerebras_model}'
-                )
+                logger.info(f'Creating Cerebras LLM client with model {cerebras_model}')
                 logger.info(f'Cerebras API key present: {cerebras_api_key is not None}')
-                logger.info(f'USE_CEREBRAS={os.getenv("USE_CEREBRAS")}, use_fallback={use_fallback}')
                 
                 config = LLMConfig(
                     api_key=cerebras_api_key,
@@ -68,40 +79,57 @@ class GraphitiClientFactory:
                     small_model=cerebras_small_model,
                     temperature=0.7,  # Recommended temperature for qwen-3-coder-480b
                     max_tokens=4000,
-                    # Note: top_p=0.8 recommended but not exposed in current config
                 )
-                logger.info('LLMConfig created successfully')
                 
-                logger.info('About to instantiate CerebrasClient...')
                 cerebras_client = CerebrasClient(config=config)
+                available_clients.append(cerebras_client)
+                client_names.append("Cerebras")
                 logger.info('CerebrasClient instantiated successfully!')
-                
-                # If fallback is disabled, return just Cerebras
-                if not use_fallback:
-                    logger.info('Fallback disabled, returning Cerebras client only')
-                    return cerebras_client
-                else:
-                    logger.info('Fallback enabled, will create Ollama client next')
                     
             except Exception as e:
                 logger.error(f'Failed to create Cerebras LLM client: {e}')
-                logger.error(f'Exception type: {type(e).__name__}')
                 import traceback
                 logger.error(f'Full traceback: {traceback.format_exc()}')
-                if not use_fallback:
-                    logger.info('Falling back to OpenAI LLM client')
         
-        # Try to create Ollama client (for standalone use or as fallback)
-        if os.getenv('USE_OLLAMA', '').lower() == 'true' or (cerebras_client and use_fallback):
+        # 2. Try to create Chutes AI client (second priority)
+        if use_chutes_lower == 'true':
+            try:
+                chutes_model = os.getenv('CHUTES_MODEL', 'glm-4-flash')
+                chutes_small_model = os.getenv('CHUTES_SMALL_MODEL', 'glm-4-flash')
+                chutes_api_key = os.getenv('CHUTES_API_KEY')
+                chutes_base_url = os.getenv('CHUTES_BASE_URL', 'https://llm.chutes.ai/v1')
+                
+                logger.info(f'Creating Chutes AI LLM client with model {chutes_model} at {chutes_base_url}')
+                logger.info(f'Chutes API key present: {chutes_api_key is not None}')
+                
+                config = LLMConfig(
+                    api_key=chutes_api_key,
+                    model=chutes_model,
+                    small_model=chutes_small_model,
+                    base_url=chutes_base_url,
+                    temperature=0.7,
+                    max_tokens=4000,
+                )
+                
+                chutes_client = ChutesClient(config=config)
+                available_clients.append(chutes_client)
+                client_names.append("Chutes")
+                logger.info('ChutesClient instantiated successfully!')
+                    
+            except Exception as e:
+                logger.error(f'Failed to create Chutes AI LLM client: {e}')
+                import traceback
+                logger.error(f'Full traceback: {traceback.format_exc()}')
+        
+        # 3. Try to create Ollama client (lowest priority, final fallback)
+        if use_ollama_lower == 'true':
             try:
                 from openai import AsyncOpenAI
 
                 ollama_base_url = os.getenv('OLLAMA_BASE_URL', 'http://localhost:11434/v1')
                 ollama_model = os.getenv('OLLAMA_MODEL', 'mistral:latest')
 
-                logger.info(
-                    f'Creating Ollama LLM client with model {ollama_model} at {ollama_base_url}'
-                )
+                logger.info(f'Creating Ollama LLM client with model {ollama_model} at {ollama_base_url}')
 
                 client = AsyncOpenAI(base_url=ollama_base_url, api_key='ollama')
 
@@ -110,33 +138,35 @@ class GraphitiClientFactory:
                 )
 
                 ollama_client = OpenAIClient(config=config, client=client)
-                
-                # If we have both Cerebras and Ollama with fallback enabled, create fallback client
-                if cerebras_client and ollama_client and use_fallback:
-                    logger.info('Creating fallback LLM client (Cerebras primary, Ollama backup)')
-                    return FallbackLLMClient(
-                        primary_client=cerebras_client,
-                        fallback_client=ollama_client
-                    )
-                
-                # Return just Ollama if no Cerebras
-                if ollama_client and not cerebras_client:
-                    return ollama_client
+                available_clients.append(ollama_client)
+                client_names.append("Ollama")
+                logger.info('Ollama client instantiated successfully!')
                     
             except Exception as e:
                 logger.error(f'Failed to create Ollama LLM client: {e}')
-                # If we have Cerebras but couldn't create Ollama fallback, return just Cerebras
-                if cerebras_client:
-                    logger.warning('Running without fallback - Ollama unavailable')
-                    return cerebras_client
-                logger.info('Falling back to OpenAI LLM client')
-
-        # If we have just Cerebras without fallback
-        if cerebras_client:
-            return cerebras_client
-
-        # Default to OpenAI client
-        return OpenAIClient()
+                import traceback
+                logger.error(f'Full traceback: {traceback.format_exc()}')
+        
+        # Now decide what to return based on available clients and fallback settings
+        if len(available_clients) == 0:
+            logger.warning('No specialized clients available, defaulting to OpenAI')
+            return OpenAIClient()
+        
+        if len(available_clients) == 1:
+            logger.info(f'Single client available: {client_names[0]}')
+            return available_clients[0]
+        
+        if not use_fallback:
+            # Return only the highest priority client
+            logger.info(f'Fallback disabled, using highest priority client: {client_names[0]}')
+            return available_clients[0]
+        
+        # Create cascading fallback client with all available clients
+        logger.info(f'Creating cascading fallback client: {" → ".join(client_names)}')
+        return FallbackLLMClient(
+            primary_client=available_clients[0],  # For backward compatibility
+            clients=available_clients  # New cascading approach
+        )
 
     @staticmethod
     def _get_embedding_endpoint() -> str:

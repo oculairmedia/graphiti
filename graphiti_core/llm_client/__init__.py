@@ -15,9 +15,10 @@ limitations under the License.
 """
 
 from .cerebras_client import CerebrasClient
+from .chutes_client import ChutesClient
 from .client import LLMClient
 from .config import LLMConfig
 from .errors import RateLimitError
 from .openai_client import OpenAIClient
 
-__all__ = ['LLMClient', 'OpenAIClient', 'CerebrasClient', 'LLMConfig', 'RateLimitError']
+__all__ = ['LLMClient', 'OpenAIClient', 'CerebrasClient', 'ChutesClient', 'LLMConfig', 'RateLimitError']
