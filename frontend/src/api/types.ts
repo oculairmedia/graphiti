@@ -116,6 +116,16 @@ export interface BulkCentralityResponse {
   [nodeId: string]: CentralityMetrics;
 }
 
+export interface QueueStatus {
+  status: string;
+  visible_messages: number;
+  invisible_messages: number;
+  total_processed: number;
+  total_failed: number;
+  success_rate: number;
+  last_updated: string;
+}
+
 // Graphiti-specific types (from Python server)
 export interface NodeResult {
   uuid: string;
