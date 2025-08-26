@@ -49,6 +49,8 @@ class GraphitiClientFactory:
                 logger.info(
                     f'Creating Cerebras LLM client with model {cerebras_model}'
                 )
+                logger.info(f'Cerebras API key present: {cerebras_api_key is not None}')
+                logger.info(f'USE_CEREBRAS={os.getenv("USE_CEREBRAS")}, use_fallback={use_fallback}')
                 
                 config = LLMConfig(
                     api_key=cerebras_api_key,
@@ -58,15 +60,24 @@ class GraphitiClientFactory:
                     max_tokens=4000,
                     # Note: top_p=0.8 recommended but not exposed in current config
                 )
+                logger.info('LLMConfig created successfully')
                 
+                logger.info('About to instantiate CerebrasClient...')
                 cerebras_client = CerebrasClient(config=config)
+                logger.info('CerebrasClient instantiated successfully!')
                 
                 # If fallback is disabled, return just Cerebras
                 if not use_fallback:
+                    logger.info('Fallback disabled, returning Cerebras client only')
                     return cerebras_client
+                else:
+                    logger.info('Fallback enabled, will create Ollama client next')
                     
             except Exception as e:
                 logger.error(f'Failed to create Cerebras LLM client: {e}')
+                logger.error(f'Exception type: {type(e).__name__}')
+                import traceback
+                logger.error(f'Full traceback: {traceback.format_exc()}')
                 if not use_fallback:
                     logger.info('Falling back to OpenAI LLM client')
         
