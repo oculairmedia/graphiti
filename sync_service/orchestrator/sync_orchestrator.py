@@ -198,9 +198,20 @@ class SyncOrchestrator:
                 # Perform sync based on configured direction
                 if self.sync_direction == "reverse" and self.enable_reverse_incremental:
                     if changes_detected:
-                        logger.info("Data changes detected - performing full reverse sync (FalkorDB → Neo4j)")
-                        # Use sync_reverse_incremental with no timestamp to get all data
-                        stats = await self.sync_reverse_incremental(since_timestamp=None)
+                        # Check if Neo4j has fewer items than FalkorDB - force full sync if so
+                        source_total = sum(current_source_counts.values())
+                        target_total = sum(current_target_counts.values())
+                        
+                        # Use a small tolerance to prevent constant full syncs for minor differences
+                        count_difference = source_total - target_total
+                        
+                        if count_difference > 10:  # Only full sync if significantly behind
+                            logger.warning(f"Neo4j has {count_difference} fewer items ({target_total}) than FalkorDB ({source_total}) - performing FULL REVERSE sync")
+                            stats = await self.sync_reverse_full(clear_target=False)  # Full reverse sync: FalkorDB → Neo4j
+                        else:
+                            logger.info("Data changes detected - performing incremental reverse sync (FalkorDB → Neo4j)")
+                            # Use sync_reverse_incremental with no timestamp to get all data
+                            stats = await self.sync_reverse_incremental(since_timestamp=None)
                         
                         # Update stored counts only after successful sync
                         if stats.status == SyncStatus.COMPLETED:
