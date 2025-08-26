@@ -2,6 +2,7 @@ name: Build and Push API Server Container
 
 on:
   push:
+    branches: [ main, feature/chutes-ai-integration ]
     paths:
       - 'server/**'
       - 'graphiti_core/**'
