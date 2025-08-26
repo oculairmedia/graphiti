@@ -317,33 +317,31 @@ class FalkorDBLoader:
                 # Convert datetimes to strings
                 node = self._convert_datetimes_to_strings(node)
                 
-                # Build properties string for Cypher
+                # Build properties string for direct query insertion (no parameters)
                 props = []
-                params = {"uuid": node["uuid"]}
+                uuid_val = self._safe_value_for_query(node["uuid"])
                 
                 for key, value in node.items():
                     if key not in ["uuid", "labels"]:
-                        param_key = f"prop_{key}"
-                        props.append(f"{key}: ${param_key}")
-                        params[param_key] = value
+                        safe_value = self._safe_value_for_query(value)
+                        props.append(f"{key}: {safe_value}")
                         
-                props_str = "{" + ", ".join(props) + "}"
+                props_str = "{uuid: " + uuid_val + ", " + ", ".join(props) + "}"
                 
-                # Upsert query - merge on UUID
+                # Upsert query - merge on UUID (no parameters to avoid parsing issues)
                 query = f"""
-                MERGE (n:Community {{uuid: $uuid}})
+                MERGE (n:Community {{uuid: {uuid_val}}})
                 SET n = {props_str}
                 RETURN n.uuid as uuid
                 """
                 
-                await self.graph.query(query, params)
+                await self.graph.query(query)
                 loaded_count += 1
                 
             except Exception as e:
                 logger.error(f"Failed to load community node {node.get('uuid', 'unknown')}: {e}")
                 logger.debug(f"Failing node data: {node}")
-                logger.debug(f"Query: {query}")  
-                logger.debug(f"Params: {params}")
+                logger.debug(f"Generated query: {query}")
                 
         logger.debug(f"Loaded {loaded_count}/{len(nodes)} community nodes")
         return loaded_count
@@ -368,32 +366,29 @@ class FalkorDBLoader:
                 # Convert datetimes to strings
                 edge = self._convert_datetimes_to_strings(edge)
                 
-                # Build properties string for Cypher
+                # Build properties string for direct query insertion
                 props = []
-                params = {
-                    "uuid": edge["uuid"],
-                    "source_uuid": edge["source_node_uuid"],
-                    "target_uuid": edge["target_node_uuid"]
-                }
+                uuid_val = self._safe_value_for_query(edge["uuid"])
+                source_uuid_val = self._safe_value_for_query(edge["source_node_uuid"])
+                target_uuid_val = self._safe_value_for_query(edge["target_node_uuid"])
                 
                 for key, value in edge.items():
                     if key not in ["uuid", "source_node_uuid", "target_node_uuid"]:
-                        param_key = f"prop_{key}"
-                        props.append(f"{key}: ${param_key}")
-                        params[param_key] = value
+                        safe_value = self._safe_value_for_query(value)
+                        props.append(f"{key}: {safe_value}")
                         
-                props_str = "{" + ", ".join(props) + "}"
+                props_str = "{uuid: " + uuid_val + ", " + ", ".join(props) + "}"
                 
-                # Upsert query - merge on UUID and ensure nodes exist
+                # Upsert query - merge on UUID and ensure nodes exist (no parameters)
                 query = f"""
-                MATCH (source {{uuid: $source_uuid}})
-                MATCH (target {{uuid: $target_uuid}})
-                MERGE (source)-[r:RELATES_TO {{uuid: $uuid}}]->(target)
+                MATCH (source {{uuid: {source_uuid_val}}})
+                MATCH (target {{uuid: {target_uuid_val}}})
+                MERGE (source)-[r:RELATES_TO {{uuid: {uuid_val}}}]->(target)
                 SET r = {props_str}
                 RETURN r.uuid as uuid
                 """
                 
-                result = await self.graph.query(query, params)
+                result = await self.graph.query(query)
                 if result.result_set:
                     loaded_count += 1
                 else:
@@ -403,8 +398,7 @@ class FalkorDBLoader:
                 # Log more details about the failing edge for debugging
                 logger.error(f"Failed to load entity edge {edge.get('uuid', 'unknown')}: {e}")
                 logger.debug(f"Failing edge data: {edge}")
-                logger.debug(f"Query: {query}")
-                logger.debug(f"Params: {params}")
+                logger.debug(f"Generated query: {query}")
                 
         logger.debug(f"Loaded {loaded_count}/{len(edges)} entity edges")
         return loaded_count
@@ -429,32 +423,29 @@ class FalkorDBLoader:
                 # Convert datetimes to strings
                 edge = self._convert_datetimes_to_strings(edge)
                 
-                # Build properties string for Cypher
+                # Build properties string for direct query insertion
                 props = []
-                params = {
-                    "uuid": edge["uuid"],
-                    "source_uuid": edge["source_node_uuid"],
-                    "target_uuid": edge["target_node_uuid"]
-                }
+                uuid_val = self._safe_value_for_query(edge["uuid"])
+                source_uuid_val = self._safe_value_for_query(edge["source_node_uuid"])
+                target_uuid_val = self._safe_value_for_query(edge["target_node_uuid"])
                 
                 for key, value in edge.items():
                     if key not in ["uuid", "source_node_uuid", "target_node_uuid"]:
-                        param_key = f"prop_{key}"
-                        props.append(f"{key}: ${param_key}")
-                        params[param_key] = value
+                        safe_value = self._safe_value_for_query(value)
+                        props.append(f"{key}: {safe_value}")
                         
-                props_str = "{" + ", ".join(props) + "}"
+                props_str = "{uuid: " + uuid_val + ", " + ", ".join(props) + "}"
                 
-                # Upsert query - merge on UUID and ensure nodes exist
+                # Upsert query - merge on UUID and ensure nodes exist (no parameters)
                 query = f"""
-                MATCH (episode:Episodic {{uuid: $source_uuid}})
-                MATCH (entity:Entity {{uuid: $target_uuid}})
-                MERGE (episode)-[r:MENTIONS {{uuid: $uuid}}]->(entity)
+                MATCH (episode:Episodic {{uuid: {source_uuid_val}}})
+                MATCH (entity:Entity {{uuid: {target_uuid_val}}})
+                MERGE (episode)-[r:MENTIONS {{uuid: {uuid_val}}}]->(entity)
                 SET r = {props_str}
                 RETURN r.uuid as uuid
                 """
                 
-                result = await self.graph.query(query, params)
+                result = await self.graph.query(query)
                 if result.result_set:
                     loaded_count += 1
                 else:
@@ -464,8 +455,7 @@ class FalkorDBLoader:
                 # Log more details about the failing edge for debugging
                 logger.error(f"Failed to load episodic edge {edge.get('uuid', 'unknown')}: {e}")
                 logger.debug(f"Failing edge data: {edge}")
-                logger.debug(f"Query: {query}")
-                logger.debug(f"Params: {params}")
+                logger.debug(f"Generated query: {query}")
                 
         logger.debug(f"Loaded {loaded_count}/{len(edges)} episodic edges")
         return loaded_count
