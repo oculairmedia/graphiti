@@ -18,6 +18,10 @@ import logging
 import os
 from typing import Optional
 
+# Add immediate module-level logging to verify code is loaded
+_logger = logging.getLogger(__name__)
+_logger.info("!!! GraphitiClientFactory module loaded - checking for updated code !!!")
+
 from graphiti_core.cross_encoder.openai_reranker_client import OpenAIRerankerClient
 from graphiti_core.embedder import EmbedderClient, OpenAIEmbedder, OpenAIEmbedderConfig
 from graphiti_core.llm_client import LLMClient, LLMConfig, OpenAIClient
