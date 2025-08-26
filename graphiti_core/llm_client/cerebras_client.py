@@ -14,11 +14,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
+import asyncio
 import json
 import logging
 import os
+import time
 import typing
-from typing import Any
+from typing import Any, ClassVar
 
 from cerebras.cloud.sdk import Cerebras, CerebrasError
 from pydantic import BaseModel
@@ -33,6 +35,9 @@ logger = logging.getLogger(__name__)
 DEFAULT_CEREBRAS_MODEL = 'qwen-3-coder-480b'
 DEFAULT_CEREBRAS_SMALL_MODEL = 'qwen-3-coder-480b'  # Use same model for all tasks
 
+# Rate limiting: 15 requests/minute = 1 request every 4 seconds
+CEREBRAS_RATE_LIMIT_DELAY = 4.0  # seconds
+
 
 class CerebrasClient(LLMClient):
     """
@@ -44,6 +49,8 @@ class CerebrasClient(LLMClient):
     Attributes:
         client (Cerebras): The Cerebras client used to interact with the API.
     """
+    # Class-level variable to track last request time across all instances
+    _last_request_time: ClassVar[float] = 0.0
     
     def __init__(
         self,
@@ -151,6 +158,18 @@ class CerebrasClient(LLMClient):
         Returns:
             Dictionary containing the response.
         """
+        # Rate limiting: ensure 4 seconds between requests
+        current_time = time.time()
+        time_since_last_request = current_time - CerebrasClient._last_request_time
+        
+        if time_since_last_request < CEREBRAS_RATE_LIMIT_DELAY:
+            delay_needed = CEREBRAS_RATE_LIMIT_DELAY - time_since_last_request
+            logger.debug(f"Rate limiting: waiting {delay_needed:.2f} seconds before Cerebras request")
+            await asyncio.sleep(delay_needed)
+        
+        # Update last request time
+        CerebrasClient._last_request_time = time.time()
+        
         cerebras_messages = self._convert_messages_to_cerebras_format(messages)
         model = self._get_model_for_size(model_size)
         
