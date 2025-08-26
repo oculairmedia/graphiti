@@ -162,10 +162,14 @@ class CerebrasClient(LLMClient):
         current_time = time.time()
         time_since_last_request = current_time - CerebrasClient._last_request_time
         
+        logger.info(f"Cerebras rate limiting check: time since last request = {time_since_last_request:.2f}s (limit: {CEREBRAS_RATE_LIMIT_DELAY}s)")
+        
         if time_since_last_request < CEREBRAS_RATE_LIMIT_DELAY:
             delay_needed = CEREBRAS_RATE_LIMIT_DELAY - time_since_last_request
-            logger.debug(f"Rate limiting: waiting {delay_needed:.2f} seconds before Cerebras request")
+            logger.info(f"Rate limiting: waiting {delay_needed:.2f} seconds before Cerebras request")
             await asyncio.sleep(delay_needed)
+        else:
+            logger.info("Rate limiting: no delay needed, proceeding with Cerebras request")
         
         # Update last request time
         CerebrasClient._last_request_time = time.time()
