@@ -82,6 +82,8 @@ class CerebrasClient(LLMClient):
         super().__init__(config, cache)
         self.max_tokens = max_tokens
         
+        logger.info(f"CerebrasClient initialized with rate limiting (delay: {CEREBRAS_RATE_LIMIT_DELAY}s)")
+        
         if client is None:
             # Get API key from config or environment
             api_key = config.api_key or os.getenv('CEREBRAS_API_KEY')
@@ -158,6 +160,8 @@ class CerebrasClient(LLMClient):
         Returns:
             Dictionary containing the response.
         """
+        logger.info("CerebrasClient._generate_response called - starting request processing")
+        
         # Rate limiting: ensure 4 seconds between requests
         current_time = time.time()
         time_since_last_request = current_time - CerebrasClient._last_request_time
