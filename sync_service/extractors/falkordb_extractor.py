@@ -191,7 +191,8 @@ class FalkorDBExtractor:
         where_clause = ""
         if since_timestamp:
             iso_timestamp = since_timestamp.isoformat()
-            where_clause = f"WHERE n.updated_at > '{iso_timestamp}' OR n.created_at > '{iso_timestamp}'"
+            # Include nodes with NULL timestamps to ensure complete extraction
+            where_clause = f"WHERE n.updated_at > '{iso_timestamp}' OR n.created_at > '{iso_timestamp}' OR n.updated_at IS NULL OR n.created_at IS NULL"
             
         query = f"""
         MATCH (n:Entity) 
@@ -243,7 +244,8 @@ class FalkorDBExtractor:
         where_clause = ""
         if since_timestamp:
             iso_timestamp = since_timestamp.isoformat()
-            where_clause = f"WHERE n.updated_at > '{iso_timestamp}' OR n.created_at > '{iso_timestamp}'"
+            # Include nodes with NULL timestamps to ensure complete extraction
+            where_clause = f"WHERE n.updated_at > '{iso_timestamp}' OR n.created_at > '{iso_timestamp}' OR n.updated_at IS NULL OR n.created_at IS NULL"
             
         query = f"""
         MATCH (n:Episodic) 
@@ -293,7 +295,8 @@ class FalkorDBExtractor:
         where_clause = ""
         if since_timestamp:
             iso_timestamp = since_timestamp.isoformat()
-            where_clause = f"WHERE n.updated_at > '{iso_timestamp}' OR n.created_at > '{iso_timestamp}'"
+            # Include nodes with NULL timestamps to ensure complete extraction
+            where_clause = f"WHERE n.updated_at > '{iso_timestamp}' OR n.created_at > '{iso_timestamp}' OR n.updated_at IS NULL OR n.created_at IS NULL"
             
         query = f"""
         MATCH (n:Community) 
@@ -343,7 +346,8 @@ class FalkorDBExtractor:
         where_clause = ""
         if since_timestamp:
             iso_timestamp = since_timestamp.isoformat()
-            where_clause = f"WHERE r.updated_at > '{iso_timestamp}' OR r.created_at > '{iso_timestamp}'"
+            # Include edges with NULL timestamps to ensure complete extraction
+            where_clause = f"WHERE r.updated_at > '{iso_timestamp}' OR r.created_at > '{iso_timestamp}' OR r.updated_at IS NULL OR r.created_at IS NULL"
             
         query = f"""
         MATCH (source)-[r:RELATES_TO]->(target) 
@@ -400,7 +404,8 @@ class FalkorDBExtractor:
         where_clause = ""
         if since_timestamp:
             iso_timestamp = since_timestamp.isoformat()
-            where_clause = f"WHERE r.updated_at > '{iso_timestamp}' OR r.created_at > '{iso_timestamp}'"
+            # Include edges with NULL timestamps to ensure complete extraction
+            where_clause = f"WHERE r.updated_at > '{iso_timestamp}' OR r.created_at > '{iso_timestamp}' OR r.updated_at IS NULL OR r.created_at IS NULL"
             
         query = f"""
         MATCH (episode:Episodic)-[r:MENTIONS]->(entity:Entity) 
