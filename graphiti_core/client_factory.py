@@ -33,6 +33,7 @@ class GraphitiClientFactory:
     @staticmethod
     def create_llm_client() -> Optional[LLMClient]:
         """Create LLM client based on environment configuration."""
+        logger.info("=== GraphitiClientFactory.create_llm_client() called ===")
         cerebras_client = None
         ollama_client = None
         
