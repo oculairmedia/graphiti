@@ -31,7 +31,7 @@ from .errors import RateLimitError, RefusalError
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_MODEL = 'glm-4-flash'
+DEFAULT_MODEL = 'zai-org/GLM-4.5-FP8'
 DEFAULT_BASE_URL = 'https://llm.chutes.ai/v1'
 
 
