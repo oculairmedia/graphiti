@@ -10,6 +10,7 @@ import {
   CentralityMetrics,
   CentralityStats,
   BulkCentralityResponse,
+  QueueStatus,
 } from './types';
 
 export class GraphClient {
@@ -102,6 +103,10 @@ export class GraphClient {
 
   async getStats(): Promise<GraphStats> {
     return this.fetchWithError<GraphStats>(`${this.baseUrl}/stats`);
+  }
+
+  async getQueueStatus(): Promise<QueueStatus> {
+    return this.fetchWithError<QueueStatus>(`${this.baseUrl}/queue/status`);
   }
 
   async searchNodes(request: SearchRequest): Promise<SearchResponse> {

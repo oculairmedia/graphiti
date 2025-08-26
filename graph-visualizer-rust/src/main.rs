@@ -20,6 +20,7 @@ use arrow::record_batch::RecordBatch;
 use bytes::Bytes;
 use sha2::{Sha256, Digest};
 use base64::{Engine as _, engine::general_purpose};
+use chrono;
 
 mod duckdb_store;
 mod arrow_converter;
@@ -613,6 +614,7 @@ async fn main() -> anyhow::Result<()> {
     // Build router - cleaned up for React frontend only
     let app = Router::new()
         .route("/api/stats", get(get_stats))
+        .route("/api/queue/status", get(get_queue_status))
         .route("/api/visualize", get(visualize))
         .route("/api/search", get(search))
         .route("/api/cache/clear", post(clear_cache))
@@ -2271,6 +2273,105 @@ async fn get_node_by_id(
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
                     error: format!("Failed to get node: {}", e),
+                }),
+            ))
+        }
+    }
+}
+
+#[derive(Serialize)]
+struct QueueStatus {
+    status: String,
+    visible_messages: u64,
+    invisible_messages: u64,
+    total_processed: u64,
+    total_failed: u64,
+    success_rate: f64,
+    last_updated: String,
+}
+
+async fn get_queue_status(State(state): State<AppState>) -> Result<Json<QueueStatus>, (StatusCode, Json<ErrorResponse>)> {
+    let queue_url = std::env::var("QUEUE_URL").unwrap_or_else(|_| "http://graphiti-queued:8080".to_string());
+    let queue_name = "ingestion";
+    
+    match state.http_client.get(&format!("{}/queue/{}/metrics", queue_url, queue_name))
+        .header("Accept", "application/json")
+        .send()
+        .await
+    {
+        Ok(response) if response.status().is_success() => {
+            match response.json::<serde_json::Value>().await {
+                Ok(metrics) => {
+                    let visible = metrics.get("queued_visible")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(0);
+                    
+                    let invisible = metrics.get("queued_invisible")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(0);
+                    
+                    let successful_poll = metrics.get("queued_successful_poll")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(0);
+                    
+                    let successful_push = metrics.get("queued_successful_push")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(0);
+                    
+                    let empty_polls = metrics.get("queued_empty_poll")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(0);
+                    
+                    let success_rate = if successful_push > 0 {
+                        (successful_poll as f64 / successful_push as f64) * 100.0
+                    } else {
+                        0.0
+                    };
+                    
+                    let status_text = if visible > 0 {
+                        "processing"
+                    } else if successful_push > 0 {
+                        "idle"
+                    } else {
+                        "empty"
+                    };
+                    
+                    Ok(Json(QueueStatus {
+                        status: status_text.to_string(),
+                        visible_messages: visible,
+                        invisible_messages: invisible,
+                        total_processed: successful_poll,
+                        total_failed: empty_polls,
+                        success_rate,
+                        last_updated: chrono::Utc::now().to_rfc3339(),
+                    }))
+                }
+                Err(e) => {
+                    error!("Failed to parse queue metrics: {}", e);
+                    Err((
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(ErrorResponse {
+                            error: format!("Failed to parse queue metrics: {}", e),
+                        }),
+                    ))
+                }
+            }
+        }
+        Ok(response) => {
+            error!("Queue service returned status: {}", response.status());
+            Err((
+                StatusCode::BAD_GATEWAY,
+                Json(ErrorResponse {
+                    error: format!("Queue service unavailable (status: {})", response.status()),
+                }),
+            ))
+        }
+        Err(e) => {
+            error!("Failed to connect to queue service: {}", e);
+            Err((
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(ErrorResponse {
+                    error: format!("Queue service unavailable: {}", e),
                 }),
             ))
         }
