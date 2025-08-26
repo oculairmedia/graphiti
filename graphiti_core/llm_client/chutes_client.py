@@ -101,6 +101,7 @@ class ChutesClient(LLMClient):
             elif m.role == 'system':
                 openai_messages.append({'role': 'system', 'content': m.content})
         try:
+            logger.debug(f'Making request to Chutes AI with model: {self.model or DEFAULT_MODEL}')
             response = await self.client.chat.completions.create(
                 model=self.model or DEFAULT_MODEL,
                 messages=openai_messages,
@@ -108,12 +109,31 @@ class ChutesClient(LLMClient):
                 max_tokens=self.max_tokens,
                 response_format={'type': 'json_object'},
             )
+            
+            if not response.choices or not response.choices[0].message:
+                logger.warning('Received malformed response structure from Chutes AI')
+                raise ValueError('Malformed response structure from Chutes AI')
+                
             result = response.choices[0].message.content or ''
-            return json.loads(result)
+            
+            # Handle empty or whitespace-only responses
+            if not result.strip():
+                logger.warning('Received empty response content from Chutes AI')
+                raise ValueError('Empty response content from Chutes AI')
+            
+            try:
+                parsed_response = json.loads(result)
+                logger.debug(f'Successfully parsed JSON response from Chutes AI')
+                return parsed_response
+            except json.JSONDecodeError as json_err:
+                logger.error(f'JSON parsing failed for Chutes AI response. Content: {repr(result[:500])}...')
+                raise ValueError(f'Invalid JSON response from Chutes AI: {json_err}') from json_err
+                
         except openai.RateLimitError as e:
+            logger.warning(f'Chutes AI rate limit hit: {e}')
             raise RateLimitError from e
         except Exception as e:
-            logger.error(f'Error in generating LLM response: {e}')
+            logger.error(f'Error in Chutes AI response generation: {e.__class__.__name__}: {e}')
             raise
 
     async def generate_response(
