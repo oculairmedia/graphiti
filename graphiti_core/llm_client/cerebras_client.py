@@ -171,6 +171,7 @@ class CerebrasClient(LLMClient):
         if time_since_last_request < CEREBRAS_RATE_LIMIT_DELAY:
             delay_needed = CEREBRAS_RATE_LIMIT_DELAY - time_since_last_request
             logger.info(f"Rate limiting: waiting {delay_needed:.2f} seconds before Cerebras request")
+            import asyncio  # Import locally to avoid scoping issues
             await asyncio.sleep(delay_needed)
         else:
             logger.info("Rate limiting: no delay needed, proceeding with Cerebras request")
