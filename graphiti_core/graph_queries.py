@@ -141,8 +141,10 @@ def get_entity_node_save_bulk_query(nodes, db_type: str = 'neo4j') -> str | Any:
                     UNWIND $nodes AS node
                     MERGE (n:Entity {{uuid: node.uuid, name: node.name, group_id: node.group_id}})
                     SET n:{label}
-                    SET n = node
+                    SET n.summary = node.summary,
+                        n.created_at = node.created_at
                     WITH n, node
+                    WHERE node.name_embedding IS NOT NULL
                     SET n.name_embedding = vecf32(node.name_embedding)
                     RETURN n.uuid AS uuid
                 """,
