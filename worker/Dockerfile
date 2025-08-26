@@ -1,6 +1,10 @@
 # Dockerfile for Graphiti ingestion worker
 FROM python:3.11-slim
 
+# Cache-busting argument to ensure fresh builds
+ARG CACHE_BUST
+RUN echo "Cache bust: $CACHE_BUST"
+
 # Set working directory
 WORKDIR /app
 
