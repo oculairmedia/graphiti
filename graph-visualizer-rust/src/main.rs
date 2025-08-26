@@ -2302,23 +2302,23 @@ async fn get_queue_status(State(state): State<AppState>) -> Result<Json<QueueSta
         Ok(response) if response.status().is_success() => {
             match response.json::<serde_json::Value>().await {
                 Ok(metrics) => {
-                    let visible = metrics.get("queued_visible")
+                    let message_count = metrics.get("message_counter")
                         .and_then(|v| v.as_u64())
                         .unwrap_or(0);
                     
-                    let invisible = metrics.get("queued_invisible")
+                    // For now, assume all messages are visible (we could refine this later)
+                    let visible = message_count;
+                    let invisible = 0; // Queue service doesn't distinguish visible/invisible
+                    
+                    let successful_poll = metrics.get("successful_poll_counter")
                         .and_then(|v| v.as_u64())
                         .unwrap_or(0);
                     
-                    let successful_poll = metrics.get("queued_successful_poll")
+                    let successful_push = metrics.get("successful_push_counter")
                         .and_then(|v| v.as_u64())
                         .unwrap_or(0);
                     
-                    let successful_push = metrics.get("queued_successful_push")
-                        .and_then(|v| v.as_u64())
-                        .unwrap_or(0);
-                    
-                    let empty_polls = metrics.get("queued_empty_poll")
+                    let empty_polls = metrics.get("empty_poll_counter")
                         .and_then(|v| v.as_u64())
                         .unwrap_or(0);
                     
@@ -2328,9 +2328,9 @@ async fn get_queue_status(State(state): State<AppState>) -> Result<Json<QueueSta
                         0.0
                     };
                     
-                    let status_text = if visible > 0 {
+                    let status_text = if message_count > 0 {
                         "processing"
-                    } else if successful_push > 0 {
+                    } else if successful_push > 0 || successful_poll > 0 {
                         "idle"
                     } else {
                         "empty"
