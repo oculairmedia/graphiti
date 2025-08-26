@@ -97,6 +97,33 @@ cd server/
 uvicorn graph_service.main:app --reload
 ```
 
+### Dry-Run Benchmarking
+
+The project includes a comprehensive benchmarking system for safe performance testing:
+
+```bash
+# Run basic benchmark (safe - no database writes)
+python3 cli/benchmark.py run --episodes-limit 50 --database-type falkor
+
+# Hyperparameter tuning
+python3 cli/benchmark.py tune --temperature 0.3 --temperature 0.7 --episodes-limit 20
+
+# Compare database backends  
+python3 cli/benchmark.py compare --episodes-limit 100
+
+# Simple test script
+python3 run_benchmark.py
+```
+
+**Key Features:**
+- **Safe Production Testing**: Queries real data, intercepts all write operations
+- **Comprehensive Metrics**: Timing, resource usage, success rates  
+- **Hyperparameter Optimization**: Systematic parameter tuning
+- **Multiple Backends**: Neo4j vs FalkorDB performance comparison
+- **Export Formats**: JSON, CSV, HTML profiles
+
+See [Dry-Run Benchmarking Guide](docs/DRY_RUN_BENCHMARKING_GUIDE.md) for complete documentation.
+
 ## Code Architecture
 
 ### Core Library (`graphiti_core/`)

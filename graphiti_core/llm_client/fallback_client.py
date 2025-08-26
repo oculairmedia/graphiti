@@ -1,6 +1,7 @@
 """Fallback LLM client that switches through multiple backups when primary fails."""
 
 import logging
+import time
 from typing import Any, Optional
 
 from pydantic import BaseModel
@@ -41,7 +42,8 @@ class FallbackLLMClient(LLMClient):
                 self.client_names.append(self._get_client_name(fallback_client))
         
         self._current_client_index = 0  # Start with the first client
-        self._failed_clients = set()  # Track temporarily failed clients
+        self._failed_clients = {}  # Track temporarily failed clients with timestamps
+        self._recovery_delay = 300  # 5 minutes before retrying failed clients
         
         logger.info(f"FallbackLLMClient initialized with cascade: {' → '.join(self.client_names)}")
     
@@ -81,35 +83,51 @@ class FallbackLLMClient(LLMClient):
         last_error = None
         
         # First, try to recover any previously failed clients (try higher priority clients)
+        # Only attempt recovery if enough time has passed since failure
+        current_time = time.time()
+        
         if self._current_client_index > 0:
             for i in range(self._current_client_index):
-                if i not in self._failed_clients:
-                    try:
-                        client = self.clients[i]
-                        logger.info(f"Attempting to recover higher priority client: {self.client_names[i]}")
-                        result = await client._generate_response(
-                            messages, response_model, max_tokens, model_size
-                        )
-                        # Success! Update current client and clear failed status
-                        self._current_client_index = i
-                        self._failed_clients.discard(i)
-                        logger.info(f"Successfully recovered to {self.client_names[i]}")
-                        return result
-                    except Exception as e:
-                        # Still failing, keep trying other clients
-                        logger.debug(f"Client {self.client_names[i]} still failing: {e}")
-                        self._failed_clients.add(i)
+                # Check if client is failed and if recovery delay has passed
+                if i in self._failed_clients:
+                    time_since_failure = current_time - self._failed_clients[i]
+                    if time_since_failure < self._recovery_delay:
+                        logger.debug(f"Skipping {self.client_names[i]} - recovery delay not met ({time_since_failure:.0f}s < {self._recovery_delay}s)")
                         continue
+                    else:
+                        logger.info(f"Recovery delay met for {self.client_names[i]}, attempting recovery")
+                
+                try:
+                    client = self.clients[i]
+                    logger.info(f"Attempting to recover higher priority client: {self.client_names[i]}")
+                    result = await client._generate_response(
+                        messages, response_model, max_tokens, model_size
+                    )
+                    # Success! Update current client and clear failed status
+                    self._current_client_index = i
+                    if i in self._failed_clients:
+                        del self._failed_clients[i]
+                    logger.info(f"Successfully recovered to {self.client_names[i]}")
+                    return result
+                except Exception as e:
+                    # Still failing, update failure timestamp
+                    logger.debug(f"Client {self.client_names[i]} still failing: {e}")
+                    self._failed_clients[i] = current_time
+                    continue
         
         # Try clients starting from current position
         for attempt_index in range(self._current_client_index, len(self.clients)):
             client = self.clients[attempt_index]
             client_name = self.client_names[attempt_index]
             
-            # Skip clients we know are currently failed
+            # Skip clients we know are currently failed (unless recovery delay has passed)
             if attempt_index in self._failed_clients:
-                logger.debug(f"Skipping known failed client: {client_name}")
-                continue
+                time_since_failure = current_time - self._failed_clients[attempt_index]
+                if time_since_failure < self._recovery_delay:
+                    logger.debug(f"Skipping known failed client: {client_name} ({time_since_failure:.0f}s < {self._recovery_delay}s)")
+                    continue
+                else:
+                    logger.info(f"Recovery delay met for {client_name}, attempting retry")
             
             try:
                 if attempt_index != self._current_client_index:
@@ -121,27 +139,28 @@ class FallbackLLMClient(LLMClient):
                 )
                 
                 # Success! Remove from failed set if it was there
-                self._failed_clients.discard(attempt_index)
+                if attempt_index in self._failed_clients:
+                    del self._failed_clients[attempt_index]
                 logger.debug(f"Successfully generated response using {client_name}")
                 return result
                 
             except RateLimitError as e:
                 logger.warning(f"Client {client_name} rate limited: {e}")
-                self._failed_clients.add(attempt_index)
+                self._failed_clients[attempt_index] = current_time
                 last_error = e
                 continue
                 
             except Exception as e:
-                # Check if it's a rate limit or quota error by string matching
+                # Check if it's a rate limit, quota, auth, or network error
                 error_str = str(e).lower()
-                if any(keyword in error_str for keyword in ["429", "rate", "quota", "limit"]):
-                    logger.warning(f"Client {client_name} error (likely rate limit): {e}")
-                    self._failed_clients.add(attempt_index)
+                if any(keyword in error_str for keyword in ["429", "rate", "quota", "limit", "unauthorized", "forbidden", "timeout", "connection", "network"]):
+                    logger.warning(f"Client {client_name} error (likely temporary): {e}")
+                    self._failed_clients[attempt_index] = current_time
                     last_error = e
                     continue
                 else:
-                    # Non-rate-limit error, re-raise immediately
-                    logger.error(f"Client {client_name} failed with non-rate-limit error: {e}")
+                    # Permanent error (malformed request, unsupported feature, etc.), fail immediately
+                    logger.error(f"Client {client_name} failed with permanent error: {e}")
                     raise
         
         # If we get here, all clients have failed
