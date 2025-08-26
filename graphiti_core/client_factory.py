@@ -39,8 +39,13 @@ class GraphitiClientFactory:
         # Check if we should enable fallback mode
         use_fallback = os.getenv('ENABLE_FALLBACK', 'true').lower() == 'true'
         
+        # Debug environment variables
+        use_cerebras_raw = os.getenv('USE_CEREBRAS', '')
+        use_cerebras_lower = use_cerebras_raw.lower()
+        logger.info(f'Environment check: USE_CEREBRAS="{use_cerebras_raw}" -> "{use_cerebras_lower}" -> {use_cerebras_lower == "true"}')
+        
         # Try to create Cerebras client
-        if os.getenv('USE_CEREBRAS', '').lower() == 'true':
+        if use_cerebras_lower == 'true':
             try:
                 cerebras_model = os.getenv('CEREBRAS_MODEL', 'qwen-3-coder-480b')
                 cerebras_small_model = os.getenv('CEREBRAS_SMALL_MODEL', 'qwen-3-32b')
