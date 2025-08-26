@@ -2,7 +2,7 @@ name: Build and Push Sync Service Container
 
 on:
   push:
-    branches: [ main, feature/neo4j-falkordb-hybrid ]
+    branches: [ main, feature/neo4j-falkordb-hybrid, feature/chutes-ai-integration ]
     paths:
       - 'sync_service/**'
       - 'graphiti_core/**'
