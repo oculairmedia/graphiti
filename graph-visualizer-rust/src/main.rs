@@ -2295,41 +2295,48 @@ async fn get_queue_status(State(state): State<AppState>) -> Result<Json<QueueSta
     let queue_name = "ingestion";
     
     match state.http_client.get(&format!("{}/queue/{}/metrics", queue_url, queue_name))
-        .header("Accept", "application/json")
         .send()
         .await
     {
         Ok(response) if response.status().is_success() => {
-            match response.json::<serde_json::Value>().await {
-                Ok(metrics) => {
-                    let successful_push = metrics.get("successful_push_counter")
-                        .and_then(|v| v.as_u64())
-                        .unwrap_or(0);
+            match response.text().await {
+                Ok(metrics_text) => {
+                    // Parse Prometheus metrics format
+                    let mut message_count = 0u64;
+                    let mut successful_push = 0u64;
+                    let mut successful_delete = 0u64;
+                    let mut successful_poll = 0u64;
+                    let mut empty_polls = 0u64;
                     
-                    let successful_delete = metrics.get("successful_delete_counter")
-                        .and_then(|v| v.as_u64())
-                        .unwrap_or(0);
+                    for line in metrics_text.lines() {
+                        let parts: Vec<&str> = line.split_whitespace().collect();
+                        if parts.len() >= 2 {
+                            if let Ok(value) = parts[1].parse::<u64>() {
+                                match parts[0] {
+                                    "message_counter" => message_count = value,
+                                    "successful_push_counter" => successful_push = value,
+                                    "successful_delete_counter" => successful_delete = value,
+                                    "successful_poll_counter" => successful_poll = value,
+                                    "empty_poll_counter" => empty_polls = value,
+                                    _ => {}
+                                }
+                            }
+                        }
+                    }
                     
-                    // Calculate actual pending messages: pushed - deleted = pending
-                    let pending_messages = successful_push.saturating_sub(successful_delete);
-                    let visible = pending_messages;
-                    let invisible = 0; // We don't have separate invisible count
+                    // Use message_counter for visible messages (current queue size)
+                    let visible = message_count;
+                    let invisible = 0; // Queue doesn't expose invisible message count
                     
-                    let successful_poll = metrics.get("successful_poll_counter")
-                        .and_then(|v| v.as_u64())
-                        .unwrap_or(0);
-                    
-                    let empty_polls = metrics.get("empty_poll_counter")
-                        .and_then(|v| v.as_u64())
-                        .unwrap_or(0);
-                    
-                    let success_rate = if successful_push > 0 {
-                        (successful_poll as f64 / successful_push as f64) * 100.0
+                    // Calculate success rate based on successful operations vs total operations
+                    let total_operations = successful_push + empty_polls;
+                    let success_rate = if total_operations > 0 {
+                        (successful_push as f64 / total_operations as f64) * 100.0
                     } else {
                         0.0
                     };
                     
-                    let status_text = if pending_messages > 0 {
+                    let status_text = if visible > 0 {
                         "processing"
                     } else if successful_push > 0 || successful_poll > 0 {
                         "idle"
