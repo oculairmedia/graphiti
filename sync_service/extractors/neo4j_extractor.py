@@ -192,18 +192,22 @@ class Neo4jExtractor:
             
             batch = []
             async for record in result:
-                # Flatten all properties into a single dictionary
+                # Start with attributes (properties) as base
                 node_data = dict(record["attributes"]) if record["attributes"] else {}
                 
-                # Override with specific fields to ensure consistency
-                node_data.update({
-                    "uuid": record["uuid"],
-                    "name": record["name"], 
-                    "group_id": record["group_id"],
-                    "created_at": record["created_at"],
-                    "summary": record["summary"],
-                    "labels": record["labels"]
-                })
+                # Only override with specific fields if they are not None
+                if record["uuid"] is not None:
+                    node_data["uuid"] = record["uuid"]
+                if record["name"] is not None:
+                    node_data["name"] = record["name"]
+                if record["group_id"] is not None:
+                    node_data["group_id"] = record["group_id"]
+                if record["created_at"] is not None:
+                    node_data["created_at"] = record["created_at"]
+                if record["summary"] is not None:
+                    node_data["summary"] = record["summary"]
+                if record["labels"] is not None:
+                    node_data["labels"] = record["labels"]
                 batch.append(node_data)
                 
                 if len(batch) >= self.batch_size:
@@ -267,20 +271,26 @@ class Neo4jExtractor:
             
             batch = []
             async for record in result:
-                # Flatten all properties into a single dictionary
+                # Start with attributes (properties) as base
                 node_data = dict(record["attributes"]) if record["attributes"] else {}
                 
-                # Override with specific fields to ensure consistency
-                node_data.update({
-                    "uuid": record["uuid"],
-                    "name": record["name"],
-                    "group_id": record["group_id"], 
-                    "created_at": record["created_at"],
-                    "content": record["content"],
-                    "source": record["source"],
-                    "source_description": record["source_description"],
-                    "labels": record["labels"]
-                })
+                # Only override with specific fields if they are not None
+                if record["uuid"] is not None:
+                    node_data["uuid"] = record["uuid"]
+                if record["name"] is not None:
+                    node_data["name"] = record["name"]
+                if record["group_id"] is not None:
+                    node_data["group_id"] = record["group_id"]
+                if record["created_at"] is not None:
+                    node_data["created_at"] = record["created_at"]
+                if record["content"] is not None:
+                    node_data["content"] = record["content"]
+                if record["source"] is not None:
+                    node_data["source"] = record["source"]
+                if record["source_description"] is not None:
+                    node_data["source_description"] = record["source_description"]
+                if record["labels"] is not None:
+                    node_data["labels"] = record["labels"]
                 batch.append(node_data)
                 
                 if len(batch) >= self.batch_size:
@@ -342,18 +352,22 @@ class Neo4jExtractor:
             
             batch = []
             async for record in result:
-                # Flatten all properties into a single dictionary
+                # Start with attributes (properties) as base
                 node_data = dict(record["attributes"]) if record["attributes"] else {}
                 
-                # Override with specific fields to ensure consistency
-                node_data.update({
-                    "uuid": record["uuid"],
-                    "name": record["name"],
-                    "group_id": record["group_id"],
-                    "created_at": record["created_at"],
-                    "summary": record["summary"], 
-                    "labels": record["labels"]
-                })
+                # Only override with specific fields if they are not None
+                if record["uuid"] is not None:
+                    node_data["uuid"] = record["uuid"]
+                if record["name"] is not None:
+                    node_data["name"] = record["name"]
+                if record["group_id"] is not None:
+                    node_data["group_id"] = record["group_id"]
+                if record["created_at"] is not None:
+                    node_data["created_at"] = record["created_at"]
+                if record["summary"] is not None:
+                    node_data["summary"] = record["summary"]
+                if record["labels"] is not None:
+                    node_data["labels"] = record["labels"]
                 batch.append(node_data)
                 
                 if len(batch) >= self.batch_size:
@@ -420,23 +434,32 @@ class Neo4jExtractor:
             
             batch = []
             async for record in result:
-                # Flatten all properties into a single dictionary
+                # Start with attributes (properties) as base
                 edge_data = dict(record["attributes"]) if record["attributes"] else {}
                 
-                # Override with specific fields to ensure consistency
-                edge_data.update({
-                    "uuid": record["uuid"],
-                    "source_node_uuid": record["source_node_uuid"],
-                    "target_node_uuid": record["target_node_uuid"],
-                    "created_at": record["created_at"],
-                    "name": record["name"],
-                    "group_id": record["group_id"],
-                    "fact": record["fact"],
-                    "episodes": record["episodes"],
-                    "expired_at": record["expired_at"],
-                    "valid_at": record["valid_at"],
-                    "invalid_at": record["invalid_at"]
-                })
+                # Only override with specific fields if they are not None
+                if record["uuid"] is not None:
+                    edge_data["uuid"] = record["uuid"]
+                if record["source_node_uuid"] is not None:
+                    edge_data["source_node_uuid"] = record["source_node_uuid"]
+                if record["target_node_uuid"] is not None:
+                    edge_data["target_node_uuid"] = record["target_node_uuid"]
+                if record["created_at"] is not None:
+                    edge_data["created_at"] = record["created_at"]
+                if record["name"] is not None:
+                    edge_data["name"] = record["name"]
+                if record["group_id"] is not None:
+                    edge_data["group_id"] = record["group_id"]
+                if record["fact"] is not None:
+                    edge_data["fact"] = record["fact"]
+                if record["episodes"] is not None:
+                    edge_data["episodes"] = record["episodes"]
+                if record["expired_at"] is not None:
+                    edge_data["expired_at"] = record["expired_at"]
+                if record["valid_at"] is not None:
+                    edge_data["valid_at"] = record["valid_at"]
+                if record["invalid_at"] is not None:
+                    edge_data["invalid_at"] = record["invalid_at"]
                 batch.append(edge_data)
                 
                 if len(batch) >= self.batch_size:
@@ -497,17 +520,20 @@ class Neo4jExtractor:
             
             batch = []
             async for record in result:
-                # Flatten all properties into a single dictionary
+                # Start with attributes (properties) as base
                 edge_data = dict(record["attributes"]) if record["attributes"] else {}
                 
-                # Override with specific fields to ensure consistency
-                edge_data.update({
-                    "uuid": record["uuid"],
-                    "source_node_uuid": record["source_node_uuid"],
-                    "target_node_uuid": record["target_node_uuid"],
-                    "created_at": record["created_at"],
-                    "group_id": record["group_id"]
-                })
+                # Only override with specific fields if they are not None
+                if record["uuid"] is not None:
+                    edge_data["uuid"] = record["uuid"]
+                if record["source_node_uuid"] is not None:
+                    edge_data["source_node_uuid"] = record["source_node_uuid"]
+                if record["target_node_uuid"] is not None:
+                    edge_data["target_node_uuid"] = record["target_node_uuid"]
+                if record["created_at"] is not None:
+                    edge_data["created_at"] = record["created_at"]
+                if record["group_id"] is not None:
+                    edge_data["group_id"] = record["group_id"]
                 batch.append(edge_data)
                 
                 if len(batch) >= self.batch_size:
