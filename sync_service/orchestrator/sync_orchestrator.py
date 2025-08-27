@@ -8,7 +8,7 @@ managing the sync process with error handling and progress tracking.
 import asyncio
 import logging
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Callable
 from dataclasses import dataclass, field
 from enum import Enum
 
