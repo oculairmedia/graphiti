@@ -415,12 +415,13 @@ class FalkorDBLoader:
                     loaded_count += 1
                 else:
                     logger.warning(f"Could not create edge {edge['uuid']} - nodes may not exist")
+                    logger.warning(f"Source UUID: {edge['source_node_uuid']}, Target UUID: {edge['target_node_uuid']}")
                     
             except Exception as e:
                 # Log more details about the failing edge for debugging
                 logger.error(f"Failed to load entity edge {edge.get('uuid', 'unknown')}: {e}")
-                logger.debug(f"Failing edge data: {edge}")
-                logger.debug(f"Generated query: {query}")
+                logger.error(f"Failing edge data: {edge}")
+                logger.error(f"Generated query: {query}")
                 
         logger.debug(f"Loaded {loaded_count}/{len(edges)} entity edges")
         return loaded_count
@@ -472,12 +473,13 @@ class FalkorDBLoader:
                     loaded_count += 1
                 else:
                     logger.warning(f"Could not create edge {edge['uuid']} - nodes may not exist")
+                    logger.warning(f"Source UUID: {edge['source_node_uuid']}, Target UUID: {edge['target_node_uuid']}")
                     
             except Exception as e:
                 # Log more details about the failing edge for debugging
                 logger.error(f"Failed to load episodic edge {edge.get('uuid', 'unknown')}: {e}")
-                logger.debug(f"Failing edge data: {edge}")
-                logger.debug(f"Generated query: {query}")
+                logger.error(f"Failing edge data: {edge}")
+                logger.error(f"Generated query: {query}")
                 
         logger.debug(f"Loaded {loaded_count}/{len(edges)} episodic edges")
         return loaded_count

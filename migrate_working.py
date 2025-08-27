@@ -7,21 +7,88 @@ import asyncio
 import json
 import re
 from datetime import datetime
+from typing import Any, Dict, List, Optional
 
 from falkordb import FalkorDB
 
 from graphiti_core.driver.neo4j_driver import Neo4jDriver
 
+# Configuration for migration behavior
+CONFIG = {
+    'max_query_length': 10000,  # Maximum Cypher query length for FalkorDB
+    'embedding_properties': ['name_embedding', 'summary_embedding', 'embedding', 'embeddings'],
+    'skip_large_arrays': True,  # Skip properties with large arrays (>100 elements)
+    'max_array_size': 100,  # Maximum array size to include
+    'retry_attempts': 3,  # Number of retry attempts for failed operations
+    'batch_progress_interval': 50,  # Progress reporting interval
+}
 
-def escape_string(value):
-    """Escape string for Cypher query."""
+
+def escape_string(value: str) -> str:
+    """Enhanced string escaping for Cypher queries."""
     if value is None:
         return 'null'
-    return str(value).replace("'", "\\'").replace('"', '\\"')
+    
+    # Convert to string and handle various escape sequences
+    value_str = str(value)
+    
+    # Escape backslashes first to prevent double escaping
+    value_str = value_str.replace('\\', '\\\\')
+    
+    # Escape quotes
+    value_str = value_str.replace("'", "\\'")
+    value_str = value_str.replace('"', '\\"')
+    
+    # Escape newlines and other control characters
+    value_str = value_str.replace('\n', '\\n')
+    value_str = value_str.replace('\r', '\\r')
+    value_str = value_str.replace('\t', '\\t')
+    
+    # Handle Unicode and special characters
+    try:
+        # Ensure the string is properly encoded
+        value_str.encode('utf-8')
+    except UnicodeEncodeError:
+        # Replace problematic characters
+        value_str = value_str.encode('utf-8', errors='replace').decode('utf-8')
+    
+    return value_str
 
 
-def format_value(value):
-    """Format value for Cypher query."""
+def should_skip_property(key: str, value: Any) -> bool:
+    """Determine if a property should be skipped during migration."""
+    # Skip known problematic embedding properties
+    if key.lower() in CONFIG['embedding_properties']:
+        return True
+    
+    # Skip large arrays that might cause query length issues
+    if isinstance(value, list) and CONFIG['skip_large_arrays']:
+        if len(value) > CONFIG['max_array_size']:
+            return True
+        
+        # Check if array contains large objects or deeply nested data
+        try:
+            serialized = json.dumps(value)
+            if len(serialized) > 1000:  # Skip if JSON representation is too large
+                return True
+        except (TypeError, ValueError):
+            # Skip if not JSON serializable
+            return True
+    
+    # Skip complex nested dictionaries
+    if isinstance(value, dict) and key not in ['name', 'type', 'summary']:
+        try:
+            serialized = json.dumps(value)
+            if len(serialized) > 500:  # Skip large nested objects
+                return True
+        except (TypeError, ValueError):
+            return True
+    
+    return False
+
+
+def format_value(value: Any) -> str:
+    """Format value for Cypher query with improved handling."""
     if value is None:
         return 'null'
     elif isinstance(value, str):
@@ -29,14 +96,41 @@ def format_value(value):
     elif isinstance(value, bool):
         return 'true' if value else 'false'
     elif isinstance(value, (int, float)):
+        # Handle special float values
+        if isinstance(value, float):
+            if value != value:  # NaN check
+                return 'null'
+            elif value == float('inf'):
+                return '999999999'  # Large number representation
+            elif value == float('-inf'):
+                return '-999999999'  # Large negative number
         return str(value)
     elif isinstance(value, datetime):
         return f"'{value.isoformat()}'"
+    elif hasattr(value, 'to_native'):
+        # Handle Neo4j DateTime objects
+        try:
+            native_dt = value.to_native()
+            return f"'{native_dt.strftime('%Y-%m-%dT%H:%M:%S')}'"
+        except:
+            return f"'{str(value).split('.')[0].replace('+00:00', '').replace('Z', '')}'"
     elif isinstance(value, list):
-        # For lists, convert to string representation
-        return f"'{json.dumps(value)}'"
+        # Only include small lists
+        if len(value) <= CONFIG['max_array_size']:
+            try:
+                json_str = json.dumps(value, default=str)
+                if len(json_str) <= 500:  # Reasonable size limit
+                    return f"'{escape_string(json_str)}'"
+            except:
+                pass
+        return f"'[{len(value)} items]'"  # Placeholder for large lists
     else:
         return f"'{escape_string(str(value))}'"
+
+
+def estimate_query_length(query: str) -> int:
+    """Estimate the length of a Cypher query."""
+    return len(query.encode('utf-8'))
 
 
 async def migrate_data(neo4j_driver: Neo4jDriver, falkor_graph, limit: int = None):
@@ -69,39 +163,81 @@ async def migrate_data(neo4j_driver: Neo4jDriver, falkor_graph, limit: int = Non
 
             label = labels[0]  # Use first label
 
-            # Build properties
+            # Build properties with smart filtering
             props = []
             node_uuid = None
+            skipped_properties = []
 
             for key, value in node.items():
                 if key == 'uuid':
                     node_uuid = value
-                # Skip complex values that might cause issues
-                if isinstance(value, (dict, list)) and key not in ['name', 'type', 'summary']:
+                
+                # Apply smart property filtering
+                if should_skip_property(key, value):
+                    skipped_properties.append(key)
                     continue
-                formatted_value = format_value(value)
-                props.append(f'{key}: {formatted_value}')
+                
+                try:
+                    formatted_value = format_value(value)
+                    props.append(f'{key}: {formatted_value}')
+                except Exception as e:
+                    print(f'    Warning: Failed to format property {key}: {e}')
+                    skipped_properties.append(key)
+            
+            if skipped_properties:
+                print(f'    Skipped properties for node {node_uuid}: {skipped_properties}')
 
-            if props:
-                props_str = '{' + ', '.join(props) + '}'
-                query = f'CREATE (n:{label} {props_str})'
-            else:
-                query = f'CREATE (n:{label})'
-
-            falkor_graph.query(query)
-            node_count += 1
-
-            if node_uuid:
-                node_uuid_map[node_uuid] = True
-
-            if (i + 1) % 100 == 0:
+            # Build and execute query with retry logic
+            success = False
+            for attempt in range(CONFIG['retry_attempts']):
+                try:
+                    if props:
+                        props_str = '{' + ', '.join(props) + '}'
+                        query = f'CREATE (n:{label} {props_str})'
+                    else:
+                        query = f'CREATE (n:{label})'
+                    
+                    # Check query length
+                    if estimate_query_length(query) > CONFIG['max_query_length']:
+                        print(f'    Warning: Query too long for node {node_uuid}, simplifying...')
+                        # Create simplified query with only essential properties
+                        essential_props = []
+                        for prop in props:
+                            if any(key in prop for key in ['uuid:', 'name:', 'type:', 'group_id:']):
+                                essential_props.append(prop)
+                        if essential_props:
+                            props_str = '{' + ', '.join(essential_props) + '}'
+                            query = f'CREATE (n:{label} {props_str})'
+                        else:
+                            query = f'CREATE (n:{label})'
+                    
+                    falkor_graph.query(query)
+                    node_count += 1
+                    success = True
+                    
+                    if node_uuid:
+                        node_uuid_map[node_uuid] = True
+                    
+                    break  # Success, exit retry loop
+                    
+                except Exception as e:
+                    if attempt == CONFIG['retry_attempts'] - 1:  # Last attempt
+                        error_msg = str(e)
+                        if 'Invalid input' not in error_msg and 'query with more than one statement' not in error_msg:
+                            print(f'  Error migrating node {i} (uuid: {node_uuid}): {error_msg}')
+                        break
+                    else:
+                        print(f'    Retry {attempt + 1} for node {node_uuid}: {e}')
+                        await asyncio.sleep(0.1)  # Brief delay before retry
+            
+            if (i + 1) % CONFIG['batch_progress_interval'] == 0:
                 print(f'  Migrated {i + 1}/{len(nodes)} nodes...')
 
         except Exception as e:
-            if 'Invalid input' not in str(e):  # Skip syntax errors
-                print(f'  Error migrating node {i}: {e}')
+            print(f'  Unexpected error processing node {i}: {e}')
 
-    print(f'Successfully migrated {node_count} nodes')
+    success_rate = (node_count / len(nodes)) * 100 if nodes else 0
+    print(f'Successfully migrated {node_count}/{len(nodes)} nodes ({success_rate:.1f}% success rate)')
 
     # Get relationships
     if node_uuid_map:
@@ -134,33 +270,59 @@ async def migrate_data(neo4j_driver: Neo4jDriver, falkor_graph, limit: int = Non
                     rel_type = record['rel_type']
                     props = record['props']
 
-                    # Format properties for Cypher
+                    # Format properties for Cypher with filtering
+                    prop_list = []
                     if props:
-                        prop_list = []
                         for key, value in props.items():
-                            formatted_value = format_value(value)
-                            prop_list.append(f"{key}: {formatted_value}")
-                        prop_string = "{" + ", ".join(prop_list) + "}"
-                    else:
-                        prop_string = ""
+                            if should_skip_property(key, value):
+                                continue
+                            try:
+                                formatted_value = format_value(value)
+                                prop_list.append(f"{key}: {formatted_value}")
+                            except Exception as e:
+                                print(f'    Warning: Failed to format relationship property {key}: {e}')
+                    
+                    prop_string = "{" + ", ".join(prop_list) + "}" if prop_list else ""
 
-                    # Relationship creation with properties
-                    rel_query = f"""
-                    MATCH (s {{uuid: '{source_uuid}'}}), (t {{uuid: '{target_uuid}'}})
-                    CREATE (s)-[:{rel_type} {prop_string}]->(t)
-                    """
+                    # Relationship creation with retry logic
+                    success = False
+                    for attempt in range(CONFIG['retry_attempts']):
+                        try:
+                            rel_query = f"""
+                            MATCH (s {{uuid: '{escape_string(source_uuid)}'}}), (t {{uuid: '{escape_string(target_uuid)}'}}) 
+                            CREATE (s)-[:{rel_type} {prop_string}]->(t)
+                            """
+                            
+                            # Check query length
+                            if estimate_query_length(rel_query) > CONFIG['max_query_length']:
+                                # Simplify by removing properties
+                                rel_query = f"""
+                                MATCH (s {{uuid: '{escape_string(source_uuid)}'}}), (t {{uuid: '{escape_string(target_uuid)}'}}) 
+                                CREATE (s)-[:{rel_type}]->(t)
+                                """
+                            
+                            falkor_graph.query(rel_query)
+                            rel_count += 1
+                            success = True
+                            break
+                            
+                        except Exception as e:
+                            if attempt == CONFIG['retry_attempts'] - 1:
+                                error_msg = str(e)
+                                if 'Invalid input' not in error_msg:
+                                    print(f'  Error migrating relationship {i} ({source_uuid} -> {target_uuid}): {error_msg}')
+                                break
+                            else:
+                                await asyncio.sleep(0.1)
 
-                    falkor_graph.query(rel_query)
-                    rel_count += 1
-
-                    if (i + 1) % 50 == 0:
+                    if (i + 1) % CONFIG['batch_progress_interval'] == 0:
                         print(f'  Migrated {i + 1}/{len(relationships)} relationships...')
 
                 except Exception as e:
-                    if 'Invalid input' not in str(e):
-                        print(f'  Error migrating relationship {i}: {e}')
+                    print(f'  Unexpected error processing relationship {i}: {e}')
 
-            print(f'Successfully migrated {rel_count} relationships')
+            rel_success_rate = (rel_count / len(relationships)) * 100 if relationships else 0
+            print(f'Successfully migrated {rel_count}/{len(relationships)} relationships ({rel_success_rate:.1f}% success rate)')
 
         except Exception as e:
             print(f'Error fetching relationships: {e}')

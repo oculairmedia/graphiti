@@ -16,7 +16,7 @@ from extractors.neo4j_extractor import Neo4jExtractor, ExtractionStats, SyncMeta
 from extractors.falkordb_extractor import FalkorDBExtractor
 from loaders.falkordb_loader import FalkorDBLoader, LoadingStats
 from loaders.neo4j_loader import Neo4jLoader
-from migration.migration_service import MigrationService, MigrationConfig, MigrationProgress
+from simple_migration import perform_simple_migration
 
 logger = logging.getLogger(__name__)
 
@@ -119,7 +119,6 @@ class SyncOrchestrator:
         sync_direction: str = "forward",
         enable_reverse_incremental: bool = False,
         auto_recovery: bool = True,
-        migration_config: Optional[MigrationConfig] = None,
     ):
         """
         Initialize sync orchestrator.
@@ -134,7 +133,6 @@ class SyncOrchestrator:
             sync_direction: Sync direction ("forward" for Neo4j→FalkorDB, "reverse" for FalkorDB→Neo4j)
             enable_reverse_incremental: Enable reverse incremental sync
             auto_recovery: Enable automatic disaster recovery
-            migration_config: Migration service configuration
         """
         self.neo4j_config = neo4j_config
         self.falkordb_config = falkordb_config
@@ -145,17 +143,12 @@ class SyncOrchestrator:
         self.sync_direction = sync_direction
         self.enable_reverse_incremental = enable_reverse_incremental
         self.auto_recovery = auto_recovery
-        self.migration_config = migration_config or MigrationConfig()
         
         # State tracking
         self.last_sync_timestamp: Optional[datetime] = None
         self.current_operation: Optional[SyncOperationStats] = None
         self.sync_history: List[SyncOperationStats] = []
         self.is_running = False
-        
-        # Migration service state
-        self.current_migration: Optional[MigrationService] = None
-        self.migration_progress: Optional[MigrationProgress] = None
         self._stop_requested = False
         
         # Change detection for continuous sync
@@ -1007,19 +1000,13 @@ class SyncOrchestrator:
             self.current_operation = None
             
         return operation_stats
-    async def sync_migration_full(
-        self, 
-        progress_callback: Optional[Callable[[MigrationProgress], None]] = None
-    ) -> SyncOperationStats:
+    async def sync_migration_full(self) -> SyncOperationStats:
         """
-        Perform full migration from Neo4j to FalkorDB using proven migration service.
+        Perform full migration from Neo4j to FalkorDB using proven simple method.
         
-        This method uses the migration service which has proven 100% success rate
+        This method uses the proven migration approach that achieved 100% success rate
         with smart property filtering and robust error handling.
         
-        Args:
-            progress_callback: Optional callback for migration progress updates
-            
         Returns:
             Statistics for the migration operation
         """
@@ -1032,67 +1019,44 @@ class SyncOrchestrator:
         operation_stats.status = SyncStatus.RUNNING
         
         try:
-            logger.info("Starting full Neo4j to FalkorDB migration")
+            logger.info("Starting full Neo4j to FalkorDB migration using proven method")
             
-            # Create migration service with progress tracking
-            def migration_progress_handler(progress: MigrationProgress):
-                """Handle migration progress updates."""
-                self.migration_progress = progress
-                if progress_callback:
-                    progress_callback(progress)
-                
-                # Log significant progress updates
-                if progress.current_phase != getattr(migration_progress_handler, "_last_phase", None):
-                    logger.info(f"Migration phase: {progress.current_phase}")
-                    migration_progress_handler._last_phase = progress.current_phase
-            
-            # Initialize and run migration service
-            async with MigrationService(
+            # Execute simple migration using proven approach
+            migration_result = await perform_simple_migration(
                 neo4j_config=self.neo4j_config,
-                falkordb_config=self.falkordb_config,
-                migration_config=self.migration_config,
-                progress_callback=migration_progress_handler
-            ) as migration_service:
-                
-                self.current_migration = migration_service
-                
-                # Execute migration
-                final_progress = await migration_service.migrate_full()
-                
-                # Convert migration progress to sync operation stats
-                operation_stats.status = (
-                    SyncStatus.COMPLETED if final_progress.status.value == "completed"
-                    else SyncStatus.FAILED
-                )
+                falkordb_config=self.falkordb_config
+            )
+            
+            # Convert migration result to sync operation stats
+            if migration_result['status'] == 'completed':
+                operation_stats.status = SyncStatus.COMPLETED
                 operation_stats.completed_at = datetime.utcnow()
-                operation_stats.duration_seconds = final_progress.duration_seconds
+                operation_stats.duration_seconds = migration_result['duration_seconds']
                 
                 # Map migration stats to sync stats
                 operation_stats.total_items_processed = (
-                    final_progress.migrated_nodes + final_progress.migrated_relationships
+                    migration_result['nodes_migrated'] + migration_result['relationships_migrated']
                 )
-                operation_stats.total_items_failed = (
-                    (final_progress.total_nodes - final_progress.migrated_nodes) +
-                    (final_progress.total_relationships - final_progress.migrated_relationships)
-                )
+                total_items = migration_result['total_nodes'] + migration_result['total_relationships']
+                operation_stats.total_items_failed = total_items - operation_stats.total_items_processed
                 operation_stats.success_rate = (
-                    operation_stats.total_items_processed / 
-                    (final_progress.total_nodes + final_progress.total_relationships)
-                    if (final_progress.total_nodes + final_progress.total_relationships) > 0 else 0.0
+                    operation_stats.total_items_processed / total_items if total_items > 0 else 0.0
                 )
-                
-                # Add migration-specific details to errors if any issues
-                if final_progress.errors:
-                    operation_stats.errors.extend(final_progress.errors)
                 
                 logger.info(
-                    f"Migration completed: "
-                    f"Nodes: {final_progress.migrated_nodes}/{final_progress.total_nodes} "
-                    f"({final_progress.node_success_rate:.1f}%), "
-                    f"Relationships: {final_progress.migrated_relationships}/{final_progress.total_relationships} "
-                    f"({final_progress.relationship_success_rate:.1f}%), "
-                    f"Duration: {final_progress.duration_seconds:.2f}s"
+                    f"Migration completed successfully: "
+                    f"Nodes: {migration_result['nodes_migrated']}/{migration_result['total_nodes']} "
+                    f"({migration_result['node_success_rate']:.1f}%), "
+                    f"Relationships: {migration_result['relationships_migrated']}/{migration_result['total_relationships']} "
+                    f"({migration_result['relationship_success_rate']:.1f}%), "
+                    f"Duration: {migration_result['duration_seconds']:.2f}s"
                 )
+            else:
+                operation_stats.status = SyncStatus.FAILED
+                operation_stats.completed_at = datetime.utcnow()
+                operation_stats.duration_seconds = migration_result['duration_seconds']
+                operation_stats.errors.append(f"Migration failed: {migration_result.get('error', 'Unknown error')}")
+                logger.error(f"Migration failed: {migration_result.get('error', 'Unknown error')}")
                 
         except Exception as e:
             operation_stats.status = SyncStatus.FAILED
@@ -1101,9 +1065,6 @@ class SyncOrchestrator:
             logger.error(f"Migration failed: {e}", exc_info=True)
             
         finally:
-            # Clear migration state
-            self.current_migration = None
-            
             # Update sync timestamp and history
             if operation_stats.status == SyncStatus.COMPLETED:
                 self.last_sync_timestamp = operation_stats.completed_at
@@ -1113,14 +1074,3 @@ class SyncOrchestrator:
             
         return operation_stats
     
-    def get_migration_progress(self) -> Optional[MigrationProgress]:
-        """Get current migration progress if migration is running."""
-        return self.migration_progress
-    
-    def cancel_migration(self) -> bool:
-        """Cancel ongoing migration if one is running."""
-        if self.current_migration:
-            self.current_migration.cancel_migration()
-            logger.info("Migration cancellation requested")
-            return True
-        return False

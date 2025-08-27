@@ -59,18 +59,6 @@ class SyncService:
                 'database': self.config.falkordb.database,
             }
             
-            # Convert migration config from Pydantic to MigrationConfig dataclass
-            from migration.migration_service import MigrationConfig as ServiceMigrationConfig
-            migration_config = ServiceMigrationConfig(
-                max_query_length=self.config.migration.max_query_length,
-                embedding_properties=self.config.migration.embedding_properties,
-                skip_large_arrays=self.config.migration.skip_large_arrays,
-                max_array_size=self.config.migration.max_array_size,
-                retry_attempts=self.config.migration.retry_attempts,
-                batch_progress_interval=self.config.migration.batch_progress_interval,
-                clear_target_on_start=self.config.migration.clear_target_on_start
-            )
-            
             self.orchestrator = SyncOrchestrator(
                 neo4j_config=neo4j_config,
                 falkordb_config=falkordb_config,
@@ -81,7 +69,6 @@ class SyncService:
                 sync_direction=self.config.sync.sync_direction,
                 enable_reverse_incremental=self.config.sync.enable_reverse_incremental,
                 auto_recovery=self.config.sync.auto_recovery,
-                migration_config=migration_config,
             )
             
             # Initialize health server
@@ -97,13 +84,8 @@ class SyncService:
             if self.config.sync.auto_recovery:
                 sync_logger.info("Checking if disaster recovery is needed...")
                 if await self.orchestrator.check_disaster_recovery_needed():
-                    # Use migration service for disaster recovery if enabled
-                    if self.config.migration.enabled and self.config.migration.use_for_disaster_recovery:
-                        sync_logger.warning("Performing disaster recovery using migration service: Neo4j → FalkorDB")
-                        operation_stats = await self.orchestrator.sync_migration_full()
-                    else:
-                        sync_logger.warning("Performing disaster recovery using standard sync: Neo4j → FalkorDB")
-                        operation_stats = await self.orchestrator.sync_full()
+                    sync_logger.warning("Performing disaster recovery using proven migration method: Neo4j → FalkorDB")
+                    operation_stats = await self.orchestrator.sync_migration_full()
                     
                     if operation_stats.status.value == "completed":
                         sync_logger.log_sync_complete(
