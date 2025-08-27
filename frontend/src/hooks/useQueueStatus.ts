@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { QueueStatus } from '@/api/types';
 import { GraphClient } from '@/api/graphClient';
 
@@ -9,7 +9,8 @@ interface UseQueueStatusOptions {
 
 interface UseQueueStatusResult {
   queueStatus: QueueStatus | null;
-  isLoading: boolean;
+  isLoading: boolean;      // initial-only
+  isRefreshing: boolean;   // background refetches
   error: string | null;
   refresh: () => void;
 }
@@ -19,25 +20,47 @@ export const useQueueStatus = ({
   enabled = true 
 }: UseQueueStatusOptions = {}): UseQueueStatusResult => {
   const [queueStatus, setQueueStatus] = useState<QueueStatus | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const inFlightRef = useRef(false);
 
   const graphClient = new GraphClient();
 
   const fetchQueueStatus = async () => {
-    if (!enabled) return;
+    if (!enabled || inFlightRef.current) return;
+    
+    inFlightRef.current = true;
+    const isInitial = queueStatus === null;
     
     try {
-      setIsLoading(true);
+      if (isInitial) {
+        setIsLoading(true);
+      } else {
+        setIsRefreshing(true);
+      }
       setError(null);
+      
       const status = await graphClient.getQueueStatus();
-      setQueueStatus(status);
+      
+      // Only update if data actually changed to prevent unnecessary re-renders
+      setQueueStatus(prev => {
+        if (JSON.stringify(prev) === JSON.stringify(status)) {
+          return prev;
+        }
+        return status;
+      });
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to fetch queue status';
       setError(errorMessage);
       console.error('Queue status fetch error:', err);
+      // Keep showing last good data on error
     } finally {
-      setIsLoading(false);
+      if (isInitial) {
+        setIsLoading(false);
+      }
+      setIsRefreshing(false);
+      inFlightRef.current = false;
     }
   };
 
@@ -60,6 +83,7 @@ export const useQueueStatus = ({
   return {
     queueStatus,
     isLoading,
+    isRefreshing,
     error,
     refresh,
   };

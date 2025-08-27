@@ -1,5 +1,5 @@
 import React from 'react';
-import { Database, RefreshCw, Cpu, Zap, Activity } from 'lucide-react';
+import { Database, RefreshCw, Cpu, Zap, Activity, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -31,7 +31,7 @@ export const QueryControlsTab: React.FC<QueryControlsTabProps> = ({
   onRefreshGraph,
   onQuickQuery,
 }) => {
-  const { queueStatus, isLoading: queueLoading, error: queueError } = useQueueStatus();
+  const { queueStatus, isLoading: queueLoading, isRefreshing: queueRefreshing, error: queueError } = useQueueStatus();
   return (
     <div className="space-y-4">
       <Card className="glass border-border/30">
@@ -182,21 +182,27 @@ export const QueryControlsTab: React.FC<QueryControlsTabProps> = ({
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
-          {queueLoading ? (
-            <div className="flex justify-center items-center py-2">
-              <div className="animate-pulse text-xs text-muted-foreground">Loading...</div>
-            </div>
-          ) : queueError ? (
-            <div className="text-xs text-red-400">
-              Queue unavailable
+          {queueLoading && !queueStatus ? (
+            // Initial-only skeleton matching final layout heights
+            <div className="space-y-2">
+              <div className="h-5 w-24 bg-muted/30 rounded animate-pulse" />
+              <div className="grid grid-cols-2 gap-2">
+                <div className="h-4 bg-muted/30 rounded animate-pulse" />
+                <div className="h-4 bg-muted/30 rounded animate-pulse" />
+              </div>
             </div>
           ) : queueStatus ? (
             <div className="space-y-2">
               <div className="flex justify-between items-center">
-                <span className="text-xs text-muted-foreground">Status</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">Status</span>
+                  {queueRefreshing && (
+                    <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                  )}
+                </div>
                 <Badge 
                   variant={queueStatus.status === 'processing' ? 'default' : 'secondary'}
-                  className={`text-xs h-5 ${
+                  className={`text-xs h-5 transition-colors duration-200 ${
                     queueStatus.status === 'processing' ? 'bg-green-500/20 text-green-400 border-green-500/30' :
                     queueStatus.status === 'idle' ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' :
                     'bg-gray-500/20 text-gray-400 border-gray-500/30'
@@ -208,11 +214,15 @@ export const QueryControlsTab: React.FC<QueryControlsTabProps> = ({
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Pending</span>
-                  <span className="text-primary font-mono">{queueStatus.visible_messages}</span>
+                  <span className="text-primary font-mono transition-opacity duration-200">
+                    {queueStatus.visible_messages}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Processing</span>
-                  <span className="text-primary font-mono">{queueStatus.invisible_messages}</span>
+                  <span className="text-primary font-mono transition-opacity duration-200">
+                    {queueStatus.invisible_messages}
+                  </span>
                 </div>
               </div>
               {queueStatus.total_processed > 0 && (
@@ -220,7 +230,7 @@ export const QueryControlsTab: React.FC<QueryControlsTabProps> = ({
                   <span className="text-muted-foreground">Success Rate</span>
                   <Badge 
                     variant="outline"
-                    className={`text-xs h-5 ${
+                    className={`text-xs h-5 transition-colors duration-200 ${
                       queueStatus.success_rate >= 95 ? 'text-green-400 border-green-500/30' :
                       queueStatus.success_rate >= 80 ? 'text-yellow-400 border-yellow-500/30' :
                       'text-red-400 border-red-500/30'
@@ -228,6 +238,11 @@ export const QueryControlsTab: React.FC<QueryControlsTabProps> = ({
                   >
                     {queueStatus.success_rate.toFixed(0)}%
                   </Badge>
+                </div>
+              )}
+              {queueError && (
+                <div className="text-[10px] text-amber-400">
+                  Connection issue; showing last update
                 </div>
               )}
             </div>
