@@ -113,6 +113,14 @@ class FalkorDBLoader:
         elif isinstance(obj, datetime):
             # FalkorDB prefers simpler datetime format without microseconds and timezone
             return obj.strftime('%Y-%m-%dT%H:%M:%S')
+        elif hasattr(obj, 'to_native'):
+            # Handle Neo4j DateTime objects - they have a to_native() method
+            try:
+                native_dt = obj.to_native()
+                return native_dt.strftime('%Y-%m-%dT%H:%M:%S')
+            except:
+                # Fall back to string representation and clean it
+                return str(obj).split('.')[0].replace('+00:00', '').replace('Z', '')
         elif isinstance(obj, str):
             # Handle string datetimes that might be malformed
             if 'T' in obj and (':' in obj or '+' in obj or '-' in obj[-6:]):
