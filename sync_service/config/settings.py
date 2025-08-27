@@ -7,7 +7,7 @@ environment variables, configuration files, and validation.
 
 import os
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -81,6 +81,31 @@ class SyncConfig(BaseModel):
         return v.lower()
 
 
+class MigrationConfig(BaseModel):
+    """Migration service configuration."""
+    enabled: bool = Field(default=True, description="Enable migration service")
+    max_query_length: int = Field(default=10000, description="Maximum Cypher query length", ge=1000, le=50000)
+    skip_large_arrays: bool = Field(default=True, description="Skip properties with large arrays")
+    max_array_size: int = Field(default=100, description="Maximum array size to include", ge=10, le=1000)
+    retry_attempts: int = Field(default=3, description="Number of retry attempts for failed operations", ge=1, le=10)
+    batch_progress_interval: int = Field(default=50, description="Progress reporting interval", ge=1, le=1000)
+    clear_target_on_start: bool = Field(default=True, description="Clear target database before migration")
+    use_for_disaster_recovery: bool = Field(default=True, description="Use migration service for disaster recovery")
+    embedding_properties: List[str] = Field(
+        default=['name_embedding', 'summary_embedding', 'embedding', 'embeddings'],
+        description="Property names to skip (typically large embedding arrays)"
+    )
+    
+    @validator('max_query_length')
+    def validate_query_length(cls, v):
+        """Validate query length is reasonable."""
+        if v < 1000:
+            raise ValueError('Max query length must be at least 1000 characters')
+        if v > 50000:
+            raise ValueError('Max query length cannot exceed 50000 characters')
+        return v
+
+
 class LoggingConfig(BaseModel):
     """Logging configuration."""
     level: str = Field(default="INFO", description="Log level")
@@ -127,6 +152,7 @@ class SyncServiceConfig(BaseModel):
     neo4j: Neo4jConfig = Field(default_factory=Neo4jConfig)
     falkordb: FalkorDBConfig = Field(default_factory=FalkorDBConfig)
     sync: SyncConfig = Field(default_factory=SyncConfig)
+    migration: MigrationConfig = Field(default_factory=MigrationConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     monitoring: MonitoringConfig = Field(default_factory=MonitoringConfig)
     
