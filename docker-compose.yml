@@ -65,7 +65,7 @@ services:
   # Rust Services
   # =============================================================================
   graph-visualizer-rust:
-    image: ghcr.io/oculairmedia/graphiti-rust-visualizer:main
+    image: ghcr.io/oculairmedia/graphiti-rust-visualizer:feature-chutes-ai-integration
     restart: unless-stopped
     ports:
       - "${RUST_SERVER_PORT:-3000}:3000"
@@ -180,7 +180,7 @@ services:
       - CEREBRAS_MODEL=${CEREBRAS_MODEL:-qwen-3-coder-480b}
       - CEREBRAS_SMALL_MODEL=${CEREBRAS_SMALL_MODEL:-qwen-3-coder-480b}
       - USE_CHUTES=${USE_CHUTES:-true}
-      - CHUTES_API_KEY=${CHUTES_API_KEY:-cpk_be431a88a4f2460fb6a72b8cbd15e711.bb20b5a1d58c50c9bc051e74b2a39d7c.h0xwIW3vhQMOX9J7GEHXNk4TUiit7IUt}
+      - CHUTES_API_KEY=${CHUTES_API_KEY:-cpk_8506ccf34be446abb6aba0680ff0555d.bb20b5a1d58c50c9bc051e74b2a39d7c.YAfn45yIG0v39nOaCuVLWbGJiQH0zydP}
       - CHUTES_MODEL=${CHUTES_MODEL:-zai-org/GLM-4.5-FP8}
       - CHUTES_SMALL_MODEL=${CHUTES_SMALL_MODEL:-zai-org/GLM-4.5-FP8}
       - CHUTES_BASE_URL=${CHUTES_BASE_URL:-https://llm.chutes.ai/v1}
@@ -254,7 +254,7 @@ services:
       - CEREBRAS_MODEL=${CEREBRAS_MODEL:-qwen-3-coder-480b}
       - CEREBRAS_SMALL_MODEL=${CEREBRAS_SMALL_MODEL:-qwen-3-coder-480b}
       - USE_CHUTES=${USE_CHUTES:-true}
-      - CHUTES_API_KEY=${CHUTES_API_KEY:-cpk_be431a88a4f2460fb6a72b8cbd15e711.bb20b5a1d58c50c9bc051e74b2a39d7c.h0xwIW3vhQMOX9J7GEHXNk4TUiit7IUt}
+      - CHUTES_API_KEY=${CHUTES_API_KEY:-cpk_8506ccf34be446abb6aba0680ff0555d.bb20b5a1d58c50c9bc051e74b2a39d7c.YAfn45yIG0v39nOaCuVLWbGJiQH0zydP}
       - CHUTES_MODEL=${CHUTES_MODEL:-zai-org/GLM-4.5-FP8}
       - CHUTES_SMALL_MODEL=${CHUTES_SMALL_MODEL:-zai-org/GLM-4.5-FP8}
       - CHUTES_BASE_URL=${CHUTES_BASE_URL:-https://llm.chutes.ai/v1}
@@ -413,7 +413,7 @@ services:
       - CEREBRAS_MODEL=${CEREBRAS_MODEL:-qwen-3-coder-480b}
       - CEREBRAS_SMALL_MODEL=${CEREBRAS_SMALL_MODEL:-qwen-3-coder-480b}
       - USE_CHUTES=${USE_CHUTES:-true}
-      - CHUTES_API_KEY=${CHUTES_API_KEY:-cpk_be431a88a4f2460fb6a72b8cbd15e711.bb20b5a1d58c50c9bc051e74b2a39d7c.h0xwIW3vhQMOX9J7GEHXNk4TUiit7IUt}
+      - CHUTES_API_KEY=${CHUTES_API_KEY:-cpk_8506ccf34be446abb6aba0680ff0555d.bb20b5a1d58c50c9bc051e74b2a39d7c.YAfn45yIG0v39nOaCuVLWbGJiQH0zydP}
       - CHUTES_MODEL=${CHUTES_MODEL:-zai-org/GLM-4.5-FP8}
       - CHUTES_SMALL_MODEL=${CHUTES_SMALL_MODEL:-zai-org/GLM-4.5-FP8}
       - CHUTES_BASE_URL=${CHUTES_BASE_URL:-https://llm.chutes.ai/v1}
