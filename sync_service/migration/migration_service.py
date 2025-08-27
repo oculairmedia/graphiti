@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 from falkordb import FalkorDB
-from graphiti_core.driver.neo4j_driver import Neo4jDriver
+from neo4j import AsyncGraphDatabase, AsyncDriver
 
 logger = logging.getLogger(__name__)
 
@@ -122,7 +122,7 @@ class MigrationService:
         self._cancelled = False
         
         # Connection objects
-        self.neo4j_driver: Optional[Neo4jDriver] = None
+        self.neo4j_driver: Optional[AsyncDriver] = None
         self.falkor_db: Optional[FalkorDB] = None
         self.falkor_graph = None
     
@@ -139,10 +139,9 @@ class MigrationService:
         """Initialize database connections."""
         try:
             # Initialize Neo4j driver
-            self.neo4j_driver = Neo4jDriver(
-                uri=self.neo4j_config['uri'],
-                user=self.neo4j_config['user'],
-                password=self.neo4j_config['password']
+            self.neo4j_driver = AsyncGraphDatabase.driver(
+                self.neo4j_config['uri'],
+                auth=(self.neo4j_config['user'], self.neo4j_config['password'])
             )
             
             # Initialize FalkorDB connection
@@ -322,13 +321,10 @@ class MigrationService:
             
             # Get total node count for progress tracking
             self._update_progress(current_phase="counting_source_data")
-            count_result = await self.neo4j_driver.execute_query(
-                'MATCH (n) RETURN count(n) as count'
-            )
-            total_nodes = (
-                count_result.records[0]['count'] 
-                if count_result and count_result.records else 0
-            )
+            async with self.neo4j_driver.session() as session:
+                count_result = await session.run('MATCH (n) RETURN count(n) as count')
+                count_record = await count_result.single()
+            total_nodes = count_record['count'] if count_record else 0
             self._update_progress(total_nodes=total_nodes)
             
             logger.info(f"Found {total_nodes} nodes to migrate")
@@ -375,8 +371,9 @@ class MigrationService:
         
         # Get nodes with labels
         nodes_query = 'MATCH (n) RETURN n, labels(n) as labels'
-        nodes_result = await self.neo4j_driver.execute_query(nodes_query)
-        nodes = nodes_result.records if nodes_result else []
+        async with self.neo4j_driver.session() as session:
+            nodes_result = await session.run(nodes_query)
+            nodes = await nodes_result.data()
         
         logger.info(f"Migrating {len(nodes)} nodes...")
         node_count = 0
@@ -499,8 +496,9 @@ class MigrationService:
         """
         
         try:
-            rels_result = await self.neo4j_driver.execute_query(rels_query)
-            relationships = rels_result.records if rels_result else []
+            async with self.neo4j_driver.session() as session:
+                rels_result = await session.run(rels_query)
+                relationships = await rels_result.data()
             
             self.progress.total_relationships = len(relationships)
             self._update_progress()
