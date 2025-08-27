@@ -31,7 +31,14 @@ export const QueryControlsTab: React.FC<QueryControlsTabProps> = ({
   onRefreshGraph,
   onQuickQuery,
 }) => {
-  const { queueStatus, isLoading: queueLoading, isRefreshing: queueRefreshing, error: queueError } = useQueueStatus();
+  const { 
+    queueStatus, 
+    isLoading: queueLoading, 
+    isRefreshing: queueRefreshing, 
+    error: queueError,
+    isStale,
+    lastUpdatedAgo
+  } = useQueueStatus();
   return (
     <div className="space-y-4">
       <Card className="glass border-border/30">
@@ -181,7 +188,7 @@ export const QueryControlsTab: React.FC<QueryControlsTabProps> = ({
             <span>Queue Status</span>
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-2">
+        <CardContent className="space-y-2 min-h-[100px]">
           {queueLoading && !queueStatus ? (
             // Initial-only skeleton matching final layout heights
             <div className="space-y-2">
@@ -192,7 +199,7 @@ export const QueryControlsTab: React.FC<QueryControlsTabProps> = ({
               </div>
             </div>
           ) : queueStatus ? (
-            <div className="space-y-2">
+            <div className={`space-y-2 motion-safe:transition-opacity motion-safe:duration-300 ${isStale ? 'opacity-75' : 'opacity-100'}`}>
               <div className="flex justify-between items-center">
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-muted-foreground">Status</span>
@@ -214,13 +221,13 @@ export const QueryControlsTab: React.FC<QueryControlsTabProps> = ({
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Pending</span>
-                  <span className="text-primary font-mono transition-opacity duration-200">
+                  <span className="text-primary font-mono motion-safe:transition-all motion-safe:duration-300 ease-out">
                     {queueStatus.visible_messages}
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Processing</span>
-                  <span className="text-primary font-mono transition-opacity duration-200">
+                  <span className="text-primary font-mono motion-safe:transition-all motion-safe:duration-300 ease-out">
                     {queueStatus.invisible_messages}
                   </span>
                 </div>
@@ -230,7 +237,7 @@ export const QueryControlsTab: React.FC<QueryControlsTabProps> = ({
                   <span className="text-muted-foreground">Success Rate</span>
                   <Badge 
                     variant="outline"
-                    className={`text-xs h-5 transition-colors duration-200 ${
+                    className={`text-xs h-5 motion-safe:transition-colors motion-safe:duration-300 ease-out font-mono ${
                       queueStatus.success_rate >= 95 ? 'text-green-400 border-green-500/30' :
                       queueStatus.success_rate >= 80 ? 'text-yellow-400 border-yellow-500/30' :
                       'text-red-400 border-red-500/30'
@@ -240,9 +247,10 @@ export const QueryControlsTab: React.FC<QueryControlsTabProps> = ({
                   </Badge>
                 </div>
               )}
-              {queueError && (
-                <div className="text-[10px] text-amber-400">
-                  Connection issue; showing last update
+              {(queueError || isStale) && (
+                <div className={`text-[10px] ${queueError ? 'text-amber-400' : 'text-muted-foreground'}`}>
+                  {queueError ? 'Connection issue; showing last update' : 
+                   `Updated ${lastUpdatedAgo}s ago`}
                 </div>
               )}
             </div>
