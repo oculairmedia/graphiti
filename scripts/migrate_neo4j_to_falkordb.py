@@ -57,6 +57,9 @@ async def fetch_all_neo4j_data(neo4j_driver: Neo4jDriver) -> Dict[str, Any]:
     """
     community_nodes = await neo4j_driver.execute_query(community_nodes_query)
 
+    print(f"Found: {len(entity_nodes)} entity nodes, {len(episodic_nodes)} episodic nodes, {len(community_nodes)} community nodes")
+    print(f"Found: {len(entity_edges)} entity edges, {len(episodic_edges)} episodic edges")
+
     return {
         'entity_nodes': entity_nodes,
         'episodic_nodes': episodic_nodes,
@@ -70,20 +73,65 @@ async def migrate_nodes(falkor_driver: FalkorDriver, nodes: List[Dict], node_typ
     """Migrate nodes to FalkorDB."""
     print(f'Migrating {len(nodes)} {node_type} nodes...')
 
-    for node_data in nodes:
-        node = node_data['n']
+    for node_item in nodes:
+        # Handle different data structures - nodes seem to be in lists
+        if isinstance(node_item, list) and len(node_item) > 0:
+            # Get the first item from list, which should be a Record
+            first_record = node_item[0]
+            if hasattr(first_record, 'data'):
+                record_data = first_record.data()
+                if 'n' in record_data:
+                    node = record_data['n']
+                else:
+                    continue
+            elif hasattr(first_record, 'get'):
+                node = first_record.get('n') or first_record
+            else:
+                node = first_record
+        else:
+            # Fallback for other structures
+            if isinstance(node_item, dict) and 'n' in node_item:
+                node = node_item['n']
+            else:
+                node = node_item
+        
+        # Convert Neo4j node to dict if needed
+        if hasattr(node, '_properties'):
+            properties = dict(node._properties)
+        elif hasattr(node, 'keys') and callable(node.keys):
+            properties = {k: node[k] for k in node.keys()}
+        else:
+            print(f"DEBUG: Node type: {type(node)}, Node: {node}")
+            if isinstance(node, dict):
+                properties = node
+            else:
+                print(f"Unexpected node structure: {node}")
+                continue
 
-        # Create node in FalkorDB
+        # Create node in FalkorDB - build query dynamically
+        if not properties.get('uuid') or not properties.get('name'):
+            print(f"Skipping node without uuid or name: {properties}")
+            continue
+            
+        property_parts = []
+        params = {}
+        
+        for key, value in properties.items():
+            # Convert Neo4j datetime objects to strings
+            if hasattr(value, 'to_native'):
+                try:
+                    native_dt = value.to_native()
+                    value = native_dt.strftime('%Y-%m-%dT%H:%M:%S')
+                except:
+                    value = str(value)
+            
+            property_parts.append(f"{key}: ${key}")
+            params[key] = value
+
         create_query = f"""
-        CREATE (n:{node_type} {{
-            uuid: $uuid,
-            name: $name,
-            {', '.join([f'{k}: ${k}' for k in node.keys() if k not in ['uuid', 'name']])}
-        }})
+        CREATE (n:{node_type} {{{', '.join(property_parts)}}})
         RETURN n
         """
-
-        params = {k: v for k, v in node.items()}
 
         try:
             await falkor_driver.execute_query(create_query, parameters=params)
@@ -96,22 +144,48 @@ async def migrate_edges(falkor_driver: FalkorDriver, edges: List[Dict], edge_typ
     print(f'Migrating {len(edges)} {edge_type} edges...')
 
     for edge_data in edges:
-        edge = edge_data['r']
-        source_uuid = edge_data.get('source_uuid') or edge_data.get('episode_uuid')
-        target_uuid = edge_data.get('target_uuid') or edge_data.get('entity_uuid')
+        # Handle different possible data structures  
+        if isinstance(edge_data, dict) and 'r' in edge_data:
+            edge = edge_data['r']
+            source_uuid = edge_data.get('source_uuid') or edge_data.get('episode_uuid')
+            target_uuid = edge_data.get('target_uuid') or edge_data.get('entity_uuid')
+        else:
+            # Fallback for different structure
+            print(f"Unexpected edge data structure: {edge_data}")
+            continue
+
+        # Convert Neo4j relationship to dict if needed
+        if hasattr(edge, '_properties'):
+            properties = dict(edge._properties)
+        elif hasattr(edge, 'keys') and callable(edge.keys):
+            properties = {k: edge[k] for k in edge.keys()}
+        else:
+            properties = dict(edge)
+            
+        # Convert Neo4j datetime objects to strings
+        for key, value in properties.items():
+            if hasattr(value, 'to_native'):
+                try:
+                    native_dt = value.to_native()
+                    properties[key] = native_dt.strftime('%Y-%m-%dT%H:%M:%S')
+                except:
+                    properties[key] = str(value)
+
+        # Build edge properties
+        property_parts = []
+        params = {'source_uuid': source_uuid, 'target_uuid': target_uuid}
+        
+        for key, value in properties.items():
+            property_parts.append(f"{key}: ${key}")
+            params[key] = value
 
         # Create edge in FalkorDB
         create_query = f"""
         MATCH (source {{uuid: $source_uuid}})
         MATCH (target {{uuid: $target_uuid}})
-        CREATE (source)-[r:{edge_type} {{
-            uuid: $uuid,
-            {', '.join([f'{k}: ${k}' for k in edge.keys() if k != 'uuid'])}
-        }}]->(target)
+        CREATE (source)-[r:{edge_type} {{{', '.join(property_parts)}}}]->(target)
         RETURN r
         """
-
-        params = {'source_uuid': source_uuid, 'target_uuid': target_uuid, **edge}
 
         try:
             await falkor_driver.execute_query(create_query, parameters=params)
@@ -128,14 +202,30 @@ async def verify_migration(neo4j_driver: Neo4jDriver, falkor_driver: FalkorDrive
     for label in ['Entity', 'Episodic', 'Community']:
         query = f'MATCH (n:{label}) RETURN count(n) as count'
         result = await neo4j_driver.execute_query(query)
-        neo4j_counts[label] = result[0]['count'] if result else 0
+        if isinstance(result, list) and len(result) > 0:
+            if hasattr(result[0], 'data'):
+                neo4j_counts[label] = result[0].data()['count'] if result[0].data() else 0
+            elif isinstance(result[0], dict):
+                neo4j_counts[label] = result[0]['count']
+            else:
+                neo4j_counts[label] = result[0]
+        else:
+            neo4j_counts[label] = 0
 
     # Count nodes in FalkorDB
     falkor_counts = {}
     for label in ['Entity', 'Episodic', 'Community']:
         query = f'MATCH (n:{label}) RETURN count(n) as count'
         result = await falkor_driver.execute_query(query)
-        falkor_counts[label] = result[0]['count'] if result else 0
+        if isinstance(result, list) and len(result) > 0:
+            if hasattr(result[0], 'data'):
+                falkor_counts[label] = result[0].data()['count'] if result[0].data() else 0
+            elif isinstance(result[0], dict):
+                falkor_counts[label] = result[0]['count']
+            else:
+                falkor_counts[label] = result[0]
+        else:
+            falkor_counts[label] = 0
 
     # Count edges
     neo4j_edge_count = await neo4j_driver.execute_query('MATCH ()-[r]->() RETURN count(r) as count')
@@ -151,8 +241,26 @@ async def verify_migration(neo4j_driver: Neo4jDriver, falkor_driver: FalkorDrive
         status = '✓' if neo4j_counts[label] == falkor_counts[label] else '✗'
         print(f'{label:<15} {neo4j_counts[label]:<10} {falkor_counts[label]:<10} {status}')
 
-    neo4j_edges = neo4j_edge_count[0]['count'] if neo4j_edge_count else 0
-    falkor_edges = falkor_edge_count[0]['count'] if falkor_edge_count else 0
+    # Handle edge counts
+    if isinstance(neo4j_edge_count, list) and len(neo4j_edge_count) > 0:
+        if hasattr(neo4j_edge_count[0], 'data'):
+            neo4j_edges = neo4j_edge_count[0].data()['count'] if neo4j_edge_count[0].data() else 0
+        elif isinstance(neo4j_edge_count[0], dict):
+            neo4j_edges = neo4j_edge_count[0]['count']
+        else:
+            neo4j_edges = neo4j_edge_count[0]
+    else:
+        neo4j_edges = 0
+        
+    if isinstance(falkor_edge_count, list) and len(falkor_edge_count) > 0:
+        if hasattr(falkor_edge_count[0], 'data'):
+            falkor_edges = falkor_edge_count[0].data()['count'] if falkor_edge_count[0].data() else 0
+        elif isinstance(falkor_edge_count[0], dict):
+            falkor_edges = falkor_edge_count[0]['count']
+        else:
+            falkor_edges = falkor_edge_count[0]
+    else:
+        falkor_edges = 0
     status = '✓' if neo4j_edges == falkor_edges else '✗'
     print(f'{"Edges":<15} {neo4j_edges:<10} {falkor_edges:<10} {status}')
 
