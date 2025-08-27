@@ -69,6 +69,11 @@ class HealthServer:
         self.app.router.add_post('/api/sync/reverse/full', self.trigger_reverse_full_sync)
         self.app.router.add_post('/api/sync/reverse/incremental', self.trigger_reverse_incremental_sync)
         
+        # Migration endpoints
+        self.app.router.add_post('/api/migration/full', self.trigger_migration_full)
+        self.app.router.add_get('/api/migration/progress', self.get_migration_progress)
+        self.app.router.add_post('/api/migration/cancel', self.cancel_migration)
+        
         # WebSocket endpoint for real-time updates
         self.app.router.add_get('/ws/updates', self.websocket_handler)
         
@@ -444,3 +449,98 @@ class HealthServer:
             logger.info("Health server stopped")
         except Exception as e:
             logger.error(f"Failed to stop health server: {e}")
+    
+    async def trigger_migration_full(self, request: Request) -> Response:
+        """Trigger a full migration operation using the migration service."""
+        try:
+            # Parse request parameters
+            data = await request.json() if request.has_body else {}
+            
+            # Create progress callback for real-time updates
+            def progress_callback(progress):
+                """Progress callback for WebSocket updates."""
+                update_data = {
+                    "type": "migration_progress",
+                    "data": {
+                        "status": progress.status.value,
+                        "current_phase": progress.current_phase,
+                        "migrated_nodes": progress.migrated_nodes,
+                        "total_nodes": progress.total_nodes,
+                        "migrated_relationships": progress.migrated_relationships,
+                        "total_relationships": progress.total_relationships,
+                        "node_success_rate": progress.node_success_rate,
+                        "relationship_success_rate": progress.relationship_success_rate,
+                        "duration_seconds": progress.duration_seconds,
+                        "errors": progress.errors
+                    }
+                }
+                # Broadcast to WebSocket clients
+                asyncio.create_task(self.broadcast_update(update_data))
+            
+            # Execute migration
+            operation_stats = await self.sync_orchestrator.sync_migration_full(
+                progress_callback=progress_callback
+            )
+            
+            # Convert to serializable format
+            result = {
+                "mode": operation_stats.mode.value,
+                "status": operation_stats.status.value,
+                "duration_seconds": operation_stats.duration_seconds,
+                "total_items_processed": operation_stats.total_items_processed,
+                "total_items_failed": operation_stats.total_items_failed,
+                "success_rate": operation_stats.success_rate,
+                "errors": operation_stats.errors,
+                "started_at": operation_stats.started_at.isoformat() + "Z" if operation_stats.started_at else None,
+                "completed_at": operation_stats.completed_at.isoformat() + "Z" if operation_stats.completed_at else None
+            }
+            
+            return web.json_response(result)
+        except Exception as e:
+            logger.error(f"Failed to trigger migration: {e}")
+            return web.json_response({"error": str(e)}, status=500)
+    
+    async def get_migration_progress(self, request: Request) -> Response:
+        """Get current migration progress."""
+        try:
+            progress = self.sync_orchestrator.get_migration_progress()
+            
+            if progress is None:
+                return web.json_response({
+                    "status": "idle",
+                    "message": "No migration is currently running"
+                })
+            
+            # Convert to serializable format
+            result = {
+                "status": progress.status.value,
+                "current_phase": progress.current_phase,
+                "started_at": progress.started_at.isoformat() + "Z" if progress.started_at else None,
+                "completed_at": progress.completed_at.isoformat() + "Z" if progress.completed_at else None,
+                "duration_seconds": progress.duration_seconds,
+                "total_nodes": progress.total_nodes,
+                "migrated_nodes": progress.migrated_nodes,
+                "total_relationships": progress.total_relationships,
+                "migrated_relationships": progress.migrated_relationships,
+                "node_success_rate": progress.node_success_rate,
+                "relationship_success_rate": progress.relationship_success_rate,
+                "errors": progress.errors
+            }
+            
+            return web.json_response(result)
+        except Exception as e:
+            logger.error(f"Failed to get migration progress: {e}")
+            return web.json_response({"error": str(e)}, status=500)
+    
+    async def cancel_migration(self, request: Request) -> Response:
+        """Cancel ongoing migration."""
+        try:
+            success = self.sync_orchestrator.cancel_migration()
+            
+            if success:
+                return web.json_response({"message": "Migration cancellation requested"})
+            else:
+                return web.json_response({"message": "No migration is currently running"}, status=400)
+        except Exception as e:
+            logger.error(f"Failed to cancel migration: {e}")
+            return web.json_response({"error": str(e)}, status=500)
