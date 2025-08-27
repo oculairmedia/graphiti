@@ -84,7 +84,13 @@ class ChutesClient(LLMClient):
 
         if client is None:
             base_url = config.base_url or DEFAULT_BASE_URL
-            self.client = AsyncOpenAI(api_key=config.api_key, base_url=base_url)
+            # Set extended timeouts for Chutes AI - their models may take longer to respond
+            self.client = AsyncOpenAI(
+                api_key=config.api_key, 
+                base_url=base_url,
+                timeout=120.0,  # 2 minutes timeout for Chutes AI
+                max_retries=3
+            )
         else:
             self.client = client
 
