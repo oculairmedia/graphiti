@@ -192,15 +192,18 @@ class Neo4jExtractor:
             
             batch = []
             async for record in result:
-                node_data = {
+                # Flatten all properties into a single dictionary
+                node_data = dict(record["attributes"]) if record["attributes"] else {}
+                
+                # Override with specific fields to ensure consistency
+                node_data.update({
                     "uuid": record["uuid"],
                     "name": record["name"], 
                     "group_id": record["group_id"],
                     "created_at": record["created_at"],
                     "summary": record["summary"],
-                    "labels": record["labels"],
-                    "attributes": dict(record["attributes"])
-                }
+                    "labels": record["labels"]
+                })
                 batch.append(node_data)
                 
                 if len(batch) >= self.batch_size:
@@ -264,7 +267,11 @@ class Neo4jExtractor:
             
             batch = []
             async for record in result:
-                node_data = {
+                # Flatten all properties into a single dictionary
+                node_data = dict(record["attributes"]) if record["attributes"] else {}
+                
+                # Override with specific fields to ensure consistency
+                node_data.update({
                     "uuid": record["uuid"],
                     "name": record["name"],
                     "group_id": record["group_id"], 
@@ -272,9 +279,8 @@ class Neo4jExtractor:
                     "content": record["content"],
                     "source": record["source"],
                     "source_description": record["source_description"],
-                    "labels": record["labels"],
-                    "attributes": dict(record["attributes"])
-                }
+                    "labels": record["labels"]
+                })
                 batch.append(node_data)
                 
                 if len(batch) >= self.batch_size:
@@ -336,15 +342,18 @@ class Neo4jExtractor:
             
             batch = []
             async for record in result:
-                node_data = {
+                # Flatten all properties into a single dictionary
+                node_data = dict(record["attributes"]) if record["attributes"] else {}
+                
+                # Override with specific fields to ensure consistency
+                node_data.update({
                     "uuid": record["uuid"],
                     "name": record["name"],
                     "group_id": record["group_id"],
                     "created_at": record["created_at"],
                     "summary": record["summary"], 
-                    "labels": record["labels"],
-                    "attributes": dict(record["attributes"])
-                }
+                    "labels": record["labels"]
+                })
                 batch.append(node_data)
                 
                 if len(batch) >= self.batch_size:
@@ -411,7 +420,11 @@ class Neo4jExtractor:
             
             batch = []
             async for record in result:
-                edge_data = {
+                # Flatten all properties into a single dictionary
+                edge_data = dict(record["attributes"]) if record["attributes"] else {}
+                
+                # Override with specific fields to ensure consistency
+                edge_data.update({
                     "uuid": record["uuid"],
                     "source_node_uuid": record["source_node_uuid"],
                     "target_node_uuid": record["target_node_uuid"],
@@ -422,9 +435,8 @@ class Neo4jExtractor:
                     "episodes": record["episodes"],
                     "expired_at": record["expired_at"],
                     "valid_at": record["valid_at"],
-                    "invalid_at": record["invalid_at"],
-                    "attributes": dict(record["attributes"])
-                }
+                    "invalid_at": record["invalid_at"]
+                })
                 batch.append(edge_data)
                 
                 if len(batch) >= self.batch_size:
@@ -485,14 +497,17 @@ class Neo4jExtractor:
             
             batch = []
             async for record in result:
-                edge_data = {
+                # Flatten all properties into a single dictionary
+                edge_data = dict(record["attributes"]) if record["attributes"] else {}
+                
+                # Override with specific fields to ensure consistency
+                edge_data.update({
                     "uuid": record["uuid"],
                     "source_node_uuid": record["source_node_uuid"],
                     "target_node_uuid": record["target_node_uuid"],
                     "created_at": record["created_at"],
-                    "group_id": record["group_id"],
-                    "attributes": dict(record["attributes"])
-                }
+                    "group_id": record["group_id"]
+                })
                 batch.append(edge_data)
                 
                 if len(batch) >= self.batch_size:
