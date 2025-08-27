@@ -228,21 +228,26 @@ class FalkorDBLoader:
                 # Convert datetimes to strings
                 node = self._convert_datetimes_to_strings(node)
                 
-                # Build properties string for direct query insertion (no parameters)
-                props = []
+                # Build property assignments for MERGE and SET clauses
                 uuid_val = self._safe_value_for_query(node["uuid"])
+                name_val = self._safe_value_for_query(node.get("name", ""))
+                group_id_val = self._safe_value_for_query(node.get("group_id", ""))
                 
+                # Include all mandatory properties in MERGE to avoid constraint violations
+                # FalkorDB checks constraints immediately after MERGE, before SET
+                merge_props = f"{{uuid: {uuid_val}, name: {name_val}, group_id: {group_id_val}}}"
+                
+                # Build SET clauses for all properties
+                set_clauses = []
                 for key, value in node.items():
-                    if key not in ["uuid", "labels"]:
+                    if key != "labels":  # Don't set labels as a property
                         safe_value = self._safe_value_for_query(value)
-                        props.append(f"{key}: {safe_value}")
-                        
-                props_str = "{uuid: " + uuid_val + ", " + ", ".join(props) + "}"
+                        set_clauses.append(f"n.{key} = {safe_value}")
                 
-                # Upsert query - merge on UUID (no parameters to avoid parsing issues)
+                # Upsert query - merge with mandatory properties, then set all properties
                 query = f"""
-                MERGE (n:Entity {{uuid: {uuid_val}}})
-                SET n = {props_str}
+                MERGE (n:Entity {merge_props})
+                SET {', '.join(set_clauses)}
                 RETURN n.uuid as uuid
                 """
                 
@@ -277,21 +282,25 @@ class FalkorDBLoader:
                 # Convert datetimes to strings
                 node = self._convert_datetimes_to_strings(node)
                 
-                # Build properties string for direct query insertion (no parameters)
-                props = []
+                # Build property assignments for MERGE and SET clauses
                 uuid_val = self._safe_value_for_query(node["uuid"])
+                name_val = self._safe_value_for_query(node.get("name", ""))
+                group_id_val = self._safe_value_for_query(node.get("group_id", ""))
                 
+                # Include all mandatory properties in MERGE to avoid constraint violations
+                merge_props = f"{{uuid: {uuid_val}, name: {name_val}, group_id: {group_id_val}}}"
+                
+                # Build SET clauses for all properties
+                set_clauses = []
                 for key, value in node.items():
-                    if key not in ["uuid", "labels"]:
+                    if key != "labels":  # Don't set labels as a property
                         safe_value = self._safe_value_for_query(value)
-                        props.append(f"{key}: {safe_value}")
-                        
-                props_str = "{uuid: " + uuid_val + ", " + ", ".join(props) + "}"
+                        set_clauses.append(f"n.{key} = {safe_value}")
                 
-                # Upsert query - merge on UUID (no parameters to avoid parsing issues)
+                # Upsert query - merge with mandatory properties, then set all properties
                 query = f"""
-                MERGE (n:Episodic {{uuid: {uuid_val}}})
-                SET n = {props_str}
+                MERGE (n:Episodic {merge_props})
+                SET {', '.join(set_clauses)}
                 RETURN n.uuid as uuid
                 """
                 
@@ -326,21 +335,25 @@ class FalkorDBLoader:
                 # Convert datetimes to strings
                 node = self._convert_datetimes_to_strings(node)
                 
-                # Build properties string for direct query insertion (no parameters)
-                props = []
+                # Build property assignments for MERGE and SET clauses
                 uuid_val = self._safe_value_for_query(node["uuid"])
+                name_val = self._safe_value_for_query(node.get("name", ""))
+                group_id_val = self._safe_value_for_query(node.get("group_id", ""))
                 
+                # Include all mandatory properties in MERGE to avoid constraint violations
+                merge_props = f"{{uuid: {uuid_val}, name: {name_val}, group_id: {group_id_val}}}"
+                
+                # Build SET clauses for all properties
+                set_clauses = []
                 for key, value in node.items():
-                    if key not in ["uuid", "labels"]:
+                    if key != "labels":  # Don't set labels as a property
                         safe_value = self._safe_value_for_query(value)
-                        props.append(f"{key}: {safe_value}")
-                        
-                props_str = "{uuid: " + uuid_val + ", " + ", ".join(props) + "}"
+                        set_clauses.append(f"n.{key} = {safe_value}")
                 
-                # Upsert query - merge on UUID (no parameters to avoid parsing issues)
+                # Upsert query - merge with mandatory properties, then set all properties
                 query = f"""
-                MERGE (n:Community {{uuid: {uuid_val}}})
-                SET n = {props_str}
+                MERGE (n:Community {merge_props})
+                SET {', '.join(set_clauses)}
                 RETURN n.uuid as uuid
                 """
                 
