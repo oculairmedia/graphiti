@@ -131,9 +131,8 @@ impl DuckDBStore {
                 weight DOUBLE NOT NULL DEFAULT 1.0,
                 color VARCHAR,
                 strength DOUBLE DEFAULT 1.0
-                -- No PRIMARY KEY: Graphiti allows duplicate edges between same entities
-            ),"
-            params![],
+            )",
+            params![]
         )?;
         
         // Migration: Try to add created_at column if it doesn't exist (for existing databases)
