@@ -905,7 +905,7 @@ async fn execute_graph_query(client: &FalkorAsyncClient, graph_name: &str, query
     if query == "ENTIRE_GRAPH_SPECIAL" {
         // GRAPH-502: Implement Paginated Node Loading
         // Instead of loading all nodes at once with properties(n), use batches to avoid memory exhaustion
-        let node_batch_size = 250; // Further reduced batch size for FalkorDB memory constraints
+        let node_batch_size = 100; // Ultra-small batch size for severe FalkorDB memory constraints
         let mut node_offset = 0;
         let mut total_nodes_loaded = 0;
         
@@ -924,7 +924,6 @@ async fn execute_graph_query(client: &FalkorAsyncClient, graph_name: &str, query
                     COALESCE(n.betweenness_centrality, 0) as betweenness_centrality,
                     n.created_at as created_at,
                     n.summary as summary
-                ORDER BY n.uuid
                 SKIP {}
                 LIMIT {}
             "#, node_offset, node_batch_size);
@@ -988,7 +987,7 @@ async fn execute_graph_query(client: &FalkorAsyncClient, graph_name: &str, query
         
         // GRAPH-503: Implement Paginated Edge Loading
         // GRAPH-503: Improved edge loading with resilience against FalkorDB timeouts/memory issues
-        let edge_batch_size = 250; // Further reduced for FalkorDB memory constraints (was 500, originally 1000)
+        let edge_batch_size = 100; // Ultra-small batch size for severe FalkorDB memory constraints
         let mut edge_offset = 0;
         let mut total_edges_loaded = 0;
         let max_retries = 3;
@@ -1008,7 +1007,6 @@ async fn execute_graph_query(client: &FalkorAsyncClient, graph_name: &str, query
                     m.uuid as target_id,
                     type(r) as rel_type,
                     COALESCE(r.weight, 1.0) as weight
-                ORDER BY n.uuid, m.uuid
                 SKIP {}
                 LIMIT {}
             "#, edge_offset, edge_batch_size);
