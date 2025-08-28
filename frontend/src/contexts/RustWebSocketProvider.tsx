@@ -87,10 +87,21 @@ export function RustWebSocketProvider({ children }: { children: React.ReactNode 
       wsRef.current = ws;
 
       ws.onopen = () => {
-        console.log(`[RustWebSocketProvider #${connId}] Connected to Rust server`);
+        console.log(`[RustWebSocketProvider #${connId}] ✅ Connected to Rust server at ${rustWsUrl}`);
+        console.log(`[RustWebSocketProvider #${connId}] Connection stats: attempts=${reconnectCountRef.current + 1}, readyState=${ws.readyState}`);
         isConnectingRef.current = false;
         setIsConnected(true);
         reconnectCountRef.current = 0;
+        
+        // Make connection status available globally for debugging
+        if (typeof window !== 'undefined') {
+          (window as any).rustWebSocket = {
+            isConnected: true,
+            url: rustWsUrl,
+            readyState: ws.readyState,
+            reconnectCount: reconnectCountRef.current
+          };
+        }
         
         // Subscribe to delta updates for real-time incremental changes
         try {
@@ -220,15 +231,50 @@ export function RustWebSocketProvider({ children }: { children: React.ReactNode 
       };
 
       ws.onerror = (error) => {
-        console.error('[RustWebSocketProvider] WebSocket error:', error);
+        console.error(`[RustWebSocketProvider #${connId}] ❌ WebSocket error:`, {
+          error,
+          url: rustWsUrl,
+          readyState: ws.readyState,
+          reconnectCount: reconnectCountRef.current
+        });
         isConnectingRef.current = false;
+        
+        // Update global debug info
+        if (typeof window !== 'undefined') {
+          (window as any).rustWebSocket = {
+            ...((window as any).rustWebSocket || {}),
+            lastError: { error, timestamp: new Date().toISOString(), url: rustWsUrl },
+            isConnected: false
+          };
+        }
       };
 
       ws.onclose = (event) => {
-        console.log(`[RustWebSocketProvider #${connId}] Connection closed, code: ${event.code}, reason: ${event.reason || 'No reason provided'}, wasClean: ${event.wasClean}, intentional:`, isIntentionalCloseRef.current);
+        console.log(`[RustWebSocketProvider #${connId}] ⚪ Connection closed:`, {
+          code: event.code,
+          reason: event.reason || 'No reason provided',
+          wasClean: event.wasClean,
+          intentional: isIntentionalCloseRef.current,
+          url: rustWsUrl,
+          reconnectCount: reconnectCountRef.current
+        });
         wsRef.current = null;
         isConnectingRef.current = false;
         setIsConnected(false);
+        
+        // Update global debug info
+        if (typeof window !== 'undefined') {
+          (window as any).rustWebSocket = {
+            ...((window as any).rustWebSocket || {}),
+            isConnected: false,
+            lastClose: { 
+              code: event.code, 
+              reason: event.reason, 
+              wasClean: event.wasClean,
+              timestamp: new Date().toISOString()
+            }
+          };
+        }
         
         // Clear ping interval
         if (pingIntervalRef.current) {

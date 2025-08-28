@@ -345,8 +345,13 @@ export function useGraphDataQuery() {
   // Stable callbacks for real-time sync
   const handleRealtimeDataUpdate = useCallback(() => {
     logger.log('[useGraphDataQuery] Real-time update triggered, refreshing data');
+    
+    // Invalidate React Query cache to ensure fresh data
+    queryClient.invalidateQueries({ queryKey: ['graphData'] });
+    
+    // Refresh DuckDB data
     refreshDuckDBData();
-  }, [refreshDuckDBData]);
+  }, [refreshDuckDBData, queryClient]);
 
   const handleRealtimeNotification = useCallback((notification: any) => {
     logger.log('[useGraphDataQuery] Received notification:', notification);

@@ -54,14 +54,20 @@ export function useRealtimeDataSync({
       logger.log('[useRealtimeDataSync] Triggering data refresh', {
         updateCount: updateCountRef.current,
         timeSinceLastUpdate: now - (lastUpdateTimeRef.current || 0),
+        hasCallback: !!onDataUpdateRef.current
       });
 
       lastUpdateTimeRef.current = now;
       setLastUpdateTime(now);
       setPendingUpdate(false);
       
-      // Trigger the data update callback using ref
-      onDataUpdateRef.current?.();
+      // Trigger the data update callback using ref with error handling
+      try {
+        onDataUpdateRef.current?.();
+        logger.log('[useRealtimeDataSync] Data refresh callback executed successfully');
+      } catch (error) {
+        logger.error('[useRealtimeDataSync] Error in data refresh callback:', error);
+      }
     }, debounceMs);
   }, [debounceMs]); // Only depend on debounceMs
 
@@ -72,24 +78,35 @@ export function useRealtimeDataSync({
     logger.log('[useRealtimeDataSync] Setting up WebSocket subscription');
 
     const unsubscribe = subscribe((update) => {
-      logger.log('[useRealtimeDataSync] Received WebSocket update:', update);
+      logger.log('[useRealtimeDataSync] Received WebSocket update:', {
+        type: update.type,
+        hasData: !!(update.data?.nodes || update.data?.edges),
+        nodeCount: update.data?.nodes?.length || 0,
+        edgeCount: update.data?.edges?.length || 0
+      });
 
-      // Handle different update types
-      if (update.type === 'graph:update' || update.type === 'graph:delta') {
-        // Call the notification callback if provided
-        onNotificationRef.current?.(update);
+      try {
+        // Handle different update types
+        if (update.type === 'graph:update' || update.type === 'graph:delta') {
+          // Call the notification callback if provided
+          onNotificationRef.current?.(update);
 
-        // Check if this is a notification (no data payload) or actual data
-        const hasDataPayload = update.data?.nodes || update.data?.edges;
-        
-        if (!hasDataPayload) {
-          // This is a notification - trigger data refresh
-          logger.log('[useRealtimeDataSync] Notification received, triggering refresh');
-          handleDataUpdate();
+          // Check if this is a notification (no data payload) or actual data
+          const hasDataPayload = update.data?.nodes || update.data?.edges;
+          
+          if (!hasDataPayload) {
+            // This is a notification - trigger data refresh
+            logger.log('[useRealtimeDataSync] Notification received, triggering refresh');
+            handleDataUpdate();
+          } else {
+            // This is actual data - let the data layer handle it
+            logger.log('[useRealtimeDataSync] Data payload received, skipping refresh');
+          }
         } else {
-          // This is actual data - let the data layer handle it
-          logger.log('[useRealtimeDataSync] Data payload received, skipping refresh');
+          logger.log('[useRealtimeDataSync] Unknown update type received:', update.type);
         }
+      } catch (error) {
+        logger.error('[useRealtimeDataSync] Error handling WebSocket update:', error);
       }
     });
 
