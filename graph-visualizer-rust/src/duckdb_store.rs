@@ -130,9 +130,9 @@ impl DuckDBStore {
                 edge_type VARCHAR NOT NULL,
                 weight DOUBLE NOT NULL DEFAULT 1.0,
                 color VARCHAR,
-                strength DOUBLE DEFAULT 1.0,
-                PRIMARY KEY (source, target, edge_type)
-            )",
+                strength DOUBLE DEFAULT 1.0
+                -- No PRIMARY KEY: Graphiti allows duplicate edges between same entities
+            ),"
             params![],
         )?;
         
