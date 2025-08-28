@@ -903,98 +903,160 @@ async fn execute_graph_query(client: &FalkorAsyncClient, graph_name: &str, query
     
     // Special handling for entire_graph query
     if query == "ENTIRE_GRAPH_SPECIAL" {
-        // Query 1: Get all nodes
-        let nodes_query = r#"
-            MATCH (n)
-            RETURN 
-                n.uuid as id,
-                n.name as name,
-                COALESCE(n.type, labels(n)[0]) as node_type,
-                COALESCE(n.degree_centrality, 0) as degree_centrality,
-                properties(n) as props
-        "#;
+        // GRAPH-502: Implement Paginated Node Loading
+        // Instead of loading all nodes at once with properties(n), use batches to avoid memory exhaustion
+        let node_batch_size = 500; // Conservative batch size for memory efficiency
+        let mut node_offset = 0;
+        let mut total_nodes_loaded = 0;
         
-        let mut graph = client.select_graph(graph_name);
-        let mut nodes_result = graph.query(nodes_query).execute().await?;
+        info!("Starting paginated node loading with batch size: {}", node_batch_size);
         
-        // Process all nodes
-        while let Some(row) = nodes_result.data.next() {
-            if row.len() >= 5 {
-                let node_id = value_to_string(&row[0]);
-                let node_name = value_to_string(&row[1]);
-                let node_type = value_to_string(&row[2]);
-                let degree_centrality = value_to_f64(&row[3]);
-                let mut node_props = value_to_properties(&row[4]);
-                
-                // Ensure required properties
-                node_props.insert("name".to_string(), serde_json::Value::String(node_name.clone()));
-                if !node_props.contains_key("degree_centrality") {
+        loop {
+            // Memory-efficient node query: Load only essential properties, not properties(n)
+            let nodes_query = format!(r#"
+                MATCH (n)
+                RETURN 
+                    n.uuid as id,
+                    n.name as name,
+                    COALESCE(n.type, labels(n)[0]) as node_type,
+                    COALESCE(n.degree_centrality, 0) as degree_centrality,
+                    COALESCE(n.pagerank_centrality, 0) as pagerank_centrality,
+                    COALESCE(n.betweenness_centrality, 0) as betweenness_centrality,
+                    n.created_at as created_at,
+                    n.summary as summary
+                ORDER BY n.uuid
+                SKIP {}
+                LIMIT {}
+            "#, node_offset, node_batch_size);
+            
+            let mut graph = client.select_graph(graph_name);
+            let mut nodes_result = graph.query(&nodes_query).execute().await?;
+            
+            let mut batch_count = 0;
+            // Process nodes in this batch
+            while let Some(row) = nodes_result.data.next() {
+                if row.len() >= 8 {
+                    let node_id = value_to_string(&row[0]);
+                    let node_name = value_to_string(&row[1]);
+                    let node_type = value_to_string(&row[2]);
+                    let degree_centrality = value_to_f64(&row[3]);
+                    let pagerank_centrality = value_to_f64(&row[4]);
+                    let betweenness_centrality = value_to_f64(&row[5]);
+                    let created_at = value_to_string(&row[6]);
+                    let summary_text = row[7].as_string().map(|s| s.to_string());
+                    
+                    // Build properties object with only essential fields (memory-efficient)
+                    let mut node_props = HashMap::new();
+                    node_props.insert("name".to_string(), serde_json::Value::String(node_name.clone()));
+                    node_props.insert("type".to_string(), serde_json::Value::String(node_type.clone()));
                     node_props.insert("degree_centrality".to_string(), serde_json::json!(degree_centrality));
-                }
-                node_props.insert("type".to_string(), serde_json::Value::String(node_type.clone()));
-                
-                // Extract summary
-                let summary = node_props.get("summary")
-                    .or_else(|| node_props.get("content"))
-                    .or_else(|| node_props.get("source_description"))
-                    .and_then(|v| match v {
-                        serde_json::Value::String(s) => Some(s.clone()),
-                        _ => v.as_str().map(|s| s.to_string())
+                    node_props.insert("pagerank_centrality".to_string(), serde_json::json!(pagerank_centrality));
+                    node_props.insert("betweenness_centrality".to_string(), serde_json::json!(betweenness_centrality));
+                    
+                    if !created_at.is_empty() {
+                        node_props.insert("created_at".to_string(), serde_json::Value::String(created_at));
+                    }
+                    
+                    nodes_map.insert(node_id.clone(), Node {
+                        id: node_id,
+                        label: truncate_string(&node_name, 50),
+                        node_type,
+                        summary: summary_text,
+                        properties: node_props,
                     });
-                
-                nodes_map.insert(node_id.clone(), Node {
-                    id: node_id,
-                    label: truncate_string(&node_name, 50),
-                    node_type,
-                    summary,
-                    properties: node_props,
-                });
+                    
+                    batch_count += 1;
+                }
             }
+            
+            total_nodes_loaded += batch_count;
+            
+            if batch_count > 0 {
+                info!("Loaded node batch: {} nodes (offset: {}, total loaded: {})", 
+                     batch_count, node_offset, total_nodes_loaded);
+            }
+            
+            // If we got fewer nodes than batch_size, we've reached the end
+            if batch_count < node_batch_size {
+                break;
+            }
+            
+            node_offset += node_batch_size;
         }
         
-        // Query 2: Get all edges with pagination to handle FalkorDB's 10K limit
-        let batch_size = 5000;
-        let mut offset = 0;
+        info!("Paginated node loading completed: {} total nodes loaded", total_nodes_loaded);
+        
+        // GRAPH-503: Implement Paginated Edge Loading
+        // Improved edge loading with better memory management and coordination with node loading
+        let edge_batch_size = 1000; // Smaller batch size for better memory efficiency
+        let mut edge_offset = 0;
+        let mut total_edges_loaded = 0;
+        
+        info!("Starting paginated edge loading with batch size: {}", edge_batch_size);
+        
+        // Build set of valid node IDs to filter edges (only include edges between loaded nodes)
+        let valid_node_ids: std::collections::HashSet<String> = nodes_map.keys().cloned().collect();
+        info!("Filtering edges to {} valid node IDs", valid_node_ids.len());
+        
         loop {
+            // Memory-efficient edge query with optional edge properties
             let edges_query = format!(r#"
                 MATCH (n)-[r]->(m)
                 RETURN 
                     n.uuid as source_id,
                     m.uuid as target_id,
-                    type(r) as rel_type
+                    type(r) as rel_type,
+                    COALESCE(r.weight, 1.0) as weight
+                ORDER BY n.uuid, m.uuid
                 SKIP {}
                 LIMIT {}
-            "#, offset, batch_size);
+            "#, edge_offset, edge_batch_size);
             
             let mut graph = client.select_graph(graph_name);
             let mut edges_result = graph.query(&edges_query).execute().await?;
             
             let mut batch_count = 0;
+            let mut valid_edges_in_batch = 0;
+            
             // Process edges in this batch
             while let Some(row) = edges_result.data.next() {
-                if row.len() >= 3 {
+                if row.len() >= 4 {
                     let source_id = value_to_string(&row[0]);
                     let target_id = value_to_string(&row[1]);
                     let rel_type = value_to_string(&row[2]);
+                    let weight = row[3].to_f64().unwrap_or(1.0);
                     
-                    edges.push(Edge {
-                        from: source_id,
-                        to: target_id,
-                        edge_type: rel_type,
-                        weight: 1.0,
-                    });
+                    // Only include edges between nodes we've loaded (referential integrity)
+                    if valid_node_ids.contains(&source_id) && valid_node_ids.contains(&target_id) {
+                        edges.push(Edge {
+                            from: source_id,
+                            to: target_id,
+                            edge_type: rel_type,
+                            weight,
+                        });
+                        valid_edges_in_batch += 1;
+                    }
+                    
                     batch_count += 1;
                 }
             }
             
+            total_edges_loaded += valid_edges_in_batch;
+            
+            if batch_count > 0 {
+                info!("Loaded edge batch: {} edges processed, {} valid edges added (offset: {}, total valid edges: {})", 
+                     batch_count, valid_edges_in_batch, edge_offset, total_edges_loaded);
+            }
+            
             // If we got fewer edges than batch_size, we've reached the end
-            if batch_count < batch_size {
+            if batch_count < edge_batch_size {
                 break;
             }
             
-            offset += batch_size;
-            info!("Fetched {} edges so far...", edges.len());
+            edge_offset += edge_batch_size;
         }
+        
+        info!("Paginated edge loading completed: {} total valid edges loaded", total_edges_loaded);
     } else {
         // Regular query processing
         let mut graph = client.select_graph(graph_name);
@@ -2115,6 +2177,9 @@ async fn reload_duckdb_from_falkordb(
                 operation: UpdateOperation::AddNodes, // Could add FullReload variant
                 nodes: Some(graph_data.nodes.clone()),
                 edges: Some(graph_data.edges.clone()),
+                // GRAPH-506: Initialize deletion fields for compatibility
+                deleted_nodes: None,
+                deleted_edges: None,
                 timestamp: std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .unwrap()
