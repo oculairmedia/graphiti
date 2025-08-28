@@ -1013,59 +1013,32 @@ async fn execute_graph_query(client: &FalkorAsyncClient, graph_name: &str, query
                 LIMIT {}
             "#, edge_offset, edge_batch_size);
             
+            let mut graph = client.select_graph(graph_name);
+            let mut edges_result = graph.query(&edges_query).execute().await?;
+            
             let mut batch_count = 0;
             let mut valid_edges_in_batch = 0;
-            let mut retry_count = 0;
             
-            // Retry loop for resilience against FalkorDB connection/memory issues
-            loop {
-                let mut graph = client.select_graph(graph_name);
-                match graph.query(&edges_query).execute().await {
-                    Ok(mut edges_result) => {
-                        batch_count = 0;
-                        valid_edges_in_batch = 0;
-                        
-                        // Process edges in this batch
-                        while let Some(row) = edges_result.data.next() {
-                            if row.len() >= 4 {
-                                let source_id = value_to_string(&row[0]);
-                                let target_id = value_to_string(&row[1]);
-                                let rel_type = value_to_string(&row[2]);
-                                let weight = row[3].to_f64().unwrap_or(1.0);
-                                
-                                // Only include edges between nodes we've loaded (referential integrity)
-                                if valid_node_ids.contains(&source_id) && valid_node_ids.contains(&target_id) {
-                                    edges.push(Edge {
-                                        from: source_id,
-                                        to: target_id,
-                                        edge_type: rel_type,
-                                        weight,
-                                    });
-                                    valid_edges_in_batch += 1;
-                                }
-                                
-                                batch_count += 1;
-                            }
-                        }
-                        
-                        // Success - break out of retry loop
-                        break;
+            // Process edges in this batch
+            while let Some(row) = edges_result.data.next() {
+                if row.len() >= 4 {
+                    let source_id = value_to_string(&row[0]);
+                    let target_id = value_to_string(&row[1]);
+                    let rel_type = value_to_string(&row[2]);
+                    let weight = row[3].to_f64().unwrap_or(1.0);
+                    
+                    // Only include edges between nodes we've loaded (referential integrity)
+                    if valid_node_ids.contains(&source_id) && valid_node_ids.contains(&target_id) {
+                        edges.push(Edge {
+                            from: source_id,
+                            to: target_id,
+                            edge_type: rel_type,
+                            weight,
+                        });
+                        valid_edges_in_batch += 1;
                     }
-                    Err(e) => {
-                        retry_count += 1;
-                        if retry_count > max_retries {
-                            error!("Failed to load edge batch after {} retries at offset {}: {}", 
-                                  max_retries, edge_offset, e);
-                            return Err(e.into());
-                        }
-                        
-                        let delay_ms = 1000 * retry_count; // Exponential backoff: 1s, 2s, 3s
-                        warn!("Edge query failed at offset {}, retry {}/{} in {}ms: {}", 
-                              edge_offset, retry_count, max_retries, delay_ms, e);
-                        
-                        // Wait before retrying with exponential backoff
-                        tokio::time::sleep(std::time::Duration::from_millis(delay_ms as u64)).await;
-                    }
+                    
+                    batch_count += 1;
                 }
             }
             
