@@ -108,20 +108,24 @@ export class DuckDBService {
       
       // Prefetch from server in parallel with cache-busting
       console.log('[DuckDB] Prefetching data from server...');
-      const cacheBuster = `?t=${Date.now()}`;
+      const cacheBuster = `?t=${Date.now()}&r=${Math.random().toString(36).substr(2, 9)}&v=${Math.floor(Math.random() * 1000000)}`;
       const [nodesResponse, edgesResponse] = await Promise.all([
         fetch(`${this.rustServerUrl}/api/arrow/nodes${cacheBuster}`, {
           cache: 'no-cache',
           headers: {
-            'Cache-Control': 'no-cache',
-            'Pragma': 'no-cache'
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0',
+            'If-None-Match': '*'
           }
         }),
         fetch(`${this.rustServerUrl}/api/arrow/edges${cacheBuster}`, {
           cache: 'no-cache',
           headers: {
-            'Cache-Control': 'no-cache',
-            'Pragma': 'no-cache'
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0',
+            'If-None-Match': '*'
           }
         })
       ]);
