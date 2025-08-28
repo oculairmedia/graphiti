@@ -666,7 +666,7 @@ impl DuckDBStore {
                     };
                     
                     tx.execute(
-                        "INSERT OR IGNORE INTO edges (source, sourceidx, target, targetidx, edge_type, weight, color, strength) 
+                        "INSERT INTO edges (source, sourceidx, target, targetidx, edge_type, weight, color, strength) 
                          VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                         params![
                             &edge.from,
@@ -742,7 +742,7 @@ impl DuckDBStore {
                     };
                     
                     tx.execute(
-                        "INSERT OR IGNORE INTO edges (source, sourceidx, target, targetidx, edge_type, weight, color, strength) 
+                        "INSERT INTO edges (source, sourceidx, target, targetidx, edge_type, weight, color, strength) 
                          VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                         params![
                             &pending.edge.from,
