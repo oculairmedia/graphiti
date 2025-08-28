@@ -21,7 +21,7 @@ The problematic code was:
 const pointSizeRange = useMemo(() => {
   const baseMin = config.minNodeSize || 2;
   const baseMax = config.maxNodeSize || 8;
-  
+
   // Size mapping logic...
   switch (config.sizeMapping) {
     case 'uniform':
@@ -47,10 +47,10 @@ const pointSizeRange = useMemo(() => {
   const baseMin = config.minNodeSize || 2;
   const baseMax = config.maxNodeSize || 8;
   const multiplier = config.sizeMultiplier || 1; // ✅ Extract multiplier
-  
+
   let adjustedMin: number;
   let adjustedMax: number;
-  
+
   // Size mapping logic (unchanged)
   switch (config.sizeMapping) {
     case 'uniform':
@@ -65,10 +65,53 @@ const pointSizeRange = useMemo(() => {
       break;
     // ... other cases
   }
-  
+
   // ✅ Apply size multiplier to the final range
   return [adjustedMin * multiplier, adjustedMax * multiplier];
 }, [config.sizeMapping, config.minNodeSize, config.maxNodeSize, config.sizeMultiplier]); // ✅ Added sizeMultiplier
+```
+
+## Cleanup Scripts for Unconnected Points
+
+### Location of Cleanup Scripts
+Based on the codebase analysis, the cleanup scripts for unconnected points are located in several places:
+
+#### 1. **Main Maintenance Scripts** (Root Directory)
+- `maintenance_dedupe_entities.py` - Main deduplication script that can remove duplicate nodes
+- `run_deduplication.py` - Script to find and resolve duplicate entities
+- Scripts referenced in settings but may be missing:
+  - `scripts/check_duplicates.py`
+  - `scripts/deduplicate_and_merge.py`
+  - `scripts/merge_duplicates_simple.py`
+  - `scripts/cleanup_all_duplicates.py`
+  - `scripts/clear_database.py`
+
+#### 2. **Core Maintenance Utilities** (`graphiti_core/utils/maintenance/`)
+- `graph_data_operations.py` - Contains `clear_data()` function for database cleanup
+- `node_operations.py` - Contains node merging and deletion functions
+- `edge_operations.py` - Contains edge cleanup and orphaned edge removal
+- `community_operations.py` - Contains `remove_communities()` function
+
+#### 3. **Frontend Utilities** (`frontend/src/utils/`)
+- `graphNodeOperations.ts` - Contains `findIsolatedNodes()` function for client-side detection
+
+#### 4. **Cron Scripts** (`scripts/`)
+- `deduplication_cron.sh` - Automated deduplication maintenance
+- `entity_extraction_cron.sh` - Entity extraction maintenance
+
+### Key Functions for Cleanup
+```python
+# Remove orphaned edges
+async def remove_orphaned_edges(driver: GraphDriver, group_id: str = None) -> int
+
+# Clear all data or specific groups
+async def clear_data(driver: GraphDriver, group_ids: list[str] | None = None)
+
+# Find isolated nodes (frontend)
+function findIsolatedNodes(nodes: GraphNode[], links: any[]): GraphNode[]
+
+# Merge duplicate nodes
+async def merge_node_into(driver, canonical_uuid: str, duplicate_uuid: str, delete_duplicate: bool = True)
 ```
 
 ## Technical Details
@@ -86,6 +129,29 @@ const pointSizeRange = useMemo(() => {
 4. `pointSizeRange` useMemo recalculates with new multiplier
 5. New range is passed to Cosmograph component
 6. Nodes are re-rendered with scaled sizes
+
+### Usage Examples
+```bash
+# Run main deduplication script
+python maintenance_dedupe_entities.py
+
+# Run deduplication with specific group
+python run_deduplication.py --group-id "your-group-id"
+
+# Clear all data (use with caution!)
+python -c "
+import asyncio
+from graphiti_core.utils.maintenance.graph_data_operations import clear_data
+from graphiti_core.driver import GraphDriver
+async def main():
+    driver = GraphDriver()
+    await clear_data(driver)
+asyncio.run(main())
+"
+
+# Run automated cleanup via cron
+./scripts/deduplication_cron.sh
+```
 
 ## Testing Recommendations
 
@@ -119,8 +185,11 @@ const pointSizeRange = useMemo(() => {
 - ✅ Maintains compatibility with all size mapping strategies
 - ✅ No breaking changes to existing functionality
 - ✅ Performance impact minimal (just multiplication in existing calculation)
+- ✅ Documented cleanup script locations for future maintenance
 
 ## Future Considerations
 - Consider adding visual feedback when multiplier is not at default (1.0x)
 - Could add preset multiplier buttons (0.5x, 1x, 2x) for quick access
 - Might want to persist multiplier value in user preferences
+- Create missing cleanup scripts referenced in settings
+- Add automated isolated node detection and cleanup functionality

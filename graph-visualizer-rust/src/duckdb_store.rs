@@ -34,6 +34,9 @@ struct UpdateQueue {
     edges_to_add: Vec<Edge>,
     nodes_to_update: HashMap<String, Node>,
     pending_edges: Vec<PendingEdge>,
+    // GRAPH-506: Add deletion queues for proper synchronization
+    nodes_to_delete: Vec<String>, // Store node IDs to delete
+    edges_to_delete: Vec<(String, String)>, // Store (source, target) pairs to delete
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -41,10 +44,13 @@ pub struct GraphUpdate {
     pub operation: UpdateOperation,
     pub nodes: Option<Vec<Node>>,
     pub edges: Option<Vec<Edge>>,
+    // GRAPH-506: Add fields to track deleted entities
+    pub deleted_nodes: Option<Vec<String>>, // IDs of deleted nodes
+    pub deleted_edges: Option<Vec<(String, String)>>, // (source, target) pairs of deleted edges
     pub timestamp: u64,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum UpdateOperation {
     AddNodes,
@@ -156,8 +162,15 @@ impl DuckDBStore {
         let mut conn = self.conn.lock().unwrap();
         let tx = conn.transaction()?;
         
-        // Insert nodes with indices - use INSERT OR REPLACE to handle duplicates
-        let stmt_node = "INSERT OR REPLACE INTO nodes (id, idx, label, node_type, summary, degree_centrality, pagerank_centrality, betweenness_centrality, eigenvector_centrality, x, y, color, size, created_at, created_at_timestamp, cluster, clusterStrength) 
+        // GRAPH-504: Implement Atomic TRUNCATE+Reload Strategy
+        // Clear existing data to ensure deleted nodes/edges are properly removed
+        info!("Clearing existing data for atomic reload (deletion handling)");
+        tx.execute("DELETE FROM edges", [])?; // Delete edges first due to foreign key constraints
+        tx.execute("DELETE FROM nodes", [])?;
+        info!("Existing data cleared, proceeding with fresh data load");
+        
+        // GRAPH-504: Use simple INSERT since we cleared all data above (atomic replacement)
+        let stmt_node = "INSERT INTO nodes (id, idx, label, node_type, summary, degree_centrality, pagerank_centrality, betweenness_centrality, eigenvector_centrality, x, y, color, size, created_at, created_at_timestamp, cluster, clusterStrength) 
                          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         
         let mut node_to_idx = HashMap::new();
@@ -247,8 +260,8 @@ impl DuckDBStore {
             node_to_idx.insert(node.id.clone(), idx as u32);
         }
         
-        // Insert edges with indices
-        let stmt_edge = "INSERT OR IGNORE INTO edges (source, sourceidx, target, targetidx, edge_type, weight, color, strength) 
+        // GRAPH-504: Use simple INSERT since we cleared all data above (atomic replacement)
+        let stmt_edge = "INSERT INTO edges (source, sourceidx, target, targetidx, edge_type, weight, color, strength) 
                          VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
         
         for edge in edges.iter() {
@@ -480,13 +493,27 @@ impl DuckDBStore {
         queue.edges_to_add.extend(edges);
     }
     
+    // GRAPH-506: Add deletion operation queueing methods
+    pub async fn queue_node_deletions(&self, node_ids: Vec<String>) {
+        let mut queue = self.update_queue.write().await;
+        queue.nodes_to_delete.extend(node_ids);
+    }
+    
+    pub async fn queue_edge_deletions(&self, edge_pairs: Vec<(String, String)>) {
+        let mut queue = self.update_queue.write().await;
+        queue.edges_to_delete.extend(edge_pairs);
+    }
+    
     pub async fn process_updates(&self) -> Result<Option<GraphUpdate>> {
         let mut queue = self.update_queue.write().await;
         
+        // GRAPH-506: Include deletion queues in empty check
         if queue.nodes_to_add.is_empty() && 
            queue.edges_to_add.is_empty() && 
            queue.nodes_to_update.is_empty() &&
-           queue.pending_edges.is_empty() {
+           queue.pending_edges.is_empty() &&
+           queue.nodes_to_delete.is_empty() &&
+           queue.edges_to_delete.is_empty() {
             return Ok(None);
         }
         
@@ -497,6 +524,9 @@ impl DuckDBStore {
             operation: UpdateOperation::AddNodes,
             nodes: None,
             edges: None,
+            // GRAPH-506: Initialize new deletion tracking fields
+            deleted_nodes: None,
+            deleted_edges: None,
             timestamp: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
@@ -754,10 +784,71 @@ impl DuckDBStore {
             update.edges = Some(validated_edges);
         }
         
+        // GRAPH-506: Process deletion operations
+        let mut deleted_nodes = Vec::new();
+        let mut deleted_edges = Vec::new();
+        
+        // Process node deletions (delete edges first due to foreign key constraints)
+        if !queue.nodes_to_delete.is_empty() {
+            let nodes_to_delete = queue.nodes_to_delete.drain(..).collect::<Vec<_>>();
+            debug!("Processing {} node deletions", nodes_to_delete.len());
+            
+            for node_id in &nodes_to_delete {
+                // First delete edges referencing this node
+                let edge_delete_count = tx.execute(
+                    "DELETE FROM edges WHERE source = ? OR target = ?",
+                    params![node_id, node_id]
+                )?;
+                if edge_delete_count > 0 {
+                    debug!("Deleted {} edges referencing node {}", edge_delete_count, node_id);
+                }
+                
+                // Then delete the node itself
+                let node_delete_count = tx.execute(
+                    "DELETE FROM nodes WHERE id = ?",
+                    params![node_id]
+                )?;
+                if node_delete_count > 0 {
+                    debug!("Deleted node: {}", node_id);
+                    deleted_nodes.push(node_id.clone());
+                }
+            }
+            
+            if !deleted_nodes.is_empty() {
+                update.operation = UpdateOperation::DeleteNodes;
+                update.deleted_nodes = Some(deleted_nodes.clone());
+            }
+        }
+        
+        // Process edge deletions
+        if !queue.edges_to_delete.is_empty() {
+            let edges_to_delete = queue.edges_to_delete.drain(..).collect::<Vec<_>>();
+            debug!("Processing {} edge deletions", edges_to_delete.len());
+            
+            for (source, target) in &edges_to_delete {
+                let delete_count = tx.execute(
+                    "DELETE FROM edges WHERE source = ? AND target = ?",
+                    params![source, target]
+                )?;
+                if delete_count > 0 {
+                    debug!("Deleted edge: {} -> {}", source, target);
+                    deleted_edges.push((source.clone(), target.clone()));
+                }
+            }
+            
+            if !deleted_edges.is_empty() && update.operation != UpdateOperation::DeleteNodes {
+                update.operation = UpdateOperation::DeleteEdges;
+            }
+            if !deleted_edges.is_empty() {
+                update.deleted_edges = Some(deleted_edges.clone());
+            }
+        }
+        
         tx.commit()?;
         
-        // Return None if update has no actual data
-        if update.nodes.is_none() && update.edges.is_none() {
+        // GRAPH-506: Return None if update has no actual data (including deletions)
+        if update.nodes.is_none() && update.edges.is_none() && 
+           update.deleted_nodes.is_none() && update.deleted_edges.is_none() {
             return Ok(None);
         }
         
