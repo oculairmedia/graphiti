@@ -14,7 +14,7 @@ use tower_http::{
     cors::CorsLayer,
     compression::CompressionLayer,
 };
-use tracing::{error, info, debug};
+use tracing::{error, info, debug, warn};
 use tokio::sync::{broadcast, RwLock};
 use arrow::record_batch::RecordBatch;
 use bytes::Bytes;
@@ -987,10 +987,11 @@ async fn execute_graph_query(client: &FalkorAsyncClient, graph_name: &str, query
         info!("Paginated node loading completed: {} total nodes loaded", total_nodes_loaded);
         
         // GRAPH-503: Implement Paginated Edge Loading
-        // Improved edge loading with better memory management and coordination with node loading
-        let edge_batch_size = 1000; // Smaller batch size for better memory efficiency
+        // GRAPH-503: Improved edge loading with resilience against FalkorDB timeouts/memory issues
+        let edge_batch_size = 500; // Reduced from 1000 for better memory efficiency and timeout prevention
         let mut edge_offset = 0;
         let mut total_edges_loaded = 0;
+        let max_retries = 3;
         
         info!("Starting paginated edge loading with batch size: {}", edge_batch_size);
         
@@ -1012,32 +1013,59 @@ async fn execute_graph_query(client: &FalkorAsyncClient, graph_name: &str, query
                 LIMIT {}
             "#, edge_offset, edge_batch_size);
             
-            let mut graph = client.select_graph(graph_name);
-            let mut edges_result = graph.query(&edges_query).execute().await?;
-            
             let mut batch_count = 0;
             let mut valid_edges_in_batch = 0;
+            let mut retry_count = 0;
             
-            // Process edges in this batch
-            while let Some(row) = edges_result.data.next() {
-                if row.len() >= 4 {
-                    let source_id = value_to_string(&row[0]);
-                    let target_id = value_to_string(&row[1]);
-                    let rel_type = value_to_string(&row[2]);
-                    let weight = row[3].to_f64().unwrap_or(1.0);
-                    
-                    // Only include edges between nodes we've loaded (referential integrity)
-                    if valid_node_ids.contains(&source_id) && valid_node_ids.contains(&target_id) {
-                        edges.push(Edge {
-                            from: source_id,
-                            to: target_id,
-                            edge_type: rel_type,
-                            weight,
-                        });
-                        valid_edges_in_batch += 1;
+            // Retry loop for resilience against FalkorDB connection/memory issues
+            loop {
+                let mut graph = client.select_graph(graph_name);
+                match graph.query(&edges_query).execute().await {
+                    Ok(mut edges_result) => {
+                        batch_count = 0;
+                        valid_edges_in_batch = 0;
+                        
+                        // Process edges in this batch
+                        while let Some(row) = edges_result.data.next() {
+                            if row.len() >= 4 {
+                                let source_id = value_to_string(&row[0]);
+                                let target_id = value_to_string(&row[1]);
+                                let rel_type = value_to_string(&row[2]);
+                                let weight = row[3].to_f64().unwrap_or(1.0);
+                                
+                                // Only include edges between nodes we've loaded (referential integrity)
+                                if valid_node_ids.contains(&source_id) && valid_node_ids.contains(&target_id) {
+                                    edges.push(Edge {
+                                        from: source_id,
+                                        to: target_id,
+                                        edge_type: rel_type,
+                                        weight,
+                                    });
+                                    valid_edges_in_batch += 1;
+                                }
+                                
+                                batch_count += 1;
+                            }
+                        }
+                        
+                        // Success - break out of retry loop
+                        break;
                     }
-                    
-                    batch_count += 1;
+                    Err(e) => {
+                        retry_count += 1;
+                        if retry_count > max_retries {
+                            error!("Failed to load edge batch after {} retries at offset {}: {}", 
+                                  max_retries, edge_offset, e);
+                            return Err(e.into());
+                        }
+                        
+                        let delay_ms = 1000 * retry_count; // Exponential backoff: 1s, 2s, 3s
+                        warn!("Edge query failed at offset {}, retry {}/{} in {}ms: {}", 
+                              edge_offset, retry_count, max_retries, delay_ms, e);
+                        
+                        // Wait before retrying with exponential backoff
+                        tokio::time::sleep(std::time::Duration::from_millis(delay_ms as u64)).await;
+                    }
                 }
             }
             
@@ -1050,6 +1078,8 @@ async fn execute_graph_query(client: &FalkorAsyncClient, graph_name: &str, query
             
             // If we got fewer edges than batch_size, we've reached the end
             if batch_count < edge_batch_size {
+                info!("Edge loading complete: reached end of data with batch_count {} < batch_size {}", 
+                     batch_count, edge_batch_size);
                 break;
             }
             
