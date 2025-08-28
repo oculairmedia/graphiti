@@ -544,42 +544,63 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
       };
     }, [nodes, links, config.clusteringMethod, config.centralityMetric, config.clusterStrength]);
     
-    // Dynamic point size range based on size mapping strategy
+    // Dynamic point size range based on size mapping strategy (FIXED: now includes sizeMultiplier)
     // Since all nodes have degree_centrality-based sizes, we adjust the range to simulate different strategies
     const pointSizeRange = useMemo(() => {
       const baseMin = config.minNodeSize || 2;
       const baseMax = config.maxNodeSize || 8;
+      const multiplier = config.sizeMultiplier || 1; // Extract multiplier with fallback to 1.0
+      
+      let adjustedMin: number;
+      let adjustedMax: number;
       
       // Adjust range based on the size mapping strategy
       switch (config.sizeMapping) {
         case 'uniform':
           // All nodes same size - very narrow range forces uniformity
           const uniformSize = (baseMin + baseMax) / 2;
-          return [uniformSize, uniformSize + 0.1]; // Near-uniform with tiny variation
+          adjustedMin = uniformSize;
+          adjustedMax = uniformSize + 0.1; // Near-uniform with tiny variation
+          break;
         
         case 'degree':
         case 'connections':
           // Degree-based sizing - this is our base, use normal range
-          return [baseMin, baseMax];
+          adjustedMin = baseMin;
+          adjustedMax = baseMax;
+          break;
         
         case 'betweenness':
           // Simulate betweenness by using wider range (more contrast)
-          return [baseMin * 0.5, baseMax * 2.0];
+          adjustedMin = baseMin * 0.5;
+          adjustedMax = baseMax * 2.0;
+          break;
         
         case 'pagerank':
         case 'importance':
           // Simulate pagerank/eigenvector with moderate expansion
-          return [baseMin * 0.8, baseMax * 1.2];
+          adjustedMin = baseMin * 0.8;
+          adjustedMax = baseMax * 1.2;
+          break;
         
         case 'custom':
           // Custom sizing - use expanded range
-          return [baseMin * 0.7, baseMax * 1.5];
+          adjustedMin = baseMin * 0.7;
+          adjustedMax = baseMax * 1.5;
+          break;
         
         default:
           // Default to base range
-          return [baseMin, baseMax];
+          adjustedMin = baseMin;
+          adjustedMax = baseMax;
+          break;
       }
-    }, [config.sizeMapping, config.minNodeSize, config.maxNodeSize]);
+      
+      // Apply size multiplier to the final range
+      const finalRange = [adjustedMin * multiplier, adjustedMax * multiplier];
+      console.log('[GraphCanvasV2] Size calculation - Multiplier:', multiplier, 'Base range:', [adjustedMin, adjustedMax], 'Final range:', finalRange);
+      return finalRange;
+    }, [config.sizeMapping, config.minNodeSize, config.maxNodeSize, config.sizeMultiplier]);
     
     // Initialize and update color manager
     const colorManagerRef = useRef<NodeColorManager>(getGlobalColorManager({
