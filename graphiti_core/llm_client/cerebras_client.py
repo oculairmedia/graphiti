@@ -35,8 +35,9 @@ logger = logging.getLogger(__name__)
 DEFAULT_CEREBRAS_MODEL = 'qwen-3-coder-480b'
 DEFAULT_CEREBRAS_SMALL_MODEL = 'qwen-3-coder-480b'  # Use same model for all tasks
 
-# Rate limiting: 15 requests/minute = 1 request every 4 seconds
-CEREBRAS_RATE_LIMIT_DELAY = 4.0  # seconds
+# Rate limiting: Increased to 8 seconds to reduce 429 errors in production
+# 15 requests/minute theoretical, but production needs more conservative limits
+CEREBRAS_RATE_LIMIT_DELAY = 8.0  # seconds
 
 
 class CerebrasClient(LLMClient):
