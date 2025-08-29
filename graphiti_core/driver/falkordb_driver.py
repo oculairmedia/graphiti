@@ -35,6 +35,7 @@ else:
 from graphiti_core.driver.driver import GraphDriver, GraphDriverSession
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 
 def _is_vector_list(val: Any) -> bool:
@@ -202,10 +203,28 @@ class FalkorDriver(GraphDriver):
         params = convert_datetimes_to_strings(raw_params)
 
         # 3) Pre-process nested vectors in parameters (for UNWIND operations)
+        params_before = params.copy()
         params = _preprocess_vectors_in_params(params)
+        
+        # Debug logging for vector preprocessing
+        logger.debug(f"Vector preprocessing applied. Before: {len(params_before)} params")
+        if 'edges' in params_before:
+            logger.debug(f"edges param before preprocessing: {len(params_before['edges'])} items")
+            if params_before['edges']:
+                first_edge = params_before['edges'][0]
+                if 'fact_embedding' in first_edge:
+                    logger.debug(f"First edge fact_embedding type before: {type(first_edge['fact_embedding'])}")
+        if 'edges' in params:
+            logger.debug(f"edges param after preprocessing: {len(params['edges'])} items")
+            if params['edges']:
+                first_edge = params['edges'][0]
+                if 'fact_embedding' in first_edge:
+                    logger.debug(f"First edge fact_embedding type after: {type(first_edge['fact_embedding'])}")
 
         # 4) Driver-level wrapping for vector params (fixes "expected Vectorf32 but was List" errors)
         cypher_query_ = _wrap_vector_params_in_query(cypher_query_, params)
+        
+        logger.debug(f"Final query: {cypher_query_[:200]}...")
 
         try:
             result = await graph.query(cypher_query_, params)  # type: ignore[reportUnknownArgumentType]
