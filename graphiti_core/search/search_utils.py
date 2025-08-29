@@ -873,6 +873,10 @@ async def get_edge_invalidation_candidates(
     filter_query, filter_params = edge_search_filter_query_constructor(search_filter)
     query_params.update(filter_params)
 
+    cosine_func = get_vector_cosine_func_query('e.fact_embedding', 'edge.fact_embedding', driver.provider)
+    logger.info(f"Edge invalidation cosine function: {cosine_func}")
+    logger.info(f"Driver provider: {driver.provider}")
+    
     query = (
         RUNTIME_QUERY
         + """
@@ -883,7 +887,7 @@ async def get_edge_invalidation_candidates(
         + filter_query
         + """
         WITH edge, e, """
-        + get_vector_cosine_func_query('e.fact_embedding', 'edge.fact_embedding', driver.provider)
+        + cosine_func
         + """ AS score
         WHERE score > $min_score
         WITH edge, e, score
@@ -907,10 +911,17 @@ async def get_edge_invalidation_candidates(
         """
     )
 
+    edges_data = [edge.model_dump() for edge in edges]
+    if edges_data:
+        logger.info(f"Edge invalidation - fact_embedding type: {type(edges_data[0].get('fact_embedding'))}")
+        logger.info(f"Edge invalidation - fact_embedding is list: {isinstance(edges_data[0].get('fact_embedding'), list)}")
+        if edges_data[0].get('fact_embedding'):
+            logger.info(f"Edge invalidation - fact_embedding length: {len(edges_data[0].get('fact_embedding'))}")
+    
     results, _, _ = await driver.execute_query(
         query,
         params=query_params,
-        edges=[edge.model_dump() for edge in edges],
+        edges=edges_data,
         limit=limit,
         min_score=min_score,
         routing_='r',
