@@ -373,11 +373,33 @@ class ChutesClient(LLMClient):
         # Add multilingual extraction instructions
         messages[0].content += MULTILINGUAL_EXTRACTION_RESPONSES
 
+        # Debug logging: Track summary generation calls
+        is_summary_call = any('summary' in msg.content.lower() and 'extract' in msg.content.lower() 
+                             for msg in messages if hasattr(msg, 'content'))
+        if is_summary_call:
+            logger.debug(f"🔍 ChutesClient: Summary generation call detected")
+            logger.debug(f"   Response model: {response_model.__name__ if response_model else 'None'}")
+        
         while retry_count <= self.MAX_RETRIES:
             try:
                 response = await self._generate_response(
                     messages, response_model, max_tokens=max_tokens, model_size=model_size
                 )
+                
+                # Debug logging: Track summary responses
+                if is_summary_call:
+                    logger.debug(f"🔍 ChutesClient: Summary response received")
+                    if isinstance(response, dict):
+                        logger.debug(f"   Response keys: {list(response.keys())}")
+                        if 'summary' in response:
+                            summary_text = response['summary']
+                            logger.debug(f"   Summary generated: {len(summary_text)} characters")
+                            logger.info(f"✅ ChutesClient generated summary: {len(summary_text)} chars")
+                        else:
+                            logger.warning(f"⚠️ ChutesClient: No 'summary' key in response!")
+                    else:
+                        logger.warning(f"⚠️ ChutesClient: Response is not dict: {type(response)}")
+                
                 return response
             except (RateLimitError, RefusalError):
                 # These errors should not trigger retries
