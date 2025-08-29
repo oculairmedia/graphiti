@@ -66,6 +66,26 @@ def _wrap_vector_params_in_query(query: str, params: dict[str, Any]) -> str:
     This fixes FalkorDB type mismatch errors where Python lists need to be converted
     to VectorF32 types for vector operations.
     """
+    def _recursively_find_vectors(data: Any, path: str = ""):
+        """Recursively find vector parameters in nested data structures."""
+        vector_paths = []
+        if isinstance(data, dict):
+            for key, val in data.items():
+                current_path = f"{path}.{key}" if path else key
+                if _is_vector_list(val):
+                    vector_paths.append(current_path)
+                elif isinstance(val, (dict, list)):
+                    vector_paths.extend(_recursively_find_vectors(val, current_path))
+        elif isinstance(data, list):
+            for i, item in enumerate(data):
+                current_path = f"{path}[{i}]" if path else f"[{i}]"
+                if _is_vector_list(item):
+                    vector_paths.append(current_path)
+                elif isinstance(item, (dict, list)):
+                    vector_paths.extend(_recursively_find_vectors(item, current_path))
+        return vector_paths
+
+    # Handle top-level vector parameters (existing functionality)
     for key, val in params.items():
         if _is_vector_list(val):
             needle = f"${key}"
@@ -75,6 +95,19 @@ def _wrap_vector_params_in_query(query: str, params: dict[str, Any]) -> str:
                 continue
             # Replace bare $key with vecf32($key)
             query = query.replace(needle, wrapped)
+    
+    # Handle nested vector parameters - specifically look for common patterns in queries
+    vector_patterns = [
+        'edge.fact_embedding',
+        'edge.name_embedding', 
+        'node.name_embedding',
+        'comm.name_embedding',  # Community name embeddings
+    ]
+    
+    for pattern in vector_patterns:
+        if pattern in query:
+            query = query.replace(pattern, f'vecf32({pattern})')
+    
     return query
 
 
