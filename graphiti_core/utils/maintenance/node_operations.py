@@ -625,6 +625,247 @@ async def resolve_extracted_nodes(
     return resolved_nodes, uuid_map, new_node_duplicates
 
 
+async def resolve_extracted_nodes_batch(
+    clients: GraphitiClients,
+    batch_extracted_nodes: list[list[EntityNode]],
+    episodes: list[EpisodicNode],
+    previous_episodes_list: list[list[EpisodicNode]] | None = None,
+    entity_types: dict[str, BaseModel] | None = None,
+    enable_cross_graph_deduplication: bool = False,
+) -> list[tuple[list[EntityNode], dict[str, str], list[tuple[EntityNode, EntityNode]]]]:
+    """
+    Batch version of resolve_extracted_nodes that processes multiple episodes in a single LLM call.
+    
+    This function deduplicates entities across multiple episodes using a single API call,
+    significantly reducing quota usage while maintaining the same accuracy.
+    
+    Args:
+        clients: GraphitiClients instance
+        batch_extracted_nodes: List of extracted nodes for each episode
+        episodes: List of episodes being processed
+        previous_episodes_list: Optional list of previous episodes for each episode
+        entity_types: Optional entity type definitions
+        enable_cross_graph_deduplication: Whether to deduplicate across graphs
+        
+    Returns:
+        List of tuples (resolved_nodes, uuid_map, node_duplicates) for each episode
+    """
+    llm_client = clients.llm_client
+    driver = clients.driver
+    
+    if not batch_extracted_nodes:
+        return []
+    
+    # Check if we're using ChutesClient with batch support
+    use_batch_dedup = (
+        hasattr(llm_client, 'dedupe_entities_batch') and 
+        os.getenv('CHUTES_ENABLE_BATCH_PROCESSING', 'false').lower() == 'true'
+    )
+    
+    if not use_batch_dedup:
+        # Fall back to individual processing if batch not supported
+        logger.debug("Batch deduplication not available, falling back to individual processing")
+        results = []
+        for i, extracted_nodes in enumerate(batch_extracted_nodes):
+            episode = episodes[i] if i < len(episodes) else None
+            previous_episodes = previous_episodes_list[i] if previous_episodes_list and i < len(previous_episodes_list) else None
+            result = await resolve_extracted_nodes(
+                clients,
+                extracted_nodes,
+                episode,
+                previous_episodes,
+                entity_types,
+                existing_nodes_override=None,
+                enable_cross_graph_deduplication=enable_cross_graph_deduplication
+            )
+            results.append(result)
+        return results
+    
+    logger.debug(f"Starting batch deduplication for {len(batch_extracted_nodes)} episodes")
+    
+    # Process exact name matching first (as in original)
+    batch_results = []
+    all_nodes_needing_llm = []
+    episode_node_indices = []  # Track which nodes belong to which episode
+    
+    for episode_idx, extracted_nodes in enumerate(batch_extracted_nodes):
+        resolved_nodes = []
+        uuid_map = {}
+        node_duplicates = []
+        nodes_needing_llm_resolution = []
+        episode_resolved_nodes = {}
+        
+        # First pass: exact name matching (serialized as in original)
+        for node in extracted_nodes:
+            episode_key = f"{node.name}|{node.group_id}" if not enable_cross_graph_deduplication else node.name
+            
+            if episode_key in episode_resolved_nodes:
+                # Found within this episode
+                existing_node = episode_resolved_nodes[episode_key]
+                resolved_nodes.append(existing_node)
+                uuid_map[node.uuid] = existing_node.uuid
+                node_duplicates.append((node, existing_node))
+                continue
+            
+            # Query for exact matches in database
+            if enable_cross_graph_deduplication:
+                exact_query = """
+                MATCH (n:Entity)
+                WHERE n.name = $name
+                RETURN n
+                ORDER BY n.created_at
+                LIMIT 1
+                """
+                records, _, _ = await driver.execute_query(
+                    exact_query, name=node.name
+                )
+            else:
+                exact_query = """
+                MATCH (n:Entity)
+                WHERE n.name = $name AND n.group_id = $group_id
+                RETURN n
+                ORDER BY n.created_at
+                LIMIT 1
+                """
+                records, _, _ = await driver.execute_query(
+                    exact_query, name=node.name, group_id=node.group_id
+                )
+            
+            if records:
+                # Found exact match in database
+                db_node_data = records[0]['n']
+                existing_node = EntityNode.model_validate(db_node_data)
+                resolved_nodes.append(existing_node)
+                uuid_map[node.uuid] = existing_node.uuid
+                node_duplicates.append((node, existing_node))
+                episode_resolved_nodes[episode_key] = existing_node
+            else:
+                # No exact match, needs LLM resolution
+                nodes_needing_llm_resolution.append(node)
+                all_nodes_needing_llm.append(node)
+                episode_node_indices.append(episode_idx)
+        
+        # Store intermediate results
+        batch_results.append({
+            'resolved_nodes': resolved_nodes,
+            'uuid_map': uuid_map,
+            'node_duplicates': node_duplicates,
+            'nodes_needing_llm': nodes_needing_llm_resolution,
+            'episode_resolved_nodes': episode_resolved_nodes
+        })
+    
+    # Now do batch LLM deduplication for all nodes needing resolution
+    if all_nodes_needing_llm:
+        logger.debug(f"Processing {len(all_nodes_needing_llm)} nodes needing LLM deduplication")
+        
+        # Prepare data for batch deduplication
+        episodes_nodes_for_llm = []
+        episode_contents = []
+        
+        for episode_idx, episode in enumerate(episodes):
+            nodes_for_episode = [
+                {
+                    'name': node.name,
+                    'labels': node.labels,
+                    'uuid': node.uuid,
+                    'summary': node.summary
+                }
+                for i, node in enumerate(all_nodes_needing_llm)
+                if episode_node_indices[i] == episode_idx
+            ]
+            if nodes_for_episode:
+                episodes_nodes_for_llm.append(nodes_for_episode)
+                episode_contents.append(episode.content if episode else '')
+        
+        # Get existing nodes for comparison
+        existing_nodes = []
+        if enable_cross_graph_deduplication:
+            existing_query = """
+            MATCH (n:Entity)
+            RETURN n
+            ORDER BY n.created_at
+            LIMIT 100
+            """
+            records, _, _ = await driver.execute_query(existing_query)
+        else:
+            # Get existing nodes for all relevant groups
+            group_ids = list(set(node.group_id for node in all_nodes_needing_llm))
+            if group_ids:
+                existing_query = """
+                MATCH (n:Entity)
+                WHERE n.group_id IN $group_ids
+                RETURN n
+                ORDER BY n.created_at
+                LIMIT 100
+                """
+                records, _, _ = await driver.execute_query(existing_query, group_ids=group_ids)
+            else:
+                records = []
+        
+        existing_nodes = [
+            {
+                'name': record['n']['name'],
+                'labels': record['n'].get('labels', []),
+                'uuid': record['n']['uuid'],
+                'summary': record['n'].get('summary', '')
+            }
+            for record in records
+        ]
+        
+        # Make single batch LLM call
+        llm_response = await llm_client.dedupe_entities_batch(
+            episodes_nodes_for_llm,
+            episode_contents,
+            existing_nodes
+        )
+        
+        # Process LLM resolutions
+        node_resolutions = llm_response.get('entity_resolutions', [])
+        
+        # Map resolutions back to episodes
+        for resolution in node_resolutions:
+            resolution_id = resolution.get('id', -1)
+            duplicate_idx = resolution.get('duplicate_idx', -1)
+            
+            if 0 <= resolution_id < len(all_nodes_needing_llm):
+                node = all_nodes_needing_llm[resolution_id]
+                episode_idx = episode_node_indices[resolution_id]
+                
+                # Find or create the resolved node
+                if 0 <= duplicate_idx < len(existing_nodes):
+                    # It's a duplicate of an existing node
+                    resolved_node = EntityNode(
+                        uuid=existing_nodes[duplicate_idx]['uuid'],
+                        name=existing_nodes[duplicate_idx]['name'],
+                        labels=existing_nodes[duplicate_idx]['labels'],
+                        summary=existing_nodes[duplicate_idx]['summary'],
+                        group_id=node.group_id
+                    )
+                    batch_results[episode_idx]['node_duplicates'].append((node, resolved_node))
+                else:
+                    # It's a new unique node
+                    resolved_node = node
+                    batch_results[episode_idx]['episode_resolved_nodes'][node.name] = node
+                
+                batch_results[episode_idx]['resolved_nodes'].append(resolved_node)
+                batch_results[episode_idx]['uuid_map'][node.uuid] = resolved_node.uuid
+    
+    # Convert batch results to expected format
+    final_results = []
+    for result in batch_results:
+        # Filter for new duplicate edges
+        new_node_duplicates = await filter_existing_duplicate_of_edges(
+            driver, result['node_duplicates']
+        )
+        final_results.append((
+            result['resolved_nodes'],
+            result['uuid_map'],
+            new_node_duplicates
+        ))
+    
+    return final_results
+
+
 async def extract_attributes_from_nodes(
     clients: GraphitiClients,
     nodes: list[EntityNode],
