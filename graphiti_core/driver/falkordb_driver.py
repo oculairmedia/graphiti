@@ -61,43 +61,8 @@ def _flatten_params(kwargs: dict[str, Any]) -> dict[str, Any]:
     return params
 
 
-def _preprocess_vectors_in_params(params: dict[str, Any]) -> dict[str, Any]:
-    """Pre-process parameters to handle vectors in nested structures for FalkorDB.
-    
-    This is specifically needed for UNWIND operations where vectors are in nested dictionaries.
-    FalkorDB cannot convert lists to Vectorf32 within query execution for UNWIND variables.
-    """
-    # Import here to avoid circular dependency
-    try:
-        from falkordb import VectorF32
-    except ImportError:
-        # If VectorF32 is not available, return params unchanged
-        return params
-    
-    def convert_vectors(obj: Any) -> Any:
-        """Recursively convert vector lists to VectorF32 objects."""
-        if _is_vector_list(obj):
-            # Convert Python list to FalkorDB VectorF32
-            return VectorF32(obj)
-        elif isinstance(obj, dict):
-            # Recursively process dictionary values
-            return {k: convert_vectors(v) for k, v in obj.items()}
-        elif isinstance(obj, list):
-            # Process each item in the list
-            return [convert_vectors(item) for item in obj]
-        else:
-            # Return unchanged for non-vector, non-container types
-            return obj
-    
-    # Process specific parameters that are known to contain nested vectors
-    processed_params = {}
-    for key, value in params.items():
-        if key in ['edges', 'nodes', 'entities']:  # Parameters likely to contain nested vectors
-            processed_params[key] = convert_vectors(value)
-        else:
-            processed_params[key] = value
-    
-    return processed_params
+# Removed _preprocess_vectors_in_params() - FalkorDB 1.2.0 doesn't support VectorF32 in Python client
+# Vector conversion is handled at query level using vecf32() function instead
 
 
 def _wrap_vector_params_in_query(query: str, params: dict[str, Any]) -> str:
@@ -144,13 +109,11 @@ class FalkorDriverSession(GraphDriverSession):
         if isinstance(query, list):
             for cypher, params in query:
                 params = convert_datetimes_to_strings(params)
-                params = _preprocess_vectors_in_params(params)
                 cypher = _wrap_vector_params_in_query(str(cypher), params)
                 await self.graph.query(cypher, params)  # type: ignore[reportUnknownArgumentType]
         else:
             params = _flatten_params(dict(kwargs))
             params = convert_datetimes_to_strings(params)
-            params = _preprocess_vectors_in_params(params)
             query = _wrap_vector_params_in_query(str(query), params)
             await self.graph.query(query, params)  # type: ignore[reportUnknownArgumentType]
         # Assuming `graph.query` is async (ideal); otherwise, wrap in executor
@@ -202,29 +165,9 @@ class FalkorDriver(GraphDriver):
         # 2) Convert datetime objects to ISO strings (FalkorDB does not support datetime objects directly)
         params = convert_datetimes_to_strings(raw_params)
 
-        # 3) Pre-process nested vectors in parameters (for UNWIND operations)
-        params_before = params.copy()
-        params = _preprocess_vectors_in_params(params)
-        
-        # Debug logging for vector preprocessing
-        logger.debug(f"Vector preprocessing applied. Before: {len(params_before)} params")
-        if 'edges' in params_before:
-            logger.debug(f"edges param before preprocessing: {len(params_before['edges'])} items")
-            if params_before['edges']:
-                first_edge = params_before['edges'][0]
-                if 'fact_embedding' in first_edge:
-                    logger.debug(f"First edge fact_embedding type before: {type(first_edge['fact_embedding'])}")
-        if 'edges' in params:
-            logger.debug(f"edges param after preprocessing: {len(params['edges'])} items")
-            if params['edges']:
-                first_edge = params['edges'][0]
-                if 'fact_embedding' in first_edge:
-                    logger.debug(f"First edge fact_embedding type after: {type(first_edge['fact_embedding'])}")
-
-        # 4) Driver-level wrapping for vector params (fixes "expected Vectorf32 but was List" errors)
+        # 3) FalkorDB 1.2.0 uses query-level vecf32() wrapping instead of Python VectorF32 objects
+        # Vector parameters are wrapped with vecf32() in the query string by get_vector_cosine_func_query()
         cypher_query_ = _wrap_vector_params_in_query(cypher_query_, params)
-        
-        logger.debug(f"Final query: {cypher_query_[:200]}...")
 
         try:
             result = await graph.query(cypher_query_, params)  # type: ignore[reportUnknownArgumentType]
