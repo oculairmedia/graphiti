@@ -63,15 +63,12 @@ jobs:
         push: true
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
-        no-cache: ${{ github.event_name == 'workflow_dispatch' }}
-        cache-from: |
-          type=gha
-        cache-to: |
-          type=gha,mode=max
+        no-cache: true
         platforms: linux/amd64
         build-args: |
           BUILDKIT_PROGRESS=plain
           CACHE_BUST=${{ github.sha }}
+          FORCE_REBUILD=true
 
     - name: Output image details
       if: success()
