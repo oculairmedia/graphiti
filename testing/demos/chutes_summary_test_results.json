@@ -1,0 +1,62 @@
+{
+  "total_tests": 2,
+  "successful_tests": 2,
+  "success_rate": 1.0,
+  "results": [
+    {
+      "test": "direct_summary_generation",
+      "success": true,
+      "duration": 8.710043,
+      "response": {
+        "name": "Sarah Chen",
+        "summary": "Dr. Sarah Chen is the lead AI researcher at Stanford University, specializing in transformer architectures. Her research focuses on enhancing computational efficiency while maintaining model performance. She actively collaborates with researchers from MIT and has an extensive publication record with over 50 papers in top-tier conferences.",
+        "entity_types": [
+          "Person",
+          "Researcher"
+        ],
+        "attributes": {}
+      },
+      "has_summary": true,
+      "summary_length": 340
+    },
+    {
+      "test": "node_attribute_extraction",
+      "success": true,
+      "duration": 60.825845,
+      "original_summary_length": 328,
+      "updated_summary_length": 328,
+      "summary_generated": false,
+      "updated_summary": "Alice Johnson is a senior software engineer at TechCorp specializing in machine learning infrastructure. She leads a team of 8 engineers and has been instrumental in developing the company's AI platfo..."
+    },
+    {
+      "test": "summary_quality_validation",
+      "results": [
+        {
+          "test_case": "Short Content",
+          "success": true,
+          "summary_length": 36,
+          "word_count": 7,
+          "within_250_words": true,
+          "summary": "John Smith is a developer at Google."
+        },
+        {
+          "test_case": "Long Content",
+          "success": true,
+          "summary_length": 652,
+          "word_count": 92,
+          "within_250_words": true,
+          "summary": "Dr. Maria Rodriguez is a distinguished professor of artificial intelligence at Carnegie Mellon Unive..."
+        },
+        {
+          "test_case": "Technical Content",
+          "success": true,
+          "summary_length": 292,
+          "word_count": 41,
+          "within_250_words": true,
+          "summary": "The GraphQL API endpoint is built with Apollo Server and utilizes Redis caching. It supports real-ti..."
+        }
+      ],
+      "success_rate": 1.0
+    }
+  ]
+}

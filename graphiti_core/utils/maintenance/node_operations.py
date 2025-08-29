@@ -902,6 +902,11 @@ async def extract_attributes_from_node(
     previous_episodes: list[EpisodicNode] | None = None,
     entity_type: BaseModel | None = None,
 ) -> EntityNode:
+    # Debug logging: Track input state
+    logger.debug(f"🔍 extract_attributes_from_node - Input node: {node.name}")
+    logger.debug(f"   Original summary length: {len(node.summary)}")
+    logger.debug(f"   LLM client type: {type(llm_client).__name__}")
+    
     node_context: dict[str, Any] = {
         'name': node.name,
         'summary': node.summary,
@@ -936,12 +941,28 @@ async def extract_attributes_from_node(
         else [],
     }
 
+    # Debug logging: Track LLM call
+    logger.debug(f"🔍 Calling LLM for summary generation - Episode content length: {len(summary_context.get('episode_content', ''))}")
+    
     llm_response = await llm_client.generate_response(
         prompt_library.extract_nodes.extract_attributes(summary_context),
         response_model=entity_attributes_model,
         model_size=ModelSize.small,
     )
+    
+    # Debug logging: Track LLM response
+    logger.debug(f"🔍 LLM Response received - Type: {type(llm_response)}")
+    if isinstance(llm_response, dict):
+        logger.debug(f"   Response keys: {list(llm_response.keys())}")
+        if 'summary' in llm_response:
+            logger.debug(f"   Summary in response: {len(llm_response['summary'])} characters")
+            logger.debug(f"   Summary preview: {llm_response['summary'][:100]}...")
+        else:
+            logger.warning(f"   ⚠️ No 'summary' key in LLM response!")
+    else:
+        logger.warning(f"   ⚠️ LLM response is not a dict: {llm_response}")
 
+    original_summary = node.summary
     node.summary = llm_response.get('summary', node.summary)
     node_attributes = {key: value for key, value in llm_response.items()}
 
@@ -949,6 +970,14 @@ async def extract_attributes_from_node(
         del node_attributes['summary']
 
     node.attributes.update(node_attributes)
+    
+    # Debug logging: Track final state
+    logger.debug(f"🔍 Summary update result:")
+    logger.debug(f"   Original: {len(original_summary)} characters")
+    logger.debug(f"   Updated:  {len(node.summary)} characters") 
+    logger.debug(f"   Changed:  {node.summary != original_summary}")
+    if node.summary != original_summary:
+        logger.info(f"✅ Summary generated for {node.name}: {len(node.summary)} characters")
 
     return node
 
