@@ -97,6 +97,154 @@ cd server/
 uvicorn graph_service.main:app --reload
 ```
 
+### Cerebras/Qwen Testing Suite
+
+The project includes a comprehensive test suite for Cerebras/Qwen integration located in `testing/demos/`:
+
+```bash
+# Quick API connectivity test (no database required)
+cd testing/demos
+CEREBRAS_API_KEY="your-key" python3 test_cerebras_api_only.py
+
+# Run full test suite (requires FalkorDB + Ollama for embeddings)
+CEREBRAS_API_KEY="your-key" python3 run_cerebras_test_suite.py
+
+# Run critical tests only
+CEREBRAS_API_KEY="your-key" python3 run_cerebras_test_suite.py --critical-only
+
+# Individual test files
+CEREBRAS_API_KEY="your-key" python3 test_minimal_cerebras.py
+CEREBRAS_API_KEY="your-key" python3 test_cerebras_structured.py
+CEREBRAS_API_KEY="your-key" python3 test_full_cerebras.py
+```
+
+**Key Test Files:**
+- `test_cerebras_api_only.py` - Basic API connectivity (no DB)
+- `test_minimal_cerebras.py` - Component initialization and basic functionality
+- `test_cerebras_structured.py` - JSON output and Qwen-specific capabilities
+- `test_full_cerebras.py` - Complete Graphiti integration
+- `test_cerebras_ingestion.py` - Pipeline ingestion with AI research scenarios
+- `test_cerebras_retrieval.py` - Data retrieval and search functionality
+- `test_cerebras_vs_ollama_comparison.py` - Performance comparison
+- `test_cerebras_pipeline_integration.py` - End-to-end pipeline validation
+- `run_cerebras_test_suite.py` - Comprehensive test orchestration
+
+**Test Configuration:**
+- Tests are **independent of .env settings** - they set their own environment
+- **No database modification** during API-only tests
+- **Quota-aware design** - tests can be run individually to manage token usage
+- **Comprehensive reporting** with success rates, timing, and error analysis
+
+**Prerequisites:**
+- `CEREBRAS_API_KEY` environment variable 
+- FalkorDB running on port 6389 (for integration tests)
+- Ollama service with `mxbai-embed-large` (for hybrid embedding approach)
+
+See `testing/demos/README_CEREBRAS_TESTS.md` for detailed documentation.
+
+### Ollama Testing Suite
+
+The project also includes comprehensive Ollama integration tests located in `testing/demos/`:
+
+```bash
+# Quick Ollama connection test
+cd testing/demos
+python3 test_ollama_connection.py
+
+# Full Ollama integration tests
+python3 test_full_ollama.py
+python3 test_full_ollama_falkor.py
+
+# Individual test components
+python3 test_minimal_ollama.py          # Basic initialization
+python3 test_ollama_structured.py       # JSON output validation
+python3 test_ollama_ingestion.py        # Data ingestion pipeline
+python3 test_ollama_retrieval.py        # Search and retrieval
+python3 test_ollama_embeddings.py       # Embedding functionality
+python3 test_ollama_debug.py            # Debug diagnostics
+```
+
+**Key Ollama Test Files:**
+- `test_ollama_connection.py` - Basic Ollama service connectivity
+- `test_minimal_ollama.py` - Component initialization and setup
+- `test_ollama_structured.py` - JSON structure validation with Mistral
+- `test_full_ollama.py` - Complete Graphiti integration (Neo4j)
+- `test_full_ollama_falkor.py` - Complete integration with FalkorDB
+- `test_ollama_ingestion.py` - Pipeline ingestion testing
+- `test_ollama_retrieval.py` - Data retrieval and search functionality
+- `test_ollama_embeddings.py` - Embedding generation and validation
+- `test_ollama_debug.py` - Debugging and diagnostics
+
+**Ollama Test Configuration:**
+- Tests use Ollama service running on configured endpoints
+- Default models: `gemma3:12b` for LLM, `mxbai-embed-large` for embeddings
+- **No API keys required** - Ollama runs locally/on-premise
+- Tests work with current .env configuration (`USE_OLLAMA=true`)
+
+**Prerequisites:**
+- Ollama service running with required models:
+  ```bash
+  ollama pull gemma3:12b
+  ollama pull mxbai-embed-large
+  ```
+- FalkorDB running on port 6389 (for integration tests)
+
+### Chutes AI Testing Suite
+
+The project includes comprehensive Chutes AI (GLM-4.5-FP8) integration tests located in `testing/demos/`:
+
+```bash
+# Quick API connectivity test (no database required)
+cd testing/demos
+CHUTES_API_KEY="your-key" python3 test_chutes_api_only.py
+
+# Run full test suite (requires FalkorDB + Ollama for embeddings)
+CHUTES_API_KEY="your-key" python3 run_chutes_test_suite.py
+
+# Run critical tests only
+CHUTES_API_KEY="your-key" python3 run_chutes_test_suite.py --critical-only
+
+# Individual test files
+CHUTES_API_KEY="your-key" python3 test_minimal_chutes.py
+CHUTES_API_KEY="your-key" python3 test_chutes_structured.py
+CHUTES_API_KEY="your-key" python3 test_full_chutes.py
+```
+
+**Key Chutes Test Files:**
+- `test_chutes_api_only.py` - Basic API connectivity (no DB)
+- `test_minimal_chutes.py` - Component initialization and basic functionality
+- `test_chutes_structured.py` - JSON output and GLM-4.5-FP8 specific capabilities
+- `test_full_chutes.py` - Complete Graphiti integration with multilingual support
+- `run_chutes_test_suite.py` - Comprehensive test orchestration
+
+**Chutes AI Test Configuration:**
+- Tests are **independent of .env settings** - they set their own environment
+- **Multilingual support** - tests Chinese and English content processing
+- **GLM-optimized scenarios** - technical content and reasoning tasks
+- **Robust parsing** - handles GLM's unique output formats
+- **Extended timeouts** - GLM can have slower response times
+
+**Prerequisites:**
+- `CHUTES_API_KEY` environment variable
+- FalkorDB running on port 6389 (for integration tests)
+- Ollama service with `mxbai-embed-large` (for hybrid embedding approach)
+
+**GLM-4.5-FP8 Strengths:**
+- Excellent multilingual processing (Chinese + English)
+- Strong technical domain understanding
+- Robust structured output with custom parsing
+- Good performance on complex reasoning tasks
+
+### Comparative Testing
+
+Compare different LLM backends:
+```bash
+# Ollama vs Cerebras comparison (requires both services + Cerebras API key)
+CEREBRAS_API_KEY="your-key" python3 test_cerebras_vs_ollama_comparison.py
+
+# All three models can be tested individually with their respective test suites
+```
+
 ### Dry-Run Benchmarking
 
 The project includes a comprehensive benchmarking system for safe performance testing:

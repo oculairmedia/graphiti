@@ -15,6 +15,7 @@ limitations under the License.
 """
 
 import logging
+import os
 import typing
 from datetime import datetime
 
@@ -51,6 +52,7 @@ from graphiti_core.utils.maintenance.graph_data_operations import (
 from graphiti_core.utils.maintenance.node_operations import (
     extract_nodes,
     resolve_extracted_nodes,
+    resolve_extracted_nodes_batch,
 )
 
 logger = logging.getLogger(__name__)
@@ -310,27 +312,43 @@ async def dedupe_nodes_bulk(
         dedupe_tuples.append((nodes_i, candidates_i))
 
     # Determine Node Resolutions
-    # NOTE: We're now NOT passing existing_nodes_override, which means
-    # resolve_extracted_nodes will query the database for existing nodes
-    # This enables cross-graph linking between new nodes and existing database nodes
-    bulk_node_resolutions: list[
-        tuple[list[EntityNode], dict[str, str], list[tuple[EntityNode, EntityNode]]]
-    ] = await semaphore_gather(
-        *[
-            resolve_extracted_nodes(
-                clients,
-                dedupe_tuple[0],
-                episode_tuples[i][0],
-                episode_tuples[i][1],
-                entity_types,
-                # Removed existing_nodes_override to enable database queries
-                # This allows new nodes to be merged with existing database nodes
-                existing_nodes_override=None,
-                enable_cross_graph_deduplication=enable_cross_graph_deduplication,
-            )
-            for i, dedupe_tuple in enumerate(dedupe_tuples)
-        ]
+    # Check if batch deduplication is enabled
+    use_batch_dedup = (
+        os.getenv('CHUTES_ENABLE_BATCH_PROCESSING', 'false').lower() == 'true' and
+        hasattr(clients.llm_client, 'dedupe_entities_batch')
     )
+    
+    if use_batch_dedup:
+        logger.debug(f"Using batch deduplication for {len(dedupe_tuples)} episodes")
+        # Use batch processing for deduplication - single API call for all episodes
+        bulk_node_resolutions = await resolve_extracted_nodes_batch(
+            clients,
+            [dedupe_tuple[0] for dedupe_tuple in dedupe_tuples],
+            [episode_tuple[0] for episode_tuple in episode_tuples],
+            [episode_tuple[1] for episode_tuple in episode_tuples],
+            entity_types,
+            enable_cross_graph_deduplication=enable_cross_graph_deduplication,
+        )
+    else:
+        # Fall back to individual processing
+        bulk_node_resolutions: list[
+            tuple[list[EntityNode], dict[str, str], list[tuple[EntityNode, EntityNode]]]
+        ] = await semaphore_gather(
+            *[
+                resolve_extracted_nodes(
+                    clients,
+                    dedupe_tuple[0],
+                    episode_tuples[i][0],
+                    episode_tuples[i][1],
+                    entity_types,
+                    # Removed existing_nodes_override to enable database queries
+                    # This allows new nodes to be merged with existing database nodes
+                    existing_nodes_override=None,
+                    enable_cross_graph_deduplication=enable_cross_graph_deduplication,
+                )
+                for i, dedupe_tuple in enumerate(dedupe_tuples)
+            ]
+        )
 
     # Collect all duplicate pairs sorted by uuid
     duplicate_pairs: list[tuple[str, str]] = []
