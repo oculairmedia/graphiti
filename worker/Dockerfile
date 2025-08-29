@@ -1,9 +1,10 @@
 # Dockerfile for Graphiti ingestion worker
 FROM python:3.11-slim
 
-# Cache-busting argument to ensure fresh builds
+# Cache-busting arguments to ensure fresh builds
 ARG CACHE_BUST
-RUN echo "Cache bust: $CACHE_BUST"
+ARG FORCE_REBUILD
+RUN echo "Cache bust: $CACHE_BUST" && echo "Force rebuild: $FORCE_REBUILD"
 
 # Set working directory
 WORKDIR /app
@@ -17,6 +18,9 @@ RUN apt-get update && \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy all project files (needed for installation)
+# Additional cache bust for code changes
+RUN echo "Code copy cache bust: $CACHE_BUST-$(date +%s)"
+
 COPY pyproject.toml /app/
 COPY README.md /app/
 COPY graphiti_core /app/graphiti_core
