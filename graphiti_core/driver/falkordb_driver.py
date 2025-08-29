@@ -143,11 +143,13 @@ class FalkorDriverSession(GraphDriverSession):
         if isinstance(query, list):
             for cypher, params in query:
                 params = convert_datetimes_to_strings(params)
+                params = _preprocess_vectors_in_params(params)
                 cypher = _wrap_vector_params_in_query(str(cypher), params)
                 await self.graph.query(cypher, params)  # type: ignore[reportUnknownArgumentType]
         else:
             params = _flatten_params(dict(kwargs))
             params = convert_datetimes_to_strings(params)
+            params = _preprocess_vectors_in_params(params)
             query = _wrap_vector_params_in_query(str(query), params)
             await self.graph.query(query, params)  # type: ignore[reportUnknownArgumentType]
         # Assuming `graph.query` is async (ideal); otherwise, wrap in executor
