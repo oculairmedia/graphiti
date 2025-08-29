@@ -60,31 +60,51 @@ def _flatten_params(kwargs: dict[str, Any]) -> dict[str, Any]:
     return params
 
 
+def _preprocess_vectors_in_params(params: dict[str, Any]) -> dict[str, Any]:
+    """Pre-process parameters to handle vectors in nested structures for FalkorDB.
+    
+    This is specifically needed for UNWIND operations where vectors are in nested dictionaries.
+    FalkorDB cannot convert lists to Vectorf32 within query execution for UNWIND variables.
+    """
+    # Import here to avoid circular dependency
+    try:
+        from falkordb import VectorF32
+    except ImportError:
+        # If VectorF32 is not available, return params unchanged
+        return params
+    
+    def convert_vectors(obj: Any) -> Any:
+        """Recursively convert vector lists to VectorF32 objects."""
+        if _is_vector_list(obj):
+            # Convert Python list to FalkorDB VectorF32
+            return VectorF32(obj)
+        elif isinstance(obj, dict):
+            # Recursively process dictionary values
+            return {k: convert_vectors(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            # Process each item in the list
+            return [convert_vectors(item) for item in obj]
+        else:
+            # Return unchanged for non-vector, non-container types
+            return obj
+    
+    # Process specific parameters that are known to contain nested vectors
+    processed_params = {}
+    for key, value in params.items():
+        if key in ['edges', 'nodes', 'entities']:  # Parameters likely to contain nested vectors
+            processed_params[key] = convert_vectors(value)
+        else:
+            processed_params[key] = value
+    
+    return processed_params
+
+
 def _wrap_vector_params_in_query(query: str, params: dict[str, Any]) -> str:
     """Wrap any $key in the query with vecf32($key) when the param is a vector-like list.
     
     This fixes FalkorDB type mismatch errors where Python lists need to be converted
     to VectorF32 types for vector operations.
     """
-    def _recursively_find_vectors(data: Any, path: str = ""):
-        """Recursively find vector parameters in nested data structures."""
-        vector_paths = []
-        if isinstance(data, dict):
-            for key, val in data.items():
-                current_path = f"{path}.{key}" if path else key
-                if _is_vector_list(val):
-                    vector_paths.append(current_path)
-                elif isinstance(val, (dict, list)):
-                    vector_paths.extend(_recursively_find_vectors(val, current_path))
-        elif isinstance(data, list):
-            for i, item in enumerate(data):
-                current_path = f"{path}[{i}]" if path else f"[{i}]"
-                if _is_vector_list(item):
-                    vector_paths.append(current_path)
-                elif isinstance(item, (dict, list)):
-                    vector_paths.extend(_recursively_find_vectors(item, current_path))
-        return vector_paths
-
     # Handle top-level vector parameters (existing functionality)
     for key, val in params.items():
         if _is_vector_list(val):
@@ -95,18 +115,6 @@ def _wrap_vector_params_in_query(query: str, params: dict[str, Any]) -> str:
                 continue
             # Replace bare $key with vecf32($key)
             query = query.replace(needle, wrapped)
-    
-    # Handle nested vector parameters - specifically look for common patterns in queries
-    vector_patterns = [
-        'edge.fact_embedding',
-        'edge.name_embedding', 
-        'node.name_embedding',
-        'comm.name_embedding',  # Community name embeddings
-    ]
-    
-    for pattern in vector_patterns:
-        if pattern in query:
-            query = query.replace(pattern, f'vecf32({pattern})')
     
     return query
 
@@ -191,7 +199,10 @@ class FalkorDriver(GraphDriver):
         # 2) Convert datetime objects to ISO strings (FalkorDB does not support datetime objects directly)
         params = convert_datetimes_to_strings(raw_params)
 
-        # 3) Driver-level wrapping for vector params (fixes "expected Vectorf32 but was List" errors)
+        # 3) Pre-process nested vectors in parameters (for UNWIND operations)
+        params = _preprocess_vectors_in_params(params)
+
+        # 4) Driver-level wrapping for vector params (fixes "expected Vectorf32 but was List" errors)
         cypher_query_ = _wrap_vector_params_in_query(cypher_query_, params)
 
         try:
