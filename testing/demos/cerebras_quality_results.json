@@ -1,0 +1,63 @@
+{
+  "timestamp": "2025-08-30T10:44:47.090153",
+  "model": "qwen-3-coder-480b",
+  "metrics": {
+    "entity_f1": 0,
+    "relationship_f1": 0,
+    "summary_quality": 0,
+    "avg_response_time": 0
+  },
+  "details": [
+    {
+      "episode": "tech_meeting",
+      "entities": {
+        "success": false,
+        "error": "module 'graphiti_core.prompts.models' has no attribute 'EntityExtractionResponse'",
+        "time": 8.821487426757812e-06
+      },
+      "relationships": {
+        "success": false,
+        "error": "No entities available"
+      },
+      "summary": {
+        "success": false,
+        "error": "'dict' object has no attribute 'content'",
+        "time": 5.245208740234375e-06
+      }
+    },
+    {
+      "episode": "product_launch",
+      "entities": {
+        "success": false,
+        "error": "module 'graphiti_core.prompts.models' has no attribute 'EntityExtractionResponse'",
+        "time": 3.337860107421875e-06
+      },
+      "relationships": {
+        "success": false,
+        "error": "No entities available"
+      },
+      "summary": {
+        "success": false,
+        "error": "'dict' object has no attribute 'content'",
+        "time": 2.6226043701171875e-06
+      }
+    },
+    {
+      "episode": "research_findings",
+      "entities": {
+        "success": false,
+        "error": "module 'graphiti_core.prompts.models' has no attribute 'EntityExtractionResponse'",
+        "time": 2.6226043701171875e-06
+      },
+      "relationships": {
+        "success": false,
+        "error": "No entities available"
+      },
+      "summary": {
+        "success": false,
+        "error": "'dict' object has no attribute 'content'",
+        "time": 2.6226043701171875e-06
+      }
+    }
+  ]
+}

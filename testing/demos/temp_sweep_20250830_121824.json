@@ -1,0 +1,768 @@
+{
+  "model": "qwen-3-coder-480b",
+  "best_temperature": 0.0,
+  "best_f1": 0.6308823529411764,
+  "results": {
+    "0.0": [
+      {
+        "success": true,
+        "temperature": 0.0,
+        "response_time": 0.9551069736480713,
+        "entities": [
+          "Alice",
+          "Microsoft",
+          "Bob",
+          "Google",
+          "Seattle",
+          "AI collaboration",
+          "large language models",
+          "monthly sync meetings",
+          "project budget",
+          "$5 million"
+        ],
+        "relationships": [
+          [
+            "Alice",
+            "works for",
+            "Microsoft"
+          ],
+          [
+            "Bob",
+            "works for",
+            "Google"
+          ],
+          [
+            "Alice",
+            "met with",
+            "Bob"
+          ],
+          [
+            "Bob",
+            "met with",
+            "Alice"
+          ],
+          [
+            "Alice",
+            "discussed",
+            "AI collaboration"
+          ],
+          [
+            "Bob",
+            "discussed",
+            "AI collaboration"
+          ],
+          [
+            "Microsoft",
+            "collaborated with",
+            "Google"
+          ],
+          [
+            "Google",
+            "collaborated with",
+            "Microsoft"
+          ],
+          [
+            "AI collaboration",
+            "involves research on",
+            "large language models"
+          ],
+          [
+            "AI collaboration",
+            "includes",
+            "monthly sync meetings"
+          ],
+          [
+            "AI collaboration",
+            "has",
+            "project budget"
+          ]
+        ],
+        "entity_f1": 0.8235294117647058,
+        "entity_precision": 0.7,
+        "entity_recall": 1.0,
+        "rel_f1": 0.5333333333333333,
+        "rel_precision": 0.36363636363636365,
+        "rel_recall": 1.0,
+        "num_entities": 10,
+        "num_relationships": 11
+      },
+      {
+        "success": true,
+        "temperature": 0.0,
+        "response_time": 0.4745521545410156,
+        "entities": [
+          "Sarah",
+          "DataCorp",
+          "CloudSync 2.0",
+          "March 1st",
+          "real-time collaboration",
+          "end-to-end encryption",
+          "10TB storage",
+          "$99/month",
+          "teams"
+        ],
+        "relationships": [
+          [
+            "Sarah",
+            "announced",
+            "CloudSync 2.0"
+          ],
+          [
+            "DataCorp",
+            "develops",
+            "CloudSync 2.0"
+          ],
+          [
+            "DataCorp",
+            "launches",
+            "CloudSync 2.0"
+          ],
+          [
+            "CloudSync 2.0",
+            "has_launch_date",
+            "March 1st"
+          ],
+          [
+            "CloudSync 2.0",
+            "includes_feature",
+            "real-time collaboration"
+          ],
+          [
+            "CloudSync 2.0",
+            "includes_feature",
+            "end-to-end encryption"
+          ],
+          [
+            "CloudSync 2.0",
+            "supports",
+            "10TB storage"
+          ],
+          [
+            "CloudSync 2.0",
+            "has_pricing",
+            "$99/month"
+          ],
+          [
+            "CloudSync 2.0",
+            "targets",
+            "teams"
+          ]
+        ],
+        "entity_f1": 0.6666666666666667,
+        "entity_precision": 0.5555555555555556,
+        "entity_recall": 0.8333333333333334,
+        "rel_f1": 0.5,
+        "rel_precision": 0.3333333333333333,
+        "rel_recall": 1.0,
+        "num_entities": 9,
+        "num_relationships": 9
+      }
+    ],
+    "0.1": [
+      {
+        "success": true,
+        "temperature": 0.1,
+        "response_time": 0.5225858688354492,
+        "entities": [
+          "Alice",
+          "Microsoft",
+          "Bob",
+          "Google",
+          "Seattle",
+          "AI collaboration",
+          "large language models",
+          "monthly sync meetings",
+          "project budget",
+          "$5 million"
+        ],
+        "relationships": [
+          [
+            "Alice",
+            "works_for",
+            "Microsoft"
+          ],
+          [
+            "Bob",
+            "works_for",
+            "Google"
+          ],
+          [
+            "Alice",
+            "met_with",
+            "Bob"
+          ],
+          [
+            "Alice",
+            "discussed",
+            "AI collaboration"
+          ],
+          [
+            "Bob",
+            "discussed",
+            "AI collaboration"
+          ],
+          [
+            "Microsoft",
+            "collaborates_with",
+            "Google"
+          ],
+          [
+            "Alice",
+            "agreed_to_share",
+            "large language models"
+          ],
+          [
+            "Bob",
+            "agreed_to_share",
+            "large language models"
+          ],
+          [
+            "Alice",
+            "set_up",
+            "monthly sync meetings"
+          ],
+          [
+            "Bob",
+            "set_up",
+            "monthly sync meetings"
+          ],
+          [
+            "AI collaboration",
+            "has_budget",
+            "$5 million"
+          ]
+        ],
+        "entity_f1": 0.8235294117647058,
+        "entity_precision": 0.7,
+        "entity_recall": 1.0,
+        "rel_f1": 0.5333333333333333,
+        "rel_precision": 0.36363636363636365,
+        "rel_recall": 1.0,
+        "num_entities": 10,
+        "num_relationships": 11
+      },
+      {
+        "success": true,
+        "temperature": 0.1,
+        "response_time": 0.9031870365142822,
+        "entities": [
+          "Sarah",
+          "DataCorp",
+          "CloudSync 2.0",
+          "March 1st",
+          "real-time collaboration",
+          "end-to-end encryption",
+          "10TB storage",
+          "$99/month",
+          "teams"
+        ],
+        "relationships": [
+          [
+            "Sarah",
+            "announced",
+            "CloudSync 2.0"
+          ],
+          [
+            "DataCorp",
+            "develops",
+            "CloudSync 2.0"
+          ],
+          [
+            "DataCorp",
+            "launches",
+            "CloudSync 2.0"
+          ],
+          [
+            "CloudSync 2.0",
+            "has_launch_date",
+            "March 1st"
+          ],
+          [
+            "CloudSync 2.0",
+            "includes_feature",
+            "real-time collaboration"
+          ],
+          [
+            "CloudSync 2.0",
+            "includes_feature",
+            "end-to-end encryption"
+          ],
+          [
+            "CloudSync 2.0",
+            "supports",
+            "10TB storage"
+          ],
+          [
+            "CloudSync 2.0",
+            "has_pricing",
+            "$99/month"
+          ],
+          [
+            "CloudSync 2.0",
+            "targets",
+            "teams"
+          ]
+        ],
+        "entity_f1": 0.6666666666666667,
+        "entity_precision": 0.5555555555555556,
+        "entity_recall": 0.8333333333333334,
+        "rel_f1": 0.5,
+        "rel_precision": 0.3333333333333333,
+        "rel_recall": 1.0,
+        "num_entities": 9,
+        "num_relationships": 9
+      }
+    ],
+    "0.2": [
+      {
+        "success": true,
+        "temperature": 0.2,
+        "response_time": 3.7596518993377686,
+        "entities": [
+          "Alice",
+          "Microsoft",
+          "Bob",
+          "Google",
+          "Seattle",
+          "January 15, 2024",
+          "AI collaboration",
+          "large language models",
+          "monthly sync meetings",
+          "$5 million"
+        ],
+        "relationships": [
+          [
+            "Alice",
+            "works at",
+            "Microsoft"
+          ],
+          [
+            "Bob",
+            "works at",
+            "Google"
+          ],
+          [
+            "Alice",
+            "met with",
+            "Bob"
+          ],
+          [
+            "Alice",
+            "discussed",
+            "AI collaboration"
+          ],
+          [
+            "Bob",
+            "discussed",
+            "AI collaboration"
+          ],
+          [
+            "Alice",
+            "agreed to share",
+            "large language models"
+          ],
+          [
+            "Bob",
+            "agreed to share",
+            "large language models"
+          ],
+          [
+            "Alice",
+            "set up",
+            "monthly sync meetings"
+          ],
+          [
+            "Bob",
+            "set up",
+            "monthly sync meetings"
+          ],
+          [
+            "AI collaboration",
+            "has budget",
+            "$5 million"
+          ]
+        ],
+        "entity_f1": 0.8235294117647058,
+        "entity_precision": 0.7,
+        "entity_recall": 1.0,
+        "rel_f1": 0.4285714285714285,
+        "rel_precision": 0.3,
+        "rel_recall": 0.75,
+        "num_entities": 10,
+        "num_relationships": 10
+      },
+      {
+        "success": true,
+        "temperature": 0.2,
+        "response_time": 0.49376845359802246,
+        "entities": [
+          "Sarah",
+          "DataCorp",
+          "CloudSync 2.0",
+          "March 1st",
+          "real-time collaboration",
+          "end-to-end encryption",
+          "10TB storage",
+          "$99/month",
+          "teams"
+        ],
+        "relationships": [
+          [
+            "Sarah",
+            "announced",
+            "CloudSync 2.0"
+          ],
+          [
+            "DataCorp",
+            "develops",
+            "CloudSync 2.0"
+          ],
+          [
+            "CloudSync 2.0",
+            "has_feature",
+            "real-time collaboration"
+          ],
+          [
+            "CloudSync 2.0",
+            "has_feature",
+            "end-to-end encryption"
+          ],
+          [
+            "CloudSync 2.0",
+            "has_feature",
+            "10TB storage"
+          ],
+          [
+            "CloudSync 2.0",
+            "has_pricing",
+            "$99/month"
+          ],
+          [
+            "CloudSync 2.0",
+            "targets",
+            "teams"
+          ]
+        ],
+        "entity_f1": 0.6666666666666667,
+        "entity_precision": 0.5555555555555556,
+        "entity_recall": 0.8333333333333334,
+        "rel_f1": 0.4,
+        "rel_precision": 0.2857142857142857,
+        "rel_recall": 0.6666666666666666,
+        "num_entities": 9,
+        "num_relationships": 7
+      }
+    ],
+    "0.3": [
+      {
+        "success": true,
+        "temperature": 0.3,
+        "response_time": 0.955120325088501,
+        "entities": [
+          "Alice",
+          "Microsoft",
+          "Bob",
+          "Google",
+          "Seattle",
+          "January 15, 2024",
+          "AI collaboration",
+          "large language models",
+          "monthly sync meetings",
+          "$5 million"
+        ],
+        "relationships": [
+          [
+            "Alice",
+            "works for",
+            "Microsoft"
+          ],
+          [
+            "Bob",
+            "works for",
+            "Google"
+          ],
+          [
+            "Alice",
+            "met with",
+            "Bob"
+          ],
+          [
+            "Alice",
+            "discussed",
+            "AI collaboration"
+          ],
+          [
+            "Bob",
+            "discussed",
+            "AI collaboration"
+          ],
+          [
+            "Alice",
+            "agreed to share",
+            "large language models"
+          ],
+          [
+            "Bob",
+            "agreed to share",
+            "large language models"
+          ],
+          [
+            "Alice",
+            "agreed to set up",
+            "monthly sync meetings"
+          ],
+          [
+            "Bob",
+            "agreed to set up",
+            "monthly sync meetings"
+          ],
+          [
+            "AI collaboration",
+            "has budget",
+            "$5 million"
+          ]
+        ],
+        "entity_f1": 0.8235294117647058,
+        "entity_precision": 0.7,
+        "entity_recall": 1.0,
+        "rel_f1": 0.4285714285714285,
+        "rel_precision": 0.3,
+        "rel_recall": 0.75,
+        "num_entities": 10,
+        "num_relationships": 10
+      },
+      {
+        "success": true,
+        "temperature": 0.3,
+        "response_time": 1.7622361183166504,
+        "entities": [
+          "Sarah",
+          "DataCorp",
+          "CloudSync 2.0",
+          "March 1st",
+          "real-time collaboration",
+          "end-to-end encryption",
+          "10TB storage",
+          "$99/month",
+          "teams"
+        ],
+        "relationships": [
+          [
+            "Sarah",
+            "announced",
+            "CloudSync 2.0 launch"
+          ],
+          [
+            "DataCorp",
+            "develops",
+            "CloudSync 2.0"
+          ],
+          [
+            "CloudSync 2.0",
+            "has_feature",
+            "real-time collaboration"
+          ],
+          [
+            "CloudSync 2.0",
+            "has_feature",
+            "end-to-end encryption"
+          ],
+          [
+            "CloudSync 2.0",
+            "has_feature",
+            "10TB storage"
+          ],
+          [
+            "CloudSync 2.0",
+            "has_pricing",
+            "$99/month"
+          ],
+          [
+            "CloudSync 2.0",
+            "targets",
+            "teams"
+          ]
+        ],
+        "entity_f1": 0.6666666666666667,
+        "entity_precision": 0.5555555555555556,
+        "entity_recall": 0.8333333333333334,
+        "rel_f1": 0.4,
+        "rel_precision": 0.2857142857142857,
+        "rel_recall": 0.6666666666666666,
+        "num_entities": 9,
+        "num_relationships": 7
+      }
+    ],
+    "0.5": [
+      {
+        "success": true,
+        "temperature": 0.5,
+        "response_time": 2.7643003463745117,
+        "entities": [
+          "Alice",
+          "Microsoft",
+          "Bob",
+          "Google",
+          "Seattle",
+          "January 15, 2024",
+          "AI collaboration",
+          "large language models",
+          "monthly sync meetings",
+          "project budget",
+          "$5 million"
+        ],
+        "relationships": [
+          [
+            "Alice",
+            "works_for",
+            "Microsoft"
+          ],
+          [
+            "Bob",
+            "works_for",
+            "Google"
+          ],
+          [
+            "Alice",
+            "met_with",
+            "Bob"
+          ],
+          [
+            "Bob",
+            "met_with",
+            "Alice"
+          ],
+          [
+            "Alice",
+            "located_in",
+            "Seattle"
+          ],
+          [
+            "Bob",
+            "located_in",
+            "Seattle"
+          ],
+          [
+            "Alice",
+            "discussed",
+            "AI collaboration"
+          ],
+          [
+            "Bob",
+            "discussed",
+            "AI collaboration"
+          ],
+          [
+            "Microsoft",
+            "collaborates_with",
+            "Google"
+          ],
+          [
+            "Google",
+            "collaborates_with",
+            "Microsoft"
+          ],
+          [
+            "Alice",
+            "agreed_to",
+            "share research on large language models"
+          ],
+          [
+            "Bob",
+            "agreed_to",
+            "share research on large language models"
+          ],
+          [
+            "Alice",
+            "agreed_to",
+            "set up monthly sync meetings"
+          ],
+          [
+            "Bob",
+            "agreed_to",
+            "set up monthly sync meetings"
+          ],
+          [
+            "AI collaboration",
+            "has_budget",
+            "$5 million"
+          ]
+        ],
+        "entity_f1": 0.7777777777777778,
+        "entity_precision": 0.6363636363636364,
+        "entity_recall": 1.0,
+        "rel_f1": 0.4210526315789474,
+        "rel_precision": 0.26666666666666666,
+        "rel_recall": 1.0,
+        "num_entities": 11,
+        "num_relationships": 15
+      },
+      {
+        "success": true,
+        "temperature": 0.5,
+        "response_time": 0.5058856010437012,
+        "entities": [
+          "Sarah",
+          "DataCorp",
+          "CloudSync 2.0",
+          "March 1st",
+          "real-time collaboration",
+          "end-to-end encryption",
+          "10TB storage",
+          "teams",
+          "$99/month"
+        ],
+        "relationships": [
+          [
+            "Sarah",
+            "announced",
+            "CloudSync 2.0"
+          ],
+          [
+            "DataCorp",
+            "launches",
+            "CloudSync 2.0"
+          ],
+          [
+            "CloudSync 2.0",
+            "has_feature",
+            "real-time collaboration"
+          ],
+          [
+            "CloudSync 2.0",
+            "has_feature",
+            "end-to-end encryption"
+          ],
+          [
+            "CloudSync 2.0",
+            "has_feature",
+            "10TB storage"
+          ],
+          [
+            "CloudSync 2.0",
+            "has_launch_date",
+            "March 1st"
+          ],
+          [
+            "CloudSync 2.0",
+            "has_pricing",
+            "$99/month"
+          ],
+          [
+            "$99/month",
+            "targets",
+            "teams"
+          ]
+        ],
+        "entity_f1": 0.6666666666666667,
+        "entity_precision": 0.5555555555555556,
+        "entity_recall": 0.8333333333333334,
+        "rel_f1": 0.36363636363636365,
+        "rel_precision": 0.25,
+        "rel_recall": 0.6666666666666666,
+        "num_entities": 9,
+        "num_relationships": 8
+      }
+    ]
+  }
+}

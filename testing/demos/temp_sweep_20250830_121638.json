@@ -1,0 +1,77 @@
+{
+  "model": "qwen-3-coder-480b",
+  "best_temperature": null,
+  "best_f1": 0,
+  "results": {
+    "0.0": [
+      {
+        "success": false,
+        "temperature": 0.0,
+        "error": "Error code: 400 - {'message': \"'required' is required to be supplied and to be an array including every key in properties. Missing {'description'}.\", 'type': 'invalid_request_error', 'param': 'response_format', 'code': 'wrong_api_format'}",
+        "response_time": 0.2582886219024658
+      },
+      {
+        "success": false,
+        "temperature": 0.0,
+        "error": "Error code: 400 - {'message': \"'required' is required to be supplied and to be an array including every key in properties. Missing {'description'}.\", 'type': 'invalid_request_error', 'param': 'response_format', 'code': 'wrong_api_format'}",
+        "response_time": 0.248460054397583
+      }
+    ],
+    "0.1": [
+      {
+        "success": false,
+        "temperature": 0.1,
+        "error": "Error code: 400 - {'message': \"'required' is required to be supplied and to be an array including every key in properties. Missing {'description'}.\", 'type': 'invalid_request_error', 'param': 'response_format', 'code': 'wrong_api_format'}",
+        "response_time": 0.2023012638092041
+      },
+      {
+        "success": false,
+        "temperature": 0.1,
+        "error": "Error code: 400 - {'message': \"'required' is required to be supplied and to be an array including every key in properties. Missing {'description'}.\", 'type': 'invalid_request_error', 'param': 'response_format', 'code': 'wrong_api_format'}",
+        "response_time": 0.24692273139953613
+      }
+    ],
+    "0.2": [
+      {
+        "success": false,
+        "temperature": 0.2,
+        "error": "Error code: 400 - {'message': \"'required' is required to be supplied and to be an array including every key in properties. Missing {'description'}.\", 'type': 'invalid_request_error', 'param': 'response_format', 'code': 'wrong_api_format'}",
+        "response_time": 0.2191174030303955
+      },
+      {
+        "success": false,
+        "temperature": 0.2,
+        "error": "Error code: 400 - {'message': \"'required' is required to be supplied and to be an array including every key in properties. Missing {'description'}.\", 'type': 'invalid_request_error', 'param': 'response_format', 'code': 'wrong_api_format'}",
+        "response_time": 0.24539566040039062
+      }
+    ],
+    "0.3": [
+      {
+        "success": false,
+        "temperature": 0.3,
+        "error": "Error code: 400 - {'message': \"'required' is required to be supplied and to be an array including every key in properties. Missing {'description'}.\", 'type': 'invalid_request_error', 'param': 'response_format', 'code': 'wrong_api_format'}",
+        "response_time": 0.20783281326293945
+      },
+      {
+        "success": false,
+        "temperature": 0.3,
+        "error": "Error code: 400 - {'message': \"'required' is required to be supplied and to be an array including every key in properties. Missing {'description'}.\", 'type': 'invalid_request_error', 'param': 'response_format', 'code': 'wrong_api_format'}",
+        "response_time": 0.21561121940612793
+      }
+    ],
+    "0.5": [
+      {
+        "success": false,
+        "temperature": 0.5,
+        "error": "Error code: 400 - {'message': \"'required' is required to be supplied and to be an array including every key in properties. Missing {'description'}.\", 'type': 'invalid_request_error', 'param': 'response_format', 'code': 'wrong_api_format'}",
+        "response_time": 0.2657041549682617
+      },
+      {
+        "success": false,
+        "temperature": 0.5,
+        "error": "Error code: 400 - {'message': \"'required' is required to be supplied and to be an array including every key in properties. Missing {'description'}.\", 'type': 'invalid_request_error', 'param': 'response_format', 'code': 'wrong_api_format'}",
+        "response_time": 0.2094898223876953
+      }
+    ]
+  }
+}

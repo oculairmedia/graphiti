@@ -1,0 +1,144 @@
+{
+  "timestamp": "2025-08-30T12:11:57.733137",
+  "model": "qwen-3-coder-480b",
+  "hyperparameter_sweep": "temperature",
+  "temperature_values": [
+    0.0,
+    0.1,
+    0.2,
+    0.3,
+    0.5,
+    0.7
+  ],
+  "iterations_per_config": 3,
+  "best_temperature": null,
+  "best_overall_f1": 0,
+  "detailed_results": [
+    {
+      "temperature": 0.0,
+      "top_p": 0.8,
+      "episodes": [
+        {
+          "episode_name": "tech_meeting",
+          "success_rate": 0,
+          "error": "All iterations failed"
+        },
+        {
+          "episode_name": "product_launch",
+          "success_rate": 0,
+          "error": "All iterations failed"
+        },
+        {
+          "episode_name": "research_findings",
+          "success_rate": 0,
+          "error": "All iterations failed"
+        }
+      ]
+    },
+    {
+      "temperature": 0.1,
+      "top_p": 0.8,
+      "episodes": [
+        {
+          "episode_name": "tech_meeting",
+          "success_rate": 0,
+          "error": "All iterations failed"
+        },
+        {
+          "episode_name": "product_launch",
+          "success_rate": 0,
+          "error": "All iterations failed"
+        },
+        {
+          "episode_name": "research_findings",
+          "success_rate": 0,
+          "error": "All iterations failed"
+        }
+      ]
+    },
+    {
+      "temperature": 0.2,
+      "top_p": 0.8,
+      "episodes": [
+        {
+          "episode_name": "tech_meeting",
+          "success_rate": 0,
+          "error": "All iterations failed"
+        },
+        {
+          "episode_name": "product_launch",
+          "success_rate": 0,
+          "error": "All iterations failed"
+        },
+        {
+          "episode_name": "research_findings",
+          "success_rate": 0,
+          "error": "All iterations failed"
+        }
+      ]
+    },
+    {
+      "temperature": 0.3,
+      "top_p": 0.8,
+      "episodes": [
+        {
+          "episode_name": "tech_meeting",
+          "success_rate": 0,
+          "error": "All iterations failed"
+        },
+        {
+          "episode_name": "product_launch",
+          "success_rate": 0,
+          "error": "All iterations failed"
+        },
+        {
+          "episode_name": "research_findings",
+          "success_rate": 0,
+          "error": "All iterations failed"
+        }
+      ]
+    },
+    {
+      "temperature": 0.5,
+      "top_p": 0.8,
+      "episodes": [
+        {
+          "episode_name": "tech_meeting",
+          "success_rate": 0,
+          "error": "All iterations failed"
+        },
+        {
+          "episode_name": "product_launch",
+          "success_rate": 0,
+          "error": "All iterations failed"
+        },
+        {
+          "episode_name": "research_findings",
+          "success_rate": 0,
+          "error": "All iterations failed"
+        }
+      ]
+    },
+    {
+      "temperature": 0.7,
+      "top_p": 0.8,
+      "episodes": [
+        {
+          "episode_name": "tech_meeting",
+          "success_rate": 0,
+          "error": "All iterations failed"
+        },
+        {
+          "episode_name": "product_launch",
+          "success_rate": 0,
+          "error": "All iterations failed"
+        },
+        {
+          "episode_name": "research_findings",
+          "success_rate": 0,
+          "error": "All iterations failed"
+        }
+      ]
+    }
+  ]
+}

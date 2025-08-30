@@ -1,0 +1,615 @@
+{
+  "timestamp": "20250830_154028",
+  "model": "qwen-3-coder-480b",
+  "optimization_type": "ultimate_combined",
+  "configuration": {
+    "temperature": 0.7,
+    "top_p": 0.8
+  },
+  "summary": {
+    "avg_overall_f1": 0.3085270436677086,
+    "avg_entity_f1": 0.5948470209339775,
+    "avg_relationship_f1": 0.1176470588235294,
+    "success_rate": 1.0,
+    "improvement_over_general": 9.020156773041922,
+    "improvement_over_relationship": -35.35875888817066
+  },
+  "optimizations_applied": [
+    "relationship_first_extraction",
+    "entity_filtering",
+    "domain_specific_prompting",
+    "contextual_inference",
+    "confidence_scoring",
+    "comprehensive_schema"
+  ],
+  "detailed_results": [
+    {
+      "scenario": "complex_business_merger",
+      "domain": "business",
+      "complexity": "extreme",
+      "success": true,
+      "extraction": {
+        "entities": [
+          {
+            "name": "Apple",
+            "type": "Organization",
+            "description": "",
+            "confidence": 1.0
+          },
+          {
+            "name": "TechCorp",
+            "type": "Organization",
+            "description": "",
+            "confidence": 1.0
+          },
+          {
+            "name": "Tim Cook",
+            "type": "Person",
+            "description": "",
+            "confidence": 1.0
+          },
+          {
+            "name": "Sarah Chen",
+            "type": "Person",
+            "description": "",
+            "confidence": 1.0
+          },
+          {
+            "name": "Goldman Sachs",
+            "type": "Organization",
+            "description": "",
+            "confidence": 1.0
+          },
+          {
+            "name": "Morgan Stanley",
+            "type": "Organization",
+            "description": "",
+            "confidence": 1.0
+          },
+          {
+            "name": "AI technology",
+            "type": "Technology",
+            "description": "",
+            "confidence": 1.0
+          },
+          {
+            "name": "Apple's ecosystem",
+            "type": "System",
+            "description": "",
+            "confidence": 1.0
+          },
+          {
+            "name": "John Martinez",
+            "type": "Person",
+            "description": "",
+            "confidence": 1.0
+          },
+          {
+            "name": "Q3 2024",
+            "type": "Date",
+            "description": "",
+            "confidence": 1.0
+          }
+        ],
+        "relationships": [
+          {
+            "source": "Apple",
+            "target": "TechCorp",
+            "type": "ACQUIRES",
+            "confidence": 0.95,
+            "context": "Apple announced it will acquire TechCorp for $50 billion",
+            "method": "explicit"
+          },
+          {
+            "source": "Tim Cook",
+            "target": "Apple",
+            "type": "CEO_OF",
+            "confidence": 0.95,
+            "context": "Apple announced it will acquire TechCorp for $50 billion, led by CEO Tim Cook",
+            "method": "explicit"
+          },
+          {
+            "source": "Sarah Chen",
+            "target": "TechCorp",
+            "type": "FOUNDER_OF",
+            "confidence": 0.9,
+            "context": "TechCorp's founder Sarah Chen",
+            "method": "explicit"
+          },
+          {
+            "source": "Apple",
+            "target": "Goldman Sachs",
+            "type": "ADVISORY_PARTNER",
+            "confidence": 0.85,
+            "context": "The deal, advised by Goldman Sachs and Morgan Stanley",
+            "method": "inferred"
+          },
+          {
+            "source": "Apple",
+            "target": "Morgan Stanley",
+            "type": "ADVISORY_PARTNER",
+            "confidence": 0.85,
+            "context": "The deal, advised by Goldman Sachs and Morgan Stanley",
+            "method": "inferred"
+          },
+          {
+            "source": "TechCorp",
+            "target": "AI technology",
+            "type": "DEVELOPS",
+            "confidence": 0.9,
+            "context": "TechCorp's AI technology",
+            "method": "inferred"
+          },
+          {
+            "source": "Apple",
+            "target": "AI technology",
+            "type": "INTEGRATES",
+            "confidence": 0.9,
+            "context": "will integrate TechCorp's AI technology into Apple's ecosystem",
+            "method": "explicit"
+          },
+          {
+            "source": "John Martinez",
+            "target": "Apple",
+            "type": "CTO_OF",
+            "confidence": 0.95,
+            "context": "John Martinez, Apple's CTO",
+            "method": "explicit"
+          },
+          {
+            "source": "John Martinez",
+            "target": "TechCorp's AI technology",
+            "type": "OVERSEES_INTEGRATION_OF",
+            "confidence": 0.9,
+            "context": "John Martinez, Apple's CTO, will oversee the integration",
+            "method": "explicit"
+          },
+          {
+            "source": "Apple",
+            "target": "TechCorp's AI technology",
+            "type": "ACQUIRES_TECHNOLOGY",
+            "confidence": 0.85,
+            "context": "The acquisition of TechCorp will integrate its AI technology",
+            "method": "inferred"
+          }
+        ]
+      },
+      "metrics": {
+        "entities": {
+          "precision": 0.8,
+          "recall": 1.0,
+          "f1": 0.888888888888889
+        },
+        "relationships": {
+          "precision": 0.3,
+          "recall": 0.42857142857142855,
+          "f1": 0.3529411764705882
+        },
+        "overall_f1": 0.5673202614379085,
+        "entity_count_predicted": 10,
+        "entity_count_expected": 8,
+        "relationship_count_predicted": 10,
+        "relationship_count_expected": 7
+      },
+      "response_time": 0.738959
+    },
+    {
+      "scenario": "advanced_technical_system",
+      "domain": "technical",
+      "complexity": "extreme",
+      "success": true,
+      "extraction": {
+        "entities": [
+          {
+            "name": "GraphRAG",
+            "type": "System",
+            "description": "A system developed by Microsoft Research",
+            "confidence": 1.0
+          },
+          {
+            "name": "Microsoft Research",
+            "type": "Organization",
+            "confidence": 1.0
+          },
+          {
+            "name": "LLaMA-3",
+            "type": "Technology",
+            "description": "Embedding model used by GraphRAG",
+            "confidence": 1.0
+          },
+          {
+            "name": "FalkorDB",
+            "type": "Technology",
+            "description": "Graph database for storage",
+            "confidence": 1.0
+          },
+          {
+            "name": "Cosmograph",
+            "type": "Technology",
+            "description": "Visualization tool",
+            "confidence": 1.0
+          },
+          {
+            "name": "FastAPI",
+            "type": "Technology",
+            "description": "Web framework",
+            "confidence": 1.0
+          },
+          {
+            "name": "OpenAI",
+            "type": "Organization",
+            "confidence": 1.0
+          },
+          {
+            "name": "API",
+            "type": "Technology",
+            "description": "Application programming interface for language processing",
+            "confidence": 0.8
+          },
+          {
+            "name": "Redis",
+            "type": "Technology",
+            "description": "In-memory data structure store used for caching",
+            "confidence": 1.0
+          },
+          {
+            "name": "Dr. Alice Wang",
+            "type": "Person",
+            "description": "Leader of the development team",
+            "confidence": 1.0
+          },
+          {
+            "name": "development team",
+            "type": "Group",
+            "description": "Team working on GraphRAG system",
+            "confidence": 0.9
+          }
+        ],
+        "relationships": [
+          {
+            "source": "GraphRAG",
+            "target": "Microsoft Research",
+            "type": "DEVELOPED_BY",
+            "confidence": 1.0,
+            "context": "The GraphRAG system, developed by Microsoft Research",
+            "method": "explicit"
+          },
+          {
+            "source": "GraphRAG",
+            "target": "LLaMA-3",
+            "type": "USES",
+            "confidence": 1.0,
+            "context": "The GraphRAG system... uses LLaMA-3 embeddings",
+            "method": "explicit"
+          },
+          {
+            "source": "GraphRAG",
+            "target": "FalkorDB",
+            "type": "INTEGRATES_WITH",
+            "confidence": 1.0,
+            "context": "The GraphRAG system... integrates with FalkorDB for graph storage",
+            "method": "explicit"
+          },
+          {
+            "source": "GraphRAG",
+            "target": "Cosmograph",
+            "type": "USES",
+            "confidence": 1.0,
+            "context": "It employs Cosmograph for visualization",
+            "method": "explicit"
+          },
+          {
+            "source": "GraphRAG",
+            "target": "FastAPI",
+            "type": "BUILT_ON",
+            "confidence": 1.0,
+            "context": "is built on the FastAPI framework",
+            "method": "explicit"
+          },
+          {
+            "source": "GraphRAG",
+            "target": "OpenAI",
+            "type": "CONNECTS_TO",
+            "confidence": 0.9,
+            "context": "The system connects to OpenAI's API for language processing",
+            "method": "inferred"
+          },
+          {
+            "source": "GraphRAG",
+            "target": "API",
+            "type": "CONNECTS_TO",
+            "confidence": 1.0,
+            "context": "The system connects to OpenAI's API for language processing",
+            "method": "explicit"
+          },
+          {
+            "source": "GraphRAG",
+            "target": "Redis",
+            "type": "USES",
+            "confidence": 1.0,
+            "context": "utilizes Redis for caching",
+            "method": "explicit"
+          },
+          {
+            "source": "Dr. Alice Wang",
+            "target": "development team",
+            "type": "LEADS",
+            "confidence": 1.0,
+            "context": "Dr. Alice Wang leads the development team",
+            "method": "explicit"
+          },
+          {
+            "source": "development team",
+            "target": "GraphRAG",
+            "type": "DEVELOPED",
+            "confidence": 0.9,
+            "context": "Dr. Alice Wang leads the development team [working on GraphRAG]",
+            "method": "inferred"
+          }
+        ]
+      },
+      "metrics": {
+        "entities": {
+          "precision": 0.18181818181818182,
+          "recall": 0.2222222222222222,
+          "f1": 0.19999999999999998
+        },
+        "relationships": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0
+        },
+        "overall_f1": 0.08,
+        "entity_count_predicted": 11,
+        "entity_count_expected": 9,
+        "relationship_count_predicted": 10,
+        "relationship_count_expected": 8
+      },
+      "response_time": 0.722304
+    },
+    {
+      "scenario": "multi_domain_collaboration",
+      "domain": "academic",
+      "complexity": "extreme",
+      "success": true,
+      "extraction": {
+        "entities": [
+          {
+            "name": "Professor Bob Zhang",
+            "type": "Person",
+            "description": "",
+            "confidence": 1.0
+          },
+          {
+            "name": "Stanford",
+            "type": "Organization",
+            "description": "",
+            "confidence": 1.0
+          },
+          {
+            "name": "MIT's AI lab",
+            "type": "Organization",
+            "description": "",
+            "confidence": 1.0
+          },
+          {
+            "name": "NSF",
+            "type": "Organization",
+            "description": "",
+            "confidence": 1.0
+          },
+          {
+            "name": "DARPA",
+            "type": "Organization",
+            "description": "",
+            "confidence": 1.0
+          },
+          {
+            "name": "Dr. Lisa Chen",
+            "type": "Person",
+            "description": "",
+            "confidence": 1.0
+          },
+          {
+            "name": "Google DeepMind",
+            "type": "Organization",
+            "description": "",
+            "confidence": 1.0
+          },
+          {
+            "name": "Nature",
+            "type": "Organization",
+            "description": "",
+            "confidence": 1.0
+          },
+          {
+            "name": "IBM",
+            "type": "Organization",
+            "description": "",
+            "confidence": 1.0
+          },
+          {
+            "name": "quantum machine learning",
+            "type": "Technology",
+            "description": "",
+            "confidence": 1.0
+          },
+          {
+            "name": "quantum algorithms",
+            "type": "Technology",
+            "description": "",
+            "confidence": 1.0
+          },
+          {
+            "name": "neural networks",
+            "type": "Technology",
+            "description": "",
+            "confidence": 1.0
+          },
+          {
+            "name": "cloud platform",
+            "type": "Technology",
+            "description": "",
+            "confidence": 1.0
+          }
+        ],
+        "relationships": [
+          {
+            "source": "Professor Bob Zhang",
+            "target": "Stanford",
+            "type": "AFFILIATED_WITH",
+            "confidence": 0.95,
+            "context": "Stanford researchers, led by Professor Bob Zhang",
+            "method": "Title and leadership role implies affiliation"
+          },
+          {
+            "source": "Professor Bob Zhang",
+            "target": "MIT's AI lab",
+            "type": "COLLABORATED_WITH",
+            "confidence": 1.0,
+            "context": "Stanford researchers, led by Professor Bob Zhang, collaborated with MIT's AI lab",
+            "method": "Explicit collaboration statement"
+          },
+          {
+            "source": "Professor Bob Zhang",
+            "target": "quantum machine learning",
+            "type": "RESEARCHES",
+            "confidence": 0.9,
+            "context": "Stanford researchers, led by Professor Bob Zhang, collaborated on quantum machine learning",
+            "method": "Context inference - project leader implies research involvement"
+          },
+          {
+            "source": "Stanford",
+            "target": "MIT's AI lab",
+            "type": "COLLABORATED_WITH",
+            "confidence": 1.0,
+            "context": "Stanford researchers...collaborated with MIT's AI lab",
+            "method": "Explicit collaboration statement"
+          },
+          {
+            "source": "Stanford",
+            "target": "quantum machine learning",
+            "type": "RESEARCHES",
+            "confidence": 0.85,
+            "context": "Stanford researchers...on quantum machine learning",
+            "method": "Context inference - researchers working on topic"
+          },
+          {
+            "source": "MIT's AI lab",
+            "target": "quantum machine learning",
+            "type": "RESEARCHES",
+            "confidence": 0.85,
+            "context": "collaborated with MIT's AI lab on quantum machine learning",
+            "method": "Context inference - collaborator on research topic"
+          },
+          {
+            "source": "The project",
+            "target": "NSF",
+            "type": "FUNDED_BY",
+            "confidence": 1.0,
+            "context": "The project, funded by NSF",
+            "method": "Explicit funding statement"
+          },
+          {
+            "source": "The project",
+            "target": "DARPA",
+            "type": "FUNDED_BY",
+            "confidence": 1.0,
+            "context": "The project, funded by...DARPA",
+            "method": "Explicit funding statement"
+          },
+          {
+            "source": "The project",
+            "target": "quantum algorithms",
+            "type": "DEVELOPS",
+            "confidence": 1.0,
+            "context": "The project...involves developing quantum algorithms",
+            "method": "Explicit development statement"
+          },
+          {
+            "source": "The project",
+            "target": "neural networks",
+            "type": "DEVELOPS_FOR",
+            "confidence": 0.9,
+            "context": "The project...involves developing quantum algorithms for neural networks",
+            "method": "Explicit development target"
+          },
+          {
+            "source": "Dr. Lisa Chen",
+            "target": "Google DeepMind",
+            "type": "AFFILIATED_WITH",
+            "confidence": 0.95,
+            "context": "Dr. Lisa Chen from Google DeepMind",
+            "method": "Explicit affiliation statement"
+          },
+          {
+            "source": "Dr. Lisa Chen",
+            "target": "The project",
+            "type": "ADVISORY_ROLE",
+            "confidence": 1.0,
+            "context": "Dr. Lisa Chen...joined as an advisor",
+            "method": "Explicit role statement"
+          },
+          {
+            "source": "Professor Bob Zhang",
+            "target": "The team",
+            "type": "LEADS",
+            "confidence": 0.85,
+            "context": "led by Professor Bob Zhang",
+            "method": "Leadership role inference"
+          },
+          {
+            "source": "The team",
+            "target": "Nature",
+            "type": "PUBLISHED_IN",
+            "confidence": 1.0,
+            "context": "The team published their findings in Nature",
+            "method": "Explicit publication statement"
+          },
+          {
+            "source": "IBM",
+            "target": "The project",
+            "type": "SUPPORTS",
+            "confidence": 0.8,
+            "context": "IBM provided quantum computing resources",
+            "method": "Resource provision implies project support"
+          },
+          {
+            "source": "IBM",
+            "target": "quantum computing resources",
+            "type": "PROVIDES",
+            "confidence": 1.0,
+            "context": "IBM provided quantum computing resources",
+            "method": "Explicit provision statement"
+          },
+          {
+            "source": "quantum computing resources",
+            "target": "cloud platform",
+            "type": "DELIVERED_VIA",
+            "confidence": 0.9,
+            "context": "quantum computing resources through their cloud platform",
+            "method": "Explicit delivery mechanism"
+          }
+        ]
+      },
+      "metrics": {
+        "entities": {
+          "precision": 0.6153846153846154,
+          "recall": 0.8,
+          "f1": 0.6956521739130435
+        },
+        "relationships": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0
+        },
+        "overall_f1": 0.2782608695652174,
+        "entity_count_predicted": 13,
+        "entity_count_expected": 10,
+        "relationship_count_predicted": 17,
+        "relationship_count_expected": 8
+      },
+      "response_time": 0.936404
+    }
+  ]
+}

@@ -305,13 +305,30 @@ class ChutesClient(LLMClient):
         try:
             logger.debug(f'Making request to Chutes AI with model: {self.model or DEFAULT_MODEL}')
             
+            # Configure response format based on whether response_model is provided
+            if response_model is not None:
+                # Use structured outputs with JSON schema for better reliability
+                response_format = {
+                    'type': 'json_schema',
+                    'json_schema': {
+                        'name': 'response',
+                        'strict': False,  # Allow flexibility for GLM-4.5-FP8
+                        'schema': response_model.model_json_schema()
+                    }
+                }
+                logger.debug(f"Using structured output with schema: {response_model.__name__}")
+            else:
+                # Fallback to basic JSON object format
+                response_format = {'type': 'json_object'}
+                logger.debug("Using basic JSON object format")
+            
             # Make the API request
             response = await self.client.chat.completions.create(
                 model=self.model or DEFAULT_MODEL,
                 messages=openai_messages,
                 temperature=self.temperature,
                 max_tokens=self.max_tokens,
-                response_format={'type': 'json_object'},
+                response_format=response_format,
             )
             
             if not response.choices or not response.choices[0].message:

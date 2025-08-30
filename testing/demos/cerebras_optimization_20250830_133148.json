@@ -1,0 +1,115 @@
+{
+  "timestamp": "2025-08-30T13:31:48.310062",
+  "model": "qwen-3-coder-480b",
+  "test_type": "schema_optimization",
+  "configuration": {
+    "temperature": 0.7,
+    "top_p": 0.8,
+    "top_k": 20
+  },
+  "best_variant": null,
+  "best_f1_score": 0,
+  "comparison_summary": [],
+  "detailed_results": {
+    "baseline": [
+      {
+        "success": false,
+        "variant": "baseline",
+        "error": "CompletionsResource.create() got an unexpected keyword argument 'top_k'",
+        "response_time": 2.5272369384765625e-05
+      },
+      {
+        "success": false,
+        "variant": "baseline",
+        "error": "CompletionsResource.create() got an unexpected keyword argument 'top_k'",
+        "response_time": 2.574920654296875e-05
+      },
+      {
+        "success": false,
+        "variant": "baseline",
+        "error": "CompletionsResource.create() got an unexpected keyword argument 'top_k'",
+        "response_time": 2.3365020751953125e-05
+      }
+    ],
+    "pydantic": [
+      {
+        "success": false,
+        "variant": "pydantic",
+        "error": "CompletionsResource.create() got an unexpected keyword argument 'top_k'",
+        "response_time": 0.003287792205810547
+      },
+      {
+        "success": false,
+        "variant": "pydantic",
+        "error": "CompletionsResource.create() got an unexpected keyword argument 'top_k'",
+        "response_time": 0.001848459243774414
+      },
+      {
+        "success": false,
+        "variant": "pydantic",
+        "error": "CompletionsResource.create() got an unexpected keyword argument 'top_k'",
+        "response_time": 0.0016262531280517578
+      }
+    ],
+    "refs_defs": [
+      {
+        "success": false,
+        "variant": "refs_defs",
+        "error": "CompletionsResource.create() got an unexpected keyword argument 'top_k'",
+        "response_time": 2.8133392333984375e-05
+      },
+      {
+        "success": false,
+        "variant": "refs_defs",
+        "error": "CompletionsResource.create() got an unexpected keyword argument 'top_k'",
+        "response_time": 2.86102294921875e-05
+      },
+      {
+        "success": false,
+        "variant": "refs_defs",
+        "error": "CompletionsResource.create() got an unexpected keyword argument 'top_k'",
+        "response_time": 2.6941299438476562e-05
+      }
+    ],
+    "union_types": [
+      {
+        "success": false,
+        "variant": "union_types",
+        "error": "CompletionsResource.create() got an unexpected keyword argument 'top_k'",
+        "response_time": 2.9802322387695312e-05
+      },
+      {
+        "success": false,
+        "variant": "union_types",
+        "error": "CompletionsResource.create() got an unexpected keyword argument 'top_k'",
+        "response_time": 2.9325485229492188e-05
+      },
+      {
+        "success": false,
+        "variant": "union_types",
+        "error": "CompletionsResource.create() got an unexpected keyword argument 'top_k'",
+        "response_time": 3.314018249511719e-05
+      }
+    ],
+    "strict_false": [
+      {
+        "success": false,
+        "variant": "strict_false",
+        "error": "CompletionsResource.create() got an unexpected keyword argument 'top_k'",
+        "response_time": 0.0016620159149169922
+      },
+      {
+        "success": false,
+        "variant": "strict_false",
+        "error": "CompletionsResource.create() got an unexpected keyword argument 'top_k'",
+        "response_time": 0.0016872882843017578
+      },
+      {
+        "success": false,
+        "variant": "strict_false",
+        "error": "CompletionsResource.create() got an unexpected keyword argument 'top_k'",
+        "response_time": 0.0016553401947021484
+      }
+    ]
+  }
+}
