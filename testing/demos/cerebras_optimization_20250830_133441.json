@@ -1,0 +1,1143 @@
+{
+  "timestamp": "2025-08-30T13:34:41.918101",
+  "model": "qwen-3-coder-480b",
+  "test_type": "schema_optimization",
+  "configuration": {
+    "temperature": 0.7,
+    "top_p": 0.8
+  },
+  "best_variant": "strict_false",
+  "best_f1_score": 0.7573717948717948,
+  "comparison_summary": [
+    {
+      "variant": "baseline",
+      "entity_f1": 0.7745098039215687,
+      "rel_f1": 0.39436026936026936,
+      "total_f1": 0.584435036640919,
+      "avg_confidence": 0.8940277777777778,
+      "avg_time": 0.9435086250305176,
+      "success_rate": 1.0,
+      "schema_size": 697
+    },
+    {
+      "variant": "strict_false",
+      "entity_f1": 0.8591880341880342,
+      "rel_f1": 0.6555555555555556,
+      "total_f1": 0.7573717948717948,
+      "avg_confidence": 0.9108333333333334,
+      "avg_time": 0.6765612761179606,
+      "success_rate": 1.0,
+      "schema_size": 2220
+    }
+  ],
+  "detailed_results": {
+    "baseline": [
+      {
+        "success": true,
+        "variant": "baseline",
+        "response_time": 0.9660396575927734,
+        "entities": [
+          "Alice",
+          "Microsoft",
+          "Bob",
+          "Google",
+          "Seattle",
+          "January 15, 2024",
+          "AI collaboration",
+          "large language models",
+          "monthly sync meetings",
+          "$5 million"
+        ],
+        "relationships": [
+          [
+            "Alice",
+            "WORKS_FOR",
+            "Microsoft"
+          ],
+          [
+            "Bob",
+            "WORKS_FOR",
+            "Google"
+          ],
+          [
+            "Alice",
+            "MET",
+            "Bob"
+          ],
+          [
+            "Alice",
+            "LOCATION",
+            "Seattle"
+          ],
+          [
+            "Bob",
+            "LOCATION",
+            "Seattle"
+          ],
+          [
+            "Alice",
+            "DATE",
+            "January 15, 2024"
+          ],
+          [
+            "Bob",
+            "DATE",
+            "January 15, 2024"
+          ],
+          [
+            "Alice",
+            "PARTICIPATES_IN",
+            "AI collaboration"
+          ],
+          [
+            "Bob",
+            "PARTICIPATES_IN",
+            "AI collaboration"
+          ],
+          [
+            "AI collaboration",
+            "USES",
+            "large language models"
+          ],
+          [
+            "Alice",
+            "PARTICIPATES_IN",
+            "monthly sync meetings"
+          ],
+          [
+            "Bob",
+            "PARTICIPATES_IN",
+            "monthly sync meetings"
+          ]
+        ],
+        "entity_f1": 0.8235294117647058,
+        "entity_precision": 0.7,
+        "entity_recall": 1.0,
+        "rel_f1": 0.375,
+        "rel_precision": 0.25,
+        "rel_recall": 0.75,
+        "avg_confidence": 0.8583333333333334,
+        "num_entities": 10,
+        "num_relationships": 12,
+        "schema_features": {
+          "size": 697,
+          "has_enums": false,
+          "has_refs": false,
+          "has_unions": false,
+          "strict_mode": true
+        },
+        "raw_result": {
+          "entities": [
+            {
+              "name": "Alice",
+              "type": "PERSON",
+              "description": "Person from Microsoft",
+              "confidence": 0.9
+            },
+            {
+              "name": "Microsoft",
+              "type": "ORGANIZATION",
+              "description": "Technology company",
+              "confidence": 0.9
+            },
+            {
+              "name": "Bob",
+              "type": "PERSON",
+              "description": "Person from Google",
+              "confidence": 0.9
+            },
+            {
+              "name": "Google",
+              "type": "ORGANIZATION",
+              "description": "Technology company",
+              "confidence": 0.9
+            },
+            {
+              "name": "Seattle",
+              "type": "LOCATION",
+              "description": "City where the meeting took place",
+              "confidence": 0.9
+            },
+            {
+              "name": "January 15, 2024",
+              "type": "DATE",
+              "description": "Date when Alice and Bob met",
+              "confidence": 0.9
+            },
+            {
+              "name": "AI collaboration",
+              "type": "PROJECT",
+              "description": "Collaboration project between Alice and Bob",
+              "confidence": 0.8
+            },
+            {
+              "name": "large language models",
+              "type": "TECHNOLOGY",
+              "description": "Research area for collaboration",
+              "confidence": 0.8
+            },
+            {
+              "name": "monthly sync meetings",
+              "type": "EVENT",
+              "description": "Regular meetings agreed upon by Alice and Bob",
+              "confidence": 0.8
+            },
+            {
+              "name": "$5 million",
+              "type": "MONEY",
+              "description": "Project budget for AI collaboration",
+              "confidence": 0.9
+            }
+          ],
+          "relationships": [
+            {
+              "source": "Alice",
+              "relation": "WORKS_FOR",
+              "target": "Microsoft",
+              "confidence": 0.9
+            },
+            {
+              "source": "Bob",
+              "relation": "WORKS_FOR",
+              "target": "Google",
+              "confidence": 0.9
+            },
+            {
+              "source": "Alice",
+              "relation": "MET",
+              "target": "Bob",
+              "confidence": 0.9
+            },
+            {
+              "source": "Alice",
+              "relation": "LOCATION",
+              "target": "Seattle",
+              "confidence": 0.9
+            },
+            {
+              "source": "Bob",
+              "relation": "LOCATION",
+              "target": "Seattle",
+              "confidence": 0.9
+            },
+            {
+              "source": "Alice",
+              "relation": "DATE",
+              "target": "January 15, 2024",
+              "confidence": 0.9
+            },
+            {
+              "source": "Bob",
+              "relation": "DATE",
+              "target": "January 15, 2024",
+              "confidence": 0.9
+            },
+            {
+              "source": "Alice",
+              "relation": "PARTICIPATES_IN",
+              "target": "AI collaboration",
+              "confidence": 0.8
+            },
+            {
+              "source": "Bob",
+              "relation": "PARTICIPATES_IN",
+              "target": "AI collaboration",
+              "confidence": 0.8
+            },
+            {
+              "source": "AI collaboration",
+              "relation": "USES",
+              "target": "large language models",
+              "confidence": 0.8
+            },
+            {
+              "source": "Alice",
+              "relation": "PARTICIPATES_IN",
+              "target": "monthly sync meetings",
+              "confidence": 0.8
+            },
+            {
+              "source": "Bob",
+              "relation": "PARTICIPATES_IN",
+              "target": "monthly sync meetings",
+              "confidence": 0.8
+            }
+          ]
+        }
+      },
+      {
+        "success": true,
+        "variant": "baseline",
+        "response_time": 0.9771385192871094,
+        "entities": [
+          "Sarah",
+          "DataCorp",
+          "CloudSync 2.0",
+          "March 1st",
+          "real-time collaboration",
+          "end-to-end encryption",
+          "10TB storage",
+          "$99/month",
+          "teams"
+        ],
+        "relationships": [
+          [
+            "Sarah",
+            "ANNOUNCED",
+            "CloudSync 2.0"
+          ],
+          [
+            "DataCorp",
+            "DEVELOPED",
+            "CloudSync 2.0"
+          ],
+          [
+            "CloudSync 2.0",
+            "HAS_FEATURE",
+            "real-time collaboration"
+          ],
+          [
+            "CloudSync 2.0",
+            "HAS_FEATURE",
+            "end-to-end encryption"
+          ],
+          [
+            "CloudSync 2.0",
+            "HAS_FEATURE",
+            "10TB storage"
+          ],
+          [
+            "CloudSync 2.0",
+            "HAS_PRICE",
+            "$99/month"
+          ],
+          [
+            "CloudSync 2.0",
+            "TARGETED_TO",
+            "teams"
+          ],
+          [
+            "CloudSync 2.0",
+            "LAUNCH_DATE",
+            "March 1st"
+          ]
+        ],
+        "entity_f1": 0.6666666666666667,
+        "entity_precision": 0.5555555555555556,
+        "entity_recall": 0.8333333333333334,
+        "rel_f1": 0.36363636363636365,
+        "rel_precision": 0.25,
+        "rel_recall": 0.6666666666666666,
+        "avg_confidence": 0.94375,
+        "num_entities": 9,
+        "num_relationships": 8,
+        "schema_features": {
+          "size": 697,
+          "has_enums": false,
+          "has_refs": false,
+          "has_unions": false,
+          "strict_mode": true
+        },
+        "raw_result": {
+          "entities": [
+            {
+              "name": "Sarah",
+              "type": "PERSON",
+              "description": "Person who made the announcement about CloudSync 2.0 launch",
+              "confidence": 0.95
+            },
+            {
+              "name": "DataCorp",
+              "type": "ORGANIZATION",
+              "description": "Company that will launch CloudSync 2.0",
+              "confidence": 0.95
+            },
+            {
+              "name": "CloudSync 2.0",
+              "type": "PRODUCT",
+              "description": "Cloud-based software product being launched by DataCorp",
+              "confidence": 0.95
+            },
+            {
+              "name": "March 1st",
+              "type": "DATE",
+              "description": "Launch date of CloudSync 2.0 announced by Sarah",
+              "confidence": 0.95
+            },
+            {
+              "name": "real-time collaboration",
+              "type": "FEATURE",
+              "description": "Functionality feature included in CloudSync 2.0",
+              "confidence": 0.95
+            },
+            {
+              "name": "end-to-end encryption",
+              "type": "FEATURE",
+              "description": "Security feature included in CloudSync 2.0",
+              "confidence": 0.95
+            },
+            {
+              "name": "10TB storage",
+              "type": "FEATURE",
+              "description": "Storage capacity feature supported by CloudSync 2.0",
+              "confidence": 0.95
+            },
+            {
+              "name": "$99/month",
+              "type": "PRICE",
+              "description": "Pricing for CloudSync 2.0 teams plan",
+              "confidence": 0.95
+            },
+            {
+              "name": "teams",
+              "type": "TARGET_AUDIENCE",
+              "description": "Customer segment for CloudSync 2.0 pricing plan",
+              "confidence": 0.95
+            }
+          ],
+          "relationships": [
+            {
+              "source": "Sarah",
+              "relation": "ANNOUNCED",
+              "target": "CloudSync 2.0",
+              "confidence": 0.95
+            },
+            {
+              "source": "DataCorp",
+              "relation": "DEVELOPED",
+              "target": "CloudSync 2.0",
+              "confidence": 0.9
+            },
+            {
+              "source": "CloudSync 2.0",
+              "relation": "HAS_FEATURE",
+              "target": "real-time collaboration",
+              "confidence": 0.95
+            },
+            {
+              "source": "CloudSync 2.0",
+              "relation": "HAS_FEATURE",
+              "target": "end-to-end encryption",
+              "confidence": 0.95
+            },
+            {
+              "source": "CloudSync 2.0",
+              "relation": "HAS_FEATURE",
+              "target": "10TB storage",
+              "confidence": 0.95
+            },
+            {
+              "source": "CloudSync 2.0",
+              "relation": "HAS_PRICE",
+              "target": "$99/month",
+              "confidence": 0.95
+            },
+            {
+              "source": "CloudSync 2.0",
+              "relation": "TARGETED_TO",
+              "target": "teams",
+              "confidence": 0.95
+            },
+            {
+              "source": "CloudSync 2.0",
+              "relation": "LAUNCH_DATE",
+              "target": "March 1st",
+              "confidence": 0.95
+            }
+          ]
+        }
+      },
+      {
+        "success": true,
+        "variant": "baseline",
+        "response_time": 0.8873476982116699,
+        "entities": [
+          "Dr. Chen",
+          "MIT",
+          "QuantumBoost",
+          "IBM",
+          "Intel"
+        ],
+        "relationships": [
+          [
+            "Dr. Chen",
+            "PART_OF",
+            "MIT"
+          ],
+          [
+            "Dr. Chen",
+            "DEVELOPED",
+            "QuantumBoost"
+          ],
+          [
+            "MIT",
+            "OWNED",
+            "QuantumBoost"
+          ],
+          [
+            "IBM",
+            "INTERESTED_IN",
+            "QuantumBoost"
+          ],
+          [
+            "Intel",
+            "INTERESTED_IN",
+            "QuantumBoost"
+          ]
+        ],
+        "entity_f1": 0.8333333333333333,
+        "entity_precision": 1.0,
+        "entity_recall": 0.7142857142857143,
+        "rel_f1": 0.4444444444444445,
+        "rel_precision": 0.4,
+        "rel_recall": 0.5,
+        "avg_confidence": 0.88,
+        "num_entities": 5,
+        "num_relationships": 5,
+        "schema_features": {
+          "size": 697,
+          "has_enums": false,
+          "has_refs": false,
+          "has_unions": false,
+          "strict_mode": true
+        },
+        "raw_result": {
+          "entities": [
+            {
+              "name": "Dr. Chen",
+              "type": "PERSON",
+              "description": "Researcher leading a team that discovered a quantum algorithm",
+              "confidence": 0.9
+            },
+            {
+              "name": "MIT",
+              "type": "ORGANIZATION",
+              "description": "Institution where Dr. Chen's team is located",
+              "confidence": 0.9
+            },
+            {
+              "name": "QuantumBoost",
+              "type": "TECHNOLOGY",
+              "description": "A quantum algorithm that reduces computation time by 60% and can solve NP-complete problems faster than classical computers",
+              "confidence": 0.9
+            },
+            {
+              "name": "IBM",
+              "type": "ORGANIZATION",
+              "description": "Technology company interested in licensing QuantumBoost",
+              "confidence": 0.9
+            },
+            {
+              "name": "Intel",
+              "type": "ORGANIZATION",
+              "description": "Technology company interested in licensing QuantumBoost",
+              "confidence": 0.9
+            }
+          ],
+          "relationships": [
+            {
+              "source": "Dr. Chen",
+              "relation": "PART_OF",
+              "target": "MIT",
+              "confidence": 0.9
+            },
+            {
+              "source": "Dr. Chen",
+              "relation": "DEVELOPED",
+              "target": "QuantumBoost",
+              "confidence": 0.9
+            },
+            {
+              "source": "MIT",
+              "relation": "OWNED",
+              "target": "QuantumBoost",
+              "confidence": 0.8
+            },
+            {
+              "source": "IBM",
+              "relation": "INTERESTED_IN",
+              "target": "QuantumBoost",
+              "confidence": 0.9
+            },
+            {
+              "source": "Intel",
+              "relation": "INTERESTED_IN",
+              "target": "QuantumBoost",
+              "confidence": 0.9
+            }
+          ]
+        }
+      }
+    ],
+    "pydantic": [
+      {
+        "success": false,
+        "variant": "pydantic",
+        "error": "Error code: 400 - {'message': \"'additionalProperties' is required to be supplied and set to false.\", 'type': 'invalid_request_error', 'param': 'response_format', 'code': 'wrong_api_format'}",
+        "response_time": 0.3158235549926758
+      },
+      {
+        "success": false,
+        "variant": "pydantic",
+        "error": "Error code: 400 - {'message': \"'additionalProperties' is required to be supplied and set to false.\", 'type': 'invalid_request_error', 'param': 'response_format', 'code': 'wrong_api_format'}",
+        "response_time": 0.2352283000946045
+      },
+      {
+        "success": false,
+        "variant": "pydantic",
+        "error": "Error code: 400 - {'message': \"'additionalProperties' is required to be supplied and set to false.\", 'type': 'invalid_request_error', 'param': 'response_format', 'code': 'wrong_api_format'}",
+        "response_time": 0.21593022346496582
+      }
+    ],
+    "refs_defs": [
+      {
+        "success": false,
+        "variant": "refs_defs",
+        "error": "Error code: 400 - {'message': \"Unsupported JSON schema fields: {'maximum', 'minimum'}\", 'type': 'invalid_request_error', 'param': 'response_format', 'code': 'wrong_api_format'}",
+        "response_time": 0.28240966796875
+      },
+      {
+        "success": false,
+        "variant": "refs_defs",
+        "error": "Error code: 400 - {'message': \"Unsupported JSON schema fields: {'maximum', 'minimum'}\", 'type': 'invalid_request_error', 'param': 'response_format', 'code': 'wrong_api_format'}",
+        "response_time": 0.2706601619720459
+      },
+      {
+        "success": false,
+        "variant": "refs_defs",
+        "error": "Error code: 400 - {'message': \"Unsupported JSON schema fields: {'maximum', 'minimum'}\", 'type': 'invalid_request_error', 'param': 'response_format', 'code': 'wrong_api_format'}",
+        "response_time": 0.20589184761047363
+      }
+    ],
+    "union_types": [
+      {
+        "success": false,
+        "variant": "union_types",
+        "error": "Error code: 400 - {'message': \"'required' is required to be supplied and to be an array including every key in properties. Missing {'organization', 'title'}.\", 'type': 'invalid_request_error', 'param': 'response_format', 'code': 'wrong_api_format'}",
+        "response_time": 0.28608131408691406
+      },
+      {
+        "success": false,
+        "variant": "union_types",
+        "error": "Error code: 400 - {'message': \"'required' is required to be supplied and to be an array including every key in properties. Missing {'organization', 'title'}.\", 'type': 'invalid_request_error', 'param': 'response_format', 'code': 'wrong_api_format'}",
+        "response_time": 0.1987442970275879
+      },
+      {
+        "success": false,
+        "variant": "union_types",
+        "error": "Error code: 400 - {'message': \"'required' is required to be supplied and to be an array including every key in properties. Missing {'title', 'organization'}.\", 'type': 'invalid_request_error', 'param': 'response_format', 'code': 'wrong_api_format'}",
+        "response_time": 0.19837522506713867
+      }
+    ],
+    "strict_false": [
+      {
+        "success": true,
+        "variant": "strict_false",
+        "response_time": 0.7038471698760986,
+        "entities": [
+          "Alice",
+          "Microsoft",
+          "Bob",
+          "Google",
+          "Seattle",
+          "January 15, 2024",
+          "AI collaboration",
+          "large language models",
+          "$5 million"
+        ],
+        "relationships": [
+          [
+            "Alice",
+            "WORKS_AT",
+            "Microsoft"
+          ],
+          [
+            "Bob",
+            "WORKS_AT",
+            "Google"
+          ],
+          [
+            "Alice",
+            "MET_WITH",
+            "Bob"
+          ],
+          [
+            "Alice",
+            "INTERESTED_IN",
+            "AI collaboration"
+          ],
+          [
+            "Bob",
+            "INTERESTED_IN",
+            "AI collaboration"
+          ],
+          [
+            "Microsoft",
+            "COLLABORATES_WITH",
+            "Google"
+          ],
+          [
+            "Microsoft",
+            "DEVELOPS",
+            "large language models"
+          ],
+          [
+            "Google",
+            "DEVELOPS",
+            "large language models"
+          ]
+        ],
+        "entity_f1": 0.8750000000000001,
+        "entity_precision": 0.7777777777777778,
+        "entity_recall": 1.0,
+        "rel_f1": 0.6666666666666666,
+        "rel_precision": 0.5,
+        "rel_recall": 1.0,
+        "avg_confidence": 0.8875,
+        "num_entities": 9,
+        "num_relationships": 8,
+        "schema_features": {
+          "size": 2220,
+          "has_enums": true,
+          "has_refs": true,
+          "has_unions": true,
+          "strict_mode": false
+        },
+        "raw_result": {
+          "entities": [
+            {
+              "name": "Alice",
+              "type": "PERSON",
+              "description": "Person from Microsoft involved in AI collaboration discussion",
+              "confidence": 0.95
+            },
+            {
+              "name": "Microsoft",
+              "type": "ORGANIZATION",
+              "description": "Technology company where Alice works",
+              "confidence": 0.95
+            },
+            {
+              "name": "Bob",
+              "type": "PERSON",
+              "description": "Person from Google involved in AI collaboration discussion",
+              "confidence": 0.95
+            },
+            {
+              "name": "Google",
+              "type": "ORGANIZATION",
+              "description": "Technology company where Bob works",
+              "confidence": 0.95
+            },
+            {
+              "name": "Seattle",
+              "type": "LOCATION",
+              "description": "City where the meeting took place",
+              "confidence": 0.95
+            },
+            {
+              "name": "January 15, 2024",
+              "type": "EVENT",
+              "description": "Date when Alice and Bob met to discuss AI collaboration",
+              "confidence": 0.95
+            },
+            {
+              "name": "AI collaboration",
+              "type": "CONCEPT",
+              "description": "Subject of discussion between Alice and Bob",
+              "confidence": 0.9
+            },
+            {
+              "name": "large language models",
+              "type": "TECHNOLOGY",
+              "description": "Type of research to be shared between Microsoft and Google",
+              "confidence": 0.9
+            },
+            {
+              "name": "$5 million",
+              "type": "CONCEPT",
+              "description": "Project budget agreed upon for the AI collaboration",
+              "confidence": 0.9
+            }
+          ],
+          "relationships": [
+            {
+              "source": "Alice",
+              "relation": "WORKS_AT",
+              "target": "Microsoft",
+              "confidence": 0.95,
+              "confidence_level": "HIGH",
+              "context": "Alice from Microsoft"
+            },
+            {
+              "source": "Bob",
+              "relation": "WORKS_AT",
+              "target": "Google",
+              "confidence": 0.95,
+              "confidence_level": "HIGH",
+              "context": "Bob from Google"
+            },
+            {
+              "source": "Alice",
+              "relation": "MET_WITH",
+              "target": "Bob",
+              "confidence": 0.95,
+              "confidence_level": "HIGH",
+              "context": "Alice from Microsoft and Bob from Google met in Seattle on January 15, 2024 to discuss AI collaboration"
+            },
+            {
+              "source": "Alice",
+              "relation": "INTERESTED_IN",
+              "target": "AI collaboration",
+              "confidence": 0.9,
+              "confidence_level": "HIGH",
+              "context": "met in Seattle on January 15, 2024 to discuss AI collaboration"
+            },
+            {
+              "source": "Bob",
+              "relation": "INTERESTED_IN",
+              "target": "AI collaboration",
+              "confidence": 0.9,
+              "confidence_level": "HIGH",
+              "context": "met in Seattle on January 15, 2024 to discuss AI collaboration"
+            },
+            {
+              "source": "Microsoft",
+              "relation": "COLLABORATES_WITH",
+              "target": "Google",
+              "confidence": 0.85,
+              "confidence_level": "MEDIUM",
+              "context": "Alice from Microsoft and Bob from Google met in Seattle on January 15, 2024 to discuss AI collaboration"
+            },
+            {
+              "source": "Microsoft",
+              "relation": "DEVELOPS",
+              "target": "large language models",
+              "confidence": 0.8,
+              "confidence_level": "MEDIUM",
+              "context": "They agreed to share research on large language models"
+            },
+            {
+              "source": "Google",
+              "relation": "DEVELOPS",
+              "target": "large language models",
+              "confidence": 0.8,
+              "confidence_level": "MEDIUM",
+              "context": "They agreed to share research on large language models"
+            }
+          ]
+        }
+      },
+      {
+        "success": true,
+        "variant": "strict_false",
+        "response_time": 0.7327759265899658,
+        "entities": [
+          "Sarah",
+          "DataCorp",
+          "CloudSync 2.0",
+          "real-time collaboration",
+          "end-to-end encryption",
+          "10TB storage",
+          "teams"
+        ],
+        "relationships": [
+          [
+            "Sarah",
+            "ANNOUNCES",
+            "CloudSync 2.0"
+          ],
+          [
+            "DataCorp",
+            "LAUNCHES",
+            "CloudSync 2.0"
+          ],
+          [
+            "CloudSync 2.0",
+            "INCLUDES",
+            "real-time collaboration"
+          ],
+          [
+            "CloudSync 2.0",
+            "INCLUDES",
+            "end-to-end encryption"
+          ],
+          [
+            "CloudSync 2.0",
+            "INCLUDES",
+            "10TB storage"
+          ]
+        ],
+        "entity_f1": 0.7692307692307692,
+        "entity_precision": 0.7142857142857143,
+        "entity_recall": 0.8333333333333334,
+        "rel_f1": 0.5,
+        "rel_precision": 0.4,
+        "rel_recall": 0.6666666666666666,
+        "avg_confidence": 0.92,
+        "num_entities": 7,
+        "num_relationships": 5,
+        "schema_features": {
+          "size": 2220,
+          "has_enums": true,
+          "has_refs": true,
+          "has_unions": true,
+          "strict_mode": false
+        },
+        "raw_result": {
+          "entities": [
+            {
+              "name": "Sarah",
+              "type": "PERSON",
+              "description": "Person who made the announcement about CloudSync 2.0",
+              "confidence": 0.95
+            },
+            {
+              "name": "DataCorp",
+              "type": "ORGANIZATION",
+              "description": "Company that will launch CloudSync 2.0",
+              "confidence": 0.95
+            },
+            {
+              "name": "CloudSync 2.0",
+              "type": "PRODUCT",
+              "description": "Cloud storage product being launched by DataCorp",
+              "confidence": 0.95
+            },
+            {
+              "name": "real-time collaboration",
+              "type": "TECHNOLOGY",
+              "description": "Feature included in CloudSync 2.0",
+              "confidence": 0.9
+            },
+            {
+              "name": "end-to-end encryption",
+              "type": "TECHNOLOGY",
+              "description": "Security feature included in CloudSync 2.0",
+              "confidence": 0.9
+            },
+            {
+              "name": "10TB storage",
+              "type": "TECHNOLOGY",
+              "description": "Storage capacity supported by CloudSync 2.0",
+              "confidence": 0.9
+            },
+            {
+              "name": "teams",
+              "type": "CONCEPT",
+              "description": "Target user group for CloudSync 2.0 pricing",
+              "confidence": 0.8
+            }
+          ],
+          "relationships": [
+            {
+              "source": "Sarah",
+              "relation": "ANNOUNCES",
+              "target": "CloudSync 2.0",
+              "confidence": 0.95,
+              "confidence_level": "HIGH",
+              "context": "Sarah announced that DataCorp will launch CloudSync 2.0 on March 1st"
+            },
+            {
+              "source": "DataCorp",
+              "relation": "LAUNCHES",
+              "target": "CloudSync 2.0",
+              "confidence": 0.95,
+              "confidence_level": "HIGH",
+              "context": "Sarah announced that DataCorp will launch CloudSync 2.0 on March 1st"
+            },
+            {
+              "source": "CloudSync 2.0",
+              "relation": "INCLUDES",
+              "target": "real-time collaboration",
+              "confidence": 0.9,
+              "confidence_level": "HIGH",
+              "context": "The new version includes real-time collaboration"
+            },
+            {
+              "source": "CloudSync 2.0",
+              "relation": "INCLUDES",
+              "target": "end-to-end encryption",
+              "confidence": 0.9,
+              "confidence_level": "HIGH",
+              "context": "The new version includes real-time collaboration, end-to-end encryption"
+            },
+            {
+              "source": "CloudSync 2.0",
+              "relation": "INCLUDES",
+              "target": "10TB storage",
+              "confidence": 0.9,
+              "confidence_level": "HIGH",
+              "context": "supports up to 10TB storage"
+            }
+          ]
+        }
+      },
+      {
+        "success": true,
+        "variant": "strict_false",
+        "response_time": 0.5930607318878174,
+        "entities": [
+          "Dr. Chen",
+          "MIT",
+          "quantum algorithm",
+          "QuantumBoost",
+          "NP-complete problems",
+          "classical computers",
+          "IBM",
+          "Intel"
+        ],
+        "relationships": [
+          [
+            "Dr. Chen",
+            "WORKS_AT",
+            "MIT"
+          ],
+          [
+            "Dr. Chen",
+            "DISCOVERS",
+            "quantum algorithm"
+          ],
+          [
+            "quantum algorithm",
+            "NAMED",
+            "QuantumBoost"
+          ],
+          [
+            "QuantumBoost",
+            "DEVELOPS",
+            "NP-complete problems"
+          ],
+          [
+            "IBM",
+            "INTERESTED_IN",
+            "QuantumBoost"
+          ],
+          [
+            "Intel",
+            "INTERESTED_IN",
+            "QuantumBoost"
+          ]
+        ],
+        "entity_f1": 0.9333333333333333,
+        "entity_precision": 0.875,
+        "entity_recall": 1.0,
+        "rel_f1": 0.8,
+        "rel_precision": 0.6666666666666666,
+        "rel_recall": 1.0,
+        "avg_confidence": 0.925,
+        "num_entities": 8,
+        "num_relationships": 6,
+        "schema_features": {
+          "size": 2220,
+          "has_enums": true,
+          "has_refs": true,
+          "has_unions": true,
+          "strict_mode": false
+        },
+        "raw_result": {
+          "entities": [
+            {
+              "name": "Dr. Chen",
+              "type": "PERSON",
+              "description": "A researcher who leads a team that discovered a quantum algorithm",
+              "confidence": 0.95
+            },
+            {
+              "name": "MIT",
+              "type": "ORGANIZATION",
+              "description": "Massachusetts Institute of Technology, where Dr. Chen's team works",
+              "confidence": 1.0
+            },
+            {
+              "name": "quantum algorithm",
+              "type": "TECHNOLOGY",
+              "description": "A newly discovered algorithm that reduces computation time by 60%",
+              "confidence": 0.9
+            },
+            {
+              "name": "QuantumBoost",
+              "type": "TECHNOLOGY",
+              "description": "Name of the newly discovered quantum algorithm",
+              "confidence": 1.0
+            },
+            {
+              "name": "NP-complete problems",
+              "type": "CONCEPT",
+              "description": "Class of computational problems that the quantum algorithm can solve faster",
+              "confidence": 0.95
+            },
+            {
+              "name": "classical computers",
+              "type": "TECHNOLOGY",
+              "description": "Traditional computing systems that the new algorithm outperforms",
+              "confidence": 0.95
+            },
+            {
+              "name": "IBM",
+              "type": "ORGANIZATION",
+              "description": "Technology company interested in licensing the quantum algorithm",
+              "confidence": 1.0
+            },
+            {
+              "name": "Intel",
+              "type": "ORGANIZATION",
+              "description": "Technology company interested in licensing the quantum algorithm",
+              "confidence": 1.0
+            }
+          ],
+          "relationships": [
+            {
+              "source": "Dr. Chen",
+              "relation": "WORKS_AT",
+              "target": "MIT",
+              "confidence": 0.95,
+              "confidence_level": "HIGH",
+              "context": "Dr. Chen's team at MIT"
+            },
+            {
+              "source": "Dr. Chen",
+              "relation": "DISCOVERS",
+              "target": "quantum algorithm",
+              "confidence": 0.95,
+              "confidence_level": "HIGH",
+              "context": "Dr. Chen's team at MIT discovered a new quantum algorithm"
+            },
+            {
+              "source": "quantum algorithm",
+              "relation": "NAMED",
+              "target": "QuantumBoost",
+              "confidence": 1.0,
+              "confidence_level": "HIGH",
+              "context": "The algorithm, named QuantumBoost"
+            },
+            {
+              "source": "QuantumBoost",
+              "relation": "DEVELOPS",
+              "target": "NP-complete problems",
+              "confidence": 0.85,
+              "confidence_level": "MEDIUM",
+              "context": "can solve NP-complete problems faster than classical computers"
+            },
+            {
+              "source": "IBM",
+              "relation": "INTERESTED_IN",
+              "target": "QuantumBoost",
+              "confidence": 0.9,
+              "confidence_level": "HIGH",
+              "context": "IBM and Intel have expressed interest in licensing the technology"
+            },
+            {
+              "source": "Intel",
+              "relation": "INTERESTED_IN",
+              "target": "QuantumBoost",
+              "confidence": 0.9,
+              "confidence_level": "HIGH",
+              "context": "IBM and Intel have expressed interest in licensing the technology"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,2713 @@
+{
+  "timestamp": "20250830_153306",
+  "model": "qwen-3-coder-480b",
+  "focus": "relationship_extraction",
+  "configuration": {
+    "temperature": 0.7,
+    "top_p": 0.8
+  },
+  "summary": {
+    "best_f1_strategy": "relationship_first",
+    "best_f1_score": 0.48636363636363633,
+    "best_precision_strategy": "relationship_first",
+    "best_precision_score": 0.44480519480519476,
+    "best_recall_strategy": "relationship_first",
+    "best_recall_score": 0.5433333333333333,
+    "baseline_f1": 0.18181818181818182,
+    "improvements": {
+      "relationship_first": 167.49999999999997,
+      "two_pass_extraction": 1.2564102564102633,
+      "contextual_inference": 22.65873015873016,
+      "linguistic_patterns": 28.333333333333332,
+      "domain_business": -45.0,
+      "domain_technical": 68.05555555555557,
+      "pattern_augmented": 28.333333333333332
+    }
+  },
+  "strategy_scores": {
+    "baseline_relationships": {
+      "avg_f1": 0.18181818181818182,
+      "avg_precision": 0.1476190476190476,
+      "avg_recall": 0.24,
+      "success_rate": 1.0
+    },
+    "relationship_first": {
+      "avg_f1": 0.48636363636363633,
+      "avg_precision": 0.44480519480519476,
+      "avg_recall": 0.5433333333333333,
+      "success_rate": 1.0
+    },
+    "two_pass_extraction": {
+      "avg_f1": 0.18410256410256412,
+      "avg_precision": 0.16944444444444445,
+      "avg_recall": 0.20666666666666664,
+      "success_rate": 1.0
+    },
+    "contextual_inference": {
+      "avg_f1": 0.22301587301587303,
+      "avg_precision": 0.225,
+      "avg_recall": 0.22333333333333333,
+      "success_rate": 1.0
+    },
+    "linguistic_patterns": {
+      "avg_f1": 0.23333333333333334,
+      "avg_precision": 0.23333333333333334,
+      "avg_recall": 0.23333333333333334,
+      "success_rate": 1.0
+    },
+    "domain_business": {
+      "avg_f1": 0.1,
+      "avg_precision": 0.1,
+      "avg_recall": 0.1,
+      "success_rate": 1.0
+    },
+    "domain_technical": {
+      "avg_f1": 0.3055555555555556,
+      "avg_precision": 0.3125,
+      "avg_recall": 0.3,
+      "success_rate": 0.8
+    },
+    "pattern_augmented": {
+      "avg_f1": 0.23333333333333334,
+      "avg_precision": 0.23333333333333334,
+      "avg_recall": 0.23333333333333334,
+      "success_rate": 1.0
+    }
+  },
+  "detailed_results": [
+    {
+      "strategy": "baseline_relationships",
+      "scenario": "employment_relationships",
+      "success": true,
+      "relationships": [
+        {
+          "source": "Sarah Chen",
+          "target": "TechCorp",
+          "type": "employment",
+          "confidence": 0.95,
+          "context": "Sarah Chen, the CEO of TechCorp",
+          "method": "title_relationship"
+        },
+        {
+          "source": "John Smith",
+          "target": "TechCorp",
+          "type": "employment",
+          "confidence": 0.9,
+          "context": "Sarah Chen announced that John Smith will join as CTO",
+          "method": "announcement_relationship"
+        },
+        {
+          "source": "John Smith",
+          "target": "CTO",
+          "type": "title",
+          "confidence": 0.95,
+          "context": "John Smith will join as CTO",
+          "method": "title_assignment"
+        },
+        {
+          "source": "Mary Johnson",
+          "target": "DataSys",
+          "type": "employment",
+          "confidence": 0.85,
+          "context": "Mary Johnson from DataSys",
+          "method": "affiliation_mention"
+        },
+        {
+          "source": "Mary Johnson",
+          "target": "TechCorp",
+          "type": "employment",
+          "confidence": 0.9,
+          "context": "Mary Johnson will lead the new AI division",
+          "method": "employment_relationship"
+        },
+        {
+          "source": "Dr. Alice Wang",
+          "target": "MIT",
+          "type": "affiliation",
+          "confidence": 0.85,
+          "context": "Dr. Alice Wang from MIT",
+          "method": "institutional_affiliation"
+        },
+        {
+          "source": "Dr. Alice Wang",
+          "target": "TechCorp",
+          "type": "employment",
+          "confidence": 0.9,
+          "context": "The company also hired Dr. Alice Wang",
+          "method": "hiring_relationship"
+        }
+      ],
+      "metrics": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0,
+        "true_positives": 0,
+        "false_positives": 7,
+        "false_negatives": 6,
+        "predicted_count": 7,
+        "expected_count": 6
+      },
+      "response_time": 0.547467,
+      "extraction_approach": "single_pass"
+    },
+    {
+      "strategy": "baseline_relationships",
+      "scenario": "collaboration_relationships",
+      "success": true,
+      "relationships": [
+        {
+          "source": "Dr. Bob Zhang",
+          "target": "Stanford",
+          "type": "affiliation",
+          "confidence": 0.95,
+          "context": "Dr. Bob Zhang at Stanford",
+          "method": "explicit_mention"
+        },
+        {
+          "source": "Dr. Bob Zhang",
+          "target": "Professor Lisa Chen",
+          "type": "collaboration",
+          "confidence": 0.9,
+          "context": "collaborated with Professor Lisa Chen",
+          "method": "explicit_mention"
+        },
+        {
+          "source": "Professor Lisa Chen",
+          "target": "MIT",
+          "type": "affiliation",
+          "confidence": 0.95,
+          "context": "Professor Lisa Chen from MIT",
+          "method": "explicit_mention"
+        },
+        {
+          "source": "Dr. Bob Zhang",
+          "target": "quantum computing research",
+          "type": "research_focus",
+          "confidence": 0.85,
+          "context": "collaborated on quantum computing research",
+          "method": "explicit_mention"
+        },
+        {
+          "source": "Professor Lisa Chen",
+          "target": "quantum computing research",
+          "type": "research_focus",
+          "confidence": 0.85,
+          "context": "collaborated on quantum computing research",
+          "method": "explicit_mention"
+        },
+        {
+          "source": "Dr. Bob Zhang",
+          "target": "Google",
+          "type": "meeting",
+          "confidence": 0.8,
+          "context": "met with researchers from Google",
+          "method": "explicit_mention"
+        },
+        {
+          "source": "Dr. Bob Zhang",
+          "target": "IBM",
+          "type": "meeting",
+          "confidence": 0.8,
+          "context": "met with researchers from IBM",
+          "method": "explicit_mention"
+        },
+        {
+          "source": "Professor Lisa Chen",
+          "target": "Google",
+          "type": "meeting",
+          "confidence": 0.8,
+          "context": "met with researchers from Google",
+          "method": "implicit_through_collaborator"
+        },
+        {
+          "source": "Professor Lisa Chen",
+          "target": "IBM",
+          "type": "meeting",
+          "confidence": 0.8,
+          "context": "met with researchers from IBM",
+          "method": "implicit_through_collaborator"
+        }
+      ],
+      "metrics": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0,
+        "true_positives": 0,
+        "false_positives": 9,
+        "false_negatives": 9,
+        "predicted_count": 9,
+        "expected_count": 9
+      },
+      "response_time": 1.965696,
+      "extraction_approach": "single_pass"
+    },
+    {
+      "strategy": "baseline_relationships",
+      "scenario": "temporal_relationships",
+      "success": true,
+      "relationships": [
+        {
+          "source": "John",
+          "target": "Google",
+          "type": "worked_at",
+          "confidence": 0.95,
+          "context": "John previously worked at Google for 5 years",
+          "method": "explicit_mention"
+        },
+        {
+          "source": "John",
+          "target": "Microsoft",
+          "type": "worked_at",
+          "confidence": 0.95,
+          "context": "In 2020, he joined Microsoft as a senior engineer",
+          "method": "explicit_mention"
+        },
+        {
+          "source": "John",
+          "target": "senior engineer",
+          "type": "has_job_title",
+          "confidence": 0.9,
+          "context": "In 2020, he joined Microsoft as a senior engineer",
+          "method": "explicit_mention"
+        },
+        {
+          "source": "John",
+          "target": "principal engineer",
+          "type": "has_job_title",
+          "confidence": 0.9,
+          "context": "Last year, he was promoted to principal engineer",
+          "method": "explicit_mention"
+        },
+        {
+          "source": "John",
+          "target": "Azure team",
+          "type": "leads",
+          "confidence": 0.85,
+          "context": "now leads the Azure team",
+          "method": "explicit_mention"
+        },
+        {
+          "source": "Microsoft",
+          "target": "Azure team",
+          "type": "has_team",
+          "confidence": 0.8,
+          "context": "he now leads the Azure team",
+          "method": "implicit_inference"
+        }
+      ],
+      "metrics": {
+        "precision": 0.16666666666666666,
+        "recall": 0.2,
+        "f1": 0.1818181818181818,
+        "true_positives": 1,
+        "false_positives": 5,
+        "false_negatives": 4,
+        "predicted_count": 6,
+        "expected_count": 5
+      },
+      "response_time": 0.407885,
+      "extraction_approach": "single_pass"
+    },
+    {
+      "strategy": "baseline_relationships",
+      "scenario": "technical_relationships",
+      "success": true,
+      "relationships": [
+        {
+          "source": "GraphRAG system",
+          "target": "LLaMA-3 embeddings",
+          "type": "uses",
+          "confidence": 0.9,
+          "context": "The GraphRAG system uses LLaMA-3 embeddings for vector storage",
+          "method": "direct_statement"
+        },
+        {
+          "source": "GraphRAG system",
+          "target": "FalkorDB",
+          "type": "integrates_with",
+          "confidence": 0.9,
+          "context": "It integrates with FalkorDB as the backend database",
+          "method": "direct_statement"
+        },
+        {
+          "source": "GraphRAG system",
+          "target": "Cosmograph",
+          "type": "employs",
+          "confidence": 0.9,
+          "context": "It employs Cosmograph for data visualization",
+          "method": "direct_statement"
+        },
+        {
+          "source": "GraphRAG system",
+          "target": "FastAPI framework",
+          "type": "built_on",
+          "confidence": 0.9,
+          "context": "The system was built on FastAPI framework",
+          "method": "direct_statement"
+        },
+        {
+          "source": "LLaMA-3 embeddings",
+          "target": "vector storage",
+          "type": "used_for",
+          "confidence": 0.8,
+          "context": "The GraphRAG system uses LLaMA-3 embeddings for vector storage",
+          "method": "inference"
+        },
+        {
+          "source": "FalkorDB",
+          "target": "backend database",
+          "type": "serves_as",
+          "confidence": 0.9,
+          "context": "It integrates with FalkorDB as the backend database",
+          "method": "direct_statement"
+        },
+        {
+          "source": "Cosmograph",
+          "target": "data visualization",
+          "type": "used_for",
+          "confidence": 0.9,
+          "context": "It employs Cosmograph for data visualization",
+          "method": "direct_statement"
+        }
+      ],
+      "metrics": {
+        "precision": 0.5714285714285714,
+        "recall": 1.0,
+        "f1": 0.7272727272727273,
+        "true_positives": 4,
+        "false_positives": 3,
+        "false_negatives": 0,
+        "predicted_count": 7,
+        "expected_count": 4
+      },
+      "response_time": 0.447397,
+      "extraction_approach": "single_pass"
+    },
+    {
+      "strategy": "baseline_relationships",
+      "scenario": "implicit_relationships",
+      "success": true,
+      "relationships": [
+        {
+          "source": "Apple",
+          "target": "Tim Cook",
+          "type": "EMPLOYEE",
+          "confidence": 0.95,
+          "context": "Tim Cook said the iPhone sales exceeded expectations in China",
+          "method": "employment_relation"
+        },
+        {
+          "source": "Apple",
+          "target": "iPhone",
+          "type": "PRODUCT",
+          "confidence": 0.9,
+          "context": "Tim Cook said the iPhone sales exceeded expectations in China",
+          "method": "product_relation"
+        },
+        {
+          "source": "Apple",
+          "target": "China",
+          "type": "MARKET",
+          "confidence": 0.85,
+          "context": "Tim Cook said the iPhone sales exceeded expectations in China",
+          "method": "market_relation"
+        },
+        {
+          "source": "Apple",
+          "target": "India",
+          "type": "MANUFACTURING_LOCATION",
+          "confidence": 0.8,
+          "context": "The company will expand manufacturing in India next year",
+          "method": "location_relation"
+        }
+      ],
+      "metrics": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0,
+        "true_positives": 0,
+        "false_positives": 4,
+        "false_negatives": 5,
+        "predicted_count": 4,
+        "expected_count": 5
+      },
+      "response_time": 0.346692,
+      "extraction_approach": "single_pass"
+    },
+    {
+      "strategy": "relationship_first",
+      "scenario": "employment_relationships",
+      "success": true,
+      "relationships": [
+        {
+          "source": "Sarah Chen",
+          "target": "TechCorp",
+          "type": "CEO_of",
+          "confidence": 0.95,
+          "context": "Sarah Chen, the CEO of TechCorp",
+          "method": "explicit_title_assignment"
+        },
+        {
+          "source": "John Smith",
+          "target": "TechCorp",
+          "type": "will_join",
+          "confidence": 0.9,
+          "context": "Sarah Chen announced that John Smith will join as CTO",
+          "method": "future_employment_announcement"
+        },
+        {
+          "source": "John Smith",
+          "target": "TechCorp",
+          "type": "CTO_of",
+          "confidence": 0.9,
+          "context": "John Smith will join as CTO",
+          "method": "title_assignment"
+        },
+        {
+          "source": "Mary Johnson",
+          "target": "DataSys",
+          "type": "works_at",
+          "confidence": 0.85,
+          "context": "Mary Johnson from DataSys",
+          "method": "affiliation_mention"
+        },
+        {
+          "source": "Mary Johnson",
+          "target": "TechCorp",
+          "type": "will_join",
+          "confidence": 0.9,
+          "context": "Mary Johnson from DataSys will lead the new AI division",
+          "method": "future_employment_announcement"
+        },
+        {
+          "source": "Mary Johnson",
+          "target": "AI division",
+          "type": "leads",
+          "confidence": 0.95,
+          "context": "Mary Johnson from DataSys will lead the new AI division",
+          "method": "leadership_assignment"
+        },
+        {
+          "source": "Dr. Alice Wang",
+          "target": "MIT",
+          "type": "works_at",
+          "confidence": 0.85,
+          "context": "Dr. Alice Wang from MIT",
+          "method": "affiliation_mention"
+        },
+        {
+          "source": "TechCorp",
+          "target": "Dr. Alice Wang",
+          "type": "hired",
+          "confidence": 0.95,
+          "context": "The company also hired Dr. Alice Wang from MIT",
+          "method": "employment_action"
+        },
+        {
+          "source": "Dr. Alice Wang",
+          "target": "TechCorp",
+          "type": "hired_by",
+          "confidence": 0.95,
+          "context": "The company also hired Dr. Alice Wang from MIT",
+          "method": "employment_action"
+        }
+      ],
+      "metrics": {
+        "precision": 0.3333333333333333,
+        "recall": 0.5,
+        "f1": 0.4,
+        "true_positives": 3,
+        "false_positives": 6,
+        "false_negatives": 3,
+        "predicted_count": 9,
+        "expected_count": 6
+      },
+      "response_time": 1.667416,
+      "extraction_approach": "single_pass"
+    },
+    {
+      "strategy": "relationship_first",
+      "scenario": "collaboration_relationships",
+      "success": true,
+      "relationships": [
+        {
+          "source": "Dr. Bob Zhang",
+          "target": "Stanford",
+          "type": "works_at",
+          "confidence": 0.95,
+          "context": "Dr. Bob Zhang at Stanford",
+          "method": "prepositional_phrase"
+        },
+        {
+          "source": "Professor Lisa Chen",
+          "target": "MIT",
+          "type": "works_at",
+          "confidence": 0.95,
+          "context": "Professor Lisa Chen from MIT",
+          "method": "prepositional_phrase"
+        },
+        {
+          "source": "Dr. Bob Zhang",
+          "target": "Professor Lisa Chen",
+          "type": "collaborates_with",
+          "confidence": 0.9,
+          "context": "Dr. Bob Zhang at Stanford collaborated with Professor Lisa Chen from MIT on quantum computing research",
+          "method": "verb_connection"
+        },
+        {
+          "source": "Dr. Bob Zhang",
+          "target": "Google",
+          "type": "met_with",
+          "confidence": 0.85,
+          "context": "They met with researchers from Google and IBM to discuss potential applications",
+          "method": "verb_connection"
+        },
+        {
+          "source": "Dr. Bob Zhang",
+          "target": "IBM",
+          "type": "met_with",
+          "confidence": 0.85,
+          "context": "They met with researchers from Google and IBM to discuss potential applications",
+          "method": "verb_connection"
+        },
+        {
+          "source": "Professor Lisa Chen",
+          "target": "Google",
+          "type": "met_with",
+          "confidence": 0.85,
+          "context": "They met with researchers from Google and IBM to discuss potential applications",
+          "method": "verb_connection"
+        },
+        {
+          "source": "Professor Lisa Chen",
+          "target": "IBM",
+          "type": "met_with",
+          "confidence": 0.85,
+          "context": "They met with researchers from Google and IBM to discuss potential applications",
+          "method": "verb_connection"
+        },
+        {
+          "source": "Dr. Bob Zhang",
+          "target": "Google",
+          "type": "discussed_with",
+          "confidence": 0.8,
+          "context": "They met with researchers from Google and IBM to discuss potential applications",
+          "method": "verb_connection"
+        },
+        {
+          "source": "Dr. Bob Zhang",
+          "target": "IBM",
+          "type": "discussed_with",
+          "confidence": 0.8,
+          "context": "They met with researchers from Google and IBM to discuss potential applications",
+          "method": "verb_connection"
+        },
+        {
+          "source": "Professor Lisa Chen",
+          "target": "Google",
+          "type": "discussed_with",
+          "confidence": 0.8,
+          "context": "They met with researchers from Google and IBM to discuss potential applications",
+          "method": "verb_connection"
+        },
+        {
+          "source": "Professor Lisa Chen",
+          "target": "IBM",
+          "type": "discussed_with",
+          "confidence": 0.8,
+          "context": "They met with researchers from Google and IBM to discuss potential applications",
+          "method": "verb_connection"
+        }
+      ],
+      "metrics": {
+        "precision": 0.5454545454545454,
+        "recall": 0.6666666666666666,
+        "f1": 0.6,
+        "true_positives": 6,
+        "false_positives": 5,
+        "false_negatives": 3,
+        "predicted_count": 11,
+        "expected_count": 9
+      },
+      "response_time": 0.535075,
+      "extraction_approach": "single_pass"
+    },
+    {
+      "strategy": "relationship_first",
+      "scenario": "temporal_relationships",
+      "success": true,
+      "relationships": [
+        {
+          "source": "John",
+          "target": "Google",
+          "type": "previously_worked_at",
+          "confidence": 0.95,
+          "context": "John previously worked at Google for 5 years",
+          "method": "explicit_statement"
+        },
+        {
+          "source": "John",
+          "target": "Microsoft",
+          "type": "joined",
+          "confidence": 0.95,
+          "context": "In 2020, he joined Microsoft as a senior engineer",
+          "method": "explicit_statement"
+        },
+        {
+          "source": "John",
+          "target": "Microsoft",
+          "type": "works_at",
+          "confidence": 0.9,
+          "context": "In 2020, he joined Microsoft as a senior engineer. Last year, he was promoted to principal engineer and now leads the Azure team",
+          "method": "temporal_inference"
+        },
+        {
+          "source": "John",
+          "target": "senior engineer",
+          "type": "holds_position",
+          "confidence": 0.85,
+          "context": "In 2020, he joined Microsoft as a senior engineer",
+          "method": "explicit_statement"
+        },
+        {
+          "source": "John",
+          "target": "principal engineer",
+          "type": "promoted_to",
+          "confidence": 0.95,
+          "context": "Last year, he was promoted to principal engineer",
+          "method": "explicit_statement"
+        },
+        {
+          "source": "John",
+          "target": "Azure team",
+          "type": "leads",
+          "confidence": 0.9,
+          "context": "now leads the Azure team",
+          "method": "explicit_statement"
+        },
+        {
+          "source": "Azure team",
+          "target": "Microsoft",
+          "type": "part_of",
+          "confidence": 0.95,
+          "context": "leads the Azure team",
+          "method": "domain_knowledge"
+        }
+      ],
+      "metrics": {
+        "precision": 0.42857142857142855,
+        "recall": 0.6,
+        "f1": 0.5,
+        "true_positives": 3,
+        "false_positives": 4,
+        "false_negatives": 2,
+        "predicted_count": 7,
+        "expected_count": 5
+      },
+      "response_time": 0.424825,
+      "extraction_approach": "single_pass"
+    },
+    {
+      "strategy": "relationship_first",
+      "scenario": "technical_relationships",
+      "success": true,
+      "relationships": [
+        {
+          "source": "GraphRAG system",
+          "target": "LLaMA-3 embeddings",
+          "type": "uses",
+          "confidence": 0.95,
+          "context": "The GraphRAG system uses LLaMA-3 embeddings for vector storage",
+          "method": "direct_verb_usage"
+        },
+        {
+          "source": "GraphRAG system",
+          "target": "FalkorDB",
+          "type": "integrates_with",
+          "confidence": 0.95,
+          "context": "It integrates with FalkorDB as the backend database",
+          "method": "direct_verb_usage"
+        },
+        {
+          "source": "GraphRAG system",
+          "target": "Cosmograph",
+          "type": "uses",
+          "confidence": 0.9,
+          "context": "employs Cosmograph for data visualization",
+          "method": "verb_indication"
+        },
+        {
+          "source": "GraphRAG system",
+          "target": "FastAPI framework",
+          "type": "built_on",
+          "confidence": 0.95,
+          "context": "The system was built on FastAPI framework",
+          "method": "direct_verb_usage"
+        }
+      ],
+      "metrics": {
+        "precision": 0.75,
+        "recall": 0.75,
+        "f1": 0.75,
+        "true_positives": 3,
+        "false_positives": 1,
+        "false_negatives": 1,
+        "predicted_count": 4,
+        "expected_count": 4
+      },
+      "response_time": 0.357751,
+      "extraction_approach": "single_pass"
+    },
+    {
+      "strategy": "relationship_first",
+      "scenario": "implicit_relationships",
+      "success": true,
+      "relationships": [
+        {
+          "source": "Apple",
+          "target": "record quarterly earnings",
+          "type": "announced",
+          "confidence": 0.95,
+          "context": "Apple announced record quarterly earnings",
+          "method": "direct_statement"
+        },
+        {
+          "source": "Tim Cook",
+          "target": "Apple",
+          "type": "works_at",
+          "confidence": 0.85,
+          "context": "Tim Cook said the iPhone sales exceeded expectations in China",
+          "method": "implicit_role_identification"
+        },
+        {
+          "source": "iPhone",
+          "target": "Apple",
+          "type": "developed",
+          "confidence": 0.95,
+          "context": "Tim Cook said the iPhone sales exceeded expectations in China",
+          "method": "product_company_association"
+        },
+        {
+          "source": "Apple",
+          "target": "China",
+          "type": "sells_in",
+          "confidence": 0.8,
+          "context": "Tim Cook said the iPhone sales exceeded expectations in China",
+          "method": "market_identification"
+        },
+        {
+          "source": "Apple",
+          "target": "India",
+          "type": "will_expand_to",
+          "confidence": 0.9,
+          "context": "The company will expand manufacturing in India next year",
+          "method": "future_action_statement"
+        },
+        {
+          "source": "Apple",
+          "target": "manufacturing",
+          "type": "operates",
+          "confidence": 0.75,
+          "context": "The company will expand manufacturing in India next year",
+          "method": "business_operation_identification"
+        }
+      ],
+      "metrics": {
+        "precision": 0.16666666666666666,
+        "recall": 0.2,
+        "f1": 0.1818181818181818,
+        "true_positives": 1,
+        "false_positives": 5,
+        "false_negatives": 4,
+        "predicted_count": 6,
+        "expected_count": 5
+      },
+      "response_time": 2.023509,
+      "extraction_approach": "single_pass"
+    },
+    {
+      "strategy": "two_pass_extraction",
+      "scenario": "employment_relationships",
+      "success": true,
+      "relationships": [
+        {
+          "source": "Sarah Chen",
+          "target": "TechCorp",
+          "type": "works_at",
+          "confidence": 0.95,
+          "context": "Sarah Chen, the CEO of TechCorp",
+          "method": "title_role"
+        },
+        {
+          "source": "Sarah Chen",
+          "target": "CEO",
+          "type": "has_title",
+          "confidence": 0.95,
+          "context": "Sarah Chen, the CEO of TechCorp",
+          "method": "explicit_statement"
+        },
+        {
+          "source": "John Smith",
+          "target": "TechCorp",
+          "type": "will_work_at",
+          "confidence": 0.9,
+          "context": "John Smith will join as CTO",
+          "method": "future_role"
+        },
+        {
+          "source": "John Smith",
+          "target": "CTO",
+          "type": "will_have_title",
+          "confidence": 0.9,
+          "context": "John Smith will join as CTO",
+          "method": "explicit_statement"
+        },
+        {
+          "source": "Mary Johnson",
+          "target": "DataSys",
+          "type": "works_at",
+          "confidence": 0.85,
+          "context": "Mary Johnson from DataSys",
+          "method": "preposition_from"
+        },
+        {
+          "source": "Mary Johnson",
+          "target": "AI division",
+          "type": "leads",
+          "confidence": 0.95,
+          "context": "Mary Johnson from DataSys will lead the new AI division",
+          "method": "explicit_statement"
+        },
+        {
+          "source": "Dr. Alice Wang",
+          "target": "MIT",
+          "type": "works_at",
+          "confidence": 0.8,
+          "context": "Dr. Alice Wang from MIT",
+          "method": "preposition_from"
+        },
+        {
+          "source": "Dr. Alice Wang",
+          "target": "TechCorp",
+          "type": "hired_by",
+          "confidence": 0.9,
+          "context": "The company also hired Dr. Alice Wang from MIT",
+          "method": "explicit_statement"
+        },
+        {
+          "source": "TechCorp",
+          "target": "AI division",
+          "type": "has_division",
+          "confidence": 0.85,
+          "context": "Mary Johnson from DataSys will lead the new AI division",
+          "method": "contextual_inference"
+        }
+      ],
+      "metrics": {
+        "precision": 0.2222222222222222,
+        "recall": 0.3333333333333333,
+        "f1": 0.26666666666666666,
+        "true_positives": 2,
+        "false_positives": 7,
+        "false_negatives": 4,
+        "predicted_count": 9,
+        "expected_count": 6
+      },
+      "response_time": 0.484441,
+      "extraction_approach": "two_pass"
+    },
+    {
+      "strategy": "two_pass_extraction",
+      "scenario": "collaboration_relationships",
+      "success": true,
+      "relationships": [
+        {
+          "source": "Dr. Bob Zhang",
+          "target": "Stanford",
+          "type": "affiliation",
+          "confidence": 0.9,
+          "context": "Dr. Bob Zhang at Stanford",
+          "method": "preposition"
+        },
+        {
+          "source": "Dr. Bob Zhang",
+          "target": "Professor Lisa Chen",
+          "type": "collaboration",
+          "confidence": 0.95,
+          "context": "Dr. Bob Zhang at Stanford collaborated with Professor Lisa Chen from MIT on quantum computing research",
+          "method": "verb"
+        },
+        {
+          "source": "Professor Lisa Chen",
+          "target": "MIT",
+          "type": "affiliation",
+          "confidence": 0.9,
+          "context": "Professor Lisa Chen from MIT",
+          "method": "preposition"
+        },
+        {
+          "source": "Dr. Bob Zhang",
+          "target": "quantum computing research",
+          "type": "research_focus",
+          "confidence": 0.85,
+          "context": "Dr. Bob Zhang at Stanford collaborated with Professor Lisa Chen from MIT on quantum computing research",
+          "method": "preposition"
+        },
+        {
+          "source": "Professor Lisa Chen",
+          "target": "quantum computing research",
+          "type": "research_focus",
+          "confidence": 0.85,
+          "context": "Dr. Bob Zhang at Stanford collaborated with Professor Lisa Chen from MIT on quantum computing research",
+          "method": "preposition"
+        },
+        {
+          "source": "Dr. Bob Zhang",
+          "target": "Google",
+          "type": "meeting",
+          "confidence": 0.7,
+          "context": "They met with researchers from Google and IBM to discuss potential applications",
+          "method": "verb"
+        },
+        {
+          "source": "Dr. Bob Zhang",
+          "target": "IBM",
+          "type": "meeting",
+          "confidence": 0.7,
+          "context": "They met with researchers from Google and IBM to discuss potential applications",
+          "method": "verb"
+        },
+        {
+          "source": "Professor Lisa Chen",
+          "target": "Google",
+          "type": "meeting",
+          "confidence": 0.7,
+          "context": "They met with researchers from Google and IBM to discuss potential applications",
+          "method": "verb"
+        },
+        {
+          "source": "Professor Lisa Chen",
+          "target": "IBM",
+          "type": "meeting",
+          "confidence": 0.7,
+          "context": "They met with researchers from Google and IBM to discuss potential applications",
+          "method": "verb"
+        }
+      ],
+      "metrics": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0,
+        "true_positives": 0,
+        "false_positives": 9,
+        "false_negatives": 9,
+        "predicted_count": 9,
+        "expected_count": 9
+      },
+      "response_time": 0.473958,
+      "extraction_approach": "two_pass"
+    },
+    {
+      "strategy": "two_pass_extraction",
+      "scenario": "temporal_relationships",
+      "success": true,
+      "relationships": [
+        {
+          "source": "John",
+          "target": "Google",
+          "type": "worked_at",
+          "confidence": 1.0,
+          "context": "John previously worked at Google for 5 years",
+          "method": "explicit"
+        },
+        {
+          "source": "John",
+          "target": "Microsoft",
+          "type": "works_at",
+          "confidence": 1.0,
+          "context": "In 2020, he joined Microsoft as a senior engineer",
+          "method": "explicit"
+        },
+        {
+          "source": "John",
+          "target": "senior engineer",
+          "type": "has_role",
+          "confidence": 1.0,
+          "context": "he joined Microsoft as a senior engineer",
+          "method": "explicit"
+        },
+        {
+          "source": "John",
+          "target": "principal engineer",
+          "type": "has_role",
+          "confidence": 1.0,
+          "context": "he was promoted to principal engineer",
+          "method": "explicit"
+        },
+        {
+          "source": "John",
+          "target": "Azure team",
+          "type": "leads",
+          "confidence": 1.0,
+          "context": "now leads the Azure team",
+          "method": "explicit"
+        },
+        {
+          "source": "Azure team",
+          "target": "Microsoft",
+          "type": "part_of",
+          "confidence": 1.0,
+          "context": "Azure team [at Microsoft]",
+          "method": "implicit"
+        },
+        {
+          "source": "senior engineer",
+          "target": "Microsoft",
+          "type": "employed_by",
+          "confidence": 0.9,
+          "context": "joined Microsoft as a senior engineer",
+          "method": "implicit"
+        },
+        {
+          "source": "principal engineer",
+          "target": "Microsoft",
+          "type": "employed_by",
+          "confidence": 0.9,
+          "context": "promoted to principal engineer [at Microsoft]",
+          "method": "implicit"
+        }
+      ],
+      "metrics": {
+        "precision": 0.125,
+        "recall": 0.2,
+        "f1": 0.15384615384615385,
+        "true_positives": 1,
+        "false_positives": 7,
+        "false_negatives": 4,
+        "predicted_count": 8,
+        "expected_count": 5
+      },
+      "response_time": 0.4512,
+      "extraction_approach": "two_pass"
+    },
+    {
+      "strategy": "two_pass_extraction",
+      "scenario": "technical_relationships",
+      "success": true,
+      "relationships": [
+        {
+          "source": "GraphRAG system",
+          "target": "LLaMA-3 embeddings",
+          "type": "uses",
+          "confidence": 0.9,
+          "context": "The GraphRAG system uses LLaMA-3 embeddings for vector storage.",
+          "method": "explicit"
+        },
+        {
+          "source": "GraphRAG system",
+          "target": "FalkorDB",
+          "type": "integrates with",
+          "confidence": 0.9,
+          "context": "It integrates with FalkorDB as the backend database",
+          "method": "explicit"
+        },
+        {
+          "source": "GraphRAG system",
+          "target": "Cosmograph",
+          "type": "employs",
+          "confidence": 0.9,
+          "context": "employs Cosmograph for data visualization",
+          "method": "explicit"
+        },
+        {
+          "source": "GraphRAG system",
+          "target": "FastAPI framework",
+          "type": "built on",
+          "confidence": 0.9,
+          "context": "The system was built on FastAPI framework.",
+          "method": "explicit"
+        }
+      ],
+      "metrics": {
+        "precision": 0.5,
+        "recall": 0.5,
+        "f1": 0.5,
+        "true_positives": 2,
+        "false_positives": 2,
+        "false_negatives": 2,
+        "predicted_count": 4,
+        "expected_count": 4
+      },
+      "response_time": 0.334559,
+      "extraction_approach": "two_pass"
+    },
+    {
+      "strategy": "two_pass_extraction",
+      "scenario": "implicit_relationships",
+      "success": true,
+      "relationships": [
+        {
+          "source": "Apple",
+          "target": "Tim Cook",
+          "type": "led by",
+          "confidence": 0.9,
+          "context": "Apple announced record quarterly earnings. Tim Cook said the iPhone sales exceeded expectations in China.",
+          "method": "title/role implication"
+        },
+        {
+          "source": "Tim Cook",
+          "target": "Apple",
+          "type": "leads",
+          "confidence": 0.9,
+          "context": "Apple announced record quarterly earnings. Tim Cook said the iPhone sales exceeded expectations in China.",
+          "method": "title/role implication"
+        },
+        {
+          "source": "Apple",
+          "target": "iPhone",
+          "type": "produces",
+          "confidence": 0.95,
+          "context": "Tim Cook said the iPhone sales exceeded expectations in China.",
+          "method": "explicit statement"
+        },
+        {
+          "source": "iPhone",
+          "target": "China",
+          "type": "sold in",
+          "confidence": 0.85,
+          "context": "Tim Cook said the iPhone sales exceeded expectations in China.",
+          "method": "explicit statement"
+        },
+        {
+          "source": "Apple",
+          "target": "China",
+          "type": "sells products in",
+          "confidence": 0.85,
+          "context": "Tim Cook said the iPhone sales exceeded expectations in China.",
+          "method": "explicit statement"
+        },
+        {
+          "source": "Apple",
+          "target": "India",
+          "type": "expands manufacturing in",
+          "confidence": 0.9,
+          "context": "The company will expand manufacturing in India next year.",
+          "method": "explicit statement"
+        },
+        {
+          "source": "Tim Cook",
+          "target": "iPhone",
+          "type": "discusses sales of",
+          "confidence": 0.8,
+          "context": "Tim Cook said the iPhone sales exceeded expectations in China.",
+          "method": "explicit statement"
+        },
+        {
+          "source": "manufacturing",
+          "target": "India",
+          "type": "located in",
+          "confidence": 0.85,
+          "context": "The company will expand manufacturing in India next year.",
+          "method": "explicit statement"
+        },
+        {
+          "source": "Apple",
+          "target": "manufacturing",
+          "type": "conducts",
+          "confidence": 0.9,
+          "context": "The company will expand manufacturing in India next year.",
+          "method": "explicit statement"
+        }
+      ],
+      "metrics": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0,
+        "true_positives": 0,
+        "false_positives": 9,
+        "false_negatives": 5,
+        "predicted_count": 9,
+        "expected_count": 5
+      },
+      "response_time": 0.472485,
+      "extraction_approach": "two_pass"
+    },
+    {
+      "strategy": "contextual_inference",
+      "scenario": "employment_relationships",
+      "success": true,
+      "relationships": [
+        {
+          "source": "Sarah Chen",
+          "target": "TechCorp",
+          "type": "CEO_OF",
+          "confidence": 1.0,
+          "context": "Sarah Chen, the CEO of TechCorp",
+          "method": "explicit"
+        },
+        {
+          "source": "Sarah Chen",
+          "target": "TechCorp",
+          "type": "WORKS_AT",
+          "confidence": 1.0,
+          "context": "Sarah Chen, the CEO of TechCorp",
+          "method": "inference_rule_1"
+        },
+        {
+          "source": "John Smith",
+          "target": "TechCorp",
+          "type": "WORKS_AT",
+          "confidence": 0.9,
+          "context": "Sarah Chen announced that John Smith will join as CTO",
+          "method": "inference_rule_3"
+        },
+        {
+          "source": "John Smith",
+          "target": "TechCorp",
+          "type": "CTO_OF",
+          "confidence": 0.8,
+          "context": "announced that John Smith will join as CTO",
+          "method": "inference_rule_1"
+        },
+        {
+          "source": "Mary Johnson",
+          "target": "DataSys",
+          "type": "AFFILIATED_WITH",
+          "confidence": 0.9,
+          "context": "Mary Johnson from DataSys",
+          "method": "inference_rule_2"
+        },
+        {
+          "source": "Mary Johnson",
+          "target": "TechCorp",
+          "type": "WORKS_AT",
+          "confidence": 0.9,
+          "context": "Mary Johnson from DataSys will lead the new AI division",
+          "method": "inference_rule_3"
+        },
+        {
+          "source": "Dr. Alice Wang",
+          "target": "MIT",
+          "type": "AFFILIATED_WITH",
+          "confidence": 0.9,
+          "context": "Dr. Alice Wang from MIT",
+          "method": "inference_rule_2"
+        },
+        {
+          "source": "Dr. Alice Wang",
+          "target": "TechCorp",
+          "type": "WORKS_AT",
+          "confidence": 0.9,
+          "context": "The company also hired Dr. Alice Wang",
+          "method": "inference_rule_3"
+        }
+      ],
+      "metrics": {
+        "precision": 0.125,
+        "recall": 0.16666666666666666,
+        "f1": 0.14285714285714288,
+        "true_positives": 1,
+        "false_positives": 7,
+        "false_negatives": 5,
+        "predicted_count": 8,
+        "expected_count": 6
+      },
+      "response_time": 0.456792,
+      "extraction_approach": "single_pass"
+    },
+    {
+      "strategy": "contextual_inference",
+      "scenario": "collaboration_relationships",
+      "success": true,
+      "relationships": [
+        {
+          "source": "Dr. Bob Zhang",
+          "target": "Stanford",
+          "type": "AFFILIATED_WITH",
+          "confidence": 1.0,
+          "context": "Dr. Bob Zhang at Stanford",
+          "method": "explicit_affiliation"
+        },
+        {
+          "source": "Professor Lisa Chen",
+          "target": "MIT",
+          "type": "AFFILIATED_WITH",
+          "confidence": 1.0,
+          "context": "Professor Lisa Chen from MIT",
+          "method": "explicit_affiliation"
+        },
+        {
+          "source": "Dr. Bob Zhang",
+          "target": "Professor Lisa Chen",
+          "type": "COLLABORATES_WITH",
+          "confidence": 1.0,
+          "context": "Dr. Bob Zhang at Stanford collaborated with Professor Lisa Chen from MIT on quantum computing research",
+          "method": "explicit_collaboration"
+        },
+        {
+          "source": "Dr. Bob Zhang",
+          "target": "quantum computing research",
+          "type": "WORKS_ON",
+          "confidence": 1.0,
+          "context": "Dr. Bob Zhang at Stanford collaborated with Professor Lisa Chen from MIT on quantum computing research",
+          "method": "explicit_project_participation"
+        },
+        {
+          "source": "Professor Lisa Chen",
+          "target": "quantum computing research",
+          "type": "WORKS_ON",
+          "confidence": 1.0,
+          "context": "Dr. Bob Zhang at Stanford collaborated with Professor Lisa Chen from MIT on quantum computing research",
+          "method": "explicit_project_participation"
+        },
+        {
+          "source": "Dr. Bob Zhang",
+          "target": "Google",
+          "type": "MEETS_WITH",
+          "confidence": 1.0,
+          "context": "They met with researchers from Google and IBM to discuss potential applications",
+          "method": "explicit_meeting"
+        },
+        {
+          "source": "Dr. Bob Zhang",
+          "target": "IBM",
+          "type": "MEETS_WITH",
+          "confidence": 1.0,
+          "context": "They met with researchers from Google and IBM to discuss potential applications",
+          "method": "explicit_meeting"
+        },
+        {
+          "source": "Professor Lisa Chen",
+          "target": "Google",
+          "type": "MEETS_WITH",
+          "confidence": 1.0,
+          "context": "They met with researchers from Google and IBM to discuss potential applications",
+          "method": "explicit_meeting"
+        },
+        {
+          "source": "Professor Lisa Chen",
+          "target": "IBM",
+          "type": "MEETS_WITH",
+          "confidence": 1.0,
+          "context": "They met with researchers from Google and IBM to discuss potential applications",
+          "method": "explicit_meeting"
+        },
+        {
+          "source": "Google",
+          "target": "quantum computing research",
+          "type": "WORKS_ON",
+          "confidence": 0.8,
+          "context": "They met with researchers from Google and IBM to discuss potential applications",
+          "method": "inferred_research_interest"
+        },
+        {
+          "source": "IBM",
+          "target": "quantum computing research",
+          "type": "WORKS_ON",
+          "confidence": 0.8,
+          "context": "They met with researchers from Google and IBM to discuss potential applications",
+          "method": "inferred_research_interest"
+        }
+      ],
+      "metrics": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0,
+        "true_positives": 0,
+        "false_positives": 11,
+        "false_negatives": 9,
+        "predicted_count": 11,
+        "expected_count": 9
+      },
+      "response_time": 21.752793,
+      "extraction_approach": "single_pass"
+    },
+    {
+      "strategy": "contextual_inference",
+      "scenario": "temporal_relationships",
+      "success": true,
+      "relationships": [
+        {
+          "source": "John",
+          "target": "Google",
+          "type": "WORKS_AT",
+          "confidence": 1.0,
+          "context": "John previously worked at Google for 5 years",
+          "method": "explicit"
+        },
+        {
+          "source": "John",
+          "target": "Microsoft",
+          "type": "WORKS_AT",
+          "confidence": 1.0,
+          "context": "In 2020, he joined Microsoft as a senior engineer",
+          "method": "explicit"
+        },
+        {
+          "source": "John",
+          "target": "Azure team",
+          "type": "LEADS",
+          "confidence": 1.0,
+          "context": "now leads the Azure team",
+          "method": "explicit"
+        },
+        {
+          "source": "Azure team",
+          "target": "Microsoft",
+          "type": "PART_OF",
+          "confidence": 0.9,
+          "context": "Azure team",
+          "method": "inferred"
+        }
+      ],
+      "metrics": {
+        "precision": 0.25,
+        "recall": 0.2,
+        "f1": 0.22222222222222224,
+        "true_positives": 1,
+        "false_positives": 3,
+        "false_negatives": 4,
+        "predicted_count": 4,
+        "expected_count": 5
+      },
+      "response_time": 0.384534,
+      "extraction_approach": "single_pass"
+    },
+    {
+      "strategy": "contextual_inference",
+      "scenario": "technical_relationships",
+      "success": true,
+      "relationships": [
+        {
+          "source": "GraphRAG system",
+          "target": "LLaMA-3 embeddings",
+          "type": "USES",
+          "confidence": 0.9,
+          "context": "The GraphRAG system uses LLaMA-3 embeddings for vector storage",
+          "method": "explicit usage mention"
+        },
+        {
+          "source": "GraphRAG system",
+          "target": "FalkorDB",
+          "type": "INTEGRATES_WITH",
+          "confidence": 0.9,
+          "context": "It integrates with FalkorDB as the backend database",
+          "method": "explicit integration mention"
+        },
+        {
+          "source": "GraphRAG system",
+          "target": "Cosmograph",
+          "type": "USES",
+          "confidence": 0.9,
+          "context": "employs Cosmograph for data visualization",
+          "method": "explicit usage mention"
+        },
+        {
+          "source": "GraphRAG system",
+          "target": "FastAPI framework",
+          "type": "BUILT_ON",
+          "confidence": 0.9,
+          "context": "The system was built on FastAPI framework",
+          "method": "explicit construction mention"
+        }
+      ],
+      "metrics": {
+        "precision": 0.75,
+        "recall": 0.75,
+        "f1": 0.75,
+        "true_positives": 3,
+        "false_positives": 1,
+        "false_negatives": 1,
+        "predicted_count": 4,
+        "expected_count": 4
+      },
+      "response_time": 0.375404,
+      "extraction_approach": "single_pass"
+    },
+    {
+      "strategy": "contextual_inference",
+      "scenario": "implicit_relationships",
+      "success": true,
+      "relationships": [
+        {
+          "source": "Apple",
+          "target": "Tim Cook",
+          "type": "EMPLOYED_BY",
+          "confidence": 0.95,
+          "context": "Tim Cook said the iPhone sales exceeded expectations in China",
+          "method": "Inference from announcement context - spokesperson implies employment"
+        },
+        {
+          "source": "Tim Cook",
+          "target": "Apple",
+          "type": "WORKS_AT",
+          "confidence": 0.95,
+          "context": "Tim Cook said the iPhone sales exceeded expectations in China",
+          "method": "Inference from announcement context - spokesperson implies employment"
+        },
+        {
+          "source": "Apple",
+          "target": "iPhone",
+          "type": "PRODUCES",
+          "confidence": 0.9,
+          "context": "Tim Cook said the iPhone sales exceeded expectations in China",
+          "method": "Inference from product sales discussion"
+        },
+        {
+          "source": "Apple",
+          "target": "China",
+          "type": "SELLS_IN",
+          "confidence": 0.85,
+          "context": "Tim Cook said the iPhone sales exceeded expectations in China",
+          "method": "Inference from sales market mention"
+        },
+        {
+          "source": "Apple",
+          "target": "India",
+          "type": "EXPANDS_TO",
+          "confidence": 0.9,
+          "context": "The company will expand manufacturing in India next year",
+          "method": "Explicit expansion announcement"
+        }
+      ],
+      "metrics": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0,
+        "true_positives": 0,
+        "false_positives": 5,
+        "false_negatives": 5,
+        "predicted_count": 5,
+        "expected_count": 5
+      },
+      "response_time": 0.468273,
+      "extraction_approach": "single_pass"
+    },
+    {
+      "strategy": "linguistic_patterns",
+      "scenario": "employment_relationships",
+      "success": true,
+      "relationships": [
+        {
+          "source": "Sarah Chen",
+          "target": "TechCorp",
+          "type": "CEO_OF",
+          "confidence": 0.95,
+          "context": "Sarah Chen, the CEO of TechCorp",
+          "method": "pattern_match"
+        },
+        {
+          "source": "John Smith",
+          "target": "TechCorp",
+          "type": "CTO_OF",
+          "confidence": 0.85,
+          "context": "John Smith will join as CTO",
+          "method": "pattern_match"
+        },
+        {
+          "source": "Mary Johnson",
+          "target": "DataSys",
+          "type": "AFFILIATION",
+          "confidence": 0.9,
+          "context": "Mary Johnson from DataSys",
+          "method": "pattern_match"
+        },
+        {
+          "source": "Mary Johnson",
+          "target": "TechCorp",
+          "type": "LEADS_DIVISION_AT",
+          "confidence": 0.8,
+          "context": "Mary Johnson from DataSys will lead the new AI division",
+          "method": "pattern_match"
+        },
+        {
+          "source": "Dr. Alice Wang",
+          "target": "MIT",
+          "type": "AFFILIATION",
+          "confidence": 0.9,
+          "context": "Dr. Alice Wang from MIT",
+          "method": "pattern_match"
+        },
+        {
+          "source": "Dr. Alice Wang",
+          "target": "TechCorp",
+          "type": "EMPLOYED_BY",
+          "confidence": 0.85,
+          "context": "The company also hired Dr. Alice Wang from MIT",
+          "method": "pattern_match"
+        }
+      ],
+      "metrics": {
+        "precision": 0.16666666666666666,
+        "recall": 0.16666666666666666,
+        "f1": 0.16666666666666666,
+        "true_positives": 1,
+        "false_positives": 5,
+        "false_negatives": 5,
+        "predicted_count": 6,
+        "expected_count": 6
+      },
+      "response_time": 0.418073,
+      "extraction_approach": "single_pass"
+    },
+    {
+      "strategy": "linguistic_patterns",
+      "scenario": "collaboration_relationships",
+      "success": true,
+      "relationships": [
+        {
+          "source": "Dr. Bob Zhang",
+          "target": "Stanford",
+          "type": "EMPLOYMENT",
+          "confidence": 0.9,
+          "context": "Dr. Bob Zhang at Stanford",
+          "method": "pattern: [Entity] 'at' [Organization]"
+        },
+        {
+          "source": "Dr. Bob Zhang",
+          "target": "Professor Lisa Chen",
+          "type": "COLLABORATES_WITH",
+          "confidence": 0.95,
+          "context": "collaborated with Professor Lisa Chen",
+          "method": "pattern: [Entity] 'collaborated with' [Entity]"
+        },
+        {
+          "source": "Professor Lisa Chen",
+          "target": "MIT",
+          "type": "AFFILIATION",
+          "confidence": 0.85,
+          "context": "Professor Lisa Chen from MIT",
+          "method": "pattern: [Entity] 'from' [Organization]"
+        },
+        {
+          "source": "Dr. Bob Zhang",
+          "target": "researchers from Google",
+          "type": "MEETS_WITH",
+          "confidence": 0.8,
+          "context": "met with researchers from Google",
+          "method": "pattern: [Entity] 'met with' [Entity]"
+        },
+        {
+          "source": "Dr. Bob Zhang",
+          "target": "researchers from IBM",
+          "type": "MEETS_WITH",
+          "confidence": 0.8,
+          "context": "met with researchers from IBM",
+          "method": "pattern: [Entity] 'met with' [Entity]"
+        },
+        {
+          "source": "Professor Lisa Chen",
+          "target": "researchers from Google",
+          "type": "MEETS_WITH",
+          "confidence": 0.8,
+          "context": "met with researchers from Google",
+          "method": "pattern: [Entity] 'met with' [Entity]"
+        },
+        {
+          "source": "Professor Lisa Chen",
+          "target": "researchers from IBM",
+          "type": "MEETS_WITH",
+          "confidence": 0.8,
+          "context": "met with researchers from IBM",
+          "method": "pattern: [Entity] 'met with' [Entity]"
+        }
+      ],
+      "metrics": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0,
+        "true_positives": 0,
+        "false_positives": 7,
+        "false_negatives": 9,
+        "predicted_count": 7,
+        "expected_count": 9
+      },
+      "response_time": 0.484216,
+      "extraction_approach": "single_pass"
+    },
+    {
+      "strategy": "linguistic_patterns",
+      "scenario": "temporal_relationships",
+      "success": true,
+      "relationships": [
+        {
+          "source": "John",
+          "target": "Google",
+          "type": "EMPLOYMENT",
+          "confidence": 0.95,
+          "context": "John previously worked at Google for 5 years",
+          "method": "pattern: [Person] [action_verb] [preposition] [Organization]"
+        },
+        {
+          "source": "John",
+          "target": "Microsoft",
+          "type": "EMPLOYMENT",
+          "confidence": 0.98,
+          "context": "In 2020, he joined Microsoft as a senior engineer",
+          "method": "pattern: [Person] [action_verb] [Organization]"
+        },
+        {
+          "source": "John",
+          "target": "senior engineer",
+          "type": "TITLE",
+          "confidence": 0.9,
+          "context": "In 2020, he joined Microsoft as a senior engineer",
+          "method": "pattern: [Person] [title] [preposition] [Organization]"
+        },
+        {
+          "source": "John",
+          "target": "principal engineer",
+          "type": "TITLE",
+          "confidence": 0.92,
+          "context": "Last year, he was promoted to principal engineer",
+          "method": "pattern: [Person] [action_verb] [title]"
+        },
+        {
+          "source": "John",
+          "target": "Azure team",
+          "type": "LEADERSHIP",
+          "confidence": 0.85,
+          "context": "now leads the Azure team",
+          "method": "pattern: [Person] [action_verb] [Entity]"
+        }
+      ],
+      "metrics": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0,
+        "true_positives": 0,
+        "false_positives": 5,
+        "false_negatives": 5,
+        "predicted_count": 5,
+        "expected_count": 5
+      },
+      "response_time": 0.431542,
+      "extraction_approach": "single_pass"
+    },
+    {
+      "strategy": "linguistic_patterns",
+      "scenario": "technical_relationships",
+      "success": true,
+      "relationships": [
+        {
+          "source": "GraphRAG system",
+          "target": "LLaMA-3 embeddings",
+          "type": "USES",
+          "confidence": 0.95,
+          "context": "The GraphRAG system uses LLaMA-3 embeddings for vector storage.",
+          "method": "action_verb"
+        },
+        {
+          "source": "GraphRAG system",
+          "target": "FalkorDB",
+          "type": "INTEGRATES_WITH",
+          "confidence": 0.9,
+          "context": "It integrates with FalkorDB as the backend database",
+          "method": "action_verb"
+        },
+        {
+          "source": "GraphRAG system",
+          "target": "Cosmograph",
+          "type": "EMPLOYS",
+          "confidence": 0.95,
+          "context": "employs Cosmograph for data visualization",
+          "method": "action_verb"
+        },
+        {
+          "source": "GraphRAG system",
+          "target": "FastAPI framework",
+          "type": "BUILT_ON",
+          "confidence": 0.85,
+          "context": "The system was built on FastAPI framework.",
+          "method": "action_verb"
+        }
+      ],
+      "metrics": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "true_positives": 4,
+        "false_positives": 0,
+        "false_negatives": 0,
+        "predicted_count": 4,
+        "expected_count": 4
+      },
+      "response_time": 1.532608,
+      "extraction_approach": "single_pass"
+    },
+    {
+      "strategy": "linguistic_patterns",
+      "scenario": "implicit_relationships",
+      "success": true,
+      "relationships": [
+        {
+          "source": "Apple",
+          "target": "record quarterly earnings",
+          "type": "ACTION",
+          "confidence": 0.9,
+          "context": "Apple announced record quarterly earnings",
+          "method": "action_verb"
+        },
+        {
+          "source": "Tim Cook",
+          "target": "Apple",
+          "type": "EMPLOYMENT",
+          "confidence": 0.8,
+          "context": "Tim Cook said the iPhone sales exceeded expectations in China",
+          "method": "title_preposition"
+        },
+        {
+          "source": "iPhone",
+          "target": "Apple",
+          "type": "AFFILIATION",
+          "confidence": 0.9,
+          "context": "Tim Cook said the iPhone sales exceeded expectations in China",
+          "method": "product_affiliation"
+        },
+        {
+          "source": "Apple",
+          "target": "China",
+          "type": "LOCATION",
+          "confidence": 0.7,
+          "context": "Tim Cook said the iPhone sales exceeded expectations in China",
+          "method": "location_preposition"
+        },
+        {
+          "source": "Apple",
+          "target": "India",
+          "type": "LOCATION",
+          "confidence": 0.8,
+          "context": "The company will expand manufacturing in India next year",
+          "method": "location_preposition"
+        }
+      ],
+      "metrics": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0,
+        "true_positives": 0,
+        "false_positives": 5,
+        "false_negatives": 5,
+        "predicted_count": 5,
+        "expected_count": 5
+      },
+      "response_time": 0.398912,
+      "extraction_approach": "single_pass"
+    },
+    {
+      "strategy": "domain_business",
+      "scenario": "employment_relationships",
+      "success": true,
+      "relationships": [
+        {
+          "source": "Sarah Chen",
+          "target": "TechCorp",
+          "type": "LEADS/MANAGES",
+          "confidence": 0.95,
+          "context": "Sarah Chen, the CEO of TechCorp",
+          "method": "title-based inference"
+        },
+        {
+          "source": "Sarah Chen",
+          "target": "John Smith",
+          "type": "ANNOUNCED/LAUNCHED",
+          "confidence": 0.85,
+          "context": "Sarah Chen, the CEO of TechCorp, announced that John Smith will join as CTO",
+          "method": "action verb extraction"
+        },
+        {
+          "source": "John Smith",
+          "target": "TechCorp",
+          "type": "JOINED/HIRED_BY",
+          "confidence": 0.9,
+          "context": "John Smith will join as CTO",
+          "method": "employment verb extraction"
+        },
+        {
+          "source": "Mary Johnson",
+          "target": "DataSys",
+          "type": "LEADS/MANAGES",
+          "confidence": 0.8,
+          "context": "Mary Johnson from DataSys will lead the new AI division",
+          "method": "title-based inference"
+        },
+        {
+          "source": "TechCorp",
+          "target": "Mary Johnson",
+          "type": "HIRED_BY",
+          "confidence": 0.85,
+          "context": "Mary Johnson from DataSys will lead the new AI division",
+          "method": "employment verb extraction"
+        },
+        {
+          "source": "Dr. Alice Wang",
+          "target": "MIT",
+          "type": "LEADS/MANAGES",
+          "confidence": 0.75,
+          "context": "Dr. Alice Wang from MIT",
+          "method": "title-based inference"
+        },
+        {
+          "source": "TechCorp",
+          "target": "Dr. Alice Wang",
+          "type": "HIRED_BY",
+          "confidence": 0.9,
+          "context": "The company also hired Dr. Alice Wang from MIT",
+          "method": "employment verb extraction"
+        }
+      ],
+      "metrics": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0,
+        "true_positives": 0,
+        "false_positives": 7,
+        "false_negatives": 6,
+        "predicted_count": 7,
+        "expected_count": 6
+      },
+      "response_time": 1.783261,
+      "extraction_approach": "single_pass"
+    },
+    {
+      "strategy": "domain_business",
+      "scenario": "collaboration_relationships",
+      "success": true,
+      "relationships": [
+        {
+          "source": "Dr. Bob Zhang",
+          "target": "Stanford",
+          "type": "JOINED/HIRED_BY",
+          "confidence": 0.9,
+          "context": "Dr. Bob Zhang at Stanford",
+          "method": "pattern_matching"
+        },
+        {
+          "source": "Professor Lisa Chen",
+          "target": "MIT",
+          "type": "JOINED/HIRED_BY",
+          "confidence": 0.9,
+          "context": "Professor Lisa Chen from MIT",
+          "method": "pattern_matching"
+        },
+        {
+          "source": "Dr. Bob Zhang",
+          "target": "Professor Lisa Chen",
+          "type": "PARTNERS_WITH",
+          "confidence": 0.95,
+          "context": "collaborated with",
+          "method": "pattern_matching"
+        },
+        {
+          "source": "Dr. Bob Zhang",
+          "target": "Google",
+          "type": "PARTNERS_WITH",
+          "confidence": 0.8,
+          "context": "met with researchers from Google",
+          "method": "pattern_matching"
+        },
+        {
+          "source": "Dr. Bob Zhang",
+          "target": "IBM",
+          "type": "PARTNERS_WITH",
+          "confidence": 0.8,
+          "context": "met with researchers from IBM",
+          "method": "pattern_matching"
+        },
+        {
+          "source": "Professor Lisa Chen",
+          "target": "Google",
+          "type": "PARTNERS_WITH",
+          "confidence": 0.8,
+          "context": "met with researchers from Google",
+          "method": "pattern_matching"
+        },
+        {
+          "source": "Professor Lisa Chen",
+          "target": "IBM",
+          "type": "PARTNERS_WITH",
+          "confidence": 0.8,
+          "context": "met with researchers from IBM",
+          "method": "pattern_matching"
+        }
+      ],
+      "metrics": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0,
+        "true_positives": 0,
+        "false_positives": 7,
+        "false_negatives": 9,
+        "predicted_count": 7,
+        "expected_count": 9
+      },
+      "response_time": 0.447616,
+      "extraction_approach": "single_pass"
+    },
+    {
+      "strategy": "domain_business",
+      "scenario": "temporal_relationships",
+      "success": true,
+      "relationships": [
+        {
+          "source": "John",
+          "target": "Google",
+          "type": "JOINED/HIRED_BY",
+          "confidence": 0.9,
+          "context": "John previously worked at Google for 5 years",
+          "method": "worked_at"
+        },
+        {
+          "source": "John",
+          "target": "Microsoft",
+          "type": "JOINED/HIRED_BY",
+          "confidence": 0.95,
+          "context": "In 2020, he joined Microsoft as a senior engineer",
+          "method": "joined"
+        },
+        {
+          "source": "John",
+          "target": "Azure team",
+          "type": "LEADS/MANAGES",
+          "confidence": 0.85,
+          "context": "now leads the Azure team",
+          "method": "leads"
+        }
+      ],
+      "metrics": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0,
+        "true_positives": 0,
+        "false_positives": 3,
+        "false_negatives": 5,
+        "predicted_count": 3,
+        "expected_count": 5
+      },
+      "response_time": 0.397374,
+      "extraction_approach": "single_pass"
+    },
+    {
+      "strategy": "domain_business",
+      "scenario": "technical_relationships",
+      "success": true,
+      "relationships": [
+        {
+          "source": "GraphRAG system",
+          "target": "LLaMA-3 embeddings",
+          "type": "INTEGRATES_WITH",
+          "confidence": 0.9,
+          "context": "uses LLaMA-3 embeddings for vector storage",
+          "method": "uses"
+        },
+        {
+          "source": "GraphRAG system",
+          "target": "FalkorDB",
+          "type": "INTEGRATES_WITH",
+          "confidence": 0.9,
+          "context": "integrates with FalkorDB as the backend database",
+          "method": "integrates_with"
+        },
+        {
+          "source": "GraphRAG system",
+          "target": "Cosmograph",
+          "type": "INTEGRATES_WITH",
+          "confidence": 0.9,
+          "context": "employs Cosmograph for data visualization",
+          "method": "employs"
+        },
+        {
+          "source": "GraphRAG system",
+          "target": "FastAPI framework",
+          "type": "BUILT_ON",
+          "confidence": 0.95,
+          "context": "The system was built on FastAPI framework",
+          "method": "built_on"
+        }
+      ],
+      "metrics": {
+        "precision": 0.5,
+        "recall": 0.5,
+        "f1": 0.5,
+        "true_positives": 2,
+        "false_positives": 2,
+        "false_negatives": 2,
+        "predicted_count": 4,
+        "expected_count": 4
+      },
+      "response_time": 0.63339,
+      "extraction_approach": "single_pass"
+    },
+    {
+      "strategy": "domain_business",
+      "scenario": "implicit_relationships",
+      "success": true,
+      "relationships": [
+        {
+          "source": "Apple",
+          "target": "record quarterly earnings",
+          "type": "ANNOUNCED/LAUNCHED",
+          "confidence": 0.9,
+          "context": "Apple announced record quarterly earnings",
+          "method": "announced"
+        },
+        {
+          "source": "Tim Cook",
+          "target": "Apple",
+          "type": "LEADS/MANAGES",
+          "confidence": 0.8,
+          "context": "Tim Cook said the iPhone sales exceeded expectations in China",
+          "method": "CEO statement"
+        },
+        {
+          "source": "Apple",
+          "target": "India",
+          "type": "INVESTED_IN",
+          "confidence": 0.7,
+          "context": "The company will expand manufacturing in India next year",
+          "method": "expansion announcement"
+        }
+      ],
+      "metrics": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0,
+        "true_positives": 0,
+        "false_positives": 3,
+        "false_negatives": 5,
+        "predicted_count": 3,
+        "expected_count": 5
+      },
+      "response_time": 0.402024,
+      "extraction_approach": "single_pass"
+    },
+    {
+      "strategy": "domain_technical",
+      "scenario": "employment_relationships",
+      "success": true,
+      "relationships": [
+        {
+          "source": "Sarah Chen",
+          "target": "TechCorp",
+          "type": "EMPLOYS",
+          "confidence": 0.95,
+          "context": "Sarah Chen, the CEO of TechCorp",
+          "method": "title_relationship"
+        },
+        {
+          "source": "John Smith",
+          "target": "TechCorp",
+          "type": "EMPLOYS",
+          "confidence": 0.9,
+          "context": "John Smith will join as CTO",
+          "method": "employment_announcement"
+        },
+        {
+          "source": "Mary Johnson",
+          "target": "DataSys",
+          "type": "EMPLOYS",
+          "confidence": 0.85,
+          "context": "Mary Johnson from DataSys",
+          "method": "affiliation_mention"
+        },
+        {
+          "source": "Mary Johnson",
+          "target": "TechCorp",
+          "type": "EMPLOYS",
+          "confidence": 0.9,
+          "context": "Mary Johnson from DataSys will lead the new AI division",
+          "method": "employment_context"
+        },
+        {
+          "source": "Dr. Alice Wang",
+          "target": "MIT",
+          "type": "EMPLOYS",
+          "confidence": 0.8,
+          "context": "Dr. Alice Wang from MIT",
+          "method": "affiliation_mention"
+        },
+        {
+          "source": "Dr. Alice Wang",
+          "target": "TechCorp",
+          "type": "EMPLOYS",
+          "confidence": 0.95,
+          "context": "The company also hired Dr. Alice Wang from MIT",
+          "method": "hiring_announcement"
+        }
+      ],
+      "metrics": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0,
+        "true_positives": 0,
+        "false_positives": 6,
+        "false_negatives": 6,
+        "predicted_count": 6,
+        "expected_count": 6
+      },
+      "response_time": 0.430704,
+      "extraction_approach": "single_pass"
+    },
+    {
+      "strategy": "domain_technical",
+      "scenario": "collaboration_relationships",
+      "success": false,
+      "error": "Error code: 429 - {'message': 'Requests per minute limit exceeded - too many requests sent.', 'type': 'too_many_requests_error', 'param': 'quota', 'code': 'request_quota_exceeded'}",
+      "metrics": {
+        "f1": 0,
+        "precision": 0,
+        "recall": 0
+      }
+    },
+    {
+      "strategy": "domain_technical",
+      "scenario": "temporal_relationships",
+      "success": true,
+      "relationships": [
+        {
+          "source": "John",
+          "target": "Google",
+          "type": "WORKED_AT",
+          "confidence": 0.95,
+          "context": "John previously worked at Google for 5 years"
+        },
+        {
+          "source": "John",
+          "target": "Microsoft",
+          "type": "WORKS_AT",
+          "confidence": 0.95,
+          "context": "In 2020, he joined Microsoft as a senior engineer"
+        },
+        {
+          "source": "John",
+          "target": "Azure team",
+          "type": "LEADS",
+          "confidence": 0.9,
+          "context": "now leads the Azure team"
+        },
+        {
+          "source": "Azure team",
+          "target": "Microsoft",
+          "type": "PART_OF",
+          "confidence": 0.85,
+          "context": "Azure team at Microsoft"
+        }
+      ],
+      "metrics": {
+        "precision": 0.25,
+        "recall": 0.2,
+        "f1": 0.22222222222222224,
+        "true_positives": 1,
+        "false_positives": 3,
+        "false_negatives": 4,
+        "predicted_count": 4,
+        "expected_count": 5
+      },
+      "response_time": 2.100612,
+      "extraction_approach": "single_pass"
+    },
+    {
+      "strategy": "domain_technical",
+      "scenario": "technical_relationships",
+      "success": true,
+      "relationships": [
+        {
+          "source": "GraphRAG system",
+          "target": "LLaMA-3 embeddings",
+          "type": "USES",
+          "confidence": 0.95,
+          "context": "uses LLaMA-3 embeddings for vector storage"
+        },
+        {
+          "source": "GraphRAG system",
+          "target": "FalkorDB",
+          "type": "INTEGRATES_WITH",
+          "confidence": 0.95,
+          "context": "integrates with FalkorDB as the backend database"
+        },
+        {
+          "source": "GraphRAG system",
+          "target": "Cosmograph",
+          "type": "EMPLOYS",
+          "confidence": 0.95,
+          "context": "employs Cosmograph for data visualization"
+        },
+        {
+          "source": "GraphRAG system",
+          "target": "FastAPI framework",
+          "type": "BUILT_ON",
+          "confidence": 0.95,
+          "context": "was built on FastAPI framework"
+        }
+      ],
+      "metrics": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "true_positives": 4,
+        "false_positives": 0,
+        "false_negatives": 0,
+        "predicted_count": 4,
+        "expected_count": 4
+      },
+      "response_time": 0.332578,
+      "extraction_approach": "single_pass"
+    },
+    {
+      "strategy": "domain_technical",
+      "scenario": "implicit_relationships",
+      "success": true,
+      "relationships": [],
+      "metrics": {
+        "precision": 0,
+        "recall": 0.0,
+        "f1": 0,
+        "true_positives": 0,
+        "false_positives": 0,
+        "false_negatives": 5,
+        "predicted_count": 0,
+        "expected_count": 5
+      },
+      "response_time": 1.331083,
+      "extraction_approach": "single_pass"
+    },
+    {
+      "strategy": "pattern_augmented",
+      "scenario": "employment_relationships",
+      "success": true,
+      "relationships": [
+        {
+          "source": "Sarah Chen",
+          "target": "TechCorp",
+          "type": "CEO_OF",
+          "confidence": 0.95,
+          "context": "Sarah Chen, the CEO of TechCorp",
+          "method": "pattern_match"
+        },
+        {
+          "source": "John Smith",
+          "target": "TechCorp",
+          "type": "CTO_OF",
+          "confidence": 0.85,
+          "context": "John Smith will join as CTO",
+          "method": "pattern_match"
+        },
+        {
+          "source": "Mary Johnson",
+          "target": "DataSys",
+          "type": "AFFILIATION",
+          "confidence": 0.9,
+          "context": "Mary Johnson from DataSys",
+          "method": "pattern_match"
+        },
+        {
+          "source": "Mary Johnson",
+          "target": "TechCorp",
+          "type": "LEADS_DIVISION_AT",
+          "confidence": 0.8,
+          "context": "Mary Johnson from DataSys will lead the new AI division",
+          "method": "pattern_match"
+        },
+        {
+          "source": "Dr. Alice Wang",
+          "target": "MIT",
+          "type": "AFFILIATION",
+          "confidence": 0.9,
+          "context": "Dr. Alice Wang from MIT",
+          "method": "pattern_match"
+        },
+        {
+          "source": "Dr. Alice Wang",
+          "target": "TechCorp",
+          "type": "EMPLOYED_BY",
+          "confidence": 0.85,
+          "context": "The company also hired Dr. Alice Wang from MIT",
+          "method": "pattern_match"
+        },
+        {
+          "source": "Sarah Chen",
+          "target": "TechCorp",
+          "type": "CEO_OF",
+          "confidence": 0.9,
+          "method": "pattern_extraction"
+        }
+      ],
+      "metrics": {
+        "precision": 0.16666666666666666,
+        "recall": 0.16666666666666666,
+        "f1": 0.16666666666666666,
+        "true_positives": 1,
+        "false_positives": 5,
+        "false_negatives": 5,
+        "predicted_count": 6,
+        "expected_count": 6
+      },
+      "response_time": 0.41702,
+      "extraction_approach": "single_pass"
+    },
+    {
+      "strategy": "pattern_augmented",
+      "scenario": "collaboration_relationships",
+      "success": true,
+      "relationships": [
+        {
+          "source": "Dr. Bob Zhang",
+          "target": "Stanford",
+          "type": "EMPLOYMENT",
+          "confidence": 0.9,
+          "context": "Dr. Bob Zhang at Stanford",
+          "method": "pattern: [Person] [title] [preposition] [Organization]"
+        },
+        {
+          "source": "Professor Lisa Chen",
+          "target": "MIT",
+          "type": "EMPLOYMENT",
+          "confidence": 0.9,
+          "context": "Professor Lisa Chen from MIT",
+          "method": "pattern: [Person] [title] [preposition] [Organization]"
+        },
+        {
+          "source": "Dr. Bob Zhang",
+          "target": "Professor Lisa Chen",
+          "type": "COLLABORATES_WITH",
+          "confidence": 0.95,
+          "context": "Dr. Bob Zhang at Stanford collaborated with Professor Lisa Chen from MIT",
+          "method": "pattern: [Entity] [action_verb] [Entity]"
+        },
+        {
+          "source": "Dr. Bob Zhang",
+          "target": "researchers from Google",
+          "type": "MEETS_WITH",
+          "confidence": 0.85,
+          "context": "They met with researchers from Google",
+          "method": "pattern: [Entity] [action_verb] [Entity]"
+        },
+        {
+          "source": "Dr. Bob Zhang",
+          "target": "researchers from IBM",
+          "type": "MEETS_WITH",
+          "confidence": 0.85,
+          "context": "They met with researchers from Google and IBM",
+          "method": "pattern: [Entity] [action_verb] [Entity]"
+        },
+        {
+          "source": "Professor Lisa Chen",
+          "target": "researchers from Google",
+          "type": "MEETS_WITH",
+          "confidence": 0.85,
+          "context": "They met with researchers from Google",
+          "method": "pattern: [Entity] [action_verb] [Entity]"
+        },
+        {
+          "source": "Professor Lisa Chen",
+          "target": "researchers from IBM",
+          "type": "MEETS_WITH",
+          "confidence": 0.85,
+          "context": "They met with researchers from Google and IBM",
+          "method": "pattern: [Entity] [action_verb] [Entity]"
+        },
+        {
+          "source": "researchers from Google",
+          "target": "quantum computing research",
+          "type": "AFFILIATION",
+          "confidence": 0.7,
+          "context": "researchers from Google to discuss potential applications",
+          "method": "pattern: [Entity] [preposition] [Organization]"
+        },
+        {
+          "source": "researchers from IBM",
+          "target": "quantum computing research",
+          "type": "AFFILIATION",
+          "confidence": 0.7,
+          "context": "researchers from IBM to discuss potential applications",
+          "method": "pattern: [Entity] [preposition] [Organization]"
+        }
+      ],
+      "metrics": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0,
+        "true_positives": 0,
+        "false_positives": 9,
+        "false_negatives": 9,
+        "predicted_count": 9,
+        "expected_count": 9
+      },
+      "response_time": 0.591235,
+      "extraction_approach": "single_pass"
+    },
+    {
+      "strategy": "pattern_augmented",
+      "scenario": "temporal_relationships",
+      "success": true,
+      "relationships": [
+        {
+          "source": "John",
+          "target": "Google",
+          "type": "employment",
+          "confidence": 0.95,
+          "context": "John previously worked at Google for 5 years",
+          "method": "pattern: [Person] [action_verb] [Organization]"
+        },
+        {
+          "source": "John",
+          "target": "Microsoft",
+          "type": "employment",
+          "confidence": 0.98,
+          "context": "In 2020, he joined Microsoft as a senior engineer",
+          "method": "pattern: [Person] [action_verb] [Organization]"
+        },
+        {
+          "source": "John",
+          "target": "senior engineer",
+          "type": "title",
+          "confidence": 0.9,
+          "context": "In 2020, he joined Microsoft as a senior engineer",
+          "method": "pattern: [Person] [title] [preposition] [Organization]"
+        },
+        {
+          "source": "John",
+          "target": "principal engineer",
+          "type": "title",
+          "confidence": 0.92,
+          "context": "Last year, he was promoted to principal engineer",
+          "method": "pattern: [Person] [action_verb] [title]"
+        },
+        {
+          "source": "John",
+          "target": "Azure team",
+          "type": "leadership",
+          "confidence": 0.85,
+          "context": "now leads the Azure team",
+          "method": "pattern: [Person] [action_verb] [Entity]"
+        }
+      ],
+      "metrics": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0,
+        "true_positives": 0,
+        "false_positives": 5,
+        "false_negatives": 5,
+        "predicted_count": 5,
+        "expected_count": 5
+      },
+      "response_time": 0.382828,
+      "extraction_approach": "single_pass"
+    },
+    {
+      "strategy": "pattern_augmented",
+      "scenario": "technical_relationships",
+      "success": true,
+      "relationships": [
+        {
+          "source": "GraphRAG system",
+          "target": "LLaMA-3 embeddings",
+          "type": "USES",
+          "confidence": 0.95,
+          "context": "The GraphRAG system uses LLaMA-3 embeddings for vector storage.",
+          "method": "action_verb"
+        },
+        {
+          "source": "GraphRAG system",
+          "target": "FalkorDB",
+          "type": "INTEGRATES_WITH",
+          "confidence": 0.9,
+          "context": "It integrates with FalkorDB as the backend database",
+          "method": "action_verb"
+        },
+        {
+          "source": "GraphRAG system",
+          "target": "Cosmograph",
+          "type": "EMPLOYS",
+          "confidence": 0.85,
+          "context": "employs Cosmograph for data visualization",
+          "method": "action_verb"
+        },
+        {
+          "source": "GraphRAG system",
+          "target": "FastAPI framework",
+          "type": "BUILT_ON",
+          "confidence": 0.95,
+          "context": "The system was built on FastAPI framework.",
+          "method": "action_verb"
+        }
+      ],
+      "metrics": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1": 1.0,
+        "true_positives": 4,
+        "false_positives": 0,
+        "false_negatives": 0,
+        "predicted_count": 4,
+        "expected_count": 4
+      },
+      "response_time": 0.349903,
+      "extraction_approach": "single_pass"
+    },
+    {
+      "strategy": "pattern_augmented",
+      "scenario": "implicit_relationships",
+      "success": true,
+      "relationships": [
+        {
+          "source": "Apple",
+          "target": "record quarterly earnings",
+          "type": "ACTION",
+          "confidence": 0.9,
+          "context": "Apple announced record quarterly earnings",
+          "method": "action_verb"
+        },
+        {
+          "source": "Tim Cook",
+          "target": "Apple",
+          "type": "EMPLOYMENT",
+          "confidence": 0.8,
+          "context": "Tim Cook said the iPhone sales exceeded expectations in China",
+          "method": "title_preposition"
+        },
+        {
+          "source": "iPhone",
+          "target": "Apple",
+          "type": "AFFILIATION",
+          "confidence": 0.9,
+          "context": "Tim Cook said the iPhone sales exceeded expectations in China",
+          "method": "product_affiliation"
+        },
+        {
+          "source": "Apple",
+          "target": "China",
+          "type": "LOCATION",
+          "confidence": 0.7,
+          "context": "Tim Cook said the iPhone sales exceeded expectations in China",
+          "method": "location_preposition"
+        },
+        {
+          "source": "Apple",
+          "target": "India",
+          "type": "LOCATION",
+          "confidence": 0.8,
+          "context": "The company will expand manufacturing in India next year",
+          "method": "location_preposition"
+        }
+      ],
+      "metrics": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0,
+        "true_positives": 0,
+        "false_positives": 5,
+        "false_negatives": 5,
+        "predicted_count": 5,
+        "expected_count": 5
+      },
+      "response_time": 1.510499,
+      "extraction_approach": "single_pass"
+    }
+  ],
+  "recommendations": [
+    "Pattern-augmented extraction provides substantial gains",
+    "Domain-specific prompting shows strong benefits - tailor prompts to content type"
+  ]
+}

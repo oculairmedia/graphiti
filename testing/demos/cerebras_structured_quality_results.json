@@ -1,0 +1,386 @@
+{
+  "timestamp": "2025-08-30T10:59:33.649108",
+  "model": "llama-4-scout-17b-16e-instruct",
+  "structured_outputs": true,
+  "metrics": {
+    "entity_f1": 0.6826923076923077,
+    "relationship_f1": 0.6,
+    "summary_quality": 0.9,
+    "overall_quality": 0.7275641025641025,
+    "avg_entity_time": 0.6251007318496704,
+    "avg_summary_time": 0.4623500108718872
+  },
+  "episodes": [
+    {
+      "episode": "tech_meeting",
+      "entities": {
+        "success": true,
+        "entities": [
+          "Alice",
+          "Microsoft",
+          "Bob",
+          "Google",
+          "Seattle",
+          "January 15, 2024",
+          "AI",
+          "$5 million",
+          "large language models"
+        ],
+        "relationships": [
+          [
+            "Alice",
+            "works at",
+            "Microsoft"
+          ],
+          [
+            "Bob",
+            "works at",
+            "Google"
+          ],
+          [
+            "Alice",
+            "met",
+            "Bob"
+          ],
+          [
+            "Alice",
+            "discussed",
+            "AI collaboration"
+          ],
+          [
+            "Bob",
+            "discussed",
+            "AI collaboration"
+          ],
+          [
+            "Alice",
+            "agreed to share research on",
+            "large language models"
+          ],
+          [
+            "Bob",
+            "agreed to share research on",
+            "large language models"
+          ],
+          [
+            "Alice",
+            "set up monthly sync meetings with",
+            "Bob"
+          ],
+          [
+            "project",
+            "has budget",
+            "$5 million"
+          ],
+          [
+            "project",
+            "involves",
+            "AI collaboration"
+          ],
+          [
+            "AI collaboration",
+            "involves",
+            "large language models"
+          ]
+        ],
+        "entity_precision": 0.6666666666666666,
+        "entity_recall": 0.8571428571428571,
+        "entity_f1": 0.75,
+        "rel_precision": 0.36363636363636365,
+        "rel_recall": 1.0,
+        "rel_f1": 0.5333333333333333,
+        "time": 0.9891672134399414,
+        "raw_response": {
+          "entities": [
+            {
+              "name": "Alice",
+              "type": "person",
+              "description": null
+            },
+            {
+              "name": "Microsoft",
+              "type": "organization",
+              "description": null
+            },
+            {
+              "name": "Bob",
+              "type": "person",
+              "description": null
+            },
+            {
+              "name": "Google",
+              "type": "organization",
+              "description": null
+            },
+            {
+              "name": "Seattle",
+              "type": "location",
+              "description": null
+            },
+            {
+              "name": "January 15, 2024",
+              "type": "date",
+              "description": null
+            },
+            {
+              "name": "AI",
+              "type": "concept",
+              "description": null
+            },
+            {
+              "name": "$5 million",
+              "type": "monetary value",
+              "description": null
+            },
+            {
+              "name": "large language models",
+              "type": "concept",
+              "description": null
+            }
+          ],
+          "relationships": [
+            {
+              "source": "Alice",
+              "relation": "works at",
+              "target": "Microsoft",
+              "confidence": null
+            },
+            {
+              "source": "Bob",
+              "relation": "works at",
+              "target": "Google",
+              "confidence": null
+            },
+            {
+              "source": "Alice",
+              "relation": "met",
+              "target": "Bob",
+              "confidence": null
+            },
+            {
+              "source": "Alice",
+              "relation": "discussed",
+              "target": "AI collaboration",
+              "confidence": null
+            },
+            {
+              "source": "Bob",
+              "relation": "discussed",
+              "target": "AI collaboration",
+              "confidence": null
+            },
+            {
+              "source": "Alice",
+              "relation": "agreed to share research on",
+              "target": "large language models",
+              "confidence": null
+            },
+            {
+              "source": "Bob",
+              "relation": "agreed to share research on",
+              "target": "large language models",
+              "confidence": null
+            },
+            {
+              "source": "Alice",
+              "relation": "set up monthly sync meetings with",
+              "target": "Bob",
+              "confidence": null
+            },
+            {
+              "source": "project",
+              "relation": "has budget",
+              "target": "$5 million",
+              "confidence": null
+            },
+            {
+              "source": "project",
+              "relation": "involves",
+              "target": "AI collaboration",
+              "confidence": null
+            },
+            {
+              "source": "AI collaboration",
+              "relation": "involves",
+              "target": "large language models",
+              "confidence": null
+            }
+          ]
+        }
+      },
+      "summary": {
+        "success": true,
+        "summary": "Alice from Microsoft and Bob from Google met in Seattle to discuss AI collaboration, agreeing to share research on large language models and set up regular meetings. The project budget was set at $5 million. Their collaboration aims to advance AI development.",
+        "key_points": [
+          "Alice and Bob agreed to share research on large language models",
+          "Monthly sync meetings were scheduled",
+          "The project budget was set at $5 million"
+        ],
+        "word_count": 42,
+        "quality_score": 1.0,
+        "time": 0.6751291751861572,
+        "raw_response": {
+          "summary": "Alice from Microsoft and Bob from Google met in Seattle to discuss AI collaboration, agreeing to share research on large language models and set up regular meetings. The project budget was set at $5 million. Their collaboration aims to advance AI development.",
+          "key_points": [
+            "Alice and Bob agreed to share research on large language models",
+            "Monthly sync meetings were scheduled",
+            "The project budget was set at $5 million"
+          ],
+          "word_count": 56
+        }
+      }
+    },
+    {
+      "episode": "product_launch",
+      "entities": {
+        "success": true,
+        "entities": [
+          "Sarah",
+          "DataCorp",
+          "CloudSync 2.0",
+          "March 1st",
+          "real-time collaboration",
+          "end-to-end encryption",
+          "$99/month"
+        ],
+        "relationships": [
+          [
+            "Sarah",
+            "announced",
+            "DataCorp"
+          ],
+          [
+            "DataCorp",
+            "launches",
+            "CloudSync 2.0"
+          ],
+          [
+            "CloudSync 2.0",
+            "includes",
+            "real-time collaboration"
+          ],
+          [
+            "CloudSync 2.0",
+            "includes",
+            "end-to-end encryption"
+          ],
+          [
+            "CloudSync 2.0",
+            "launches on",
+            "March 1st"
+          ],
+          [
+            "CloudSync 2.0",
+            "priced at",
+            "$99/month"
+          ]
+        ],
+        "entity_precision": 0.5714285714285714,
+        "entity_recall": 0.6666666666666666,
+        "entity_f1": 0.6153846153846153,
+        "rel_precision": 0.5,
+        "rel_recall": 1.0,
+        "rel_f1": 0.6666666666666666,
+        "time": 0.2610342502593994,
+        "raw_response": {
+          "entities": [
+            {
+              "name": "Sarah",
+              "type": "person",
+              "description": null
+            },
+            {
+              "name": "DataCorp",
+              "type": "organization",
+              "description": null
+            },
+            {
+              "name": "CloudSync 2.0",
+              "type": "product",
+              "description": null
+            },
+            {
+              "name": "March 1st",
+              "type": "date",
+              "description": null
+            },
+            {
+              "name": "real-time collaboration",
+              "type": "concept",
+              "description": null
+            },
+            {
+              "name": "end-to-end encryption",
+              "type": "concept",
+              "description": null
+            },
+            {
+              "name": "$99/month",
+              "type": "price",
+              "description": null
+            }
+          ],
+          "relationships": [
+            {
+              "source": "Sarah",
+              "relation": "announced",
+              "target": "DataCorp",
+              "confidence": null
+            },
+            {
+              "source": "DataCorp",
+              "relation": "launches",
+              "target": "CloudSync 2.0",
+              "confidence": null
+            },
+            {
+              "source": "CloudSync 2.0",
+              "relation": "includes",
+              "target": "real-time collaboration",
+              "confidence": null
+            },
+            {
+              "source": "CloudSync 2.0",
+              "relation": "includes",
+              "target": "end-to-end encryption",
+              "confidence": null
+            },
+            {
+              "source": "CloudSync 2.0",
+              "relation": "launches on",
+              "target": "March 1st",
+              "confidence": null
+            },
+            {
+              "source": "CloudSync 2.0",
+              "relation": "priced at",
+              "target": "$99/month",
+              "confidence": null
+            }
+          ]
+        }
+      },
+      "summary": {
+        "success": true,
+        "summary": "DataCorp is set to launch CloudSync 2.0 on March 1st, featuring real-time collaboration, end-to-end encryption, and up to 10TB storage. The new version is priced at $99/month for teams. This update aims to enhance data management and security.",
+        "key_points": [
+          "Launch date: March 1st",
+          "Features: real-time collaboration, end-to-end encryption, up to 10TB storage",
+          "Pricing: $99/month for teams"
+        ],
+        "word_count": 38,
+        "quality_score": 0.8,
+        "time": 0.2495708465576172,
+        "raw_response": {
+          "summary": "DataCorp is set to launch CloudSync 2.0 on March 1st, featuring real-time collaboration, end-to-end encryption, and up to 10TB storage. The new version is priced at $99/month for teams. This update aims to enhance data management and security.",
+          "key_points": [
+            "Launch date: March 1st",
+            "Features: real-time collaboration, end-to-end encryption, up to 10TB storage",
+            "Pricing: $99/month for teams"
+          ],
+          "word_count": 56
+        }
+      }
+    }
+  ]
+}

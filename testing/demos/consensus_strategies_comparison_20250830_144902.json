@@ -1,0 +1,1131 @@
+{
+  "timestamp": "20250830_144902",
+  "model": "qwen-3-coder-480b",
+  "summary": {
+    "strategies_tested": 8,
+    "most_entities": "Aggressive",
+    "most_relationships": "Aggressive",
+    "best_agreement": "Union (High Recall)"
+  },
+  "detailed_results": [
+    {
+      "strategy": "Majority Voting",
+      "config": "ConsensusConfig(name='Majority Voting', num_samples=5, temperature_range=(0.3, 0.7), top_p_range=(0.7, 0.9), voting_threshold=0.5, aggregation_method='majority', confidence_weighting=False)",
+      "consensus": {
+        "entities": [
+          {
+            "name": "Dr. Sarah Chen",
+            "type": "Person"
+          },
+          {
+            "name": "QuantumTech Industries",
+            "type": "Organization"
+          },
+          {
+            "name": "International Tech Summit",
+            "type": "Event"
+          },
+          {
+            "name": "San Francisco",
+            "type": "Location"
+          },
+          {
+            "name": "MIT's Quantum Lab",
+            "type": "Organization"
+          },
+          {
+            "name": "Professor John Williams",
+            "type": "Person"
+          },
+          {
+            "name": "Google",
+            "type": "Organization"
+          },
+          {
+            "name": "IBM",
+            "type": "Organization"
+          },
+          {
+            "name": "NSF",
+            "type": "Organization"
+          },
+          {
+            "name": "Dr. Sarah Chen",
+            "type": "person"
+          },
+          {
+            "name": "QuantumTech Industries",
+            "type": "organization"
+          },
+          {
+            "name": "San Francisco",
+            "type": "location"
+          },
+          {
+            "name": "Professor John Williams",
+            "type": "person"
+          },
+          {
+            "name": "Google",
+            "type": "organization"
+          },
+          {
+            "name": "IBM",
+            "type": "organization"
+          },
+          {
+            "name": "NSF",
+            "type": "organization"
+          },
+          {
+            "name": "quantum computing",
+            "type": "Technology"
+          },
+          {
+            "name": "QPU-500 processor",
+            "type": "Product"
+          },
+          {
+            "name": "$50 million grant",
+            "type": "FinancialInstrument"
+          }
+        ],
+        "relationships": [
+          {
+            "source": "Dr. Sarah Chen",
+            "target": "QuantumTech Industries",
+            "type": "works_for"
+          },
+          {
+            "source": "Dr. Sarah Chen",
+            "target": "International Tech Summit",
+            "type": "announced_at"
+          },
+          {
+            "source": "International Tech Summit",
+            "target": "San Francisco",
+            "type": "located_in"
+          },
+          {
+            "source": "QPU-500 processor",
+            "target": "QuantumTech Industries",
+            "type": "developed_by"
+          },
+          {
+            "source": "QPU-500 processor",
+            "target": "MIT's Quantum Lab",
+            "type": "developed_in_collaboration_with"
+          },
+          {
+            "source": "MIT's Quantum Lab",
+            "target": "Professor John Williams",
+            "type": "led_by"
+          },
+          {
+            "source": "Google",
+            "target": "QPU-500 processor",
+            "type": "interested_in_licensing"
+          },
+          {
+            "source": "IBM",
+            "target": "QPU-500 processor",
+            "type": "interested_in_licensing"
+          },
+          {
+            "source": "Dr. Sarah Chen",
+            "target": "QuantumTech Industries",
+            "type": "employment"
+          }
+        ],
+        "consensus_method": "majority_voting",
+        "threshold": 0.5
+      },
+      "variance": {
+        "num_samples": 5,
+        "entity_variance": {
+          "unique": 34,
+          "total": 61,
+          "avg_per_sample": 12.2,
+          "avg_agreement": 0.35882352941176465,
+          "std_agreement": 0.15925866318448098
+        },
+        "relationship_variance": {
+          "unique": 43,
+          "total": 54,
+          "avg_per_sample": 10.8,
+          "avg_agreement": 0.25116279069767433,
+          "std_agreement": 0.10646998271869393
+        },
+        "timing": {
+          "avg_response_time": 0.8261074,
+          "std_response_time": 0.6947416255992152
+        }
+      },
+      "num_entities": 19,
+      "num_relationships": 9
+    },
+    {
+      "strategy": "Weighted Consensus",
+      "config": "ConsensusConfig(name='Weighted Consensus', num_samples=5, temperature_range=(0.3, 0.7), top_p_range=(0.7, 0.9), voting_threshold=0.5, aggregation_method='weighted', confidence_weighting=True)",
+      "consensus": {
+        "entities": [],
+        "relationships": [],
+        "consensus_method": "weighted",
+        "avg_confidence": 0.7499999999999999
+      },
+      "variance": {
+        "num_samples": 5,
+        "entity_variance": {
+          "unique": 27,
+          "total": 59,
+          "avg_per_sample": 11.8,
+          "avg_agreement": 0.437037037037037,
+          "std_agreement": 0.14439695325642907
+        },
+        "relationship_variance": {
+          "unique": 48,
+          "total": 58,
+          "avg_per_sample": 11.6,
+          "avg_agreement": 0.24166666666666667,
+          "std_agreement": 0.0996521728591783
+        },
+        "timing": {
+          "avg_response_time": 0.9971324000000001,
+          "std_response_time": 0.7122711734615125
+        }
+      },
+      "num_entities": 0,
+      "num_relationships": 0
+    },
+    {
+      "strategy": "Union (High Recall)",
+      "config": "ConsensusConfig(name='Union (High Recall)', num_samples=3, temperature_range=(0.3, 0.7), top_p_range=(0.7, 0.9), voting_threshold=0.5, aggregation_method='union', confidence_weighting=False)",
+      "consensus": {
+        "entities": [
+          {
+            "name": "QuantumTech Industries",
+            "type": "organization"
+          },
+          {
+            "name": "IBM",
+            "type": "organization"
+          },
+          {
+            "name": "QPU-500 processor",
+            "type": "system"
+          },
+          {
+            "name": "NSF",
+            "type": "Organization"
+          },
+          {
+            "name": "International Tech Summit",
+            "type": "organization"
+          },
+          {
+            "name": "MIT's Quantum Lab",
+            "type": "Organization"
+          },
+          {
+            "name": "NSF",
+            "type": "organization"
+          },
+          {
+            "name": "quantum computing",
+            "type": "Technology"
+          },
+          {
+            "name": "MIT's Quantum Lab",
+            "type": "organization"
+          },
+          {
+            "name": "99.9% fidelity",
+            "type": "Measurement"
+          },
+          {
+            "name": "QPU-500 processor",
+            "type": "Product"
+          },
+          {
+            "name": "Google",
+            "type": "Organization"
+          },
+          {
+            "name": "Dr. Sarah Chen",
+            "type": "Person"
+          },
+          {
+            "name": "Professor John Williams",
+            "type": "Person"
+          },
+          {
+            "name": "Google",
+            "type": "organization"
+          },
+          {
+            "name": "$50 million grant",
+            "type": "Financial"
+          },
+          {
+            "name": "500 qubits",
+            "type": "Measurement"
+          },
+          {
+            "name": "Dr. Sarah Chen",
+            "type": "person"
+          },
+          {
+            "name": "Professor John Williams",
+            "type": "person"
+          },
+          {
+            "name": "International Tech Summit",
+            "type": "Event"
+          },
+          {
+            "name": "QPU-500 processor",
+            "type": "Technology"
+          },
+          {
+            "name": "San Francisco",
+            "type": "Location"
+          },
+          {
+            "name": "QuantumTech Industries",
+            "type": "Organization"
+          },
+          {
+            "name": "San Francisco",
+            "type": "location"
+          },
+          {
+            "name": "IBM",
+            "type": "Organization"
+          }
+        ],
+        "relationships": [
+          {
+            "source": "$50 million grant",
+            "target": "NSF",
+            "type": "funding_source"
+          },
+          {
+            "source": "MIT's Quantum Lab",
+            "target": "Professor John Williams",
+            "type": "leadership"
+          },
+          {
+            "source": "Dr. Sarah Chen",
+            "target": "International Tech Summit",
+            "type": "announcement_location"
+          },
+          {
+            "source": "Dr. Sarah Chen",
+            "target": "QPU-500 processor",
+            "type": "announcement"
+          },
+          {
+            "source": "IBM",
+            "target": "QPU-500 processor",
+            "type": "licensing_interest"
+          },
+          {
+            "source": "$50 million grant",
+            "target": "NSF",
+            "type": "provided_by"
+          },
+          {
+            "source": "IBM",
+            "target": "QPU-500 processor",
+            "type": "licensing interest"
+          },
+          {
+            "source": "MIT's Quantum Lab",
+            "target": "Professor John Williams",
+            "type": "led_by"
+          },
+          {
+            "source": "QPU-500 processor",
+            "target": "QuantumTech Industries",
+            "type": "developed_by"
+          },
+          {
+            "source": "International Tech Summit",
+            "target": "San Francisco",
+            "type": "location"
+          },
+          {
+            "source": "Dr. Sarah Chen",
+            "target": "International Tech Summit",
+            "type": "announced_at"
+          },
+          {
+            "source": "QPU-500 processor",
+            "target": "MIT's Quantum Lab",
+            "type": "developed_in_collaboration_with"
+          },
+          {
+            "source": "Google",
+            "target": "QPU-500 processor",
+            "type": "licensing_interest"
+          },
+          {
+            "source": "QPU-500 processor",
+            "target": "$50 million grant",
+            "type": "funded_by"
+          },
+          {
+            "source": "Google",
+            "target": "QPU-500 processor",
+            "type": "licensing interest"
+          },
+          {
+            "source": "QPU-500 processor",
+            "target": "MIT's Quantum Lab",
+            "type": "development_collaboration"
+          },
+          {
+            "source": "QPU-500 processor",
+            "target": "Professor John Williams",
+            "type": "development_lead"
+          },
+          {
+            "source": "QPU-500 processor",
+            "target": "MIT's Quantum Lab",
+            "type": "development collaboration"
+          },
+          {
+            "source": "Dr. Sarah Chen",
+            "target": "quantum computing",
+            "type": "announcement"
+          },
+          {
+            "source": "QPU-500 processor",
+            "target": "$50 million grant",
+            "type": "funding"
+          },
+          {
+            "source": "Dr. Sarah Chen",
+            "target": "QuantumTech Industries",
+            "type": "works_for"
+          },
+          {
+            "source": "IBM",
+            "target": "QPU-500 processor",
+            "type": "interested_in_licensing"
+          },
+          {
+            "source": "QuantumTech Industries",
+            "target": "QPU-500 processor",
+            "type": "product_development"
+          },
+          {
+            "source": "Dr. Sarah Chen",
+            "target": "QuantumTech Industries",
+            "type": "employment"
+          },
+          {
+            "source": "International Tech Summit",
+            "target": "San Francisco",
+            "type": "event_location"
+          },
+          {
+            "source": "NSF",
+            "target": "QPU-500 processor",
+            "type": "funding"
+          },
+          {
+            "source": "International Tech Summit",
+            "target": "San Francisco",
+            "type": "located_in"
+          },
+          {
+            "source": "QuantumTech Industries",
+            "target": "QPU-500 processor",
+            "type": "development"
+          },
+          {
+            "source": "QPU-500 processor",
+            "target": "quantum computing",
+            "type": "technology_domain"
+          },
+          {
+            "source": "Google",
+            "target": "QPU-500 processor",
+            "type": "interested_in_licensing"
+          }
+        ],
+        "consensus_method": "union"
+      },
+      "variance": {
+        "num_samples": 3,
+        "entity_variance": {
+          "unique": 25,
+          "total": 35,
+          "avg_per_sample": 11.666666666666666,
+          "avg_agreement": 0.4666666666666666,
+          "std_agreement": 0.1632993161855452
+        },
+        "relationship_variance": {
+          "unique": 30,
+          "total": 32,
+          "avg_per_sample": 10.666666666666666,
+          "avg_agreement": 0.3555555555555557,
+          "std_agreement": 0.08314794192830981
+        },
+        "timing": {
+          "avg_response_time": 0.4663,
+          "std_response_time": 0.030440835282013315
+        }
+      },
+      "num_entities": 25,
+      "num_relationships": 30
+    },
+    {
+      "strategy": "Intersection (High Precision)",
+      "config": "ConsensusConfig(name='Intersection (High Precision)', num_samples=3, temperature_range=(0.3, 0.7), top_p_range=(0.7, 0.9), voting_threshold=0.5, aggregation_method='intersection', confidence_weighting=False)",
+      "consensus": {
+        "entities": [],
+        "relationships": [],
+        "consensus_method": "intersection"
+      },
+      "variance": {
+        "num_samples": 3,
+        "entity_variance": {
+          "unique": 27,
+          "total": 36,
+          "avg_per_sample": 12.0,
+          "avg_agreement": 0.44444444444444453,
+          "std_agreement": 0.15713484026367724
+        },
+        "relationship_variance": {
+          "unique": 33,
+          "total": 33,
+          "avg_per_sample": 11.0,
+          "avg_agreement": 0.3333333333333333,
+          "std_agreement": 0.0
+        },
+        "timing": {
+          "avg_response_time": 10.210669333333334,
+          "std_response_time": 13.840561024431207
+        }
+      },
+      "num_entities": 0,
+      "num_relationships": 0
+    },
+    {
+      "strategy": "Ranked Consensus",
+      "config": "ConsensusConfig(name='Ranked Consensus', num_samples=5, temperature_range=(0.3, 0.7), top_p_range=(0.7, 0.9), voting_threshold=0.5, aggregation_method='ranked', confidence_weighting=False)",
+      "consensus": {
+        "entities": [],
+        "relationships": [],
+        "consensus_method": "ranked"
+      },
+      "variance": {
+        "num_samples": 5,
+        "entity_variance": {
+          "unique": 30,
+          "total": 60,
+          "avg_per_sample": 12.0,
+          "avg_agreement": 0.39999999999999986,
+          "std_agreement": 0.15491933384829668
+        },
+        "relationship_variance": {
+          "unique": 43,
+          "total": 51,
+          "avg_per_sample": 10.2,
+          "avg_agreement": 0.23720930232558135,
+          "std_agreement": 0.07782883967758843
+        },
+        "timing": {
+          "avg_response_time": 0.4826708,
+          "std_response_time": 0.05795035971726146
+        }
+      },
+      "num_entities": 0,
+      "num_relationships": 0
+    },
+    {
+      "strategy": "Diverse Ensemble",
+      "config": "ConsensusConfig(name='Diverse Ensemble', num_samples=7, temperature_range=(0.0, 0.9), top_p_range=(0.7, 0.9), voting_threshold=0.5, aggregation_method='majority', confidence_weighting=False)",
+      "consensus": {
+        "entities": [
+          {
+            "name": "Dr. Sarah Chen",
+            "type": "Person"
+          },
+          {
+            "name": "QuantumTech Industries",
+            "type": "Organization"
+          },
+          {
+            "name": "International Tech Summit",
+            "type": "Event"
+          },
+          {
+            "name": "San Francisco",
+            "type": "Location"
+          },
+          {
+            "name": "MIT's Quantum Lab",
+            "type": "Organization"
+          },
+          {
+            "name": "Professor John Williams",
+            "type": "Person"
+          },
+          {
+            "name": "Google",
+            "type": "Organization"
+          },
+          {
+            "name": "IBM",
+            "type": "Organization"
+          },
+          {
+            "name": "$50 million grant",
+            "type": "Financial"
+          },
+          {
+            "name": "NSF",
+            "type": "Organization"
+          },
+          {
+            "name": "Dr. Sarah Chen",
+            "type": "person"
+          },
+          {
+            "name": "QuantumTech Industries",
+            "type": "organization"
+          },
+          {
+            "name": "San Francisco",
+            "type": "location"
+          },
+          {
+            "name": "MIT's Quantum Lab",
+            "type": "organization"
+          },
+          {
+            "name": "Professor John Williams",
+            "type": "person"
+          },
+          {
+            "name": "Google",
+            "type": "organization"
+          },
+          {
+            "name": "IBM",
+            "type": "organization"
+          },
+          {
+            "name": "NSF",
+            "type": "organization"
+          }
+        ],
+        "relationships": [
+          {
+            "source": "Dr. Sarah Chen",
+            "target": "QuantumTech Industries",
+            "type": "works_for"
+          },
+          {
+            "source": "Dr. Sarah Chen",
+            "target": "QPU-500 processor",
+            "type": "announced"
+          },
+          {
+            "source": "International Tech Summit",
+            "target": "San Francisco",
+            "type": "located_in"
+          },
+          {
+            "source": "MIT's Quantum Lab",
+            "target": "Professor John Williams",
+            "type": "led_by"
+          },
+          {
+            "source": "QPU-500 processor",
+            "target": "NSF",
+            "type": "funded_by"
+          },
+          {
+            "source": "Dr. Sarah Chen",
+            "target": "QuantumTech Industries",
+            "type": "employment"
+          },
+          {
+            "source": "QPU-500 processor",
+            "target": "MIT's Quantum Lab",
+            "type": "developed_in_collaboration_with"
+          },
+          {
+            "source": "Google",
+            "target": "QPU-500 processor",
+            "type": "interested_in_licensing"
+          },
+          {
+            "source": "IBM",
+            "target": "QPU-500 processor",
+            "type": "interested_in_licensing"
+          }
+        ],
+        "consensus_method": "majority_voting",
+        "threshold": 0.5
+      },
+      "variance": {
+        "num_samples": 7,
+        "entity_variance": {
+          "unique": 27,
+          "total": 78,
+          "avg_per_sample": 11.142857142857142,
+          "avg_agreement": 0.4126984126984126,
+          "std_agreement": 0.14197256999998664
+        },
+        "relationship_variance": {
+          "unique": 45,
+          "total": 70,
+          "avg_per_sample": 10.0,
+          "avg_agreement": 0.22222222222222215,
+          "std_agreement": 0.14616970708852495
+        },
+        "timing": {
+          "avg_response_time": 0.6085168571428572,
+          "std_response_time": 0.3006845912197358
+        }
+      },
+      "num_entities": 18,
+      "num_relationships": 9
+    },
+    {
+      "strategy": "Conservative",
+      "config": "ConsensusConfig(name='Conservative', num_samples=3, temperature_range=(0.0, 0.3), top_p_range=(0.7, 0.9), voting_threshold=0.5, aggregation_method='intersection', confidence_weighting=False)",
+      "consensus": {
+        "entities": [],
+        "relationships": [],
+        "consensus_method": "intersection"
+      },
+      "variance": {
+        "num_samples": 3,
+        "entity_variance": {
+          "unique": 28,
+          "total": 37,
+          "avg_per_sample": 12.333333333333334,
+          "avg_agreement": 0.4404761904761906,
+          "std_agreement": 0.15567496226930977
+        },
+        "relationship_variance": {
+          "unique": 30,
+          "total": 33,
+          "avg_per_sample": 11.0,
+          "avg_agreement": 0.3666666666666668,
+          "std_agreement": 0.09999999999999999
+        },
+        "timing": {
+          "avg_response_time": 0.4652146666666666,
+          "std_response_time": 0.04288110253816814
+        }
+      },
+      "num_entities": 0,
+      "num_relationships": 0
+    },
+    {
+      "strategy": "Aggressive",
+      "config": "ConsensusConfig(name='Aggressive', num_samples=5, temperature_range=(0.5, 0.9), top_p_range=(0.7, 0.9), voting_threshold=0.5, aggregation_method='union', confidence_weighting=False)",
+      "consensus": {
+        "entities": [
+          {
+            "name": "QuantumTech Industries",
+            "type": "organization"
+          },
+          {
+            "name": "IBM",
+            "type": "organization"
+          },
+          {
+            "name": "QPU-500 processor",
+            "type": "system"
+          },
+          {
+            "name": "NSF",
+            "type": "Organization"
+          },
+          {
+            "name": "International Tech Summit",
+            "type": "organization"
+          },
+          {
+            "name": "$50 million grant",
+            "type": "FinancialInstrument"
+          },
+          {
+            "name": "500 qubits",
+            "type": "Specification"
+          },
+          {
+            "name": "MIT's Quantum Lab",
+            "type": "Organization"
+          },
+          {
+            "name": "NSF",
+            "type": "organization"
+          },
+          {
+            "name": "quantum computing",
+            "type": "Technology"
+          },
+          {
+            "name": "MIT's Quantum Lab",
+            "type": "organization"
+          },
+          {
+            "name": "99.9% fidelity",
+            "type": "Measurement"
+          },
+          {
+            "name": "QPU-500 processor",
+            "type": "Product"
+          },
+          {
+            "name": "Google",
+            "type": "Organization"
+          },
+          {
+            "name": "Dr. Sarah Chen",
+            "type": "Person"
+          },
+          {
+            "name": "Professor John Williams",
+            "type": "Person"
+          },
+          {
+            "name": "Google",
+            "type": "organization"
+          },
+          {
+            "name": "$50 million grant",
+            "type": "Financial"
+          },
+          {
+            "name": "500 qubits",
+            "type": "Measurement"
+          },
+          {
+            "name": "Dr. Sarah Chen",
+            "type": "person"
+          },
+          {
+            "name": "Professor John Williams",
+            "type": "person"
+          },
+          {
+            "name": "International Tech Summit",
+            "type": "Event"
+          },
+          {
+            "name": "QPU-500 processor",
+            "type": "Technology"
+          },
+          {
+            "name": "San Francisco",
+            "type": "Location"
+          },
+          {
+            "name": "QuantumTech Industries",
+            "type": "Organization"
+          },
+          {
+            "name": "San Francisco",
+            "type": "location"
+          },
+          {
+            "name": "licensing",
+            "type": "BusinessActivity"
+          },
+          {
+            "name": "99.9% fidelity",
+            "type": "Specification"
+          },
+          {
+            "name": "IBM",
+            "type": "Organization"
+          }
+        ],
+        "relationships": [
+          {
+            "source": "QuantumTech Industries",
+            "target": "MIT's Quantum Lab",
+            "type": "collaborated_with"
+          },
+          {
+            "source": "QPU-500 processor",
+            "target": "NSF",
+            "type": "funding"
+          },
+          {
+            "source": "MIT's Quantum Lab",
+            "target": "Professor John Williams",
+            "type": "leadership"
+          },
+          {
+            "source": "Dr. Sarah Chen",
+            "target": "QPU-500 processor",
+            "type": "announcement"
+          },
+          {
+            "source": "NSF",
+            "target": "QuantumTech Industries",
+            "type": "funded"
+          },
+          {
+            "source": "QPU-500 processor",
+            "target": "NSF",
+            "type": "funding_source"
+          },
+          {
+            "source": "$50 million grant",
+            "target": "NSF",
+            "type": "provided_by"
+          },
+          {
+            "source": "NSF",
+            "target": "QuantumTech Industries",
+            "type": "granted_funding_to"
+          },
+          {
+            "source": "IBM",
+            "target": "QPU-500 processor",
+            "type": "licensing interest"
+          },
+          {
+            "source": "NSF",
+            "target": "QPU-500 processor",
+            "type": "funded_development_of"
+          },
+          {
+            "source": "MIT's Quantum Lab",
+            "target": "Professor John Williams",
+            "type": "led_by"
+          },
+          {
+            "source": "Dr. Sarah Chen",
+            "target": "QPU-500 processor",
+            "type": "developed"
+          },
+          {
+            "source": "International Tech Summit",
+            "target": "San Francisco",
+            "type": "held in"
+          },
+          {
+            "source": "$50 million grant",
+            "target": "QuantumTech Industries",
+            "type": "funded"
+          },
+          {
+            "source": "MIT's Quantum Lab",
+            "target": "Professor John Williams",
+            "type": "led by"
+          },
+          {
+            "source": "NSF",
+            "target": "$50 million grant",
+            "type": "provided"
+          },
+          {
+            "source": "$50 million grant",
+            "target": "QPU-500 processor",
+            "type": "funds"
+          },
+          {
+            "source": "QPU-500 processor",
+            "target": "QuantumTech Industries",
+            "type": "developed_by"
+          },
+          {
+            "source": "International Tech Summit",
+            "target": "San Francisco",
+            "type": "location"
+          },
+          {
+            "source": "Dr. Sarah Chen",
+            "target": "International Tech Summit",
+            "type": "announced_at"
+          },
+          {
+            "source": "QPU-500 processor",
+            "target": "MIT's Quantum Lab",
+            "type": "developed_in_collaboration_with"
+          },
+          {
+            "source": "QPU-500 processor",
+            "target": "99.9% fidelity",
+            "type": "specification"
+          },
+          {
+            "source": "IBM",
+            "target": "QPU-500 processor",
+            "type": "interest_in_licensing"
+          },
+          {
+            "source": "Professor John Williams",
+            "target": "MIT's Quantum Lab",
+            "type": "leads"
+          },
+          {
+            "source": "QPU-500 processor",
+            "target": "$50 million grant",
+            "type": "funded_by"
+          },
+          {
+            "source": "QPU-500 processor",
+            "target": "99.9% fidelity",
+            "type": "achieves"
+          },
+          {
+            "source": "Google",
+            "target": "QPU-500 processor",
+            "type": "licensing interest"
+          },
+          {
+            "source": "QuantumTech Industries",
+            "target": "QPU-500 processor",
+            "type": "developed"
+          },
+          {
+            "source": "QPU-500 processor",
+            "target": "MIT's Quantum Lab",
+            "type": "development collaboration"
+          },
+          {
+            "source": "IBM",
+            "target": "QPU-500 processor",
+            "type": "expressed interest in licensing"
+          },
+          {
+            "source": "Dr. Sarah Chen",
+            "target": "International Tech Summit",
+            "type": "announced at"
+          },
+          {
+            "source": "Dr. Sarah Chen",
+            "target": "quantum computing",
+            "type": "announcement"
+          },
+          {
+            "source": "Google",
+            "target": "QPU-500 processor",
+            "type": "interest_in_licensing"
+          },
+          {
+            "source": "Dr. Sarah Chen",
+            "target": "QuantumTech Industries",
+            "type": "works for"
+          },
+          {
+            "source": "Dr. Sarah Chen",
+            "target": "QuantumTech Industries",
+            "type": "works_for"
+          },
+          {
+            "source": "IBM",
+            "target": "QPU-500 processor",
+            "type": "interested_in_licensing"
+          },
+          {
+            "source": "QPU-500 processor",
+            "target": "licensing",
+            "type": "business_opportunity"
+          },
+          {
+            "source": "QPU-500 processor",
+            "target": "500 qubits",
+            "type": "specification"
+          },
+          {
+            "source": "Dr. Sarah Chen",
+            "target": "QuantumTech Industries",
+            "type": "employment"
+          },
+          {
+            "source": "QuantumTech Industries",
+            "target": "MIT's Quantum Lab",
+            "type": "collaborated with"
+          },
+          {
+            "source": "QPU-500 processor",
+            "target": "500 qubits",
+            "type": "achieves"
+          },
+          {
+            "source": "QPU-500 processor",
+            "target": "quantum computing",
+            "type": "is a type of"
+          },
+          {
+            "source": "Google",
+            "target": "QPU-500 processor",
+            "type": "expressed interest in licensing"
+          },
+          {
+            "source": "Dr. Sarah Chen",
+            "target": "quantum computing",
+            "type": "announced breakthrough in"
+          },
+          {
+            "source": "International Tech Summit",
+            "target": "San Francisco",
+            "type": "located_in"
+          },
+          {
+            "source": "QuantumTech Industries",
+            "target": "QPU-500 processor",
+            "type": "development"
+          },
+          {
+            "source": "QPU-500 processor",
+            "target": "quantum computing",
+            "type": "technology_domain"
+          },
+          {
+            "source": "Google",
+            "target": "QPU-500 processor",
+            "type": "interested_in_licensing"
+          },
+          {
+            "source": "Dr. Sarah Chen",
+            "target": "International Tech Summit",
+            "type": "announcement_at"
+          }
+        ],
+        "consensus_method": "union"
+      },
+      "variance": {
+        "num_samples": 5,
+        "entity_variance": {
+          "unique": 29,
+          "total": 60,
+          "avg_per_sample": 12.0,
+          "avg_agreement": 0.41379310344827575,
+          "std_agreement": 0.26745819902986645
+        },
+        "relationship_variance": {
+          "unique": 49,
+          "total": 61,
+          "avg_per_sample": 12.2,
+          "avg_agreement": 0.24897959183673468,
+          "std_agreement": 0.10325804604631443
+        },
+        "timing": {
+          "avg_response_time": 10.5733914,
+          "std_response_time": 20.05226935612361
+        }
+      },
+      "num_entities": 29,
+      "num_relationships": 49
+    }
+  ],
+  "recommendations": [
+    "Consider union strategy for exploratory analysis (high recall)"
+  ]
+}

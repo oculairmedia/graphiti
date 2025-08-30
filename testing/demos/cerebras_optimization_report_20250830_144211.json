@@ -1,0 +1,1571 @@
+{
+  "timestamp": "20250830_144211",
+  "model": "qwen-3-coder-480b",
+  "configuration": {
+    "temperature": 0.7,
+    "top_p": 0.8
+  },
+  "summary": {
+    "best_strategy": "domain_specific",
+    "best_f1": 0.43982683982683984,
+    "baseline_f1": 0.0,
+    "improvements": {}
+  },
+  "strategy_scores": {
+    "baseline": {
+      "avg_f1": 0.0,
+      "avg_entity_f1": 0.0,
+      "avg_rel_f1": 0.0,
+      "success_rate": 1.0
+    },
+    "relationship_first": {
+      "avg_f1": 0.0,
+      "avg_entity_f1": 0.0,
+      "avg_rel_f1": 0.0,
+      "success_rate": 1.0
+    },
+    "entity_filtering": {
+      "avg_f1": 0.0,
+      "avg_entity_f1": 0.0,
+      "avg_rel_f1": 0.0,
+      "success_rate": 1.0
+    },
+    "domain_specific": {
+      "avg_f1": 0.43982683982683984,
+      "avg_entity_f1": 0.6653679653679654,
+      "avg_rel_f1": 0.21428571428571427,
+      "success_rate": 1.0
+    },
+    "confidence_scoring": {
+      "avg_f1": 0.0,
+      "avg_entity_f1": 0.0,
+      "avg_rel_f1": 0.0,
+      "success_rate": 1.0
+    },
+    "combined_optimizations": {
+      "avg_f1": 0.0,
+      "avg_entity_f1": 0.0,
+      "avg_rel_f1": 0.0,
+      "success_rate": 1.0
+    }
+  },
+  "detailed_results": [
+    {
+      "strategy": "baseline",
+      "scenario": "implicit_employment",
+      "success": true,
+      "extraction": {
+        "entities": [
+          {
+            "name": "Sarah Chen",
+            "type": "Person"
+          },
+          {
+            "name": "TechCorp",
+            "type": "Company"
+          },
+          {
+            "name": "Europe",
+            "type": "Location"
+          }
+        ],
+        "relationships": [
+          {
+            "source": "Sarah Chen",
+            "target": "TechCorp",
+            "type": "CEO_of"
+          },
+          {
+            "source": "TechCorp",
+            "target": "Europe",
+            "type": "expansion_to"
+          }
+        ]
+      },
+      "metrics": {
+        "entities": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0
+        },
+        "relationships": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0
+        },
+        "overall_f1": 0.0
+      },
+      "response_time": 0.301232
+    },
+    {
+      "strategy": "baseline",
+      "scenario": "research_collaboration",
+      "success": true,
+      "extraction": {
+        "entities": [
+          {
+            "name": "Dr. Alice Wang",
+            "type": "person"
+          },
+          {
+            "name": "MIT",
+            "type": "organization"
+          },
+          {
+            "name": "Professor Bob Zhang",
+            "type": "person"
+          },
+          {
+            "name": "Stanford",
+            "type": "organization"
+          },
+          {
+            "name": "quantum computing research",
+            "type": "research"
+          },
+          {
+            "name": "NSF",
+            "type": "organization"
+          }
+        ],
+        "relationships": [
+          {
+            "source": "Dr. Alice Wang",
+            "target": "MIT",
+            "type": "affiliation"
+          },
+          {
+            "source": "Dr. Alice Wang",
+            "target": "Professor Bob Zhang",
+            "type": "collaboration"
+          },
+          {
+            "source": "Professor Bob Zhang",
+            "target": "Stanford",
+            "type": "affiliation"
+          },
+          {
+            "source": "Dr. Alice Wang",
+            "target": "quantum computing research",
+            "type": "research_contribution"
+          },
+          {
+            "source": "Professor Bob Zhang",
+            "target": "quantum computing research",
+            "type": "research_contribution"
+          },
+          {
+            "source": "quantum computing research",
+            "target": "NSF",
+            "type": "funding_source"
+          }
+        ]
+      },
+      "metrics": {
+        "entities": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0
+        },
+        "relationships": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0
+        },
+        "overall_f1": 0.0
+      },
+      "response_time": 0.390884
+    },
+    {
+      "strategy": "baseline",
+      "scenario": "temporal_relationships",
+      "success": true,
+      "extraction": {
+        "entities": [
+          {
+            "name": "John Smith",
+            "type": "Person"
+          },
+          {
+            "name": "Google",
+            "type": "Company"
+          },
+          {
+            "name": "Microsoft",
+            "type": "Company"
+          },
+          {
+            "name": "CTO",
+            "type": "Position"
+          }
+        ],
+        "relationships": [
+          {
+            "source": "John Smith",
+            "target": "Google",
+            "type": "worked_at"
+          },
+          {
+            "source": "John Smith",
+            "target": "Microsoft",
+            "type": "joined"
+          },
+          {
+            "source": "John Smith",
+            "target": "CTO",
+            "type": "became"
+          }
+        ]
+      },
+      "metrics": {
+        "entities": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0
+        },
+        "relationships": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0
+        },
+        "overall_f1": 0.0
+      },
+      "response_time": 1.323358
+    },
+    {
+      "strategy": "baseline",
+      "scenario": "complex_technical",
+      "success": true,
+      "extraction": {
+        "entities": [
+          {
+            "name": "GraphRAG system",
+            "type": "System"
+          },
+          {
+            "name": "Anthropic",
+            "type": "Organization"
+          },
+          {
+            "name": "LLaMA-3 embeddings",
+            "type": "Technology"
+          },
+          {
+            "name": "FalkorDB",
+            "type": "Database"
+          },
+          {
+            "name": "Cosmograph",
+            "type": "VisualizationTool"
+          }
+        ],
+        "relationships": [
+          {
+            "source": "GraphRAG system",
+            "target": "Anthropic",
+            "type": "DevelopedBy"
+          },
+          {
+            "source": "GraphRAG system",
+            "target": "LLaMA-3 embeddings",
+            "type": "Uses"
+          },
+          {
+            "source": "GraphRAG system",
+            "target": "FalkorDB",
+            "type": "IntegratesWith"
+          },
+          {
+            "source": "GraphRAG system",
+            "target": "Cosmograph",
+            "type": "IntegratesWith"
+          }
+        ]
+      },
+      "metrics": {
+        "entities": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0
+        },
+        "relationships": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0
+        },
+        "overall_f1": 0.0
+      },
+      "response_time": 0.328808
+    },
+    {
+      "strategy": "relationship_first",
+      "scenario": "implicit_employment",
+      "success": true,
+      "extraction": {
+        "entities": [
+          {
+            "name": "Sarah Chen",
+            "type": "person"
+          },
+          {
+            "name": "TechCorp",
+            "type": "organization"
+          },
+          {
+            "name": "Europe",
+            "type": "location"
+          }
+        ],
+        "relationships": [
+          {
+            "source": "Sarah Chen",
+            "target": "TechCorp",
+            "type": "works_for"
+          },
+          {
+            "source": "Sarah Chen",
+            "target": "TechCorp",
+            "type": "announced_profits_for"
+          },
+          {
+            "source": "TechCorp",
+            "target": "Europe",
+            "type": "will_expand_to"
+          }
+        ]
+      },
+      "metrics": {
+        "entities": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0
+        },
+        "relationships": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0
+        },
+        "overall_f1": 0.0
+      },
+      "response_time": 0.325482
+    },
+    {
+      "strategy": "relationship_first",
+      "scenario": "research_collaboration",
+      "success": true,
+      "extraction": {
+        "entities": [
+          {
+            "name": "Dr. Alice Wang",
+            "type": "person"
+          },
+          {
+            "name": "MIT",
+            "type": "organization"
+          },
+          {
+            "name": "Professor Bob Zhang",
+            "type": "person"
+          },
+          {
+            "name": "Stanford",
+            "type": "organization"
+          },
+          {
+            "name": "quantum computing research",
+            "type": "research_project"
+          },
+          {
+            "name": "NSF",
+            "type": "organization"
+          }
+        ],
+        "relationships": [
+          {
+            "source": "Dr. Alice Wang",
+            "target": "MIT",
+            "type": "affiliation"
+          },
+          {
+            "source": "Dr. Alice Wang",
+            "target": "Professor Bob Zhang",
+            "type": "collaboration"
+          },
+          {
+            "source": "Professor Bob Zhang",
+            "target": "Stanford",
+            "type": "affiliation"
+          },
+          {
+            "source": "Dr. Alice Wang",
+            "target": "quantum computing research",
+            "type": "research_contribution"
+          },
+          {
+            "source": "Professor Bob Zhang",
+            "target": "quantum computing research",
+            "type": "research_contribution"
+          },
+          {
+            "source": "quantum computing research",
+            "target": "NSF",
+            "type": "funding_source"
+          }
+        ]
+      },
+      "metrics": {
+        "entities": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0
+        },
+        "relationships": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0
+        },
+        "overall_f1": 0.0
+      },
+      "response_time": 1.3839
+    },
+    {
+      "strategy": "relationship_first",
+      "scenario": "temporal_relationships",
+      "success": true,
+      "extraction": {
+        "entities": [
+          {
+            "name": "John Smith",
+            "type": "person"
+          },
+          {
+            "name": "Google",
+            "type": "organization"
+          },
+          {
+            "name": "Microsoft",
+            "type": "organization"
+          },
+          {
+            "name": "CTO",
+            "type": "role"
+          }
+        ],
+        "relationships": [
+          {
+            "source": "John Smith",
+            "target": "Google",
+            "type": "worked_at"
+          },
+          {
+            "source": "John Smith",
+            "target": "Microsoft",
+            "type": "joined"
+          },
+          {
+            "source": "John Smith",
+            "target": "CTO",
+            "type": "became"
+          }
+        ]
+      },
+      "metrics": {
+        "entities": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0
+        },
+        "relationships": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0
+        },
+        "overall_f1": 0.0
+      },
+      "response_time": 0.291268
+    },
+    {
+      "strategy": "relationship_first",
+      "scenario": "complex_technical",
+      "success": true,
+      "extraction": {
+        "entities": [
+          {
+            "name": "GraphRAG system",
+            "type": "system"
+          },
+          {
+            "name": "Anthropic",
+            "type": "organization"
+          },
+          {
+            "name": "LLaMA-3 embeddings",
+            "type": "technology"
+          },
+          {
+            "name": "FalkorDB",
+            "type": "database"
+          },
+          {
+            "name": "Cosmograph",
+            "type": "software"
+          }
+        ],
+        "relationships": [
+          {
+            "source": "GraphRAG system",
+            "target": "Anthropic",
+            "type": "developed_by"
+          },
+          {
+            "source": "GraphRAG system",
+            "target": "LLaMA-3 embeddings",
+            "type": "uses"
+          },
+          {
+            "source": "GraphRAG system",
+            "target": "FalkorDB",
+            "type": "integrates_with"
+          },
+          {
+            "source": "GraphRAG system",
+            "target": "Cosmograph",
+            "type": "integrates_with"
+          }
+        ]
+      },
+      "metrics": {
+        "entities": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0
+        },
+        "relationships": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0
+        },
+        "overall_f1": 0.0
+      },
+      "response_time": 0.332997
+    },
+    {
+      "strategy": "entity_filtering",
+      "scenario": "implicit_employment",
+      "success": true,
+      "extraction": {
+        "entities": [
+          {
+            "name": "Sarah Chen",
+            "type": "person"
+          },
+          {
+            "name": "TechCorp",
+            "type": "organization"
+          },
+          {
+            "name": "Europe",
+            "type": "place"
+          }
+        ],
+        "relationships": [
+          {
+            "source": "Sarah Chen",
+            "target": "TechCorp",
+            "type": "works_for"
+          },
+          {
+            "source": "TechCorp",
+            "target": "Europe",
+            "type": "expands_to"
+          }
+        ]
+      },
+      "metrics": {
+        "entities": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0
+        },
+        "relationships": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0
+        },
+        "overall_f1": 0.0
+      },
+      "response_time": 1.342557
+    },
+    {
+      "strategy": "entity_filtering",
+      "scenario": "research_collaboration",
+      "success": true,
+      "extraction": {
+        "entities": [
+          {
+            "name": "Alice Wang",
+            "type": "person"
+          },
+          {
+            "name": "MIT",
+            "type": "organization"
+          },
+          {
+            "name": "Bob Zhang",
+            "type": "person"
+          },
+          {
+            "name": "Stanford",
+            "type": "organization"
+          },
+          {
+            "name": "NSF",
+            "type": "organization"
+          },
+          {
+            "name": "quantum computing",
+            "type": "concept"
+          }
+        ],
+        "relationships": [
+          {
+            "source": "Alice Wang",
+            "target": "MIT",
+            "type": "affiliation"
+          },
+          {
+            "source": "Alice Wang",
+            "target": "Bob Zhang",
+            "type": "collaboration"
+          },
+          {
+            "source": "Bob Zhang",
+            "target": "Stanford",
+            "type": "affiliation"
+          },
+          {
+            "source": "Alice Wang",
+            "target": "quantum computing",
+            "type": "research"
+          },
+          {
+            "source": "Bob Zhang",
+            "target": "quantum computing",
+            "type": "research"
+          },
+          {
+            "source": "quantum computing research",
+            "target": "NSF",
+            "type": "funding"
+          }
+        ]
+      },
+      "metrics": {
+        "entities": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0
+        },
+        "relationships": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0
+        },
+        "overall_f1": 0.0
+      },
+      "response_time": 0.392061
+    },
+    {
+      "strategy": "entity_filtering",
+      "scenario": "temporal_relationships",
+      "success": true,
+      "extraction": {
+        "entities": [
+          {
+            "name": "John Smith",
+            "type": "person"
+          },
+          {
+            "name": "Google",
+            "type": "organization"
+          },
+          {
+            "name": "Microsoft",
+            "type": "organization"
+          },
+          {
+            "name": "CTO",
+            "type": "position"
+          }
+        ],
+        "relationships": [
+          {
+            "source": "John Smith",
+            "target": "Google",
+            "type": "worked_at"
+          },
+          {
+            "source": "John Smith",
+            "target": "Microsoft",
+            "type": "joined"
+          },
+          {
+            "source": "John Smith",
+            "target": "CTO",
+            "type": "became"
+          }
+        ]
+      },
+      "metrics": {
+        "entities": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0
+        },
+        "relationships": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0
+        },
+        "overall_f1": 0.0
+      },
+      "response_time": 1.026302
+    },
+    {
+      "strategy": "entity_filtering",
+      "scenario": "complex_technical",
+      "success": true,
+      "extraction": {
+        "entities": [
+          {
+            "name": "GraphRAG",
+            "type": "system"
+          },
+          {
+            "name": "Anthropic",
+            "type": "organization"
+          },
+          {
+            "name": "LLaMA-3",
+            "type": "product"
+          },
+          {
+            "name": "FalkorDB",
+            "type": "system"
+          },
+          {
+            "name": "Cosmograph",
+            "type": "system"
+          }
+        ],
+        "relationships": [
+          {
+            "source": "GraphRAG",
+            "target": "Anthropic",
+            "type": "developed_by"
+          },
+          {
+            "source": "GraphRAG",
+            "target": "LLaMA-3",
+            "type": "uses"
+          },
+          {
+            "source": "GraphRAG",
+            "target": "FalkorDB",
+            "type": "integrates_with"
+          },
+          {
+            "source": "GraphRAG",
+            "target": "Cosmograph",
+            "type": "integrates_with"
+          }
+        ]
+      },
+      "metrics": {
+        "entities": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0
+        },
+        "relationships": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0
+        },
+        "overall_f1": 0.0
+      },
+      "response_time": 0.308397
+    },
+    {
+      "strategy": "inference_rules",
+      "scenario": "implicit_employment",
+      "success": false,
+      "error": "RelationshipInferenceRules.infer_relationships() missing 1 required positional argument: 'entities'",
+      "metrics": {
+        "overall_f1": 0
+      }
+    },
+    {
+      "strategy": "inference_rules",
+      "scenario": "research_collaboration",
+      "success": false,
+      "error": "RelationshipInferenceRules.infer_relationships() missing 1 required positional argument: 'entities'",
+      "metrics": {
+        "overall_f1": 0
+      }
+    },
+    {
+      "strategy": "inference_rules",
+      "scenario": "temporal_relationships",
+      "success": false,
+      "error": "RelationshipInferenceRules.infer_relationships() missing 1 required positional argument: 'entities'",
+      "metrics": {
+        "overall_f1": 0
+      }
+    },
+    {
+      "strategy": "inference_rules",
+      "scenario": "complex_technical",
+      "success": false,
+      "error": "RelationshipInferenceRules.infer_relationships() missing 1 required positional argument: 'entities'",
+      "metrics": {
+        "overall_f1": 0
+      }
+    },
+    {
+      "strategy": "domain_specific",
+      "scenario": "implicit_employment",
+      "success": true,
+      "extraction": {
+        "entities": [
+          {
+            "name": "Sarah Chen",
+            "type": "PERSON"
+          },
+          {
+            "name": "TechCorp",
+            "type": "COMPANY"
+          },
+          {
+            "name": "Europe",
+            "type": "LOCATION"
+          }
+        ],
+        "relationships": [
+          {
+            "source": "Sarah Chen",
+            "target": "TechCorp",
+            "type": "WORKS_FOR"
+          },
+          {
+            "source": "TechCorp",
+            "target": "Europe",
+            "type": "EXPANDS_TO"
+          }
+        ]
+      },
+      "metrics": {
+        "entities": {
+          "precision": 0.6666666666666666,
+          "recall": 0.6666666666666666,
+          "f1": 0.6666666666666666
+        },
+        "relationships": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0
+        },
+        "overall_f1": 0.3333333333333333
+      },
+      "response_time": 3.585649
+    },
+    {
+      "strategy": "domain_specific",
+      "scenario": "research_collaboration",
+      "success": true,
+      "extraction": {
+        "entities": [
+          {
+            "name": "Dr. Alice Wang",
+            "type": "PERSON"
+          },
+          {
+            "name": "MIT",
+            "type": "ORGANIZATION"
+          },
+          {
+            "name": "Professor Bob Zhang",
+            "type": "PERSON"
+          },
+          {
+            "name": "Stanford",
+            "type": "ORGANIZATION"
+          },
+          {
+            "name": "quantum computing",
+            "type": "TECHNOLOGY"
+          },
+          {
+            "name": "NSF",
+            "type": "ORGANIZATION"
+          }
+        ],
+        "relationships": [
+          {
+            "source": "Dr. Alice Wang",
+            "target": "MIT",
+            "type": "AFFILIATED_WITH"
+          },
+          {
+            "source": "Dr. Alice Wang",
+            "target": "Professor Bob Zhang",
+            "type": "COLLABORATED_WITH"
+          },
+          {
+            "source": "Professor Bob Zhang",
+            "target": "Stanford",
+            "type": "AFFILIATED_WITH"
+          },
+          {
+            "source": "Dr. Alice Wang",
+            "target": "quantum computing",
+            "type": "RESEARCHED_ON"
+          },
+          {
+            "source": "Professor Bob Zhang",
+            "target": "quantum computing",
+            "type": "RESEARCHED_ON"
+          },
+          {
+            "source": "NSF",
+            "target": "quantum computing",
+            "type": "FUNDED"
+          }
+        ]
+      },
+      "metrics": {
+        "entities": {
+          "precision": 0.8333333333333334,
+          "recall": 1.0,
+          "f1": 0.9090909090909091
+        },
+        "relationships": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0
+        },
+        "overall_f1": 0.45454545454545453
+      },
+      "response_time": 0.363362
+    },
+    {
+      "strategy": "domain_specific",
+      "scenario": "temporal_relationships",
+      "success": true,
+      "extraction": {
+        "entities": [
+          {
+            "name": "John Smith",
+            "type": "PERSON"
+          },
+          {
+            "name": "Google",
+            "type": "COMPANY"
+          },
+          {
+            "name": "Microsoft",
+            "type": "COMPANY"
+          },
+          {
+            "name": "CTO",
+            "type": "ROLE"
+          }
+        ],
+        "relationships": [
+          {
+            "source": "John Smith",
+            "target": "Google",
+            "type": "WORKED_AT"
+          },
+          {
+            "source": "John Smith",
+            "target": "Microsoft",
+            "type": "JOINED"
+          },
+          {
+            "source": "John Smith",
+            "target": "CTO",
+            "type": "BECAME"
+          }
+        ]
+      },
+      "metrics": {
+        "entities": {
+          "precision": 0.25,
+          "recall": 0.3333333333333333,
+          "f1": 0.28571428571428575
+        },
+        "relationships": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0
+        },
+        "overall_f1": 0.14285714285714288
+      },
+      "response_time": 0.307926
+    },
+    {
+      "strategy": "domain_specific",
+      "scenario": "complex_technical",
+      "success": true,
+      "extraction": {
+        "entities": [
+          {
+            "name": "GraphRAG",
+            "type": "SYSTEM"
+          },
+          {
+            "name": "Anthropic",
+            "type": "ORGANIZATION"
+          },
+          {
+            "name": "LLaMA-3",
+            "type": "MODEL"
+          },
+          {
+            "name": "FalkorDB",
+            "type": "DATABASE"
+          },
+          {
+            "name": "Cosmograph",
+            "type": "VISUALIZATION_TOOL"
+          }
+        ],
+        "relationships": [
+          {
+            "source": "GraphRAG",
+            "target": "LLaMA-3",
+            "type": "USES"
+          },
+          {
+            "source": "GraphRAG",
+            "target": "FalkorDB",
+            "type": "INTEGRATES_WITH"
+          },
+          {
+            "source": "GraphRAG",
+            "target": "Cosmograph",
+            "type": "INTEGRATES_WITH"
+          }
+        ]
+      },
+      "metrics": {
+        "entities": {
+          "precision": 0.8,
+          "recall": 0.8,
+          "f1": 0.8000000000000002
+        },
+        "relationships": {
+          "precision": 1.0,
+          "recall": 0.75,
+          "f1": 0.8571428571428571
+        },
+        "overall_f1": 0.8285714285714286
+      },
+      "response_time": 1.520136
+    },
+    {
+      "strategy": "confidence_scoring",
+      "scenario": "implicit_employment",
+      "success": true,
+      "extraction": {
+        "entities": [
+          {
+            "name": "Sarah Chen",
+            "type": "Person"
+          },
+          {
+            "name": "TechCorp",
+            "type": "Company"
+          },
+          {
+            "name": "Europe",
+            "type": "Location"
+          }
+        ],
+        "relationships": [
+          {
+            "source": "Sarah Chen",
+            "target": "TechCorp",
+            "type": "CEO_of"
+          },
+          {
+            "source": "TechCorp",
+            "target": "Europe",
+            "type": "expansion_to"
+          }
+        ]
+      },
+      "metrics": {
+        "entities": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0
+        },
+        "relationships": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0
+        },
+        "overall_f1": 0.0
+      },
+      "response_time": 0.531306
+    },
+    {
+      "strategy": "confidence_scoring",
+      "scenario": "research_collaboration",
+      "success": true,
+      "extraction": {
+        "entities": [
+          {
+            "name": "Dr. Alice Wang",
+            "type": "Person"
+          },
+          {
+            "name": "MIT",
+            "type": "Organization"
+          },
+          {
+            "name": "Professor Bob Zhang",
+            "type": "Person"
+          },
+          {
+            "name": "Stanford",
+            "type": "Organization"
+          },
+          {
+            "name": "quantum computing research",
+            "type": "ResearchProject"
+          },
+          {
+            "name": "NSF",
+            "type": "Organization"
+          }
+        ],
+        "relationships": [
+          {
+            "source": "Dr. Alice Wang",
+            "target": "MIT",
+            "type": "Affiliation"
+          },
+          {
+            "source": "Dr. Alice Wang",
+            "target": "Professor Bob Zhang",
+            "type": "Collaboration"
+          },
+          {
+            "source": "Professor Bob Zhang",
+            "target": "Stanford",
+            "type": "Affiliation"
+          },
+          {
+            "source": "Dr. Alice Wang",
+            "target": "quantum computing research",
+            "type": "ResearchContribution"
+          },
+          {
+            "source": "Professor Bob Zhang",
+            "target": "quantum computing research",
+            "type": "ResearchContribution"
+          },
+          {
+            "source": "quantum computing research",
+            "target": "NSF",
+            "type": "FundingSource"
+          }
+        ]
+      },
+      "metrics": {
+        "entities": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0
+        },
+        "relationships": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0
+        },
+        "overall_f1": 0.0
+      },
+      "response_time": 0.364698
+    },
+    {
+      "strategy": "confidence_scoring",
+      "scenario": "temporal_relationships",
+      "success": true,
+      "extraction": {
+        "entities": [
+          {
+            "name": "John Smith",
+            "type": "Person"
+          },
+          {
+            "name": "Google",
+            "type": "Company"
+          },
+          {
+            "name": "Microsoft",
+            "type": "Company"
+          },
+          {
+            "name": "CTO",
+            "type": "JobTitle"
+          }
+        ],
+        "relationships": [
+          {
+            "source": "John Smith",
+            "target": "Google",
+            "type": "worked_at"
+          },
+          {
+            "source": "John Smith",
+            "target": "Microsoft",
+            "type": "joined"
+          },
+          {
+            "source": "John Smith",
+            "target": "CTO",
+            "type": "became"
+          }
+        ]
+      },
+      "metrics": {
+        "entities": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0
+        },
+        "relationships": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0
+        },
+        "overall_f1": 0.0
+      },
+      "response_time": 0.311822
+    },
+    {
+      "strategy": "confidence_scoring",
+      "scenario": "complex_technical",
+      "success": true,
+      "extraction": {
+        "entities": [
+          {
+            "name": "GraphRAG system",
+            "type": "System"
+          },
+          {
+            "name": "Anthropic",
+            "type": "Organization"
+          },
+          {
+            "name": "LLaMA-3 embeddings",
+            "type": "Technology"
+          },
+          {
+            "name": "FalkorDB",
+            "type": "Database"
+          },
+          {
+            "name": "Cosmograph",
+            "type": "Visualization Tool"
+          }
+        ],
+        "relationships": [
+          {
+            "source": "GraphRAG system",
+            "target": "Anthropic",
+            "type": "Developed By"
+          },
+          {
+            "source": "GraphRAG system",
+            "target": "LLaMA-3 embeddings",
+            "type": "Uses"
+          },
+          {
+            "source": "GraphRAG system",
+            "target": "FalkorDB",
+            "type": "Integrates With"
+          },
+          {
+            "source": "GraphRAG system",
+            "target": "Cosmograph",
+            "type": "Integrates With"
+          }
+        ]
+      },
+      "metrics": {
+        "entities": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0
+        },
+        "relationships": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0
+        },
+        "overall_f1": 0.0
+      },
+      "response_time": 1.348056
+    },
+    {
+      "strategy": "combined_optimizations",
+      "scenario": "implicit_employment",
+      "success": true,
+      "extraction": {
+        "entities": [
+          {
+            "name": "Sarah Chen",
+            "type": "person"
+          },
+          {
+            "name": "TechCorp",
+            "type": "organization"
+          },
+          {
+            "name": "Europe",
+            "type": "place"
+          }
+        ],
+        "relationships": [
+          {
+            "source": "Sarah Chen",
+            "target": "TechCorp",
+            "type": "works_for"
+          },
+          {
+            "source": "TechCorp",
+            "target": "Europe",
+            "type": "expands_to"
+          }
+        ]
+      },
+      "metrics": {
+        "entities": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0
+        },
+        "relationships": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0
+        },
+        "overall_f1": 0.0
+      },
+      "response_time": 0.353335
+    },
+    {
+      "strategy": "combined_optimizations",
+      "scenario": "research_collaboration",
+      "success": true,
+      "extraction": {
+        "entities": [
+          {
+            "name": "Alice Wang",
+            "type": "person"
+          },
+          {
+            "name": "MIT",
+            "type": "organization"
+          },
+          {
+            "name": "Bob Zhang",
+            "type": "person"
+          },
+          {
+            "name": "Stanford",
+            "type": "organization"
+          },
+          {
+            "name": "NSF",
+            "type": "organization"
+          },
+          {
+            "name": "quantum computing research",
+            "type": "concept"
+          }
+        ],
+        "relationships": [
+          {
+            "source": "Alice Wang",
+            "target": "MIT",
+            "type": "affiliation"
+          },
+          {
+            "source": "Alice Wang",
+            "target": "Bob Zhang",
+            "type": "collaboration"
+          },
+          {
+            "source": "Bob Zhang",
+            "target": "Stanford",
+            "type": "affiliation"
+          },
+          {
+            "source": "Alice Wang",
+            "target": "quantum computing research",
+            "type": "research_focus"
+          },
+          {
+            "source": "Bob Zhang",
+            "target": "quantum computing research",
+            "type": "research_focus"
+          },
+          {
+            "source": "quantum computing research",
+            "target": "NSF",
+            "type": "funding_source"
+          }
+        ]
+      },
+      "metrics": {
+        "entities": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0
+        },
+        "relationships": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0
+        },
+        "overall_f1": 0.0
+      },
+      "response_time": 0.353507
+    },
+    {
+      "strategy": "combined_optimizations",
+      "scenario": "temporal_relationships",
+      "success": true,
+      "extraction": {
+        "entities": [
+          {
+            "name": "John Smith",
+            "type": "person"
+          },
+          {
+            "name": "Google",
+            "type": "organization"
+          },
+          {
+            "name": "Microsoft",
+            "type": "organization"
+          }
+        ],
+        "relationships": [
+          {
+            "source": "John Smith",
+            "target": "Google",
+            "type": "worked_at"
+          },
+          {
+            "source": "John Smith",
+            "target": "Microsoft",
+            "type": "joined"
+          },
+          {
+            "source": "John Smith",
+            "target": "Microsoft",
+            "type": "became_cto"
+          }
+        ]
+      },
+      "metrics": {
+        "entities": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0
+        },
+        "relationships": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0
+        },
+        "overall_f1": 0.0
+      },
+      "response_time": 1.275775
+    },
+    {
+      "strategy": "combined_optimizations",
+      "scenario": "complex_technical",
+      "success": true,
+      "extraction": {
+        "entities": [
+          {
+            "name": "GraphRAG",
+            "type": "system"
+          },
+          {
+            "name": "Anthropic",
+            "type": "organization"
+          },
+          {
+            "name": "LLaMA-3",
+            "type": "product"
+          },
+          {
+            "name": "FalkorDB",
+            "type": "system"
+          },
+          {
+            "name": "Cosmograph",
+            "type": "system"
+          }
+        ],
+        "relationships": [
+          {
+            "source": "GraphRAG",
+            "target": "Anthropic",
+            "type": "developed_by"
+          },
+          {
+            "source": "GraphRAG",
+            "target": "LLaMA-3",
+            "type": "uses"
+          },
+          {
+            "source": "GraphRAG",
+            "target": "FalkorDB",
+            "type": "integrates_with"
+          },
+          {
+            "source": "GraphRAG",
+            "target": "Cosmograph",
+            "type": "integrates_with"
+          }
+        ]
+      },
+      "metrics": {
+        "entities": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0
+        },
+        "relationships": {
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0
+        },
+        "overall_f1": 0.0
+      },
+      "response_time": 0.412425
+    }
+  ],
+  "recommendations": [
+    "Focus on improving relationship extraction prompts"
+  ]
+}
