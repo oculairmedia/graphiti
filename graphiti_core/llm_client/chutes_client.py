@@ -142,7 +142,32 @@ class ChutesClient(LLMClient):
         except Exception:
             logger.debug('Partial JSON parsing failed, trying cleanup strategies')
         
-        # Strategy 4: Clean up common JSON formatting issues
+        # Strategy 4: Extract JSON from verbose/explanatory text (GLM-4.5-FP8 reasoning)
+        try:
+            # Look for JSON objects embedded in explanatory text
+            json_pattern = r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}'
+            matches = re.findall(json_pattern, content, re.DOTALL)
+            
+            for match in matches:
+                try:
+                    # Clean up the extracted JSON
+                    cleaned = match.strip()
+                    # Replace single quotes with double quotes for JSON validity
+                    cleaned = re.sub(r"'([^']*)'", r'"\1"', cleaned)
+                    # Fix trailing commas
+                    cleaned = re.sub(r',\s*}', '}', cleaned)
+                    cleaned = re.sub(r',\s*]', ']', cleaned)
+                    
+                    result = json.loads(cleaned)
+                    logger.info('Successfully extracted JSON from verbose GLM response')
+                    return result
+                except json.JSONDecodeError:
+                    continue
+            logger.debug('No valid JSON found in explanatory text, trying cleanup strategies')
+        except Exception:
+            logger.debug('JSON extraction from verbose text failed, trying cleanup strategies')
+        
+        # Strategy 5: Clean up common JSON formatting issues
         try:
             cleaned = content
             
@@ -176,7 +201,7 @@ class ChutesClient(LLMClient):
         except (json.JSONDecodeError, Exception):
             logger.debug('JSON cleanup failed, trying legacy methods')
         
-        # Strategy 5: Python dict evaluation (legacy compatibility)
+        # Strategy 6: Python dict evaluation (legacy compatibility)
         if content.startswith('{') and content.endswith('}'):
             try:
                 result = ast.literal_eval(content)
@@ -186,7 +211,7 @@ class ChutesClient(LLMClient):
             except (ValueError, SyntaxError):
                 logger.debug('ast.literal_eval failed, trying manual conversion')
         
-        # Strategy 6: Manual conversion of Python syntax to JSON (legacy)
+        # Strategy 7: Manual conversion of Python syntax to JSON (legacy)
         try:
             # Replace Python boolean/null values with JSON equivalents
             json_content = content
@@ -204,7 +229,7 @@ class ChutesClient(LLMClient):
         except (json.JSONDecodeError, Exception):
             logger.debug('Manual JSON conversion failed, trying regex extraction')
         
-        # Strategy 7: Regex extraction for legacy patterns
+        # Strategy 8: Regex extraction for legacy patterns
         # Try to find entities array pattern
         entities_match = re.search(r"'entities':\s*\[(.*?)\]", content, re.DOTALL)
         if entities_match:
