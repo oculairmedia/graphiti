@@ -39,7 +39,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_MODEL = 'zai-org/GLM-4.5-FP8'
+DEFAULT_MODEL = 'deepseek-ai/DeepSeek-V3.1'
 DEFAULT_BASE_URL = 'https://llm.chutes.ai/v1'
 
 
@@ -116,6 +116,29 @@ class ChutesClient(LLMClient):
         content = content.strip()
         
         # For single response parsing, we'll use a subset of the robust strategies
+        
+        # Strategy 0: Handle DeepSeek V3.1 schema inclusion pattern
+        # DeepSeek V3.1 includes both Pydantic schema definition AND data in response
+        try:
+            result = json.loads(content)
+            # Check if this looks like DeepSeek's schema+data response
+            if isinstance(result, dict):
+                # If it has $defs or properties (schema) AND actual data fields
+                has_schema = '$defs' in result or 'properties' in result
+                has_data = False
+                data_fields = {}
+                
+                # Look for actual data fields (not schema fields)
+                for key, value in result.items():
+                    if key not in ['$defs', 'properties', 'required', 'title', 'type', 'description']:
+                        has_data = True
+                        data_fields[key] = value
+                
+                if has_schema and has_data:
+                    logger.info('Detected DeepSeek V3.1 schema+data response, extracting data only')
+                    return data_fields
+        except (json.JSONDecodeError, TypeError):
+            pass
         
         # Strategy 1: Handle GLM markdown JSON format first
         if content.startswith('```json') and content.endswith('```'):
