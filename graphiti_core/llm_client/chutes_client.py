@@ -414,8 +414,27 @@ class ChutesClient(LLMClient):
                             logger.info(f"✅ ChutesClient generated summary: {len(summary_text)} chars")
                         else:
                             logger.warning(f"⚠️ ChutesClient: No 'summary' key in response!")
+                            logger.debug(f"   Available keys: {list(response.keys())}")
+                            
+                            # Try to recover summary from alternative fields
+                            summary_recovered = False
+                            for alt_key in ['content', 'text', 'result', 'output']:
+                                if alt_key in response and isinstance(response[alt_key], str):
+                                    response['summary'] = response[alt_key]
+                                    logger.info(f"✅ ChutesClient: Recovered summary from '{alt_key}' field: {len(response['summary'])} chars")
+                                    summary_recovered = True
+                                    break
+                            
+                            if not summary_recovered and is_summary_call:
+                                # For summary calls, this is unacceptable - raise error to trigger retry
+                                logger.error(f"❌ ChutesClient: Failed to extract summary from response: {response}")
+                                raise ValueError("ChutesClient: Summary extraction failed - no valid summary field found")
+                                
                     else:
                         logger.warning(f"⚠️ ChutesClient: Response is not dict: {type(response)}")
+                        if is_summary_call:
+                            # Summary calls must return dict format
+                            raise ValueError("ChutesClient: Summary call returned non-dict response")
                 
                 return response
             except (RateLimitError, RefusalError):
