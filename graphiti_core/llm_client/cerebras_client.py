@@ -239,6 +239,17 @@ class CerebrasClient(LLMClient):
                                 f'Total: {chat_completion.usage.total_tokens}'
                             )
                         
+                        # Validate against response model if provided (similar to Gemini client)
+                        if response_model is not None:
+                            try:
+                                validated_model = response_model.model_validate(result)
+                                # Return as a dictionary for API consistency
+                                return validated_model.model_dump()
+                            except Exception as e:
+                                logger.error(f'Failed to validate response against model {response_model.__name__}: {e}')
+                                logger.error(f'Raw response that failed validation: {json.dumps(result, indent=2)[:500]}...')
+                                raise e
+                        
                         return result
                     except json.JSONDecodeError as e:
                         logger.error(f'Failed to parse JSON response: {content[:500]}')

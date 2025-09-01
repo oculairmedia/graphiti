@@ -366,7 +366,7 @@ class IngestionWorker:
             
             logger.info(f"Processing episode with group_id: {effective_group_id} (task.group_id: {task.group_id}, payload.group_id: {payload.get('group_id')})")
             
-            result = await self.graphiti.add_episode(
+            result = await self.graphiti.add_episode_resilient(
                 group_id=effective_group_id,
                 name=payload.get('name'),
                 episode_body=payload.get('content'),

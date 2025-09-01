@@ -14,12 +14,25 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
+import os
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
 
 from pydantic import BaseModel, Field
 
-EMBEDDING_DIM = 1024
+def get_embedding_dimension() -> int:
+    """
+    Get embedding dimension from environment variable.
+    
+    This ensures consistent dimensions across ingestion and retrieval.
+    Common model dimensions:
+    - mxbai-embed-large: 1024
+    - Qwen3-Embedding-4B: 2560  
+    - nomic-embed-text: 768
+    """
+    return int(os.getenv('EMBEDDING_DIMENSION', '1024'))
+
+EMBEDDING_DIM = get_embedding_dimension()
 
 
 class EmbedderConfig(BaseModel):
