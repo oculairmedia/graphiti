@@ -411,6 +411,20 @@ class ChutesClient(LLMClient):
             parsed_response = self._parse_chutes_response(result)
             if parsed_response is not None:
                 logger.debug(f'Successfully parsed Chutes AI response')
+                
+                # Validate against response model if provided (similar to Cerebras client fix)
+                if response_model is not None:
+                    try:
+                        validated_model = response_model.model_validate(parsed_response)
+                        # Return as a dictionary for API consistency
+                        validated_response = validated_model.model_dump()
+                        logger.debug(f'Successfully validated response against model {response_model.__name__}')
+                        return validated_response
+                    except Exception as e:
+                        logger.error(f'Failed to validate Chutes response against model {response_model.__name__}: {e}')
+                        logger.error(f'Raw response that failed validation: {json.dumps(parsed_response, indent=2)[:500]}...')
+                        raise e
+                
                 return parsed_response
             
             # If all parsing strategies fail, this is a wasted request

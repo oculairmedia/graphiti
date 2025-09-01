@@ -40,10 +40,9 @@ services:
     restart: unless-stopped
     ports:
       - "${FALKORDB_PORT:-6379}:6379"
-    volumes:
-      - falkordb_data:/var/lib/falkordb/data
+    # No volumes - FalkorDB runs in-memory only, restored from Neo4j on startup
     environment:
-      - REDIS_ARGS=--save 60 1 --save 300 10 --save 900 100 --appendonly yes --appendfsync everysec --loglevel warning --maxmemory 2g --maxmemory-policy allkeys-lru
+      - REDIS_ARGS=--loglevel warning --maxmemory 2g --maxmemory-policy allkeys-lru --save ""
       - FALKORDB_ARGS=NODE_CREATION_BUFFER 128 QUERY_MEM_CAPACITY 8388608 CMD_INFO no OMP_THREAD_COUNT 1 CACHE_SIZE 5
     mem_limit: 2g
     memswap_limit: 2g
@@ -59,7 +58,7 @@ services:
       - homepage.name=FalkorDB
       - homepage.icon=si-redis
       - homepage.href=http://${HOMEPAGE_HOST:-192.168.50.90}:${FALKORDB_PORT:-6379}
-      - homepage.description=Graph database (fast cache)
+      - homepage.description=In-memory graph cache (auto-restored from Neo4j)
 
   # =============================================================================
   # Rust Services
@@ -124,7 +123,7 @@ services:
       - homepage.description=Graph centrality calculations
 
   graphiti-search-rs:
-    image: ghcr.io/oculairmedia/graphiti-search-rs:main
+    image: ghcr.io/oculairmedia/graphiti-search-rs:feature-chutes-ai-integration
     restart: unless-stopped
     ports:
       - "${RUST_SEARCH_PORT:-3004}:3004"
@@ -189,6 +188,7 @@ services:
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://100.81.139.20:11434/v1}
       - OLLAMA_MODEL=${OLLAMA_MODEL:-gemma3:12b}
       - OLLAMA_EMBEDDING_MODEL=${OLLAMA_EMBEDDING_MODEL:-mxbai-embed-large:latest}
+      - EMBEDDING_DIMENSION=${EMBEDDING_DIMENSION:-1024}
       - USE_OLLAMA_EMBEDDINGS=${USE_OLLAMA_EMBEDDINGS:-true}
       - USE_DEDICATED_EMBEDDING_ENDPOINT=${USE_DEDICATED_EMBEDDING_ENDPOINT:-true}
       - OLLAMA_EMBEDDING_BASE_URL=${OLLAMA_EMBEDDING_BASE_URL:-http://192.168.50.80:11434/v1}
@@ -209,6 +209,13 @@ services:
       - GRAPHITI_DATA_WEBHOOK_URLS=${GRAPHITI_DATA_WEBHOOK_URLS:-http://graph-visualizer-rust:3000/api/webhooks/data-ingestion}
       - USE_QUEUE_FOR_INGESTION=${USE_QUEUE_FOR_INGESTION:-true}
       - QUEUE_URL=http://graphiti-queued:8080
+      # Resilient Ingestion Configuration
+      - RESILIENT_INGESTION_ENABLED=${RESILIENT_INGESTION_ENABLED:-true}
+      - RESILIENT_RETRY_MAX_ATTEMPTS=${RESILIENT_RETRY_MAX_ATTEMPTS:-3}
+      - RESILIENT_RETRY_BASE_DELAY=${RESILIENT_RETRY_BASE_DELAY:-2.0}
+      - RESILIENT_RETRY_MAX_DELAY=${RESILIENT_RETRY_MAX_DELAY:-60.0}
+      - RESILIENT_RETRY_EXPONENTIAL_BASE=${RESILIENT_RETRY_EXPONENTIAL_BASE:-2.0}
+      - RESILIENT_CACHE_MAX_AGE_SECONDS=${RESILIENT_CACHE_MAX_AGE_SECONDS:-3600}
       - DEDUP_SIMILARITY_THRESHOLD=${DEDUP_SIMILARITY_THRESHOLD:-0.6}
       - DEDUP_FUZZY_THRESHOLD=${DEDUP_FUZZY_THRESHOLD:-0.9}
       - ENABLE_AGGRESSIVE_DEDUP=${ENABLE_AGGRESSIVE_DEDUP:-true}
@@ -263,6 +270,7 @@ services:
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://100.81.139.20:11434/v1}
       - OLLAMA_MODEL=${OLLAMA_MODEL:-gemma3:12b}
       - OLLAMA_EMBEDDING_MODEL=${OLLAMA_EMBEDDING_MODEL:-mxbai-embed-large:latest}
+      - EMBEDDING_DIMENSION=${EMBEDDING_DIMENSION:-1024}
       - USE_OLLAMA_EMBEDDINGS=${USE_OLLAMA_EMBEDDINGS:-true}
       - USE_DEDICATED_EMBEDDING_ENDPOINT=${USE_DEDICATED_EMBEDDING_ENDPOINT:-true}
       - OLLAMA_EMBEDDING_BASE_URL=${OLLAMA_EMBEDDING_BASE_URL:-http://192.168.50.80:11434/v1}
@@ -315,7 +323,7 @@ services:
       # Sync configuration
       - SYNC_INTERVAL_SECONDS=${SYNC_INTERVAL_SECONDS:-180}
       - SYNC_BATCH_SIZE=${SYNC_BATCH_SIZE:-500}
-      - SYNC_FULL_ON_STARTUP=${SYNC_FULL_ON_STARTUP:-false}
+      - SYNC_FULL_ON_STARTUP=${SYNC_FULL_ON_STARTUP:-true}
       - SYNC_ENABLE_INCREMENTAL=${SYNC_ENABLE_INCREMENTAL:-false}
       - SYNC_ENABLE_CONTINUOUS=${SYNC_ENABLE_CONTINUOUS:-true}
       - SYNC_DIRECTION=${SYNC_DIRECTION:-reverse}
@@ -422,6 +430,7 @@ services:
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://100.81.139.20:11434/v1}
       - OLLAMA_MODEL=${OLLAMA_MODEL:-gemma3:12b}
       - OLLAMA_EMBEDDING_MODEL=${OLLAMA_EMBEDDING_MODEL:-mxbai-embed-large:latest}
+      - EMBEDDING_DIMENSION=${EMBEDDING_DIMENSION:-1024}
       - USE_OLLAMA_EMBEDDINGS=${USE_OLLAMA_EMBEDDINGS:-true}
       - USE_DEDICATED_EMBEDDING_ENDPOINT=${USE_DEDICATED_EMBEDDING_ENDPOINT:-true}
       - OLLAMA_EMBEDDING_BASE_URL=${OLLAMA_EMBEDDING_BASE_URL:-http://192.168.50.80:11434/v1}
@@ -529,10 +538,7 @@ volumes:
     driver: local
     labels:
       - description=Neo4j persistent data
-  falkordb_data:
-    driver: local
-    labels:
-      - description=FalkorDB cache data
+  # falkordb_data removed - FalkorDB now runs in-memory only
   queued_data:
     driver: local
     labels:

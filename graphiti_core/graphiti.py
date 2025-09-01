@@ -37,6 +37,11 @@ from graphiti_core.helpers import (
     validate_group_id,
 )
 from graphiti_core.llm_client import LLMClient, OpenAIClient
+from graphiti_core.utils.resilient_ingestion import (
+    ResilientIngestionState,
+    ingestion_cache,
+    retry_with_backoff,
+)
 from graphiti_core.nodes import CommunityNode, EntityNode, EpisodeType, EpisodicNode
 from graphiti_core.search.search import SearchConfig, search
 from graphiti_core.search.search_config import DEFAULT_SEARCH_LIMIT, SearchResults
@@ -562,6 +567,251 @@ class Graphiti:
 
         except Exception as e:
             raise e
+
+    ##### RESILIENT INGESTION #####
+    
+    async def add_episode_resilient(
+        self,
+        name: str,
+        episode_body: str,
+        source_description: str,
+        reference_time: datetime,
+        source: EpisodeType = EpisodeType.message,
+        group_id: str | None = None,
+        uuid: str | None = None,
+        update_communities: bool = False,
+        entity_types: dict[str, BaseModel] | None = None,
+        excluded_entity_types: list[str] | None = None,
+        edge_types: dict[str, BaseModel] | None = None,
+        edge_type_map: dict[tuple[str, str], list[str]] | None = None,
+        previous_episode_uuids: list[str] | None = None,
+    ) -> 'AddEpisodeResults':
+        """
+        Resilient version of add_episode that can recover from partial failures.
+        
+        This method implements granular retry logic for each stage of ingestion:
+        1. Node extraction
+        2. Node resolution  
+        3. Edge extraction
+        4. Episode creation
+        
+        Each stage can be retried independently, preventing loss of progress when
+        providers like Cerebras have elevated error rates.
+        """
+        try:
+            start = time()
+            now = utc_now()
+
+            # if group_id is None, use the default group id by the provider
+            group_id = group_id or get_default_group_id(self.driver.provider)
+            validate_entity_types(entity_types)
+            validate_excluded_entity_types(excluded_entity_types, entity_types)
+            validate_group_id(group_id)
+
+            # Create episode node first (before other processing)
+            episode = (
+                await EpisodicNode.get_by_uuid(self.driver, uuid)
+                if uuid is not None
+                else EpisodicNode(
+                    name=name,
+                    group_id=group_id,
+                    labels=[],
+                    source=source,
+                    content=episode_body,
+                    source_description=source_description,
+                    created_at=now,
+                    valid_at=reference_time,
+                )
+            )
+            
+            logger.info(f"Created EpisodicNode with group_id: {episode.group_id} (uuid: {episode.uuid})")
+
+            # Get or create resilient ingestion state
+            state = ingestion_cache.get_or_create_state(episode.uuid, group_id)
+            
+            # Get previous episodes
+            previous_episodes = (
+                await self.retrieve_episodes(
+                    reference_time,
+                    last_n=RELEVANT_SCHEMA_LIMIT,
+                    group_ids=[group_id],
+                    source=source,
+                )
+                if previous_episode_uuids is None
+                else await EpisodicNode.get_by_uuids(self.driver, previous_episode_uuids)
+            )
+
+            # Stage 1: Extract nodes (with retry)
+            if not state.nodes_extracted:
+                extracted_nodes = await self._extract_nodes_with_retry(
+                    episode, previous_episodes, entity_types, excluded_entity_types, state
+                )
+                state.mark_nodes_extracted(extracted_nodes)
+            else:
+                logger.info(f"Episode {episode.uuid}: Using cached extracted nodes ({len(state.extracted_nodes)} nodes)")
+                extracted_nodes = state.extracted_nodes
+
+            # Stage 2: Resolve nodes (with retry)  
+            if not state.nodes_resolved:
+                nodes, uuid_map, node_duplicates = await self._resolve_nodes_with_retry(
+                    extracted_nodes, episode, previous_episodes, entity_types, state
+                )
+                state.mark_nodes_resolved(nodes)
+                # Cache additional resolution data
+                state.uuid_map = uuid_map
+                state.node_duplicates = node_duplicates
+            else:
+                logger.info(f"Episode {episode.uuid}: Using cached resolved nodes ({len(state.resolved_nodes)} nodes)")
+                nodes = state.resolved_nodes
+                uuid_map = state.uuid_map
+                node_duplicates = state.node_duplicates
+
+            # Stage 3: Extract edges (with retry)
+            if not state.edges_extracted:
+                extracted_edges = await self._extract_edges_with_retry(
+                    episode, extracted_nodes, previous_episodes, edge_type_map, 
+                    group_id, edge_types, state
+                )
+                state.mark_edges_extracted(extracted_edges)
+            else:
+                logger.info(f"Episode {episode.uuid}: Using cached extracted edges ({len(state.extracted_edges)} edges)")
+                extracted_edges = state.extracted_edges
+
+            # Continue with edge processing (non-LLM operations, less likely to fail)
+            edge_type_map_default = (
+                {('Entity', 'Entity'): list(edge_types.keys())}
+                if edge_types is not None
+                else {('Entity', 'Entity'): []}
+            )
+
+            edges = resolve_edge_pointers(extracted_edges, uuid_map)
+
+            (resolved_edges, invalidated_edges), hydrated_nodes = await semaphore_gather(
+                resolve_extracted_edges(
+                    self.clients,
+                    edges,
+                    episode,
+                    nodes,
+                    edge_types or {},
+                    edge_type_map or edge_type_map_default,
+                ),
+                extract_attributes_from_nodes(
+                    self.clients, nodes, episode, previous_episodes, entity_types
+                ),
+                max_coroutines=self.max_coroutines,
+            )
+
+            duplicate_of_edges, merge_operations, duplicate_nodes_to_save = build_duplicate_of_edges(episode, now, node_duplicates)
+
+            entity_edges = resolved_edges + invalidated_edges + duplicate_of_edges
+            episodic_edges = build_episodic_edges(nodes, episode.uuid, now)
+            episode.entity_edges = [edge.uuid for edge in entity_edges]
+
+            # Save to database
+            if not state.episode_created:
+                await self.driver.add_episode(
+                    episode,
+                    hydrated_nodes + duplicate_nodes_to_save,
+                    entity_edges,
+                    episodic_edges,
+                    merge_operations,
+                    allow_cross_graph_merge=self.enable_cross_graph_deduplication
+                )
+                state.mark_completed()
+                logger.info(f"Episode {episode.uuid}: Successfully saved to database")
+
+            # Update communities if requested
+            if update_communities:
+                await semaphore_gather(
+                    *[
+                        update_community(self.driver, self.llm_client, self.embedder, node)
+                        for node in nodes
+                    ],
+                    max_coroutines=self.max_coroutines,
+                )
+
+            # Clean up cache for completed episodes
+            ingestion_cache.remove_state(episode.uuid)
+            
+            end = time()
+            logger.info(f'Completed resilient add_episode in {(end - start) * 1000} ms')
+
+            return AddEpisodeResults(episode=episode, nodes=nodes, edges=entity_edges)
+
+        except Exception as e:
+            logger.error(f"Resilient ingestion failed for episode {episode.uuid if 'episode' in locals() else 'unknown'}: {e}")
+            raise e
+
+    @retry_with_backoff(max_retries=3, base_delay=2.0)
+    async def _extract_nodes_with_retry(
+        self,
+        episode: EpisodicNode,
+        previous_episodes: list[EpisodicNode],
+        entity_types: dict[str, BaseModel] | None,
+        excluded_entity_types: list[str] | None,
+        state: ResilientIngestionState,
+    ) -> list[dict[str, Any]]:
+        """Extract nodes with retry logic."""
+        state.nodes_extract_attempts += 1
+        logger.info(f"Episode {episode.uuid}: Extracting nodes (attempt {state.nodes_extract_attempts})")
+        
+        return await extract_nodes(
+            self.clients, episode, previous_episodes, entity_types, excluded_entity_types
+        )
+
+    @retry_with_backoff(max_retries=3, base_delay=2.0)
+    async def _resolve_nodes_with_retry(
+        self,
+        extracted_nodes: list[dict[str, Any]], 
+        episode: EpisodicNode,
+        previous_episodes: list[EpisodicNode],
+        entity_types: dict[str, BaseModel] | None,
+        state: ResilientIngestionState,
+    ) -> tuple[list[EntityNode], dict[str, str], list[EntityNode]]:
+        """Resolve nodes with retry logic."""
+        state.nodes_resolve_attempts += 1
+        logger.info(f"Episode {episode.uuid}: Resolving nodes (attempt {state.nodes_resolve_attempts})")
+        
+        return await resolve_extracted_nodes(
+            self.clients,
+            extracted_nodes,
+            episode,
+            previous_episodes,
+            entity_types,
+            existing_nodes_override=None,
+            enable_cross_graph_deduplication=self.enable_cross_graph_deduplication,
+        )
+
+    @retry_with_backoff(max_retries=3, base_delay=2.0)
+    async def _extract_edges_with_retry(
+        self,
+        episode: EpisodicNode,
+        extracted_nodes: list[dict[str, Any]],
+        previous_episodes: list[EpisodicNode],
+        edge_type_map: dict[tuple[str, str], list[str]] | None,
+        group_id: str,
+        edge_types: dict[str, BaseModel] | None,
+        state: ResilientIngestionState,
+    ) -> list[dict[str, Any]]:
+        """Extract edges with retry logic."""
+        state.edges_extract_attempts += 1
+        logger.info(f"Episode {episode.uuid}: Extracting edges (attempt {state.edges_extract_attempts})")
+        
+        edge_type_map_default = (
+            {('Entity', 'Entity'): list(edge_types.keys())}
+            if edge_types is not None
+            else {('Entity', 'Entity'): []}
+        )
+        
+        return await extract_edges(
+            self.clients,
+            episode,
+            extracted_nodes,
+            previous_episodes,
+            edge_type_map or edge_type_map_default,
+            group_id,
+            edge_types,
+        )
 
     ##### EXPERIMENTAL #####
     async def add_episode_bulk(

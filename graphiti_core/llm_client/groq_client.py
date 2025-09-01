@@ -77,7 +77,20 @@ class GroqClient(LLMClient):
                 response_format={'type': 'json_object'},
             )
             result = response.choices[0].message.content or ''
-            return json.loads(result)
+            parsed_response = json.loads(result)
+            
+            # Validate against response model if provided (similar to Cerebras/Chutes client fix)
+            if response_model is not None:
+                try:
+                    validated_model = response_model.model_validate(parsed_response)
+                    # Return as a dictionary for API consistency
+                    return validated_model.model_dump()
+                except Exception as e:
+                    logger.error(f'Failed to validate Groq response against model {response_model.__name__}: {e}')
+                    logger.error(f'Raw response that failed validation: {json.dumps(parsed_response, indent=2)[:500]}...')
+                    raise e
+            
+            return parsed_response
         except groq.RateLimitError as e:
             raise RateLimitError from e
         except Exception as e:
