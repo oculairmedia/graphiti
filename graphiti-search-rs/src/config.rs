@@ -13,6 +13,7 @@ pub struct Config {
     pub cache_ttl: u64,
     pub enable_simd: bool,
     pub parallel_threshold: usize,
+    pub embedding_dimension: usize,
 }
 
 impl Config {
@@ -39,6 +40,9 @@ impl Config {
                 .parse()?,
             parallel_threshold: env::var("PARALLEL_THRESHOLD")
                 .unwrap_or_else(|_| "100".to_string())
+                .parse()?,
+            embedding_dimension: env::var("EMBEDDING_DIMENSION")
+                .unwrap_or_else(|_| "2560".to_string()) // Default to Qwen3-Embedding-4B dimension
                 .parse()?,
         })
     }

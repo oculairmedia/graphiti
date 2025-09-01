@@ -123,7 +123,7 @@ services:
       - homepage.description=Graph centrality calculations
 
   graphiti-search-rs:
-    image: ghcr.io/oculairmedia/graphiti-search-rs:feature-chutes-ai-integration
+    image: ghcr.io/oculairmedia/graphiti-search-rs:main
     restart: unless-stopped
     ports:
       - "${RUST_SEARCH_PORT:-3004}:3004"
