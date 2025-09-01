@@ -67,8 +67,8 @@ async fn main() -> Result<()> {
     // Generate a test vector (first 10 dimensions for brevity)
     let test_vector = vec![0.1, -0.2, 0.3, -0.4, 0.5, -0.6, 0.7, -0.8, 0.9, -0.1];
     let mut full_vector = test_vector.clone();
-    // Pad to 1024 dimensions
-    for _ in 10..1024 {
+    // Pad to 2560 dimensions
+    for _ in 10..2560 {
         full_vector.push(0.0);
     }
     

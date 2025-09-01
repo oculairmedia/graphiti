@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 class OllamaEmbedder(EmbedderClient):
     """Custom embedder that uses Ollama for embeddings."""
 
-    def __init__(self, base_url: str, model: str = 'mxbai-embed-large'):
+    def __init__(self, base_url: str, model: str = 'dengcao/Qwen3-Embedding-4B:Q4_K_M'):
         self.base_url = base_url
         self.model = model
         self.client = AsyncOpenAI(base_url=base_url, api_key='ollama')
@@ -89,11 +89,11 @@ async def regenerate_node_embeddings(
     # Initialize Ollama embedder - use dedicated embedding endpoint if available
     use_dedicated = os.getenv('USE_DEDICATED_EMBEDDING_ENDPOINT', 'true').lower() == 'true'
     if use_dedicated:
-        ollama_base_url = os.getenv('OLLAMA_EMBEDDING_BASE_URL', 'http://192.168.50.80:11434/v1')
+        ollama_base_url = os.getenv('OLLAMA_EMBEDDING_BASE_URL', 'http://100.81.139.20:11434/v1')
     else:
         ollama_base_url = os.getenv('OLLAMA_BASE_URL', 'http://100.81.139.20:11434/v1')
 
-    ollama_model = os.getenv('OLLAMA_EMBEDDING_MODEL', 'mxbai-embed-large:latest')
+    ollama_model = os.getenv('OLLAMA_EMBEDDING_MODEL', 'dengcao/Qwen3-Embedding-4B:Q4_K_M')
     
     embedder = OllamaEmbedder(
         base_url=ollama_base_url,

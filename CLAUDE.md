@@ -469,3 +469,48 @@ Python Server (port 8000) - For data ingestion only
 ```
 
 The frontend connects directly to the Rust server for visualization, bypassing the Python backend for optimal performance while maintaining compatibility with Graphiti's data ingestion capabilities.
+
+### Embedding Generation
+
+The project includes scripts to generate embeddings for all graph elements using Ollama:
+
+#### Individual Embedding Scripts
+
+```bash
+# Generate embeddings for regular nodes
+python3 regenerate_node_embeddings_ollama.py
+
+# Generate embeddings for edges (relationships)
+python3 regenerate_edge_embeddings_ollama.py
+
+# Generate embeddings for episodic nodes
+python3 regenerate_episodic_embeddings_ollama.py
+```
+
+#### Combined Embedding Script
+
+For convenience, use the combined script to regenerate all embeddings at once:
+
+```bash
+# Regenerate ALL embeddings (nodes, edges, and episodic nodes)
+python3 regenerate_all_embeddings.py
+```
+
+**Features of the combined script:**
+- Runs all three embedding scripts in sequence
+- Handles cases where embeddings already exist gracefully
+- Provides colorful output with clear status indicators
+- Shows timing information and progress for each step
+- Generates a comprehensive summary report
+
+**Configuration:**
+- Ollama endpoint: `http://192.168.50.80:11434/v1`
+- Embedding model: `mxbai-embed-large:latest`
+- Batch size: 50 items per request
+- Automatic retry on failures
+
+**When to regenerate embeddings:**
+- After migrating data from Neo4j to FalkorDB
+- After bulk importing new data
+- When switching embedding models
+- After database corruption or reset
