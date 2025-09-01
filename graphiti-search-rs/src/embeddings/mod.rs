@@ -35,9 +35,9 @@ impl Default for OllamaEmbedder {
 impl OllamaEmbedder {
     pub fn new() -> Self {
         let base_url = env::var("OLLAMA_BASE_URL")
-            .unwrap_or_else(|_| "http://192.168.50.80:11434/v1".to_string());
+            .unwrap_or_else(|_| "http://100.81.139.20:11434/v1".to_string());
         let model = env::var("OLLAMA_EMBEDDING_MODEL")
-            .unwrap_or_else(|_| "mxbai-embed-large:latest".to_string());
+            .unwrap_or_else(|_| "dengcao/Qwen3-Embedding-4B:Q4_K_M".to_string());
 
         debug!(
             "Ollama embedder initialized with URL: {}, Model: {}",

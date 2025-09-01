@@ -26,7 +26,7 @@ async fn test_falkordb_sdk_similarity_search() -> Result<()> {
     println!("\nTesting similarity search with vecf32()...");
 
     // Create a small test vector for demonstration
-    let test_vector: Vec<f32> = (0..1024).map(|i| ((i as f32) * 0.001).sin()).collect();
+    let test_vector: Vec<f32> = (0..2560).map(|i| ((i as f32) * 0.001).sin()).collect();
     let vector_str = test_vector
         .iter()
         .map(|v| v.to_string())
@@ -144,7 +144,7 @@ async fn test_falkordb_client_v2() -> Result<()> {
     println!("✓ Fulltext search returned {} results", results.len());
 
     // Test similarity search with a dummy embedding
-    let test_embedding: Vec<f32> = (0..1024).map(|i| ((i as f32) * 0.001).sin()).collect();
+    let test_embedding: Vec<f32> = (0..2560).map(|i| ((i as f32) * 0.001).sin()).collect();
     let results = client
         .similarity_search_nodes(&test_embedding, 5, 0.0, None)
         .await?;
