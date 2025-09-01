@@ -123,20 +123,30 @@ class ChutesClient(LLMClient):
             result = json.loads(content)
             # Check if this looks like DeepSeek's schema+data response
             if isinstance(result, dict):
-                # If it has $defs or properties (schema) AND actual data fields
-                has_schema = '$defs' in result or 'properties' in result
-                has_data = False
-                data_fields = {}
-                
-                # Look for actual data fields (not schema fields)
-                for key, value in result.items():
-                    if key not in ['$defs', 'properties', 'required', 'title', 'type', 'description']:
-                        has_data = True
-                        data_fields[key] = value
-                
-                if has_schema and has_data:
-                    logger.info('Detected DeepSeek V3.1 schema+data response, extracting data only')
-                    return data_fields
+                # Pattern 1: Data mixed with schema at top level
+                if '$defs' in result or 'properties' in result:
+                    data_fields = {}
+                    
+                    # Extract actual data fields (not schema fields)
+                    for key, value in result.items():
+                        if key not in ['$defs', 'properties', 'required', 'title', 'type', 'description']:
+                            data_fields[key] = value
+                    
+                    # Pattern 2: Data nested in properties with 'value' field
+                    # Example: {"properties": {"summary": {"value": "actual text"}}}
+                    if 'properties' in result and isinstance(result['properties'], dict):
+                        for prop_key, prop_value in result['properties'].items():
+                            if isinstance(prop_value, dict):
+                                # Check for 'value' field within property definition
+                                if 'value' in prop_value:
+                                    data_fields[prop_key] = prop_value['value']
+                                # Also check if the property has actual data as default
+                                elif prop_key not in data_fields and 'default' in prop_value:
+                                    data_fields[prop_key] = prop_value['default']
+                    
+                    if data_fields:
+                        logger.info(f'Detected DeepSeek V3.1 schema response, extracted fields: {list(data_fields.keys())}')
+                        return data_fields
         except (json.JSONDecodeError, TypeError):
             pass
         
