@@ -30,7 +30,7 @@ def get_embedding_dimension() -> int:
     - Qwen3-Embedding-4B: 2560  
     - nomic-embed-text: 768
     """
-    return int(os.getenv('EMBEDDING_DIMENSION', '1024'))
+    return int(os.getenv('EMBEDDING_DIMENSION', '2560'))
 
 EMBEDDING_DIM = get_embedding_dimension()
 
