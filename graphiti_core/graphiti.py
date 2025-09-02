@@ -710,14 +710,23 @@ class Graphiti:
 
             # Save to database
             if not state.episode_created:
-                await self.driver.add_episode(
-                    episode,
-                    hydrated_nodes + duplicate_nodes_to_save,
-                    entity_edges,
-                    episodic_edges,
-                    merge_operations,
-                    allow_cross_graph_merge=self.enable_cross_graph_deduplication
+                if not self.store_raw_episode_content:
+                    episode.content = ''
+
+                # Combine all nodes to be saved (hydrated nodes + duplicate nodes)
+                all_nodes_to_save = hydrated_nodes + duplicate_nodes_to_save
+
+                await add_nodes_and_edges_bulk(
+                    self.driver, [episode], episodic_edges, all_nodes_to_save, entity_edges, self.embedder
                 )
+                
+                # Execute merge operations after nodes and edges are saved
+                if merge_operations:
+                    from graphiti_core.utils.maintenance.edge_operations import execute_merge_operations
+                    await execute_merge_operations(
+                        self.driver, merge_operations, allow_cross_graph_merge=self.enable_cross_graph_deduplication
+                    )
+                
                 state.mark_completed()
                 logger.info(f"Episode {episode.uuid}: Successfully saved to database")
 
