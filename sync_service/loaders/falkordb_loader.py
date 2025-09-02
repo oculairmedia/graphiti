@@ -69,6 +69,12 @@ class FalkorDBLoader:
         self.client: Optional[FalkorDB] = None
         self.graph: Optional[FalkorGraph] = None
         
+        # Define embedding properties (consistent with simple_migration.py)
+        self.embedding_properties = {
+            'name_embedding', 'summary_embedding', 'fact_embedding', 
+            'content_embedding', 'embedding', 'embeddings'
+        }
+        
     async def connect(self) -> None:
         """Establish connection to FalkorDB."""
         try:
@@ -136,7 +142,11 @@ class FalkorDBLoader:
         else:
             return obj
     
-    def _safe_value_for_query(self, value: Any) -> str:
+    def _is_embedding_property(self, key: str) -> bool:
+        """Check if a property is an embedding that needs vecf32 wrapping."""
+        return key.lower() in self.embedding_properties
+    
+    def _safe_value_for_query(self, value: Any, property_name: str = '') -> str:
         """Convert a value to a safely escaped string for direct query insertion."""
         if value is None:
             return 'NULL'
@@ -144,6 +154,36 @@ class FalkorDBLoader:
             return 'true' if value else 'false'
         elif isinstance(value, (int, float)):
             return str(value)
+        elif isinstance(value, list):
+            # Handle embeddings with vecf32() wrapping for FalkorDB
+            if self._is_embedding_property(property_name):
+                try:
+                    # Format as array for vecf32() function
+                    formatted_items = []
+                    for item in value:
+                        if isinstance(item, str):
+                            # Escape quotes in string items
+                            escaped = item.replace('\\', '\\\\').replace('"', '\\"')
+                            formatted_items.append(f'"{escaped}"')
+                        else:
+                            formatted_items.append(str(item))
+                    array_str = '[' + ', '.join(formatted_items) + ']'
+                    return f'vecf32({array_str})'
+                except Exception:
+                    return 'NULL'
+            else:
+                # Regular array handling (not embeddings)
+                try:
+                    formatted_items = []
+                    for item in value:
+                        if isinstance(item, str):
+                            escaped = item.replace('\\', '\\\\').replace('"', '\\"')
+                            formatted_items.append(f'"{escaped}"')
+                        else:
+                            formatted_items.append(str(item))
+                    return '[' + ', '.join(formatted_items) + ']'
+                except Exception:
+                    return 'NULL'
         elif isinstance(value, str):
             # Escape quotes and backslashes for string literals
             escaped = value.replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n').replace('\r', '\\r')
@@ -229,9 +269,9 @@ class FalkorDBLoader:
                 node = self._convert_datetimes_to_strings(node)
                 
                 # Build property assignments for MERGE and SET clauses
-                uuid_val = self._safe_value_for_query(node["uuid"])
-                name_val = self._safe_value_for_query(node.get("name", ""))
-                group_id_val = self._safe_value_for_query(node.get("group_id", ""))
+                uuid_val = self._safe_value_for_query(node["uuid"], "uuid")
+                name_val = self._safe_value_for_query(node.get("name", ""), "name")
+                group_id_val = self._safe_value_for_query(node.get("group_id", ""), "group_id")
                 
                 # Include all mandatory properties in MERGE to avoid constraint violations
                 # FalkorDB checks constraints immediately after MERGE, before SET
@@ -241,7 +281,7 @@ class FalkorDBLoader:
                 set_clauses = []
                 for key, value in node.items():
                     if key != "labels":  # Don't set labels as a property
-                        safe_value = self._safe_value_for_query(value)
+                        safe_value = self._safe_value_for_query(value, key)
                         set_clauses.append(f"n.{key} = {safe_value}")
                 
                 # Upsert query - merge with mandatory properties, then set all properties
@@ -283,9 +323,9 @@ class FalkorDBLoader:
                 node = self._convert_datetimes_to_strings(node)
                 
                 # Build property assignments for MERGE and SET clauses
-                uuid_val = self._safe_value_for_query(node["uuid"])
-                name_val = self._safe_value_for_query(node.get("name", ""))
-                group_id_val = self._safe_value_for_query(node.get("group_id", ""))
+                uuid_val = self._safe_value_for_query(node["uuid"], "uuid")
+                name_val = self._safe_value_for_query(node.get("name", ""), "name")
+                group_id_val = self._safe_value_for_query(node.get("group_id", ""), "group_id")
                 
                 # Include all mandatory properties in MERGE to avoid constraint violations
                 merge_props = f"{{uuid: {uuid_val}, name: {name_val}, group_id: {group_id_val}}}"
@@ -294,7 +334,7 @@ class FalkorDBLoader:
                 set_clauses = []
                 for key, value in node.items():
                     if key != "labels":  # Don't set labels as a property
-                        safe_value = self._safe_value_for_query(value)
+                        safe_value = self._safe_value_for_query(value, key)
                         set_clauses.append(f"n.{key} = {safe_value}")
                 
                 # Upsert query - merge with mandatory properties, then set all properties
@@ -336,9 +376,9 @@ class FalkorDBLoader:
                 node = self._convert_datetimes_to_strings(node)
                 
                 # Build property assignments for MERGE and SET clauses
-                uuid_val = self._safe_value_for_query(node["uuid"])
-                name_val = self._safe_value_for_query(node.get("name", ""))
-                group_id_val = self._safe_value_for_query(node.get("group_id", ""))
+                uuid_val = self._safe_value_for_query(node["uuid"], "uuid")
+                name_val = self._safe_value_for_query(node.get("name", ""), "name")
+                group_id_val = self._safe_value_for_query(node.get("group_id", ""), "group_id")
                 
                 # Include all mandatory properties in MERGE to avoid constraint violations
                 merge_props = f"{{uuid: {uuid_val}, name: {name_val}, group_id: {group_id_val}}}"
@@ -347,7 +387,7 @@ class FalkorDBLoader:
                 set_clauses = []
                 for key, value in node.items():
                     if key != "labels":  # Don't set labels as a property
-                        safe_value = self._safe_value_for_query(value)
+                        safe_value = self._safe_value_for_query(value, key)
                         set_clauses.append(f"n.{key} = {safe_value}")
                 
                 # Upsert query - merge with mandatory properties, then set all properties
@@ -390,13 +430,13 @@ class FalkorDBLoader:
                 
                 # Build properties string for direct query insertion
                 props = []
-                uuid_val = self._safe_value_for_query(edge["uuid"])
-                source_uuid_val = self._safe_value_for_query(edge["source_node_uuid"])
-                target_uuid_val = self._safe_value_for_query(edge["target_node_uuid"])
+                uuid_val = self._safe_value_for_query(edge["uuid"], "uuid")
+                source_uuid_val = self._safe_value_for_query(edge["source_node_uuid"], "source_node_uuid")
+                target_uuid_val = self._safe_value_for_query(edge["target_node_uuid"], "target_node_uuid")
                 
                 for key, value in edge.items():
                     if key not in ["uuid", "source_node_uuid", "target_node_uuid"]:
-                        safe_value = self._safe_value_for_query(value)
+                        safe_value = self._safe_value_for_query(value, key)
                         props.append(f"{key}: {safe_value}")
                         
                 props_str = "{uuid: " + uuid_val + ", " + ", ".join(props) + "}"
@@ -448,13 +488,13 @@ class FalkorDBLoader:
                 
                 # Build properties string for direct query insertion
                 props = []
-                uuid_val = self._safe_value_for_query(edge["uuid"])
-                source_uuid_val = self._safe_value_for_query(edge["source_node_uuid"])
-                target_uuid_val = self._safe_value_for_query(edge["target_node_uuid"])
+                uuid_val = self._safe_value_for_query(edge["uuid"], "uuid")
+                source_uuid_val = self._safe_value_for_query(edge["source_node_uuid"], "source_node_uuid")
+                target_uuid_val = self._safe_value_for_query(edge["target_node_uuid"], "target_node_uuid")
                 
                 for key, value in edge.items():
                     if key not in ["uuid", "source_node_uuid", "target_node_uuid"]:
-                        safe_value = self._safe_value_for_query(value)
+                        safe_value = self._safe_value_for_query(value, key)
                         props.append(f"{key}: {safe_value}")
                         
                 props_str = "{uuid: " + uuid_val + ", " + ", ".join(props) + "}"

@@ -18,9 +18,9 @@ logger = logging.getLogger(__name__)
 # Configuration for migration behavior (proven settings)
 MIGRATION_CONFIG = {
     'max_query_length': 10000,
-    'embedding_properties': ['name_embedding', 'summary_embedding', 'embedding', 'embeddings'],
+    'embedding_properties': ['name_embedding', 'summary_embedding', 'fact_embedding', 'content_embedding', 'embedding', 'embeddings'],
     'skip_large_arrays': True,
-    'max_array_size': 100,
+    'max_array_size': 3000,  # INCREASED: Allow 2560-dimensional embeddings
     'retry_attempts': 3,
     'batch_progress_interval': 50,
 }
@@ -50,12 +50,15 @@ def escape_string(value: str) -> str:
 
 def should_skip_property(key: str, value: Any) -> bool:
     """Determine if a property should be skipped during migration."""
-    # Skip known problematic embedding properties
+    # DON'T skip embedding properties - preserve them for FalkorDB
     if key.lower() in MIGRATION_CONFIG['embedding_properties']:
-        return True
+        return False  # CHANGED: Preserve embeddings instead of skipping them
     
-    # Skip large arrays that might cause query length issues
+    # Skip large arrays that might cause query length issues (but not embeddings)
     if isinstance(value, list) and MIGRATION_CONFIG['skip_large_arrays']:
+        # Don't skip if it's an embedding property
+        if key.lower() in MIGRATION_CONFIG['embedding_properties']:
+            return False
         if len(value) > MIGRATION_CONFIG['max_array_size']:
             return True
         
@@ -79,7 +82,12 @@ def should_skip_property(key: str, value: Any) -> bool:
     return False
 
 
-def format_value(value: Any) -> str:
+def is_embedding_property(key: str) -> bool:
+    """Check if a property is an embedding that needs vecf32 wrapping."""
+    return key.lower() in MIGRATION_CONFIG['embedding_properties']
+
+
+def format_value(value: Any, key: str = '') -> str:
     """Format value for Cypher query with improved handling."""
     if value is None:
         return 'null'
@@ -106,7 +114,13 @@ def format_value(value: Any) -> str:
                     formatted_items.append(f"'{escape_string(item)}'")
                 else:
                     formatted_items.append(str(item))
-            return '[' + ', '.join(formatted_items) + ']'
+            array_str = '[' + ', '.join(formatted_items) + ']'
+            
+            # Wrap embeddings with vecf32() for FalkorDB compatibility
+            if is_embedding_property(key):
+                return f'vecf32({array_str})'
+            else:
+                return array_str
         except Exception:
             return 'null'
     elif hasattr(value, 'to_native'):
@@ -199,7 +213,7 @@ async def perform_simple_migration(neo4j_config: Dict[str, Any], falkordb_config
                         continue
                     
                     try:
-                        formatted_value = format_value(value)
+                        formatted_value = format_value(value, key)  # Pass key for embedding detection
                         props.append(f'{key}: {formatted_value}')
                     except Exception as e:
                         logger.warning(f'Failed to format property {key}: {e}')
@@ -278,7 +292,7 @@ async def perform_simple_migration(neo4j_config: Dict[str, Any], falkordb_config
                             if should_skip_property(key, value):
                                 continue
                             try:
-                                formatted_value = format_value(value)
+                                formatted_value = format_value(value, key)  # Pass key for embedding detection
                                 prop_list.append(f"{key}: {formatted_value}")
                             except Exception as e:
                                 logger.warning(f'Failed to format relationship property {key}: {e}')
