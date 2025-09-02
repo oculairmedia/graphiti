@@ -7,6 +7,7 @@ adapted for the sync service environment with minimal dependencies.
 
 import json
 import logging
+import os
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -178,158 +179,196 @@ async def perform_simple_migration(neo4j_config: Dict[str, Any], falkordb_config
         except:
             pass  # Graph might not exist yet
         
-        # Get nodes from Neo4j
-        logger.info("Fetching nodes from Neo4j")
+        # Get total node count first
+        logger.info("Counting total nodes in Neo4j")
         async with neo4j_driver.session() as session:
-            nodes_result = await session.run('MATCH (n) RETURN n, labels(n) as labels')
-            nodes = await nodes_result.data()
+            count_result = await session.run('MATCH (n) RETURN count(n) as total_nodes')
+            count_record = await count_result.single()
+            total_nodes = count_record['total_nodes']
         
-        logger.info(f"Found {len(nodes)} nodes to migrate")
+        logger.info(f"Found {total_nodes} nodes to migrate - using batched processing")
         
-        # Migrate nodes
+        # Migrate nodes in batches to prevent memory exhaustion
         node_count = 0
         node_uuid_map = {}
+        batch_size = int(os.getenv('MIGRATION_BATCH_SIZE', '100'))  # Configurable batch size
         
-        for i, record in enumerate(nodes):
-            try:
-                node = record['n']
-                labels = record['labels']
-                
-                if not labels:
-                    continue
-                
-                label = labels[0]  # Use first label
-                
-                # Build properties with smart filtering
-                props = []
-                node_uuid = None
-                
-                for key, value in node.items():
-                    if key == 'uuid':
-                        node_uuid = value
+        logger.info(f"Processing nodes in batches of {batch_size}")
+        
+        for batch_start in range(0, total_nodes, batch_size):
+            batch_end = min(batch_start + batch_size, total_nodes)
+            logger.info(f"Processing node batch {batch_start}-{batch_end} ({batch_end - batch_start} nodes)")
+            
+            # Fetch batch of nodes
+            async with neo4j_driver.session() as session:
+                batch_query = f'MATCH (n) RETURN n, labels(n) as labels SKIP {batch_start} LIMIT {batch_size}'
+                nodes_result = await session.run(batch_query)
+                batch_nodes = await nodes_result.data()
+            
+            # Process each node in the batch
+            for i, record in enumerate(batch_nodes):
+                try:
+                    node = record['n']
+                    labels = record['labels']
                     
-                    # Apply smart property filtering
-                    if should_skip_property(key, value):
+                    if not labels:
                         continue
                     
-                    try:
-                        formatted_value = format_value(value, key)  # Pass key for embedding detection
-                        props.append(f'{key}: {formatted_value}')
-                    except Exception as e:
-                        logger.warning(f'Failed to format property {key}: {e}')
-                
-                # Build and execute query with retry logic
-                success = False
-                for attempt in range(MIGRATION_CONFIG['retry_attempts']):
-                    try:
-                        if props:
-                            props_str = '{' + ', '.join(props) + '}'
-                            query = f'CREATE (n:{label} {props_str})'
-                        else:
-                            query = f'CREATE (n:{label})'
-                        
-                        # Check query length and simplify if needed
-                        if estimate_query_length(query) > MIGRATION_CONFIG['max_query_length']:
-                            # Create simplified query with only essential properties
-                            essential_props = []
-                            for prop in props:
-                                if any(key in prop for key in ['uuid:', 'name:', 'type:', 'group_id:']):
-                                    essential_props.append(prop)
-                            if essential_props:
-                                props_str = '{' + ', '.join(essential_props) + '}'
-                                query = f'CREATE (n:{label} {props_str})'
-                            else:
-                                query = f'CREATE (n:{label})'
-                        
-                        falkor_graph.query(query)
-                        node_count += 1
-                        success = True
-                        
-                        if node_uuid:
-                            node_uuid_map[node_uuid] = True
-                        break
-                        
-                    except Exception as e:
-                        if attempt == MIGRATION_CONFIG['retry_attempts'] - 1:
-                            logger.error(f'Failed to migrate node {node_uuid} after {MIGRATION_CONFIG["retry_attempts"]} attempts: {e}')
-                
-                # Progress reporting
-                if (i + 1) % MIGRATION_CONFIG['batch_progress_interval'] == 0:
-                    logger.info(f'Migrated {node_count}/{i+1} nodes so far')
-            
-            except Exception as e:
-                logger.error(f'Error processing node {i}: {e}')
-        
-        node_success_rate = (node_count / len(nodes) * 100) if nodes else 0
-        logger.info(f'Successfully migrated {node_count}/{len(nodes)} nodes ({node_success_rate:.1f}% success rate)')
-        
-        # Migrate relationships
-        rel_count = 0
-        if node_uuid_map:
-            logger.info("Fetching relationships from Neo4j")
-            
-            async with neo4j_driver.session() as session:
-                rels_result = await session.run("""
-                    MATCH (s)-[r]->(t) 
-                    WHERE s.uuid IS NOT NULL AND t.uuid IS NOT NULL
-                    RETURN s.uuid as source_uuid, t.uuid as target_uuid, type(r) as rel_type, properties(r) as props
-                """)
-                relationships = await rels_result.data()
-            
-            logger.info(f'Found {len(relationships)} relationships to migrate')
-            
-            for i, record in enumerate(relationships):
-                try:
-                    source_uuid = record['source_uuid']
-                    target_uuid = record['target_uuid']
-                    rel_type = record['rel_type']
-                    props = record['props']
+                    label = labels[0]  # Use first label
                     
-                    # Format properties with filtering
-                    prop_list = []
-                    if props:
-                        for key, value in props.items():
-                            if should_skip_property(key, value):
-                                continue
-                            try:
-                                formatted_value = format_value(value, key)  # Pass key for embedding detection
-                                prop_list.append(f"{key}: {formatted_value}")
-                            except Exception as e:
-                                logger.warning(f'Failed to format relationship property {key}: {e}')
+                    # Build properties with smart filtering
+                    props = []
+                    node_uuid = None
                     
-                    prop_string = "{" + ", ".join(prop_list) + "}" if prop_list else ""
+                    for key, value in node.items():
+                        if key == 'uuid':
+                            node_uuid = value
+                        
+                        # Apply smart property filtering
+                        if should_skip_property(key, value):
+                            continue
+                        
+                        try:
+                            formatted_value = format_value(value, key)  # Pass key for embedding detection
+                            props.append(f'{key}: {formatted_value}')
+                        except Exception as e:
+                            logger.warning(f'Failed to format property {key}: {e}')
                     
-                    # Create relationship with retry logic
+                    # Build and execute query with retry logic
                     success = False
                     for attempt in range(MIGRATION_CONFIG['retry_attempts']):
                         try:
-                            rel_query = f"""
-                            MATCH (s {{uuid: '{escape_string(source_uuid)}'}}), (t {{uuid: '{escape_string(target_uuid)}'}}) 
-                            CREATE (s)-[:{rel_type} {prop_string}]->(t)
-                            """
+                            if props:
+                                props_str = '{' + ', '.join(props) + '}'
+                                query = f'CREATE (n:{label} {props_str})'
+                            else:
+                                query = f'CREATE (n:{label})'
                             
                             # Check query length and simplify if needed
-                            if estimate_query_length(rel_query) > MIGRATION_CONFIG['max_query_length']:
-                                # Simplify by removing properties
-                                rel_query = f"""
-                                MATCH (s {{uuid: '{escape_string(source_uuid)}'}}), (t {{uuid: '{escape_string(target_uuid)}'}}) 
-                                CREATE (s)-[:{rel_type}]->(t)
-                                """
+                            if estimate_query_length(query) > MIGRATION_CONFIG['max_query_length']:
+                                # Create simplified query with only essential properties
+                                essential_props = []
+                                for prop in props:
+                                    if any(key in prop for key in ['uuid:', 'name:', 'type:', 'group_id:']):
+                                        essential_props.append(prop)
+                                if essential_props:
+                                    props_str = '{' + ', '.join(essential_props) + '}'
+                                    query = f'CREATE (n:{label} {props_str})'
+                                else:
+                                    query = f'CREATE (n:{label})'
                             
-                            falkor_graph.query(rel_query)
-                            rel_count += 1
+                            falkor_graph.query(query)
+                            node_count += 1
                             success = True
+                            
+                            if node_uuid:
+                                node_uuid_map[node_uuid] = True
                             break
                             
                         except Exception as e:
                             if attempt == MIGRATION_CONFIG['retry_attempts'] - 1:
-                                logger.error(f'Failed to migrate relationship {source_uuid}->{target_uuid} after {MIGRATION_CONFIG["retry_attempts"]} attempts: {e}')
-                
+                                logger.error(f'Failed to migrate node {node_uuid} after {MIGRATION_CONFIG["retry_attempts"]} attempts: {e}')
+                    
                 except Exception as e:
-                    logger.error(f'Error processing relationship {i}: {e}')
+                    logger.error(f'Error processing node in batch: {e}')
+            
+            # Progress reporting for each batch
+            logger.info(f'Batch complete: {node_count}/{total_nodes} nodes migrated so far ({(node_count / total_nodes * 100):.1f}%)')
         
-        rel_success_rate = (rel_count / len(relationships) * 100) if relationships else 0
-        logger.info(f'Successfully migrated {rel_count}/{len(relationships)} relationships ({rel_success_rate:.1f}% success rate)')
+        node_success_rate = (node_count / total_nodes * 100) if total_nodes else 0
+        logger.info(f'Successfully migrated {node_count}/{total_nodes} nodes ({node_success_rate:.1f}% success rate)')
+        
+        # Migrate relationships in batches
+        rel_count = 0
+        total_relationships = 0
+        rel_success_rate = 0
+        
+        if node_uuid_map:
+            # Get total relationship count first
+            logger.info("Counting total relationships in Neo4j")
+            async with neo4j_driver.session() as session:
+                rel_count_result = await session.run("""
+                    MATCH (s)-[r]->(t) 
+                    WHERE s.uuid IS NOT NULL AND t.uuid IS NOT NULL
+                    RETURN count(r) as total_relationships
+                """)
+                rel_count_record = await rel_count_result.single()
+                total_relationships = rel_count_record['total_relationships']
+            
+            logger.info(f'Found {total_relationships} relationships to migrate - using batched processing')
+            
+            # Process relationships in batches
+            for rel_batch_start in range(0, total_relationships, batch_size):
+                rel_batch_end = min(rel_batch_start + batch_size, total_relationships)
+                logger.info(f"Processing relationship batch {rel_batch_start}-{rel_batch_end} ({rel_batch_end - rel_batch_start} relationships)")
+                
+                # Fetch batch of relationships
+                async with neo4j_driver.session() as session:
+                    rel_batch_query = f"""
+                    MATCH (s)-[r]->(t) 
+                    WHERE s.uuid IS NOT NULL AND t.uuid IS NOT NULL
+                    RETURN s.uuid as source_uuid, t.uuid as target_uuid, type(r) as rel_type, properties(r) as props
+                    SKIP {rel_batch_start} LIMIT {batch_size}
+                    """
+                    rels_result = await session.run(rel_batch_query)
+                    batch_relationships = await rels_result.data()
+                
+                # Process each relationship in the batch
+                for i, record in enumerate(batch_relationships):
+                    try:
+                        source_uuid = record['source_uuid']
+                        target_uuid = record['target_uuid']
+                        rel_type = record['rel_type']
+                        props = record['props']
+                        
+                        # Format properties with filtering
+                        prop_list = []
+                        if props:
+                            for key, value in props.items():
+                                if should_skip_property(key, value):
+                                    continue
+                                try:
+                                    formatted_value = format_value(value, key)  # Pass key for embedding detection
+                                    prop_list.append(f"{key}: {formatted_value}")
+                                except Exception as e:
+                                    logger.warning(f'Failed to format relationship property {key}: {e}')
+                        
+                        prop_string = "{" + ", ".join(prop_list) + "}" if prop_list else ""
+                        
+                        # Create relationship with retry logic
+                        success = False
+                        for attempt in range(MIGRATION_CONFIG['retry_attempts']):
+                            try:
+                                rel_query = f"""
+                                MATCH (s {{uuid: '{escape_string(source_uuid)}'}}), (t {{uuid: '{escape_string(target_uuid)}'}}) 
+                                CREATE (s)-[:{rel_type} {prop_string}]->(t)
+                                """
+                                
+                                # Check query length and simplify if needed
+                                if estimate_query_length(rel_query) > MIGRATION_CONFIG['max_query_length']:
+                                    # Simplify by removing properties
+                                    rel_query = f"""
+                                    MATCH (s {{uuid: '{escape_string(source_uuid)}'}}), (t {{uuid: '{escape_string(target_uuid)}'}}) 
+                                    CREATE (s)-[:{rel_type}]->(t)
+                                    """
+                                
+                                falkor_graph.query(rel_query)
+                                rel_count += 1
+                                success = True
+                                break
+                                
+                            except Exception as e:
+                                if attempt == MIGRATION_CONFIG['retry_attempts'] - 1:
+                                    logger.error(f'Failed to migrate relationship {source_uuid}->{target_uuid} after {MIGRATION_CONFIG["retry_attempts"]} attempts: {e}')
+                    
+                    except Exception as e:
+                        logger.error(f'Error processing relationship in batch: {e}')
+                
+                # Progress reporting for each batch
+                logger.info(f'Relationship batch complete: {rel_count}/{total_relationships} relationships migrated so far ({(rel_count / total_relationships * 100):.1f}%)')
+        
+        rel_success_rate = (rel_count / total_relationships * 100) if total_relationships else 0
+        logger.info(f'Successfully migrated {rel_count}/{total_relationships} relationships ({rel_success_rate:.1f}% success rate)')
         
         # Calculate overall statistics
         end_time = datetime.now()
@@ -339,11 +378,11 @@ async def perform_simple_migration(neo4j_config: Dict[str, Any], falkordb_config
             'status': 'completed',
             'duration_seconds': duration,
             'nodes_migrated': node_count,
-            'total_nodes': len(nodes),
+            'total_nodes': total_nodes,
             'node_success_rate': node_success_rate,
             'relationships_migrated': rel_count,
-            'total_relationships': len(relationships) if 'relationships' in locals() else 0,
-            'relationship_success_rate': rel_success_rate if 'relationships' in locals() else 0,
+            'total_relationships': total_relationships,
+            'relationship_success_rate': rel_success_rate,
             'started_at': start_time.isoformat(),
             'completed_at': end_time.isoformat()
         }
