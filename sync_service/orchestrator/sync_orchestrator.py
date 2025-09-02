@@ -670,7 +670,7 @@ class SyncOrchestrator:
             status["current_operation"] = {
                 "mode": self.current_operation.mode.value,
                 "status": self.current_operation.status.value,
-                "started_at": self.current_operation.started_at,
+                "started_at": self.current_operation.started_at.isoformat() + "Z" if self.current_operation.started_at else None,
                 "duration_seconds": (datetime.utcnow() - self.current_operation.started_at).total_seconds() if self.current_operation.started_at else 0
             }
             
@@ -679,8 +679,8 @@ class SyncOrchestrator:
             status["recent_operations"].append({
                 "mode": operation.mode.value,
                 "status": operation.status.value,
-                "started_at": operation.started_at,
-                "completed_at": operation.completed_at,
+                "started_at": operation.started_at.isoformat() + "Z" if operation.started_at else None,
+                "completed_at": operation.completed_at.isoformat() + "Z" if operation.completed_at else None,
                 "duration_seconds": operation.duration_seconds,
                 "total_items_processed": operation.total_items_processed,
                 "success_rate": operation.success_rate,
