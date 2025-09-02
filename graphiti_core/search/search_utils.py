@@ -858,13 +858,53 @@ async def get_relevant_edges(
     return relevant_edges
 
 
-async def get_edge_invalidation_candidates(
+async def get_edge_invalidation_candidates_batch(
+    driver: GraphDriver,
+    edges: list[EntityEdge],
+    search_filter: SearchFilters,
+    min_score: float = DEFAULT_MIN_SCORE,
+    limit: int = RELEVANT_SCHEMA_LIMIT,
+    batch_size: int | None = None,  # Process edges in batches to avoid memory exhaustion
+) -> list[list[EntityEdge]]:
+    """
+    Batched version of edge invalidation candidates to prevent FalkorDB memory exhaustion.
+    
+    This function processes edges in smaller batches instead of all at once,
+    which prevents the "Query's mem consumption exceeded capacity" error.
+    """
+    if len(edges) == 0:
+        return []
+
+    # Get batch size from environment or use default
+    if batch_size is None:
+        import os
+        batch_size = int(os.getenv('EDGE_INVALIDATION_BATCH_SIZE', '5'))
+    
+    logger.info(f"Processing {len(edges)} edges for invalidation in batches of {batch_size}")
+
+    # Process edges in batches
+    all_invalidation_edges: list[list[EntityEdge]] = []
+    
+    for i in range(0, len(edges), batch_size):
+        batch_edges = edges[i:i + batch_size]
+        logger.debug(f"Processing edge invalidation batch {i//batch_size + 1}/{(len(edges)-1)//batch_size + 1} ({len(batch_edges)} edges)")
+        
+        batch_results = await get_edge_invalidation_candidates_single_batch(
+            driver, batch_edges, search_filter, min_score, limit
+        )
+        all_invalidation_edges.extend(batch_results)
+    
+    return all_invalidation_edges
+
+
+async def get_edge_invalidation_candidates_single_batch(
     driver: GraphDriver,
     edges: list[EntityEdge],
     search_filter: SearchFilters,
     min_score: float = DEFAULT_MIN_SCORE,
     limit: int = RELEVANT_SCHEMA_LIMIT,
 ) -> list[list[EntityEdge]]:
+    """Single batch processing for edge invalidation candidates."""
     if len(edges) == 0:
         return []
 
@@ -874,8 +914,6 @@ async def get_edge_invalidation_candidates(
     query_params.update(filter_params)
 
     cosine_func = get_vector_cosine_func_query('e.fact_embedding', 'edge.fact_embedding', driver.provider)
-    logger.info(f"Edge invalidation cosine function: {cosine_func}")
-    logger.info(f"Driver provider: {driver.provider}")
     
     query = (
         RUNTIME_QUERY
@@ -912,20 +950,36 @@ async def get_edge_invalidation_candidates(
     )
 
     edges_data = [edge.model_dump() for edge in edges]
-    if edges_data:
-        logger.info(f"Edge invalidation - fact_embedding type: {type(edges_data[0].get('fact_embedding'))}")
-        logger.info(f"Edge invalidation - fact_embedding is list: {isinstance(edges_data[0].get('fact_embedding'), list)}")
-        if edges_data[0].get('fact_embedding'):
-            logger.info(f"Edge invalidation - fact_embedding length: {len(edges_data[0].get('fact_embedding'))}")
     
-    results, _, _ = await driver.execute_query(
-        query,
-        params=query_params,
-        edges=edges_data,
-        limit=limit,
-        min_score=min_score,
-        routing_='r',
-    )
+    try:
+        results, _, _ = await driver.execute_query(
+            query,
+            params=query_params,
+            edges=edges_data,
+            limit=limit,
+            min_score=min_score,
+            routing_='r',
+        )
+    except Exception as e:
+        if "mem consumption exceeded capacity" in str(e):
+            logger.warning(f"Memory exhaustion in edge invalidation batch of {len(edges)} edges, retrying with smaller batch")
+            # If still getting memory errors, split into even smaller batches
+            if len(edges) <= 1:
+                logger.error("Cannot process even single edge - skipping")
+                return [[]]
+            
+            # Split the batch in half and retry
+            mid = len(edges) // 2
+            batch1_results = await get_edge_invalidation_candidates_single_batch(
+                driver, edges[:mid], search_filter, min_score, limit
+            )
+            batch2_results = await get_edge_invalidation_candidates_single_batch(
+                driver, edges[mid:], search_filter, min_score, limit
+            )
+            return batch1_results + batch2_results
+        else:
+            raise e
+    
     invalidation_edges_dict: dict[str, list[EntityEdge]] = {
         result['search_edge_uuid']: [
             get_entity_edge_from_record(record) for record in result['matches']
@@ -936,6 +990,25 @@ async def get_edge_invalidation_candidates(
     invalidation_edges = [invalidation_edges_dict.get(edge.uuid, []) for edge in edges]
 
     return invalidation_edges
+
+
+async def get_edge_invalidation_candidates(
+    driver: GraphDriver,
+    edges: list[EntityEdge],
+    search_filter: SearchFilters,
+    min_score: float = DEFAULT_MIN_SCORE,
+    limit: int = RELEVANT_SCHEMA_LIMIT,
+) -> list[list[EntityEdge]]:
+    """
+    Edge invalidation candidates with automatic batching for memory management.
+    
+    Uses batched processing to prevent FalkorDB memory exhaustion while maintaining
+    compatibility with existing code.
+    """
+    # Use batched approach by default for better reliability
+    return await get_edge_invalidation_candidates_batch(
+        driver, edges, search_filter, min_score, limit
+    )
 
 
 # takes in a list of rankings of uuids
