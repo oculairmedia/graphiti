@@ -61,6 +61,30 @@ pub enum UpdateOperation {
 }
 
 impl DuckDBStore {
+    /// Centralized date normalization to prevent synthetic timestamps
+    /// Returns (created_at_string, timestamp_f64) tuple
+    fn normalize_created_at(node: &Node) -> (String, f64) {
+        if let Some(created_str) = node.properties.get("created_at").and_then(|v| v.as_str()) {
+            // Parse existing timestamp
+            match DateTime::parse_from_rfc3339(created_str) {
+                Ok(dt) => {
+                    let timestamp = dt.timestamp_millis() as f64;
+                    (created_str.to_string(), timestamp)
+                }
+                Err(e) => {
+                    warn!("Failed to parse created_at '{}': {}, using current time", created_str, e);
+                    let now = Utc::now();
+                    (now.to_rfc3339(), now.timestamp_millis() as f64)
+                }
+            }
+        } else {
+            // Missing created_at - use current time instead of synthetic 1979 timestamps
+            debug!("Node {} missing created_at, using current time instead of synthetic timestamp", node.id);
+            let now = Utc::now();
+            (now.to_rfc3339(), now.timestamp_millis() as f64)
+        }
+    }
+
     pub fn new() -> Result<Self> {
         let conn = Connection::open_in_memory()?;
         
@@ -213,25 +237,8 @@ impl DuckDBStore {
             let cluster = node.node_type.clone();
             let cluster_strength = 0.7;
             
-            // Compute both created_at string and timestamp
-            let (created_str, timestamp) = if let Some(created_str) = node.properties.get("created_at")
-                .and_then(|v| v.as_str()) {
-                // Have string, compute timestamp
-                let ts = DateTime::parse_from_rfc3339(created_str)
-                    .map(|dt| dt.timestamp_millis() as f64)
-                    .unwrap_or_else(|e| {
-                        warn!("Failed to parse created_at '{}': {}", created_str, e);
-                        (idx as f64) * 86400000.0 // Fallback to synthetic
-                    });
-                (created_str.to_string(), ts)
-            } else {
-                // No string, synthesize both
-                debug!("Node {} has no created_at, synthesizing both fields", node.id);
-                let ts = (idx as f64) * 86400000.0; // Synthetic timestamp
-                let dt = DateTime::<Utc>::from_timestamp_millis(ts as i64)
-                    .unwrap_or_else(|| Utc::now());
-                (dt.to_rfc3339(), ts)
-            };
+            // Use centralized date normalization
+            let (created_str, timestamp) = Self::normalize_created_at(&node);
             
             tx.execute(
                 stmt_node,
@@ -573,19 +580,12 @@ impl DuckDBStore {
                 let cluster = node.node_type.clone();
                 let cluster_strength = 0.7;
                 
-                // Parse real timestamp from created_at if available
-                let timestamp = if let Some(created_str) = node.properties.get("created_at")
-                    .and_then(|v| v.as_str()) {
-                    DateTime::parse_from_rfc3339(created_str)
-                        .map(|dt| dt.timestamp_millis() as f64)
-                        .unwrap_or((start_idx as f64) * 86400000.0)
-                } else {
-                    (start_idx as f64) * 86400000.0
-                };
+                // Use centralized date normalization
+                let (created_str, timestamp) = Self::normalize_created_at(&node);
 
                 tx.execute(
-                    "INSERT OR REPLACE INTO nodes (id, idx, label, node_type, summary, degree_centrality, pagerank_centrality, betweenness_centrality, eigenvector_centrality, x, y, color, size, created_at_timestamp, cluster, clusterStrength) 
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "INSERT OR REPLACE INTO nodes (id, idx, label, node_type, summary, degree_centrality, pagerank_centrality, betweenness_centrality, eigenvector_centrality, x, y, color, size, created_at, created_at_timestamp, cluster, clusterStrength) 
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     params![
                         &node.id,
                         start_idx,
@@ -600,7 +600,8 @@ impl DuckDBStore {
                         Option::<f64>::None,
                         color,
                         size,
-                        timestamp,
+                        &created_str,     // created_at string
+                        timestamp,        // created_at_timestamp
                         cluster,
                         cluster_strength
                     ],
