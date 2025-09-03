@@ -94,13 +94,10 @@ def is_embedding_property(key: str) -> bool:
 
 
 def format_value(value: Any, key: str = '') -> str:
-    """Format value for Cypher query with improved handling."""
+    """Format value for Cypher query with simple, reliable handling."""
     if value is None:
         return 'null'
     elif isinstance(value, str):
-        # Check if string looks like an ISO datetime and preserve it
-        if key.endswith(('_at', 'created', 'date')) and ('T' in value and 'Z' in value or '+' in value[-6:]):
-            return f"'{escape_string(value)}'"
         return f"'{escape_string(value)}'"
     elif isinstance(value, bool):
         return 'true' if value else 'false'
@@ -113,19 +110,9 @@ def format_value(value: Any, key: str = '') -> str:
                 return '999999999'  # Large number representation
             elif value == float('-inf'):
                 return '-999999999'
-        # Check if this looks like a timestamp (for datetime fields)
-        if key.endswith(('_at', 'created', 'date', 'timestamp')) and isinstance(value, (int, float)):
-            try:
-                # Convert timestamp to datetime string if it's reasonable timestamp
-                if 1000000000 < value < 9999999999:  # Reasonable timestamp range (2001-2318)
-                    dt = datetime.fromtimestamp(value, tz=timezone.utc)
-                    return f"'{dt.isoformat()}'"
-                elif value > 9999999999:  # Millisecond timestamp
-                    dt = datetime.fromtimestamp(value / 1000, tz=timezone.utc)
-                    return f"'{dt.isoformat()}'"
-            except (ValueError, OSError):
-                pass
         return str(value)
+    elif isinstance(value, datetime):
+        return f"'{value.isoformat()}'"
     elif isinstance(value, list):
         try:
             # Convert list to JSON-like array format
@@ -367,11 +354,23 @@ async def perform_simple_migration(neo4j_config: Dict[str, Any], falkordb_config
                                 
                                 # Check query length and simplify if needed
                                 if estimate_query_length(rel_query) > MIGRATION_CONFIG['max_query_length']:
-                                    # Simplify by removing properties
-                                    rel_query = f"""
-                                    MATCH (s {{uuid: '{escape_string(source_uuid)}'}}), (t {{uuid: '{escape_string(target_uuid)}'}}) 
-                                    CREATE (s)-[:{rel_type}]->(t)
-                                    """
+                                    # Simplify by keeping only essential properties (uuid is required for RELATES_TO)
+                                    essential_props = []
+                                    for prop in prop_list:
+                                        if any(key in prop for key in ['uuid:', 'name:', 'fact:']):
+                                            essential_props.append(prop)
+                                    
+                                    if essential_props:
+                                        prop_string = "{" + ", ".join(essential_props) + "}"
+                                        rel_query = f"""
+                                        MATCH (s {{uuid: '{escape_string(source_uuid)}'}}), (t {{uuid: '{escape_string(target_uuid)}'}}) 
+                                        CREATE (s)-[:{rel_type} {prop_string}]->(t)
+                                        """
+                                    else:
+                                        rel_query = f"""
+                                        MATCH (s {{uuid: '{escape_string(source_uuid)}'}}), (t {{uuid: '{escape_string(target_uuid)}'}}) 
+                                        CREATE (s)-[:{rel_type}]->(t)
+                                        """
                                 
                                 falkor_graph.query(rel_query)
                                 rel_count += 1
