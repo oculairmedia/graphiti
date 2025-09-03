@@ -354,10 +354,10 @@ async def perform_simple_migration(neo4j_config: Dict[str, Any], falkordb_config
                                 
                                 # Check query length and simplify if needed
                                 if estimate_query_length(rel_query) > MIGRATION_CONFIG['max_query_length']:
-                                    # Simplify by keeping only essential properties (uuid is required for RELATES_TO)
+                                    # Simplify by keeping only essential properties (uuid and group_id are required for RELATES_TO)
                                     essential_props = []
                                     for prop in prop_list:
-                                        if any(key in prop for key in ['uuid:', 'name:', 'fact:']):
+                                        if any(key in prop for key in ['uuid:', 'name:', 'fact:', 'group_id:']):
                                             essential_props.append(prop)
                                     
                                     if essential_props:
