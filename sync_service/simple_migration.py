@@ -8,7 +8,7 @@ adapted for the sync service environment with minimal dependencies.
 import json
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from falkordb import FalkorDB
@@ -98,6 +98,9 @@ def format_value(value: Any, key: str = '') -> str:
     if value is None:
         return 'null'
     elif isinstance(value, str):
+        # Check if string looks like an ISO datetime and preserve it
+        if key.endswith(('_at', 'created', 'date')) and ('T' in value and 'Z' in value or '+' in value[-6:]):
+            return f"'{escape_string(value)}'"
         return f"'{escape_string(value)}'"
     elif isinstance(value, bool):
         return 'true' if value else 'false'
@@ -110,6 +113,18 @@ def format_value(value: Any, key: str = '') -> str:
                 return '999999999'  # Large number representation
             elif value == float('-inf'):
                 return '-999999999'
+        # Check if this looks like a timestamp (for datetime fields)
+        if key.endswith(('_at', 'created', 'date', 'timestamp')) and isinstance(value, (int, float)):
+            try:
+                # Convert timestamp to datetime string if it's reasonable timestamp
+                if 1000000000 < value < 9999999999:  # Reasonable timestamp range (2001-2318)
+                    dt = datetime.fromtimestamp(value, tz=timezone.utc)
+                    return f"'{dt.isoformat()}'"
+                elif value > 9999999999:  # Millisecond timestamp
+                    dt = datetime.fromtimestamp(value / 1000, tz=timezone.utc)
+                    return f"'{dt.isoformat()}'"
+            except (ValueError, OSError):
+                pass
         return str(value)
     elif isinstance(value, list):
         try:
