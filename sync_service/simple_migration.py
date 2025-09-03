@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 MIGRATION_CONFIG = {
     'max_query_length': 10000,
     'embedding_properties': ['name_embedding', 'summary_embedding', 'fact_embedding', 'content_embedding', 'embedding', 'embeddings'],
+    'centrality_properties': ['degree_centrality', 'betweenness_centrality', 'pagerank_centrality', 'eigenvector_centrality'],
     'skip_large_arrays': True,
     'max_array_size': 3000,  # INCREASED: Allow 2560-dimensional embeddings
     'retry_attempts': 3,
@@ -55,10 +56,14 @@ def should_skip_property(key: str, value: Any) -> bool:
     if key.lower() in MIGRATION_CONFIG['embedding_properties']:
         return False  # CHANGED: Preserve embeddings instead of skipping them
     
-    # Skip large arrays that might cause query length issues (but not embeddings)
+    # DON'T skip centrality properties - preserve them for analysis
+    if key.lower() in MIGRATION_CONFIG['centrality_properties']:
+        return False  # PRESERVE: Keep centrality values for graph analysis
+    
+    # Skip large arrays that might cause query length issues (but not embeddings or centrality)
     if isinstance(value, list) and MIGRATION_CONFIG['skip_large_arrays']:
-        # Don't skip if it's an embedding property
-        if key.lower() in MIGRATION_CONFIG['embedding_properties']:
+        # Don't skip if it's an embedding or centrality property
+        if key.lower() in MIGRATION_CONFIG['embedding_properties'] or key.lower() in MIGRATION_CONFIG['centrality_properties']:
             return False
         if len(value) > MIGRATION_CONFIG['max_array_size']:
             return True
@@ -246,10 +251,11 @@ async def perform_simple_migration(neo4j_config: Dict[str, Any], falkordb_config
                             
                             # Check query length and simplify if needed
                             if estimate_query_length(query) > MIGRATION_CONFIG['max_query_length']:
-                                # Create simplified query with only essential properties
+                                # Create simplified query with only essential properties (including centrality)
+                                essential_keys = ['uuid:', 'name:', 'type:', 'group_id:'] + [f'{key}:' for key in MIGRATION_CONFIG['centrality_properties']]
                                 essential_props = []
                                 for prop in props:
-                                    if any(key in prop for key in ['uuid:', 'name:', 'type:', 'group_id:']):
+                                    if any(key in prop for key in essential_keys):
                                         essential_props.append(prop)
                                 if essential_props:
                                     props_str = '{' + ', '.join(essential_props) + '}'
