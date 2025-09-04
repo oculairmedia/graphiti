@@ -902,7 +902,7 @@ class Graphiti:
                     source_description=episode.source_description,
                     group_id=group_id,
                     created_at=now,
-                    valid_at=episode.reference_time,
+                    valid_at=ensure_utc(episode.reference_time),
                 )
                 # If episode had a UUID, preserve it for deterministic processing
                 if episode.uuid is not None:
