@@ -112,7 +112,15 @@ def format_value(value: Any, key: str = '') -> str:
                 return '-999999999'
         return str(value)
     elif isinstance(value, datetime):
-        return f"'{value.isoformat()}'"
+        # Ensure timezone is present for proper formatting
+        if value.tzinfo is None:
+            # Assume UTC for naive datetime
+            value = value.replace(tzinfo=timezone.utc)
+        iso_str = value.isoformat()
+        # Ensure it ends with timezone (handle both +00:00 and Z formats)
+        if not ('+' in iso_str or iso_str.endswith('Z')):
+            iso_str += '+00:00'
+        return f"'{iso_str}'"
     elif isinstance(value, list):
         try:
             # Convert list to JSON-like array format
@@ -136,7 +144,15 @@ def format_value(value: Any, key: str = '') -> str:
         try:
             native_value = value.to_native()
             if isinstance(native_value, datetime):
-                return f"'{native_value.isoformat()}'"
+                # Ensure timezone is present for proper formatting
+                if native_value.tzinfo is None:
+                    # Assume UTC for naive datetime
+                    native_value = native_value.replace(tzinfo=timezone.utc)
+                iso_str = native_value.isoformat()
+                # Ensure it ends with timezone (handle both +00:00 and Z formats)
+                if not ('+' in iso_str or iso_str.endswith('Z')):
+                    iso_str += '+00:00'
+                return f"'{iso_str}'"
             else:
                 return f"'{escape_string(str(native_value))}'"
         except Exception:
@@ -185,6 +201,24 @@ async def perform_simple_migration(neo4j_config: Dict[str, Any], falkordb_config
             falkor_graph.delete()
         except:
             pass  # Graph might not exist yet
+        
+        # Recreate constraints after clearing database
+        logger.info("Recreating FalkorDB constraints after database clear")
+        try:
+            from graphiti_core.utils.constraints import get_existence_constraints
+            constraint_queries = get_existence_constraints('falkordb')
+            graph_key = falkordb_config['database']  # Use the actual database name, not hardcoded
+            
+            for query in constraint_queries:
+                try:
+                    if '{graph_key}' in query:
+                        command = query.format(graph_key=graph_key)
+                        falkor_db.execute_command(*command.split())
+                except Exception as e:
+                    logger.info(f"Constraint creation result: {e}")
+            logger.info("FalkorDB constraints recreated successfully")
+        except Exception as e:
+            logger.warning(f"Failed to recreate constraints: {e}")
         
         # Get total node count first
         logger.info("Counting total nodes in Neo4j")
@@ -329,6 +363,10 @@ async def perform_simple_migration(neo4j_config: Dict[str, Any], falkordb_config
                         rel_type = record['rel_type']
                         props = record['props']
                         
+                        # Debug logging for RELATES_TO
+                        if rel_type == 'RELATES_TO' and i < 3:  # Log first few RELATES_TO
+                            logger.info(f"Processing RELATES_TO: {source_uuid[:8]}... -> {target_uuid[:8]}...")
+                        
                         # Format properties with filtering
                         prop_list = []
                         if props:
@@ -355,9 +393,11 @@ async def perform_simple_migration(neo4j_config: Dict[str, Any], falkordb_config
                                 # Check query length and simplify if needed
                                 if estimate_query_length(rel_query) > MIGRATION_CONFIG['max_query_length']:
                                     # Simplify by keeping only essential properties (uuid and group_id are required for RELATES_TO)
+                                    # Also preserve datetime fields for proper timestamp tracking
                                     essential_props = []
                                     for prop in prop_list:
-                                        if any(key in prop for key in ['uuid:', 'name:', 'fact:', 'group_id:']):
+                                        if any(key in prop for key in ['uuid:', 'name:', 'fact:', 'group_id:', 
+                                                                      'valid_at:', 'created_at:', 'invalid_at:', 'expired_at:']):
                                             essential_props.append(prop)
                                     
                                     if essential_props:
@@ -375,6 +415,10 @@ async def perform_simple_migration(neo4j_config: Dict[str, Any], falkordb_config
                                 falkor_graph.query(rel_query)
                                 rel_count += 1
                                 success = True
+                                
+                                # Debug: Log successful RELATES_TO creation
+                                if rel_type == 'RELATES_TO' and rel_count % 100 == 0:
+                                    logger.info(f"Successfully created {rel_count} relationships (including RELATES_TO)")
                                 break
                                 
                             except Exception as e:
