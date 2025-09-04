@@ -68,7 +68,7 @@ from graphiti_core.utils.bulk_utils import (
     resolve_edge_pointers,
     retrieve_previous_episodes_bulk,
 )
-from graphiti_core.utils.datetime_utils import utc_now
+from graphiti_core.utils.datetime_utils import utc_now, ensure_utc
 from graphiti_core.utils.maintenance.community_operations import (
     build_communities,
     remove_communities,
@@ -465,7 +465,7 @@ class Graphiti:
                     content=episode_body,
                     source_description=source_description,
                     created_at=now,
-                    valid_at=reference_time,
+                    valid_at=ensure_utc(reference_time),
                 )
             )
             
@@ -621,7 +621,7 @@ class Graphiti:
                     content=episode_body,
                     source_description=source_description,
                     created_at=now,
-                    valid_at=reference_time,
+                    valid_at=ensure_utc(reference_time),
                 )
             )
             
