@@ -54,7 +54,7 @@ class WorkerService:
                 temperature=0.7
             )
             embedder = OllamaEmbedder(
-                base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1"),
+                base_url=os.getenv("OLLAMA_EMBEDDING_BASE_URL", "http://localhost:11434/v1"),
                 model=os.getenv("OLLAMA_EMBEDDING_MODEL", "mxbai-embed-large:latest")
             )
         else:
