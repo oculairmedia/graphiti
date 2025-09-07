@@ -98,10 +98,10 @@ class MergePolicyConfig:
         
         if self.centrality_weights is None:
             self.centrality_weights = {
-                'degree_centrality': 0.3,
-                'pagerank_centrality': 0.3,
-                'betweenness_centrality': 0.2,
-                'eigenvector_centrality': 0.2
+                'centrality_degree': 0.3,
+                'centrality_pagerank': 0.3,
+                'centrality_betweenness': 0.2,
+                'centrality_eigenvector': 0.2
             }
     
     def _create_default_field_rules(self) -> Dict[str, FieldMergeRule]:
@@ -117,11 +117,11 @@ class MergePolicyConfig:
             'name_embedding': FieldMergeRule('name_embedding', FieldMergeMode.MERGE, ConflictResolution.LONGEST_WINS),
             
             # Centrality fields
-            'degree_centrality': FieldMergeRule('degree_centrality', FieldMergeMode.MERGE, ConflictResolution.NUMERIC_MAX),
-            'pagerank_centrality': FieldMergeRule('pagerank_centrality', FieldMergeMode.MERGE, ConflictResolution.NUMERIC_MAX),
-            'betweenness_centrality': FieldMergeRule('betweenness_centrality', FieldMergeMode.MERGE, ConflictResolution.NUMERIC_MAX),
-            'eigenvector_centrality': FieldMergeRule('eigenvector_centrality', FieldMergeMode.MERGE, ConflictResolution.NUMERIC_MAX),
-            'importance_score': FieldMergeRule('importance_score', FieldMergeMode.MERGE, ConflictResolution.NUMERIC_MAX),
+            'centrality_degree': FieldMergeRule('centrality_degree', FieldMergeMode.MERGE, ConflictResolution.NUMERIC_MAX),
+            'centrality_pagerank': FieldMergeRule('centrality_pagerank', FieldMergeMode.MERGE, ConflictResolution.NUMERIC_MAX),
+            'centrality_betweenness': FieldMergeRule('centrality_betweenness', FieldMergeMode.MERGE, ConflictResolution.NUMERIC_MAX),
+            'centrality_eigenvector': FieldMergeRule('centrality_eigenvector', FieldMergeMode.MERGE, ConflictResolution.NUMERIC_MAX),
+            'centrality_importance': FieldMergeRule('centrality_importance', FieldMergeMode.MERGE, ConflictResolution.NUMERIC_MAX),
         }
     
     @classmethod
@@ -242,7 +242,7 @@ class EntityMerger:
         if entity.get('name_embedding'): score += 1.0
         
         # Centrality completeness
-        centrality_fields = ['degree_centrality', 'pagerank_centrality', 'betweenness_centrality', 'eigenvector_centrality']
+        centrality_fields = ['centrality_degree', 'centrality_pagerank', 'centrality_betweenness', 'centrality_eigenvector']
         for field in centrality_fields:
             if entity.get(field) is not None and entity.get(field) > 0:
                 score += 0.5

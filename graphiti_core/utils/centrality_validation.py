@@ -17,11 +17,11 @@ logger = logging.getLogger(__name__)
 
 class CentralityType(Enum):
     """Types of centrality metrics supported."""
-    PAGERANK = "pagerank_centrality"
-    DEGREE = "degree_centrality" 
-    BETWEENNESS = "betweenness_centrality"
-    EIGENVECTOR = "eigenvector_centrality"
-    IMPORTANCE_SCORE = "importance_score"
+    PAGERANK = "centrality_pagerank"
+    DEGREE = "centrality_degree" 
+    BETWEENNESS = "centrality_betweenness"
+    EIGENVECTOR = "centrality_eigenvector"
+    IMPORTANCE_SCORE = "centrality_importance"
 
 
 @dataclass
@@ -215,19 +215,19 @@ class CentralityValidator:
         def get_value(field_name):
             return corrected_values.get(field_name, original_attributes.get(field_name, 0.0))
         
-        pagerank = get_value('pagerank_centrality')
-        degree = get_value('degree_centrality')
-        betweenness = get_value('betweenness_centrality')
-        eigenvector = get_value('eigenvector_centrality')
-        importance = get_value('importance_score')
+        pagerank = get_value('centrality_pagerank')
+        degree = get_value('centrality_degree')
+        betweenness = get_value('centrality_betweenness')
+        eigenvector = get_value('centrality_eigenvector')
+        importance = get_value('centrality_importance')
         
         # Validate that values are numeric before relationship checks
         metrics = {
-            'pagerank_centrality': pagerank,
-            'degree_centrality': degree,
-            'betweenness_centrality': betweenness,
-            'eigenvector_centrality': eigenvector,
-            'importance_score': importance
+            'centrality_pagerank': pagerank,
+            'centrality_degree': degree,
+            'centrality_betweenness': betweenness,
+            'centrality_eigenvector': eigenvector,
+            'centrality_importance': importance
         }
         
         numeric_metrics = {}

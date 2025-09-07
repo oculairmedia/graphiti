@@ -321,10 +321,10 @@ class IntegrityMonitoringService:
                 invalid_query = """
                 MATCH (n:Entity)
                 WHERE 
-                    n.degree_centrality < 0 OR n.degree_centrality > 1 OR
-                    n.pagerank_centrality < 0 OR n.pagerank_centrality > 1 OR
-                    n.betweenness_centrality < 0 OR n.betweenness_centrality > 1 OR
-                    n.eigenvector_centrality < 0 OR n.eigenvector_centrality > 1
+                    n.centrality_degree < 0 OR n.centrality_degree > 1 OR
+                    n.centrality_pagerank < 0 OR n.centrality_pagerank > 1 OR
+                    n.centrality_betweenness < 0 OR n.centrality_betweenness > 1 OR
+                    n.centrality_eigenvector < 0 OR n.centrality_eigenvector > 1
                 RETURN count(n) as invalid_count, collect(n.uuid)[0..10] as sample_entity_ids
                 """
                 result = await session.run(invalid_query)
