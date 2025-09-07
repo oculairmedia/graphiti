@@ -288,7 +288,7 @@ async def perform_simple_migration(neo4j_config: Dict[str, Any], falkordb_config
                             # Check query length and simplify if needed
                             if estimate_query_length(query) > MIGRATION_CONFIG['max_query_length']:
                                 # Create simplified query with only essential properties (including centrality)
-                                essential_keys = ['uuid:', 'name:', 'type:', 'group_id:'] + [f'{key}:' for key in MIGRATION_CONFIG['centrality_properties']]
+                                essential_keys = ['uuid:', 'name:', 'type:', 'group_id:', 'summary:'] + [f'{key}:' for key in MIGRATION_CONFIG['centrality_properties']]
                                 essential_props = []
                                 for prop in props:
                                     if any(key in prop for key in essential_keys):
