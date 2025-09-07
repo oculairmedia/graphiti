@@ -104,12 +104,20 @@ reference entities.
    - Use the descriptions in ENTITY TYPES to classify each extracted entity.
    - Assign the appropriate `entity_type_id` for each one.
 
-4. **Exclusions**:
+4. **Required Entity Names**:
+   - **CRITICAL**: Every entity MUST have a clear, specific, non-empty name.
+   - Do NOT extract entities that cannot be given a meaningful name.
+   - Generic terms like "container", "service", "system" without specific identifiers should be avoided.
+   - If you cannot determine a specific name for an entity, skip it entirely.
+
+5. **Exclusions**:
    - Do NOT extract entities representing relationships or actions.
    - Do NOT extract dates, times, or other temporal information—these will be handled separately.
+   - Do NOT extract entities with vague, generic, or empty names.
 
-5. **Formatting**:
+6. **Formatting**:
    - Be **explicit and unambiguous** in naming entities (e.g., use full names when available).
+   - Names must be specific identifiers, not generic categories.
 
 {context['custom_prompt']}
 """
@@ -143,6 +151,8 @@ Indicate the classified entity type by providing its entity_type_id.
 Guidelines:
 1. Always try to extract an entities that the JSON represents. This will often be something like a "name" or "user field
 2. Do NOT extract any properties that contain dates
+3. **CRITICAL**: Every entity MUST have a clear, specific, non-empty name. Do NOT extract entities that cannot be given a meaningful name.
+4. If you cannot determine a specific name for an entity, skip it entirely rather than using generic terms.
 """
     return [
         Message(role='system', content=sys_prompt),
@@ -173,6 +183,8 @@ Guidelines:
 2. Avoid creating nodes for relationships or actions.
 3. Avoid creating nodes for temporal information like dates, times or years (these will be added to edges later).
 4. Be as explicit as possible in your node names, using full names and avoiding abbreviations.
+5. **CRITICAL**: Every entity MUST have a clear, specific, non-empty name. Do NOT extract entities that cannot be given a meaningful name.
+6. If you cannot determine a specific name for an entity, skip it entirely rather than using generic terms.
 """
     return [
         Message(role='system', content=sys_prompt),

@@ -16,6 +16,40 @@ Key features:
 - Rust-based high-performance visualization server
 - React frontend with GPU-accelerated rendering via Cosmograph
 
+## Service Port Mappings
+
+The following ports are exposed by the Docker Compose services:
+
+| Service | Host Port | Container Port | Purpose |
+|---------|-----------|----------------|---------|
+| **neo4j** | 7474 | 7474 | Neo4j HTTP Browser |
+| **neo4j** | 7687 | 7687 | Neo4j Bolt Protocol |
+| **falkordb** | 6379 | 6379 | FalkorDB/Redis Protocol |
+| **graph-visualizer-rust** | 3000 | 3000 | Rust Graph Visualization Server |
+| **graphiti-centrality-rs** | 3003 | 3003 | Rust Centrality Calculation Service |
+| **graphiti-search-rs** | 3004 | 3004 | Rust Search Service |
+| **graph** (API Server) | 8003 | 8000 | Python GraphQL/REST API |
+| **graphiti-mcp** | 3010 | 3010 | MCP Server |
+| **sync-service** | 8082 | 8080 | Sync Service Health |
+| **sync-service** | 8083 | 8081 | Sync Service Metrics |
+| **graphiti-queued** | 8093 | 8080 | Queue Service |
+| **nginx** | 8088 | 80 | Nginx HTTP |
+| **nginx** | 8443 | 443 | Nginx HTTPS |
+| **frontend** | 8084 | 80 | React Frontend |
+
+### Quick Access URLs
+- **Neo4j Browser**: http://localhost:7474
+- **GraphQL API**: http://localhost:8003/graphql
+- **Frontend**: http://localhost:8084
+- **Graph Visualization**: http://localhost:3000
+- **MCP Server**: http://localhost:3010
+- **Queue Dashboard**: http://localhost:8093
+- **Nginx (Main)**: http://localhost:8088
+
+### Database Connections
+- **Neo4j**: `bolt://localhost:7687` (user: neo4j, pass: demodemo)
+- **FalkorDB**: `localhost:6379` (Redis protocol)
+
 ## Development Commands
 
 ### Main Development Commands (run from project root)

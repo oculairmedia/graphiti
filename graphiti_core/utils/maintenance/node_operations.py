@@ -310,7 +310,20 @@ async def extract_nodes(
             for entity in missing_entities:
                 custom_prompt += f'\n{entity},'
 
-    filtered_extracted_entities = [entity for entity in extracted_entities if entity.name.strip()]
+    # Enhanced filtering and name validation
+    filtered_extracted_entities = []
+    for entity in extracted_entities:
+        # Multiple validation checks for entity names
+        if (entity.name and 
+            isinstance(entity.name, str) and 
+            entity.name.strip() and 
+            len(entity.name.strip()) > 0 and
+            entity.name.strip() != "null" and
+            entity.name.strip() != "None"):
+            filtered_extracted_entities.append(entity)
+        else:
+            logger.warning(f"Skipping entity with invalid name: '{entity.name}' (type: {type(entity.name)})")
+    
     end = time()
     logger.debug(f'Extracted new nodes: {filtered_extracted_entities} in {(end - start) * 1000} ms')
     # Convert the extracted data into EntityNode objects
@@ -327,9 +340,15 @@ async def extract_nodes(
 
         labels: list[str] = list({'Entity', str(entity_type_name)})
 
+        # Final safety check before creating EntityNode
+        validated_name = str(extracted_entity.name).strip()
+        if not validated_name or validated_name in ["null", "None", ""]:
+            logger.error(f"CRITICAL: Entity name validation failed at EntityNode creation: '{extracted_entity.name}'")
+            continue
+
         new_node = EntityNode(
-            uuid=generate_deterministic_uuid(extracted_entity.name, episode.group_id),
-            name=extracted_entity.name,
+            uuid=generate_deterministic_uuid(validated_name, episode.group_id),
+            name=validated_name,
             group_id=episode.group_id,
             labels=labels,
             summary='',
