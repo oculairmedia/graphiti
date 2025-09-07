@@ -34,10 +34,13 @@ class EntityExtractor:
         self.embedder = graphiti.embedder
 
     async def find_episodes_without_entities(
-        self, group_id: Optional[str] = None, limit: int = 100
+        self, group_id: Optional[str] = None, limit: int = 100, include_sparse: bool = False
     ) -> List[EpisodicNode]:
-        """Find episodic nodes that have no associated entities"""
-        logger.info('Finding episodic nodes without entities...')
+        """Find episodic nodes that have no or minimal associated entities"""
+        if include_sparse:
+            logger.info('Finding episodic nodes with no or minimal entities...')
+        else:
+            logger.info('Finding episodic nodes without entities...')
 
         # Get all episodes with entities first
         query_with_entities = """
@@ -51,15 +54,28 @@ class EntityExtractor:
         episodes_with_entities = {r['uuid'] for r in records}
         logger.info(f'Found {len(episodes_with_entities)} episodes with entities')
 
-        # Get episodes without entities directly
-        query_without_entities = """
-        MATCH (ep:Episodic)
-        WHERE ($group_id IS NULL OR ep.group_id = $group_id)
-        AND NOT (ep)-[:MENTIONS]->(:Entity)
-        RETURN ep
-        ORDER BY ep.created_at DESC
-        LIMIT $limit
-        """
+        # Get episodes without entities or with minimal entities
+        if include_sparse:
+            # Include episodes with 0 or 1 entity
+            query_without_entities = """
+            MATCH (ep:Episodic)
+            WHERE ($group_id IS NULL OR ep.group_id = $group_id)
+            WITH ep, size([(ep)-[:MENTIONS]->(:Entity) | 1]) as entity_count
+            WHERE entity_count <= 1
+            RETURN ep
+            ORDER BY ep.created_at DESC
+            LIMIT $limit
+            """
+        else:
+            # Only episodes with no entities
+            query_without_entities = """
+            MATCH (ep:Episodic)
+            WHERE ($group_id IS NULL OR ep.group_id = $group_id)
+            AND NOT (ep)-[:MENTIONS]->(:Entity)
+            RETURN ep
+            ORDER BY ep.created_at DESC
+            LIMIT $limit
+            """
 
         records, _, _ = await self.driver.execute_query(
             query_without_entities, group_id=group_id, limit=limit
@@ -120,13 +136,21 @@ class EntityExtractor:
             logger.error(f'Error extracting entities from episode {episode.uuid}: {e}')
             return []
 
-    async def get_orphan_count(self) -> int:
-        """Get count of episodes without entities"""
-        query = """
-        MATCH (ep:Episodic)
-        WHERE NOT (ep)-[:MENTIONS]->(:Entity)
-        RETURN count(ep) as count
-        """
+    async def get_orphan_count(self, include_sparse: bool = False) -> int:
+        """Get count of episodes without entities or with minimal entities"""
+        if include_sparse:
+            query = """
+            MATCH (ep:Episodic)
+            WITH ep, size([(ep)-[:MENTIONS]->(:Entity) | 1]) as entity_count
+            WHERE entity_count <= 1
+            RETURN count(ep) as count
+            """
+        else:
+            query = """
+            MATCH (ep:Episodic)
+            WHERE NOT (ep)-[:MENTIONS]->(:Entity)
+            RETURN count(ep) as count
+            """
         records, _, _ = await self.driver.execute_query(query)
         return records[0]['count'] if records else 0
 
@@ -157,16 +181,33 @@ class EntityExtractor:
                     if entities:
                         # Save entities and create MENTIONS edges
                         for entity in entities:
+                            # Skip entities without names (invalid entities)
+                            if not hasattr(entity, 'name') or not entity.name:
+                                logger.warning(f'Skipping entity without name: {entity}')
+                                continue
+                            
                             await entity.save(self.driver)
 
-                            # Create MENTIONS edge
+                            # Create MENTIONS edge with required properties
+                            import uuid as uuid_lib
+                            from datetime import datetime, timezone
+                            
+                            edge_uuid = str(uuid_lib.uuid4())
+                            current_time = datetime.now(timezone.utc)
+                            
                             mentions_query = """
                             MATCH (ep:Episodic {uuid: $episode_uuid})
                             MATCH (e:Entity {uuid: $entity_uuid})
-                            MERGE (ep)-[:MENTIONS]->(e)
+                            MERGE (ep)-[r:MENTIONS {uuid: $edge_uuid, group_id: $group_id}]->(e)
+                            SET r.created_at = $created_at
                             """
                             await self.driver.execute_query(
-                                mentions_query, episode_uuid=episode.uuid, entity_uuid=entity.uuid
+                                mentions_query, 
+                                episode_uuid=episode.uuid, 
+                                entity_uuid=entity.uuid,
+                                edge_uuid=edge_uuid,
+                                group_id=episode.group_id,
+                                created_at=current_time
                             )
 
                         results['entities_created'] += len(entities)
@@ -184,13 +225,13 @@ class EntityExtractor:
         return results
 
     async def run_extraction(
-        self, group_id: Optional[str] = None, limit: int = 100, dry_run: bool = False
+        self, group_id: Optional[str] = None, limit: int = 100, dry_run: bool = False, include_sparse: bool = False
     ) -> Dict[str, any]:
         """Run the entity extraction process"""
         start_time = datetime.now()
 
-        # Find episodes without entities
-        episodes = await self.find_episodes_without_entities(group_id, limit)
+        # Find episodes without entities or with minimal entities
+        episodes = await self.find_episodes_without_entities(group_id, limit, include_sparse)
 
         if not episodes:
             logger.info('No episodes without entities found')
@@ -250,7 +291,7 @@ async def main():
     from graphiti_core.llm_client.openai_generic_client import OpenAIGenericClient
 
     # Create FalkorDB driver
-    driver = FalkorDriver(host='localhost', port=6389, database='graphiti_migration')
+    driver = FalkorDriver(host='localhost', port=6379, database='graphiti_migration')
 
     # Use same LLM config as deduplication
     llm_config = LLMConfig(
@@ -278,24 +319,30 @@ async def main():
 
     # Create extractor
     extractor = EntityExtractor(graphiti)
+    
+    # Check if we should process sparse episodes too
+    import sys
+    include_sparse = '--include-sparse' in sys.argv or '--enrich' in sys.argv
 
     # Run extraction
-    logger.info('Running dry run to analyze episodes without entities...')
+    mode_desc = 'with no or minimal entities' if include_sparse else 'without entities'
+    logger.info(f'Running dry run to analyze episodes {mode_desc}...')
     dry_run_result = await extractor.run_extraction(
         group_id='claude_conversations',
         limit=20,  # Start with small batch
         dry_run=True,
+        include_sparse=include_sparse,
     )
 
     print(f'\nDry run results: {dry_run_result}')
 
     # Get actual total count of orphan episodes
-    total_orphans = await extractor.get_orphan_count()
+    total_orphans = await extractor.get_orphan_count(include_sparse=include_sparse)
 
     # Process all episodes in batches
     if total_orphans > 0:
         print(
-            f'\nFound {total_orphans} total episodes without entities (showing first 20 in dry run).'
+            f'\nFound {total_orphans} total episodes {mode_desc} (showing first 20 in dry run).'
         )
         print('Processing ALL episodes in batches of 5...')
 
@@ -316,6 +363,7 @@ async def main():
                 group_id='claude_conversations',
                 limit=5,  # Process 5 episodes at a time
                 dry_run=False,
+                include_sparse=include_sparse,
             )
 
             episodes_processed = result.get('episodes_processed', 0)
@@ -334,12 +382,12 @@ async def main():
             print(f'  Total progress: {total_processed}/{total_orphans} episodes')
 
             # Check if we've processed all episodes
-            remaining = await extractor.get_orphan_count()
+            remaining = await extractor.get_orphan_count(include_sparse=include_sparse)
             if remaining == 0:
                 print('\nAll episodes have been processed!')
                 break
 
-            print(f'\nRemaining episodes without entities: {remaining}')
+            print(f'\nRemaining episodes {mode_desc}: {remaining}')
             print('Continuing to next batch...')
 
         print(f'\n{"=" * 60}')

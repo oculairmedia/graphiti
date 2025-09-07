@@ -53,7 +53,7 @@ def print_warning(text: str):
     """Print warning message"""
     print(f"{Colors.YELLOW}⚠️  {text}{Colors.ENDC}")
 
-def run_script(script_name: str, description: str) -> Tuple[bool, float]:
+def run_script(script_name: str, description: str, force_all: bool = True) -> Tuple[bool, float]:
     """
     Run a Python script and capture its output.
     Returns (success, duration_seconds)
@@ -64,9 +64,16 @@ def run_script(script_name: str, description: str) -> Tuple[bool, float]:
     start_time = time.time()
     
     try:
+        # Build command with force-regenerate flag to process ALL nodes/edges
+        cmd = [sys.executable, script_name]
+        if force_all:
+            cmd.append('--force-regenerate')
+        
+        print_info(f"Command: {' '.join(cmd)}")
+        
         # Run the script
         result = subprocess.run(
-            [sys.executable, script_name],
+            cmd,
             capture_output=True,
             text=True,
             check=False
@@ -148,7 +155,7 @@ async def main():
     for i, script in enumerate(scripts, 1):
         print(f"\n{Colors.BOLD}Step {i}/{len(scripts)}{Colors.ENDC}")
         
-        success, duration = run_script(script['file'], script['description'])
+        success, duration = run_script(script['file'], script['description'], force_all=True)
         results.append({
             'script': script['file'],
             'description': script['description'],
