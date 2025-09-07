@@ -304,6 +304,7 @@ class AtomicCentralityStorage:
                 "pagerank": node_scores.get("pagerank", 0.0),
                 "degree": node_scores.get("degree", 0),
                 "betweenness": node_scores.get("betweenness", 0.0),
+                "eigenvector": node_scores.get("eigenvector", 0.0),
                 "importance": node_scores.get("importance", 0.0),
                 "transaction_id": transaction_id,
                 "updated_at": datetime.now(timezone.utc).isoformat(),
@@ -315,6 +316,7 @@ class AtomicCentralityStorage:
         SET n.centrality_pagerank = item.pagerank,
             n.centrality_degree = item.degree,
             n.centrality_betweenness = item.betweenness,
+            n.centrality_eigenvector = item.eigenvector,
             n.centrality_importance = item.importance,
             n.centrality_transaction_id = item.transaction_id,
             n.centrality_updated_at = item.updated_at
@@ -394,6 +396,7 @@ class AtomicCentralityStorage:
             REMOVE n.centrality_pagerank,
                    n.centrality_degree,
                    n.centrality_betweenness,
+                   n.centrality_eigenvector,
                    n.centrality_importance,
                    n.centrality_transaction_id,
                    n.centrality_updated_at
@@ -432,6 +435,7 @@ class AtomicCentralityStorage:
             "CREATE INDEX IF NOT EXISTS FOR (n:EntityNode) ON (n.centrality_importance)",
             "CREATE INDEX IF NOT EXISTS FOR (n:EntityNode) ON (n.centrality_pagerank)",
             "CREATE INDEX IF NOT EXISTS FOR (n:EntityNode) ON (n.centrality_degree)",
+            "CREATE INDEX IF NOT EXISTS FOR (n:EntityNode) ON (n.centrality_eigenvector)",
             "CREATE INDEX IF NOT EXISTS FOR (n:EntityNode) ON (n.centrality_updated_at)",
         ]
         

@@ -334,8 +334,8 @@ class PostSaveValidator:
         entity_id = entity.uuid if hasattr(entity, 'uuid') else entity.get('uuid')
         
         centrality_fields = [
-            'degree_centrality', 'pagerank_centrality', 
-            'betweenness_centrality', 'eigenvector_centrality'
+            'centrality_degree', 'centrality_pagerank', 
+            'centrality_betweenness', 'centrality_eigenvector'
         ]
         
         issues = []
