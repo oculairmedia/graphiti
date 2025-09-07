@@ -922,6 +922,7 @@ async fn execute_graph_query(client: &FalkorAsyncClient, graph_name: &str, query
                     COALESCE(n.degree_centrality, 0) as degree_centrality,
                     COALESCE(n.pagerank_centrality, 0) as pagerank_centrality,
                     COALESCE(n.betweenness_centrality, 0) as betweenness_centrality,
+                    COALESCE(n.eigenvector_centrality, 0) as eigenvector_centrality,
                     n.created_at as created_at,
                     n.summary as summary
                 SKIP {}
@@ -934,15 +935,16 @@ async fn execute_graph_query(client: &FalkorAsyncClient, graph_name: &str, query
             let mut batch_count = 0;
             // Process nodes in this batch
             while let Some(row) = nodes_result.data.next() {
-                if row.len() >= 8 {
+                if row.len() >= 9 {
                     let node_id = value_to_string(&row[0]);
                     let node_name = value_to_string(&row[1]);
                     let node_type = value_to_string(&row[2]);
                     let degree_centrality = value_to_f64(&row[3]);
                     let pagerank_centrality = value_to_f64(&row[4]);
                     let betweenness_centrality = value_to_f64(&row[5]);
-                    let created_at = value_to_string(&row[6]);
-                    let summary_text = row[7].as_string().map(|s| s.to_string());
+                    let eigenvector_centrality = value_to_f64(&row[6]);
+                    let created_at = value_to_string(&row[7]);
+                    let summary_text = row[8].as_string().map(|s| s.to_string());
                     
                     // Build properties object with only essential fields (memory-efficient)
                     let mut node_props = HashMap::new();
@@ -951,6 +953,7 @@ async fn execute_graph_query(client: &FalkorAsyncClient, graph_name: &str, query
                     node_props.insert("degree_centrality".to_string(), serde_json::json!(degree_centrality));
                     node_props.insert("pagerank_centrality".to_string(), serde_json::json!(pagerank_centrality));
                     node_props.insert("betweenness_centrality".to_string(), serde_json::json!(betweenness_centrality));
+                    node_props.insert("eigenvector_centrality".to_string(), serde_json::json!(eigenvector_centrality));
                     
                     if !created_at.is_empty() {
                         node_props.insert("created_at".to_string(), serde_json::Value::String(created_at));
