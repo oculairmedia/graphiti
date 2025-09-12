@@ -348,7 +348,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
         <GraphNavBar
           totalNodes={data?.nodes.length || 0}
           visibleNodes={transformedData.nodes.length}
-          isVirtualized={data && data.nodes.length > 20000}
+          isVirtualized={false}
           isSimulationRunning={isSimulationRunning}
           selectedNodes={selectedNodes}
           allNodes={transformedData.nodes}

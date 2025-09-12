@@ -35,8 +35,8 @@ interface VirtualRenderingOptions {
 }
 
 const DEFAULT_OPTIONS: VirtualRenderingOptions = {
-  enableVirtualization: true,
-  virtualThreshold: 20000,
+  enableVirtualization: false, // Disable virtualization
+  virtualThreshold: 100000, // Much higher threshold
   overscan: 1.2, // Render 20% outside viewport
   updateDebounce: 50,
   lod: {
