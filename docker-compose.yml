@@ -82,10 +82,13 @@ services:
       - MIN_DEGREE_CENTRALITY=${MIN_DEGREE_CENTRALITY:-0}
       - CACHE_ENABLED=${CACHE_ENABLED:-true}
       - RUST_LOG=${RUST_LOG:-info}
+      - CENTRALITY_SERVICE_URL=${RUST_CENTRALITY_URL:-http://graphiti-centrality-rs:3003}
     networks:
       - graphiti_network
     depends_on:
       falkordb:
+        condition: service_healthy
+      graphiti-centrality-rs:
         condition: service_healthy
     healthcheck:
       test:
@@ -104,7 +107,7 @@ services:
       - homepage.href=http://${HOMEPAGE_HOST:-192.168.50.90}:${RUST_SERVER_PORT:-3000}
       - homepage.description=Rust-powered graph visualization server
   graphiti-centrality-rs:
-    image: ghcr.io/oculairmedia/graphiti-centrality-rs:main
+    image: ghcr.io/oculairmedia/graphiti-centrality-rs:feature-chutes-ai-integration
     restart: unless-stopped
     ports:
       - ${RUST_CENTRALITY_PORT:-3003}:3003
@@ -376,7 +379,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 512M
+          memory: 1536M
           cpus: "0.5"
     labels:
       - homepage.group=Knowledge Management
@@ -529,7 +532,7 @@ services:
   # =============================================================================
   # Frontend service (profile-based)
   frontend:
-    image: ghcr.io/oculairmedia/graphiti-frontend:main
+    image: ghcr.io/oculairmedia/graphiti-frontend:feature-chutes-ai-integration
     restart: unless-stopped
     ports:
       - ${FRONTEND_PORT:-8084}:80
