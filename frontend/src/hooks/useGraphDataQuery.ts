@@ -664,8 +664,8 @@ export function useGraphDataQuery() {
 
     // Virtualization: For very large graphs (>10k nodes), prioritize most important nodes
     let finalNodes = visibleNodes;
-    const LARGE_GRAPH_THRESHOLD = 10000;
-    const MAX_RENDERED_NODES = 20000;
+    const LARGE_GRAPH_THRESHOLD = 999999; // Disable node limiting
+    const MAX_RENDERED_NODES = 999999; // Effectively unlimited
 
     if (visibleNodes.length > LARGE_GRAPH_THRESHOLD) {
       // Pre-calculate importance scores
