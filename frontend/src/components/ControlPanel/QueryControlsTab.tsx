@@ -172,9 +172,9 @@ export const QueryControlsTab: React.FC<QueryControlsTabProps> = ({
               variant="outline" 
               size="sm" 
               className="h-8 text-xs"
-              onClick={() => onQuickQuery('entire_graph', 5000)}
+              onClick={() => onQuickQuery('entire_graph', 20000)}
             >
-              ⚡ Fast Load (5K)
+              ⚡ Fast Load (20K)
             </Button>
           </div>
         </CardContent>
