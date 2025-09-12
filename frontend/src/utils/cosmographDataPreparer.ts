@@ -151,9 +151,10 @@ export function sanitizeNode(
   const sanitizedNode: any = {};
   
   if (isIncremental) {
-    // Incremental updates: MUST provide exactly 14 NON-NULL fields to match DuckDB table schema
-    // DuckDB counts null fields differently in incremental vs initial load
-    // The table was created with 14 columns, so we must provide all 14 with non-null values
+    // Incremental updates: MUST provide exactly 16 NON-NULL fields to match cosmograph_points view schema
+    // The cosmograph_points view has these 16 fields:
+    // index, id, label, node_type, summary, degree_centrality, pagerank_centrality,
+    // betweenness_centrality, eigenvector_centrality, x, y, color, size, created_at_timestamp, cluster, clusterStrength
     sanitizedNode.index = Number(index);
     sanitizedNode.id = String(node.id);
     sanitizedNode.label = String(node.label || node.name || node.id);
@@ -166,19 +167,23 @@ export function sanitizeNode(
     const pagerankValue = Number(sanitizedProperties.pagerank_centrality || 0);
     const betweennessValue = Number(sanitizedProperties.betweenness_centrality || 0);
     const eigenvectorValue = Number(sanitizedProperties.eigenvector_centrality || 0);
-    
+
     // Add tiny random noise to prevent STDDEV_SAMP errors
     sanitizedNode.degree_centrality = degreeValue + (Math.random() * epsilon);
     sanitizedNode.pagerank_centrality = pagerankValue + (Math.random() * epsilon);
     sanitizedNode.betweenness_centrality = betweennessValue + (Math.random() * epsilon);
     sanitizedNode.eigenvector_centrality = eigenvectorValue + (Math.random() * epsilon);
-    
+
+    // Add x, y coordinates (required by cosmograph_points view)
+    // For incremental updates, these will be null initially and computed by Cosmograph
+    sanitizedNode.x = null;
+    sanitizedNode.y = null;
+
     sanitizedNode.color = generateNodeTypeColor(node.node_type || 'Unknown', nodeTypeIndex);
     // Use normalized size based on degree centrality (0-1 range)
     // This provides a consistent base that can be scaled by pointSizeRange
     sanitizedNode.size = degreeValue || 0.1;
-    // Add color value that can be used by color schemes (same as degree by default)
-    sanitizedNode.colorValue = degreeValue || 0.1;
+    // Note: colorValue is NOT in the cosmograph_points schema, so we don't include it for incremental updates
     sanitizedNode.cluster = String(cluster);
     sanitizedNode.clusterStrength = Number(config.clusterStrength ?? 0.7);
     // CRITICAL: created_at_timestamp MUST be a number (Unix timestamp) for DuckDB
@@ -206,11 +211,18 @@ export function sanitizeNode(
       sanitizedNode.created_at_timestamp = Date.now();
     }
     
-    // Verify we have exactly 14 fields with no nulls
+    // Verify we have exactly 16 fields to match cosmograph_points view
+    // Note: x and y can be null for incremental updates (they'll be computed by Cosmograph)
     const fieldCount = Object.keys(sanitizedNode).length;
     const nullCount = Object.values(sanitizedNode).filter(v => v === null || v === undefined).length;
-    if (fieldCount !== 14 || nullCount > 0) {
-      console.error(`[sanitizeNode] CRITICAL: DuckDB requires exactly 14 non-null fields. Have ${fieldCount} fields with ${nullCount} nulls:`, 
+    const allowedNulls = ['x', 'y']; // These fields can be null for incremental updates
+    const actualNulls = Object.entries(sanitizedNode)
+      .filter(([k, v]) => v === null || v === undefined)
+      .map(([k, v]) => k);
+    const unexpectedNulls = actualNulls.filter(field => !allowedNulls.includes(field));
+
+    if (fieldCount !== 16 || unexpectedNulls.length > 0) {
+      console.error(`[sanitizeNode] CRITICAL: DuckDB cosmograph_points view requires exactly 16 fields with only x,y allowed to be null. Have ${fieldCount} fields with unexpected nulls in [${unexpectedNulls.join(', ')}]:`,
         Object.entries(sanitizedNode).map(([k, v]) => `${k}: ${v === null ? 'NULL' : typeof v}`));
     }
   } else {
