@@ -252,8 +252,7 @@ export function sanitizeNode(
     // Use normalized size based on degree centrality (0-1 range)
     // This provides a consistent base that can be scaled by pointSizeRange
     sanitizedNode.size = degreeValue || 0.1;
-    // Add color value that can be used by color schemes (same as degree by default)
-    sanitizedNode.colorValue = degreeValue || 0.1;
+    // Note: colorValue is NOT in the cosmograph_points schema
     // Convert timestamp to number for consistency with DuckDB DOUBLE type
     // Handle both number and string formats for robustness
     if (node.created_at_timestamp !== undefined && node.created_at_timestamp !== null) {
@@ -279,6 +278,20 @@ export function sanitizeNode(
     }
     sanitizedNode.cluster = String(cluster);
     sanitizedNode.clusterStrength = Number(config.clusterStrength ?? 0.7);
+    
+    // Verify we have exactly 16 fields to match cosmograph_points view (for initial load too)
+    const fieldCount = Object.keys(sanitizedNode).length;
+    const nullCount = Object.values(sanitizedNode).filter(v => v === null || v === undefined).length;
+    const allowedNulls = ['x', 'y', 'summary']; // These fields can be null
+    const actualNulls = Object.entries(sanitizedNode)
+      .filter(([k, v]) => v === null || v === undefined)
+      .map(([k, v]) => k);
+    const unexpectedNulls = actualNulls.filter(field => !allowedNulls.includes(field));
+
+    if (fieldCount !== 16 || unexpectedNulls.length > 0) {
+      console.error(`[sanitizeNode] CRITICAL: DuckDB cosmograph_points view requires exactly 16 fields. Have ${fieldCount} fields with unexpected nulls in [${unexpectedNulls.join(', ')}]:`,
+        Object.entries(sanitizedNode).map(([k, v]) => `${k}: ${v === null ? 'NULL' : typeof v}`));
+    }
   }
   
   return sanitizedNode;
