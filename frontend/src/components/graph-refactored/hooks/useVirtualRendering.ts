@@ -46,8 +46,8 @@ export function useVirtualRendering(
     overscan = 1.2,
     updateDebounce = 16,
     levelOfDetail = true,
-    maxVisibleNodes = 5000,
-    maxVisibleLinks = 10000
+    maxVisibleNodes = 20000,
+    maxVisibleLinks = 40000
   } = options;
 
   // State
