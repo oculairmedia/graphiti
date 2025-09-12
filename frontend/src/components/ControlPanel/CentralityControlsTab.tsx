@@ -4,7 +4,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
-import { Loader2, Play, BarChart, Network, GitBranch, Activity } from 'lucide-react';
+import { Loader2, Play, BarChart, Network, GitBranch, Activity, Zap } from 'lucide-react';
 import { graphClient } from '@/api/graphClient';
 import { useToast } from '@/hooks/use-toast';
 
@@ -15,7 +15,7 @@ interface CentralityControlsTabProps {
 export function CentralityControlsTab({ onCentralityUpdate }: CentralityControlsTabProps) {
   const { toast } = useToast();
   const [isCalculating, setIsCalculating] = useState(false);
-  const [selectedMetric, setSelectedMetric] = useState<'all' | 'pagerank' | 'degree' | 'betweenness'>('all');
+  const [selectedMetric, setSelectedMetric] = useState<'all' | 'pagerank' | 'degree' | 'betweenness' | 'eigenvector'>('all');
   const [storeResults, setStoreResults] = useState(false);
   
   // PageRank parameters
@@ -54,6 +54,12 @@ export function CentralityControlsTab({ onCentralityUpdate }: CentralityControls
         case 'betweenness':
           result = await graphClient.calculateBetweennessCentrality({
             sample_size: sampleSize,
+            store_results: storeResults,
+          });
+          break;
+
+        case 'eigenvector':
+          result = await graphClient.calculateEigenvectorCentrality({
             store_results: storeResults,
           });
           break;
@@ -120,6 +126,12 @@ export function CentralityControlsTab({ onCentralityUpdate }: CentralityControls
               <div className="flex items-center gap-2">
                 <Activity className="h-4 w-4" />
                 Betweenness Centrality
+              </div>
+            </SelectItem>
+            <SelectItem value="eigenvector">
+              <div className="flex items-center gap-2">
+                <Zap className="h-4 w-4" />
+                Eigenvector Centrality
               </div>
             </SelectItem>
           </SelectContent>
@@ -218,6 +230,7 @@ export function CentralityControlsTab({ onCentralityUpdate }: CentralityControls
         <p>• <strong>PageRank</strong>: Measures node importance based on link structure</p>
         <p>• <strong>Degree</strong>: Counts direct connections to a node</p>
         <p>• <strong>Betweenness</strong>: Measures how often a node lies on shortest paths</p>
+        <p>• <strong>Eigenvector</strong>: Measures influence based on connections to important nodes</p>
         <p>• <strong>All Metrics</strong>: Calculates all centrality metrics at once</p>
       </div>
     </div>

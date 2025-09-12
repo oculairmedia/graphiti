@@ -221,6 +221,38 @@ export class GraphClient {
     }, this.CENTRALITY_TIMEOUT);
   }
   
+  async calculateEigenvectorCentrality(options: {
+    store_results?: boolean;
+  } = {}): Promise<any> {
+    // Eigenvector centrality is calculated via the "all" endpoint
+    const result = await this.fetchWithError<any>(`${this.baseUrl}/centrality/all`, {
+      method: 'POST',
+      body: JSON.stringify({
+        store_results: options.store_results || false,
+      }),
+    }, this.CENTRALITY_TIMEOUT);
+    
+    // Extract only eigenvector scores for the response
+    const eigenvectorScores: Record<string, number> = {};
+    let totalNodes = 0;
+    
+    if (result.scores) {
+      for (const [nodeId, scores] of Object.entries(result.scores)) {
+        const nodeScores = scores as Record<string, number>;
+        if (nodeScores.eigenvector !== undefined) {
+          eigenvectorScores[nodeId] = nodeScores.eigenvector;
+          totalNodes++;
+        }
+      }
+    }
+    
+    return {
+      scores: eigenvectorScores,
+      metric: 'eigenvector',
+      nodes_processed: totalNodes
+    };
+  }
+
   async calculateAllCentralities(options: {
     store_results?: boolean;
   } = {}): Promise<any> {
