@@ -77,7 +77,7 @@ async def call_rust_centrality_service(endpoint: str, request_data: Dict[str, An
         )
     
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=600.0) as client:
             response = await client.post(
                 f"{settings.rust_centrality_url}{endpoint}",
                 json=request_data
