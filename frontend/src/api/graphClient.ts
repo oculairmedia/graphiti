@@ -16,7 +16,7 @@ import {
 export class GraphClient {
   private baseUrl = '/api';
   private readonly DEFAULT_TIMEOUT = 30000; // 30 seconds
-  private readonly CENTRALITY_TIMEOUT = 120000; // 120 seconds for centrality operations
+  private readonly CENTRALITY_TIMEOUT = 300000; // 300 seconds (5 minutes) for centrality operations
   private readonly MAX_RETRIES = 3;
   private readonly RETRY_DELAY = 1000; // 1 second
 
