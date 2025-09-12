@@ -26,7 +26,7 @@ async def check_centrality_status(driver):
     """Check how many nodes have centrality values"""
     query = """
     MATCH (n)
-    WHERE n.centrality_pagerank IS NOT NULL 
+    WHERE n.pagerank_centrality IS NOT NULL 
     RETURN count(n) as with_centrality
     """
 
@@ -48,7 +48,7 @@ async def main():
     print('=' * 60)
 
     # Connect to FalkorDB
-    driver = FalkorDriver(host='localhost', port=6389, database='graphiti_migration')
+    driver = FalkorDriver(host='localhost', port=6379, database='graphiti_migration')
 
     # Check current status
     with_centrality, total = await check_centrality_status(driver)
