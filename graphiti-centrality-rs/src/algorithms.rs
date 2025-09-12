@@ -18,29 +18,46 @@ pub async fn calculate_pagerank(
     let start = Instant::now();
     info!("Starting PageRank calculation");
 
-    // Use FalkorDB's native PageRank algorithm
-    let graph_name = client.graph_name();
-    let native_algorithm = format!(
-        "CALL algo.pageRank('{}', {{max_iter: {}, dampingFactor: {}}})",
-        graph_name, iterations, damping_factor
-    );
+    // First check if PageRank centrality values already exist (pre-computed)
+    let precomputed_query = if let Some(group_id) = group_id {
+        format!(
+            "MATCH (n) WHERE n.group_id = '{}' AND EXISTS(n.pagerank_centrality) 
+             RETURN n.uuid as uuid, n.pagerank_centrality as score",
+            group_id
+        )
+    } else {
+        "MATCH (n) WHERE EXISTS(n.pagerank_centrality) 
+         RETURN n.uuid as uuid, n.pagerank_centrality as score"
+            .to_string()
+    };
+
+    debug!("Checking for pre-computed PageRank values: {}", precomputed_query);
+    if let Ok(results) = client.execute_query(&precomputed_query, None).await {
+        if !results.is_empty() {
+            info!("Using pre-computed FalkorDB PageRank values");
+            return process_pagerank_results(results, start);
+        }
+    }
+
+    // Use FalkorDB's native PageRank algorithm with correct syntax
+    let native_algorithm = "CALL algo.pageRank(null, null)";
 
     debug!("Running native PageRank: {}", native_algorithm);
 
     // Execute the algorithm (stores results in node properties)
-    if let Ok(_) = client.execute_query(&native_algorithm, None).await {
+    if let Ok(_) = client.execute_query(native_algorithm, None).await {
         info!("FalkorDB native PageRank completed, retrieving results");
 
-        // Now retrieve the stored results
+        // Now retrieve the stored results using correct property name
         let results_query = if let Some(group_id) = group_id {
             format!(
-                "MATCH (n) WHERE n.group_id = '{}' AND EXISTS(n.score) 
-                 RETURN n.uuid as uuid, n.score as score",
+                "MATCH (n) WHERE n.group_id = '{}' AND EXISTS(n.pagerank_centrality) 
+                 RETURN n.uuid as uuid, n.pagerank_centrality as score",
                 group_id
             )
         } else {
-            "MATCH (n) WHERE EXISTS(n.score) 
-             RETURN n.uuid as uuid, n.score as score"
+            "MATCH (n) WHERE EXISTS(n.pagerank_centrality) 
+             RETURN n.uuid as uuid, n.pagerank_centrality as score"
                 .to_string()
         };
 
@@ -339,13 +356,34 @@ pub async fn calculate_betweenness_centrality(
     let _start = Instant::now();
     info!("Starting betweenness centrality calculation");
 
-    // Use FalkorDB's native betweenness algorithm
-    let graph_name = client.graph_name();
-    let native_algorithm = format!("CALL algo.betweenness('{}')", graph_name);
+    // First check if betweenness centrality values already exist (pre-computed)
+    let precomputed_query = if let Some(group_id) = group_id {
+        format!(
+            "MATCH (n) WHERE n.group_id = '{}' AND EXISTS(n.betweenness_centrality) 
+             RETURN n.uuid as uuid, n.betweenness_centrality as score",
+            group_id
+        )
+    } else {
+        "MATCH (n) WHERE EXISTS(n.betweenness_centrality) 
+         RETURN n.uuid as uuid, n.betweenness_centrality as score"
+            .to_string()
+    };
+
+    debug!("Checking for pre-computed betweenness values: {}", precomputed_query);
+    if let Ok(results) = client.execute_query(&precomputed_query, None).await {
+        if !results.is_empty() {
+            info!("Using pre-computed FalkorDB betweenness values");
+            let start = Instant::now();
+            return process_pagerank_results(results, start);
+        }
+    }
+
+    // Use FalkorDB's native betweenness algorithm with correct syntax
+    let native_algorithm = "CALL algo.betweenness({nodeLabels: [], relationshipTypes: []})";
 
     debug!("Running native betweenness: {}", native_algorithm);
 
-    if let Ok(_) = client.execute_query(&native_algorithm, None).await {
+    if let Ok(_) = client.execute_query(native_algorithm, None).await {
         info!("FalkorDB native betweenness completed, retrieving results");
         return calculate_betweenness_native(client, group_id).await;
     }
@@ -361,16 +399,16 @@ async fn calculate_betweenness_native(
 ) -> Result<CentralityScores> {
     let start = Instant::now();
 
-    // Retrieve the stored betweenness results (algo.betweenness stores in node.betweenness property)
+    // Retrieve the stored betweenness results (stored as betweenness_centrality property)
     let query = if let Some(group_id) = group_id {
         format!(
-            "MATCH (n) WHERE n.group_id = '{}' AND EXISTS(n.betweenness) 
-             RETURN n.uuid as uuid, n.betweenness as score",
+            "MATCH (n) WHERE n.group_id = '{}' AND EXISTS(n.betweenness_centrality) 
+             RETURN n.uuid as uuid, n.betweenness_centrality as score",
             group_id
         )
     } else {
-        "MATCH (n) WHERE EXISTS(n.betweenness) 
-         RETURN n.uuid as uuid, n.betweenness as score"
+        "MATCH (n) WHERE EXISTS(n.betweenness_centrality) 
+         RETURN n.uuid as uuid, n.betweenness_centrality as score"
             .to_string()
     };
 
@@ -717,8 +755,29 @@ pub async fn calculate_eigenvector_centrality(
     max_iterations: u32,
     tolerance: f64,
 ) -> Result<CentralityScores> {
-    let _start = Instant::now();
+    let start = Instant::now();
     info!("Starting eigenvector centrality calculation");
+
+    // First check if eigenvector centrality values already exist (pre-computed)
+    let precomputed_query = if let Some(group_id) = group_id {
+        format!(
+            "MATCH (n) WHERE n.group_id = '{}' AND EXISTS(n.eigenvector_centrality) 
+             RETURN n.uuid as uuid, n.eigenvector_centrality as score",
+            group_id
+        )
+    } else {
+        "MATCH (n) WHERE EXISTS(n.eigenvector_centrality) 
+         RETURN n.uuid as uuid, n.eigenvector_centrality as score"
+            .to_string()
+    };
+
+    debug!("Checking for pre-computed eigenvector values: {}", precomputed_query);
+    if let Ok(results) = client.execute_query(&precomputed_query, None).await {
+        if !results.is_empty() {
+            info!("Using pre-computed FalkorDB eigenvector values");
+            return process_pagerank_results(results, start);
+        }
+    }
 
     // Analyze graph connectivity to choose appropriate algorithm
     let connectivity = analyze_graph_connectivity(client, group_id).await?;
