@@ -45,8 +45,8 @@ export class ProgressiveRenderer {
       nodeDetail: 'full',
       edgeDetail: 'full',
       labelVisibility: 'all',
-      maxNodes: 5000,
-      maxEdges: 10000
+      maxNodes: 20000,
+      maxEdges: 40000
     },
     {
       minZoom: 5,
@@ -54,8 +54,8 @@ export class ProgressiveRenderer {
       nodeDetail: 'full',
       edgeDetail: 'full',
       labelVisibility: 'all',
-      maxNodes: 10000,
-      maxEdges: 20000
+      maxNodes: 30000,
+      maxEdges: 60000
     }
   ];
   
