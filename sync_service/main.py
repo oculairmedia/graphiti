@@ -69,6 +69,8 @@ class SyncService:
                 sync_direction=self.config.sync.sync_direction,
                 enable_reverse_incremental=self.config.sync.enable_reverse_incremental,
                 auto_recovery=self.config.sync.auto_recovery,
+                max_query_limit=self.config.sync.max_query_limit,
+                enable_query_pagination=self.config.sync.enable_query_pagination,
             )
             
             # Initialize health server

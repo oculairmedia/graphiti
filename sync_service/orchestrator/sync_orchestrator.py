@@ -119,13 +119,15 @@ class SyncOrchestrator:
         sync_direction: str = "forward",
         enable_reverse_incremental: bool = False,
         auto_recovery: bool = True,
+        max_query_limit: int = 5000,
+        enable_query_pagination: bool = True,
     ):
         """
         Initialize sync orchestrator.
-        
+
         Args:
             neo4j_config: Neo4j connection configuration
-            falkordb_config: FalkorDB connection configuration  
+            falkordb_config: FalkorDB connection configuration
             batch_size: Batch size for processing
             sync_interval_seconds: Interval between automatic syncs
             max_retries: Maximum retry attempts for failed operations
@@ -133,6 +135,8 @@ class SyncOrchestrator:
             sync_direction: Sync direction ("forward" for Neo4j→FalkorDB, "reverse" for FalkorDB→Neo4j)
             enable_reverse_incremental: Enable reverse incremental sync
             auto_recovery: Enable automatic disaster recovery
+            max_query_limit: Maximum query limit for ORDER BY operations
+            enable_query_pagination: Enable query-level pagination for large datasets
         """
         self.neo4j_config = neo4j_config
         self.falkordb_config = falkordb_config
@@ -143,6 +147,8 @@ class SyncOrchestrator:
         self.sync_direction = sync_direction
         self.enable_reverse_incremental = enable_reverse_incremental
         self.auto_recovery = auto_recovery
+        self.max_query_limit = max_query_limit
+        self.enable_query_pagination = enable_query_pagination
         
         # State tracking
         self.last_sync_timestamp: Optional[datetime] = None
@@ -157,6 +163,15 @@ class SyncOrchestrator:
         
         # Background task
         self._sync_task: Optional[asyncio.Task] = None
+
+    def _get_falkordb_extractor_config(self) -> Dict[str, Any]:
+        """Get FalkorDB extractor configuration with pagination parameters."""
+        return {
+            **self.falkordb_config,
+            'batch_size': self.batch_size,
+            'max_query_limit': self.max_query_limit,
+            'enable_pagination': self.enable_query_pagination
+        }
         
     async def start_continuous_sync(self) -> None:
         """Start continuous sync process."""
@@ -271,13 +286,7 @@ class SyncOrchestrator:
         try:
             if self.sync_direction == "reverse":
                 # Check FalkorDB (source) and Neo4j (target) counts
-                source_extractor = FalkorDBExtractor(
-                    host=self.falkordb_config['host'],
-                    port=self.falkordb_config['port'],
-                    username=self.falkordb_config.get('username'),
-                    password=self.falkordb_config.get('password'),
-                    database=self.falkordb_config['database']
-                )
+                source_extractor = FalkorDBExtractor(**self._get_falkordb_extractor_config())
                 
                 async with source_extractor:
                     source_metadata = await source_extractor.get_sync_metadata()
@@ -355,13 +364,7 @@ class SyncOrchestrator:
         """
         try:
             # Check FalkorDB node count using async context manager
-            async with FalkorDBExtractor(
-                host=self.falkordb_config['host'],
-                port=self.falkordb_config['port'],
-                username=self.falkordb_config.get('username'),
-                password=self.falkordb_config.get('password'),
-                database=self.falkordb_config['database']
-            ) as falkor_extractor:
+            async with FalkorDBExtractor(**self._get_falkordb_extractor_config()) as falkor_extractor:
                 falkor_metadata = await falkor_extractor.get_sync_metadata()
                 falkor_node_count = falkor_metadata.total_entity_nodes + falkor_metadata.total_episodic_nodes + falkor_metadata.total_community_nodes
             
@@ -795,7 +798,7 @@ class SyncOrchestrator:
             # Initialize connections  
             # Filter out pool_size for Neo4jLoader (doesn't support it)
             neo4j_loader_config = {k: v for k, v in self.neo4j_config.items() if k != 'pool_size'}
-            async with FalkorDBExtractor(**self.falkordb_config, batch_size=self.batch_size) as extractor:
+            async with FalkorDBExtractor(**self._get_falkordb_extractor_config()) as extractor:
                 async with Neo4jLoader(**neo4j_loader_config, batch_size=self.batch_size) as loader:
                     
                     # Get statistics for safety check
@@ -927,7 +930,7 @@ class SyncOrchestrator:
             
             # Filter out pool_size for Neo4jLoader (doesn't support it)
             neo4j_loader_config = {k: v for k, v in self.neo4j_config.items() if k != 'pool_size'}
-            async with FalkorDBExtractor(**self.falkordb_config, batch_size=self.batch_size) as extractor:
+            async with FalkorDBExtractor(**self._get_falkordb_extractor_config()) as extractor:
                 logger.info(f"Connected to FalkorDB with database: {extractor.database}")
                 async with Neo4jLoader(**neo4j_loader_config, batch_size=self.batch_size) as loader:
                     logger.info(f"Connected to Neo4j")

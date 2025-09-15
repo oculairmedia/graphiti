@@ -58,10 +58,12 @@ class FalkorDBExtractor:
         password: Optional[str] = None,
         database: str = "graphiti_migration",
         batch_size: int = 1000,
+        max_query_limit: int = 5000,
+        enable_pagination: bool = True,
     ):
         """
         Initialize FalkorDB extractor.
-        
+
         Args:
             host: FalkorDB host
             port: FalkorDB port
@@ -69,6 +71,8 @@ class FalkorDBExtractor:
             password: Database password (optional)
             database: Graph database name
             batch_size: Batch size for processing
+            max_query_limit: Maximum query limit for ORDER BY operations
+            enable_pagination: Enable query-level pagination for large datasets
         """
         self.host = host
         self.port = port
@@ -76,6 +80,8 @@ class FalkorDBExtractor:
         self.password = password
         self.database = database
         self.batch_size = batch_size
+        self.max_query_limit = max_query_limit
+        self.enable_pagination = enable_pagination
         self.client: Optional[FalkorDB] = None
         self.graph: Optional[FalkorGraph] = None
         
@@ -335,42 +341,125 @@ class FalkorDBExtractor:
             raise
             
     async def extract_entity_edges(
-        self, 
+        self,
         since_timestamp: Optional[datetime] = None,
         limit: Optional[int] = None
     ) -> AsyncIterator[List[Dict[str, Any]]]:
-        """Extract entity edges (RELATES_TO) in batches."""
+        """Extract entity edges (RELATES_TO) in batches with pagination."""
         if not self.graph:
             raise RuntimeError("Not connected to FalkorDB")
-            
+
+        # Use pagination if enabled and no explicit limit is provided
+        if self.enable_pagination and limit is None:
+            async for batch in self._extract_entity_edges_paginated(since_timestamp):
+                yield batch
+        else:
+            # Legacy method for backward compatibility or explicit limits
+            async for batch in self._extract_entity_edges_single_query(since_timestamp, limit):
+                yield batch
+
+    async def _extract_entity_edges_paginated(
+        self,
+        since_timestamp: Optional[datetime] = None
+    ) -> AsyncIterator[List[Dict[str, Any]]]:
+        """Extract entity edges using cursor-based pagination."""
+        offset = 0
+        total_processed = 0
+
+        while True:
+            where_clause = ""
+            if since_timestamp:
+                iso_timestamp = since_timestamp.isoformat()
+                where_clause = f"WHERE r.updated_at > '{iso_timestamp}' OR r.created_at > '{iso_timestamp}' OR r.updated_at IS NULL OR r.created_at IS NULL"
+
+            # Use SKIP/LIMIT for pagination to avoid unbounded ORDER BY
+            query = f"""
+            MATCH (source)-[r:RELATES_TO]->(target)
+            {where_clause}
+            RETURN r.uuid as uuid, source.uuid as source_uuid, target.uuid as target_uuid, properties(r) as props
+            ORDER BY r.created_at
+            SKIP {offset} LIMIT {self.max_query_limit}
+            """
+
+            try:
+                result = await self.graph.query(query)
+                if not result.result_set:
+                    logger.info(f"Entity edges extraction completed. Total processed: {total_processed}")
+                    break
+
+                batch = []
+                for row in result.result_set:
+                    uuid_val = row[0]
+                    source_uuid = row[1]
+                    target_uuid = row[2]
+                    props = row[3] if row[3] else {}
+
+                    edge_data = {
+                        'uuid': uuid_val,
+                        'source_node_uuid': source_uuid,
+                        'target_node_uuid': target_uuid,
+                        'relationship_type': 'RELATES_TO',
+                        **props
+                    }
+
+                    batch.append(self._convert_edge_result(edge_data))
+
+                    if len(batch) >= self.batch_size:
+                        yield batch
+                        total_processed += len(batch)
+                        batch = []
+
+                # Yield remaining items in batch
+                if batch:
+                    yield batch
+                    total_processed += len(batch)
+
+                # Check if we got fewer results than the limit - indicates end of data
+                if len(result.result_set) < self.max_query_limit:
+                    logger.info(f"Entity edges extraction completed. Total processed: {total_processed}")
+                    break
+
+                # Move to next page
+                offset += self.max_query_limit
+                logger.debug(f"Processed {total_processed} entity edges, continuing with offset {offset}")
+
+            except Exception as e:
+                logger.error(f"Failed to extract entity edges at offset {offset}: {e}")
+                raise
+
+    async def _extract_entity_edges_single_query(
+        self,
+        since_timestamp: Optional[datetime] = None,
+        limit: Optional[int] = None
+    ) -> AsyncIterator[List[Dict[str, Any]]]:
+        """Legacy single-query extraction method."""
         where_clause = ""
         if since_timestamp:
             iso_timestamp = since_timestamp.isoformat()
-            # Include edges with NULL timestamps to ensure complete extraction
             where_clause = f"WHERE r.updated_at > '{iso_timestamp}' OR r.created_at > '{iso_timestamp}' OR r.updated_at IS NULL OR r.created_at IS NULL"
-            
+
         query = f"""
-        MATCH (source)-[r:RELATES_TO]->(target) 
+        MATCH (source)-[r:RELATES_TO]->(target)
         {where_clause}
         RETURN r.uuid as uuid, source.uuid as source_uuid, target.uuid as target_uuid, properties(r) as props
         ORDER BY r.created_at
         """
-        
+
         if limit:
             query += f" LIMIT {limit}"
-            
+
         try:
             result = await self.graph.query(query)
             if not result.result_set:
                 return
-                
+
             batch = []
             for row in result.result_set:
                 uuid_val = row[0]
                 source_uuid = row[1]
                 target_uuid = row[2]
                 props = row[3] if row[3] else {}
-                
+
                 edge_data = {
                     'uuid': uuid_val,
                     'source_node_uuid': source_uuid,
@@ -378,57 +467,140 @@ class FalkorDBExtractor:
                     'relationship_type': 'RELATES_TO',
                     **props
                 }
-                
+
                 batch.append(self._convert_edge_result(edge_data))
-                
+
                 if len(batch) >= self.batch_size:
                     yield batch
                     batch = []
-                    
+
             if batch:
                 yield batch
-                
+
         except Exception as e:
             logger.error(f"Failed to extract entity edges: {e}")
             raise
             
     async def extract_episodic_edges(
-        self, 
+        self,
         since_timestamp: Optional[datetime] = None,
         limit: Optional[int] = None
     ) -> AsyncIterator[List[Dict[str, Any]]]:
-        """Extract episodic edges (MENTIONS) in batches."""
+        """Extract episodic edges (MENTIONS) in batches with pagination."""
         if not self.graph:
             raise RuntimeError("Not connected to FalkorDB")
-            
+
+        # Use pagination if enabled and no explicit limit is provided
+        if self.enable_pagination and limit is None:
+            async for batch in self._extract_episodic_edges_paginated(since_timestamp):
+                yield batch
+        else:
+            # Legacy method for backward compatibility or explicit limits
+            async for batch in self._extract_episodic_edges_single_query(since_timestamp, limit):
+                yield batch
+
+    async def _extract_episodic_edges_paginated(
+        self,
+        since_timestamp: Optional[datetime] = None
+    ) -> AsyncIterator[List[Dict[str, Any]]]:
+        """Extract episodic edges using cursor-based pagination."""
+        offset = 0
+        total_processed = 0
+
+        while True:
+            where_clause = ""
+            if since_timestamp:
+                iso_timestamp = since_timestamp.isoformat()
+                where_clause = f"WHERE r.updated_at > '{iso_timestamp}' OR r.created_at > '{iso_timestamp}' OR r.updated_at IS NULL OR r.created_at IS NULL"
+
+            # Use SKIP/LIMIT for pagination to avoid unbounded ORDER BY
+            query = f"""
+            MATCH (episode:Episodic)-[r:MENTIONS]->(entity:Entity)
+            {where_clause}
+            RETURN r.uuid as uuid, episode.uuid as source_uuid, entity.uuid as target_uuid, properties(r) as props
+            ORDER BY r.created_at
+            SKIP {offset} LIMIT {self.max_query_limit}
+            """
+
+            try:
+                result = await self.graph.query(query)
+                if not result.result_set:
+                    logger.info(f"Episodic edges extraction completed. Total processed: {total_processed}")
+                    break
+
+                batch = []
+                for row in result.result_set:
+                    uuid_val = row[0]
+                    source_uuid = row[1]
+                    target_uuid = row[2]
+                    props = row[3] if row[3] else {}
+
+                    edge_data = {
+                        'uuid': uuid_val,
+                        'source_node_uuid': source_uuid,
+                        'target_node_uuid': target_uuid,
+                        'relationship_type': 'MENTIONS',
+                        **props
+                    }
+
+                    batch.append(self._convert_edge_result(edge_data))
+
+                    if len(batch) >= self.batch_size:
+                        yield batch
+                        total_processed += len(batch)
+                        batch = []
+
+                # Yield remaining items in batch
+                if batch:
+                    yield batch
+                    total_processed += len(batch)
+
+                # Check if we got fewer results than the limit - indicates end of data
+                if len(result.result_set) < self.max_query_limit:
+                    logger.info(f"Episodic edges extraction completed. Total processed: {total_processed}")
+                    break
+
+                # Move to next page
+                offset += self.max_query_limit
+                logger.debug(f"Processed {total_processed} episodic edges, continuing with offset {offset}")
+
+            except Exception as e:
+                logger.error(f"Failed to extract episodic edges at offset {offset}: {e}")
+                raise
+
+    async def _extract_episodic_edges_single_query(
+        self,
+        since_timestamp: Optional[datetime] = None,
+        limit: Optional[int] = None
+    ) -> AsyncIterator[List[Dict[str, Any]]]:
+        """Legacy single-query extraction method."""
         where_clause = ""
         if since_timestamp:
             iso_timestamp = since_timestamp.isoformat()
-            # Include edges with NULL timestamps to ensure complete extraction
             where_clause = f"WHERE r.updated_at > '{iso_timestamp}' OR r.created_at > '{iso_timestamp}' OR r.updated_at IS NULL OR r.created_at IS NULL"
-            
+
         query = f"""
-        MATCH (episode:Episodic)-[r:MENTIONS]->(entity:Entity) 
+        MATCH (episode:Episodic)-[r:MENTIONS]->(entity:Entity)
         {where_clause}
         RETURN r.uuid as uuid, episode.uuid as source_uuid, entity.uuid as target_uuid, properties(r) as props
         ORDER BY r.created_at
         """
-        
+
         if limit:
             query += f" LIMIT {limit}"
-            
+
         try:
             result = await self.graph.query(query)
             if not result.result_set:
                 return
-                
+
             batch = []
             for row in result.result_set:
                 uuid_val = row[0]
                 source_uuid = row[1]
                 target_uuid = row[2]
                 props = row[3] if row[3] else {}
-                
+
                 edge_data = {
                     'uuid': uuid_val,
                     'source_node_uuid': source_uuid,
@@ -436,16 +608,16 @@ class FalkorDBExtractor:
                     'relationship_type': 'MENTIONS',
                     **props
                 }
-                
+
                 batch.append(self._convert_edge_result(edge_data))
-                
+
                 if len(batch) >= self.batch_size:
                     yield batch
                     batch = []
-                    
+
             if batch:
                 yield batch
-                
+
         except Exception as e:
             logger.error(f"Failed to extract episodic edges: {e}")
             raise
