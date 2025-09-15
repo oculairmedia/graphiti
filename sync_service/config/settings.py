@@ -62,6 +62,9 @@ class SyncConfig(BaseModel):
     auto_recovery: bool = Field(default=True, description="Enable automatic disaster recovery (Neo4j→FalkorDB when FalkorDB is empty)")
     max_retries: int = Field(default=3, description="Maximum retry attempts", ge=1, le=10)
     retry_delay_seconds: int = Field(default=30, description="Delay between retries", ge=1)
+    # Pagination limits for large datasets (GRAPH-553 fix)
+    max_query_limit: int = Field(default=5000, description="Maximum query limit for ORDER BY operations", ge=1000, le=50000)
+    enable_query_pagination: bool = Field(default=True, description="Enable query-level pagination for large datasets")
     
     @validator('interval_seconds')
     def validate_interval(cls, v):
@@ -198,6 +201,8 @@ def load_config_from_env() -> SyncServiceConfig:
         'SYNC_AUTO_RECOVERY': 'sync.auto_recovery',
         'SYNC_MAX_RETRIES': 'sync.max_retries',
         'SYNC_RETRY_DELAY': 'sync.retry_delay_seconds',
+        'SYNC_MAX_QUERY_LIMIT': 'sync.max_query_limit',
+        'SYNC_ENABLE_QUERY_PAGINATION': 'sync.enable_query_pagination',
         
         # Logging config
         'LOG_LEVEL': 'logging.level',
