@@ -82,3 +82,60 @@ To verify the fix is working:
 1. Check service health: `curl http://localhost:3000/api/centrality/health`
 2. Test a centrality calculation from the frontend
 3. Monitor Docker logs: `docker-compose logs -f graph-visualizer-rust graphiti-centrality-rs`
+
+---
+
+## Centrality Data Flow & Neo4j Synchronization
+
+### How Centrality Updates Work
+
+**Yes, centrality scores DO get synchronized to Neo4j!** Here's the complete data flow:
+
+#### 1. Centrality Calculation Flow
+```
+Frontend → Nginx → graph-visualizer-rust → graphiti-centrality-rs → FalkorDB
+```
+
+#### 2. Storage Process
+When centrality is calculated:
+1. **Rust Centrality Service** calculates metrics using FalkorDB native algorithms
+2. **Stores results in FalkorDB** as node properties:
+   - `n.pagerank_centrality: float`
+   - `n.degree_centrality: float`
+   - `n.betweenness_centrality: float`
+   - `n.eigenvector_centrality: float`
+   - `n.importance_score: float`
+
+#### 3. Automatic Sync to Neo4j
+The **sync-service** automatically synchronizes data from FalkorDB to Neo4j:
+
+**Current Configuration** (from `sync_service/config.yaml`):
+- **Sync Direction**: `"reverse"` (FalkorDB → Neo4j)
+- **Sync Interval**: Every 180 seconds (3 minutes)
+- **Reverse Incremental**: `true` (only syncs changes)
+- **Continuous Sync**: `true` (always running)
+
+#### 4. Data Persistence
+- **Primary Storage**: FalkorDB (fast calculations)
+- **Persistent Storage**: Neo4j (permanent record)
+- **Sync Method**: Automatic reverse incremental sync every 3 minutes
+
+### Key Points
+
+✅ **Centrality scores ARE persisted to Neo4j**
+✅ **Sync happens automatically every 3 minutes**
+✅ **Only changed data is synchronized (incremental)**
+✅ **Both databases maintain the same centrality properties**
+
+### Monitoring Sync Status
+
+Check sync service health:
+```bash
+curl http://localhost:8082/health
+curl http://localhost:8083/metrics
+```
+
+View sync logs:
+```bash
+docker-compose logs -f sync-service
+```

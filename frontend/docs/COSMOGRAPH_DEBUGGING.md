@@ -67,9 +67,9 @@ When debug mode is enabled, you'll see:
 ## Common Issues and Solutions
 
 ### Issue: Column Count Mismatch
-**Error**: `table cosmograph_points has 16 columns but 15 values were supplied`
+**Error**: `DuckDB requires exactly 14 non-null fields. Have 15 fields with 0 nulls`
 
-**Solution**: The schema differs between initial load and incremental updates. The `sanitizeNode` function in `cosmographDataPreparer.ts` handles this by conditionally including fields based on the `isIncremental` flag.
+**Solution**: The cosmograph_points view expects exactly 16 fields. The `sanitizeNode` function in `cosmographDataPreparer.ts` handles this by conditionally including fields based on the `isIncremental` flag. For incremental updates, ensure all 16 fields are provided: index, id, label, node_type, summary, degree_centrality, pagerank_centrality, betweenness_centrality, eigenvector_centrality, x, y, color, size, created_at_timestamp, cluster, clusterStrength.
 
 ### Issue: Vector Type Inference
 **Error**: `Unable to infer Vector type from input values`
