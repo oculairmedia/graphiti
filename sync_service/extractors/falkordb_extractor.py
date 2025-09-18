@@ -445,7 +445,7 @@ class FalkorDBExtractor:
         MATCH (source)-[r:RELATES_TO]->(target)
         {where_clause}
         RETURN r.uuid as uuid, source.uuid as source_uuid, target.uuid as target_uuid, properties(r) as props
-        ORDER BY r.created_at
+        ORDER BY r.uuid
         """
 
         if limit:
@@ -517,11 +517,12 @@ class FalkorDBExtractor:
                 where_clause = f"WHERE r.updated_at > '{iso_timestamp}' OR r.created_at > '{iso_timestamp}' OR r.updated_at IS NULL OR r.created_at IS NULL"
 
             # Use SKIP/LIMIT for pagination to avoid unbounded ORDER BY
+            # Use UUID for stable pagination instead of created_at to avoid NULL value issues
             query = f"""
             MATCH (episode:Episodic)-[r:MENTIONS]->(entity:Entity)
             {where_clause}
             RETURN r.uuid as uuid, episode.uuid as source_uuid, entity.uuid as target_uuid, properties(r) as props
-            ORDER BY r.created_at
+            ORDER BY r.uuid
             SKIP {offset} LIMIT {self.max_query_limit}
             """
 
@@ -558,8 +559,10 @@ class FalkorDBExtractor:
                     yield batch
                     total_processed += len(batch)
 
-                # Check if we got fewer results than the limit - indicates end of data
-                if len(result.result_set) < self.max_query_limit:
+                # Check if we got 0 results - indicates end of data
+                # Note: Don't break just because we got fewer than max_query_limit results,
+                # as this can happen with NULL values being filtered differently
+                if len(result.result_set) == 0:
                     logger.info(f"Episodic edges extraction completed. Total processed: {total_processed}")
                     break
 
@@ -586,7 +589,7 @@ class FalkorDBExtractor:
         MATCH (episode:Episodic)-[r:MENTIONS]->(entity:Entity)
         {where_clause}
         RETURN r.uuid as uuid, episode.uuid as source_uuid, entity.uuid as target_uuid, properties(r) as props
-        ORDER BY r.created_at
+        ORDER BY r.uuid
         """
 
         if limit:
