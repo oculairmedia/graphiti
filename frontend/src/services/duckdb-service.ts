@@ -178,24 +178,24 @@ export class DuckDBService {
       // Cosmograph expects cosmograph_points and cosmograph_links tables
       // Map our 'idx' column to 'index' that Cosmograph expects
       // Include all possible columns, using NULL defaults for those that might not exist yet
-      await this.conn.query(`CREATE OR REPLACE VIEW cosmograph_points AS 
-        SELECT 
-          idx as index, 
-          id, 
-          label, 
-          node_type, 
-          summary, 
+      await this.conn.query(`CREATE OR REPLACE VIEW cosmograph_points AS
+        SELECT
+          idx as index,
+          id,
+          label,
+          node_type,
+          summary,
           degree_centrality,
           pagerank_centrality,
           betweenness_centrality,
           eigenvector_centrality,
-          x, 
-          y, 
-          color, 
+          x,
+          y,
+          color,
           size,
           created_at_timestamp,
-          NULL as cluster,
-          NULL as clusterStrength
+          cluster,
+          clusterStrength
         FROM nodes`);
       await this.conn.query(`CREATE OR REPLACE VIEW cosmograph_links AS 
         SELECT 
@@ -263,7 +263,28 @@ export class DuckDBService {
           await this.conn.insertArrowTable(edgesTable, { name: 'edges' });
           
           // Also create Cosmograph-specific views/tables that map to our data
-          await this.conn.query(`CREATE OR REPLACE VIEW cosmograph_points AS SELECT * FROM nodes`);
+          // Cosmograph expects cosmograph_points and cosmograph_links tables
+          // Map our 'idx' column to 'index' that Cosmograph expects
+          // Include all possible columns, using NULL defaults for those that might not exist yet
+          await this.conn.query(`CREATE OR REPLACE VIEW cosmograph_points AS
+            SELECT
+              idx as index,
+              id,
+              label,
+              node_type,
+              summary,
+              degree_centrality,
+              pagerank_centrality,
+              betweenness_centrality,
+              eigenvector_centrality,
+              x,
+              y,
+              color,
+              size,
+              created_at_timestamp,
+              cluster,
+              clusterStrength
+            FROM nodes`);
           await this.conn.query(`CREATE OR REPLACE VIEW cosmograph_links AS 
             SELECT 
               source, 
@@ -346,24 +367,24 @@ export class DuckDBService {
       // Cosmograph expects cosmograph_points and cosmograph_links tables
       // Map our 'idx' column to 'index' that Cosmograph expects
       // Include all possible columns, using NULL defaults for those that might not exist yet
-      await this.conn.query(`CREATE OR REPLACE VIEW cosmograph_points AS 
-        SELECT 
-          idx as index, 
-          id, 
-          label, 
-          node_type, 
-          summary, 
+      await this.conn.query(`CREATE OR REPLACE VIEW cosmograph_points AS
+        SELECT
+          idx as index,
+          id,
+          label,
+          node_type,
+          summary,
           degree_centrality,
           pagerank_centrality,
           betweenness_centrality,
           eigenvector_centrality,
-          x, 
-          y, 
-          color, 
+          x,
+          y,
+          color,
           size,
           created_at_timestamp,
-          NULL as cluster,
-          NULL as clusterStrength
+          cluster,
+          clusterStrength
         FROM nodes`);
       await this.conn.query(`CREATE OR REPLACE VIEW cosmograph_links AS 
         SELECT 
