@@ -50,10 +50,19 @@ class FalkorDBConfig(BaseModel):
         return v.strip()
 
 
+class SyncOptimizationConfig(BaseModel):
+    """Advanced optimization controls for large dataset synchronization."""
+    enabled: bool = Field(default=True, description="Enable optimized extraction patterns")
+    edge_batch_size: int = Field(default=8000, description="Maximum batch size for edge extraction", ge=1000, le=20000)
+    node_batch_size: int = Field(default=15000, description="Maximum batch size for node extraction", ge=1000, le=30000)
+    memory_threshold_mb: int = Field(default=100, description="Memory usage threshold for adaptive sizing", ge=32, le=512)
+    adaptive_sizing: bool = Field(default=True, description="Enable adaptive batch sizing based on telemetry")
+
+
 class SyncConfig(BaseModel):
     """Sync operation configuration."""
     interval_seconds: int = Field(default=300, description="Sync interval in seconds", ge=10)
-    batch_size: int = Field(default=1000, description="Batch size for processing", ge=100, le=10000)
+    batch_size: int = Field(default=1000, description="Legacy default batch size; superseded when optimization enabled", ge=100, le=10000)
     full_sync_on_startup: bool = Field(default=False, description="Perform full sync on startup")
     enable_incremental: bool = Field(default=True, description="Enable incremental sync")
     enable_continuous: bool = Field(default=True, description="Enable continuous sync")
@@ -63,8 +72,9 @@ class SyncConfig(BaseModel):
     max_retries: int = Field(default=3, description="Maximum retry attempts", ge=1, le=10)
     retry_delay_seconds: int = Field(default=30, description="Delay between retries", ge=1)
     # Pagination limits for large datasets (GRAPH-553 fix)
-    max_query_limit: int = Field(default=5000, description="Maximum query limit for ORDER BY operations", ge=1000, le=50000)
+    max_query_limit: int = Field(default=15000, description="Maximum query limit for ORDER BY operations", ge=1000, le=50000)
     enable_query_pagination: bool = Field(default=True, description="Enable query-level pagination for large datasets")
+    optimization: SyncOptimizationConfig = Field(default_factory=SyncOptimizationConfig, description="Optimization settings for large dataset handling")
     
     @validator('interval_seconds')
     def validate_interval(cls, v):
@@ -203,6 +213,11 @@ def load_config_from_env() -> SyncServiceConfig:
         'SYNC_RETRY_DELAY': 'sync.retry_delay_seconds',
         'SYNC_MAX_QUERY_LIMIT': 'sync.max_query_limit',
         'SYNC_ENABLE_QUERY_PAGINATION': 'sync.enable_query_pagination',
+        'SYNC_OPTIMIZATION_ENABLED': 'sync.optimization.enabled',
+        'SYNC_OPTIMIZATION_EDGE_BATCH_SIZE': 'sync.optimization.edge_batch_size',
+        'SYNC_OPTIMIZATION_NODE_BATCH_SIZE': 'sync.optimization.node_batch_size',
+        'SYNC_OPTIMIZATION_MEMORY_THRESHOLD_MB': 'sync.optimization.memory_threshold_mb',
+        'SYNC_OPTIMIZATION_ADAPTIVE_SIZING': 'sync.optimization.adaptive_sizing',
         
         # Logging config
         'LOG_LEVEL': 'logging.level',

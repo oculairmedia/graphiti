@@ -119,8 +119,13 @@ class SyncOrchestrator:
         sync_direction: str = "forward",
         enable_reverse_incremental: bool = False,
         auto_recovery: bool = True,
-        max_query_limit: int = 5000,
+        max_query_limit: int = 15000,
         enable_query_pagination: bool = True,
+        optimization_enabled: bool = True,
+        edge_batch_size: int = 8000,
+        node_batch_size: int = 15000,
+        optimization_memory_threshold_mb: int = 100,
+        optimization_adaptive_sizing: bool = True,
     ):
         """
         Initialize sync orchestrator.
@@ -137,6 +142,11 @@ class SyncOrchestrator:
             auto_recovery: Enable automatic disaster recovery
             max_query_limit: Maximum query limit for ORDER BY operations
             enable_query_pagination: Enable query-level pagination for large datasets
+            optimization_enabled: Toggle optimized extraction patterns for large datasets
+            edge_batch_size: Maximum batch size when extracting edges
+            node_batch_size: Maximum batch size when extracting nodes
+            optimization_memory_threshold_mb: Memory threshold for adaptive sizing heuristics
+            optimization_adaptive_sizing: Enable adaptive batch adjustments
         """
         self.neo4j_config = neo4j_config
         self.falkordb_config = falkordb_config
@@ -149,6 +159,11 @@ class SyncOrchestrator:
         self.auto_recovery = auto_recovery
         self.max_query_limit = max_query_limit
         self.enable_query_pagination = enable_query_pagination
+        self.optimization_enabled = optimization_enabled
+        self.edge_batch_size = edge_batch_size
+        self.node_batch_size = node_batch_size
+        self.optimization_memory_threshold_mb = optimization_memory_threshold_mb
+        self.optimization_adaptive_sizing = optimization_adaptive_sizing
         
         # State tracking
         self.last_sync_timestamp: Optional[datetime] = None
@@ -170,7 +185,12 @@ class SyncOrchestrator:
             **self.falkordb_config,
             'batch_size': self.batch_size,
             'max_query_limit': self.max_query_limit,
-            'enable_pagination': self.enable_query_pagination
+            'enable_pagination': self.enable_query_pagination,
+            'optimization_enabled': self.optimization_enabled,
+            'edge_batch_size': self.edge_batch_size,
+            'node_batch_size': self.node_batch_size,
+            'memory_threshold_mb': self.optimization_memory_threshold_mb,
+            'adaptive_sizing': self.optimization_adaptive_sizing
         }
         
     async def start_continuous_sync(self) -> None:
