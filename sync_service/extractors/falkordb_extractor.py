@@ -38,6 +38,32 @@ class ExtractionStats:
     episodic_edges: int = 0
     extraction_time_seconds: float = 0.0
 
+ESSENTIAL_EDGE_PROPERTIES = [
+    'uuid',           # Primary identifier
+    'source_uuid',    # Source node reference (coalesced with source_node_uuid)
+    'target_uuid',    # Target node reference (coalesced with target_node_uuid)
+    'created_at',     # Creation timestamp
+    'updated_at',     # Modification timestamp
+    'weight',         # Relationship weight
+    'valid_at',       # Validity start time
+    'invalid_at'      # Validity end time
+]
+
+EDGE_PROPERTY_EXPRESSIONS = {
+    'uuid': 'r.uuid',
+    'source_uuid': 'coalesce(r.source_node_uuid, r.source_uuid)',
+    'target_uuid': 'coalesce(r.target_node_uuid, r.target_uuid)',
+    'created_at': 'r.created_at',
+    'updated_at': 'r.updated_at',
+    'weight': 'r.weight',
+    'valid_at': 'r.valid_at',
+    'invalid_at': 'r.invalid_at',
+}
+
+EDGE_RETURN_FIELDS = [
+    (prop, EDGE_PROPERTY_EXPRESSIONS[prop]) for prop in ESSENTIAL_EDGE_PROPERTIES
+]
+
 
 class FalkorDBExtractor:
     """
@@ -50,6 +76,9 @@ class FalkorDBExtractor:
     - Connection pooling and error handling
     """
     
+    NODE_DATA_TYPES = {"entity_nodes", "episodic_nodes", "community_nodes"}
+    EDGE_DATA_TYPES = {"entity_edges", "episodic_edges"}
+
     def __init__(
         self,
         host: str = "localhost",
@@ -58,8 +87,13 @@ class FalkorDBExtractor:
         password: Optional[str] = None,
         database: str = "graphiti_migration",
         batch_size: int = 1000,
-        max_query_limit: int = 5000,
+        max_query_limit: int = 15000,
         enable_pagination: bool = True,
+        optimization_enabled: bool = True,
+        edge_batch_size: int = 8000,
+        node_batch_size: int = 15000,
+        memory_threshold_mb: int = 100,
+        adaptive_sizing: bool = True,
     ):
         """
         Initialize FalkorDB extractor.
@@ -70,18 +104,28 @@ class FalkorDBExtractor:
             username: Database username (optional)
             password: Database password (optional)
             database: Graph database name
-            batch_size: Batch size for processing
+            batch_size: Legacy batch size for backwards compatibility
             max_query_limit: Maximum query limit for ORDER BY operations
             enable_pagination: Enable query-level pagination for large datasets
+            optimization_enabled: Toggle for optimized extraction patterns
+            edge_batch_size: Maximum batch size for edge extraction
+            node_batch_size: Maximum batch size for node extraction
+            memory_threshold_mb: Memory threshold for adaptive sizing heuristics
+            adaptive_sizing: Enable adaptive batch limit adjustments
         """
         self.host = host
         self.port = port
         self.username = username
         self.password = password
         self.database = database
-        self.batch_size = batch_size
-        self.max_query_limit = max_query_limit
+        self.batch_size = max(1, batch_size)
+        self.max_query_limit = max(1, max_query_limit)
         self.enable_pagination = enable_pagination
+        self.optimization_enabled = optimization_enabled
+        self.edge_batch_size = max(1, edge_batch_size)
+        self.node_batch_size = max(1, node_batch_size)
+        self.memory_threshold_mb = max(1, memory_threshold_mb)
+        self.adaptive_sizing = adaptive_sizing
         self.client: Optional[FalkorDB] = None
         self.graph: Optional[FalkorGraph] = None
         
@@ -137,15 +181,76 @@ class FalkorDBExtractor:
         
     def _convert_edge_result(self, edge_data: Dict[str, Any]) -> Dict[str, Any]:
         """Convert FalkorDB edge result to standard format."""
-        # Similar datetime conversion for edges
-        if 'created_at' in edge_data and isinstance(edge_data['created_at'], str):
-            try:
-                edge_data['created_at'] = datetime.fromisoformat(edge_data['created_at'].replace('Z', '+00:00'))
-            except (ValueError, AttributeError):
-                pass
-                
+        # Normalize datetime string representations for downstream loaders
+        for key in ('created_at', 'updated_at', 'valid_at', 'invalid_at'):
+            value = edge_data.get(key)
+            if isinstance(value, str):
+                try:
+                    edge_data[key] = datetime.fromisoformat(value.replace('Z', '+00:00'))
+                except (ValueError, AttributeError):
+                    pass
+
         return edge_data
-        
+
+    def _resolve_batch_limit(self, data_type: str, override: Optional[int] = None) -> int:
+        """Determine effective batch size for the requested data type."""
+        if override is not None:
+            limit = override
+        elif self.optimization_enabled:
+            if data_type in self.NODE_DATA_TYPES:
+                limit = self.node_batch_size
+            elif data_type in self.EDGE_DATA_TYPES:
+                limit = self.edge_batch_size
+            else:
+                limit = self.batch_size
+        else:
+            limit = self.batch_size
+
+        limit = max(1, limit)
+        return self._apply_adaptive_sizing(data_type, limit)
+
+    def _apply_adaptive_sizing(self, data_type: str, limit: int) -> int:
+        """Clamp batch size using simple heuristics pending telemetry hooks."""
+        if not (self.optimization_enabled and self.adaptive_sizing):
+            return limit
+
+        # Placeholder for future memory-aware logic; ensure bounds stay sane.
+        return min(self.max_query_limit, max(1, limit))
+
+    def _resolve_query_limit(self, data_type: str, override: Optional[int] = None) -> int:
+        """Resolve LIMIT value for paginated queries respecting configuration."""
+        if override is not None:
+            return min(self.max_query_limit, max(1, override))
+
+        batch_limit = self._resolve_batch_limit(data_type, None)
+        return min(self.max_query_limit, max(batch_limit, self.batch_size))
+
+    def _build_edge_return_clause(self) -> str:
+        """Construct optimized RETURN clause for edge extraction queries."""
+        return '\n       '.join(
+            f"{expression} as {alias}" for alias, expression in EDGE_RETURN_FIELDS
+        )
+
+    def _map_edge_row(self, row: List[Any]) -> Dict[str, Any]:
+        """Map raw FalkorDB row data to normalized edge payload."""
+        edge_data: Dict[str, Any] = {}
+        for idx, (alias, _) in enumerate(EDGE_RETURN_FIELDS):
+            if idx >= len(row):
+                break
+            value = row[idx]
+            if value is None:
+                continue
+
+            if alias == 'source_uuid':
+                edge_data['source_node_uuid'] = value
+            elif alias == 'target_uuid':
+                edge_data['target_node_uuid'] = value
+            else:
+                edge_data[alias] = value
+
+        edge_data.setdefault('relationship_type', 'RELATES_TO')
+        return self._convert_edge_result(edge_data)
+
     async def get_sync_metadata(self) -> SyncMetadata:
         """Get metadata about the FalkorDB database."""
         if not self.graph:
@@ -204,7 +309,7 @@ class FalkorDBExtractor:
         MATCH (n:Entity) 
         {where_clause}
         RETURN n.uuid as uuid, properties(n) as props
-        ORDER BY n.created_at
+        ORDER BY n.uuid
         """
         
         if limit:
@@ -226,7 +331,7 @@ class FalkorDBExtractor:
                 
                 batch.append(self._convert_node_result(props))
                 
-                if len(batch) >= self.batch_size:
+                if len(batch) >= self._resolve_batch_limit('entity_nodes', limit):
                     yield batch
                     batch = []
                     
@@ -257,7 +362,7 @@ class FalkorDBExtractor:
         MATCH (n:Episodic) 
         {where_clause}
         RETURN n.uuid as uuid, properties(n) as props
-        ORDER BY n.created_at
+        ORDER BY n.uuid
         """
         
         if limit:
@@ -278,7 +383,7 @@ class FalkorDBExtractor:
                 
                 batch.append(self._convert_node_result(props))
                 
-                if len(batch) >= self.batch_size:
+                if len(batch) >= self._resolve_batch_limit('episodic_nodes', limit):
                     yield batch
                     batch = []
                     
@@ -308,7 +413,7 @@ class FalkorDBExtractor:
         MATCH (n:Community) 
         {where_clause}
         RETURN n.uuid as uuid, properties(n) as props
-        ORDER BY n.created_at
+        ORDER BY n.uuid
         """
         
         if limit:
@@ -329,7 +434,7 @@ class FalkorDBExtractor:
                 
                 batch.append(self._convert_node_result(props))
                 
-                if len(batch) >= self.batch_size:
+                if len(batch) >= self._resolve_batch_limit('community_nodes', limit):
                     yield batch
                     batch = []
                     
@@ -345,18 +450,103 @@ class FalkorDBExtractor:
         since_timestamp: Optional[datetime] = None,
         limit: Optional[int] = None
     ) -> AsyncIterator[List[Dict[str, Any]]]:
-        """Extract entity edges (RELATES_TO) in batches with pagination."""
+        """Extract entity edges (RELATES_TO) with optimized direct access by default."""
         if not self.graph:
             raise RuntimeError("Not connected to FalkorDB")
 
-        # Use pagination if enabled and no explicit limit is provided
+        if self.optimization_enabled:
+            remaining = limit
+            batch_override = min(remaining, self.edge_batch_size) if remaining is not None else None
+
+            async for batch in self.extract_entity_edges_optimized(
+                since_timestamp=since_timestamp,
+                batch_size=batch_override
+            ):
+                if remaining is not None:
+                    if len(batch) >= remaining:
+                        yield batch[:remaining]
+                        return
+                    yield batch
+                    remaining -= len(batch)
+                    if remaining <= 0:
+                        return
+                else:
+                    yield batch
+            return
+
         if self.enable_pagination and limit is None:
             async for batch in self._extract_entity_edges_paginated(since_timestamp):
                 yield batch
         else:
-            # Legacy method for backward compatibility or explicit limits
             async for batch in self._extract_entity_edges_single_query(since_timestamp, limit):
                 yield batch
+
+    async def extract_entity_edges_optimized(
+        self,
+        since_timestamp: Optional[datetime] = None,
+        batch_size: Optional[int] = None
+    ) -> AsyncIterator[List[Dict[str, Any]]]:
+        """Optimized entity edge extraction using direct property access."""
+        if not self.graph:
+            raise RuntimeError("Not connected to FalkorDB")
+
+        offset = 0
+        total_processed = 0
+        where_clause = ""
+        if since_timestamp:
+            iso_timestamp = since_timestamp.isoformat()
+            where_clause = (
+                f"WHERE r.updated_at > '{iso_timestamp}' OR r.created_at > '{iso_timestamp}' "
+                "OR r.updated_at IS NULL OR r.created_at IS NULL"
+            )
+
+        return_clause = self._build_edge_return_clause()
+
+        while True:
+            effective_batch_limit = self._resolve_batch_limit('entity_edges', batch_size)
+            page_limit = self._resolve_query_limit('entity_edges', batch_size)
+            pagination_clause = (
+                f"SKIP {offset} LIMIT {page_limit}"
+                if self.enable_pagination
+                else f"LIMIT {page_limit}"
+            )
+
+            query = f"""
+            MATCH ()-[r:RELATES_TO]->()
+            {where_clause}
+            RETURN {return_clause}
+            ORDER BY r.uuid
+            {pagination_clause}
+            """
+
+            try:
+                result = await self.graph.query(query)
+            except Exception as exc:
+                logger.error(f"Failed to extract optimized entity edges at offset {offset}: {exc}")
+                raise
+
+            rows = result.result_set if result and result.result_set else []
+            if not rows:
+                logger.info(f"Entity edge optimization completed. Total processed: {total_processed}")
+                break
+
+            batch: List[Dict[str, Any]] = []
+            for row in rows:
+                batch.append(self._map_edge_row(row))
+                if len(batch) >= effective_batch_limit:
+                    yield batch
+                    total_processed += len(batch)
+                    batch = []
+
+            if batch:
+                yield batch
+                total_processed += len(batch)
+
+            if not self.enable_pagination or len(rows) < page_limit:
+                break
+
+            offset += page_limit
+            logger.debug(f"Processed {total_processed} optimized entity edges; continuing from offset {offset}")
 
     async def _extract_entity_edges_paginated(
         self,
@@ -374,12 +564,13 @@ class FalkorDBExtractor:
 
             # Use SKIP/LIMIT for pagination to avoid unbounded ORDER BY
             # Use UUID for stable pagination instead of created_at to avoid NULL value issues
+            page_limit = self._resolve_query_limit('entity_edges')
             query = f"""
             MATCH (source)-[r:RELATES_TO]->(target)
             {where_clause}
             RETURN r.uuid as uuid, source.uuid as source_uuid, target.uuid as target_uuid, properties(r) as props
             ORDER BY r.uuid
-            SKIP {offset} LIMIT {self.max_query_limit}
+            SKIP {offset} LIMIT {page_limit}
             """
 
             try:
@@ -405,7 +596,7 @@ class FalkorDBExtractor:
 
                     batch.append(self._convert_edge_result(edge_data))
 
-                    if len(batch) >= self.batch_size:
+                    if len(batch) >= self._resolve_batch_limit('entity_edges'):
                         yield batch
                         total_processed += len(batch)
                         batch = []
@@ -423,7 +614,7 @@ class FalkorDBExtractor:
                     break
 
                 # Move to next page
-                offset += self.max_query_limit
+                offset += page_limit
                 logger.debug(f"Processed {total_processed} entity edges, continuing with offset {offset}")
 
             except Exception as e:
@@ -473,7 +664,7 @@ class FalkorDBExtractor:
 
                 batch.append(self._convert_edge_result(edge_data))
 
-                if len(batch) >= self.batch_size:
+                if len(batch) >= self._resolve_batch_limit('entity_edges', limit):
                     yield batch
                     batch = []
 
@@ -518,12 +709,13 @@ class FalkorDBExtractor:
 
             # Use SKIP/LIMIT for pagination to avoid unbounded ORDER BY
             # Use UUID for stable pagination instead of created_at to avoid NULL value issues
+            page_limit = self._resolve_query_limit('episodic_edges')
             query = f"""
             MATCH (episode:Episodic)-[r:MENTIONS]->(entity:Entity)
             {where_clause}
             RETURN r.uuid as uuid, episode.uuid as source_uuid, entity.uuid as target_uuid, properties(r) as props
             ORDER BY r.uuid
-            SKIP {offset} LIMIT {self.max_query_limit}
+            SKIP {offset} LIMIT {page_limit}
             """
 
             try:
@@ -549,7 +741,7 @@ class FalkorDBExtractor:
 
                     batch.append(self._convert_edge_result(edge_data))
 
-                    if len(batch) >= self.batch_size:
+                    if len(batch) >= self._resolve_batch_limit('episodic_edges'):
                         yield batch
                         total_processed += len(batch)
                         batch = []
@@ -567,7 +759,7 @@ class FalkorDBExtractor:
                     break
 
                 # Move to next page
-                offset += self.max_query_limit
+                offset += page_limit
                 logger.debug(f"Processed {total_processed} episodic edges, continuing with offset {offset}")
 
             except Exception as e:
@@ -617,7 +809,7 @@ class FalkorDBExtractor:
 
                 batch.append(self._convert_edge_result(edge_data))
 
-                if len(batch) >= self.batch_size:
+                if len(batch) >= self._resolve_batch_limit('episodic_edges', limit):
                     yield batch
                     batch = []
 

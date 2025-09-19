@@ -71,6 +71,11 @@ class SyncService:
                 auto_recovery=self.config.sync.auto_recovery,
                 max_query_limit=self.config.sync.max_query_limit,
                 enable_query_pagination=self.config.sync.enable_query_pagination,
+                optimization_enabled=self.config.sync.optimization.enabled,
+                edge_batch_size=self.config.sync.optimization.edge_batch_size,
+                node_batch_size=self.config.sync.optimization.node_batch_size,
+                optimization_memory_threshold_mb=self.config.sync.optimization.memory_threshold_mb,
+                optimization_adaptive_sizing=self.config.sync.optimization.adaptive_sizing,
             )
             
             # Initialize health server
