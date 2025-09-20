@@ -7,7 +7,7 @@
 set -e
 
 # Configuration
-CONTAINER_NAME="graphiti-falkordb"
+CONTAINER_NAME="graphiti-falkordb-1"
 BACKUP_DIR="/backups/falkordb"
 LOG_FILE="/var/log/falkordb-restore.log"
 

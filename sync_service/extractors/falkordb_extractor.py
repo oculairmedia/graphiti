@@ -7,6 +7,8 @@ to Neo4j, supporting batch processing and incremental sync capabilities.
 
 import asyncio
 import logging
+import time
+import psutil
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple, AsyncIterator
 from dataclasses import dataclass
@@ -520,7 +522,18 @@ class FalkorDBExtractor:
             """
 
             try:
-                result = await self.graph.query(query)
+                logger.info(f"Executing edge query: offset={offset}, limit={page_limit}")
+                start_time = time.time()
+                
+                # Add timeout to prevent infinite hang (GRAPH-574 fix)
+                result = await asyncio.wait_for(self.graph.query(query), timeout=30.0)
+                
+                duration = time.time() - start_time
+                logger.info(f"Query completed in {duration:.2f}s")
+                
+            except asyncio.TimeoutError:
+                logger.error(f"Edge query timed out after 30s at offset {offset}")
+                raise RuntimeError(f"Edge extraction timed out at offset {offset}")
             except Exception as exc:
                 logger.error(f"Failed to extract optimized entity edges at offset {offset}: {exc}")
                 raise
