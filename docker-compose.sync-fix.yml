@@ -1,0 +1,19 @@
+# Docker Compose override to fix sync service edge extraction hang
+# This increases memory allocation to resolve GRAPH-574
+version: '3.8'
+
+services:
+  sync-service:
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+        reservations:
+          memory: 1G
+          cpus: '0.5'
+    environment:
+      # Reduce batch size as additional safety measure
+      - SYNC_OPTIMIZATION_EDGE_BATCH_SIZE=500
+      # Add memory monitoring
+      - PYTHONUNBUFFERED=1
