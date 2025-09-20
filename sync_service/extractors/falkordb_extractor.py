@@ -42,8 +42,8 @@ class ExtractionStats:
 
 ESSENTIAL_EDGE_PROPERTIES = [
     'uuid',           # Primary identifier
-    'source_uuid',    # Source node UUID via startNode
-    'target_uuid',    # Target node UUID via endNode
+    'source_uuid',    # Source node UUID via MATCH binding
+    'target_uuid',    # Target node UUID via MATCH binding
     'created_at',     # Creation timestamp
     'updated_at',     # Modification timestamp
     'weight',         # Relationship weight
@@ -53,8 +53,8 @@ ESSENTIAL_EDGE_PROPERTIES = [
 
 EDGE_PROPERTY_EXPRESSIONS = {
     'uuid': 'r.uuid',
-    'source_uuid': 'startNode(r).uuid',
-    'target_uuid': 'endNode(r).uuid',
+    'source_uuid': 'source.uuid',
+    'target_uuid': 'target.uuid',
     'created_at': 'r.created_at',
     'updated_at': 'r.updated_at',
     'weight': 'r.weight',
@@ -514,7 +514,7 @@ class FalkorDBExtractor:
             )
 
             query = f"""
-            MATCH ()-[r:RELATES_TO]->()
+            MATCH (source)-[r:RELATES_TO]->(target)
             {where_clause}
             RETURN {return_clause}
             ORDER BY r.uuid

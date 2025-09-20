@@ -61,9 +61,8 @@ async def test_extract_entity_edges_optimized_uses_direct_access_pattern():
     assert second_edge['source_node_uuid'] == 'legacy-source-2'
     assert second_edge['target_node_uuid'] == 'legacy-target-2'
 
-    # Ensure queries use the direct edge access pattern with selective properties
-    assert any('MATCH ()-[r:RELATES_TO]->()' in q for q in stub.queries)
-    assert all('MATCH (source)-[r:RELATES_TO]->(target)' not in q for q in stub.queries)
+    # Ensure queries bind source/target nodes for UUID access without properties(r) fallback
+    assert any('MATCH (source)-[r:RELATES_TO]->(target)' in q for q in stub.queries)
     assert all('properties(r)' not in q for q in stub.queries)
     assert 'SKIP 0 LIMIT 2' in stub.queries[0]
     assert len(stub.queries) == 2
