@@ -27,7 +27,7 @@ async def test_extract_entity_edges_optimized_uses_direct_access_pattern():
     stub = StubGraph([
         [
             ['edge-1', 'source-1', 'target-1', '2024-01-01T00:00:00Z', '2024-01-02T00:00:00Z', 0.7, None, None],
-            ['edge-2', 'source-2', 'target-2', '2024-01-03T00:00:00Z', None, None, None, None],
+            ['edge-2', 'legacy-source-2', 'legacy-target-2', '2024-01-03T00:00:00Z', None, None, None, None],
         ],
         [
             ['edge-3', 'source-3', 'target-3', '2024-01-04T00:00:00Z', '2024-01-05T00:00:00Z', 0.9, '2024-01-04T00:00:00Z', '2024-01-06T00:00:00Z'],
@@ -56,6 +56,10 @@ async def test_extract_entity_edges_optimized_uses_direct_access_pattern():
     assert first_edge['relationship_type'] == 'RELATES_TO'
     assert first_edge['created_at'] == datetime(2024, 1, 1, tzinfo=timezone.utc)
     assert first_edge['updated_at'] == datetime(2024, 1, 2, tzinfo=timezone.utc)
+
+    second_edge = batches[0][1]
+    assert second_edge['source_node_uuid'] == 'legacy-source-2'
+    assert second_edge['target_node_uuid'] == 'legacy-target-2'
 
     # Ensure queries use the direct edge access pattern with selective properties
     assert any('MATCH ()-[r:RELATES_TO]->()' in q for q in stub.queries)

@@ -13,7 +13,9 @@ services:
           memory: 1G
           cpus: '0.5'
     environment:
-      # Reduce batch size as additional safety measure
-      - SYNC_OPTIMIZATION_EDGE_BATCH_SIZE=500
+      # FIXED: Re-enable optimization with startNode/endNode UUID fix
+      - SYNC_OPTIMIZATION_ENABLED=true
+      # Reduce batch size as additional safety measure (minimum allowed is 1000)
+      - SYNC_OPTIMIZATION_EDGE_BATCH_SIZE=1000
       # Add memory monitoring
       - PYTHONUNBUFFERED=1

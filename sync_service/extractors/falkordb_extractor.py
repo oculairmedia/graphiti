@@ -41,24 +41,20 @@ class ExtractionStats:
     extraction_time_seconds: float = 0.0
 
 ESSENTIAL_EDGE_PROPERTIES = [
-    'uuid',                   # Primary identifier
-    'source_uuid',            # Primary source node reference
-    'source_uuid_fallback',   # Legacy source node reference
-    'target_uuid',            # Primary target node reference
-    'target_uuid_fallback',   # Legacy target node reference
-    'created_at',             # Creation timestamp
-    'updated_at',             # Modification timestamp
-    'weight',                 # Relationship weight
-    'valid_at',               # Validity start time
-    'invalid_at'              # Validity end time
+    'uuid',           # Primary identifier
+    'source_uuid',    # Source node UUID via startNode
+    'target_uuid',    # Target node UUID via endNode
+    'created_at',     # Creation timestamp
+    'updated_at',     # Modification timestamp
+    'weight',         # Relationship weight
+    'valid_at',       # Validity start time
+    'invalid_at'      # Validity end time
 ]
 
 EDGE_PROPERTY_EXPRESSIONS = {
     'uuid': 'r.uuid',
-    'source_uuid': 'r.source_node_uuid',
-    'source_uuid_fallback': 'r.source_uuid',
-    'target_uuid': 'r.target_node_uuid',
-    'target_uuid_fallback': 'r.target_uuid',
+    'source_uuid': 'startNode(r).uuid',
+    'target_uuid': 'endNode(r).uuid',
     'created_at': 'r.created_at',
     'updated_at': 'r.updated_at',
     'weight': 'r.weight',
@@ -249,12 +245,8 @@ class FalkorDBExtractor:
 
             if alias == 'source_uuid':
                 edge_data['source_node_uuid'] = value
-            elif alias == 'source_uuid_fallback':
-                edge_data.setdefault('source_node_uuid', value)
             elif alias == 'target_uuid':
                 edge_data['target_node_uuid'] = value
-            elif alias == 'target_uuid_fallback':
-                edge_data.setdefault('target_node_uuid', value)
             else:
                 edge_data[alias] = value
 
