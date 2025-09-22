@@ -67,9 +67,11 @@ def _flatten_params(kwargs: dict[str, Any]) -> dict[str, Any]:
 
 def _wrap_vector_params_in_query(query: str, params: dict[str, Any]) -> str:
     """Wrap any $key in the query with vecf32($key) when the param is a vector-like list.
-    
+
     This fixes FalkorDB type mismatch errors where Python lists need to be converted
     to VectorF32 types for vector operations.
+
+    Also handles nested vector parameters in UNWIND operations (e.g., edge.fact_embedding).
     """
     # Handle top-level vector parameters (existing functionality)
     for key, val in params.items():
@@ -81,7 +83,49 @@ def _wrap_vector_params_in_query(query: str, params: dict[str, Any]) -> str:
                 continue
             # Replace bare $key with vecf32($key)
             query = query.replace(needle, wrapped)
-    
+
+    # Handle nested vector parameters in UNWIND operations
+    # Look for patterns like: edge.fact_embedding, node.name_embedding, etc.
+    # These need vecf32() wrapping when used in vector operations
+    def _wrap_unwind_vectors(query_text: str) -> str:
+        import re
+
+        # Pattern to match UNWIND parameter vectors in vector operations
+        # Matches: edge.fact_embedding, node.name_embedding, etc. when used in vec.cosineDistance
+        unwind_vector_patterns = [
+            r'\b(edge\.(?:fact_)?embedding)\b',
+            r'\b(node\.(?:name_|summary_)?embedding)\b',
+            r'\b(entity\.(?:name_|summary_)?embedding)\b',
+            r'\b(item\.(?:name_|summary_)?embedding)\b',
+        ]
+
+        for pattern in unwind_vector_patterns:
+            # Find all matches of the pattern
+            matches = re.finditer(pattern, query_text)
+            replacements = []
+
+            for match in matches:
+                original = match.group(1)
+                start, end = match.span(1)
+
+                # Check if this vector is used in a vector operation (vec.cosineDistance)
+                # Look ahead and behind to see if it's in a vector context
+                context_start = max(0, start - 50)
+                context_end = min(len(query_text), end + 50)
+                context = query_text[context_start:context_end]
+
+                # If it's in a vector operation context and not already wrapped
+                if ('vec.cosineDistance' in context or 'vector.similarity' in context) and f'vecf32({original})' not in context:
+                    replacements.append((start, end, f'vecf32({original})'))
+
+            # Apply replacements in reverse order to maintain indices
+            for start, end, replacement in reversed(replacements):
+                query_text = query_text[:start] + replacement + query_text[end:]
+
+        return query_text
+
+    query = _wrap_unwind_vectors(query)
+
     return query
 
 

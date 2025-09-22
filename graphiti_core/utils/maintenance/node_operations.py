@@ -525,32 +525,46 @@ async def resolve_extracted_nodes(
         ] = await filter_existing_duplicate_of_edges(driver, node_duplicates)
         return resolved_nodes, uuid_map, new_node_duplicates
 
-    # For remaining nodes, use the existing LLM-based resolution
-    search_results: list[SearchResults] = await semaphore_gather(
-        *[
-            search(
-                clients=clients,
-                query=node.name,
-                group_ids=None if enable_cross_graph_deduplication else [node.group_id],
-                search_filter=SearchFilters(),
-                config=NODE_HYBRID_SEARCH_RRF,
+    entity_types_dict: dict[str, BaseModel] = entity_types if entity_types is not None else {}
+
+    search_config = NODE_HYBRID_SEARCH_RRF
+    chunk_size = max(1, search_config.limit)
+
+    for chunk_start in range(0, len(nodes_needing_llm_resolution), chunk_size):
+        chunk_nodes = nodes_needing_llm_resolution[chunk_start : chunk_start + chunk_size]
+
+        if not chunk_nodes:
+            continue
+
+        if existing_nodes_override is None:
+            chunk_search_results: list[SearchResults] = await semaphore_gather(
+                *[
+                    search(
+                        clients=clients,
+                        query=node.name,
+                        group_ids=None if enable_cross_graph_deduplication else [node.group_id],
+                        search_filter=SearchFilters(),
+                        config=search_config,
+                    )
+                    for node in chunk_nodes
+                ]
             )
-            for node in nodes_needing_llm_resolution
-        ]
-    )
 
-    candidate_nodes: list[EntityNode] = (
-        [node for result in search_results for node in result.nodes]
-        if existing_nodes_override is None
-        else existing_nodes_override
-    )
+            candidate_nodes: list[EntityNode] = [
+                node for result in chunk_search_results for node in result.nodes
+            ]
+        else:
+            chunk_search_results = []
+            candidate_nodes = existing_nodes_override
 
-    existing_nodes_dict: dict[str, EntityNode] = {node.uuid: node for node in candidate_nodes}
+        existing_nodes_dict: dict[str, EntityNode] = {}
+        for candidate in candidate_nodes:
+            if candidate.uuid not in existing_nodes_dict:
+                existing_nodes_dict[candidate.uuid] = candidate
 
-    existing_nodes: list[EntityNode] = list(existing_nodes_dict.values())
+        existing_nodes: list[EntityNode] = list(existing_nodes_dict.values())
 
-    existing_nodes_context = (
-        [
+        existing_nodes_context = [
             {
                 **{
                     'idx': i,
@@ -560,80 +574,97 @@ async def resolve_extracted_nodes(
                 **candidate.attributes,
             }
             for i, candidate in enumerate(existing_nodes)
-        ],
-    )
+        ]
 
-    entity_types_dict: dict[str, BaseModel] = entity_types if entity_types is not None else {}
+        uuid_to_idx = {node.uuid: idx for idx, node in enumerate(existing_nodes)}
 
-    # Prepare context for LLM
-    extracted_nodes_context = [
-        {
-            'id': i,
-            'name': node.name,
-            'entity_type': node.labels,
-            'entity_type_description': entity_types_dict.get(
-                next((item for item in node.labels if item != 'Entity'), '')
-            ).__doc__
-            or 'Default Entity Type',
-        }
-        for i, node in enumerate(nodes_needing_llm_resolution)
-    ]
+        duplication_candidates: list[list[int]] = []
+        if existing_nodes_override is None:
+            for result in chunk_search_results:
+                duplication_candidates.append(
+                    [
+                        uuid_to_idx[node.uuid]
+                        for node in result.nodes
+                        if node.uuid in uuid_to_idx
+                    ]
+                )
+        else:
+            duplication_candidates = [list(range(len(existing_nodes))) for _ in chunk_nodes]
 
-    context = {
-        'extracted_nodes': extracted_nodes_context,
-        'existing_nodes': existing_nodes_context,
-        'episode_content': episode.content if episode is not None else '',
-        'previous_episodes': [ep.content for ep in previous_episodes]
-        if previous_episodes is not None
-        else [],
-    }
-
-    llm_response = await llm_client.generate_response(
-        prompt_library.dedupe_nodes.nodes(context),
-        response_model=NodeResolutions,
-    )
-
-    node_resolutions: list = llm_response.get('entity_resolutions', [])
-
-    # Process LLM resolutions for nodes that needed it
-    for resolution in node_resolutions:
-        resolution_id: int = resolution.get('id', -1)
-        duplicate_idx: int = resolution.get('duplicate_idx', -1)
-
-        # Validate resolution_id is within bounds
-        if not (0 <= resolution_id < len(nodes_needing_llm_resolution)):
-            logger.warning(
-                f'Invalid resolution_id {resolution_id} for nodes_needing_llm_resolution of length {len(nodes_needing_llm_resolution)}. Skipping resolution.'
+        extracted_nodes_context = []
+        for local_idx, node in enumerate(chunk_nodes):
+            label_key = next((item for item in node.labels if item != 'Entity'), '')
+            entity_type_model = entity_types_dict.get(label_key)
+            extracted_nodes_context.append(
+                {
+                    'id': local_idx,
+                    'name': node.name,
+                    'entity_type': node.labels,
+                    'entity_type_description': entity_type_model.__doc__
+                    if entity_type_model is not None
+                    else 'Default Entity Type',
+                    'duplication_candidates': duplication_candidates[local_idx]
+                    if local_idx < len(duplication_candidates)
+                    else [],
+                }
             )
-            continue
 
-        extracted_node = nodes_needing_llm_resolution[resolution_id]
+        context = {
+            'extracted_nodes': extracted_nodes_context,
+            'existing_nodes': existing_nodes_context,
+            'episode_content': episode.content if episode is not None else '',
+            'previous_episodes': [ep.content for ep in previous_episodes]
+            if previous_episodes is not None
+            else [],
+        }
 
-        resolved_node = (
-            existing_nodes[duplicate_idx]
-            if 0 <= duplicate_idx < len(existing_nodes)
-            else extracted_node
+        llm_response = await llm_client.generate_response(
+            prompt_library.dedupe_nodes.nodes(context),
+            response_model=NodeResolutions,
         )
 
-        # resolved_node.name = resolution.get('name')
+        node_resolutions: list = llm_response.get('entity_resolutions', [])
 
-        resolved_nodes.append(resolved_node)
-        uuid_map[extracted_node.uuid] = resolved_node.uuid
+        for resolution in node_resolutions:
+            resolution_id: int = resolution.get('id', -1)
+            duplicate_idx: int = resolution.get('duplicate_idx', -1)
 
-        duplicates: list[int] = resolution.get('duplicates', [])
-        if duplicate_idx not in duplicates and duplicate_idx > -1:
-            duplicates.append(duplicate_idx)
-        for idx in duplicates:
-            # Validate idx is within bounds
-            if not (0 <= idx < len(existing_nodes)):
+            if not (0 <= resolution_id < len(chunk_nodes)):
                 logger.warning(
-                    f'Invalid duplicate index {idx} for existing_nodes of length {len(existing_nodes)}. Using resolved_node instead.'
+                    f'Invalid resolution_id {resolution_id} for chunk of length {len(chunk_nodes)}. Skipping resolution.'
                 )
-                existing_node = resolved_node
-            else:
-                existing_node = existing_nodes[idx]
+                continue
 
-            node_duplicates.append((extracted_node, existing_node))
+            extracted_node = chunk_nodes[resolution_id]
+
+            resolved_node = (
+                existing_nodes[duplicate_idx]
+                if 0 <= duplicate_idx < len(existing_nodes)
+                else extracted_node
+            )
+
+            resolved_nodes.append(resolved_node)
+            uuid_map[extracted_node.uuid] = resolved_node.uuid
+
+            duplicates: list[int] = resolution.get('duplicates', [])
+            if duplicate_idx not in duplicates and duplicate_idx > -1:
+                duplicates.append(duplicate_idx)
+
+            for idx in duplicates:
+                if not (0 <= idx < len(existing_nodes)):
+                    logger.warning(
+                        f'Invalid duplicate index {idx} for existing_nodes of length {len(existing_nodes)}. Using resolved_node instead.'
+                    )
+                    existing_node = resolved_node
+                else:
+                    existing_node = existing_nodes[idx]
+
+                node_duplicates.append((extracted_node, existing_node))
+
+        for node in chunk_nodes:
+            if node.uuid not in uuid_map:
+                resolved_nodes.append(node)
+                uuid_map[node.uuid] = node.uuid
 
     logger.debug(f'Resolved nodes: {[(n.name, n.uuid) for n in resolved_nodes]}')
 
@@ -798,14 +829,15 @@ async def resolve_extracted_nodes_batch(
         
         # Get existing nodes for comparison
         existing_nodes = []
+        existing_candidate_limit = max(1, NODE_HYBRID_SEARCH_RRF.limit * 2)
         if enable_cross_graph_deduplication:
             existing_query = """
             MATCH (n:Entity)
             RETURN n
             ORDER BY n.created_at
-            LIMIT 100
+            LIMIT $limit
             """
-            records, _, _ = await driver.execute_query(existing_query)
+            records, _, _ = await driver.execute_query(existing_query, limit=existing_candidate_limit)
         else:
             # Get existing nodes for all relevant groups
             group_ids = list(set(node.group_id for node in all_nodes_needing_llm))
@@ -815,9 +847,11 @@ async def resolve_extracted_nodes_batch(
                 WHERE n.group_id IN $group_ids
                 RETURN n
                 ORDER BY n.created_at
-                LIMIT 100
+                LIMIT $limit
                 """
-                records, _, _ = await driver.execute_query(existing_query, group_ids=group_ids)
+                records, _, _ = await driver.execute_query(
+                    existing_query, group_ids=group_ids, limit=existing_candidate_limit
+                )
             else:
                 records = []
         
