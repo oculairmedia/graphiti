@@ -44,6 +44,7 @@ from graphiti_core.search.search_config import SearchResults
 from graphiti_core.search.search_config_recipes import NODE_HYBRID_SEARCH_RRF
 from graphiti_core.search.search_filters import SearchFilters
 from graphiti_core.utils.datetime_utils import utc_now
+from graphiti_core.utils.prompt_compression import get_prompt_compressor
 
 
 def normalize_entity_name(name: str) -> str:
@@ -372,6 +373,7 @@ async def resolve_extracted_nodes(
 ) -> tuple[list[EntityNode], dict[str, str], list[tuple[EntityNode, EntityNode]]]:
     llm_client = clients.llm_client
     driver = clients.driver
+    compressor = get_prompt_compressor()
 
     resolved_nodes: list[EntityNode] = []
     uuid_map: dict[str, str] = {}
@@ -564,32 +566,60 @@ async def resolve_extracted_nodes(
 
         existing_nodes: list[EntityNode] = list(existing_nodes_dict.values())
 
-        existing_nodes_context = [
+        existing_nodes_metadata = [
             {
-                **{
-                    'idx': i,
-                    'name': candidate.name,
-                    'entity_types': candidate.labels,
-                },
-                **candidate.attributes,
+                'idx': i,
+                'name': candidate.name,
+                'uuid': candidate.uuid,
+                'labels': candidate.labels,
             }
             for i, candidate in enumerate(existing_nodes)
         ]
 
+        existing_nodes_text, compression_stats = compressor.compress_existing_entities(
+            existing_nodes
+        )
+        if (
+            compression_stats.original_tokens
+            and compression_stats.compression_ratio < 0.95
+        ):
+            logger.debug(
+                'Dedup prompt compression applied: %s',
+                compression_stats.__dict__,
+            )
+
         uuid_to_idx = {node.uuid: idx for idx, node in enumerate(existing_nodes)}
 
-        duplication_candidates: list[list[int]] = []
+        duplication_candidates: list[list[dict[str, str]]] = []
         if existing_nodes_override is None:
             for result in chunk_search_results:
+                candidate_indices = [
+                    uuid_to_idx[node.uuid]
+                    for node in result.nodes
+                    if node.uuid in uuid_to_idx
+                ]
                 duplication_candidates.append(
                     [
-                        uuid_to_idx[node.uuid]
-                        for node in result.nodes
-                        if node.uuid in uuid_to_idx
+                        {
+                            'idx': idx,
+                            'name': existing_nodes[idx].name,
+                            'uuid': existing_nodes[idx].uuid,
+                        }
+                        for idx in candidate_indices
                     ]
                 )
         else:
-            duplication_candidates = [list(range(len(existing_nodes))) for _ in chunk_nodes]
+            duplication_candidates = [
+                [
+                    {
+                        'idx': meta['idx'],
+                        'name': meta['name'],
+                        'uuid': meta['uuid'],
+                    }
+                    for meta in existing_nodes_metadata
+                ]
+                for _ in chunk_nodes
+            ]
 
         extracted_nodes_context = []
         for local_idx, node in enumerate(chunk_nodes):
@@ -611,7 +641,8 @@ async def resolve_extracted_nodes(
 
         context = {
             'extracted_nodes': extracted_nodes_context,
-            'existing_nodes': existing_nodes_context,
+            'existing_nodes': existing_nodes_metadata,
+            'existing_nodes_text': existing_nodes_text,
             'episode_content': episode.content if episode is not None else '',
             'previous_episodes': [ep.content for ep in previous_episodes]
             if previous_episodes is not None
@@ -702,7 +733,8 @@ async def resolve_extracted_nodes_batch(
     """
     llm_client = clients.llm_client
     driver = clients.driver
-    
+    compressor = get_prompt_compressor()
+
     if not batch_extracted_nodes:
         return []
     
@@ -855,7 +887,7 @@ async def resolve_extracted_nodes_batch(
             else:
                 records = []
         
-        existing_nodes = [
+        existing_nodes_raw = [
             {
                 'name': record['n']['name'],
                 'labels': record['n'].get('labels', []),
@@ -864,12 +896,35 @@ async def resolve_extracted_nodes_batch(
             }
             for record in records
         ]
-        
+
+        existing_nodes_text, compression_stats = compressor.compress_existing_entities_for_batch(
+            existing_nodes_raw
+        )
+        if (
+            compression_stats.original_tokens
+            and compression_stats.compression_ratio < 0.95
+        ):
+            logger.debug(
+                'Batch dedup prompt compression applied: %s',
+                compression_stats.__dict__,
+            )
+
+        existing_nodes_metadata = [
+            {
+                'idx': idx,
+                'name': node['name'],
+                'uuid': node['uuid'],
+                'labels': node.get('labels', []),
+            }
+            for idx, node in enumerate(existing_nodes_raw)
+        ]
+
         # Make single batch LLM call
         llm_response = await llm_client.dedupe_entities_batch(
             episodes_nodes_for_llm,
             episode_contents,
-            existing_nodes
+            existing_nodes_metadata,
+            existing_nodes_text=existing_nodes_text,
         )
         
         # Process LLM resolutions
@@ -885,13 +940,13 @@ async def resolve_extracted_nodes_batch(
                 episode_idx = episode_node_indices[resolution_id]
                 
                 # Find or create the resolved node
-                if 0 <= duplicate_idx < len(existing_nodes):
+                if 0 <= duplicate_idx < len(existing_nodes_raw):
                     # It's a duplicate of an existing node
                     resolved_node = EntityNode(
-                        uuid=existing_nodes[duplicate_idx]['uuid'],
-                        name=existing_nodes[duplicate_idx]['name'],
-                        labels=existing_nodes[duplicate_idx]['labels'],
-                        summary=existing_nodes[duplicate_idx]['summary'],
+                        uuid=existing_nodes_raw[duplicate_idx]['uuid'],
+                        name=existing_nodes_raw[duplicate_idx]['name'],
+                        labels=existing_nodes_raw[duplicate_idx]['labels'],
+                        summary=existing_nodes_raw[duplicate_idx]['summary'],
                         group_id=node.group_id
                     )
                     batch_results[episode_idx]['node_duplicates'].append((node, resolved_node))
