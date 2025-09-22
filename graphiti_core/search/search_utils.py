@@ -950,7 +950,11 @@ async def get_edge_invalidation_candidates_single_batch(
     )
 
     edges_data = [edge.model_dump() for edge in edges]
-    
+    for edge_values in edges_data:
+        embedding = edge_values.get('fact_embedding')
+        if isinstance(embedding, list) and len(embedding) == 0:
+            edge_values['fact_embedding'] = None
+
     try:
         results, _, _ = await driver.execute_query(
             query,
