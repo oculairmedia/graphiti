@@ -1,0 +1,43 @@
+# Exclude large directories that aren't needed in containers
+backups/
+graph-visualizer-rust/target/
+graphiti-search-rs/target/
+graphiti-centrality-rs/target/
+frontend/node_modules/
+frontend/dist/
+
+# Exclude build artifacts and temporary files
+*.rdb
+*.log
+*.tmp
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Exclude development files
+.git/
+.github/
+.vscode/
+.idea/
+*.md
+docs/
+tests/
+
+# Exclude environment files
+.env*
+!.env.example
+
+# Exclude OS files
+.DS_Store
+Thumbs.db
+
+# Exclude local development artifacts
+.venv/
+venv/
+node_modules/
+dist/
+build/
