@@ -26,6 +26,12 @@ sync:
   max_retries: 5          # More retries for reliability
   retry_delay_seconds: 15 # Faster retry recovery
   auto_recovery: true     # Enable automatic disaster recovery
+  optimization:
+    enabled: false        # TEMP: Disable optimization - FalkorDB Cypher incompatible
+    edge_batch_size: 1000
+    node_batch_size: 15000
+    memory_threshold_mb: 100
+    adaptive_sizing: true
 
 logging:
   level: "INFO"

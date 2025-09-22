@@ -13,8 +13,8 @@ services:
           memory: 1G
           cpus: '0.5'
     environment:
-      # FIXED: Re-enable optimization with startNode/endNode UUID fix
-      - SYNC_OPTIMIZATION_ENABLED=true
+      # TEMP: Disable optimization - FalkorDB Cypher syntax incompatible
+      - SYNC_OPTIMIZATION_ENABLED=false
       # Reduce batch size as additional safety measure (minimum allowed is 1000)
       - SYNC_OPTIMIZATION_EDGE_BATCH_SIZE=1000
       # Add memory monitoring
