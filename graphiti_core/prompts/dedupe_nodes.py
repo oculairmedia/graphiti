@@ -54,7 +54,20 @@ class Versions(TypedDict):
     nodes: PromptFunction
 
 
+def _existing_entities_block(context: dict[str, Any]) -> str:
+    existing_nodes_text = context.get('existing_nodes_text')
+    if existing_nodes_text:
+        return existing_nodes_text
+
+    existing_nodes = context.get('existing_nodes', [])
+    if isinstance(existing_nodes, str):
+        return existing_nodes
+
+    return json.dumps(existing_nodes, indent=2)
+
+
 def node(context: dict[str, Any]) -> list[Message]:
+    existing_nodes_block = _existing_entities_block(context)
     return [
         Message(
             role='system',
@@ -77,9 +90,10 @@ def node(context: dict[str, Any]) -> list[Message]:
         </ENTITY TYPE DESCRIPTION>
 
         <EXISTING ENTITIES>
-        {json.dumps(context['existing_nodes'], indent=2)}
+        {existing_nodes_block}
         </EXISTING ENTITIES>
-        
+        Existing entities are enumerated with "Candidate idx=<number>". Use that idx value when reporting duplicates.
+
         Given the above EXISTING ENTITIES and their attributes, MESSAGE, and PREVIOUS MESSAGES; Determine if the NEW ENTITY extracted from the conversation
         is a duplicate entity of one of the EXISTING ENTITIES.
         
@@ -104,6 +118,7 @@ def node(context: dict[str, Any]) -> list[Message]:
 
 
 def nodes(context: dict[str, Any]) -> list[Message]:
+    existing_nodes_block = _existing_entities_block(context)
     return [
         Message(
             role='system',
@@ -143,7 +158,7 @@ def nodes(context: dict[str, Any]) -> list[Message]:
         </ENTITIES>
         
         <EXISTING ENTITIES>
-        {json.dumps(context['existing_nodes'], indent=2)}
+        {existing_nodes_block}
         </EXISTING ENTITIES>
 
         For each of the above ENTITIES, determine if the entity is a duplicate of any of the EXISTING ENTITIES.

@@ -29,6 +29,7 @@ from pydantic import BaseModel, Field, ValidationError, field_validator
 from pydantic_core import from_json
 
 from ..prompts.models import Message
+from ..utils.prompt_compression import get_prompt_compressor
 from .client import MULTILINGUAL_EXTRACTION_RESPONSES, LLMClient
 from .config import DEFAULT_MAX_TOKENS, LLMConfig, ModelSize
 from .errors import RateLimitError, RefusalError
@@ -811,8 +812,10 @@ Rules:
         self,
         episodes_nodes: List[List[Dict[str, Any]]],
         episode_contents: List[str],
-        existing_nodes: List[Dict[str, Any]] = None,
-        batch_size: int = 5
+        existing_nodes: List[Dict[str, Any]] | None = None,
+        *,
+        existing_nodes_text: str | None = None,
+        batch_size: int = 5,
     ) -> Dict[str, Any]:
         """
         Deduplicate entities from multiple episodes in a single API call.
@@ -829,21 +832,51 @@ Rules:
         if not episodes_nodes:
             return {'entity_resolutions': []}
         
+        existing_nodes_list = list(existing_nodes or [])
+        compressor = get_prompt_compressor()
+
+        metadata = [
+            {
+                'idx': idx,
+                'name': node.get('name', ''),
+                'uuid': node.get('uuid', ''),
+                'labels': node.get('labels', []),
+            }
+            for idx, node in enumerate(existing_nodes_list)
+        ]
+
+        context_existing_text = existing_nodes_text
+        if context_existing_text is None and existing_nodes_list:
+            context_existing_text, compression_stats = compressor.compress_existing_entities_for_batch(
+                existing_nodes_list
+            )
+            if (
+                compression_stats.original_tokens
+                and compression_stats.compression_ratio < 0.95
+            ):
+                logger.debug(
+                    'Chutes batch dedup compression stats: %s',
+                    compression_stats.__dict__,
+                )
+
+        existing_nodes_block = context_existing_text or ''
+
         # Build prompt for batch deduplication
         prompt_context = {
             'extracted_nodes': [],
-            'existing_nodes': existing_nodes or [],
+            'existing_nodes': metadata,
+            'existing_nodes_text': existing_nodes_block,
             'episode_content': '\n\n'.join(episode_contents),
             'previous_episodes': []
         }
-        
+
         # Flatten nodes with episode tracking
         for episode_idx, nodes in enumerate(episodes_nodes):
             for node in nodes:
                 node_with_episode = {
                     **node,
                     'episode_index': episode_idx,
-                    'duplication_candidates': existing_nodes or []
+                    'duplication_candidates': metadata,
                 }
                 prompt_context['extracted_nodes'].append(node_with_episode)
         
