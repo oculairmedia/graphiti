@@ -828,7 +828,7 @@ async def get_relevant_edges(
                 group_id: e.group_id,
                 fact: e.fact,
                 fact_embedding: e.fact_embedding,
-                episodes: e.episodes,
+                episodes: coalesce(e.episodes, []),
                 expired_at: e.expired_at,
                 valid_at: e.valid_at,
                 invalid_at: e.invalid_at,
