@@ -89,6 +89,10 @@ def node(context: dict[str, Any]) -> list[Message]:
         {json.dumps(context['entity_type_description'], indent=2)}
         </ENTITY TYPE DESCRIPTION>
 
+        IMPORTANT ID RULES:
+        - The NEW ENTITY "id" is a zero-based integer. Return that exact value; do NOT renumber to 1-based indexing.
+        - Candidate indices are also zero-based. Use the provided values when reporting duplicates.
+
         <EXISTING ENTITIES>
         {existing_nodes_block}
         </EXISTING ENTITIES>
@@ -156,7 +160,12 @@ def nodes(context: dict[str, Any]) -> list[Message]:
         <ENTITIES>
         {json.dumps(context['extracted_nodes'], indent=2)}
         </ENTITIES>
-        
+
+        IMPORTANT ID RULES:
+        - Each entity's "id" is a zero-based integer that uniquely identifies it across the entire batch.
+        - You must return that exact value without renumbering. Do NOT convert ids to 1-based or reorder them.
+        - Candidate indices (duplicate_idx / duplicates) are also zero-based; echo them exactly as given.
+
         <EXISTING ENTITIES>
         {existing_nodes_block}
         </EXISTING ENTITIES>
@@ -171,7 +180,7 @@ def nodes(context: dict[str, Any]) -> list[Message]:
 
         Task:
         Your response will be a list called entity_resolutions which contains one entry for each entity.
-        
+
         For each entity, return the id of the entity as id, the name of the entity as name, and the duplicate_idx
         as an integer.
         
