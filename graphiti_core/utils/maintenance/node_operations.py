@@ -594,7 +594,7 @@ async def resolve_extracted_nodes(
 
         uuid_to_idx = {node.uuid: idx for idx, node in enumerate(existing_nodes)}
 
-        duplication_candidates: list[list[dict[str, str]]] = []
+        duplication_candidates: list[list[int]] = []
         if existing_nodes_override is None:
             for result in chunk_search_results:
                 candidate_indices = [
@@ -602,26 +602,10 @@ async def resolve_extracted_nodes(
                     for node in result.nodes
                     if node.uuid in uuid_to_idx
                 ]
-                duplication_candidates.append(
-                    [
-                        {
-                            'idx': idx,
-                            'name': existing_nodes[idx].name,
-                            'uuid': existing_nodes[idx].uuid,
-                        }
-                        for idx in candidate_indices
-                    ]
-                )
+                duplication_candidates.append(candidate_indices)
         else:
             duplication_candidates = [
-                [
-                    {
-                        'idx': meta['idx'],
-                        'name': meta['name'],
-                        'uuid': meta['uuid'],
-                    }
-                    for meta in existing_nodes_metadata
-                ]
+                [meta['idx'] for meta in existing_nodes_metadata]
                 for _ in chunk_nodes
             ]
 
@@ -663,8 +647,21 @@ async def resolve_extracted_nodes(
         node_resolutions: list = llm_response.get('entity_resolutions', [])
 
         for resolution in node_resolutions:
-            resolution_id: int = resolution.get('id', -1)
-            duplicate_idx: int = resolution.get('duplicate_idx', -1)
+            raw_resolution_id = resolution.get('id', -1)
+            try:
+                resolution_id = int(raw_resolution_id)
+            except (TypeError, ValueError):
+                logger.warning(
+                    'Invalid resolution_id value %s; expected integer. Skipping resolution.',
+                    raw_resolution_id,
+                )
+                continue
+
+            raw_duplicate_idx = resolution.get('duplicate_idx', -1)
+            try:
+                duplicate_idx = int(raw_duplicate_idx)
+            except (TypeError, ValueError):
+                duplicate_idx = -1
 
             extracted_node = id_to_node.get(resolution_id)
             if extracted_node is None or extracted_node not in chunk_nodes:
