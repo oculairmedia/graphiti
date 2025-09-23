@@ -532,6 +532,10 @@ async def resolve_extracted_nodes(
     search_config = NODE_HYBRID_SEARCH_RRF
     chunk_size = max(1, search_config.limit)
 
+    id_to_node: dict[int, EntityNode] = {
+        idx: node for idx, node in enumerate(nodes_needing_llm_resolution)
+    }
+
     for chunk_start in range(0, len(nodes_needing_llm_resolution), chunk_size):
         chunk_nodes = nodes_needing_llm_resolution[chunk_start : chunk_start + chunk_size]
 
@@ -621,13 +625,15 @@ async def resolve_extracted_nodes(
                 for _ in chunk_nodes
             ]
 
+        chunk_indices = list(range(chunk_start, chunk_start + len(chunk_nodes)))
         extracted_nodes_context = []
         for local_idx, node in enumerate(chunk_nodes):
+            global_idx = chunk_indices[local_idx]
             label_key = next((item for item in node.labels if item != 'Entity'), '')
             entity_type_model = entity_types_dict.get(label_key)
             extracted_nodes_context.append(
                 {
-                    'id': local_idx,
+                    'id': global_idx,
                     'name': node.name,
                     'entity_type': node.labels,
                     'entity_type_description': entity_type_model.__doc__
@@ -660,13 +666,12 @@ async def resolve_extracted_nodes(
             resolution_id: int = resolution.get('id', -1)
             duplicate_idx: int = resolution.get('duplicate_idx', -1)
 
-            if not (0 <= resolution_id < len(chunk_nodes)):
+            extracted_node = id_to_node.get(resolution_id)
+            if extracted_node is None or extracted_node not in chunk_nodes:
                 logger.warning(
                     f'Invalid resolution_id {resolution_id} for chunk of length {len(chunk_nodes)}. Skipping resolution.'
                 )
                 continue
-
-            extracted_node = chunk_nodes[resolution_id]
 
             resolved_node = (
                 existing_nodes[duplicate_idx]
