@@ -643,13 +643,32 @@ async def resolve_extracted_nodes(
             prompt_library.dedupe_nodes.nodes(context),
             response_model=NodeResolutions,
         )
+        logger.info(
+            "LLM node dedupe response for chunk starting at %s: %s",
+            chunk_start,
+            llm_response,
+        )
 
         node_resolutions: list = llm_response.get('entity_resolutions', [])
+
+        def _normalize_chunk_index(value: int) -> int | None:
+            if chunk_start <= value < chunk_start + len(chunk_nodes):
+                return value
+            if 1 <= value <= len(chunk_nodes):
+                return chunk_start + value - 1
+            return None
+
+        def _normalize_local_index(value: int, length: int) -> int | None:
+            if 0 <= value < length:
+                return value
+            if 1 <= value <= length:
+                return value - 1
+            return None
 
         for resolution in node_resolutions:
             raw_resolution_id = resolution.get('id', -1)
             try:
-                resolution_id = int(raw_resolution_id)
+                resolution_id_candidate = int(raw_resolution_id)
             except (TypeError, ValueError):
                 logger.warning(
                     'Invalid resolution_id value %s; expected integer. Skipping resolution.',
@@ -657,16 +676,31 @@ async def resolve_extracted_nodes(
                 )
                 continue
 
+            resolution_id_normalized = _normalize_chunk_index(resolution_id_candidate)
+            if resolution_id_normalized is None:
+                logger.warning(
+                    'Invalid resolution_id %s for chunk starting at %s (size %s). Skipping resolution.',
+                    resolution_id_candidate,
+                    chunk_start,
+                    len(chunk_nodes),
+                )
+                continue
+
             raw_duplicate_idx = resolution.get('duplicate_idx', -1)
             try:
-                duplicate_idx = int(raw_duplicate_idx)
+                duplicate_idx_candidate = int(raw_duplicate_idx)
             except (TypeError, ValueError):
+                duplicate_idx_candidate = -1
+
+            duplicate_idx = _normalize_local_index(duplicate_idx_candidate, len(existing_nodes))
+            if duplicate_idx is None:
                 duplicate_idx = -1
 
-            extracted_node = id_to_node.get(resolution_id)
+            extracted_node = id_to_node.get(resolution_id_normalized)
             if extracted_node is None or extracted_node not in chunk_nodes:
                 logger.warning(
-                    f'Invalid resolution_id {resolution_id} for chunk of length {len(chunk_nodes)}. Skipping resolution.'
+                    'Normalized resolution_id %s did not map to chunk node. Skipping resolution.',
+                    resolution_id_normalized,
                 )
                 continue
 
@@ -679,11 +713,21 @@ async def resolve_extracted_nodes(
             resolved_nodes.append(resolved_node)
             uuid_map[extracted_node.uuid] = resolved_node.uuid
 
-            duplicates: list[int] = resolution.get('duplicates', [])
-            if duplicate_idx not in duplicates and duplicate_idx > -1:
-                duplicates.append(duplicate_idx)
+            duplicates_raw: list[int] = resolution.get('duplicates', [])
+            normalized_duplicates: list[int] = []
+            for dup in duplicates_raw:
+                try:
+                    dup_candidate = int(dup)
+                except (TypeError, ValueError):
+                    continue
+                dup_normalized = _normalize_local_index(dup_candidate, len(existing_nodes))
+                if dup_normalized is not None:
+                    normalized_duplicates.append(dup_normalized)
 
-            for idx in duplicates:
+            if duplicate_idx > -1 and duplicate_idx not in normalized_duplicates:
+                normalized_duplicates.append(duplicate_idx)
+
+            for idx in normalized_duplicates:
                 if not (0 <= idx < len(existing_nodes)):
                     logger.warning(
                         f'Invalid duplicate index {idx} for existing_nodes of length {len(existing_nodes)}. Using resolved_node instead.'
