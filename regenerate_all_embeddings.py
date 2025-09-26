@@ -155,7 +155,7 @@ async def main():
     for i, script in enumerate(scripts, 1):
         print(f"\n{Colors.BOLD}Step {i}/{len(scripts)}{Colors.ENDC}")
         
-        success, duration = run_script(script['file'], script['description'], force_all=True)
+        success, duration = run_script(script['file'], script['description'], force_all=False)
         results.append({
             'script': script['file'],
             'description': script['description'],
