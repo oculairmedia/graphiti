@@ -174,7 +174,7 @@ services:
   # API and Processing Services
   # =============================================================================
   graph:
-    image: ghcr.io/oculairmedia/graphiti-api:feature-chutes-ai-integration
+    image: ghcr.io/oculairmedia/graphiti-api:feature-memory-replay-system
     restart: unless-stopped
     ports:
       - ${API_PORT:-8003}:8000
@@ -268,7 +268,7 @@ services:
       - homepage.href=http://${HOMEPAGE_HOST:-192.168.50.90}:${API_PORT:-8003}
       - homepage.description=Knowledge graph API service
   graphiti-mcp:
-    image: ghcr.io/oculairmedia/graphiti-mcp:feature-chutes-ai-integration
+    image: ghcr.io/oculairmedia/graphiti-mcp:feature-memory-replay-system
     restart: unless-stopped
     ports:
       - ${MCP_PORT:-3010}:3010
@@ -429,7 +429,7 @@ services:
       - homepage.href=http://${HOMEPAGE_HOST:-192.168.50.90}:${QUEUE_PORT:-8093}
       - homepage.description=Message queue for ingestion processing
   graphiti-worker:
-    image: ghcr.io/oculairmedia/graphiti-worker:feature-chutes-ai-integration
+    image: ghcr.io/oculairmedia/graphiti-worker:feature-memory-replay-system
     restart: unless-stopped
     environment:
       - QUEUE_URL=http://graphiti-queued:8080

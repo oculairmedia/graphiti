@@ -60,32 +60,32 @@ class ReplayConfig:
 
         environ = env if env is not None else os.environ
         return cls(
-            enabled=_parse_bool(environ.get('REPLAY_ENABLED'), cls.enabled),
-            interval_seconds=_parse_int(environ.get('REPLAY_INTERVAL_SECONDS'), cls.interval_seconds),
-            batch_size=_parse_int(environ.get('REPLAY_BATCH_SIZE'), cls.batch_size),
-            max_attempts=_parse_int(environ.get('REPLAY_MAX_ATTEMPTS'), cls.max_attempts),
-            cooldown_hours=_parse_float(environ.get('REPLAY_COOLDOWN_HOURS'), cls.cooldown_hours),
-            min_priority=_parse_float(environ.get('REPLAY_MIN_PRIORITY'), cls.min_priority),
+            enabled=_parse_bool(environ.get('REPLAY_ENABLED'), False),
+            interval_seconds=_parse_int(environ.get('REPLAY_INTERVAL_SECONDS'), 300),
+            batch_size=_parse_int(environ.get('REPLAY_BATCH_SIZE'), 10),
+            max_attempts=_parse_int(environ.get('REPLAY_MAX_ATTEMPTS'), 3),
+            cooldown_hours=_parse_float(environ.get('REPLAY_COOLDOWN_HOURS'), 24.0),
+            min_priority=_parse_float(environ.get('REPLAY_MIN_PRIORITY'), 0.2),
             max_per_group_per_hour=_parse_int(
                 environ.get('REPLAY_MAX_PER_GROUP_PER_HOUR'),
-                cls.max_per_group_per_hour,
+                100,
             ),
             rate_limit_window_seconds=_parse_int(
                 environ.get('REPLAY_RATE_LIMIT_WINDOW_SECONDS'),
-                cls.rate_limit_window_seconds,
+                3600,
             ),
             circuit_breaker_threshold=_parse_int(
                 environ.get('REPLAY_CIRCUIT_BREAKER_THRESHOLD'),
-                cls.circuit_breaker_threshold,
+                10,
             ),
             circuit_breaker_reset_seconds=_parse_int(
                 environ.get('REPLAY_CIRCUIT_BREAKER_RESET_SECONDS'),
-                cls.circuit_breaker_reset_seconds,
+                900,
             ),
-            queue_name=environ.get('REPLAY_QUEUE_NAME', cls.queue_name),
+            queue_name=environ.get('REPLAY_QUEUE_NAME', 'memory_replay'),
             candidate_scan_multiplier=max(
                 1,
-                _parse_int(environ.get('REPLAY_SCAN_MULTIPLIER'), cls.candidate_scan_multiplier),
+                _parse_int(environ.get('REPLAY_SCAN_MULTIPLIER'), 4),
             ),
             target_group_id=environ.get('REPLAY_TARGET_GROUP_ID'),
         )
