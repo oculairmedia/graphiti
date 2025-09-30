@@ -232,6 +232,21 @@ class EpisodicNode(Node):
         description='list of entity edges referenced in this episode',
         default_factory=list,
     )
+    entity_count: int | None = Field(
+        default=None, ge=0, description='number of unique entities linked to this episode'
+    )
+    edge_count: int | None = Field(
+        default=None, ge=0, description='number of entity edges generated from this episode'
+    )
+    cross_group_connections: int | None = Field(
+        default=None, ge=0, description='count of entities whose group differs from the episode group'
+    )
+    extraction_version: str | None = Field(
+        default=None, description='extraction pipeline version applied to this episode'
+    )
+    confidence_score: float | None = Field(
+        default=None, ge=0.0, le=1.0, description='confidence in the latest extraction results'
+    )
 
     @validator('source_description')
     def validate_source_description(cls, v):
@@ -270,7 +285,32 @@ class EpisodicNode(Node):
                 raise ValueError(f'Invalid entity edge UUID format: {edge_id}')
         return v
 
+    @validator('extraction_version')
+    def validate_extraction_version(cls, v):
+        if v is None:
+            return None
+        v = v.strip()
+        return v or None
+
+    @validator('confidence_score')
+    def validate_confidence_score(cls, v):
+        if v is None:
+            return None
+        return float(v)
+
     async def save(self, driver: GraphDriver):
+        entity_count = 0 if self.entity_count is None else self.entity_count
+        edge_count = 0 if self.edge_count is None else self.edge_count
+        cross_group_connections = 0 if self.cross_group_connections is None else self.cross_group_connections
+        extraction_version = None if self.extraction_version is None else self.extraction_version
+        confidence_score = None if self.confidence_score is None else float(self.confidence_score)
+
+        self.entity_count = entity_count
+        self.edge_count = edge_count
+        self.cross_group_connections = cross_group_connections
+        self.extraction_version = extraction_version
+        self.confidence_score = confidence_score
+
         result = await driver.execute_query(
             EPISODIC_NODE_SAVE,
             uuid=self.uuid,
@@ -281,6 +321,11 @@ class EpisodicNode(Node):
             entity_edges=self.entity_edges,
             created_at=self.created_at,
             valid_at=self.valid_at,
+            entity_count=entity_count,
+            edge_count=edge_count,
+            cross_group_connections=cross_group_connections,
+            extraction_version=extraction_version,
+            confidence_score=confidence_score,
             source=self.source.value,
         )
 
@@ -301,7 +346,12 @@ class EpisodicNode(Node):
             e.group_id AS group_id,
             e.source_description AS source_description,
             e.source AS source,
-            e.entity_edges AS entity_edges
+            e.entity_edges AS entity_edges,
+            e.entity_count AS entity_count,
+            e.edge_count AS edge_count,
+            e.cross_group_connections AS cross_group_connections,
+            e.extraction_version AS extraction_version,
+            e.confidence_score AS confidence_score
         """,
             uuid=uuid,
             routing_='r',
@@ -328,7 +378,12 @@ class EpisodicNode(Node):
             e.group_id AS group_id,
             e.source_description AS source_description,
             e.source AS source,
-            e.entity_edges AS entity_edges
+            e.entity_edges AS entity_edges,
+            e.entity_count AS entity_count,
+            e.edge_count AS edge_count,
+            e.cross_group_connections AS cross_group_connections,
+            e.extraction_version AS extraction_version,
+            e.confidence_score AS confidence_score
         """,
             uuids=uuids,
             routing_='r',
@@ -364,7 +419,12 @@ class EpisodicNode(Node):
             e.group_id AS group_id,
             e.source_description AS source_description,
             e.source AS source,
-            e.entity_edges AS entity_edges
+            e.entity_edges AS entity_edges,
+            e.entity_count AS entity_count,
+            e.edge_count AS edge_count,
+            e.cross_group_connections AS cross_group_connections,
+            e.extraction_version AS extraction_version,
+            e.confidence_score AS confidence_score
         ORDER BY e.uuid DESC
         """
             + limit_query,
@@ -392,7 +452,12 @@ class EpisodicNode(Node):
             e.group_id AS group_id,
             e.source_description AS source_description,
             e.source AS source,
-            e.entity_edges AS entity_edges
+            e.entity_edges AS entity_edges,
+            e.entity_count AS entity_count,
+            e.edge_count AS edge_count,
+            e.cross_group_connections AS cross_group_connections,
+            e.extraction_version AS extraction_version,
+            e.confidence_score AS confidence_score
         """,
             entity_node_uuid=entity_node_uuid,
             routing_='r',
@@ -728,6 +793,11 @@ def get_episodic_node_from_record(record: Any) -> EpisodicNode:
         name=record['name'],
         source_description=record['source_description'],
         entity_edges=record['entity_edges'],
+        entity_count=record.get('entity_count') if record.get('entity_count') is not None else 0,
+        edge_count=record.get('edge_count') if record.get('edge_count') is not None else 0,
+        cross_group_connections=record.get('cross_group_connections') if record.get('cross_group_connections') is not None else 0,
+        extraction_version=record.get('extraction_version'),
+        confidence_score=record.get('confidence_score'),
     )
 
 

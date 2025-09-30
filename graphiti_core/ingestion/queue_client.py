@@ -26,6 +26,7 @@ class TaskType(str, Enum):
     BATCH = "batch"
     RELATIONSHIP = "relationship"
     DEDUPLICATION = "deduplication"
+    REPLAY = "replay"
 
 
 class TaskPriority(int, Enum):

@@ -159,7 +159,13 @@ async def retrieve_episodes(
             e.group_id AS group_id,
             e.name AS name,
             e.source_description AS source_description,
-            e.source AS source
+            e.source AS source,
+            e.entity_edges AS entity_edges,
+            e.entity_count AS entity_count,
+            e.edge_count AS edge_count,
+            e.cross_group_connections AS cross_group_connections,
+            e.extraction_version AS extraction_version,
+            e.confidence_score AS confidence_score
         ORDER BY e.valid_at DESC
         LIMIT $num_episodes
         """
@@ -183,6 +189,12 @@ async def retrieve_episodes(
             source=EpisodeType.from_str(record['source']),
             name=record['name'],
             source_description=record['source_description'],
+            entity_edges=record.get('entity_edges', []),
+            entity_count=record.get('entity_count') if record.get('entity_count') is not None else 0,
+            edge_count=record.get('edge_count') if record.get('edge_count') is not None else 0,
+            cross_group_connections=record.get('cross_group_connections') if record.get('cross_group_connections') is not None else 0,
+            extraction_version=record.get('extraction_version'),
+            confidence_score=record.get('confidence_score'),
         )
         for record in result
     ]

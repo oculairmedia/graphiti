@@ -20,6 +20,7 @@ from graphiti_core.utils.datetime_utils import utc_now
 from graphiti_core.ingestion.queue_client import (
     QueuedClient, IngestionTask, TaskType, TaskPriority, QueueMetrics
 )
+from graphiti_core.utils.replay.executor import ReplayContext, ReplayExecutor, ReplayEpisodeNotFound
 
 logger = logging.getLogger(__name__)
 
@@ -226,6 +227,7 @@ class IngestionWorker:
         self.rate_limiter = RateLimiter()
         self.centrality_client = CentralityClient()
         self.metrics = QueueMetrics()
+        self.replay_executor = ReplayExecutor(graphiti)
         self.running = False
         self._task: Optional[asyncio.Task] = None
         # Background deduplication tracking
@@ -336,6 +338,8 @@ class IngestionWorker:
             await self._process_relationship(task)
         elif task.type == TaskType.DEDUPLICATION:
             await self._process_deduplication(task)
+        elif task.type == TaskType.REPLAY:
+            await self._process_replay(task)
         else:
             raise PermanentError(f"Unknown task type: {task.type}")
     
@@ -532,7 +536,7 @@ class IngestionWorker:
         """Process a batch of operations"""
         payload = task.payload
         operations = payload.get('operations', [])
-        
+
         successful = 0
         failed = 0
         
@@ -561,11 +565,39 @@ class IngestionWorker:
         
         if failed > 0 and failed == len(operations):
             raise Exception(f"All batch operations failed")
-    
+
+    async def _process_replay(self, task: IngestionTask):
+        """Process a memory replay task."""
+        payload = task.payload or {}
+        episode_uuid = payload.get('episode_uuid')
+        if not episode_uuid:
+            raise PermanentError('Replay task payload missing episode_uuid')
+
+        context = ReplayContext.from_dict(payload.get('replay_context'))
+        candidate_group = task.group_id or payload.get('group_id')
+        if candidate_group:
+            context = context.with_group_id(str(candidate_group))
+
+        try:
+            result = await self.replay_executor.execute(episode_uuid, context)
+        except ReplayEpisodeNotFound as exc:
+            logger.warning('Skipping replay for %s: episode not found', episode_uuid)
+            raise PermanentError(str(exc)) from exc
+
+        logger.info(
+            'Replay completed for episode %s (reason=%s, entities=%d, edges=%d)',
+            episode_uuid,
+            context.reason,
+            len(result.nodes) if result and result.nodes else 0,
+            len(result.edges) if result and result.edges else 0,
+        )
+
+        return result
+
     async def _process_relationship(self, task: IngestionTask):
         """Process a relationship creation task"""
         payload = task.payload
-        
+
         try:
             # Ensure group_id is not None - use payload group_id or default
             effective_group_id = task.group_id or payload.get('group_id')

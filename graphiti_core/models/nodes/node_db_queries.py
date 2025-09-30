@@ -17,7 +17,7 @@ limitations under the License.
 EPISODIC_NODE_SAVE = """
         MERGE (n:Episodic {uuid: $uuid})
         SET n = {uuid: $uuid, name: $name, group_id: $group_id, source_description: $source_description, source: $source, content: $content, 
-        entity_edges: $entity_edges, created_at: $created_at, valid_at: $valid_at}
+        entity_edges: $entity_edges, created_at: $created_at, valid_at: $valid_at, entity_count: $entity_count, edge_count: $edge_count, cross_group_connections: $cross_group_connections, extraction_version: $extraction_version, confidence_score: $confidence_score}
         RETURN n.uuid AS uuid"""
 
 EPISODIC_NODE_SAVE_BULK = """
@@ -25,7 +25,7 @@ EPISODIC_NODE_SAVE_BULK = """
     MERGE (n:Episodic {uuid: episode.uuid, group_id: episode.group_id})
     SET n = {uuid: episode.uuid, name: episode.name, group_id: episode.group_id, source_description: episode.source_description, 
         source: episode.source, content: episode.content, 
-    entity_edges: episode.entity_edges, created_at: episode.created_at, valid_at: episode.valid_at}
+    entity_edges: episode.entity_edges, created_at: episode.created_at, valid_at: episode.valid_at, entity_count: episode.entity_count, edge_count: episode.edge_count, cross_group_connections: episode.cross_group_connections, extraction_version: episode.extraction_version, confidence_score: episode.confidence_score}
     RETURN n.uuid AS uuid
 """
 

@@ -17,7 +17,7 @@ limitations under the License.
 import logging
 from datetime import datetime
 from time import time
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 from dotenv import load_dotenv
 from pydantic import BaseModel
@@ -86,12 +86,20 @@ from graphiti_core.utils.maintenance.graph_data_operations import (
     build_indices_and_constraints,
     retrieve_episodes,
 )
+from graphiti_core.utils.maintenance.replay_metadata_migration import (
+    ReplayMetadataMigrationStats,
+    apply_replay_metadata_migration as _apply_replay_metadata_migration,
+    rollback_replay_metadata_migration as _rollback_replay_metadata_migration,
+)
 from graphiti_core.utils.maintenance.node_operations import (
     extract_attributes_from_nodes,
     extract_nodes,
     resolve_extracted_nodes,
 )
 from graphiti_core.utils.ontology_utils.entity_types_utils import validate_entity_types
+
+if TYPE_CHECKING:  # pragma: no cover - typing helpers only
+    from graphiti_core.utils.replay.executor import ReplayContext
 
 logger = logging.getLogger(__name__)
 
@@ -327,6 +335,38 @@ class Graphiti:
         """
         await build_indices_and_constraints(self.driver, delete_existing)
 
+    async def apply_replay_metadata_migration(self, batch_size: int = 500) -> ReplayMetadataMigrationStats:
+        """
+        Apply the ReplayMetadata forward migration for the connected graph.
+
+        Parameters
+        ----------
+        batch_size : int, optional
+            Number of records processed per Cypher batch when backfilling metadata.
+
+        Returns
+        -------
+        ReplayMetadataMigrationStats
+            Summary statistics describing the migration outcome.
+        """
+        return await _apply_replay_metadata_migration(self.driver, batch_size=batch_size)
+
+    async def rollback_replay_metadata_migration(self, batch_size: int = 500) -> ReplayMetadataMigrationStats:
+        """
+        Roll back the ReplayMetadata migration for the connected graph.
+
+        Parameters
+        ----------
+        batch_size : int, optional
+            Number of records processed per Cypher batch when deleting data.
+
+        Returns
+        -------
+        ReplayMetadataMigrationStats
+            Summary statistics describing the rollback outcome.
+        """
+        return await _rollback_replay_metadata_migration(self.driver, batch_size=batch_size)
+
     async def retrieve_episodes(
         self,
         reference_time: datetime,
@@ -531,6 +571,11 @@ class Graphiti:
 
             episodic_edges = build_episodic_edges(nodes, episode.uuid, now)
 
+            unique_entity_ids = {node.uuid for node in nodes}
+            cross_group_entities = [node for node in nodes if node.group_id != episode.group_id]
+            episode.entity_count = len(unique_entity_ids)
+            episode.edge_count = len(entity_edges)
+            episode.cross_group_connections = len(cross_group_entities)
             episode.entity_edges = [edge.uuid for edge in entity_edges]
 
             if not self.store_raw_episode_content:
@@ -586,6 +631,8 @@ class Graphiti:
         edge_types: dict[str, BaseModel] | None = None,
         edge_type_map: dict[tuple[str, str], list[str]] | None = None,
         previous_episode_uuids: list[str] | None = None,
+        replay_mode: bool = False,
+        replay_context: 'ReplayContext | None' = None,
     ) -> 'AddEpisodeResults':
         """
         Resilient version of add_episode that can recover from partial failures.
@@ -602,6 +649,16 @@ class Graphiti:
         try:
             start = time()
             now = utc_now()
+
+            if replay_mode:
+                context_reason = replay_context.reason if replay_context else 'unspecified'
+                context_attempt = replay_context.attempt_number if replay_context else 'n/a'
+                logger.info(
+                    'Starting replay ingestion for episode %s (reason=%s, attempt=%s)',
+                    uuid or '<new>',
+                    context_reason,
+                    context_attempt,
+                )
 
             # if group_id is None, use the default group id by the provider
             group_id = group_id or get_default_group_id(self.driver.provider)
@@ -706,6 +763,11 @@ class Graphiti:
 
             entity_edges = resolved_edges + invalidated_edges + duplicate_of_edges
             episodic_edges = build_episodic_edges(nodes, episode.uuid, now)
+            unique_entity_ids = {node.uuid for node in nodes}
+            cross_group_entities = [node for node in nodes if node.group_id != episode.group_id]
+            episode.entity_count = len(unique_entity_ids)
+            episode.edge_count = len(entity_edges)
+            episode.cross_group_connections = len(cross_group_entities)
             episode.entity_edges = [edge.uuid for edge in entity_edges]
 
             # Save to database
@@ -746,7 +808,17 @@ class Graphiti:
             end = time()
             logger.info(f'Completed resilient add_episode in {(end - start) * 1000} ms')
 
-            return AddEpisodeResults(episode=episode, nodes=nodes, edges=entity_edges)
+            result = AddEpisodeResults(episode=episode, nodes=nodes, edges=entity_edges)
+
+            if replay_mode and replay_context:
+                logger.info(
+                    'Replay ingestion completed for episode %s (reason=%s, priority=%.3f)',
+                    episode.uuid,
+                    replay_context.reason,
+                    replay_context.priority_score,
+                )
+
+            return result
 
         except Exception as e:
             logger.error(f"Resilient ingestion failed for episode {episode.uuid if 'episode' in locals() else 'unknown'}: {e}")
@@ -1106,6 +1178,15 @@ class Graphiti:
             for result in edge_results:
                 resolved_edges.extend(result[0])
                 invalidated_edges.extend(result[1])
+
+            for episode, (episode_resolved, _) in zip(episodes, edge_results):
+                nodes_for_episode = nodes_by_episode_unique.get(episode.uuid, [])
+                unique_entity_ids = {node.uuid for node in nodes_for_episode}
+                cross_group_entities = [node for node in nodes_for_episode if node.group_id != episode.group_id]
+                episode.entity_count = len(unique_entity_ids)
+                episode.edge_count = len(episode_resolved)
+                episode.cross_group_connections = len(cross_group_entities)
+                episode.entity_edges = [edge.uuid for edge in episode_resolved]
 
             # Resolved pointers for episodic edges
             resolved_episodic_edges = resolve_edge_pointers(episodic_edges, uuid_map)

@@ -40,6 +40,9 @@ def get_range_indices(db_type: str = 'neo4j') -> list[LiteralString]:
             'CREATE INDEX FOR ()-[e:MENTIONS]-() ON (e.uuid, e.group_id)',
             # HAS_MEMBER edge
             'CREATE INDEX FOR ()-[e:HAS_MEMBER]-() ON (e.uuid)',
+            # ReplayMetadata node indexes
+            'CREATE INDEX FOR (rm:ReplayMetadata) ON (rm.episode_uuid)',
+            'CREATE INDEX FOR (rm:ReplayMetadata) ON (rm.group_id)',
         ]
     else:
         return [
@@ -62,6 +65,8 @@ def get_range_indices(db_type: str = 'neo4j') -> list[LiteralString]:
             'CREATE INDEX expired_at_edge_index IF NOT EXISTS FOR ()-[e:RELATES_TO]-() ON (e.expired_at)',
             'CREATE INDEX valid_at_edge_index IF NOT EXISTS FOR ()-[e:RELATES_TO]-() ON (e.valid_at)',
             'CREATE INDEX invalid_at_edge_index IF NOT EXISTS FOR ()-[e:RELATES_TO]-() ON (e.invalid_at)',
+            'CREATE INDEX replay_metadata_episode_uuid IF NOT EXISTS FOR (rm:ReplayMetadata) ON (rm.episode_uuid)',
+            'CREATE INDEX replay_metadata_group_id IF NOT EXISTS FOR (rm:ReplayMetadata) ON (rm.group_id)',
         ]
 
 
