@@ -144,10 +144,8 @@ def get_entity_node_save_bulk_query(nodes, db_type: str = 'neo4j') -> str | Any:
                     (
                         f"""
                     UNWIND $nodes AS node
-                    MERGE (n:Entity {{uuid: node.uuid}})
-                    SET n.name = node.name,
-                        n.group_id = node.group_id,
-                        n.summary = node.summary,
+                    MERGE (n:Entity {{uuid: node.uuid, name: node.name, group_id: node.group_id}})
+                    SET n.summary = node.summary,
                         n.created_at = node.created_at
                     SET n:{label}
                     WITH n, node

@@ -194,7 +194,13 @@ class ReplayExecutor:
         self.metadata_manager = metadata_manager or ReplayMetadataManager(graphiti.driver)
 
     async def execute(self, episode_uuid: str, context: ReplayContext) -> Any:
-        episode = await EpisodicNode.get_by_uuid(self.graphiti.driver, episode_uuid)
+        from graphiti_core.errors import NodeNotFoundError
+
+        try:
+            episode = await EpisodicNode.get_by_uuid(self.graphiti.driver, episode_uuid)
+        except NodeNotFoundError:
+            raise ReplayEpisodeNotFound(episode_uuid)
+
         if not episode:
             raise ReplayEpisodeNotFound(episode_uuid)
 

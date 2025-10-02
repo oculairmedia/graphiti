@@ -248,8 +248,11 @@ class EpisodicNode(Node):
         default=None, ge=0.0, le=1.0, description='confidence in the latest extraction results'
     )
 
-    @validator('source_description')
+    @validator('source_description', pre=True)
     def validate_source_description(cls, v):
+        # Handle None from legacy data
+        if v is None:
+            return ''
         if not v or not v.strip():
             raise ValueError('Source description cannot be empty')
         if len(v.strip()) > 1000:
@@ -270,8 +273,11 @@ class EpisodicNode(Node):
             raise ValueError('valid_at must be a datetime object')
         return v
     
-    @validator('entity_edges')
+    @validator('entity_edges', pre=True)
     def validate_entity_edges(cls, v):
+        # Handle None from legacy data
+        if v is None:
+            return []
         if not isinstance(v, list):
             raise ValueError('Entity edges must be a list')
         for edge_id in v:

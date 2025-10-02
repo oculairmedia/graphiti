@@ -182,15 +182,12 @@ async def main():
         # Run dry run first to show what would be deleted
         logger.info('Running dry run to show what would be deleted...')
         dry_result = await cleaner.clean_all_unconnected(group_id, dry_run=True)
-        
+
         if dry_result['episodes_deleted'] == 0 and dry_result['entities_deleted'] == 0:
             logger.info('No unconnected nodes found. Exiting.')
             return
-        
-        confirmation = input(f'\nDelete {dry_result["episodes_deleted"]} episodes and {dry_result["entities_deleted"]} entities? (yes/no): ')
-        if confirmation.lower() not in ['yes', 'y']:
-            logger.info('Operation cancelled.')
-            return
+
+        logger.info(f'Proceeding to delete {dry_result["episodes_deleted"]} episodes and {dry_result["entities_deleted"]} entities...')
     
     # Perform the actual cleanup
     result = await cleaner.clean_all_unconnected(group_id, dry_run)
