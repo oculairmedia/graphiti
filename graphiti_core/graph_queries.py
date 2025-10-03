@@ -107,15 +107,16 @@ def get_vector_cosine_func_query(vec1, vec2, db_type: str = 'neo4j') -> str:
         # Query parameters ($param) are Lists that NEED wrapping when used in vector operations
         # UNWIND parameters (edge.*, node.*) from Python lists also NEED wrapping
         def should_wrap_in_vecf32(vec_param: str) -> bool:
-            # Graph properties (n.*, e.*, r.*, etc.) are already stored as Vectorf32 - DON'T wrap
-            if '.' in vec_param and not vec_param.startswith(('edge.', 'node.', 'entity.', 'relationship.', 'item.')):
-                return False
             # Query parameters ($*) are Lists that need wrapping when used in vector operations
             if vec_param.startswith('$'):
                 return True
-            # UNWIND parameters (edge.*, node.*, etc.) - These NEED wrapping when coming from Python lists
+            # UNWIND parameters (edge.*, node.*, entity.*, relationship.*, item.*) - These NEED wrapping when coming from Python lists
             if vec_param.startswith(('edge.', 'node.', 'entity.', 'relationship.', 'item.')):
-                return True  # Fixed: UNWIND parameters from Python lists need vecf32() conversion
+                return True  # UNWIND parameters from Python lists need vecf32() conversion
+            # Graph properties (n.*, e.*, r.*, m.*, comm.*, ep.*, etc.) are already stored as Vectorf32 - DON'T wrap
+            # This includes any variable with a dot that's not an UNWIND parameter
+            if '.' in vec_param:
+                return False
             # Default: don't wrap (conservative approach)
             return False
         

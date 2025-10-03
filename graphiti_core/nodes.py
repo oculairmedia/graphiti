@@ -250,11 +250,12 @@ class EpisodicNode(Node):
 
     @validator('source_description', pre=True)
     def validate_source_description(cls, v):
-        # Handle None from legacy data
+        # Handle None from legacy data - convert to empty string and allow it
         if v is None:
             return ''
+        # Allow empty strings for legacy data compatibility
         if not v or not v.strip():
-            raise ValueError('Source description cannot be empty')
+            return ''
         if len(v.strip()) > 1000:
             raise ValueError('Source description cannot exceed 1000 characters')
         return v.strip()
