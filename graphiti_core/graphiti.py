@@ -704,6 +704,16 @@ class Graphiti:
                 extracted_nodes = await self._extract_nodes_with_retry(
                     episode, previous_episodes, entity_types, excluded_entity_types, state
                 )
+
+                # CRITICAL: Validate that we extracted at least one entity with a valid name
+                # This prevents orphaned episodic nodes with no MENTIONS relationships
+                if not extracted_nodes or len(extracted_nodes) == 0:
+                    error_msg = f"Episode {episode.uuid}: No valid entities extracted from content. Cannot create orphaned episode."
+                    logger.error(error_msg)
+                    # Clean up the episode UUID from cache before raising error
+                    ingestion_cache.remove_state(episode.uuid)
+                    raise ValueError(error_msg)
+
                 state.mark_nodes_extracted(extracted_nodes)
             else:
                 logger.info(f"Episode {episode.uuid}: Using cached extracted nodes ({len(state.extracted_nodes)} nodes)")

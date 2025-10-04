@@ -8,6 +8,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Callable, Optional
+from textwrap import dedent
 
 from graphiti_core.driver.driver import GraphDriver
 from graphiti_core.helpers import parse_db_date
@@ -62,6 +63,29 @@ def _coerce_int(value: Any) -> int:
         return int(value)
     except (TypeError, ValueError):
         return 0
+
+
+def _cypher_quote(value: str | None) -> str:
+    """Return a Cypher string literal or NULL."""
+
+    if value is None:
+        return 'NULL'
+
+    if not isinstance(value, str):
+        value = str(value)
+
+    escaped = value.replace("\\", r"\\").replace("'", "''")
+    return f"'{escaped}'"
+
+
+def _build_extraction_version_clause(current_version: str | None) -> str:
+    """Construct the extraction version mismatch condition."""
+
+    if current_version is None:
+        return 'ep.extraction_version IS NULL'
+
+    version_literal = _cypher_quote(current_version)
+    return f"(ep.extraction_version IS NULL OR ep.extraction_version <> {version_literal})"
 
 
 @dataclass(slots=True)
@@ -161,48 +185,59 @@ class ReplayCandidateDetector:
         confidence_threshold: float,
         current_extraction_version: str | None,
     ) -> list[dict[str, Any]]:
-        query = """
-        MATCH (ep:Episodic)
-        OPTIONAL MATCH (rm:ReplayMetadata {episode_uuid: ep.uuid})
-        WITH ep, rm,
-             coalesce(ep.entity_count, size(coalesce(ep.entity_edges, []))) AS entity_count,
-             coalesce(ep.edge_count, size(coalesce(ep.entity_edges, []))) AS edge_count,
-             coalesce(ep.cross_group_connections, 0) AS cross_group_connections,
-             coalesce(ep.confidence_score, 0.0) AS confidence_score
-        WHERE ($group_id IS NULL OR ep.group_id = $group_id)
-          AND (
-                entity_count < $entity_threshold
-             OR cross_group_connections = 0
-             OR confidence_score < $confidence_threshold
-             OR ep.extraction_version IS NULL
-             OR ($current_extraction_version IS NOT NULL AND ep.extraction_version <> $current_extraction_version)
-          )
-        RETURN ep.uuid AS episode_uuid,
-               ep.group_id AS group_id,
-               entity_count,
-               edge_count,
-               cross_group_connections,
-               ep.extraction_version AS extraction_version,
-               confidence_score,
-               ep.valid_at AS valid_at,
-               ep.created_at AS created_at,
-               rm.last_replayed_at AS last_replayed_at,
-               coalesce(rm.replay_attempts, 0) AS replay_attempts
-        ORDER BY ep.valid_at DESC
-        LIMIT $max_candidates
-        """
+        # Get stale days threshold from environment and compute cutoff timestamp
+        stale_days = float(os.getenv('REPLAY_STALE_DAYS', '90'))
+        now = self._now()
+        from datetime import timedelta
+        cutoff_time = now - timedelta(days=stale_days)
+        cutoff_iso = cutoff_time.isoformat()
+        cutoff_literal = _cypher_quote(cutoff_iso)
 
-        params = {
-            'group_id': group_id,
-            'entity_threshold': entity_threshold,
-            'confidence_threshold': confidence_threshold,
-            'current_extraction_version': current_extraction_version,
-            'max_candidates': max_candidates,
-        }
+        group_filter = f"ep.group_id = {_cypher_quote(group_id)}" if group_id else "true"
+        confidence_literal = f"{confidence_threshold:.6f}"
+        version_clause = _build_extraction_version_clause(current_extraction_version)
 
-        result = await self.driver.execute_query(query, **params)
+        query = dedent(
+            f"""
+            MATCH (ep:Episodic)
+            OPTIONAL MATCH (rm:ReplayMetadata {{episode_uuid: ep.uuid}})
+            WITH ep, rm,
+                 coalesce(ep.entity_count, size(coalesce(ep.entity_edges, []))) AS entity_count,
+                 coalesce(ep.edge_count, size(coalesce(ep.entity_edges, []))) AS edge_count,
+                 coalesce(ep.cross_group_connections, 0) AS cross_group_connections,
+                 coalesce(ep.confidence_score, 0.0) AS confidence_score
+            WHERE {group_filter}
+              AND ep.created_at IS NOT NULL
+              AND ep.created_at < {cutoff_literal}
+              AND (
+                    entity_count < {entity_threshold}
+                 OR cross_group_connections = 0
+                 OR confidence_score < {confidence_literal}
+                 OR {version_clause}
+              )
+            RETURN ep.uuid AS episode_uuid,
+                   ep.group_id AS group_id,
+                   entity_count,
+                   edge_count,
+                   cross_group_connections,
+                   ep.extraction_version AS extraction_version,
+                   confidence_score,
+                   ep.valid_at AS valid_at,
+                   ep.created_at AS created_at,
+                   rm.last_replayed_at AS last_replayed_at,
+                   coalesce(rm.replay_attempts, 0) AS replay_attempts
+            ORDER BY ep.valid_at DESC
+            LIMIT {max_candidates}
+            """
+        ).strip()
+
+        logger.info('ReplayCandidateDetector query params: stale_days=%.6f, cutoff=%s, entity_threshold=%d, confidence_threshold=%.2f',
+                    stale_days, cutoff_iso, entity_threshold, confidence_threshold)
+        logger.info('ReplayCandidateDetector query: %s', query[:500])  # Log first 500 chars
+
+        result = await self.driver.execute_query(query)
         rows = _normalise_records(result)
-        logger.debug('ReplayCandidateDetector fetched %s raw rows', len(rows))
+        logger.info('ReplayCandidateDetector fetched %d raw rows', len(rows))
         return rows
 
     def _build_candidate(

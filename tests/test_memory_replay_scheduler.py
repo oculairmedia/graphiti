@@ -177,3 +177,56 @@ async def test_scheduler_enforces_group_rate_limit_across_cycles():
 
     status = scheduler.get_status().as_dict()
     assert status['last_scheduled'] == 1
+
+
+@pytest.mark.asyncio
+async def test_scheduler_preview_cycle_returns_candidates_without_enqueuing():
+    now = datetime(2025, 1, 1, tzinfo=timezone.utc)
+    detector = DummyDetector([
+        _candidate('ep-preview-1', priority=0.9),
+        _candidate('ep-preview-2', priority=0.8),
+    ])
+    queue = RecordingQueue()
+    config = ReplayConfig(
+        enabled=True,
+        batch_size=5,
+        cooldown_hours=0,
+        max_per_group_per_hour=10,
+        min_priority=0.1,
+    )
+
+    scheduler = MemoryReplayScheduler(
+        queue_client=queue,
+        config=config,
+        candidate_detector=detector,
+        now_provider=lambda: now,
+    )
+
+    preview = await scheduler.preview_cycle()
+    assert preview['enabled'] is True
+    assert preview['selected_count'] == 2
+    assert {item['episode_uuid'] for item in preview['selected']} == {'ep-preview-1', 'ep-preview-2'}
+    assert queue.calls == []
+
+
+@pytest.mark.asyncio
+async def test_scheduler_preview_cycle_disabled_returns_message():
+    now = datetime(2025, 1, 1, tzinfo=timezone.utc)
+    detector = DummyDetector([
+        _candidate('ep-disabled', priority=0.9),
+    ])
+    queue = RecordingQueue()
+    config = ReplayConfig(
+        enabled=False,
+    )
+
+    scheduler = MemoryReplayScheduler(
+        queue_client=queue,
+        config=config,
+        candidate_detector=detector,
+        now_provider=lambda: now,
+    )
+
+    preview = await scheduler.preview_cycle()
+    assert preview['enabled'] is False
+    assert preview['selected_count'] == 0

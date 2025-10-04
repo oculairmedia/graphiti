@@ -269,6 +269,45 @@ class MemoryReplayScheduler:
             metadata=metadata,
         )
 
+    async def preview_cycle(self) -> dict[str, object]:
+        """Return candidate summary without enqueuing tasks."""
+
+        if not self.config.enabled:
+            return {
+                'enabled': False,
+                'requested': 0,
+                'selected_count': 0,
+                'selected': [],
+                'message': 'Replay scheduler disabled',
+            }
+
+        now = self._now()
+        candidate_limit = max(1, self.config.batch_size * self.config.candidate_scan_multiplier)
+
+        candidates = await self.candidate_detector.identify_candidates(
+            group_id=self.config.target_group_id,
+            limit=candidate_limit,
+            min_priority=self.config.min_priority,
+        )
+
+        selected = self._select_candidates(candidates, now)
+
+        return {
+            'enabled': True,
+            'requested': len(candidates),
+            'selected_count': len(selected),
+            'selected': [
+                {
+                    'episode_uuid': cand.episode_uuid,
+                    'group_id': cand.group_id,
+                    'priority': cand.replay_priority,
+                    'reason': cand.replay_reason,
+                    'attempts': cand.replay_attempts,
+                }
+                for cand in selected
+            ],
+        }
+
     def get_status(self) -> ReplaySchedulerStatus:
         """Expose scheduler state for monitoring."""
 
