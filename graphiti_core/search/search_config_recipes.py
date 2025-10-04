@@ -160,7 +160,7 @@ NODE_HYBRID_SEARCH_RRF = SearchConfig(
         search_methods=[NodeSearchMethod.bm25, NodeSearchMethod.cosine_similarity],
         reranker=NodeReranker.rrf,
     ),
-    limit=int(os.getenv('MAX_DEDUP_CANDIDATES', '10'))  # Limit deduplication candidates for prompt optimization
+    limit=int(os.getenv('MAX_DEDUP_CANDIDATES', '5'))  # Limit deduplication candidates for prompt optimization (reduced from 10)
 )
 
 # performs a hybrid search over nodes with mmr reranking

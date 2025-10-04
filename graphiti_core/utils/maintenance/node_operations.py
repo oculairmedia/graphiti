@@ -916,7 +916,8 @@ async def resolve_extracted_nodes_batch(
         
         # Get existing nodes for comparison
         existing_nodes = []
-        existing_candidate_limit = max(1, NODE_HYBRID_SEARCH_RRF.limit * 2)
+        # Use environment variable for existing node limit (default: 10)
+        existing_candidate_limit = int(os.getenv('MAX_DEDUP_EXISTING_NODES', '10'))
         if enable_cross_graph_deduplication:
             existing_query = """
             MATCH (n:Entity)
