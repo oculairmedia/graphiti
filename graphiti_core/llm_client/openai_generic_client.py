@@ -121,10 +121,9 @@ class OpenAIGenericClient(LLMClient):
 
         # Debug: Save large prompts to file for analysis
         if estimated_tokens > 10000:
-            import os
-            import json
+            import os as os_module
             debug_dir = '/tmp/prompt_debug'
-            os.makedirs(debug_dir, exist_ok=True)
+            os_module.makedirs(debug_dir, exist_ok=True)
 
             # Save full prompt to file
             prompt_file = f'{debug_dir}/prompt_{prompt_type}_{estimated_tokens}.json'
