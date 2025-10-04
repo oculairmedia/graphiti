@@ -15,6 +15,7 @@ limitations under the License.
 """
 
 import logging
+import os
 from datetime import datetime
 from time import time
 from typing import Any
@@ -42,6 +43,9 @@ from graphiti_core.search.search_utils import get_edge_invalidation_candidates, 
 from graphiti_core.utils.datetime_utils import ensure_utc, utc_now
 
 logger = logging.getLogger(__name__)
+
+# Import truncation utility
+from graphiti_core.utils.prompt_utils import truncate_episode_content
 
 
 async def execute_merge_operations(
@@ -220,14 +224,14 @@ async def extract_edges(
         else []
     )
 
-    # Prepare context for LLM
+    # Prepare context for LLM (with truncation for prompt optimization)
     context = {
-        'episode_content': episode.content,
+        'episode_content': truncate_episode_content(episode.content),
         'nodes': [
             {'id': idx, 'name': node.name, 'entity_types': node.labels}
             for idx, node in enumerate(nodes)
         ],
-        'previous_episodes': [ep.content for ep in previous_episodes],
+        'previous_episodes': [truncate_episode_content(ep.content) for ep in previous_episodes],
         'reference_time': episode.valid_at,
         'edge_types': edge_types_context,
         'custom_prompt': '',

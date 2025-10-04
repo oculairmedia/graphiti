@@ -210,6 +210,9 @@ from graphiti_core.utils.maintenance.edge_operations import filter_existing_dupl
 
 logger = logging.getLogger(__name__)
 
+# Import truncation utility
+from graphiti_core.utils.prompt_utils import truncate_episode_content
+
 
 async def extract_nodes_reflexion(
     llm_client: LLMClient,
@@ -217,10 +220,10 @@ async def extract_nodes_reflexion(
     previous_episodes: list[EpisodicNode],
     node_names: list[str],
 ) -> list[str]:
-    # Prepare context for LLM
+    # Prepare context for LLM (with truncation for prompt optimization)
     context = {
-        'episode_content': episode.content,
-        'previous_episodes': [ep.content for ep in previous_episodes],
+        'episode_content': truncate_episode_content(episode.content),
+        'previous_episodes': [truncate_episode_content(ep.content) for ep in previous_episodes],
         'extracted_entities': node_names,
     }
 
@@ -268,9 +271,9 @@ async def extract_nodes(
     )
 
     context = {
-        'episode_content': episode.content,
+        'episode_content': truncate_episode_content(episode.content),
         'episode_timestamp': episode.valid_at.isoformat(),
-        'previous_episodes': [ep.content for ep in previous_episodes],
+        'previous_episodes': [truncate_episode_content(ep.content) for ep in previous_episodes],
         'custom_prompt': custom_prompt,
         'entity_types': entity_types_context,
         'source_description': episode.source_description,
@@ -639,8 +642,8 @@ async def resolve_extracted_nodes(
             'extracted_nodes': extracted_nodes_context,
             'existing_nodes': existing_nodes_metadata,
             'existing_nodes_text': existing_nodes_text,
-            'episode_content': episode.content if episode is not None else '',
-            'previous_episodes': [ep.content for ep in previous_episodes]
+            'episode_content': truncate_episode_content(episode.content) if episode is not None else '',
+            'previous_episodes': [truncate_episode_content(ep.content) for ep in previous_episodes]
             if previous_episodes is not None
             else [],
         }
@@ -1095,8 +1098,8 @@ async def extract_attributes_from_node(
 
     summary_context: dict[str, Any] = {
         'node': node_context,
-        'episode_content': episode.content if episode is not None else '',
-        'previous_episodes': [ep.content for ep in previous_episodes]
+        'episode_content': truncate_episode_content(episode.content) if episode is not None else '',
+        'previous_episodes': [truncate_episode_content(ep.content) for ep in previous_episodes]
         if previous_episodes is not None
         else [],
     }
