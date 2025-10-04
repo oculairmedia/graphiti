@@ -118,6 +118,24 @@ class OpenAIGenericClient(LLMClient):
                 prompt_type = "reflexion"
 
         logger.info(f"LLM Request [{prompt_type}]: {len(messages)} messages, ~{total_chars:,} chars, ~{estimated_tokens:,} tokens")
+
+        # Debug: Save large prompts to file for analysis
+        if estimated_tokens > 10000:
+            import os
+            import json
+            debug_dir = '/tmp/prompt_debug'
+            os.makedirs(debug_dir, exist_ok=True)
+
+            # Save full prompt to file
+            prompt_file = f'{debug_dir}/prompt_{prompt_type}_{estimated_tokens}.json'
+            with open(prompt_file, 'w') as f:
+                json.dump({
+                    'type': prompt_type,
+                    'estimated_tokens': estimated_tokens,
+                    'messages': [{'role': m.role, 'content': m.content} for m in messages]
+                }, f, indent=2)
+
+            logger.warning(f"LARGE PROMPT DETECTED ({estimated_tokens:,} tokens). Saved to {prompt_file}")
         
         # Configure response format based on whether response_model is provided
         if response_model is not None:
