@@ -174,7 +174,11 @@ services:
   # API and Processing Services
   # =============================================================================
   graph:
-    image: ghcr.io/oculairmedia/graphiti-api:feature-memory-replay-system
+    # Use local build instead of remote image
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: graphiti-api-local:latest
     restart: unless-stopped
     ports:
       - ${API_PORT:-8003}:8000
@@ -191,7 +195,7 @@ services:
       - FALKORDB_PORT=${FALKORDB_PORT:-6379}
       - FALKORDB_URI=${FALKORDB_URI:-redis://falkordb:6379}
       - FALKORDB_DATABASE=${FALKORDB_DATABASE:-graphiti_migration}
-      - USE_FALKORDB=${USE_FALKORDB:-false}
+      - USE_FALKORDB=${USE_FALKORDB:-true}
       - USE_DETERMINISTIC_UUIDS=${USE_DETERMINISTIC_UUIDS:-true}
       - PORT=8000
       - USE_CEREBRAS=${USE_CEREBRAS:-false}
@@ -243,7 +247,7 @@ services:
       - REPLAY_ENABLED=${REPLAY_ENABLED:-false}
       - REPLAY_CHECK_INTERVAL_HOURS=${REPLAY_CHECK_INTERVAL_HOURS:-24}
       - REPLAY_INTERVAL_SECONDS=${REPLAY_INTERVAL_SECONDS:-300}
-      - REPLAY_STALE_DAYS=${REPLAY_STALE_DAYS:-2}
+      - REPLAY_STALE_DAYS=${REPLAY_STALE_DAYS:-0.003472}
       - REPLAY_MIN_PRIORITY=${REPLAY_MIN_PRIORITY:-0.2}
       - REPLAY_SCAN_MULTIPLIER=${REPLAY_SCAN_MULTIPLIER:-4}
       - REPLAY_BATCH_SIZE=${REPLAY_BATCH_SIZE:-10}
@@ -445,10 +449,16 @@ services:
       - homepage.href=http://${HOMEPAGE_HOST:-192.168.50.90}:${QUEUE_PORT:-8093}
       - homepage.description=Message queue for ingestion processing
   graphiti-worker:
-    image: ghcr.io/oculairmedia/graphiti-worker:feature-memory-replay-system
+    # Use local build instead of remote image
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: graphiti-api-local:latest
+    command: ["python", "-u", "/app/worker/worker_service.py"]
     restart: unless-stopped
     environment:
       - QUEUE_URL=http://graphiti-queued:8080
+      - QUEUED_URL=http://graphiti-queued:8080
       - NEO4J_URI=${NEO4J_URI:-bolt://neo4j:7687}
       - NEO4J_USER=${NEO4J_USER:-neo4j}
       - NEO4J_PASSWORD=${NEO4J_PASSWORD:-graphiti123}
@@ -484,6 +494,19 @@ services:
       - BATCH_SIZE=${BATCH_SIZE:-5}
       - POLL_INTERVAL=${POLL_INTERVAL:-2.0}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      # Pipeline Optimization Settings
+      - MAX_CONCURRENT_EPISODES=${MAX_CONCURRENT_EPISODES:-5}
+      - SEMAPHORE_LIMIT=${SEMAPHORE_LIMIT:-50}
+      - CHUTES_ENABLE_BATCH_PROCESSING=${CHUTES_ENABLE_BATCH_PROCESSING:-false}
+      - BATCH_TIMEOUT_SECONDS=${BATCH_TIMEOUT_SECONDS:-10}
+      - GLOBAL_RATE_LIMIT=${GLOBAL_RATE_LIMIT:-200}
+      - GROUP_RATE_LIMIT=${GROUP_RATE_LIMIT:-50}
+      - EMBEDDING_BATCH_SIZE=${EMBEDDING_BATCH_SIZE:-100}
+      - ENABLE_PROMPT_COMPRESSION=${ENABLE_PROMPT_COMPRESSION:-true}
+      - COMPRESSION_TARGET_TOKENS=${COMPRESSION_TARGET_TOKENS:-2000}
+      - COMPRESSION_RATIO=${COMPRESSION_RATIO:-0.6}
+      - DEDUP_SIMILARITY_THRESHOLD=${DEDUP_SIMILARITY_THRESHOLD:-0.6}
+      - DEDUP_EPISODE_INTERVAL=${DEDUP_EPISODE_INTERVAL:-10}
     networks:
       - graphiti_network
     depends_on:

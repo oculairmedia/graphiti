@@ -17,10 +17,12 @@ import os
 from graphiti_core import Graphiti
 from graphiti_core.nodes import EpisodeType
 from graphiti_core.utils.datetime_utils import utc_now
+from graphiti_core.helpers import semaphore_gather
 from graphiti_core.ingestion.queue_client import (
     QueuedClient, IngestionTask, TaskType, TaskPriority, QueueMetrics
 )
 from graphiti_core.utils.replay.executor import ReplayContext, ReplayExecutor, ReplayEpisodeNotFound
+from graphiti_core.config.replay_config import ReplayConfig
 
 logger = logging.getLogger(__name__)
 
@@ -43,27 +45,36 @@ class PermanentError(Exception):
     pass
 
 
-@dataclass
 class RateLimitWindow:
-    """Sliding window for rate limiting"""
-    requests: list[float]
-    limit: int
-    window_seconds: int
-    
-    def is_allowed(self) -> bool:
-        """Check if request is allowed"""
-        now = time.time()
-        cutoff = now - self.window_seconds
-        
-        # Remove old requests
-        self.requests = [t for t in self.requests if t > cutoff]
-        
-        # Check if under limit
-        return len(self.requests) < self.limit
-    
-    def record_request(self):
-        """Record a new request"""
-        self.requests.append(time.time())
+    """Sliding window for rate limiting with async-safe operations"""
+
+    def __init__(self, requests: list[float], limit: int, window_seconds: int):
+        self.requests = requests
+        self.limit = limit
+        self.window_seconds = window_seconds
+        self._lock = asyncio.Lock()  # Protect against race conditions
+
+    async def is_allowed(self) -> bool:
+        """
+        Check if request is allowed (async-safe).
+
+        Returns:
+            True if under rate limit, False otherwise
+        """
+        async with self._lock:
+            now = time.time()
+            cutoff = now - self.window_seconds
+
+            # Remove old requests
+            self.requests = [t for t in self.requests if t > cutoff]
+
+            # Check if under limit
+            return len(self.requests) < self.limit
+
+    async def record_request(self):
+        """Record a new request (async-safe)"""
+        async with self._lock:
+            self.requests.append(time.time())
 
 
 class CentralityClient:
@@ -166,38 +177,38 @@ class RateLimiter:
     
     async def acquire(self, group_id: Optional[str] = None) -> bool:
         """
-        Acquire permission to process a request.
-        
+        Acquire permission to process a request (async-safe).
+
         Args:
             group_id: Optional group ID for per-group rate limiting
-            
+
         Returns:
             True if request is allowed
-            
+
         Raises:
             RateLimitError if rate limit exceeded
         """
-        # Check global rate limit
-        if not self.global_window.is_allowed():
+        # Check global rate limit (now async)
+        if not await self.global_window.is_allowed():
             raise RateLimitError("global", retry_after=1)
-        
+
         # Check group rate limit
         if group_id:
             if self.is_group_suspended(group_id):
                 remaining = (self.suspended_groups[group_id] - datetime.utcnow()).seconds
                 raise RateLimitError(group_id, retry_after=remaining)
-            
+
             if group_id not in self.group_windows:
                 self.group_windows[group_id] = RateLimitWindow([], self.group_rpm, 60)
-            
-            if not self.group_windows[group_id].is_allowed():
+
+            if not await self.group_windows[group_id].is_allowed():
                 # Suspend group for exponential backoff
                 self.suspend_group(group_id, 60)
                 raise RateLimitError(group_id, retry_after=60)
-            
-            self.group_windows[group_id].record_request()
-        
-        self.global_window.record_request()
+
+            await self.group_windows[group_id].record_request()
+
+        await self.global_window.record_request()
         return True
 
 
@@ -233,6 +244,20 @@ class IngestionWorker:
         # Background deduplication tracking
         self.episode_count = 0
         self.dedup_interval = int(os.getenv('DEDUP_EPISODE_INTERVAL', '10'))
+        # Parallel processing configuration
+        self.max_concurrent_episodes = int(os.getenv('MAX_CONCURRENT_EPISODES', '10'))
+        logger.info(f"Worker {worker_id} configured with max_concurrent_episodes={self.max_concurrent_episodes}")
+        replay_config = ReplayConfig.from_env()
+        self.poll_queues: list[str] = ['ingestion']
+        if replay_config.queue_name:
+            if replay_config.queue_name in self.poll_queues:
+                self.poll_queues.remove(replay_config.queue_name)
+            self.poll_queues.insert(0, replay_config.queue_name)
+        logger.info(
+            "Worker %s will poll queues: %s",
+            self.worker_id,
+            ', '.join(self.poll_queues),
+        )
         
     async def start(self):
         """Start the worker processing loop"""
@@ -263,51 +288,99 @@ class IngestionWorker:
         logger.info(f"Worker {self.worker_id} stopped")
     
     async def _process_loop(self):
-        """Main processing loop"""
-        logger.info(f"Worker {self.worker_id} entering process loop")
-        
+        """Main processing loop with parallel task processing"""
+        logger.info(f"Worker {self.worker_id} entering process loop (max_concurrent={self.max_concurrent_episodes})")
+
         while self.running:
             try:
-                # Poll for tasks
-                tasks = await self.queue.poll(
-                    queue_name="ingestion",
-                    count=self.batch_size,
-                    visibility_timeout=1200  # 20 minutes - allow time for entity extraction
-                )
-                
-                if tasks:
+                tasks_processed = False
+                for queue_name in self.poll_queues:
+                    logger.info(
+                        "Worker %s polling queue %s",
+                        self.worker_id,
+                        queue_name,
+                    )
+                    # Poll up to max_concurrent_episodes tasks
+                    tasks = await self.queue.poll(
+                        queue_name=queue_name,
+                        count=self.max_concurrent_episodes,
+                        visibility_timeout=1200,  # 20 minutes - allow time for entity extraction
+                    )
+
+                    if not tasks:
+                        continue
+
+                    tasks_processed = True
                     self.metrics.record_poll(len(tasks))
-                    logger.debug(f"Worker {self.worker_id} polled {len(tasks)} tasks")
-                    
-                    # Process tasks
-                    for message_id, task, poll_tag in tasks:
-                        try:
-                            await self._process_task(task)
-                            
-                            # Delete from queue on success
-                            await self.queue.delete(message_id, poll_tag)
-                            self.metrics.record_completion()
-                            
-                        except RateLimitError as e:
-                            # Return to queue with backoff
-                            retry_after = min(300, e.retry_after * (2 ** task.retry_count))
-                            await self.queue.update(message_id, poll_tag, retry_after)
-                            self.metrics.record_retry()
-                            logger.warning(f"Rate limited task {task.id}, retry in {retry_after}s")
-                            
-                        except Exception as e:
-                            await self._handle_failure(message_id, poll_tag, task, e)
-                else:
-                    # No tasks available, wait before polling again
+                    logger.info(
+                        "Worker %s processing %d tasks in parallel from %s",
+                        self.worker_id,
+                        len(tasks),
+                        queue_name,
+                    )
+
+                    # Process all tasks in parallel using semaphore_gather
+                    await semaphore_gather(
+                        *[self._process_task_safe(message_id, task, poll_tag, queue_name)
+                          for message_id, task, poll_tag in tasks],
+                        max_coroutines=self.max_concurrent_episodes
+                    )
+
+                    logger.debug(
+                        "Worker %s completed parallel processing of %d tasks from %s",
+                        self.worker_id,
+                        len(tasks),
+                        queue_name,
+                    )
+
+                if not tasks_processed:
                     await asyncio.sleep(self.poll_interval)
-                    
+
             except asyncio.CancelledError:
                 break
             except Exception as e:
                 logger.error(f"Worker {self.worker_id} loop error: {e}")
                 logger.error(traceback.format_exc())
                 await asyncio.sleep(5)  # Back off on errors
-    
+
+    async def _process_task_safe(self, message_id: str, task: IngestionTask, poll_tag: str, queue_name: str):
+        """
+        Process a single task with error handling and cleanup.
+
+        This wrapper ensures proper cleanup even if task processing fails.
+        Used for parallel task processing.
+
+        Args:
+            message_id: Queue message ID
+            task: The task to process
+            poll_tag: Poll tag for queue operations
+            queue_name: Name of the queue
+        """
+        try:
+            await self._process_task(task)
+            await self.queue.delete(message_id, poll_tag, queue_name=queue_name)
+            self.metrics.record_completion()
+            logger.debug(f"Successfully processed task {task.id}")
+
+        except RateLimitError as e:
+            retry_after = min(300, e.retry_after * (2 ** task.retry_count))
+            await self.queue.update(
+                message_id,
+                poll_tag,
+                retry_after,
+                queue_name=queue_name,
+            )
+            self.metrics.record_retry()
+            logger.warning(
+                "Rate limited task %s from %s, retry in %ss",
+                task.id,
+                queue_name,
+                retry_after,
+            )
+
+        except Exception as e:
+            await self._handle_failure(message_id, poll_tag, task, e, queue_name)
+
     async def _process_task(self, task: IngestionTask):
         """
         Process a single task.
@@ -745,11 +818,14 @@ class IngestionWorker:
             logger.error(f"Deduplication failed for task {task.id}: {e}")
             raise
     
-    async def _handle_failure(self, 
-                              message_id: str,
-                              poll_tag: str,
-                              task: IngestionTask,
-                              error: Exception):
+    async def _handle_failure(
+        self,
+        message_id: str,
+        poll_tag: str,
+        task: IngestionTask,
+        error: Exception,
+        queue_name: str,
+    ):
         """
         Handle task failure with retry logic.
         
@@ -769,19 +845,19 @@ class IngestionWorker:
         if isinstance(error, PermanentError):
             # Move to dead letter queue
             await self._move_to_dlq(task, error)
-            await self.queue.delete(message_id, poll_tag)
-            
+            await self.queue.delete(message_id, poll_tag, queue_name=queue_name)
+
         elif isinstance(error, TransientError) or task.retry_count < task.max_retries:
             # Retry with exponential backoff
             delay = min(300, 10 * (2 ** task.retry_count))
-            await self.queue.update(message_id, poll_tag, delay)
+            await self.queue.update(message_id, poll_tag, delay, queue_name=queue_name)
             self.metrics.record_retry()
             logger.info(f"Task {task.id} will retry in {delay} seconds")
-            
+
         else:
             # Max retries exceeded
             await self._move_to_dlq(task, error)
-            await self.queue.delete(message_id, poll_tag)
+            await self.queue.delete(message_id, poll_tag, queue_name=queue_name)
             logger.error(f"Task {task.id} moved to DLQ after {task.retry_count} attempts")
     
     async def _move_to_dlq(self, task: IngestionTask, error: Exception):

@@ -92,12 +92,18 @@ class OpenAIGenericClient(LLMClient):
         model_size: ModelSize = ModelSize.medium,
     ) -> dict[str, typing.Any]:
         openai_messages: list[ChatCompletionMessageParam] = []
+        total_chars = 0
         for m in messages:
             m.content = self._clean_input(m.content)
+            total_chars += len(m.content)
             if m.role == 'user':
                 openai_messages.append({'role': 'user', 'content': m.content})
             elif m.role == 'system':
                 openai_messages.append({'role': 'system', 'content': m.content})
+
+        # Estimate token count (rough: 1 token ≈ 4 characters)
+        estimated_tokens = total_chars // 4
+        logger.info(f"LLM Request: {len(messages)} messages, ~{total_chars:,} chars, ~{estimated_tokens:,} tokens")
         
         # Configure response format based on whether response_model is provided
         if response_model is not None:
@@ -125,6 +131,20 @@ class OpenAIGenericClient(LLMClient):
                 response_format=response_format,
             )
             result = response.choices[0].message.content or ''
+
+            # Log token usage if available
+            if hasattr(response, 'usage') and response.usage:
+                logger.info(
+                    f"LLM Response: {response.usage.prompt_tokens} prompt tokens, "
+                    f"{response.usage.completion_tokens} completion tokens, "
+                    f"{response.usage.total_tokens} total tokens"
+                )
+            else:
+                # Estimate for providers that don't return usage
+                response_chars = len(result)
+                estimated_response_tokens = response_chars // 4
+                logger.info(f"LLM Response: ~{response_chars:,} chars, ~{estimated_response_tokens:,} tokens (estimated)")
+
             return json.loads(result)
         except openai.RateLimitError as e:
             raise RateLimitError from e
