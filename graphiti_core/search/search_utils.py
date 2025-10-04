@@ -15,6 +15,7 @@ limitations under the License.
 """
 
 import logging
+import os
 from collections import defaultdict
 from time import time
 from typing import Any
@@ -53,7 +54,7 @@ from graphiti_core.search.search_filters import (
 
 logger = logging.getLogger(__name__)
 
-RELEVANT_SCHEMA_LIMIT = 10
+RELEVANT_SCHEMA_LIMIT = int(os.getenv('MAX_CONTEXT_EPISODES', '5'))  # Reduced from 10 to 5 for prompt optimization
 DEFAULT_MIN_SCORE = 0.6
 DEFAULT_MMR_LAMBDA = 0.5
 MAX_SEARCH_DEPTH = 3
