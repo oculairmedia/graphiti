@@ -154,8 +154,20 @@ async def add_nodes_and_edges_bulk_tx(
             'created_at': node.created_at,
         }
 
-        entity_data.update(node.attributes or {})
+        # CRITICAL: Filter out core fields from attributes to prevent overwriting
+        # This prevents attributes from clobbering required fields like 'name'
+        safe_attributes = {k: v for k, v in (node.attributes or {}).items()
+                          if k not in {'uuid', 'name', 'name_embedding', 'group_id', 'summary', 'created_at', 'labels'}}
+        entity_data.update(safe_attributes)
         entity_data['labels'] = list(set(node.labels + ['Entity']))
+
+        # Final validation: ensure name is present and valid
+        if not entity_data.get('name') or not str(entity_data.get('name')).strip():
+            logger.error(f"CRITICAL: Entity {node.uuid} has invalid name in entity_data: {entity_data.get('name')}")
+            logger.error(f"  Original node.name: {node.name}")
+            logger.error(f"  node.attributes: {node.attributes}")
+            raise ValueError(f"Entity {node.uuid} missing valid name field")
+
         nodes.append(entity_data)
 
     edges: list[dict[str, Any]] = []

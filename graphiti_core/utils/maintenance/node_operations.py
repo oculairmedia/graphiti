@@ -313,17 +313,23 @@ async def extract_nodes(
 
     # Enhanced filtering and name validation
     filtered_extracted_entities = []
+    invalid_count = 0
     for entity in extracted_entities:
         # Multiple validation checks for entity names
-        if (entity.name and 
-            isinstance(entity.name, str) and 
-            entity.name.strip() and 
+        if (entity.name and
+            isinstance(entity.name, str) and
+            entity.name.strip() and
             len(entity.name.strip()) > 0 and
             entity.name.strip() != "null" and
             entity.name.strip() != "None"):
             filtered_extracted_entities.append(entity)
         else:
+            invalid_count += 1
             logger.warning(f"Skipping entity with invalid name: '{entity.name}' (type: {type(entity.name)})")
+
+    # Log summary if entities were filtered
+    if invalid_count > 0:
+        logger.warning(f"Filtered out {invalid_count} entities with invalid names. Valid entities remaining: {len(filtered_extracted_entities)}")
     
     end = time()
     logger.debug(f'Extracted new nodes: {filtered_extracted_entities} in {(end - start) * 1000} ms')

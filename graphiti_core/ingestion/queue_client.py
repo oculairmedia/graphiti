@@ -247,7 +247,7 @@ class QueuedClient:
             
             return result_messages
     
-    async def delete(self, message_id: int, poll_tag: int) -> bool:
+    async def delete(self, message_id: int, poll_tag: int, *, queue_name: str = "ingestion") -> bool:
         """
         Delete a message from the queue (acknowledge processing).
         
@@ -258,9 +258,6 @@ class QueuedClient:
         Returns:
             True if deleted successfully
         """
-        # Find the queue name (we'll use a default for now)
-        queue_name = "ingestion"
-        
         async with self._get_client() as client:
             response = await client.post(
                 f"{self.base_url}/queue/{queue_name}/messages/delete",
@@ -281,10 +278,14 @@ class QueuedClient:
             
             return success
     
-    async def update(self, 
-                     message_id: int, 
-                     poll_tag: int,
-                     visibility_timeout: int) -> Optional[int]:
+    async def update(
+        self,
+        message_id: int,
+        poll_tag: int,
+        visibility_timeout: int,
+        *,
+        queue_name: str = "ingestion",
+    ) -> Optional[int]:
         """
         Update message visibility timeout (for retry with backoff).
         
@@ -296,8 +297,6 @@ class QueuedClient:
         Returns:
             New poll tag if updated successfully, None otherwise
         """
-        queue_name = "ingestion"
-        
         async with self._get_client() as client:
             response = await client.post(
                 f"{self.base_url}/queue/{queue_name}/messages/update",

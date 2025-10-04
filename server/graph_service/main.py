@@ -1,7 +1,7 @@
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -88,6 +88,8 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
             )
             configure_non_ollama_clients(replay_graphiti, settings)
 
+            replay_queue_client = QueuedClient(base_url=settings.queue_url)
+            await replay_queue_client.list_queues()
             replay_queue_client = QueuedClient(base_url=settings.queue_url)
             await replay_queue_client.list_queues()
             replay_scheduler = MemoryReplayScheduler(
@@ -183,6 +185,22 @@ async def replay_metrics() -> JSONResponse:
             'min_priority': 0.0,
         }
     return JSONResponse(content=payload, status_code=200)
+
+
+@app.post('/replay/trigger')
+async def replay_trigger(dry_run: bool = False) -> JSONResponse:
+    """Manually trigger the replay scheduler or preview candidates."""
+
+    if not replay_scheduler:
+        raise HTTPException(status_code=503, detail='Replay scheduler inactive')
+
+    if dry_run:
+        preview = await replay_scheduler.preview_cycle()
+        return JSONResponse(content={'dry_run': True, **preview}, status_code=200)
+
+    scheduled = await replay_scheduler.run_cycle()
+    status = replay_scheduler.get_status().as_dict()
+    return JSONResponse(content={'dry_run': False, 'scheduled': scheduled, 'status': status}, status_code=200)
 
 
 @app.websocket("/ws")
