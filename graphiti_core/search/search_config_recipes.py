@@ -14,6 +14,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
+import os
+
 from graphiti_core.search.search_config import (
     CommunityReranker,
     CommunitySearchConfig,
@@ -157,7 +159,8 @@ NODE_HYBRID_SEARCH_RRF = SearchConfig(
     node_config=NodeSearchConfig(
         search_methods=[NodeSearchMethod.bm25, NodeSearchMethod.cosine_similarity],
         reranker=NodeReranker.rrf,
-    )
+    ),
+    limit=int(os.getenv('MAX_DEDUP_CANDIDATES', '10'))  # Limit deduplication candidates for prompt optimization
 )
 
 # performs a hybrid search over nodes with mmr reranking

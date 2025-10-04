@@ -103,7 +103,21 @@ class OpenAIGenericClient(LLMClient):
 
         # Estimate token count (rough: 1 token ≈ 4 characters)
         estimated_tokens = total_chars // 4
-        logger.info(f"LLM Request: {len(messages)} messages, ~{total_chars:,} chars, ~{estimated_tokens:,} tokens")
+
+        # Try to identify prompt type from content
+        prompt_type = "unknown"
+        if len(messages) > 0:
+            user_content = next((m.content for m in messages if m.role == 'user'), '')
+            if 'PREVIOUS MESSAGES' in user_content or 'CURRENT MESSAGE' in user_content:
+                prompt_type = "entity_extraction"
+            elif 'EXTRACTED ENTITIES' in user_content and 'ENTITY PAIRS' in user_content:
+                prompt_type = "edge_extraction"
+            elif 'EXISTING NODES' in user_content and 'duplication' in user_content.lower():
+                prompt_type = "deduplication"
+            elif 'EXTRACTED ENTITIES' in user_content and 'missed' in user_content.lower():
+                prompt_type = "reflexion"
+
+        logger.info(f"LLM Request [{prompt_type}]: {len(messages)} messages, ~{total_chars:,} chars, ~{estimated_tokens:,} tokens")
         
         # Configure response format based on whether response_model is provided
         if response_model is not None:
