@@ -107,16 +107,15 @@ def get_vector_cosine_func_query(vec1, vec2, db_type: str = 'neo4j') -> str:
         # Query parameters ($param) are Lists that NEED wrapping when used in vector operations
         # UNWIND parameters (edge.*, node.*) from Python lists also NEED wrapping
         def should_wrap_in_vecf32(vec_param: str) -> bool:
-            # Query parameters ($*) are Lists that need wrapping when used in vector operations
-            if vec_param.startswith('$'):
-                return True
-            # UNWIND parameters (edge.*, node.*, entity.*, relationship.*, item.*) - These NEED wrapping when coming from Python lists
-            if vec_param.startswith(('edge.', 'node.', 'entity.', 'relationship.', 'item.')):
-                return True  # UNWIND parameters from Python lists need vecf32() conversion
-            # Graph properties (n.*, e.*, r.*, m.*, comm.*, ep.*, etc.) are already stored as Vectorf32 - DON'T wrap
-            # This includes any variable with a dot that's not an UNWIND parameter
-            if '.' in vec_param:
+            # Graph properties (n.*, e.*, r.*, etc.) are already stored as Vectorf32 - DON'T wrap
+            if '.' in vec_param and not vec_param.startswith(('edge.', 'node.', 'entity.', 'relationship.', 'item.')):
                 return False
+            # Query parameters ($*) are handled by driver's _wrap_vector_params_in_query() - DON'T wrap here
+            if vec_param.startswith('$'):
+                return False
+            # UNWIND parameters (edge.*, node.*, etc.) - These NEED wrapping when coming from Python lists
+            if vec_param.startswith(('edge.', 'node.', 'entity.', 'relationship.', 'item.')):
+                return True  # Fixed: UNWIND parameters from Python lists need vecf32() conversion
             # Default: don't wrap (conservative approach)
             return False
         
@@ -145,8 +144,10 @@ def get_entity_node_save_bulk_query(nodes, db_type: str = 'neo4j') -> str | Any:
                     (
                         f"""
                     UNWIND $nodes AS node
-                    MERGE (n:Entity {{uuid: node.uuid, name: node.name, group_id: node.group_id}})
-                    SET n.summary = node.summary,
+                    MERGE (n:Entity {{uuid: node.uuid}})
+                    SET n.name = node.name,
+                        n.group_id = node.group_id,
+                        n.summary = node.summary,
                         n.created_at = node.created_at
                     SET n:{label}
                     WITH n, node
@@ -166,11 +167,10 @@ def get_entity_edge_save_bulk_query(db_type: str = 'neo4j') -> str:
     if db_type == 'falkordb':
         return """
         UNWIND $entity_edges AS edge
-        MATCH (source:Entity {uuid: edge.source_node_uuid}) 
-        MATCH (target:Entity {uuid: edge.target_node_uuid}) 
-        MERGE (source)-[r:RELATES_TO {uuid: edge.uuid}]->(target)
+        MATCH (source:Entity {uuid: edge.source_node_uuid})
+        MATCH (target:Entity {uuid: edge.target_node_uuid})
+        MERGE (source)-[r:RELATES_TO {uuid: edge.uuid, group_id: edge.group_id}]->(target)
         SET r.name = edge.name,
-            r.group_id = edge.group_id,
             r.fact = edge.fact,
             r.episodes = edge.episodes,
             r.created_at = edge.created_at,
