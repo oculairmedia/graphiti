@@ -154,12 +154,18 @@ class OpenAIGenericClient(LLMClient):
             logger.debug("Using basic JSON object format")
         
         try:
+            # Add num_predict for Ollama compatibility (OpenAI API uses max_tokens)
+            extra_params = {}
+            if 'ollama' in str(self.client.base_url).lower():
+                extra_params['extra_body'] = {'num_predict': max_tokens}
+
             response = await self.client.chat.completions.create(
                 model=self.model or DEFAULT_MODEL,
                 messages=openai_messages,
                 temperature=self.temperature,
-                max_tokens=self.max_tokens,
+                max_tokens=max_tokens,
                 response_format=response_format,
+                **extra_params,
             )
             result = response.choices[0].message.content or ''
 
