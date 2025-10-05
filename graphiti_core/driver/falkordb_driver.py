@@ -149,17 +149,37 @@ class FalkorDriverSession(GraphDriverSession):
         return await func(self, *args, **kwargs)
 
     async def run(self, query: str | list, **kwargs: Any) -> Any:
+        import asyncio
+        import os
+
+        # Get timeout from environment or use default (30 seconds)
+        timeout = float(os.getenv('FALKORDB_QUERY_TIMEOUT', '30'))
+
         # FalkorDB does not support argument for Label Set, so it's converted into an array of queries
         if isinstance(query, list):
             for cypher, params in query:
                 params = convert_datetimes_to_strings(params)
                 cypher = _wrap_vector_params_in_query(str(cypher), params)
-                await self.graph.query(cypher, params)  # type: ignore[reportUnknownArgumentType]
+                try:
+                    await asyncio.wait_for(
+                        self.graph.query(cypher, params),  # type: ignore[reportUnknownArgumentType]
+                        timeout=timeout
+                    )
+                except asyncio.TimeoutError:
+                    logger.error(f"Query timeout ({timeout}s) - Query: {cypher[:200]}...")
+                    raise TimeoutError(f"FalkorDB query exceeded {timeout}s timeout")
         else:
             params = _flatten_params(dict(kwargs))
             params = convert_datetimes_to_strings(params)
             query = _wrap_vector_params_in_query(str(query), params)
-            await self.graph.query(query, params)  # type: ignore[reportUnknownArgumentType]
+            try:
+                await asyncio.wait_for(
+                    self.graph.query(query, params),  # type: ignore[reportUnknownArgumentType]
+                    timeout=timeout
+                )
+            except asyncio.TimeoutError:
+                logger.error(f"Query timeout ({timeout}s) - Query: {query[:200]}...")
+                raise TimeoutError(f"FalkorDB query exceeded {timeout}s timeout")
         # Assuming `graph.query` is async (ideal); otherwise, wrap in executor
         return None
 
