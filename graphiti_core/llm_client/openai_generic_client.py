@@ -156,8 +156,14 @@ class OpenAIGenericClient(LLMClient):
         try:
             # Add num_predict for Ollama compatibility (OpenAI API uses max_tokens)
             extra_params = {}
-            if 'ollama' in str(self.client.base_url).lower():
-                extra_params['extra_body'] = {'num_predict': max_tokens}
+            base_url_str = str(self.client.base_url).lower() if self.client.base_url else ''
+            # Detect Ollama by URL pattern (word 'ollama' or port 11434)
+            is_ollama = 'ollama' in base_url_str or ':11434' in base_url_str
+            logger.info(f"[OLLAMA CHECK] base_url={base_url_str}, is_ollama={is_ollama}")
+            if is_ollama:
+                # Ollama uses num_predict instead of max_tokens, pass both
+                extra_params['num_predict'] = max_tokens
+                logger.info(f"[OLLAMA FIX] Setting num_predict={max_tokens}")
 
             response = await self.client.chat.completions.create(
                 model=self.model or DEFAULT_MODEL,

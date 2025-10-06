@@ -247,7 +247,7 @@ services:
       - REPLAY_ENABLED=${REPLAY_ENABLED:-false}
       - REPLAY_CHECK_INTERVAL_HOURS=${REPLAY_CHECK_INTERVAL_HOURS:-24}
       - REPLAY_INTERVAL_SECONDS=${REPLAY_INTERVAL_SECONDS:-300}
-      - REPLAY_STALE_DAYS=${REPLAY_STALE_DAYS:-0.003472}
+      - REPLAY_STALE_DAYS=${REPLAY_STALE_DAYS:-30}
       - REPLAY_MIN_PRIORITY=${REPLAY_MIN_PRIORITY:-0.2}
       - REPLAY_SCAN_MULTIPLIER=${REPLAY_SCAN_MULTIPLIER:-4}
       - REPLAY_BATCH_SIZE=${REPLAY_BATCH_SIZE:-10}
@@ -454,7 +454,10 @@ services:
       context: .
       dockerfile: Dockerfile
     image: graphiti-api-local:latest
-    command: ["python", "-u", "/app/worker/worker_service.py"]
+    command:
+      - python
+      - -u
+      - /app/worker/worker_service.py
     restart: unless-stopped
     environment:
       - QUEUE_URL=http://graphiti-queued:8080
@@ -494,10 +497,9 @@ services:
       - BATCH_SIZE=${BATCH_SIZE:-5}
       - POLL_INTERVAL=${POLL_INTERVAL:-2.0}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
-      # Pipeline Optimization Settings
       - MAX_CONTEXT_EPISODES=${MAX_CONTEXT_EPISODES:-5}
       - MAX_DEDUP_CANDIDATES=${MAX_DEDUP_CANDIDATES:-5}
-      - MAX_EPISODE_CONTENT_CHARS=${MAX_EPISODE_CONTENT_CHARS:-6000}
+      - MAX_EPISODE_CONTENT_CHARS=2000
       - MAX_DEDUP_EXISTING_NODES=${MAX_DEDUP_EXISTING_NODES:-10}
       - MAX_CONCURRENT_EPISODES=${MAX_CONCURRENT_EPISODES:-5}
       - SEMAPHORE_LIMIT=${SEMAPHORE_LIMIT:-50}
@@ -511,6 +513,10 @@ services:
       - COMPRESSION_RATIO=${COMPRESSION_RATIO:-0.6}
       - DEDUP_SIMILARITY_THRESHOLD=${DEDUP_SIMILARITY_THRESHOLD:-0.6}
       - DEDUP_EPISODE_INTERVAL=${DEDUP_EPISODE_INTERVAL:-10}
+    volumes:
+      # Mount key source directories for live code edits while keeping dependencies in the image
+      - ./graphiti_core:/app/graphiti_core
+      - ./worker:/app/worker
     networks:
       - graphiti_network
     depends_on:

@@ -433,19 +433,20 @@ class FalkorDBLoader:
                 uuid_val = self._safe_value_for_query(edge["uuid"], "uuid")
                 source_uuid_val = self._safe_value_for_query(edge["source_node_uuid"], "source_node_uuid")
                 target_uuid_val = self._safe_value_for_query(edge["target_node_uuid"], "target_node_uuid")
-                
+                group_id_val = self._safe_value_for_query(edge.get("group_id", ""), "group_id")
+
                 for key, value in edge.items():
-                    if key not in ["uuid", "source_node_uuid", "target_node_uuid"]:
+                    if key not in ["uuid", "source_node_uuid", "target_node_uuid", "group_id"]:
                         safe_value = self._safe_value_for_query(value, key)
                         props.append(f"{key}: {safe_value}")
-                        
-                props_str = "{uuid: " + uuid_val + ", " + ", ".join(props) + "}"
-                
-                # Upsert query - merge on UUID and ensure nodes exist (no parameters)
+
+                props_str = "{uuid: " + uuid_val + ", group_id: " + group_id_val + ", " + ", ".join(props) + "}"
+
+                # Upsert query - merge on UUID and group_id (mandatory properties) and ensure nodes exist (no parameters)
                 query = f"""
                 MATCH (source {{uuid: {source_uuid_val}}})
                 MATCH (target {{uuid: {target_uuid_val}}})
-                MERGE (source)-[r:RELATES_TO {{uuid: {uuid_val}}}]->(target)
+                MERGE (source)-[r:RELATES_TO {{uuid: {uuid_val}, group_id: {group_id_val}}}]->(target)
                 SET r = {props_str}
                 RETURN r.uuid as uuid
                 """

@@ -25,6 +25,7 @@ ENV UV_COMPILE_BYTECODE=1 \
 COPY ./pyproject.toml ./README.md ./
 COPY ./graphiti_core ./graphiti_core
 COPY ./server ./server
+COPY ./worker ./worker
 COPY ./scripts ./scripts
 COPY ./maintenance_dedupe_entities.py ./
 COPY ./maintenance_extract_entities.py ./

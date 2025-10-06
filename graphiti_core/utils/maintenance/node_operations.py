@@ -648,9 +648,12 @@ async def resolve_extracted_nodes(
             else [],
         }
 
+        dedupe_max_tokens = int(os.getenv('NODE_DEDUPE_MAX_TOKENS', '512'))
+
         llm_response = await llm_client.generate_response(
             prompt_library.dedupe_nodes.nodes(context),
             response_model=NodeResolutions,
+            max_tokens=dedupe_max_tokens,
         )
         logger.info(
             "LLM node dedupe response for chunk starting at %s: %s",
@@ -1108,10 +1111,13 @@ async def extract_attributes_from_node(
     # Debug logging: Track LLM call
     logger.debug(f"🔍 Calling LLM for summary generation - Episode content length: {len(summary_context.get('episode_content', ''))}")
     
+    attribute_max_tokens = int(os.getenv('NODE_ATTRIBUTE_MAX_TOKENS', '1024'))
+
     llm_response = await llm_client.generate_response(
         prompt_library.extract_nodes.extract_attributes(summary_context),
         response_model=entity_attributes_model,
         model_size=ModelSize.small,
+        max_tokens=attribute_max_tokens,
     )
     
     # Debug logging: Track LLM response

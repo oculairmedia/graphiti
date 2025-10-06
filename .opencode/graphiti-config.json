@@ -1,0 +1,54 @@
+{
+  "endpoint": "http://localhost:3010/mcp",
+  "groupId": "auto-detect",
+  "preResponseSearch": {
+    "enabled": true,
+    "relevanceThreshold": 0.3,
+    "maxResults": 5,
+    "entityTypes": ["Requirement", "Preference", "Procedure"]
+  },
+  "interCallSearch": {
+    "enabled": true,
+    "toolWhitelist": ["read", "write", "edit", "bash", "glob", "grep", "task", "todowrite"],
+    "confidenceThreshold": 0.5
+  },
+  "knowledgePersistence": {
+    "enabled": true,
+    "autoSaveInsights": true,
+    "episodeRetention": 30
+  },
+  "contextSubmission": {
+    "enabled": true,
+    "realTimeSubmission": {
+      "enabled": true,
+      "threshold": 0.6,
+      "maxQueueSize": 100
+    },
+    "batchSubmission": {
+      "enabled": true,
+      "intervalMs": 30000,
+      "batchSize": 10
+    },
+    "privacy": {
+      "enableFiltering": true,
+      "maxFileSize": 1048576,
+      "allowedExtensions": [".js", ".ts", ".jsx", ".tsx", ".py", ".java", ".cpp", ".md", ".json", ".yaml", ".yml"],
+      "blockedDirectories": ["node_modules", ".git", ".env", "dist", "build", "coverage", ".cache"]
+    }
+  },
+  "performance": {
+    "enableMetrics": true,
+    "maxSearchLatency": 500,
+    "cacheEnabled": true,
+    "cacheTTL": 300
+  },
+  "projectOverrides": {
+    "graphiti": {
+      "contextSubmission": {
+        "realTimeSubmission": {
+          "threshold": 0.4
+        }
+      }
+    }
+  }
+}

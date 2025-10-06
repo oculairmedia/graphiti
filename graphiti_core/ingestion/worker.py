@@ -148,11 +148,19 @@ class RateLimiter:
     Rate limiter with per-group and global limits.
     Implements sliding window algorithm for accurate rate limiting.
     """
-    
+
     def __init__(self,
-                 global_rps: int = 100,
-                 group_rpm: int = 60,
+                 global_rps: int | None = None,
+                 group_rpm: int | None = None,
                  burst_multiplier: float = 1.5):
+        # Read from environment variables if not explicitly provided
+        if global_rps is None:
+            global_rps = int(os.getenv('GLOBAL_RATE_LIMIT', '100'))
+        if group_rpm is None:
+            group_rpm = int(os.getenv('GROUP_RATE_LIMIT', '60'))
+
+        logger.info(f"RateLimiter initialized with global_rps={global_rps}, group_rpm={group_rpm}")
+
         self.global_window = RateLimitWindow([], global_rps, 1)
         self.group_windows: Dict[str, RateLimitWindow] = {}
         self.group_rpm = group_rpm

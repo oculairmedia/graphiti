@@ -130,12 +130,16 @@ class GraphitiClientFactory:
                 ollama_base_url = os.getenv('OLLAMA_BASE_URL', 'http://localhost:11434/v1')
                 ollama_model = os.getenv('OLLAMA_MODEL', 'mistral:latest')
 
+                # Get max_tokens from environment, default to 8192
+                ollama_max_tokens = int(os.getenv('OLLAMA_MAX_TOKENS', '8192'))
+
                 logger.info(f'Creating Ollama LLM client with model {ollama_model} at {ollama_base_url}')
+                logger.info(f'Ollama max_tokens: {ollama_max_tokens}')
 
                 client = AsyncOpenAI(base_url=ollama_base_url, api_key='ollama')
 
                 config = LLMConfig(
-                    model=ollama_model, small_model=ollama_model, temperature=0.7, max_tokens=2000
+                    model=ollama_model, small_model=ollama_model, temperature=0.7, max_tokens=ollama_max_tokens
                 )
 
                 ollama_client = OpenAIGenericClient(config=config, client=client)

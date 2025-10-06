@@ -1,0 +1,44 @@
+{
+  "name": "graphiti-opencode-plugin",
+  "version": "1.0.0",
+  "description": "OpenCode plugin for automated Graphiti knowledge graph integration",
+  "main": "graphiti-integration.ts",
+  "type": "module",
+  "scripts": {
+    "build": "bun build graphiti-integration.ts --outdir=dist --target=bun",
+    "dev": "bun --watch graphiti-integration.ts",
+    "test": "bun test",
+    "lint": "eslint . --ext .ts,.js",
+    "format": "prettier --write ."
+  },
+  "keywords": [
+    "opencode",
+    "plugin",
+    "graphiti",
+    "knowledge-graph",
+    "mcp",
+    "context",
+    "memory"
+  ],
+  "author": "Graphiti Team",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@opencode-ai/plugin": "latest"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "bun-types": "latest",
+    "eslint": "^8.0.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "prettier": "^3.0.0",
+    "typescript": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "bun": ">=1.0.0"
+  },
+  "peerDependencies": {
+    "@opencode-ai/plugin": ">=1.0.0"
+  }
+}

@@ -90,8 +90,8 @@ def _wrap_vector_params_in_query(query: str, params: dict[str, Any]) -> str:
     def _wrap_unwind_vectors(query_text: str) -> str:
         import re
 
-        # Pattern to match UNWIND parameter vectors in vector operations
-        # Matches: edge.fact_embedding, node.name_embedding, etc. when used in vec.cosineDistance
+        # Pattern to match UNWIND parameter vectors
+        # Matches: edge.fact_embedding, edge.embedding, node.name_embedding, etc.
         unwind_vector_patterns = [
             r'\b(edge\.(?:fact_)?embedding)\b',
             r'\b(node\.(?:name_|summary_)?embedding)\b',
@@ -100,27 +100,21 @@ def _wrap_vector_params_in_query(query: str, params: dict[str, Any]) -> str:
         ]
 
         for pattern in unwind_vector_patterns:
-            # Find all matches of the pattern
-            matches = re.finditer(pattern, query_text)
-            replacements = []
+            # Find all matches and wrap them with vecf32() if not already wrapped
+            def replace_match(match):
+                original = match.group(0)
+                # Check if already wrapped by looking at surrounding context
+                full_text = query_text
+                pos = match.start()
 
-            for match in matches:
-                original = match.group(1)
-                start, end = match.span(1)
+                # Check if preceded by "vecf32(" (already wrapped)
+                if pos >= 7 and full_text[pos-7:pos] == 'vecf32(':
+                    return original
 
-                # Check if this vector is used in a vector operation (vec.cosineDistance)
-                # Look ahead and behind to see if it's in a vector context
-                context_start = max(0, start - 50)
-                context_end = min(len(query_text), end + 50)
-                context = query_text[context_start:context_end]
+                # Wrap it
+                return f'vecf32({original})'
 
-                # If it's in a vector operation context and not already wrapped
-                if ('vec.cosineDistance' in context or 'vector.similarity' in context) and f'vecf32({original})' not in context:
-                    replacements.append((start, end, f'vecf32({original})'))
-
-            # Apply replacements in reverse order to maintain indices
-            for start, end, replacement in reversed(replacements):
-                query_text = query_text[:start] + replacement + query_text[end:]
+            query_text = re.sub(pattern, replace_match, query_text)
 
         return query_text
 
@@ -168,6 +162,12 @@ class FalkorDriverSession(GraphDriverSession):
                 except asyncio.TimeoutError:
                     logger.error(f"Query timeout ({timeout}s) - Query: {cypher[:200]}...")
                     raise TimeoutError(f"FalkorDB query exceeded {timeout}s timeout")
+                except Exception as e:
+                    if "Type mismatch" in str(e):
+                        logger.error(f"Vector type mismatch error!")
+                        logger.error(f"Query (first 500 chars): {cypher[:500]}")
+                        logger.error(f"Param keys: {list(params.keys()) if isinstance(params, dict) else 'not a dict'}")
+                    raise
         else:
             params = _flatten_params(dict(kwargs))
             params = convert_datetimes_to_strings(params)
@@ -241,6 +241,14 @@ class FalkorDriver(GraphDriver):
                 logger.info(f'Index already exists: {e}')
                 return None
             logger.error(f'Error executing FalkorDB query: {e}')
+            if "Type mismatch" in str(e):
+                logger.error(f"Vector type mismatch in execute_query!")
+                logger.error(f"Query (first 800 chars): {cypher_query_[:800]}")
+                logger.error(f"Param keys: {list(params.keys()) if isinstance(params, dict) else 'not a dict'}")
+                # Log first edge if edges param exists
+                if 'edges' in params and isinstance(params['edges'], list) and len(params['edges']) > 0:
+                    logger.error(f"First edge keys: {list(params['edges'][0].keys())}")
+                    logger.error(f"First edge has fact_embedding: {'fact_embedding' in params['edges'][0]}")
             raise
 
         # Convert the result header to a list of strings

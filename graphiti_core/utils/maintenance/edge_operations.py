@@ -163,10 +163,12 @@ def build_duplicate_of_edges(
                 valid_at=created_at,
             )
         )
-        
-        # Add the duplicate node to be saved (source node)
-        duplicate_nodes_to_save.append(source_node)
-        
+
+        # NOTE: We don't save duplicate nodes because:
+        # 1. They would violate unique constraint (name, group_id already exists)
+        # 2. They're about to be deleted in merge_node_into anyway
+        # 3. The IS_DUPLICATE_OF edge can reference them by UUID without saving
+
         # Add merge operation (target is canonical, source is duplicate)
         merge_operations.append((target_node.uuid, source_node.uuid))
 
@@ -202,7 +204,10 @@ async def extract_edges(
 ) -> list[EntityEdge]:
     start = time()
 
-    extract_edges_max_tokens = 16384
+    # Cap completion tokens aggressively to avoid runaway responses from Ollama.
+    # 16k was a generous legacy value that routinely produced multi-megabyte payloads
+    # and parsing errors; 2k comfortably covers the structured edge list we expect.
+    extract_edges_max_tokens = int(os.getenv('EDGE_EXTRACTION_MAX_TOKENS', '2048'))
     llm_client = clients.llm_client
 
     edge_type_signature_map: dict[str, tuple[str, str]] = {

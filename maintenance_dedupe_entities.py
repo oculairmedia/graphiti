@@ -311,11 +311,11 @@ class EntityDeduplicator:
         # Update edges where duplicate is source
         update_source_query = """
         UNWIND $duplicate_uuids AS dup_uuid
-        MATCH (n:Entity {uuid: dup_uuid})-[r]->(m)
+        MATCH (n:Entity {uuid: dup_uuid})-[r:RELATES_TO]->(m)
         WHERE n.uuid <> $primary_uuid
-        WITH r, m
+        WITH r, m, r.uuid as rel_uuid, r.group_id as rel_group_id
         MATCH (primary:Entity {uuid: $primary_uuid})
-        MERGE (primary)-[new_r:RELATES_TO]->(m)
+        MERGE (primary)-[new_r:RELATES_TO {uuid: rel_uuid, group_id: rel_group_id}]->(m)
         SET new_r = properties(r)
         DELETE r
         """
@@ -323,11 +323,11 @@ class EntityDeduplicator:
         # Update edges where duplicate is target
         update_target_query = """
         UNWIND $duplicate_uuids AS dup_uuid
-        MATCH (m)-[r]->(n:Entity {uuid: dup_uuid})
+        MATCH (m)-[r:RELATES_TO]->(n:Entity {uuid: dup_uuid})
         WHERE n.uuid <> $primary_uuid
-        WITH r, m
+        WITH r, m, r.uuid as rel_uuid, r.group_id as rel_group_id
         MATCH (primary:Entity {uuid: $primary_uuid})
-        MERGE (m)-[new_r:RELATES_TO]->(primary)
+        MERGE (m)-[new_r:RELATES_TO {uuid: rel_uuid, group_id: rel_group_id}]->(primary)
         SET new_r = properties(r)
         DELETE r
         """
