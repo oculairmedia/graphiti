@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//opt/stacks/graphiti/graphiti_core/driver/**)",
+      "Read(//opt/stacks/graphiti/graphiti_core/**)",
+      "mcp__huly-mcp__huly_entity",
+      "mcp__huly-mcp__huly_issue_ops",
+      "mcp__huly-mcp__huly_query",
+      "Read(//opt/stacks/graphiti/tests/**)",
+      "Read(//opt/stacks/graphiti/**)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

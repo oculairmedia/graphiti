@@ -37,6 +37,8 @@ def create_llm_client(config: LLMConfig | None = None, cache: bool = False):
         client = AsyncOpenAI(
             base_url=ollama_base_url,
             api_key='ollama',  # Ollama doesn't require a real key
+            timeout=float(os.getenv('OLLAMA_TIMEOUT_SECONDS', '120')),
+            max_retries=int(os.getenv('OLLAMA_MAX_RETRIES', '5')),
         )
 
         return OpenAIGenericClient(config=config, cache=cache, client=client)

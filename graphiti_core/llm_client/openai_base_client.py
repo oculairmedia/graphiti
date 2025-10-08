@@ -176,24 +176,37 @@ class BaseOpenAIClient(LLMClient):
         # Add multilingual extraction instructions
         messages[0].content += MULTILINGUAL_EXTRACTION_RESPONSES
 
+        import random
+        import time
+
         while retry_count <= self.MAX_RETRIES:
+            attempt_start = time.monotonic()
             try:
                 response = await self._generate_response(
                     messages, response_model, max_tokens, model_size
                 )
+                elapsed = time.monotonic() - attempt_start
+                logger.debug(
+                    'LLM response succeeded on attempt %d in %.2fs',
+                    retry_count + 1,
+                    elapsed,
+                )
                 return response
             except (RateLimitError, RefusalError):
-                # These errors should not trigger retries
                 raise
             except (openai.APITimeoutError, openai.APIConnectionError, openai.InternalServerError):
-                # Let OpenAI's client handle these retries
                 raise
             except Exception as e:
+                elapsed = time.monotonic() - attempt_start
                 last_error = e
 
-                # Don't retry if we've hit the max retries
                 if retry_count >= self.MAX_RETRIES:
-                    logger.error(f'Max retries ({self.MAX_RETRIES}) exceeded. Last error: {e}')
+                    logger.error(
+                        'Max retries (%d) exceeded after %.2fs. Last error: %s',
+                        self.MAX_RETRIES,
+                        elapsed,
+                        e,
+                    )
                     raise
 
                 retry_count += 1
@@ -209,9 +222,24 @@ class BaseOpenAIClient(LLMClient):
 
                 error_message = Message(role='user', content=error_context)
                 messages.append(error_message)
-                logger.warning(
-                    f'Retrying after application error (attempt {retry_count}/{self.MAX_RETRIES}): {e}'
+
+                # Exponential backoff with jitter (seconds)
+                base_delay = float(os.getenv('LLM_RETRY_BASE_DELAY_SECONDS', '1.5'))
+                backoff = base_delay * (2 ** (retry_count - 1))
+                jitter = random.uniform(0, backoff * 0.25)
+                sleep_seconds = min(
+                    backoff + jitter, float(os.getenv('LLM_RETRY_MAX_DELAY_SECONDS', '15'))
                 )
 
-        # If we somehow get here, raise the last error
+                logger.warning(
+                    'Retrying after application error (attempt %d/%d) in %.2fs; last attempt took %.2fs; error: %s',
+                    retry_count,
+                    self.MAX_RETRIES,
+                    sleep_seconds,
+                    elapsed,
+                    e,
+                )
+
+                await asyncio.sleep(sleep_seconds)
+
         raise last_error or Exception('Max retries exceeded with no specific error')

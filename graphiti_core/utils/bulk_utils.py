@@ -27,6 +27,8 @@ from typing_extensions import Any
 
 from graphiti_core.driver.driver import GraphDriver, GraphDriverSession
 from graphiti_core.edges import Edge, EntityEdge, EpisodicEdge, create_entity_edge_embeddings
+
+
 from graphiti_core.embedder import EmbedderClient
 from graphiti_core.graph_queries import (
     get_entity_edge_save_bulk_query,
@@ -127,7 +129,9 @@ async def add_nodes_and_edges_bulk_tx(
             if hasattr(source_val, 'value'):  # It's an enum object
                 episode['source'] = source_val.value
             elif isinstance(source_val, str) and source_val.startswith('EpisodeType.'):
-                episode['source'] = source_val.split('.')[-1]  # Extract just 'message' from 'EpisodeType.message'
+                episode['source'] = source_val.split('.')[
+                    -1
+                ]  # Extract just 'message' from 'EpisodeType.message'
 
         # Fix datetime serialization - convert datetime objects to ISO strings
         for key, value in episode.items():
@@ -135,12 +139,12 @@ async def add_nodes_and_edges_bulk_tx(
                 episode[key] = value.isoformat()
 
     # Debug logging to see what's in the episodes data
-    logger.info(f"Preparing {len(episodes)} episodes for bulk save")
+    logger.info(f'Preparing {len(episodes)} episodes for bulk save')
     if episodes:
         sample_episode = episodes[0]
-        logger.info(f"Sample episode keys: {list(sample_episode.keys())}")
-        logger.info(f"Sample episode group_id: {sample_episode.get('group_id')}")
-        logger.info(f"Sample episode data: {sample_episode}")
+        logger.info(f'Sample episode keys: {list(sample_episode.keys())}')
+        logger.info(f'Sample episode group_id: {sample_episode.get("group_id")}')
+        logger.info(f'Sample episode data: {sample_episode}')
     nodes: list[dict[str, Any]] = []
     for node in entity_nodes:
         if node.name_embedding is None:
@@ -211,27 +215,45 @@ async def add_nodes_and_edges_bulk_tx(
         else:
             unique_edges[uuid_val] = e
     if duplicates_count:
-        logger.info(f"De-duplicated {duplicates_count} EntityEdges in-batch (by uuid)")
+        logger.info(f'De-duplicated {duplicates_count} EntityEdges in-batch (by uuid)')
     edges = list(unique_edges.values())
 
     # Debug: Log the exact episodes data being passed to Cypher
-    logger.info(f"About to execute EPISODIC_NODE_SAVE_BULK with {len(episodes)} episodes")
+    logger.info(f'About to execute EPISODIC_NODE_SAVE_BULK with {len(episodes)} episodes')
     if episodes:
-        logger.info(f"First episode data: {episodes[0]}")
-        logger.info(f"First episode type: {type(episodes[0])}")
+        logger.info(f'First episode data: {episodes[0]}')
+        logger.info(f'First episode type: {type(episodes[0])}')
         for key, value in episodes[0].items():
-            logger.info(f"  {key}: {value} (type: {type(value)})")
+            logger.info(f'  {key}: {value} (type: {type(value)})')
 
     await tx.run(EPISODIC_NODE_SAVE_BULK, episodes=episodes)
     entity_node_save_bulk = get_entity_node_save_bulk_query(nodes, driver.provider)
     if nodes:
         sample_nodes = nodes[:3]
         logger.info(
-            "About to execute ENTITY_NODE_SAVE_BULK with %s nodes; sample: %s",
+            'About to execute ENTITY_NODE_SAVE_BULK with %s nodes; sample: %s',
             len(nodes),
             sample_nodes,
         )
-    await tx.run(entity_node_save_bulk, nodes=nodes)
+
+    # Try to save entity nodes, but handle constraint violations gracefully
+    # This prevents orphaned episodic nodes when race conditions occur
+    try:
+        await tx.run(entity_node_save_bulk, nodes=nodes)
+    except Exception as e:
+        error_msg = str(e).lower()
+        if 'unique constraint violation' in error_msg or 'constraint violation' in error_msg:
+            logger.warning(
+                f'Constraint violation during entity node bulk save (expected race condition). '
+                f'Entities likely already exist. Error: {str(e)[:200]}'
+            )
+            # Entity nodes already exist - this is OK, MERGE should have found them
+            # Continue to save edges using the existing entities
+        else:
+            # Unexpected error - re-raise
+            logger.error(f'Unexpected error during entity node bulk save: {e}')
+            raise
+
     await tx.run(
         EPISODIC_EDGE_SAVE_BULK, episodic_edges=[edge.model_dump() for edge in episodic_edges]
     )
@@ -320,13 +342,12 @@ async def dedupe_nodes_bulk(
 
     # Determine Node Resolutions
     # Check if batch deduplication is enabled
-    use_batch_dedup = (
-        os.getenv('CHUTES_ENABLE_BATCH_PROCESSING', 'false').lower() == 'true' and
-        hasattr(clients.llm_client, 'dedupe_entities_batch')
-    )
-    
+    use_batch_dedup = os.getenv(
+        'CHUTES_ENABLE_BATCH_PROCESSING', 'false'
+    ).lower() == 'true' and hasattr(clients.llm_client, 'dedupe_entities_batch')
+
     if use_batch_dedup:
-        logger.debug(f"Using batch deduplication for {len(dedupe_tuples)} episodes")
+        logger.debug(f'Using batch deduplication for {len(dedupe_tuples)} episodes')
         # Use batch processing for deduplication - single API call for all episodes
         bulk_node_resolutions = await resolve_extracted_nodes_batch(
             clients,

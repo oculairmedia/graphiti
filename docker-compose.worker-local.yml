@@ -1,0 +1,3 @@
+services:
+  graphiti-worker:
+    image: graphiti-worker-local:latest

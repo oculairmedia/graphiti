@@ -15,6 +15,7 @@ limitations under the License.
 """
 
 import logging
+import re
 from collections import defaultdict
 from time import time
 from typing import Any
@@ -60,6 +61,17 @@ MAX_SEARCH_DEPTH = 3
 MAX_QUERY_LENGTH = 128
 
 
+def _clean_fulltext_tokens(query: str) -> str:
+    tokens = query.split()
+    sanitized_tokens: list[str] = []
+    for token in tokens:
+        cleaned = token.strip()
+        if re.fullmatch(r'stash@\{\d+\}', cleaned):
+            continue
+        sanitized_tokens.append(cleaned)
+    return ' '.join(sanitized_tokens)
+
+
 def fulltext_query(query: str, group_ids: list[str] | None = None, fulltext_syntax: str = ''):
     group_ids_filter_list = (
         [fulltext_syntax + f"group_id:'{lucene_sanitize(g)}'" for g in group_ids]
@@ -72,7 +84,10 @@ def fulltext_query(query: str, group_ids: list[str] | None = None, fulltext_synt
 
     group_ids_filter += ' AND ' if group_ids_filter else ''
 
-    lucene_query = lucene_sanitize(query)
+    cleaned_query = _clean_fulltext_tokens(query)
+    if cleaned_query == '':
+        return ''
+    lucene_query = lucene_sanitize(cleaned_query)
     # If the lucene query is too long return no query
     if len(lucene_query.split(' ')) + len(group_ids or '') >= MAX_QUERY_LENGTH:
         return ''
@@ -862,138 +877,102 @@ async def get_edge_invalidation_candidates_batch(
     driver: GraphDriver,
     edges: list[EntityEdge],
     search_filter: SearchFilters,
-    min_score: float = DEFAULT_MIN_SCORE,
-    limit: int = RELEVANT_SCHEMA_LIMIT,
-    batch_size: int | None = None,  # Process edges in batches to avoid memory exhaustion
+    min_score: float,
+    limit: int,
 ) -> list[list[EntityEdge]]:
     """
-    Batched version of edge invalidation candidates to prevent FalkorDB memory exhaustion.
-    
-    This function processes edges in smaller batches instead of all at once,
-    which prevents the "Query's mem consumption exceeded capacity" error.
+    Asynchronously get edge invalidation candidates for a batch of edges.
+    This function processes edges individually to avoid FalkorDB UNWIND issues.
     """
-    if len(edges) == 0:
+    if not edges:
         return []
 
-    # Get batch size from environment or use default
-    if batch_size is None:
-        import os
-        batch_size = int(os.getenv('EDGE_INVALIDATION_BATCH_SIZE', '5'))
-    
-    logger.info(f"Processing {len(edges)} edges for invalidation in batches of {batch_size}")
+    logger.info(f'Processing {len(edges)} edges for invalidation individually')
 
-    # Process edges in batches
-    all_invalidation_edges: list[list[EntityEdge]] = []
-    
-    for i in range(0, len(edges), batch_size):
-        batch_edges = edges[i:i + batch_size]
-        logger.debug(f"Processing edge invalidation batch {i//batch_size + 1}/{(len(edges)-1)//batch_size + 1} ({len(batch_edges)} edges)")
-        
-        batch_results = await get_edge_invalidation_candidates_single_batch(
-            driver, batch_edges, search_filter, min_score, limit
-        )
-        all_invalidation_edges.extend(batch_results)
-    
-    return all_invalidation_edges
+    results = await semaphore_gather(
+        *[
+            get_edge_invalidation_candidates_single(driver, edge, search_filter, min_score, limit)
+            for edge in edges
+        ]
+    )
+
+    # The results are already in the correct order
+    return results
 
 
-async def get_edge_invalidation_candidates_single_batch(
+async def get_edge_invalidation_candidates_single(
     driver: GraphDriver,
-    edges: list[EntityEdge],
+    edge: EntityEdge,
     search_filter: SearchFilters,
-    min_score: float = DEFAULT_MIN_SCORE,
-    limit: int = RELEVANT_SCHEMA_LIMIT,
-) -> list[list[EntityEdge]]:
-    """Single batch processing for edge invalidation candidates."""
-    if len(edges) == 0:
+    min_score: float,
+    limit: int,
+) -> list[EntityEdge]:
+    """Get invalidation candidates for a single edge."""
+    if not edge.fact_embedding:
         return []
 
-    query_params: dict[str, Any] = {}
-
+    query_params: dict[str, Any] = {
+        'source_node_uuid': edge.source_node_uuid,
+        'target_node_uuid': edge.target_node_uuid,
+        'group_id': edge.group_id,
+        'embedding': edge.fact_embedding,
+        'min_score': min_score,
+        'limit': limit,
+    }
     filter_query, filter_params = edge_search_filter_query_constructor(search_filter)
     query_params.update(filter_params)
 
-    cosine_func = get_vector_cosine_func_query('e.fact_embedding', 'edge.fact_embedding', driver.provider)
-    
+    cosine_func = get_vector_cosine_func_query('e.fact_embedding', '$embedding', driver.provider)
+
     query = (
         RUNTIME_QUERY
         + """
-        UNWIND $edges AS edge
-        MATCH (n:Entity)-[e:RELATES_TO {group_id: edge.group_id}]->(m:Entity)
-        WHERE n.uuid IN [edge.source_node_uuid, edge.target_node_uuid] OR m.uuid IN [edge.target_node_uuid, edge.source_node_uuid]
+        MATCH (n:Entity)-[e:RELATES_TO {group_id: $group_id}]->(m:Entity)
+        WHERE (n.uuid = $source_node_uuid AND m.uuid = $target_node_uuid)
+           OR (n.uuid = $target_node_uuid AND m.uuid = $source_node_uuid)
         """
         + filter_query
         + """
-        WITH edge, e, """
+        WITH e, """
         + cosine_func
         + """ AS score
         WHERE score > $min_score
-        WITH edge, e, score
+        RETURN
+            e.uuid AS uuid,
+            e.group_id AS group_id,
+            startNode(e).uuid AS source_node_uuid,
+            endNode(e).uuid AS target_node_uuid,
+            e.created_at AS created_at,
+            e.name AS name,
+            e.fact AS fact,
+            e.fact_embedding AS fact_embedding,
+            coalesce(e.episodes, []) AS episodes,
+            e.expired_at AS expired_at,
+            e.valid_at AS valid_at,
+            e.invalid_at AS invalid_at,
+            properties(e) AS attributes
         ORDER BY score DESC
-        RETURN edge.uuid AS search_edge_uuid,
-            collect({
-                uuid: e.uuid,
-                source_node_uuid: startNode(e).uuid,
-                target_node_uuid: endNode(e).uuid,
-                created_at: e.created_at,
-                name: e.name,
-                group_id: e.group_id,
-                fact: e.fact,
-                fact_embedding: e.fact_embedding,
-                episodes: e.episodes,
-                expired_at: e.expired_at,
-                valid_at: e.valid_at,
-                invalid_at: e.invalid_at,
-                attributes: properties(e)
-            })[..$limit] AS matches
-        """
+        LIMIT $limit
+    """
     )
 
-    edges_data = [edge.model_dump() for edge in edges]
-    for edge_values in edges_data:
-        embedding = edge_values.get('fact_embedding')
-        if isinstance(embedding, list) and len(embedding) == 0:
-            edge_values['fact_embedding'] = None
-
     try:
-        results, _, _ = await driver.execute_query(
-            query,
-            params=query_params,
-            edges=edges_data,
-            limit=limit,
-            min_score=min_score,
-            routing_='r',
-        )
+        results, _, _ = await driver.execute_query(query, params=query_params, routing_='r')
     except Exception as e:
-        if "mem consumption exceeded capacity" in str(e):
-            logger.warning(f"Memory exhaustion in edge invalidation batch of {len(edges)} edges, retrying with smaller batch")
-            # If still getting memory errors, split into even smaller batches
-            if len(edges) <= 1:
-                logger.error("Cannot process even single edge - skipping")
-                return [[]]
-            
-            # Split the batch in half and retry
-            mid = len(edges) // 2
-            batch1_results = await get_edge_invalidation_candidates_single_batch(
-                driver, edges[:mid], search_filter, min_score, limit
+        error_message = str(e)
+        if (
+            driver.provider == 'falkordb'
+            and 'Type mismatch: expected Null or Vectorf32 but was List' in error_message
+        ):
+            logger.warning(
+                'Skipping edge %s during invalidation due to legacy list embedding; run embedding backfill to convert existing edges to Vectorf32',
+                edge.uuid,
             )
-            batch2_results = await get_edge_invalidation_candidates_single_batch(
-                driver, edges[mid:], search_filter, min_score, limit
-            )
-            return batch1_results + batch2_results
-        else:
-            raise e
-    
-    invalidation_edges_dict: dict[str, list[EntityEdge]] = {
-        result['search_edge_uuid']: [
-            get_entity_edge_from_record(record) for record in result['matches']
-        ]
-        for result in results
-    }
+            return []
+        logger.error(f'Error getting edge invalidation candidates for edge {edge.uuid}: {e}')
+        raise
 
-    invalidation_edges = [invalidation_edges_dict.get(edge.uuid, []) for edge in edges]
-
-    return invalidation_edges
+    return [get_entity_edge_from_record(record) for record in results]
 
 
 async def get_edge_invalidation_candidates(
@@ -1005,7 +984,7 @@ async def get_edge_invalidation_candidates(
 ) -> list[list[EntityEdge]]:
     """
     Edge invalidation candidates with automatic batching for memory management.
-    
+
     Uses batched processing to prevent FalkorDB memory exhaustion while maintaining
     compatibility with existing code.
     """

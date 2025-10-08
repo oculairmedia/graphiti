@@ -10,6 +10,11 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from graphiti_core.driver.falkordb_driver import FalkorDriver
+from graphiti_core.search.search import SearchFilters
+from graphiti_core.search.search_utils import (
+    DEFAULT_MIN_SCORE,
+    RELEVANT_SCHEMA_LIMIT,
+)
 
 
 async def test_batch_size_setting():
@@ -34,8 +39,14 @@ async def test_batch_size_setting():
     
     try:
         # Test with empty edge list (should work fast)
+        search_filter = SearchFilters()
+
         result = await get_edge_invalidation_candidates_batch(
-            driver, [], None
+            driver,
+            [],
+            search_filter,
+            min_score=DEFAULT_MIN_SCORE,
+            limit=RELEVANT_SCHEMA_LIMIT,
         )
         print(f"✅ Empty edge list test: {len(result)} results")
         
@@ -43,7 +54,11 @@ async def test_batch_size_setting():
         os.environ['EDGE_INVALIDATION_BATCH_SIZE'] = '3'
         
         result2 = await get_edge_invalidation_candidates_batch(
-            driver, [], None
+            driver,
+            [],
+            search_filter,
+            min_score=DEFAULT_MIN_SCORE,
+            limit=RELEVANT_SCHEMA_LIMIT,
         )
         print(f"✅ Environment variable test: {len(result2)} results")
         print(f"   EDGE_INVALIDATION_BATCH_SIZE=3 configured successfully")

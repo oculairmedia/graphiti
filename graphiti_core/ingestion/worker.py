@@ -434,7 +434,7 @@ class IngestionWorker:
             logger.info(f"Starting background deduplication for group {group_id} after {self.episode_count} episodes")
             
             # Import deduplication functions
-            from graphiti_core.utils.maintenance.node_operations import dedupe_extracted_nodes
+            from graphiti_core.utils.maintenance.node_operations import dedupe_node_list
             from graphiti_core.nodes import EntityNode
             
             # Get entities for this group
@@ -444,14 +444,10 @@ class IngestionWorker:
                 logger.debug(f"Skipping deduplication for group {group_id} - only {len(entities)} entities")
                 return
             
-            # Run deduplication with lower threshold for background processing
-            similarity_threshold = float(os.getenv('DEDUP_SIMILARITY_THRESHOLD', '0.6'))
-            
-            deduped_entities, uuid_map = await dedupe_extracted_nodes(
+            # Run deduplication
+            deduped_entities, uuid_map = await dedupe_node_list(
                 llm_client=self.graphiti.llm_client,
-                embedder=self.graphiti.embedder,
-                extracted_nodes=entities,
-                threshold=similarity_threshold
+                nodes=entities
             )
             
             merged_count = len(entities) - len(deduped_entities)
@@ -652,7 +648,7 @@ class IngestionWorker:
                 raise PermanentError("No group IDs specified for deduplication")
             
             # Import required utilities
-            from graphiti_core.utils.maintenance.node_operations import dedupe_extracted_nodes
+            from graphiti_core.utils.maintenance.node_operations import dedupe_node_list
             from graphiti_core.utils.maintenance.edge_operations import dedupe_extracted_edges
             from graphiti_core.nodes import EntityNode
             from graphiti_core.edges import EntityEdge
@@ -669,11 +665,9 @@ class IngestionWorker:
                 if nodes:
                     # Deduplicate nodes using the built-in utility
                     # This function groups similar nodes and merges them
-                    deduped_nodes, uuid_map = await dedupe_extracted_nodes(
+                    deduped_nodes, uuid_map = await dedupe_node_list(
                         llm_client=self.graphiti.llm_client,
-                        embedder=self.graphiti.embedder,
-                        extracted_nodes=nodes,
-                        threshold=payload.get('similarity_threshold', float(os.getenv('DEDUP_SIMILARITY_THRESHOLD', '0.6')))
+                        nodes=nodes
                     )
                     
                     # Count merges

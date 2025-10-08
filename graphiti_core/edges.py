@@ -57,7 +57,7 @@ ENTITY_EDGE_RETURN: LiteralString = """
 
 
 class Edge(BaseModel, ABC):
-    uuid: str = Field(default="", description='UUID of the edge')
+    uuid: str = Field(default='', description='UUID of the edge')
     group_id: str = Field(description='partition of the graph')
     source_node_uuid: str
     target_node_uuid: str
@@ -66,7 +66,7 @@ class Edge(BaseModel, ABC):
     @root_validator(pre=True)
     def generate_uuid_if_needed(cls, values):
         uuid_value = values.get('uuid', '')
-        
+
         # If UUID is already provided and valid, use it
         if uuid_value and str(uuid_value).strip():
             try:
@@ -74,16 +74,16 @@ class Edge(BaseModel, ABC):
                 return values
             except ValueError:
                 raise ValueError('Invalid UUID format')
-        
+
         # Check if deterministic UUID generation is enabled
         use_deterministic_uuids = os.getenv('USE_DETERMINISTIC_UUIDS', 'false').lower() == 'true'
-        
+
         if use_deterministic_uuids:
             # Get required fields from values
             source_uuid = values.get('source_node_uuid')
             target_uuid = values.get('target_node_uuid')
             group_id = values.get('group_id')
-            
+
             # Check if this is an EpisodicEdge (no name field) vs EntityEdge (has name field)
             if 'name' not in values:
                 # For EpisodicEdges, use 'MENTIONS' as the edge type
@@ -91,16 +91,18 @@ class Edge(BaseModel, ABC):
             else:
                 # For EntityEdges, use the actual name or default to 'RELATES_TO'
                 edge_name = values.get('name', 'RELATES_TO')
-            
+
             if source_uuid and target_uuid and group_id:
                 # Generate deterministic UUID for edges
-                values['uuid'] = generate_deterministic_edge_uuid(source_uuid, target_uuid, edge_name, group_id)
+                values['uuid'] = generate_deterministic_edge_uuid(
+                    source_uuid, target_uuid, edge_name, group_id
+                )
                 return values
-        
+
         # Fall back to random UUID
         values['uuid'] = str(uuid4())
         return values
-    
+
     @validator('uuid')
     def validate_uuid_final(cls, v):
         if not v or not v.strip():
@@ -110,18 +112,20 @@ class Edge(BaseModel, ABC):
         except ValueError:
             raise ValueError('Invalid UUID format')
         return v
-    
+
     @validator('group_id')
     def validate_group_id(cls, v):
         if not v or not v.strip():
             raise ValueError('Group ID cannot be empty')
         # Allow alphanumeric, underscores, hyphens, dots
         if not re.match(r'^[a-zA-Z0-9_.-]+$', v):
-            raise ValueError('Group ID must contain only alphanumeric characters, underscores, hyphens, and dots')
+            raise ValueError(
+                'Group ID must contain only alphanumeric characters, underscores, hyphens, and dots'
+            )
         if len(v) > 100:
             raise ValueError('Group ID cannot exceed 100 characters')
         return v
-    
+
     @validator('source_node_uuid')
     def validate_source_node_uuid(cls, v):
         if not v or not v.strip():
@@ -131,7 +135,7 @@ class Edge(BaseModel, ABC):
         except ValueError:
             raise ValueError('Invalid source node UUID format')
         return v
-    
+
     @validator('target_node_uuid')
     def validate_target_node_uuid(cls, v):
         if not v or not v.strip():
@@ -298,7 +302,7 @@ class EntityEdge(Edge):
         if len(v.strip()) > 255:
             raise ValueError('Edge name cannot exceed 255 characters')
         return v.strip()
-    
+
     @validator('fact')
     def validate_fact(cls, v):
         if not v or not v.strip():
@@ -306,7 +310,7 @@ class EntityEdge(Edge):
         if len(v.strip()) > 10000:
             raise ValueError('Edge fact cannot exceed 10000 characters')
         return v.strip()
-    
+
     @validator('fact_embedding')
     def validate_fact_embedding(cls, v):
         if v is not None:
@@ -320,7 +324,7 @@ class EntityEdge(Edge):
             if len(v) > 4096:
                 raise ValueError('Fact embedding dimension too large (max 4096)')
         return v
-    
+
     @validator('episodes')
     def validate_episodes(cls, v):
         if not isinstance(v, list):
@@ -335,14 +339,14 @@ class EntityEdge(Edge):
             except ValueError:
                 raise ValueError(f'Invalid episode UUID format: {episode_id}')
         return v
-    
+
     @validator('valid_at', 'invalid_at', 'expired_at')
     def validate_timestamps(cls, v):
         # Allow None values for optional timestamps
         if v is not None and not isinstance(v, datetime):
             raise ValueError('Timestamp must be a datetime object or None')
         return v
-    
+
     @validator('attributes')
     def validate_attributes(cls, v):
         if not isinstance(v, dict):
@@ -603,6 +607,24 @@ def get_episodic_edge_from_record(record: Any) -> EpisodicEdge:
 
 
 def get_entity_edge_from_record(record: Any) -> EntityEdge:
+    raw_episodes = record.get('episodes')
+    episodes: list[str]
+    if not raw_episodes:
+        episodes = []
+    elif isinstance(raw_episodes, str):
+        episodes = [raw_episodes]
+    elif isinstance(raw_episodes, (list, tuple, set)):
+        episodes = []
+        for episode in raw_episodes:
+            if isinstance(episode, str):
+                cleaned = episode.strip()
+                if cleaned:
+                    episodes.append(cleaned)
+            elif episode is not None:
+                episodes.append(str(episode))
+    else:
+        episodes = []
+
     edge = EntityEdge(
         uuid=record['uuid'],
         source_node_uuid=record['source_node_uuid'],
@@ -611,25 +633,26 @@ def get_entity_edge_from_record(record: Any) -> EntityEdge:
         fact_embedding=record.get('fact_embedding'),
         name=record['name'],
         group_id=record['group_id'],
-        episodes=record['episodes'],
+        episodes=episodes,
         created_at=parse_db_date(record['created_at']),  # type: ignore
         expired_at=parse_db_date(record['expired_at']),
         valid_at=parse_db_date(record['valid_at']),
         invalid_at=parse_db_date(record['invalid_at']),
-        attributes=record['attributes'],
+        attributes=record.get('attributes') or {},
     )
 
-    edge.attributes.pop('uuid', None)
-    edge.attributes.pop('source_node_uuid', None)
-    edge.attributes.pop('target_node_uuid', None)
-    edge.attributes.pop('fact', None)
-    edge.attributes.pop('name', None)
-    edge.attributes.pop('group_id', None)
-    edge.attributes.pop('episodes', None)
-    edge.attributes.pop('created_at', None)
-    edge.attributes.pop('expired_at', None)
-    edge.attributes.pop('valid_at', None)
-    edge.attributes.pop('invalid_at', None)
+    if edge.attributes:
+        edge.attributes.pop('uuid', None)
+        edge.attributes.pop('source_node_uuid', None)
+        edge.attributes.pop('target_node_uuid', None)
+        edge.attributes.pop('fact', None)
+        edge.attributes.pop('name', None)
+        edge.attributes.pop('group_id', None)
+        edge.attributes.pop('episodes', None)
+        edge.attributes.pop('created_at', None)
+        edge.attributes.pop('expired_at', None)
+        edge.attributes.pop('valid_at', None)
+        edge.attributes.pop('invalid_at', None)
 
     return edge
 
