@@ -1,0 +1,9 @@
+services:
+  graphiti-worker:
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
+      args:
+        CACHE_BUST: "${CACHE_BUST:-}"
+        FORCE_REBUILD: "${FORCE_REBUILD:-true}"
+    image: graphiti-worker:local

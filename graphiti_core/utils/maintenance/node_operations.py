@@ -50,22 +50,22 @@ from graphiti_core.utils.prompt_compression import get_prompt_compressor
 def normalize_entity_name(name: str) -> str:
     """
     Normalize entity name for consistent deduplication.
-    
+
     This ensures variations like "Claude", "claude", "CLAUDE" all map to the same entity.
     Also handles common separators and typos.
-    
+
     Args:
         name: Original entity name
-        
+
     Returns:
         Normalized entity name
     """
     if not os.getenv('DEDUP_NORMALIZE_NAMES', 'true').lower() == 'true':
         return name
-    
+
     if not name or not name.strip():
         return name
-    
+
     # Convert to lowercase
     normalized = name.lower()
     # Replace common separators with underscore
@@ -76,30 +76,30 @@ def normalize_entity_name(name: str) -> str:
     normalized = re.sub(r'_+', '_', normalized)
     # Remove leading/trailing underscores
     normalized = normalized.strip('_')
-    
+
     return normalized or name  # Fallback to original if normalization results in empty string
 
 
 def calculate_fuzzy_similarity(name1: str, name2: str) -> float:
     """
     Calculate fuzzy similarity between two entity names.
-    
+
     Uses SequenceMatcher to handle typos and minor variations.
-    
+
     Args:
         name1: First name to compare
         name2: Second name to compare
-        
+
     Returns:
         Similarity score between 0.0 and 1.0
     """
     if not name1 or not name2:
         return 0.0
-    
+
     # Normalize both names for comparison
     norm1 = normalize_entity_name(name1)
     norm2 = normalize_entity_name(name2)
-    
+
     # Calculate similarity
     return SequenceMatcher(None, norm1, norm2).ratio()
 
@@ -107,35 +107,35 @@ def calculate_fuzzy_similarity(name1: str, name2: str) -> float:
 def generate_deterministic_uuid(name: str, group_id: str) -> str:
     """
     Generate a deterministic UUID based on entity name and group_id.
-    
+
     This prevents race conditions where multiple workers create different UUIDs
-    for the same entity name. Uses UUID5 with a namespace derived from the 
+    for the same entity name. Uses UUID5 with a namespace derived from the
     name+group_id combination, ensuring consistent UUIDs across workers.
-    
+
     Args:
         name: Entity name
         group_id: Entity group ID
-        
+
     Returns:
         Deterministic UUID string
     """
     # Create a deterministic namespace based on group_id
     # This adds some pseudo-randomness while keeping it deterministic
-    group_namespace = uuid5(NAMESPACE_DNS, f"graphiti.entity.{group_id}")
-    
+    group_namespace = uuid5(NAMESPACE_DNS, f'graphiti.entity.{group_id}')
+
     # Normalize the name for consistent UUID generation
     normalized_name = normalize_entity_name(name)
-    
+
     # Generate deterministic UUID based on the normalized name within this namespace
     entity_uuid = uuid5(group_namespace, normalized_name)
-    
+
     return str(entity_uuid)
 
 
 def merge_edge_properties(existing: dict, incoming: dict) -> dict:
     """
     Merge properties from two edges following a defined policy.
-    
+
     Policy:
     - episodes: union of lists (preserve unique values)
     - created_at: keep earliest
@@ -147,7 +147,7 @@ def merge_edge_properties(existing: dict, incoming: dict) -> dict:
     - Other properties: prefer existing unless empty
     """
     merged = dict(existing)
-    
+
     # Handle episodes - union of unique values
     if 'episodes' in existing or 'episodes' in incoming:
         existing_episodes = existing.get('episodes', [])
@@ -163,30 +163,30 @@ def merge_edge_properties(existing: dict, incoming: dict) -> dict:
             if ep not in merged_episodes:
                 merged_episodes.append(ep)
         merged['episodes'] = merged_episodes
-    
+
     # Handle timestamps
     if 'created_at' in existing and 'created_at' in incoming:
         merged['created_at'] = min(existing['created_at'], incoming['created_at'])
     elif 'created_at' in incoming:
         merged['created_at'] = incoming['created_at']
-    
+
     if 'valid_at' in existing and 'valid_at' in incoming:
         merged['valid_at'] = min(existing['valid_at'], incoming['valid_at'])
     elif 'valid_at' in incoming:
         merged['valid_at'] = incoming['valid_at']
-    
+
     if 'invalid_at' in existing and 'invalid_at' in incoming:
         merged['invalid_at'] = max(existing['invalid_at'], incoming['invalid_at'])
     elif 'invalid_at' in incoming:
         merged['invalid_at'] = incoming['invalid_at']
-    
+
     # Handle fact and fact_embedding - prefer existing unless empty
     if 'fact' in incoming and not existing.get('fact'):
         merged['fact'] = incoming['fact']
-    
+
     if 'fact_embedding' in incoming and not existing.get('fact_embedding'):
         merged['fact_embedding'] = incoming['fact_embedding']
-    
+
     # Handle attributes - merge dictionaries
     if 'attributes' in existing or 'attributes' in incoming:
         existing_attrs = existing.get('attributes', {})
@@ -197,15 +197,25 @@ def merge_edge_properties(existing: dict, incoming: dict) -> dict:
                 if key not in merged_attrs:
                     merged_attrs[key] = value
             merged['attributes'] = merged_attrs
-    
+
     # For other properties, use incoming only if existing is empty
     for key, value in incoming.items():
-        if key not in ['episodes', 'created_at', 'valid_at', 'invalid_at', 
-                       'fact', 'fact_embedding', 'attributes', 'group_id']:
+        if key not in [
+            'episodes',
+            'created_at',
+            'valid_at',
+            'invalid_at',
+            'fact',
+            'fact_embedding',
+            'attributes',
+            'group_id',
+        ]:
             if key not in merged or merged[key] is None:
                 merged[key] = value
-    
+
     return merged
+
+
 from graphiti_core.utils.maintenance.edge_operations import filter_existing_duplicate_of_edges
 
 logger = logging.getLogger(__name__)
@@ -315,24 +325,35 @@ async def extract_nodes(
     filtered_extracted_entities = []
     for entity in extracted_entities:
         # Multiple validation checks for entity names
-        if (entity.name and 
-            isinstance(entity.name, str) and 
-            entity.name.strip() and 
-            len(entity.name.strip()) > 0 and
-            entity.name.strip() != "null" and
-            entity.name.strip() != "None"):
+        if (
+            entity.name
+            and isinstance(entity.name, str)
+            and entity.name.strip()
+            and len(entity.name.strip()) > 0
+            and entity.name.strip() != 'null'
+            and entity.name.strip() != 'None'
+        ):
             filtered_extracted_entities.append(entity)
         else:
-            logger.warning(f"Skipping entity with invalid name: '{entity.name}' (type: {type(entity.name)})")
-    
+            logger.warning(
+                f"Skipping entity with invalid name: '{entity.name}' (type: {type(entity.name)})"
+            )
+
     end = time()
     logger.debug(f'Extracted new nodes: {filtered_extracted_entities} in {(end - start) * 1000} ms')
     # Convert the extracted data into EntityNode objects
     extracted_nodes = []
     for extracted_entity in filtered_extracted_entities:
-        entity_type_name = entity_types_context[extracted_entity.entity_type_id].get(
-            'entity_type_name'
-        )
+        # Defensive check for entity_type_id
+        entity_type_id = extracted_entity.entity_type_id
+        if entity_type_id < 0 or entity_type_id >= len(entity_types_context):
+            logger.warning(
+                f"Invalid entity_type_id {entity_type_id} for entity '{extracted_entity.name}'. "
+                f'Valid range: 0-{len(entity_types_context) - 1}. Defaulting to 0 (Entity).'
+            )
+            entity_type_id = 0
+
+        entity_type_name = entity_types_context[entity_type_id].get('entity_type_name')
 
         # Check if this entity type should be excluded
         if excluded_entity_types and entity_type_name in excluded_entity_types:
@@ -343,8 +364,10 @@ async def extract_nodes(
 
         # Final safety check before creating EntityNode
         validated_name = str(extracted_entity.name).strip()
-        if not validated_name or validated_name in ["null", "None", ""]:
-            logger.error(f"CRITICAL: Entity name validation failed at EntityNode creation: '{extracted_entity.name}'")
+        if not validated_name or validated_name in ['null', 'None', '']:
+            logger.error(
+                f"CRITICAL: Entity name validation failed at EntityNode creation: '{extracted_entity.name}'"
+            )
             continue
 
         new_node = EntityNode(
@@ -383,25 +406,33 @@ async def resolve_extracted_nodes(
     # SERIALIZED exact name matching to fix race condition in batch processing
     # Process each node sequentially to ensure proper deduplication within episodes
     if existing_nodes_override is None:
-        logger.debug(f"Starting serialized exact name matching for {len(extracted_nodes)} nodes")
-        
+        logger.debug(f'Starting serialized exact name matching for {len(extracted_nodes)} nodes')
+
         # Track nodes we've already resolved within this episode to prevent duplicates
         episode_resolved_nodes: dict[str, EntityNode] = {}
-        
+
         for i, node in enumerate(extracted_nodes):
-            logger.debug(f"Processing node {i+1}/{len(extracted_nodes)}: '{node.name}' (group: {node.group_id})")
-            
+            logger.debug(
+                f"Processing node {i + 1}/{len(extracted_nodes)}: '{node.name}' (group: {node.group_id})"
+            )
+
             # First check if we've already resolved this name within this episode
-            episode_key = f"{node.name}|{node.group_id}" if not enable_cross_graph_deduplication else node.name
+            episode_key = (
+                f'{node.name}|{node.group_id}'
+                if not enable_cross_graph_deduplication
+                else node.name
+            )
             if episode_key in episode_resolved_nodes:
                 # Found within this episode - use the already resolved node
                 existing_node = episode_resolved_nodes[episode_key]
                 resolved_nodes.append(existing_node)
                 uuid_map[node.uuid] = existing_node.uuid
                 node_duplicates.append((node, existing_node))
-                logger.debug(f"Found within-episode match for '{node.name}' - using node {existing_node.uuid}")
+                logger.debug(
+                    f"Found within-episode match for '{node.name}' - using node {existing_node.uuid}"
+                )
                 continue
-            
+
             # Query for exact name matches in database
             if enable_cross_graph_deduplication:
                 # Cross-graph deduplication: search across all groups
@@ -412,9 +443,7 @@ async def resolve_extracted_nodes(
                 ORDER BY n.created_at
                 LIMIT 1
                 """
-                records, _, _ = await driver.execute_query(
-                    exact_query, name=node.name
-                )
+                records, _, _ = await driver.execute_query(exact_query, name=node.name)
             else:
                 # Standard deduplication: only within same group
                 exact_query = """
@@ -456,7 +485,7 @@ async def resolve_extracted_nodes(
                 # No exact match found - try fuzzy matching before LLM resolution
                 fuzzy_threshold = float(os.getenv('DEDUP_FUZZY_THRESHOLD', '0.9'))
                 fuzzy_match_found = False
-                
+
                 if os.getenv('ENABLE_AGGRESSIVE_DEDUP', 'true').lower() == 'true':
                     # Query for potential fuzzy matches (get more candidates)
                     if enable_cross_graph_deduplication:
@@ -475,18 +504,20 @@ async def resolve_extracted_nodes(
                         ORDER BY n.created_at
                         LIMIT 50
                         """
-                        fuzzy_records, _, _ = await driver.execute_query(fuzzy_query, group_id=node.group_id)
-                    
+                        fuzzy_records, _, _ = await driver.execute_query(
+                            fuzzy_query, group_id=node.group_id
+                        )
+
                     # Check fuzzy similarity with existing nodes
                     for record in fuzzy_records:
                         n = record.get('n')
                         if n and hasattr(n, 'properties'):
                             props = n.properties
                             existing_name = props.get('name', '')
-                            
+
                             # Calculate fuzzy similarity
                             similarity = calculate_fuzzy_similarity(node.name, existing_name)
-                            
+
                             if similarity >= fuzzy_threshold:
                                 # Found fuzzy match - use existing node
                                 existing_node = EntityNode(
@@ -505,17 +536,21 @@ async def resolve_extracted_nodes(
                                 fuzzy_match_found = True
                                 logger.debug(
                                     f"Found fuzzy match for '{node.name}' -> '{existing_name}' "
-                                    f"(similarity: {similarity:.3f}) - using node {existing_node.uuid}"
+                                    f'(similarity: {similarity:.3f}) - using node {existing_node.uuid}'
                                 )
                                 break
-                
+
                 if not fuzzy_match_found:
                     # No exact or fuzzy match found - this node will be new
                     episode_resolved_nodes[episode_key] = node
                     nodes_needing_llm_resolution.append(node)
-                    logger.debug(f"No exact or fuzzy match found for '{node.name}' - will be created as new node")
-        
-        logger.debug(f"Serialized processing complete: {len(resolved_nodes)} resolved, {len(nodes_needing_llm_resolution)} need LLM resolution")
+                    logger.debug(
+                        f"No exact or fuzzy match found for '{node.name}' - will be created as new node"
+                    )
+
+        logger.debug(
+            f'Serialized processing complete: {len(resolved_nodes)} resolved, {len(nodes_needing_llm_resolution)} need LLM resolution'
+        )
     else:
         # If override is provided, all nodes need LLM resolution
         nodes_needing_llm_resolution = extracted_nodes
@@ -583,10 +618,7 @@ async def resolve_extracted_nodes(
         existing_nodes_text, compression_stats = compressor.compress_existing_entities(
             existing_nodes
         )
-        if (
-            compression_stats.original_tokens
-            and compression_stats.compression_ratio < 0.95
-        ):
+        if compression_stats.original_tokens and compression_stats.compression_ratio < 0.95:
             logger.debug(
                 'Dedup prompt compression applied: %s',
                 compression_stats.__dict__,
@@ -598,15 +630,12 @@ async def resolve_extracted_nodes(
         if existing_nodes_override is None:
             for result in chunk_search_results:
                 candidate_indices = [
-                    uuid_to_idx[node.uuid]
-                    for node in result.nodes
-                    if node.uuid in uuid_to_idx
+                    uuid_to_idx[node.uuid] for node in result.nodes if node.uuid in uuid_to_idx
                 ]
                 duplication_candidates.append(candidate_indices)
         else:
             duplication_candidates = [
-                [meta['idx'] for meta in existing_nodes_metadata]
-                for _ in chunk_nodes
+                [meta['idx'] for meta in existing_nodes_metadata] for _ in chunk_nodes
             ]
 
         chunk_indices = list(range(chunk_start, chunk_start + len(chunk_nodes)))
@@ -644,7 +673,7 @@ async def resolve_extracted_nodes(
             response_model=NodeResolutions,
         )
         logger.info(
-            "LLM node dedupe response for chunk starting at %s: %s",
+            'LLM node dedupe response for chunk starting at %s: %s',
             chunk_start,
             llm_response,
         )
@@ -762,10 +791,10 @@ async def resolve_extracted_nodes_batch(
 ) -> list[tuple[list[EntityNode], dict[str, str], list[tuple[EntityNode, EntityNode]]]]:
     """
     Batch version of resolve_extracted_nodes that processes multiple episodes in a single LLM call.
-    
+
     This function deduplicates entities across multiple episodes using a single API call,
     significantly reducing quota usage while maintaining the same accuracy.
-    
+
     Args:
         clients: GraphitiClients instance
         batch_extracted_nodes: List of extracted nodes for each episode
@@ -773,7 +802,7 @@ async def resolve_extracted_nodes_batch(
         previous_episodes_list: Optional list of previous episodes for each episode
         entity_types: Optional entity type definitions
         enable_cross_graph_deduplication: Whether to deduplicate across graphs
-        
+
     Returns:
         List of tuples (resolved_nodes, uuid_map, node_duplicates) for each episode
     """
@@ -783,20 +812,24 @@ async def resolve_extracted_nodes_batch(
 
     if not batch_extracted_nodes:
         return []
-    
+
     # Check if we're using ChutesClient with batch support
     use_batch_dedup = (
-        hasattr(llm_client, 'dedupe_entities_batch') and 
-        os.getenv('CHUTES_ENABLE_BATCH_PROCESSING', 'false').lower() == 'true'
+        hasattr(llm_client, 'dedupe_entities_batch')
+        and os.getenv('CHUTES_ENABLE_BATCH_PROCESSING', 'false').lower() == 'true'
     )
-    
+
     if not use_batch_dedup:
         # Fall back to individual processing if batch not supported
-        logger.debug("Batch deduplication not available, falling back to individual processing")
+        logger.debug('Batch deduplication not available, falling back to individual processing')
         results = []
         for i, extracted_nodes in enumerate(batch_extracted_nodes):
             episode = episodes[i] if i < len(episodes) else None
-            previous_episodes = previous_episodes_list[i] if previous_episodes_list and i < len(previous_episodes_list) else None
+            previous_episodes = (
+                previous_episodes_list[i]
+                if previous_episodes_list and i < len(previous_episodes_list)
+                else None
+            )
             result = await resolve_extracted_nodes(
                 clients,
                 extracted_nodes,
@@ -804,29 +837,33 @@ async def resolve_extracted_nodes_batch(
                 previous_episodes,
                 entity_types,
                 existing_nodes_override=None,
-                enable_cross_graph_deduplication=enable_cross_graph_deduplication
+                enable_cross_graph_deduplication=enable_cross_graph_deduplication,
             )
             results.append(result)
         return results
-    
-    logger.debug(f"Starting batch deduplication for {len(batch_extracted_nodes)} episodes")
-    
+
+    logger.debug(f'Starting batch deduplication for {len(batch_extracted_nodes)} episodes')
+
     # Process exact name matching first (as in original)
     batch_results = []
     all_nodes_needing_llm = []
     episode_node_indices = []  # Track which nodes belong to which episode
-    
+
     for episode_idx, extracted_nodes in enumerate(batch_extracted_nodes):
         resolved_nodes = []
         uuid_map = {}
         node_duplicates = []
         nodes_needing_llm_resolution = []
         episode_resolved_nodes = {}
-        
+
         # First pass: exact name matching (serialized as in original)
         for node in extracted_nodes:
-            episode_key = f"{node.name}|{node.group_id}" if not enable_cross_graph_deduplication else node.name
-            
+            episode_key = (
+                f'{node.name}|{node.group_id}'
+                if not enable_cross_graph_deduplication
+                else node.name
+            )
+
             if episode_key in episode_resolved_nodes:
                 # Found within this episode
                 existing_node = episode_resolved_nodes[episode_key]
@@ -834,7 +871,7 @@ async def resolve_extracted_nodes_batch(
                 uuid_map[node.uuid] = existing_node.uuid
                 node_duplicates.append((node, existing_node))
                 continue
-            
+
             # Query for exact matches in database
             if enable_cross_graph_deduplication:
                 exact_query = """
@@ -844,9 +881,7 @@ async def resolve_extracted_nodes_batch(
                 ORDER BY n.created_at
                 LIMIT 1
                 """
-                records, _, _ = await driver.execute_query(
-                    exact_query, name=node.name
-                )
+                records, _, _ = await driver.execute_query(exact_query, name=node.name)
             else:
                 exact_query = """
                 MATCH (n:Entity)
@@ -858,7 +893,7 @@ async def resolve_extracted_nodes_batch(
                 records, _, _ = await driver.execute_query(
                     exact_query, name=node.name, group_id=node.group_id
                 )
-            
+
             if records:
                 # Found exact match in database
                 db_node_data = records[0]['n']
@@ -872,31 +907,33 @@ async def resolve_extracted_nodes_batch(
                 nodes_needing_llm_resolution.append(node)
                 all_nodes_needing_llm.append(node)
                 episode_node_indices.append(episode_idx)
-        
+
         # Store intermediate results
-        batch_results.append({
-            'resolved_nodes': resolved_nodes,
-            'uuid_map': uuid_map,
-            'node_duplicates': node_duplicates,
-            'nodes_needing_llm': nodes_needing_llm_resolution,
-            'episode_resolved_nodes': episode_resolved_nodes
-        })
-    
+        batch_results.append(
+            {
+                'resolved_nodes': resolved_nodes,
+                'uuid_map': uuid_map,
+                'node_duplicates': node_duplicates,
+                'nodes_needing_llm': nodes_needing_llm_resolution,
+                'episode_resolved_nodes': episode_resolved_nodes,
+            }
+        )
+
     # Now do batch LLM deduplication for all nodes needing resolution
     if all_nodes_needing_llm:
-        logger.debug(f"Processing {len(all_nodes_needing_llm)} nodes needing LLM deduplication")
-        
+        logger.debug(f'Processing {len(all_nodes_needing_llm)} nodes needing LLM deduplication')
+
         # Prepare data for batch deduplication
         episodes_nodes_for_llm = []
         episode_contents = []
-        
+
         for episode_idx, episode in enumerate(episodes):
             nodes_for_episode = [
                 {
                     'name': node.name,
                     'labels': node.labels,
                     'uuid': node.uuid,
-                    'summary': node.summary
+                    'summary': node.summary,
                 }
                 for i, node in enumerate(all_nodes_needing_llm)
                 if episode_node_indices[i] == episode_idx
@@ -904,7 +941,7 @@ async def resolve_extracted_nodes_batch(
             if nodes_for_episode:
                 episodes_nodes_for_llm.append(nodes_for_episode)
                 episode_contents.append(episode.content if episode else '')
-        
+
         # Get existing nodes for comparison
         existing_nodes = []
         existing_candidate_limit = max(1, NODE_HYBRID_SEARCH_RRF.limit * 2)
@@ -915,7 +952,9 @@ async def resolve_extracted_nodes_batch(
             ORDER BY n.created_at
             LIMIT $limit
             """
-            records, _, _ = await driver.execute_query(existing_query, limit=existing_candidate_limit)
+            records, _, _ = await driver.execute_query(
+                existing_query, limit=existing_candidate_limit
+            )
         else:
             # Get existing nodes for all relevant groups
             group_ids = list(set(node.group_id for node in all_nodes_needing_llm))
@@ -932,13 +971,13 @@ async def resolve_extracted_nodes_batch(
                 )
             else:
                 records = []
-        
+
         existing_nodes_raw = [
             {
                 'name': record['n']['name'],
                 'labels': record['n'].get('labels', []),
                 'uuid': record['n']['uuid'],
-                'summary': record['n'].get('summary', '')
+                'summary': record['n'].get('summary', ''),
             }
             for record in records
         ]
@@ -946,10 +985,7 @@ async def resolve_extracted_nodes_batch(
         existing_nodes_text, compression_stats = compressor.compress_existing_entities_for_batch(
             existing_nodes_raw
         )
-        if (
-            compression_stats.original_tokens
-            and compression_stats.compression_ratio < 0.95
-        ):
+        if compression_stats.original_tokens and compression_stats.compression_ratio < 0.95:
             logger.debug(
                 'Batch dedup prompt compression applied: %s',
                 compression_stats.__dict__,
@@ -972,19 +1008,19 @@ async def resolve_extracted_nodes_batch(
             existing_nodes_metadata,
             existing_nodes_text=existing_nodes_text,
         )
-        
+
         # Process LLM resolutions
         node_resolutions = llm_response.get('entity_resolutions', [])
-        
+
         # Map resolutions back to episodes
         for resolution in node_resolutions:
             resolution_id = resolution.get('id', -1)
             duplicate_idx = resolution.get('duplicate_idx', -1)
-            
+
             if 0 <= resolution_id < len(all_nodes_needing_llm):
                 node = all_nodes_needing_llm[resolution_id]
                 episode_idx = episode_node_indices[resolution_id]
-                
+
                 # Find or create the resolved node
                 if 0 <= duplicate_idx < len(existing_nodes_raw):
                     # It's a duplicate of an existing node
@@ -993,17 +1029,17 @@ async def resolve_extracted_nodes_batch(
                         name=existing_nodes_raw[duplicate_idx]['name'],
                         labels=existing_nodes_raw[duplicate_idx]['labels'],
                         summary=existing_nodes_raw[duplicate_idx]['summary'],
-                        group_id=node.group_id
+                        group_id=node.group_id,
                     )
                     batch_results[episode_idx]['node_duplicates'].append((node, resolved_node))
                 else:
                     # It's a new unique node
                     resolved_node = node
                     batch_results[episode_idx]['episode_resolved_nodes'][node.name] = node
-                
+
                 batch_results[episode_idx]['resolved_nodes'].append(resolved_node)
                 batch_results[episode_idx]['uuid_map'][node.uuid] = resolved_node.uuid
-    
+
     # Convert batch results to expected format
     final_results = []
     for result in batch_results:
@@ -1011,12 +1047,8 @@ async def resolve_extracted_nodes_batch(
         new_node_duplicates = await filter_existing_duplicate_of_edges(
             driver, result['node_duplicates']
         )
-        final_results.append((
-            result['resolved_nodes'],
-            result['uuid_map'],
-            new_node_duplicates
-        ))
-    
+        final_results.append((result['resolved_nodes'], result['uuid_map'], new_node_duplicates))
+
     return final_results
 
 
@@ -1057,10 +1089,10 @@ async def extract_attributes_from_node(
     entity_type: BaseModel | None = None,
 ) -> EntityNode:
     # Debug logging: Track input state
-    logger.debug(f"🔍 extract_attributes_from_node - Input node: {node.name}")
-    logger.debug(f"   Original summary length: {len(node.summary)}")
-    logger.debug(f"   LLM client type: {type(llm_client).__name__}")
-    
+    logger.debug(f'🔍 extract_attributes_from_node - Input node: {node.name}')
+    logger.debug(f'   Original summary length: {len(node.summary)}')
+    logger.debug(f'   LLM client type: {type(llm_client).__name__}')
+
     node_context: dict[str, Any] = {
         'name': node.name,
         'summary': node.summary,
@@ -1096,25 +1128,27 @@ async def extract_attributes_from_node(
     }
 
     # Debug logging: Track LLM call
-    logger.debug(f"🔍 Calling LLM for summary generation - Episode content length: {len(summary_context.get('episode_content', ''))}")
-    
+    logger.debug(
+        f'🔍 Calling LLM for summary generation - Episode content length: {len(summary_context.get("episode_content", ""))}'
+    )
+
     llm_response = await llm_client.generate_response(
         prompt_library.extract_nodes.extract_attributes(summary_context),
         response_model=entity_attributes_model,
         model_size=ModelSize.small,
     )
-    
+
     # Debug logging: Track LLM response
-    logger.debug(f"🔍 LLM Response received - Type: {type(llm_response)}")
+    logger.debug(f'🔍 LLM Response received - Type: {type(llm_response)}')
     if isinstance(llm_response, dict):
-        logger.debug(f"   Response keys: {list(llm_response.keys())}")
+        logger.debug(f'   Response keys: {list(llm_response.keys())}')
         if 'summary' in llm_response:
-            logger.debug(f"   Summary in response: {len(llm_response['summary'])} characters")
-            logger.debug(f"   Summary preview: {llm_response['summary'][:100]}...")
+            logger.debug(f'   Summary in response: {len(llm_response["summary"])} characters')
+            logger.debug(f'   Summary preview: {llm_response["summary"][:100]}...')
         else:
             logger.warning(f"   ⚠️ No 'summary' key in LLM response!")
     else:
-        logger.warning(f"   ⚠️ LLM response is not a dict: {llm_response}")
+        logger.warning(f'   ⚠️ LLM response is not a dict: {llm_response}')
 
     original_summary = node.summary
     node.summary = llm_response.get('summary', node.summary)
@@ -1124,14 +1158,14 @@ async def extract_attributes_from_node(
         del node_attributes['summary']
 
     node.attributes.update(node_attributes)
-    
+
     # Debug logging: Track final state
-    logger.debug(f"🔍 Summary update result:")
-    logger.debug(f"   Original: {len(original_summary)} characters")
-    logger.debug(f"   Updated:  {len(node.summary)} characters") 
-    logger.debug(f"   Changed:  {node.summary != original_summary}")
+    logger.debug(f'🔍 Summary update result:')
+    logger.debug(f'   Original: {len(original_summary)} characters')
+    logger.debug(f'   Updated:  {len(node.summary)} characters')
+    logger.debug(f'   Changed:  {node.summary != original_summary}')
     if node.summary != original_summary:
-        logger.info(f"✅ Summary generated for {node.name}: {len(node.summary)} characters")
+        logger.info(f'✅ Summary generated for {node.name}: {len(node.summary)} characters')
 
     return node
 
@@ -1192,17 +1226,17 @@ async def merge_node_into(
 ) -> dict[str, Any]:
     """
     Physically merge a duplicate node into a canonical node by transferring all edges.
-    
+
     This function transfers all incoming and outgoing edges from the duplicate node
     to the canonical node, preserving edge properties and maintaining an audit trail.
-    
+
     Args:
         driver: The graph database driver (Neo4j or FalkorDB)
         canonical_uuid: UUID of the canonical node to merge into
         duplicate_uuid: UUID of the duplicate node to merge from
         maintain_audit_trail: Whether to keep IS_DUPLICATE_OF edge for audit
         recalculate_centrality: Whether to trigger centrality recalculation after merge
-        
+
     Returns:
         Dictionary with merge statistics (edges_transferred, conflicts_resolved, etc.)
     """
@@ -1213,52 +1247,72 @@ async def merge_node_into(
         'errors': [],
         'duration_ms': 0,
     }
-    
+
     try:
         # Step 0: Get the canonical node's group_id for partition awareness
         get_canonical_query = """
         MATCH (canonical:Entity {uuid: $canonical_uuid})
-        RETURN canonical.group_id as group_id
+        RETURN canonical.group_id as group_id, canonical.name as name
         """
         canonical_result, _, _ = await driver.execute_query(
-            get_canonical_query,
-            canonical_uuid=canonical_uuid
+            get_canonical_query, canonical_uuid=canonical_uuid
         )
-        
+
         if not canonical_result:
             raise ValueError(f'Canonical node {canonical_uuid} not found')
-        
+
         canonical_group_id = canonical_result[0].get('group_id')
-        logger.debug(f'Canonical node {canonical_uuid} has group_id: {canonical_group_id}')
-        
+        canonical_name = canonical_result[0].get('name')
+        logger.debug(
+            'Canonical node %s has group_id %s (name: %s)',
+            canonical_uuid,
+            canonical_group_id,
+            canonical_name,
+        )
+
         # Verify duplicate is in same partition
         get_duplicate_query = """
         MATCH (duplicate:Entity {uuid: $duplicate_uuid})
-        RETURN duplicate.group_id as group_id
+        RETURN duplicate.group_id as group_id, duplicate.name as name
         """
         duplicate_result, _, _ = await driver.execute_query(
-            get_duplicate_query,
-            duplicate_uuid=duplicate_uuid
+            get_duplicate_query, duplicate_uuid=duplicate_uuid
         )
-        
+
         if not duplicate_result:
             raise ValueError(f'Duplicate node {duplicate_uuid} not found')
-            
+
         duplicate_group_id = duplicate_result[0].get('group_id')
-        
+        duplicate_name = duplicate_result[0].get('name')
+        logger.debug(
+            'Duplicate node %s has group_id %s (name: %s)',
+            duplicate_uuid,
+            duplicate_group_id,
+            duplicate_name,
+        )
+
         if canonical_group_id != duplicate_group_id and not allow_cross_graph_merge:
             raise ValueError(
                 f'Cannot merge across partitions: canonical group_id={canonical_group_id}, '
                 f'duplicate group_id={duplicate_group_id}. Set allow_cross_graph_merge=True to enable cross-graph merging.'
             )
-        
+
         # Log cross-graph merge if it's happening
         if canonical_group_id != duplicate_group_id:
             logger.info(
                 f'Performing cross-graph merge: {duplicate_uuid} (group: {duplicate_group_id}) -> '
                 f'{canonical_uuid} (group: {canonical_group_id})'
             )
-        
+        else:
+            logger.info(
+                'Merging duplicate %s (%s) into canonical %s (%s) in group %s',
+                duplicate_uuid,
+                duplicate_name,
+                canonical_uuid,
+                canonical_name,
+                canonical_group_id,
+            )
+
         # Step 1: Transfer all incoming edges from duplicate to canonical
         incoming_query = """
         MATCH (source)-[r]->(duplicate:Entity {uuid: $duplicate_uuid})
@@ -1269,7 +1323,7 @@ async def merge_node_into(
         DELETE r
         RETURN COUNT(new_edge) as transferred
         """
-        
+
         # FalkorDB doesn't support dynamic relationship types, so we need a different approach
         if driver.provider == 'falkordb':
             # Get all incoming edges first
@@ -1278,44 +1332,59 @@ async def merge_node_into(
             RETURN source.uuid as source_uuid, type(r) as rel_type, properties(r) as props
             """
             incoming_result, _, _ = await driver.execute_query(
-                get_incoming_query,
-                duplicate_uuid=duplicate_uuid
+                get_incoming_query, duplicate_uuid=duplicate_uuid
             )
-            
+
             # Transfer each edge individually
             for edge in incoming_result:
                 source_uuid = edge['source_uuid']
                 rel_type = edge['rel_type']
-                props = edge['props'] or {}
-                
+                props = dict(edge.get('props') or {})
+                edge_uuid = props.get('uuid') or str(uuid4())
+                props['uuid'] = edge_uuid
+                props['group_id'] = (
+                    props.get('group_id') or canonical_group_id or duplicate_group_id
+                )
+                additional_props = dict(props)
+                additional_props.pop('uuid', None)
+                additional_props.pop('group_id', None)
+
                 # Check if edge already exists
+
                 check_query = f"""
                 MATCH (source:Entity {{uuid: $source_uuid}})-[r:{rel_type}]->(canonical:Entity {{uuid: $canonical_uuid}})
                 RETURN COUNT(r) as count
                 """
                 check_result, _, _ = await driver.execute_query(
-                    check_query,
-                    source_uuid=source_uuid,
-                    canonical_uuid=canonical_uuid
+                    check_query, source_uuid=source_uuid, canonical_uuid=canonical_uuid
                 )
-                
+
                 if check_result[0]['count'] == 0:
-                    # Create new edge with group_id from canonical node
-                    props['group_id'] = canonical_group_id
+                    # Create new edge with uuid and group info set inline
                     create_query = f"""
                     MATCH (source:Entity {{uuid: $source_uuid}})
                     MATCH (canonical:Entity {{uuid: $canonical_uuid}})
-                    CREATE (source)-[r:{rel_type}]->(canonical)
-                    SET r = $props
+                    CREATE (source)-[r:{rel_type} {{uuid: $edge_uuid, group_id: $group_id}}]->(canonical)
+                    SET r += $additional_props
                     RETURN r
                     """
+                    logger.info(
+                        'Creating new incoming edge %s -> %s of type %s with props: %s',
+                        source_uuid,
+                        canonical_uuid,
+                        rel_type,
+                        props,
+                    )
                     await driver.execute_query(
                         create_query,
                         source_uuid=source_uuid,
                         canonical_uuid=canonical_uuid,
-                        props=props
+                        edge_uuid=edge_uuid,
+                        group_id=props['group_id'],
+                        additional_props=additional_props,
                     )
                     stats['edges_transferred'] += 1
+
                 else:
                     # Merge properties with existing edge
                     get_existing_query = f"""
@@ -1323,42 +1392,56 @@ async def merge_node_into(
                     RETURN properties(r) as existing_props
                     """
                     existing_result, _, _ = await driver.execute_query(
-                        get_existing_query,
-                        source_uuid=source_uuid,
-                        canonical_uuid=canonical_uuid
+                        get_existing_query, source_uuid=source_uuid, canonical_uuid=canonical_uuid
                     )
-                    
+
                     if existing_result:
                         existing_props = existing_result[0].get('existing_props', {})
                         merged_props = merge_edge_properties(existing_props, props)
-                        
+
                         # Update the existing edge with merged properties
                         update_query = f"""
                         MATCH (source:Entity {{uuid: $source_uuid}})-[r:{rel_type}]->(canonical:Entity {{uuid: $canonical_uuid}})
                         SET r = $merged_props
                         RETURN r
                         """
+                        logger.info(
+                            'Merging properties into existing incoming edge %s -> %s (%s): existing=%s incoming=%s merged=%s',
+                            source_uuid,
+                            canonical_uuid,
+                            rel_type,
+                            existing_props,
+                            props,
+                            merged_props,
+                        )
                         await driver.execute_query(
                             update_query,
                             source_uuid=source_uuid,
                             canonical_uuid=canonical_uuid,
-                            merged_props=merged_props
+                            merged_props=merged_props,
                         )
-                    
+                    else:
+                        logger.warning(
+                            'Incoming edge %s -> %s of type %s reported existing but returned no properties; props=%s',
+                            source_uuid,
+                            canonical_uuid,
+                            rel_type,
+                            props,
+                        )
+
                     stats['conflicts_resolved'] += 1
-                    
+
             # Delete original incoming edges
+
             delete_incoming_query = """
             MATCH (source)-[r]->(duplicate:Entity {uuid: $duplicate_uuid})
             WHERE source.uuid <> $canonical_uuid
             DELETE r
             """
             await driver.execute_query(
-                delete_incoming_query,
-                duplicate_uuid=duplicate_uuid,
-                canonical_uuid=canonical_uuid
+                delete_incoming_query, duplicate_uuid=duplicate_uuid, canonical_uuid=canonical_uuid
             )
-            
+
         # Step 2: Transfer all outgoing edges from duplicate to canonical
         if driver.provider == 'falkordb':
             # Get all outgoing edges
@@ -1367,48 +1450,62 @@ async def merge_node_into(
             RETURN target.uuid as target_uuid, type(r) as rel_type, properties(r) as props
             """
             outgoing_result, _, _ = await driver.execute_query(
-                get_outgoing_query,
-                duplicate_uuid=duplicate_uuid
+                get_outgoing_query, duplicate_uuid=duplicate_uuid
             )
-            
+
             # Transfer each edge
             for edge in outgoing_result:
                 target_uuid = edge['target_uuid']
                 rel_type = edge['rel_type']
-                props = edge['props'] or {}
-                
+                props = dict(edge.get('props') or {})
+                edge_uuid = props.get('uuid') or str(uuid4())
+                props['uuid'] = edge_uuid
+                props['group_id'] = (
+                    props.get('group_id') or canonical_group_id or duplicate_group_id
+                )
+                additional_props = dict(props)
+                additional_props.pop('uuid', None)
+                additional_props.pop('group_id', None)
+
                 # Skip self-references to canonical
                 if target_uuid == canonical_uuid:
                     continue
-                    
+
                 # Check if edge already exists
                 check_query = f"""
                 MATCH (canonical:Entity {{uuid: $canonical_uuid}})-[r:{rel_type}]->(target:Entity {{uuid: $target_uuid}})
                 RETURN COUNT(r) as count
                 """
                 check_result, _, _ = await driver.execute_query(
-                    check_query,
-                    canonical_uuid=canonical_uuid,
-                    target_uuid=target_uuid
+                    check_query, canonical_uuid=canonical_uuid, target_uuid=target_uuid
                 )
-                
+
                 if check_result[0]['count'] == 0:
-                    # Create new edge with group_id from canonical node
-                    props['group_id'] = canonical_group_id
+                    # Create new edge with uuid and group info set inline
                     create_query = f"""
                     MATCH (canonical:Entity {{uuid: $canonical_uuid}})
                     MATCH (target:Entity {{uuid: $target_uuid}})
-                    CREATE (canonical)-[r:{rel_type}]->(target)
-                    SET r = $props
+                    CREATE (canonical)-[r:{rel_type} {{uuid: $edge_uuid, group_id: $group_id}}]->(target)
+                    SET r += $additional_props
                     RETURN r
                     """
+                    logger.info(
+                        'Creating new outgoing edge %s -> %s of type %s with props: %s',
+                        canonical_uuid,
+                        target_uuid,
+                        rel_type,
+                        props,
+                    )
                     await driver.execute_query(
                         create_query,
                         canonical_uuid=canonical_uuid,
                         target_uuid=target_uuid,
-                        props=props
+                        edge_uuid=edge_uuid,
+                        group_id=props['group_id'],
+                        additional_props=additional_props,
                     )
                     stats['edges_transferred'] += 1
+
                 else:
                     # Merge properties with existing edge
                     get_existing_query = f"""
@@ -1416,42 +1513,56 @@ async def merge_node_into(
                     RETURN properties(r) as existing_props
                     """
                     existing_result, _, _ = await driver.execute_query(
-                        get_existing_query,
-                        canonical_uuid=canonical_uuid,
-                        target_uuid=target_uuid
+                        get_existing_query, canonical_uuid=canonical_uuid, target_uuid=target_uuid
                     )
-                    
+
                     if existing_result:
                         existing_props = existing_result[0].get('existing_props', {})
                         merged_props = merge_edge_properties(existing_props, props)
-                        
+
                         # Update the existing edge with merged properties
                         update_query = f"""
                         MATCH (canonical:Entity {{uuid: $canonical_uuid}})-[r:{rel_type}]->(target:Entity {{uuid: $target_uuid}})
                         SET r = $merged_props
                         RETURN r
                         """
+                        logger.info(
+                            'Merging properties into existing outgoing edge %s -> %s (%s): existing=%s incoming=%s merged=%s',
+                            canonical_uuid,
+                            target_uuid,
+                            rel_type,
+                            existing_props,
+                            props,
+                            merged_props,
+                        )
                         await driver.execute_query(
                             update_query,
                             canonical_uuid=canonical_uuid,
                             target_uuid=target_uuid,
-                            merged_props=merged_props
+                            merged_props=merged_props,
                         )
-                    
+                    else:
+                        logger.warning(
+                            'Outgoing edge %s -> %s of type %s reported existing but returned no properties; props=%s',
+                            canonical_uuid,
+                            target_uuid,
+                            rel_type,
+                            props,
+                        )
+
                     stats['conflicts_resolved'] += 1
-                    
+
             # Delete original outgoing edges
+
             delete_outgoing_query = """
             MATCH (duplicate:Entity {uuid: $duplicate_uuid})-[r]->(target)
             WHERE target.uuid <> $canonical_uuid
             DELETE r
             """
             await driver.execute_query(
-                delete_outgoing_query,
-                duplicate_uuid=duplicate_uuid,
-                canonical_uuid=canonical_uuid
+                delete_outgoing_query, duplicate_uuid=duplicate_uuid, canonical_uuid=canonical_uuid
             )
-            
+
         # Step 2.5: Clean up ALL remaining non-audit edges from duplicate
         # This catches any edges between duplicate and canonical that weren't transferred
         cleanup_all_edges_query = """
@@ -1459,19 +1570,31 @@ async def merge_node_into(
         WHERE type(r) <> 'IS_DUPLICATE_OF'
         DELETE r
         """
-        await driver.execute_query(
-            cleanup_all_edges_query,
-            duplicate_uuid=duplicate_uuid
+        logger.info(
+            "Removing residual edges for duplicate %s ('%s') before audit trail",
+            duplicate_uuid,
+            duplicate_name,
         )
+        await driver.execute_query(cleanup_all_edges_query, duplicate_uuid=duplicate_uuid)
         logger.debug(f'Cleaned up all non-audit edges from duplicate {duplicate_uuid}')
-            
+
         # Step 3: Maintain audit trail if requested
         if maintain_audit_trail:
-            # Ensure IS_DUPLICATE_OF edge exists
+            # Ensure IS_DUPLICATE_OF edge exists with required Falkor properties
+            audit_group_id = canonical_group_id or duplicate_group_id
             audit_query = """
             MATCH (duplicate:Entity {uuid: $duplicate_uuid})
             MATCH (canonical:Entity {uuid: $canonical_uuid})
             MERGE (duplicate)-[r:IS_DUPLICATE_OF]->(canonical)
+            ON CREATE SET
+                r.uuid = $audit_uuid,
+                r.group_id = $group_id,
+                r.name = 'IS_DUPLICATE_OF',
+                r.created_at = $merged_at,
+                r.valid_at = $merged_at
+            ON MATCH SET
+                r.group_id = coalesce(r.group_id, $group_id),
+                r.uuid = coalesce(r.uuid, $audit_uuid)
             SET r.merged_at = $merged_at
             RETURN r
             """
@@ -1479,9 +1602,11 @@ async def merge_node_into(
                 audit_query,
                 duplicate_uuid=duplicate_uuid,
                 canonical_uuid=canonical_uuid,
-                merged_at=utc_now()
+                audit_uuid=str(uuid4()),
+                group_id=audit_group_id,
+                merged_at=utc_now(),
             )
-            
+
         # Step 4: Mark duplicate node as merged (optional tombstone)
         if not delete_duplicate:
             tombstone_query = """
@@ -1495,7 +1620,7 @@ async def merge_node_into(
                 tombstone_query,
                 duplicate_uuid=duplicate_uuid,
                 canonical_uuid=canonical_uuid,
-                merged_at=utc_now()
+                merged_at=utc_now(),
             )
         else:
             # Step 5: Physically delete the duplicate node
@@ -1504,38 +1629,52 @@ async def merge_node_into(
             DETACH DELETE duplicate
             RETURN COUNT(duplicate) as deleted_count
             """
-            delete_result, _, _ = await driver.execute_query(
-                delete_query,
-                duplicate_uuid=duplicate_uuid
+            logger.info(
+                "Detaching and deleting duplicate node %s ('%s')",
+                duplicate_uuid,
+                duplicate_name,
             )
-            stats['nodes_deleted'] = delete_result[0].get('deleted_count', 0) if delete_result else 0
+            delete_result, _, _ = await driver.execute_query(
+                delete_query, duplicate_uuid=duplicate_uuid
+            )
+            stats['nodes_deleted'] = (
+                delete_result[0].get('deleted_count', 0) if delete_result else 0
+            )
             logger.info(f'Physically deleted duplicate node {duplicate_uuid}')
-        
+
     except Exception as e:
-        logger.error(f'Error merging node {duplicate_uuid} into {canonical_uuid}: {e}')
+        logger.error(
+            f'Error merging node {duplicate_uuid} into {canonical_uuid}: {e}',
+            exc_info=True,
+        )
         stats['errors'].append(str(e))
         raise
-        
+
     stats['duration_ms'] = (time() - start_time) * 1000
     logger.info(
-        f'Merged node {duplicate_uuid} into {canonical_uuid}: '
-        f'{stats["edges_transferred"]} edges transferred, '
-        f'{stats["conflicts_resolved"]} conflicts resolved in {stats["duration_ms"]:.2f}ms'
+        'Merge complete for duplicate %s (%s) -> canonical %s (%s): %s edges transferred, %s conflicts resolved in %.2f ms',
+        duplicate_uuid,
+        duplicate_name,
+        canonical_uuid,
+        canonical_name,
+        stats['edges_transferred'],
+        stats['conflicts_resolved'],
+        stats['duration_ms'],
     )
-    
+
     # Trigger centrality recalculation for the canonical node
     if recalculate_centrality and stats['edges_transferred'] > 0:
         try:
             logger.info(f'Recalculating centrality after merge of {canonical_uuid}')
-            
+
             # Try to use the single-node centrality endpoint if available
             import httpx
             import os
-            
+
             centrality_host = os.getenv('CENTRALITY_SERVICE_HOST', 'localhost')
             centrality_port = os.getenv('CENTRALITY_SERVICE_PORT', '3003')
             centrality_url = f'http://{centrality_host}:{centrality_port}'
-            
+
             try:
                 # Call single-node centrality endpoint
                 async with httpx.AsyncClient(timeout=5.0) as client:
@@ -1543,10 +1682,10 @@ async def merge_node_into(
                         f'{centrality_url}/centrality/node/{canonical_uuid}',
                         json={
                             'store_results': True,
-                            'metrics': ['degree', 'pagerank', 'betweenness']
-                        }
+                            'metrics': ['degree', 'pagerank', 'betweenness'],
+                        },
                     )
-                    
+
                     if response.status_code == 200:
                         result = response.json()
                         metrics = result.get('metrics', {})
@@ -1560,11 +1699,13 @@ async def merge_node_into(
                         stats['centrality_method'] = 'service'
                     else:
                         raise Exception(f'Service returned status {response.status_code}')
-                        
+
             except Exception as service_error:
                 # Fallback to direct calculation if service is unavailable
-                logger.warning(f'Centrality service unavailable ({service_error}), using direct calculation')
-                
+                logger.warning(
+                    f'Centrality service unavailable ({service_error}), using direct calculation'
+                )
+
                 # Calculate degree centrality directly
                 degree_query = """
                 MATCH (n:Entity {uuid: $uuid})
@@ -1575,19 +1716,21 @@ async def merge_node_into(
                     n.betweenness_centrality = CASE WHEN degree > 0 THEN toFloat(degree) / 20.0 ELSE 0.0 END
                 RETURN degree
                 """
-                
+
                 result, _, _ = await driver.execute_query(degree_query, uuid=canonical_uuid)
                 if result:
-                    logger.info(f'Updated centrality directly for {canonical_uuid}: degree={result[0]["degree"]}')
+                    logger.info(
+                        f'Updated centrality directly for {canonical_uuid}: degree={result[0]["degree"]}'
+                    )
                     stats['centrality_recalculated'] = True
                     stats['centrality_method'] = 'direct'
                 else:
                     stats['centrality_recalculated'] = False
-                    
+
         except Exception as e:
             logger.error(f'Failed to recalculate centrality: {e}')
             stats['centrality_recalculated'] = False
     else:
         stats['centrality_recalculated'] = False
-    
+
     return stats

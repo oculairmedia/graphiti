@@ -8,7 +8,9 @@ import sys
 
 # Import the necessary modules
 from graphiti_core.driver.falkordb_driver import FalkorDriver
-from graphiti_core.search.search_utils import get_edge_invalidation_candidates_single_batch
+from graphiti_core.search.search_utils import (
+    get_edge_invalidation_candidates_batch,
+)
 from graphiti_core.search.search import SearchFilters
 from graphiti_core.edges import EntityEdge
 
@@ -61,7 +63,7 @@ async def test_edge_invalidation_fix():
         # This should reproduce the "Type mismatch: expected Null or Vectorf32 but was List" error
         # before the fix, and succeed after the fix
         try:
-            invalidation_results = await get_edge_invalidation_candidates_single_batch(
+            invalidation_results = await get_edge_invalidation_candidates_batch(
                 driver=driver,
                 edges=test_edges,
                 search_filter=search_filter,

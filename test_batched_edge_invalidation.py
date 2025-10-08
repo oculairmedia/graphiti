@@ -19,8 +19,10 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from graphiti_core.driver.falkordb_driver import FalkorDriver
 from graphiti_core.edges import EntityEdge  
 from graphiti_core.search.search_utils import (
+    DEFAULT_MIN_SCORE,
+    RELEVANT_SCHEMA_LIMIT,
     get_edge_invalidation_candidates,
-    get_edge_invalidation_candidates_batch
+    get_edge_invalidation_candidates_batch,
 )
 from graphiti_core.search.search import SearchFilters
 
@@ -110,42 +112,38 @@ async def test_batched_invalidation_memory_safe(driver, test_edges: List[EntityE
     
     search_filter = SearchFilters()
     
-    # Test different batch sizes (starting small due to memory constraints)
-    batch_sizes = [2, 5, 8, 10]
-    
-    for batch_size in batch_sizes:
-        print(f"\n📊 Testing batch size: {batch_size}")
-        print(f"   Processing {len(test_edges)} edges...")
-        
-        try:
-            import time
-            start_time = time.time()
-            
-            results = await get_edge_invalidation_candidates_batch(
-                driver, test_edges, search_filter, batch_size=batch_size
-            )
-            
-            end_time = time.time()
-            execution_time = end_time - start_time
-            
-            total_candidates = sum(len(candidates) for candidates in results)
-            print(f"   ✅ SUCCESS: {execution_time:.3f}s, {total_candidates} invalidation candidates found")
-            
-            if execution_time > 30:
-                print(f"   ⚠️  SLOW: {execution_time:.2f}s execution time")
-            
-        except Exception as e:
-            error_msg = str(e)
-            print(f"   ❌ FAILED: {error_msg}")
-            
-            if "Query's mem consumption exceeded capacity" in error_msg:
-                print(f"   🔥 MEMORY EXHAUSTION at batch size {batch_size}")
-                return False
-            elif "Type mismatch" in error_msg:
-                print(f"   🔧 TYPE MISMATCH at batch size {batch_size}")
-                return False
-    
-    return True
+    try:
+        import time
+
+        start_time = time.time()
+        results = await get_edge_invalidation_candidates_batch(
+            driver,
+            test_edges,
+            search_filter,
+            min_score=DEFAULT_MIN_SCORE,
+            limit=RELEVANT_SCHEMA_LIMIT,
+        )
+        end_time = time.time()
+
+        execution_time = end_time - start_time
+        total_candidates = sum(len(candidates) for candidates in results)
+        print(f"   ✅ SUCCESS: {execution_time:.3f}s, {total_candidates} invalidation candidates found")
+
+        if execution_time > 30:
+            print(f"   ⚠️  SLOW: {execution_time:.2f}s execution time")
+
+        return True
+
+    except Exception as e:
+        error_msg = str(e)
+        print(f"   ❌ FAILED: {error_msg}")
+
+        if "Query's mem consumption exceeded capacity" in error_msg:
+            print("   🔥 MEMORY EXHAUSTION during invalidation run")
+        elif "Type mismatch" in error_msg:
+            print("   🔧 TYPE MISMATCH during invalidation run")
+
+        return False
 
 
 async def test_automatic_batch_splitting(driver, test_edges: List[EntityEdge]):
@@ -156,10 +154,8 @@ async def test_automatic_batch_splitting(driver, test_edges: List[EntityEdge]):
     
     search_filter = SearchFilters()
     
-    # Start with a large batch that might cause memory issues
-    large_batch_size = 150
-    
-    print(f"📊 Testing with large batch size: {large_batch_size}")
+    # Execute a full invalidation run to ensure per-edge querying remains stable
+    print(f"📊 Testing per-edge invalidation stability across {len(test_edges)} edges")
     print(f"   Processing {len(test_edges)} edges...")
     
     try:
@@ -167,7 +163,11 @@ async def test_automatic_batch_splitting(driver, test_edges: List[EntityEdge]):
         start_time = time.time()
         
         results = await get_edge_invalidation_candidates_batch(
-            driver, test_edges, search_filter, batch_size=large_batch_size
+            driver,
+            test_edges,
+            search_filter,
+            min_score=DEFAULT_MIN_SCORE,
+            limit=RELEVANT_SCHEMA_LIMIT,
         )
         
         end_time = time.time()
@@ -175,7 +175,7 @@ async def test_automatic_batch_splitting(driver, test_edges: List[EntityEdge]):
         
         total_candidates = sum(len(candidates) for candidates in results)
         print(f"   ✅ SUCCESS: {execution_time:.3f}s, {total_candidates} invalidation candidates")
-        print(f"   💡 Automatic splitting handled large batch successfully")
+        print("   💡 Per-edge invalidation completed successfully")
         
         return True
         
@@ -191,13 +191,9 @@ async def test_environment_variable_batch_size(driver, test_edges: List[EntityEd
     print(f"\n⚙️ Testing Environment Variable Batch Size")
     print("=" * 60)
     
-    # Set environment variable
-    os.environ['EDGE_INVALIDATION_BATCH_SIZE'] = '15'
-    
     search_filter = SearchFilters()
-    
-    print(f"📊 Testing with EDGE_INVALIDATION_BATCH_SIZE=15")
-    print(f"   Processing {len(test_edges)} edges...")
+
+    print(f"📊 Testing default invalidation helper over {len(test_edges)} edges")
     
     try:
         import time
@@ -212,7 +208,7 @@ async def test_environment_variable_batch_size(driver, test_edges: List[EntityEd
         
         total_candidates = sum(len(candidates) for candidates in results)
         print(f"   ✅ SUCCESS: {execution_time:.3f}s, {total_candidates} invalidation candidates")
-        print(f"   ⚙️ Environment variable configuration working correctly")
+        print("   ⚙️ Default helper executed successfully")
         
         return True
         
@@ -222,9 +218,7 @@ async def test_environment_variable_batch_size(driver, test_edges: List[EntityEd
         return False
     
     finally:
-        # Clean up environment variable
-        if 'EDGE_INVALIDATION_BATCH_SIZE' in os.environ:
-            del os.environ['EDGE_INVALIDATION_BATCH_SIZE']
+        pass
 
 
 async def run_batch_invalidation_tests():

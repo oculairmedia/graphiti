@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class SyncMetadata:
     """Metadata for sync operations."""
+
     last_sync_timestamp: Optional[datetime] = None
     total_entity_nodes: int = 0
     total_episodic_nodes: int = 0
@@ -33,6 +34,7 @@ class SyncMetadata:
 @dataclass
 class ExtractionStats:
     """Statistics for extraction operations."""
+
     entity_nodes: int = 0
     episodic_nodes: int = 0
     community_nodes: int = 0
@@ -40,15 +42,16 @@ class ExtractionStats:
     episodic_edges: int = 0
     extraction_time_seconds: float = 0.0
 
+
 ESSENTIAL_EDGE_PROPERTIES = [
-    'uuid',           # Primary identifier
-    'source_uuid',    # Source node UUID via MATCH binding
-    'target_uuid',    # Target node UUID via MATCH binding
-    'created_at',     # Creation timestamp
-    'updated_at',     # Modification timestamp
-    'weight',         # Relationship weight
-    'valid_at',       # Validity start time
-    'invalid_at'      # Validity end time
+    'uuid',  # Primary identifier
+    'source_uuid',  # Source node UUID via MATCH binding
+    'target_uuid',  # Target node UUID via MATCH binding
+    'created_at',  # Creation timestamp
+    'updated_at',  # Modification timestamp
+    'weight',  # Relationship weight
+    'valid_at',  # Validity start time
+    'invalid_at',  # Validity end time
 ]
 
 EDGE_PROPERTY_EXPRESSIONS = {
@@ -62,32 +65,30 @@ EDGE_PROPERTY_EXPRESSIONS = {
     'invalid_at': 'r.invalid_at',
 }
 
-EDGE_RETURN_FIELDS = [
-    (prop, EDGE_PROPERTY_EXPRESSIONS[prop]) for prop in ESSENTIAL_EDGE_PROPERTIES
-]
+EDGE_RETURN_FIELDS = [(prop, EDGE_PROPERTY_EXPRESSIONS[prop]) for prop in ESSENTIAL_EDGE_PROPERTIES]
 
 
 class FalkorDBExtractor:
     """
     Extracts graph data from FalkorDB for reverse synchronization.
-    
+
     Features:
     - Batch processing for memory efficiency
     - Incremental extraction support
     - Comprehensive data type coverage
     - Connection pooling and error handling
     """
-    
-    NODE_DATA_TYPES = {"entity_nodes", "episodic_nodes", "community_nodes"}
-    EDGE_DATA_TYPES = {"entity_edges", "episodic_edges"}
+
+    NODE_DATA_TYPES = {'entity_nodes', 'episodic_nodes', 'community_nodes'}
+    EDGE_DATA_TYPES = {'entity_edges', 'episodic_edges'}
 
     def __init__(
         self,
-        host: str = "localhost",
+        host: str = 'localhost',
         port: int = 6379,
         username: Optional[str] = None,
         password: Optional[str] = None,
-        database: str = "graphiti_migration",
+        database: str = 'graphiti_migration',
         batch_size: int = 1000,
         max_query_limit: int = 15000,
         enable_pagination: bool = True,
@@ -130,7 +131,7 @@ class FalkorDBExtractor:
         self.adaptive_sizing = adaptive_sizing
         self.client: Optional[FalkorDB] = None
         self.graph: Optional[FalkorGraph] = None
-        
+
     async def connect(self) -> None:
         """Establish connection to FalkorDB."""
         try:
@@ -141,46 +142,50 @@ class FalkorDBExtractor:
                 password=self.password,
             )
             self.graph = self.client.select_graph(self.database)
-            
+
             # Test connectivity
-            await self.graph.query("RETURN 1")
-            logger.info(f"Connected to FalkorDB at {self.host}:{self.port}/{self.database}")
+            await self.graph.query('RETURN 1')
+            logger.info(f'Connected to FalkorDB at {self.host}:{self.port}/{self.database}')
         except Exception as e:
-            logger.error(f"Failed to connect to FalkorDB: {e}")
+            logger.error(f'Failed to connect to FalkorDB: {e}')
             raise
-            
+
     async def disconnect(self) -> None:
         """Close FalkorDB connection."""
         if self.client and hasattr(self.client, 'aclose'):
             await self.client.aclose()
-            logger.info("Disconnected from FalkorDB")
-            
+            logger.info('Disconnected from FalkorDB')
+
     async def __aenter__(self):
         """Async context manager entry."""
         await self.connect()
         return self
-        
+
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Async context manager exit."""
         await self.disconnect()
-        
+
     def _convert_node_result(self, node_data: Dict[str, Any]) -> Dict[str, Any]:
         """Convert FalkorDB node result to standard format."""
         # FalkorDB stores datetime as ISO strings, convert back to datetime objects
         if 'created_at' in node_data and isinstance(node_data['created_at'], str):
             try:
-                node_data['created_at'] = datetime.fromisoformat(node_data['created_at'].replace('Z', '+00:00'))
+                node_data['created_at'] = datetime.fromisoformat(
+                    node_data['created_at'].replace('Z', '+00:00')
+                )
             except (ValueError, AttributeError):
                 pass  # Keep as string if conversion fails
-                
+
         if 'updated_at' in node_data and isinstance(node_data['updated_at'], str):
             try:
-                node_data['updated_at'] = datetime.fromisoformat(node_data['updated_at'].replace('Z', '+00:00'))
+                node_data['updated_at'] = datetime.fromisoformat(
+                    node_data['updated_at'].replace('Z', '+00:00')
+                )
             except (ValueError, AttributeError):
                 pass
-                
+
         return node_data
-        
+
     def _convert_edge_result(self, edge_data: Dict[str, Any]) -> Dict[str, Any]:
         """Convert FalkorDB edge result to standard format."""
         # Normalize datetime string representations for downstream loaders
@@ -229,8 +234,8 @@ class FalkorDBExtractor:
 
     def _build_edge_return_clause(self) -> str:
         """Construct optimized RETURN clause for edge extraction queries."""
-        return '\n       '.join(
-            f"{expression} as {alias}" for alias, expression in EDGE_RETURN_FIELDS
+        return ',\n       '.join(
+            f'{expression} as {alias}' for alias, expression in EDGE_RETURN_FIELDS
         )
 
     def _map_edge_row(self, row: List[Any]) -> Dict[str, Any]:
@@ -256,213 +261,206 @@ class FalkorDBExtractor:
     async def get_sync_metadata(self) -> SyncMetadata:
         """Get metadata about the FalkorDB database."""
         if not self.graph:
-            raise RuntimeError("Not connected to FalkorDB")
-            
+            raise RuntimeError('Not connected to FalkorDB')
+
         metadata = SyncMetadata()
-        
+
         try:
             # Count entity nodes
-            result = await self.graph.query("MATCH (n:Entity) RETURN count(n) as count")
+            result = await self.graph.query('MATCH (n:Entity) RETURN count(n) as count')
             metadata.total_entity_nodes = result.result_set[0][0] if result.result_set else 0
-            
+
             # Count episodic nodes
-            result = await self.graph.query("MATCH (n:Episodic) RETURN count(n) as count")
+            result = await self.graph.query('MATCH (n:Episodic) RETURN count(n) as count')
             metadata.total_episodic_nodes = result.result_set[0][0] if result.result_set else 0
-            
+
             # Count community nodes
-            result = await self.graph.query("MATCH (n:Community) RETURN count(n) as count")
+            result = await self.graph.query('MATCH (n:Community) RETURN count(n) as count')
             metadata.total_community_nodes = result.result_set[0][0] if result.result_set else 0
-            
+
             # Count entity edges
-            result = await self.graph.query("MATCH ()-[r:RELATES_TO]->() RETURN count(r) as count")
+            result = await self.graph.query('MATCH ()-[r:RELATES_TO]->() RETURN count(r) as count')
             metadata.total_entity_edges = result.result_set[0][0] if result.result_set else 0
-            
+
             # Count episodic edges
-            result = await self.graph.query("MATCH ()-[r:MENTIONS]->() RETURN count(r) as count")
+            result = await self.graph.query('MATCH ()-[r:MENTIONS]->() RETURN count(r) as count')
             metadata.total_episodic_edges = result.result_set[0][0] if result.result_set else 0
-            
-            logger.info(f"FalkorDB metadata: {metadata.total_entity_nodes} entities, "
-                       f"{metadata.total_episodic_nodes} episodes, "
-                       f"{metadata.total_entity_edges} entity edges, "
-                       f"{metadata.total_episodic_edges} episodic edges")
-                       
+
+            logger.info(
+                f'FalkorDB metadata: {metadata.total_entity_nodes} entities, '
+                f'{metadata.total_episodic_nodes} episodes, '
+                f'{metadata.total_entity_edges} entity edges, '
+                f'{metadata.total_episodic_edges} episodic edges'
+            )
+
         except Exception as e:
-            logger.error(f"Failed to get sync metadata: {e}")
-            
+            logger.error(f'Failed to get sync metadata: {e}')
+
         return metadata
-        
+
     async def extract_entity_nodes(
-        self, 
-        since_timestamp: Optional[datetime] = None,
-        limit: Optional[int] = None
+        self, since_timestamp: Optional[datetime] = None, limit: Optional[int] = None
     ) -> AsyncIterator[List[Dict[str, Any]]]:
         """Extract entity nodes in batches."""
         if not self.graph:
-            raise RuntimeError("Not connected to FalkorDB")
-            
+            raise RuntimeError('Not connected to FalkorDB')
+
         # Build query with optional timestamp filter
-        where_clause = ""
+        where_clause = ''
         if since_timestamp:
             iso_timestamp = since_timestamp.isoformat()
             # Include nodes with NULL timestamps to ensure complete extraction
             where_clause = f"WHERE n.updated_at > '{iso_timestamp}' OR n.created_at > '{iso_timestamp}' OR n.updated_at IS NULL OR n.created_at IS NULL"
-            
+
         query = f"""
         MATCH (n:Entity) 
         {where_clause}
         RETURN n.uuid as uuid, properties(n) as props
         ORDER BY n.uuid
         """
-        
+
         if limit:
-            query += f" LIMIT {limit}"
-            
+            query += f' LIMIT {limit}'
+
         try:
             result = await self.graph.query(query)
             if not result.result_set:
                 return
-                
+
             batch = []
             for row in result.result_set:
                 uuid_val = row[0]
                 props = row[1] if row[1] else {}
-                
+
                 # Ensure uuid is in properties
                 props['uuid'] = uuid_val
                 props['labels'] = ['Entity']
-                
+
                 batch.append(self._convert_node_result(props))
-                
+
                 if len(batch) >= self._resolve_batch_limit('entity_nodes', limit):
                     yield batch
                     batch = []
-                    
+
             # Yield remaining items
             if batch:
                 yield batch
-                
+
         except Exception as e:
-            logger.error(f"Failed to extract entity nodes: {e}")
+            logger.error(f'Failed to extract entity nodes: {e}')
             raise
-            
+
     async def extract_episodic_nodes(
-        self, 
-        since_timestamp: Optional[datetime] = None,
-        limit: Optional[int] = None
+        self, since_timestamp: Optional[datetime] = None, limit: Optional[int] = None
     ) -> AsyncIterator[List[Dict[str, Any]]]:
         """Extract episodic nodes in batches."""
         if not self.graph:
-            raise RuntimeError("Not connected to FalkorDB")
-            
-        where_clause = ""
+            raise RuntimeError('Not connected to FalkorDB')
+
+        where_clause = ''
         if since_timestamp:
             iso_timestamp = since_timestamp.isoformat()
             # Include nodes with NULL timestamps to ensure complete extraction
             where_clause = f"WHERE n.updated_at > '{iso_timestamp}' OR n.created_at > '{iso_timestamp}' OR n.updated_at IS NULL OR n.created_at IS NULL"
-            
+
         query = f"""
         MATCH (n:Episodic) 
         {where_clause}
         RETURN n.uuid as uuid, properties(n) as props
         ORDER BY n.uuid
         """
-        
+
         if limit:
-            query += f" LIMIT {limit}"
-            
+            query += f' LIMIT {limit}'
+
         try:
             result = await self.graph.query(query)
             if not result.result_set:
                 return
-                
+
             batch = []
             for row in result.result_set:
                 uuid_val = row[0]
                 props = row[1] if row[1] else {}
-                
+
                 props['uuid'] = uuid_val
                 props['labels'] = ['Episodic']
-                
+
                 batch.append(self._convert_node_result(props))
-                
+
                 if len(batch) >= self._resolve_batch_limit('episodic_nodes', limit):
                     yield batch
                     batch = []
-                    
+
             if batch:
                 yield batch
-                
+
         except Exception as e:
-            logger.error(f"Failed to extract episodic nodes: {e}")
+            logger.error(f'Failed to extract episodic nodes: {e}')
             raise
-            
+
     async def extract_community_nodes(
-        self, 
-        since_timestamp: Optional[datetime] = None,
-        limit: Optional[int] = None
+        self, since_timestamp: Optional[datetime] = None, limit: Optional[int] = None
     ) -> AsyncIterator[List[Dict[str, Any]]]:
         """Extract community nodes in batches."""
         if not self.graph:
-            raise RuntimeError("Not connected to FalkorDB")
-            
-        where_clause = ""
+            raise RuntimeError('Not connected to FalkorDB')
+
+        where_clause = ''
         if since_timestamp:
             iso_timestamp = since_timestamp.isoformat()
             # Include nodes with NULL timestamps to ensure complete extraction
             where_clause = f"WHERE n.updated_at > '{iso_timestamp}' OR n.created_at > '{iso_timestamp}' OR n.updated_at IS NULL OR n.created_at IS NULL"
-            
+
         query = f"""
         MATCH (n:Community) 
         {where_clause}
         RETURN n.uuid as uuid, properties(n) as props
         ORDER BY n.uuid
         """
-        
+
         if limit:
-            query += f" LIMIT {limit}"
-            
+            query += f' LIMIT {limit}'
+
         try:
             result = await self.graph.query(query)
             if not result.result_set:
                 return
-                
+
             batch = []
             for row in result.result_set:
                 uuid_val = row[0]
                 props = row[1] if row[1] else {}
-                
+
                 props['uuid'] = uuid_val
                 props['labels'] = ['Community']
-                
+
                 batch.append(self._convert_node_result(props))
-                
+
                 if len(batch) >= self._resolve_batch_limit('community_nodes', limit):
                     yield batch
                     batch = []
-                    
+
             if batch:
                 yield batch
-                
+
         except Exception as e:
-            logger.error(f"Failed to extract community nodes: {e}")
+            logger.error(f'Failed to extract community nodes: {e}')
             raise
-            
+
     async def extract_entity_edges(
-        self,
-        since_timestamp: Optional[datetime] = None,
-        limit: Optional[int] = None
+        self, since_timestamp: Optional[datetime] = None, limit: Optional[int] = None
     ) -> AsyncIterator[List[Dict[str, Any]]]:
         """Extract entity edges (RELATES_TO) with optimized direct access by default."""
         if not self.graph:
-            raise RuntimeError("Not connected to FalkorDB")
+            raise RuntimeError('Not connected to FalkorDB')
 
         if self.optimization_enabled:
             remaining = limit
             batch_override = min(remaining, self.edge_batch_size) if remaining is not None else None
 
             async for batch in self.extract_entity_edges_optimized(
-                since_timestamp=since_timestamp,
-                batch_size=batch_override
+                since_timestamp=since_timestamp, batch_size=batch_override
             ):
                 if remaining is not None:
                     if len(batch) >= remaining:
@@ -484,22 +482,20 @@ class FalkorDBExtractor:
                 yield batch
 
     async def extract_entity_edges_optimized(
-        self,
-        since_timestamp: Optional[datetime] = None,
-        batch_size: Optional[int] = None
+        self, since_timestamp: Optional[datetime] = None, batch_size: Optional[int] = None
     ) -> AsyncIterator[List[Dict[str, Any]]]:
         """Optimized entity edge extraction using direct property access."""
         if not self.graph:
-            raise RuntimeError("Not connected to FalkorDB")
+            raise RuntimeError('Not connected to FalkorDB')
 
         offset = 0
         total_processed = 0
-        where_clause = ""
+        where_clause = ''
         if since_timestamp:
             iso_timestamp = since_timestamp.isoformat()
             where_clause = (
                 f"WHERE r.updated_at > '{iso_timestamp}' OR r.created_at > '{iso_timestamp}' "
-                "OR r.updated_at IS NULL OR r.created_at IS NULL"
+                'OR r.updated_at IS NULL OR r.created_at IS NULL'
             )
 
         return_clause = self._build_edge_return_clause()
@@ -508,9 +504,9 @@ class FalkorDBExtractor:
             effective_batch_limit = self._resolve_batch_limit('entity_edges', batch_size)
             page_limit = self._resolve_query_limit('entity_edges', batch_size)
             pagination_clause = (
-                f"SKIP {offset} LIMIT {page_limit}"
+                f'SKIP {offset} LIMIT {page_limit}'
                 if self.enable_pagination
-                else f"LIMIT {page_limit}"
+                else f'LIMIT {page_limit}'
             )
 
             query = f"""
@@ -522,25 +518,27 @@ class FalkorDBExtractor:
             """
 
             try:
-                logger.info(f"Executing edge query: offset={offset}, limit={page_limit}")
+                logger.info(f'Executing edge query: offset={offset}, limit={page_limit}')
                 start_time = time.time()
-                
+
                 # Add timeout to prevent infinite hang (GRAPH-574 fix)
                 result = await asyncio.wait_for(self.graph.query(query), timeout=30.0)
-                
+
                 duration = time.time() - start_time
-                logger.info(f"Query completed in {duration:.2f}s")
-                
+                logger.info(f'Query completed in {duration:.2f}s')
+
             except asyncio.TimeoutError:
-                logger.error(f"Edge query timed out after 30s at offset {offset}")
-                raise RuntimeError(f"Edge extraction timed out at offset {offset}")
+                logger.error(f'Edge query timed out after 30s at offset {offset}')
+                raise RuntimeError(f'Edge extraction timed out at offset {offset}')
             except Exception as exc:
-                logger.error(f"Failed to extract optimized entity edges at offset {offset}: {exc}")
+                logger.error(f'Failed to extract optimized entity edges at offset {offset}: {exc}')
                 raise
 
             rows = result.result_set if result and result.result_set else []
             if not rows:
-                logger.info(f"Entity edge optimization completed. Total processed: {total_processed}")
+                logger.info(
+                    f'Entity edge optimization completed. Total processed: {total_processed}'
+                )
                 break
 
             batch: List[Dict[str, Any]] = []
@@ -559,18 +557,19 @@ class FalkorDBExtractor:
                 break
 
             offset += page_limit
-            logger.debug(f"Processed {total_processed} optimized entity edges; continuing from offset {offset}")
+            logger.debug(
+                f'Processed {total_processed} optimized entity edges; continuing from offset {offset}'
+            )
 
     async def _extract_entity_edges_paginated(
-        self,
-        since_timestamp: Optional[datetime] = None
+        self, since_timestamp: Optional[datetime] = None
     ) -> AsyncIterator[List[Dict[str, Any]]]:
         """Extract entity edges using cursor-based pagination."""
         offset = 0
         total_processed = 0
 
         while True:
-            where_clause = ""
+            where_clause = ''
             if since_timestamp:
                 iso_timestamp = since_timestamp.isoformat()
                 where_clause = f"WHERE r.updated_at > '{iso_timestamp}' OR r.created_at > '{iso_timestamp}' OR r.updated_at IS NULL OR r.created_at IS NULL"
@@ -589,7 +588,9 @@ class FalkorDBExtractor:
             try:
                 result = await self.graph.query(query)
                 if not result.result_set:
-                    logger.info(f"Entity edges extraction completed. Total processed: {total_processed}")
+                    logger.info(
+                        f'Entity edges extraction completed. Total processed: {total_processed}'
+                    )
                     break
 
                 batch = []
@@ -604,7 +605,7 @@ class FalkorDBExtractor:
                         'source_node_uuid': source_uuid,
                         'target_node_uuid': target_uuid,
                         'relationship_type': 'RELATES_TO',
-                        **props
+                        **props,
                     }
 
                     batch.append(self._convert_edge_result(edge_data))
@@ -623,24 +624,26 @@ class FalkorDBExtractor:
                 # Note: Don't break just because we got fewer than max_query_limit results,
                 # as this can happen with NULL values being filtered differently
                 if len(result.result_set) == 0:
-                    logger.info(f"Entity edges extraction completed. Total processed: {total_processed}")
+                    logger.info(
+                        f'Entity edges extraction completed. Total processed: {total_processed}'
+                    )
                     break
 
                 # Move to next page
                 offset += page_limit
-                logger.debug(f"Processed {total_processed} entity edges, continuing with offset {offset}")
+                logger.debug(
+                    f'Processed {total_processed} entity edges, continuing with offset {offset}'
+                )
 
             except Exception as e:
-                logger.error(f"Failed to extract entity edges at offset {offset}: {e}")
+                logger.error(f'Failed to extract entity edges at offset {offset}: {e}')
                 raise
 
     async def _extract_entity_edges_single_query(
-        self,
-        since_timestamp: Optional[datetime] = None,
-        limit: Optional[int] = None
+        self, since_timestamp: Optional[datetime] = None, limit: Optional[int] = None
     ) -> AsyncIterator[List[Dict[str, Any]]]:
         """Legacy single-query extraction method."""
-        where_clause = ""
+        where_clause = ''
         if since_timestamp:
             iso_timestamp = since_timestamp.isoformat()
             where_clause = f"WHERE r.updated_at > '{iso_timestamp}' OR r.created_at > '{iso_timestamp}' OR r.updated_at IS NULL OR r.created_at IS NULL"
@@ -653,7 +656,7 @@ class FalkorDBExtractor:
         """
 
         if limit:
-            query += f" LIMIT {limit}"
+            query += f' LIMIT {limit}'
 
         try:
             result = await self.graph.query(query)
@@ -672,7 +675,7 @@ class FalkorDBExtractor:
                     'source_node_uuid': source_uuid,
                     'target_node_uuid': target_uuid,
                     'relationship_type': 'RELATES_TO',
-                    **props
+                    **props,
                 }
 
                 batch.append(self._convert_edge_result(edge_data))
@@ -685,17 +688,15 @@ class FalkorDBExtractor:
                 yield batch
 
         except Exception as e:
-            logger.error(f"Failed to extract entity edges: {e}")
+            logger.error(f'Failed to extract entity edges: {e}')
             raise
-            
+
     async def extract_episodic_edges(
-        self,
-        since_timestamp: Optional[datetime] = None,
-        limit: Optional[int] = None
+        self, since_timestamp: Optional[datetime] = None, limit: Optional[int] = None
     ) -> AsyncIterator[List[Dict[str, Any]]]:
         """Extract episodic edges (MENTIONS) in batches with pagination."""
         if not self.graph:
-            raise RuntimeError("Not connected to FalkorDB")
+            raise RuntimeError('Not connected to FalkorDB')
 
         # Use pagination if enabled and no explicit limit is provided
         if self.enable_pagination and limit is None:
@@ -707,15 +708,14 @@ class FalkorDBExtractor:
                 yield batch
 
     async def _extract_episodic_edges_paginated(
-        self,
-        since_timestamp: Optional[datetime] = None
+        self, since_timestamp: Optional[datetime] = None
     ) -> AsyncIterator[List[Dict[str, Any]]]:
         """Extract episodic edges using cursor-based pagination."""
         offset = 0
         total_processed = 0
 
         while True:
-            where_clause = ""
+            where_clause = ''
             if since_timestamp:
                 iso_timestamp = since_timestamp.isoformat()
                 where_clause = f"WHERE r.updated_at > '{iso_timestamp}' OR r.created_at > '{iso_timestamp}' OR r.updated_at IS NULL OR r.created_at IS NULL"
@@ -734,7 +734,9 @@ class FalkorDBExtractor:
             try:
                 result = await self.graph.query(query)
                 if not result.result_set:
-                    logger.info(f"Episodic edges extraction completed. Total processed: {total_processed}")
+                    logger.info(
+                        f'Episodic edges extraction completed. Total processed: {total_processed}'
+                    )
                     break
 
                 batch = []
@@ -749,7 +751,7 @@ class FalkorDBExtractor:
                         'source_node_uuid': source_uuid,
                         'target_node_uuid': target_uuid,
                         'relationship_type': 'MENTIONS',
-                        **props
+                        **props,
                     }
 
                     batch.append(self._convert_edge_result(edge_data))
@@ -768,24 +770,26 @@ class FalkorDBExtractor:
                 # Note: Don't break just because we got fewer than max_query_limit results,
                 # as this can happen with NULL values being filtered differently
                 if len(result.result_set) == 0:
-                    logger.info(f"Episodic edges extraction completed. Total processed: {total_processed}")
+                    logger.info(
+                        f'Episodic edges extraction completed. Total processed: {total_processed}'
+                    )
                     break
 
                 # Move to next page
                 offset += page_limit
-                logger.debug(f"Processed {total_processed} episodic edges, continuing with offset {offset}")
+                logger.debug(
+                    f'Processed {total_processed} episodic edges, continuing with offset {offset}'
+                )
 
             except Exception as e:
-                logger.error(f"Failed to extract episodic edges at offset {offset}: {e}")
+                logger.error(f'Failed to extract episodic edges at offset {offset}: {e}')
                 raise
 
     async def _extract_episodic_edges_single_query(
-        self,
-        since_timestamp: Optional[datetime] = None,
-        limit: Optional[int] = None
+        self, since_timestamp: Optional[datetime] = None, limit: Optional[int] = None
     ) -> AsyncIterator[List[Dict[str, Any]]]:
         """Legacy single-query extraction method."""
-        where_clause = ""
+        where_clause = ''
         if since_timestamp:
             iso_timestamp = since_timestamp.isoformat()
             where_clause = f"WHERE r.updated_at > '{iso_timestamp}' OR r.created_at > '{iso_timestamp}' OR r.updated_at IS NULL OR r.created_at IS NULL"
@@ -798,7 +802,7 @@ class FalkorDBExtractor:
         """
 
         if limit:
-            query += f" LIMIT {limit}"
+            query += f' LIMIT {limit}'
 
         try:
             result = await self.graph.query(query)
@@ -817,7 +821,7 @@ class FalkorDBExtractor:
                     'source_node_uuid': source_uuid,
                     'target_node_uuid': target_uuid,
                     'relationship_type': 'MENTIONS',
-                    **props
+                    **props,
                 }
 
                 batch.append(self._convert_edge_result(edge_data))
@@ -830,55 +834,56 @@ class FalkorDBExtractor:
                 yield batch
 
         except Exception as e:
-            logger.error(f"Failed to extract episodic edges: {e}")
+            logger.error(f'Failed to extract episodic edges: {e}')
             raise
-            
+
     async def extract_all_data(
-        self, 
-        since_timestamp: Optional[datetime] = None
+        self, since_timestamp: Optional[datetime] = None
     ) -> Tuple[AsyncIterator[Tuple[str, List[Dict[str, Any]]]], ExtractionStats]:
         """
         Extract all data from FalkorDB.
-        
+
         Returns:
             AsyncIterator yielding (data_type, batch) tuples and extraction statistics
         """
         stats = ExtractionStats()
         start_time = asyncio.get_event_loop().time()
-        
+
         async def data_generator():
             # Extract entity nodes
             async for batch in self.extract_entity_nodes(since_timestamp):
                 stats.entity_nodes += len(batch)
-                yield ("entity_nodes", batch)
-                
+                yield ('entity_nodes', batch)
+
             # Extract episodic nodes
             async for batch in self.extract_episodic_nodes(since_timestamp):
                 stats.episodic_nodes += len(batch)
-                yield ("episodic_nodes", batch)
-                
+                yield ('episodic_nodes', batch)
+
             # Extract community nodes
             async for batch in self.extract_community_nodes(since_timestamp):
                 stats.community_nodes += len(batch)
-                yield ("community_nodes", batch)
-                
+                yield ('community_nodes', batch)
+
             # Extract entity edges
             async for batch in self.extract_entity_edges(since_timestamp):
                 stats.entity_edges += len(batch)
-                yield ("entity_edges", batch)
-                
+                yield ('entity_edges', batch)
+
             # Extract episodic edges
             async for batch in self.extract_episodic_edges(since_timestamp):
                 stats.episodic_edges += len(batch)
-                yield ("episodic_edges", batch)
-                
+                yield ('episodic_edges', batch)
+
             # Calculate final stats
             end_time = asyncio.get_event_loop().time()
             stats.extraction_time_seconds = end_time - start_time
-            
-            logger.info(f"FalkorDB extraction completed: {stats.entity_nodes} entities, "
-                       f"{stats.episodic_nodes} episodes, {stats.community_nodes} communities, "
-                       f"{stats.entity_edges} entity edges, {stats.episodic_edges} episodic edges "
-                       f"in {stats.extraction_time_seconds:.2f}s")
-            
+
+            logger.info(
+                f'FalkorDB extraction completed: {stats.entity_nodes} entities, '
+                f'{stats.episodic_nodes} episodes, {stats.community_nodes} communities, '
+                f'{stats.entity_edges} entity edges, {stats.episodic_edges} episodic edges '
+                f'in {stats.extraction_time_seconds:.2f}s'
+            )
+
         return data_generator(), stats
