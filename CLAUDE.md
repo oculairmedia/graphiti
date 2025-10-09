@@ -401,6 +401,63 @@ When working with the MCP server, follow the patterns established in `mcp_server
 - Store new information immediately using `add_memory`
 - Follow discovered procedures and respect established preferences
 
+## OpenCode Plugin Integration
+
+The repository includes OpenCode plugins for automatic Graphiti knowledge graph population during development sessions.
+
+### Quick Setup
+
+```bash
+# Copy plugins to global location
+cp .opencode/plugin/*.js /root/.config/opencode/plugin/
+
+# Start Graphiti API
+docker-compose up -d graph
+
+# Use OpenCode normally - conversations automatically captured!
+```
+
+### What Gets Captured
+
+- **Buffered Conversations**: Groups 6 messages before summarization
+- **AI Summaries**: Uses OpenCode SDK to create concise episode summaries
+- **File Tracking**: Automatically extracts files mentioned in conversations
+- **Git Context**: Captures branch, commit, and tool usage
+- **Project Organization**: Dynamic GROUP_ID based on project name
+
+### Configuration
+
+```bash
+# Environment variables (optional)
+export GRAPHITI_API_URL="http://localhost:8003"
+export GRAPHITI_AUTO_COLLECT="true"
+export GRAPHITI_BUFFER_SIZE="6"
+export GRAPHITI_FLUSH_INTERVAL="60000"
+export GRAPHITI_GROUP_ID="opencode-custom"  # Override auto-detection
+```
+
+### Features
+
+- **Automatic**: No manual intervention needed
+- **Smart Grouping**: ~3 episodes per session instead of 30+
+- **Project-Aware**: Each project gets unique GROUP_ID (e.g., `opencode-graphiti`)
+- **MCP Compatible**: Works alongside Graphiti MCP server
+
+### Documentation
+
+- **Quick Start**: `.opencode/plugin/README.md`
+- **Full Guide**: `docs/integrations/OPENCODE_PLUGIN_INTEGRATION.md`
+- **Old Versions**: `.opencode.backup/plugin/` (TypeScript versions)
+
+### Verification
+
+When OpenCode starts, you should see:
+```
+[Graphiti] Context collector enabled for graphiti
+[Graphiti] Group ID: opencode-graphiti
+[Graphiti] Grouping 6 messages, auto-flush every 60000ms
+```
+
 ## Huly Project Integration
 
 This repository is tracked in Huly under project **GRAPH** (Graphiti Knowledge Graph Platform).
