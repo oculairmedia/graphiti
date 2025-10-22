@@ -6,7 +6,7 @@ Handles rate limiting, retries, and error recovery.
 import asyncio
 import logging
 import time
-from typing import Dict, Any, Optional, Set, List
+from typing import Dict, Any, Optional, Set, List, Coroutine
 from datetime import datetime, timedelta
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -231,6 +231,7 @@ class IngestionWorker:
         # Background deduplication tracking
         self.episode_count = 0
         self.dedup_interval = int(os.getenv('DEDUP_EPISODE_INTERVAL', '10'))
+        self._post_success_jobs: list[Coroutine[Any, Any, None]] = []
         
     async def start(self):
         """Start the worker processing loop"""
@@ -259,6 +260,28 @@ class IngestionWorker:
         await self.centrality_client.close()
         
         logger.info(f"Worker {self.worker_id} stopped")
+
+    def _schedule_post_success_job(self, job: Coroutine[Any, Any, None]) -> None:
+        """Queue a coroutine to run after the primary ingestion work succeeds."""
+        self._post_success_jobs.append(job)
+
+    async def _run_post_success_jobs(self) -> None:
+        """Execute and clear queued post-success jobs."""
+        if not self._post_success_jobs:
+            return
+
+        jobs = self._post_success_jobs
+        self._post_success_jobs = []
+
+        for job in jobs:
+            try:
+                await job
+            except Exception as exc:
+                logger.error(f"Post-success job failed: {exc}")
+
+    def _clear_post_success_jobs(self) -> None:
+        """Drop queued post-success jobs without executing them."""
+        self._post_success_jobs.clear()
     
     async def _process_loop(self):
         """Main processing loop"""
@@ -325,19 +348,25 @@ class IngestionWorker:
             effective_group_id = get_default_group_id(self.graphiti.driver.provider)
         await self.rate_limiter.acquire(effective_group_id)
         
-        # Route to appropriate handler
-        if task.type == TaskType.EPISODE:
-            await self._process_episode(task)
-        elif task.type == TaskType.ENTITY:
-            await self._process_entity(task)
-        elif task.type == TaskType.BATCH:
-            await self._process_batch(task)
-        elif task.type == TaskType.RELATIONSHIP:
-            await self._process_relationship(task)
-        elif task.type == TaskType.DEDUPLICATION:
-            await self._process_deduplication(task)
-        else:
-            raise PermanentError(f"Unknown task type: {task.type}")
+        try:
+            # Route to appropriate handler
+            if task.type == TaskType.EPISODE:
+                await self._process_episode(task)
+            elif task.type == TaskType.ENTITY:
+                await self._process_entity(task)
+            elif task.type == TaskType.BATCH:
+                await self._process_batch(task)
+            elif task.type == TaskType.RELATIONSHIP:
+                await self._process_relationship(task)
+            elif task.type == TaskType.DEDUPLICATION:
+                await self._process_deduplication(task)
+            else:
+                raise PermanentError(f"Unknown task type: {task.type}")
+
+            await self._run_post_success_jobs()
+        except Exception:
+            self._clear_post_success_jobs()
+            raise
     
     async def _process_episode(self, task: IngestionTask):
         """Process an episode ingestion task"""
@@ -391,14 +420,14 @@ class IngestionWorker:
                 centrality_uuids.append(result.episode.uuid)
             
             if centrality_uuids:
-                # Run centrality update asynchronously without blocking
-                asyncio.create_task(self._update_centrality_async(centrality_uuids))
+                # Queue centrality update to run after main ingestion succeeds
+                self._schedule_post_success_job(self._update_centrality_async(centrality_uuids))
             
             # Track episode count for background deduplication
             self.episode_count += 1
             if self.episode_count % self.dedup_interval == 0:
-                # Run background deduplication
-                asyncio.create_task(self._run_background_deduplication(effective_group_id))
+                # Queue background deduplication to avoid racing with ingestion commits
+                self._schedule_post_success_job(self._run_background_deduplication(effective_group_id))
             
         except Exception as e:
             # Classify error type
@@ -497,7 +526,7 @@ class IngestionWorker:
                 
                 # Update centrality for existing node
                 if existing_uuid:
-                    asyncio.create_task(self._update_centrality_async([existing_uuid]))
+                    self._schedule_post_success_job(self._update_centrality_async([existing_uuid]))
                     
                 return existing_uuid
             else:
@@ -513,7 +542,7 @@ class IngestionWorker:
                 
                 # Update centrality for the new node
                 if node and node.uuid:
-                    asyncio.create_task(self._update_centrality_async([node.uuid]))
+                    self._schedule_post_success_job(self._update_centrality_async([node.uuid]))
                     
                 return node.uuid if node else None
             
@@ -622,7 +651,7 @@ class IngestionWorker:
             
             # Update centrality for both nodes involved in the relationship
             node_uuids = [source_node.uuid, target_node.uuid]
-            asyncio.create_task(self._update_centrality_async(node_uuids))
+            self._schedule_post_success_job(self._update_centrality_async(node_uuids))
             
         except Exception as e:
             if "duplicate" in str(e).lower():

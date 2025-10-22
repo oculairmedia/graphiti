@@ -86,7 +86,7 @@ class WorkerService:
         logger.info("Graphiti initialized")
         
         # Initialize worker pool
-        worker_count = int(os.getenv("WORKER_COUNT", "4"))
+        worker_count = int(os.getenv("WORKER_COUNT", "2"))
         batch_size = int(os.getenv("BATCH_SIZE", "10"))
         
         self.worker_pool = WorkerPool(
