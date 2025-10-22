@@ -301,10 +301,29 @@ async def extract_nodes(
                 prompt_library.extract_nodes.extract_json(context), response_model=ExtractedEntities
             )
 
-        extracted_entities: list[ExtractedEntity] = [
-            ExtractedEntity(**entity_data)
-            for entity_data in llm_response.get('extracted_entities', [])
-        ]
+        # Hardened entity extraction - handle dict, object, and garbage payloads safely
+        extracted_entities: list[ExtractedEntity] = []
+        entities_data = llm_response.get('extracted_entities', [])
+        dropped_payloads = 0
+
+        for entity_data in entities_data:
+            try:
+                if isinstance(entity_data, ExtractedEntity):
+                    # Already constructed - use directly (happens with some LLM clients)
+                    extracted_entities.append(entity_data)
+                elif isinstance(entity_data, dict):
+                    # Raw dict - construct from dict
+                    extracted_entities.append(ExtractedEntity(**entity_data))
+                else:
+                    # Garbage payload - log and skip
+                    logger.warning(f"Dropped invalid entity payload: type={type(entity_data).__name__}, value={entity_data}")
+                    dropped_payloads += 1
+            except Exception as e:
+                logger.error(f"Failed to construct entity from {entity_data}: {e}")
+                dropped_payloads += 1
+
+        if dropped_payloads > 0:
+            logger.warning(f"Episode {episode.uuid}: Dropped {dropped_payloads} invalid entity payloads during extraction")
 
         reflexion_iterations += 1
         if reflexion_iterations < MAX_REFLEXION_ITERATIONS:
