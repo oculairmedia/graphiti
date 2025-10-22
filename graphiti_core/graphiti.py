@@ -544,13 +544,20 @@ class Graphiti:
             )
             
             # Execute merge operations after nodes and edges are saved
-            if merge_operations:
+            # Feature flag: GRAPHITI_ENABLE_AUTO_MERGE (default: false for safety)
+            import os
+            auto_merge_enabled = os.getenv('GRAPHITI_ENABLE_AUTO_MERGE', 'false').lower() == 'true'
+
+            if merge_operations and auto_merge_enabled:
                 from graphiti_core.utils.maintenance.edge_operations import execute_merge_operations
+                logger.info(f"Auto-merge enabled: executing {len(merge_operations)} merge operations")
                 await execute_merge_operations(
-                    self.driver, 
+                    self.driver,
                     merge_operations,
                     allow_cross_graph_merge=self.enable_cross_graph_deduplication
                 )
+            elif merge_operations and not auto_merge_enabled:
+                logger.info(f"Auto-merge disabled: skipping {len(merge_operations)} merge operations (set GRAPHITI_ENABLE_AUTO_MERGE=true to enable)")
 
             # Update any communities
             if update_communities:
@@ -721,11 +728,17 @@ class Graphiti:
                 )
                 
                 # Execute merge operations after nodes and edges are saved
-                if merge_operations:
+                # Feature flag: GRAPHITI_ENABLE_AUTO_MERGE (default: false for safety)
+                auto_merge_enabled = os.getenv('GRAPHITI_ENABLE_AUTO_MERGE', 'false').lower() == 'true'
+
+                if merge_operations and auto_merge_enabled:
                     from graphiti_core.utils.maintenance.edge_operations import execute_merge_operations
+                    logger.info(f"Auto-merge enabled: executing {len(merge_operations)} merge operations")
                     await execute_merge_operations(
                         self.driver, merge_operations, allow_cross_graph_merge=self.enable_cross_graph_deduplication
                     )
+                elif merge_operations and not auto_merge_enabled:
+                    logger.info(f"Auto-merge disabled: skipping {len(merge_operations)} merge operations (set GRAPHITI_ENABLE_AUTO_MERGE=true to enable)")
                 
                 state.mark_completed()
                 logger.info(f"Episode {episode.uuid}: Successfully saved to database")
@@ -1137,10 +1150,14 @@ class Graphiti:
             )
             
             # Execute merge operations after nodes and edges are saved
-            if merge_operations:
+            # Feature flag: GRAPHITI_ENABLE_AUTO_MERGE (default: false for safety)
+            auto_merge_enabled = os.getenv('GRAPHITI_ENABLE_AUTO_MERGE', 'false').lower() == 'true'
+
+            if merge_operations and auto_merge_enabled:
                 from graphiti_core.utils.maintenance.edge_operations import execute_merge_operations
+                logger.info(f"Auto-merge enabled: executing {len(merge_operations)} merge operations (bulk)")
                 merge_stats = await execute_merge_operations(
-                    self.driver, 
+                    self.driver,
                     merge_operations,
                     allow_cross_graph_merge=self.enable_cross_graph_deduplication
                 )
