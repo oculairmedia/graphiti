@@ -19,7 +19,11 @@ services:
       - neo4j_data:/data
     environment:
       - NEO4J_AUTH=${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-graphiti123}
-    mem_limit: 4g
+      - NEO4J_server_memory_heap_initial__size=${NEO4J_HEAP_INITIAL_SIZE:-6g}
+      - NEO4J_server_memory_heap_max__size=${NEO4J_HEAP_MAX_SIZE:-6g}
+      - NEO4J_server_memory_pagecache_size=${NEO4J_PAGECACHE_SIZE:-4g}
+      - NEO4J_server_jvm_additional=${NEO4J_JVM_ADDITIONAL:--XX:+ExitOnOutOfMemoryError}
+    mem_limit: 12g
     networks:
       - graphiti_network
     healthcheck:
@@ -71,6 +75,12 @@ services:
   graph-visualizer-rust:
     image: ghcr.io/oculairmedia/graphiti-rust-visualizer:feature-chutes-ai-integration
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 512M
     ports:
       - ${RUST_SERVER_PORT:-3000}:3000
     environment:
@@ -80,7 +90,8 @@ services:
       - NODE_LIMIT=${NODE_LIMIT:-100000}
       - EDGE_LIMIT=${EDGE_LIMIT:-100000}
       - MIN_DEGREE_CENTRALITY=${MIN_DEGREE_CENTRALITY:-0}
-      - CACHE_ENABLED=${CACHE_ENABLED:-true}
+      - CACHE_ENABLED=${CACHE_ENABLED:-false}
+      - CACHE_TTL_SECONDS=60
       - RUST_LOG=${RUST_LOG:-info}
       - CENTRALITY_SERVICE_URL=${RUST_CENTRALITY_URL:-http://graphiti-centrality-rs:3003}
     networks:
@@ -206,7 +217,7 @@ services:
       - ENABLE_FALLBACK=${ENABLE_FALLBACK:-true}
       - USE_OLLAMA=${USE_OLLAMA:-true}
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://100.81.139.20:11434/v1}
-      - OLLAMA_MODEL=${OLLAMA_MODEL:-gemma3:12b}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-gaunernst/gemma-3-12b-it-int4-awq}
       - OLLAMA_EMBEDDING_MODEL=${OLLAMA_EMBEDDING_MODEL:-dengcao/Qwen3-Embedding-4B:Q4_K_M}
       - EMBEDDING_DIMENSION=${EMBEDDING_DIMENSION:-2560}
       - USE_OLLAMA_EMBEDDINGS=${USE_OLLAMA_EMBEDDINGS:-true}
@@ -291,7 +302,7 @@ services:
       - ENABLE_FALLBACK=${ENABLE_FALLBACK:-true}
       - USE_OLLAMA=${USE_OLLAMA:-true}
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://100.81.139.20:11434/v1}
-      - OLLAMA_MODEL=${OLLAMA_MODEL:-gemma3:12b}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-gaunernst/gemma-3-12b-it-int4-awq}
       - OLLAMA_EMBEDDING_MODEL=${OLLAMA_EMBEDDING_MODEL:-dengcao/Qwen3-Embedding-4B:Q4_K_M}
       - EMBEDDING_DIMENSION=${EMBEDDING_DIMENSION:-2560}
       - USE_OLLAMA_EMBEDDINGS=${USE_OLLAMA_EMBEDDINGS:-true}
@@ -317,83 +328,57 @@ services:
       - homepage.href=http://${HOMEPAGE_HOST:-192.168.50.90}:${MCP_PORT:-3010}
       - homepage.description=Model Context Protocol server
   # =============================================================================
-  # Sync Service (Neo4j -> FalkorDB)
+  # Sync Service (FalkorDB -> Neo4j) - Rust Implementation - DISABLED
   # =============================================================================
-  sync-service:
-    image: graphiti-sync-service-local:latest
-    restart: unless-stopped
-    ports:
-      - ${SYNC_HEALTH_PORT:-8082}:8080
-      - ${SYNC_METRICS_PORT:-8083}:8081
-    volumes:
-      - sync_logs:/app/logs
-      - ./sync_service/config.yaml:/app/config.yaml:ro
-    environment:
-      # Neo4j configuration (primary storage)
-      - NEO4J_URI=${NEO4J_URI:-bolt://neo4j:7687}
-      - NEO4J_USER=${NEO4J_USER:-neo4j}
-      - NEO4J_PASSWORD=${NEO4J_PASSWORD:-graphiti123}
-      - NEO4J_DATABASE=${NEO4J_DATABASE:-neo4j}
-      - NEO4J_POOL_SIZE=${NEO4J_POOL_SIZE:-10}
-      - FALKORDB_HOST=${FALKORDB_HOST:-falkordb}
-      - FALKORDB_PORT=${FALKORDB_PORT:-6379}
-      - FALKORDB_DATABASE=${FALKORDB_DATABASE:-graphiti_migration}
-      - FALKORDB_POOL_SIZE=${FALKORDB_POOL_SIZE:-5}
-      - SYNC_INTERVAL_SECONDS=${SYNC_INTERVAL_SECONDS:-180}
-      - SYNC_BATCH_SIZE=${SYNC_BATCH_SIZE:-500}
-      - SYNC_FULL_ON_STARTUP=${SYNC_FULL_ON_STARTUP:-true}
-      - SYNC_ENABLE_INCREMENTAL=${SYNC_ENABLE_INCREMENTAL:-false}
-      - SYNC_ENABLE_CONTINUOUS=${SYNC_ENABLE_CONTINUOUS:-true}
-      - SYNC_DIRECTION=${SYNC_DIRECTION:-reverse}
-      - SYNC_ENABLE_REVERSE_INCREMENTAL=${SYNC_ENABLE_REVERSE_INCREMENTAL:-true}
-      - SYNC_AUTO_RECOVERY=${SYNC_AUTO_RECOVERY:-true}
-      - SYNC_MAX_RETRIES=${SYNC_MAX_RETRIES:-5}
-      - SYNC_RETRY_DELAY=${SYNC_RETRY_DELAY:-15}
-      - SYNC_MAX_QUERY_LIMIT=${SYNC_MAX_QUERY_LIMIT:-15000}
-      - SYNC_ENABLE_QUERY_PAGINATION=${SYNC_ENABLE_QUERY_PAGINATION:-true}
-      - SYNC_OPTIMIZATION_ENABLED=${SYNC_OPTIMIZATION_ENABLED:-true}
-      - SYNC_OPTIMIZATION_EDGE_BATCH_SIZE=${SYNC_OPTIMIZATION_EDGE_BATCH_SIZE:-1000}
-      - SYNC_OPTIMIZATION_NODE_BATCH_SIZE=${SYNC_OPTIMIZATION_NODE_BATCH_SIZE:-15000}
-      - SYNC_OPTIMIZATION_MEMORY_THRESHOLD_MB=${SYNC_OPTIMIZATION_MEMORY_THRESHOLD_MB:-100}
-      - SYNC_OPTIMIZATION_ADAPTIVE_SIZING=${SYNC_OPTIMIZATION_ADAPTIVE_SIZING:-true}
-      - LOG_LEVEL=${SYNC_LOG_LEVEL:-INFO}
-      - LOG_FORMAT=${SYNC_LOG_FORMAT:-json}
-      - LOG_FILE_PATH=${SYNC_LOG_FILE_PATH:-/app/logs/sync.log}
-      - LOG_MAX_FILE_SIZE_MB=${SYNC_LOG_MAX_SIZE:-100}
-      - LOG_BACKUP_COUNT=${SYNC_LOG_BACKUP_COUNT:-5}
-      - HEALTH_PORT=8080
-      - HEALTH_PATH=/health
-      - METRICS_ENABLED=true
-      - METRICS_PORT=8081
-      - METRICS_PATH=/metrics
-    networks:
-      - graphiti_network
-    depends_on:
-      neo4j:
-        condition: service_healthy
-      falkordb:
-        condition: service_healthy
-    healthcheck:
-      test:
-        - CMD
-        - curl
-        - -f
-        - http://localhost:8080/health
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-    deploy:
-      resources:
-        limits:
-          memory: 1536M
-          cpus: "0.5"
-    labels:
-      - homepage.group=Knowledge Management
-      - homepage.name=Sync Service
-      - homepage.icon=si-sync
-      - homepage.href=http://${HOMEPAGE_HOST:-192.168.50.90}:${SYNC_HEALTH_PORT:-8080}
-      - homepage.description=Neo4j to FalkorDB synchronization service
+  # DISABLED: Sync service not needed - Neo4j is primary source of truth
+  #
+  # sync-service:
+  #   image: graphiti-sync-rs:latest
+  #   restart: unless-stopped
+  #   ports:
+  #     - ${SYNC_HEALTH_PORT:-8082}:8080
+  #     - ${SYNC_METRICS_PORT:-8083}:8081
+  #   environment:
+  #     # Neo4j configuration
+  #     - SYNC_NEO4J_URI=${NEO4J_URI:-bolt://neo4j:7687}
+  #     - SYNC_NEO4J_USER=${NEO4J_USER:-neo4j}
+  #     - SYNC_NEO4J_PASSWORD=${NEO4J_PASSWORD:-graphiti123}
+  #     - SYNC_NEO4J_DATABASE=${NEO4J_DATABASE:-neo4j}
+  #     # FalkorDB configuration
+  #     - SYNC_FALKORDB_HOST=${FALKORDB_HOST:-falkordb}
+  #     - SYNC_FALKORDB_PORT=${FALKORDB_PORT:-6379}
+  #     - SYNC_FALKORDB_DATABASE=${FALKORDB_DATABASE:-graphiti_migration}
+  #     # Sync configuration
+  #     - SYNC_SYNC_INTERVAL_SECONDS=${SYNC_INTERVAL_SECONDS:-180}
+  #     - SYNC_SYNC_BATCH_SIZE=${SYNC_BATCH_SIZE:-500}
+  #     - SYNC_SYNC_PARALLEL_WORKERS=${SYNC_PARALLEL_WORKERS:-}
+  #     # Disaster recovery
+  #     - SYNC_DISASTER_AUTO_RECOVER=${SYNC_AUTO_RECOVERY:-true}
+  #     # Health and metrics
+  #     - SYNC_HEALTH_PORT=8080
+  #     - SYNC_METRICS_PORT=8081
+  #     # Logging
+  #     - LOG_LEVEL=${SYNC_LOG_LEVEL:-INFO}
+  #     - RUST_LOG=${RUST_LOG:-info}
+  #   networks:
+  #     - graphiti_network
+  #   depends_on:
+  #     neo4j:
+  #       condition: service_healthy
+  #     falkordb:
+  #       condition: service_healthy
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         memory: 512M
+  #         cpus: "2.0"
+  #   command: ["sync-loop", "falkor-to-neo4j"]
+  #   labels:
+  #     - homepage.group=Knowledge Management
+  #     - homepage.name=Sync Service (Rust)
+  #     - homepage.icon=si-rust
+  #     - homepage.href=http://${HOMEPAGE_HOST:-192.168.50.90}:${SYNC_HEALTH_PORT:-8082}
+  #     - homepage.description=High-performance FalkorDB to Neo4j sync (Rust)
   # =============================================================================
   # Queue and Worker Services
   # =============================================================================
@@ -456,8 +441,10 @@ services:
       - ENABLE_FALLBACK=${ENABLE_FALLBACK:-true}
       - USE_OLLAMA=${USE_OLLAMA:-true}
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://100.81.139.20:11434/v1}
-      - OLLAMA_MODEL=${OLLAMA_MODEL:-gemma3:12b}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-gaunernst/gemma-3-12b-it-int4-awq}
       - OLLAMA_EMBEDDING_MODEL=${OLLAMA_EMBEDDING_MODEL:-dengcao/Qwen3-Embedding-4B:Q4_K_M}
+      - OLLAMA_TIMEOUT_SECONDS=${OLLAMA_TIMEOUT_SECONDS:-300}
+      - OLLAMA_MAX_RETRIES=${OLLAMA_MAX_RETRIES:-5}
       - EMBEDDING_DIMENSION=${EMBEDDING_DIMENSION:-2560}
       - USE_OLLAMA_EMBEDDINGS=${USE_OLLAMA_EMBEDDINGS:-true}
       - USE_DEDICATED_EMBEDDING_ENDPOINT=${USE_DEDICATED_EMBEDDING_ENDPOINT:-true}
@@ -586,10 +573,6 @@ volumes:
     driver: local
     labels:
       - description=Nginx access and error logs
-  sync_logs:
-    driver: local
-    labels:
-      - description=Sync service logs and data
 # =============================================================================
 # Networks
 # =============================================================================

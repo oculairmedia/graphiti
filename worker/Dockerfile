@@ -28,10 +28,9 @@ COPY worker /app/worker
 
 # Install Python dependencies using uv
 RUN pip install --no-cache-dir uv && \
-    uv pip install --system -e ".[falkordb,cerebras]"
+    uv pip install --system -e ".[falkordb,cerebras,worker]"
 
 # Install additional worker dependencies
-RUN pip install --no-cache-dir msgpack httpx cerebras-cloud-sdk>=1.46.0
 
 # Create non-root user
 RUN useradd -m -u 1000 worker && chown -R worker:worker /app

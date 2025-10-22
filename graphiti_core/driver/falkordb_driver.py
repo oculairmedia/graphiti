@@ -61,8 +61,36 @@ def _flatten_params(kwargs: dict[str, Any]) -> dict[str, Any]:
     return params
 
 
-# Removed _preprocess_vectors_in_params() - FalkorDB 1.2.0 doesn't support VectorF32 in Python client
-# Vector conversion is handled at query level using vecf32() function instead
+def _preprocess_vectors_in_params(params: dict[str, Any]) -> dict[str, Any]:
+    """Convert nested vector lists to FalkorDB VectorF32 objects.
+
+    Falkor ingestion frequently passes batched structures (for example, `$edges` from
+    UNWIND) where the fact embeddings remain plain Python lists. FalkorDB expects
+    VectorF32 instances in those positions, otherwise it raises
+    `Type mismatch: expected Null or Vectorf32 but was List` during vector operations.
+
+    We intentionally skip converting top-level parameters (depth == 0) because query
+    wrappers already handle those via `vecf32($param)` to keep backwards
+    compatibility.
+    """
+
+    try:
+        from falkordb import VectorF32  # type: ignore
+    except ImportError:  # pragma: no cover - defensive guard when driver missing
+        return params
+
+    def convert(value: Any, depth: int) -> Any:
+        if _is_vector_list(value):
+            return VectorF32(value) if depth > 0 else value
+        if isinstance(value, dict):
+            return {k: convert(v, depth + 1) for k, v in value.items()}
+        if isinstance(value, list):
+            return [convert(item, depth + 1) for item in value]
+        if isinstance(value, tuple):
+            return tuple(convert(item, depth + 1) for item in value)
+        return value
+
+    return {key: convert(val, 0) for key, val in params.items()}
 
 
 def _wrap_vector_params_in_query(query: str, params: dict[str, Any]) -> str:
@@ -179,6 +207,7 @@ class FalkorDriverSession(GraphDriverSession):
         if isinstance(query, list):
             for cypher, params in query:
                 params = convert_datetimes_to_strings(params)
+                params = _preprocess_vectors_in_params(params)
                 wrapped_cypher = _wrap_vector_params_in_query(str(cypher), params)
                 summary = _summarize_params(params)
                 logger.info("Falkor RUN(list) query:\n%s\nparams=%s", wrapped_cypher[:2000], summary)
@@ -195,6 +224,7 @@ class FalkorDriverSession(GraphDriverSession):
         else:
             params = _flatten_params(dict(kwargs))
             params = convert_datetimes_to_strings(params)
+            params = _preprocess_vectors_in_params(params)
             wrapped_query = _wrap_vector_params_in_query(str(query), params)
             summary = _summarize_params(params)
             logger.info("Falkor RUN query:\n%s\nparams=%s", wrapped_query[:2000], summary)
@@ -260,7 +290,10 @@ class FalkorDriver(GraphDriver):
         # 2) Convert datetime objects to ISO strings (FalkorDB does not support datetime objects directly)
         params = convert_datetimes_to_strings(raw_params)
 
-        # 3) FalkorDB 1.2.0 uses query-level vecf32() wrapping instead of Python VectorF32 objects
+        # 3) Convert nested vector lists to VectorF32 so FalkorDB accepts them in UNWIND payloads
+        params = _preprocess_vectors_in_params(params)
+
+        # 4) FalkorDB 1.2.0 uses query-level vecf32() wrapping instead of Python VectorF32 objects
         # Vector parameters are wrapped with vecf32() in the query string by get_vector_cosine_func_query()
         cypher_query_ = _wrap_vector_params_in_query(cypher_query_, params)
 

@@ -1,0 +1,35 @@
+  /**
+   * Send episode to Graphiti
+   */
+  async function sendToGraphiti(name, content, source) {
+    try {
+      const response = await fetch(`${GRAPHITI_API_URL}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          group_id: GROUP_ID,
+          messages: [{
+            content: content,
+            name: name,
+            role_type: "system",
+            role: "opencode",
+            timestamp: new Date().toISOString(),
+            source_description: source,
+          }],
+        }),
+        signal: AbortSignal.timeout(15000),
+      })
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.warn(`[Graphiti] Failed to send: ${response.statusText} - ${errorText}`)
+        return false
+      }
+
+      console.log(`[Graphiti] ✓ Sent: ${name}`)
+      return true
+    } catch (error) {
+      console.warn(`[Graphiti] Error: ${error.message}`)
+      return false
+    }
+  }

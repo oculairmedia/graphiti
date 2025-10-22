@@ -1,0 +1,9 @@
+{
+  "name": "graphiti-opencode-plugins",
+  "version": "1.0.0",
+  "description": "OpenCode plugins for Graphiti knowledge graph integration",
+  "type": "module",
+  "dependencies": {
+    "@opencode-ai/plugin": "*"
+  }
+}

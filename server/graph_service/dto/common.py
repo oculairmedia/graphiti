@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Literal
 
 from graphiti_core.utils.datetime_utils import utc_now
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, validator
 
 
 class Result(BaseModel):
@@ -31,3 +31,8 @@ class Message(BaseModel):
     source_description: str = Field(
         default='', description='The description of the source of the message'
     )
+
+    @validator('source_description', pre=True, always=True)
+    def ensure_source_description(cls, value: str | None) -> str:
+        normalized = (value or '').strip()
+        return normalized if normalized else 'unspecified'

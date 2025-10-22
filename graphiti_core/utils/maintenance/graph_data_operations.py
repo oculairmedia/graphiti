@@ -182,7 +182,7 @@ async def retrieve_episodes(
             group_id=record['group_id'],
             source=EpisodeType.from_str(record['source']),
             name=record['name'],
-            source_description=record['source_description'],
+            source_description=(record.get('source_description') or '').strip() or 'unspecified',
         )
         for record in result
     ]

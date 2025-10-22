@@ -405,11 +405,13 @@ When working with the MCP server, follow the patterns established in `mcp_server
 
 The repository includes OpenCode plugins for automatic Graphiti knowledge graph population during development sessions.
 
+**Note**: The plugin files are located in `.opencodes/plugin/` (not `.opencode/`) to prevent auto-loading. This is intentional since the plugin is configured at the root level (`/root/.config/opencode/plugin/`) and we don't want the repository version to interfere with the global installation.
+
 ### Quick Setup
 
 ```bash
-# Copy plugins to global location
-cp .opencode/plugin/*.js /root/.config/opencode/plugin/
+# Copy plugins to global location (use .opencodes, not .opencode)
+cp .opencodes/plugin/*.js /root/.config/opencode/plugin/
 
 # Start Graphiti API
 docker-compose up -d graph
@@ -445,7 +447,7 @@ export GRAPHITI_GROUP_ID="opencode-custom"  # Override auto-detection
 
 ### Documentation
 
-- **Quick Start**: `.opencode/plugin/README.md`
+- **Quick Start**: `.opencodes/plugin/README.md`
 - **Full Guide**: `docs/integrations/OPENCODE_PLUGIN_INTEGRATION.md`
 - **Old Versions**: `.opencode.backup/plugin/` (TypeScript versions)
 
