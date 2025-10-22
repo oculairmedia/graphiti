@@ -1,0 +1,9 @@
+/target
+.git
+.gitignore
+**/*.log
+**/*.tmp
+**/__pycache__
+/tests
+IMPLEMENTATION_SUMMARY.md
+README.md

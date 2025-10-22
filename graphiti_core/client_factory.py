@@ -25,6 +25,7 @@ _logger.info('!!! GraphitiClientFactory module loaded - FORCE BUILD CACHE INVALI
 from graphiti_core.cross_encoder.openai_reranker_client import OpenAIRerankerClient
 from graphiti_core.embedder import EmbedderClient, OpenAIEmbedder, OpenAIEmbedderConfig
 from graphiti_core.llm_client import LLMClient, LLMConfig, OpenAIClient
+from graphiti_core.llm_client.openai_generic_client import OpenAIGenericClient
 from graphiti_core.llm_client.cerebras_client import CerebrasClient
 from graphiti_core.llm_client.chutes_client import ChutesClient
 from graphiti_core.llm_client.fallback_client import FallbackLLMClient
@@ -154,10 +155,10 @@ class GraphitiClientFactory:
                     model=ollama_model, small_model=ollama_model, temperature=0.7, max_tokens=2000
                 )
 
-                ollama_client = OpenAIClient(config=config, client=client)
+                ollama_client = OpenAIGenericClient(config=config, client=client)
                 available_clients.append(ollama_client)
                 client_names.append('Ollama')
-                logger.info('Ollama client instantiated successfully!')
+                logger.info('Ollama/vLLM client instantiated successfully!')
 
             except Exception as e:
                 logger.error(f'Failed to create Ollama LLM client: {e}')
