@@ -47,12 +47,12 @@ services:
       - ${FALKORDB_PORT:-6379}:6379
     # No volumes - FalkorDB runs in-memory only, restored from Neo4j on startup
     environment:
-      - REDIS_ARGS=--loglevel warning --maxmemory 2g --maxmemory-policy
+      - REDIS_ARGS=--loglevel warning --maxmemory 6g --maxmemory-policy
         allkeys-lru --save ""
       - FALKORDB_ARGS=NODE_CREATION_BUFFER 128 QUERY_MEM_CAPACITY 134217728
         CMD_INFO no OMP_THREAD_COUNT 1 CACHE_SIZE 5
-    mem_limit: 2g
-    memswap_limit: 2g
+    mem_limit: 8g
+    memswap_limit: 8g
     networks:
       - graphiti_network
     healthcheck:
