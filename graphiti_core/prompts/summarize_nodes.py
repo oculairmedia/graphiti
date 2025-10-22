@@ -20,6 +20,7 @@ from typing import Any, Protocol, TypedDict
 from pydantic import BaseModel, Field
 
 from .models import Message, PromptFunction, PromptVersion
+from ..utils.prompt_utils import enforce_max_prompt_tokens
 
 
 class Summary(BaseModel):
@@ -66,6 +67,9 @@ def summarize_pair(context: dict[str, Any]) -> list[Message]:
 
 
 def summarize_context(context: dict[str, Any]) -> list[Message]:
+    # Apply defensive prompt clipping (this already handles previous_episodes)
+    context = enforce_max_prompt_tokens(context)
+
     return [
         Message(
             role='system',
@@ -74,9 +78,9 @@ def summarize_context(context: dict[str, Any]) -> list[Message]:
         Message(
             role='user',
             content=f"""
-            
+
         <MESSAGES>
-        {json.dumps(context['previous_episodes'], indent=2)}
+        {json.dumps(context.get('previous_episodes', []), indent=2)}
         {json.dumps(context['episode_content'], indent=2)}
         </MESSAGES>
         

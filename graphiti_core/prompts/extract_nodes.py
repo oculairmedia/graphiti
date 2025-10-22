@@ -20,6 +20,7 @@ from typing import Any, Protocol, TypedDict
 from pydantic import BaseModel, Field
 
 from .models import Message, PromptFunction, PromptVersion
+from ..utils.prompt_utils import enforce_max_prompt_tokens
 
 
 class ExtractedEntity(BaseModel):
@@ -71,12 +72,15 @@ class Versions(TypedDict):
 
 
 def extract_message(context: dict[str, Any]) -> list[Message]:
-    sys_prompt = """You are an AI assistant that extracts entity nodes from conversational messages. 
+    # Apply defensive prompt clipping (this already handles previous_episodes)
+    context = enforce_max_prompt_tokens(context)
+
+    sys_prompt = """You are an AI assistant that extracts entity nodes from conversational messages.
     Your primary task is to extract and classify the speaker and other significant entities mentioned in the conversation."""
 
     user_prompt = f"""
 <PREVIOUS MESSAGES>
-{json.dumps([ep for ep in context['previous_episodes']], indent=2)}
+{json.dumps(context.get('previous_episodes', []), indent=2)}
 </PREVIOUS MESSAGES>
 
 <CURRENT MESSAGE>

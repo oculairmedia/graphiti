@@ -98,33 +98,58 @@ class OpenAIGenericClient(LLMClient):
                 openai_messages.append({'role': 'user', 'content': m.content})
             elif m.role == 'system':
                 openai_messages.append({'role': 'system', 'content': m.content})
-        
+
+        # Detect if we're using vLLM (check for common vLLM patterns in base_url)
+        base_url = str(self.client.base_url) if hasattr(self.client, 'base_url') else ''
+        is_vllm = 'vllm' in base_url.lower() or ':11434' in base_url  # vLLM or Ollama-like endpoints
+
+        # Prepare API call kwargs
+        call_kwargs = {
+            'model': self.model or DEFAULT_MODEL,
+            'messages': openai_messages,
+            'temperature': self.temperature,
+            'max_tokens': self.max_tokens,
+        }
+
         # Configure response format based on whether response_model is provided
         if response_model is not None:
-            # Use structured outputs with JSON schema for better reliability
-            response_format = {
-                'type': 'json_schema',
-                'json_schema': {
-                    'name': 'response',
-                    'strict': False,  # Allow flexibility for Ollama and other models
-                    'schema': response_model.model_json_schema()
+            json_schema = response_model.model_json_schema()
+
+            if is_vllm:
+                # vLLM uses guided_json via extra_body when using OpenAI SDK
+                call_kwargs['extra_body'] = {'guided_json': json_schema}
+                logger.debug(f"Using vLLM guided_json with schema: {response_model.__name__}")
+            else:
+                # OpenAI uses response_format
+                call_kwargs['response_format'] = {
+                    'type': 'json_schema',
+                    'json_schema': {
+                        'name': 'response',
+                        'strict': False,
+                        'schema': json_schema
+                    }
                 }
-            }
-            logger.debug(f"Using structured output with schema: {response_model.__name__}")
+                logger.debug(f"Using OpenAI structured output with schema: {response_model.__name__}")
         else:
-            # Fallback to basic JSON object format
-            response_format = {'type': 'json_object'}
-            logger.debug("Using basic JSON object format")
-        
+            if is_vllm:
+                # vLLM: use basic guided_json for free-form JSON via extra_body
+                call_kwargs['extra_body'] = {'guided_json': {'type': 'object'}}
+                logger.debug("Using vLLM guided_json with basic object schema")
+            else:
+                # OpenAI: use response_format
+                call_kwargs['response_format'] = {'type': 'json_object'}
+                logger.debug("Using OpenAI basic JSON object format")
+
         try:
-            response = await self.client.chat.completions.create(
-                model=self.model or DEFAULT_MODEL,
-                messages=openai_messages,
-                temperature=self.temperature,
-                max_tokens=self.max_tokens,
-                response_format=response_format,
-            )
+            response = await self.client.chat.completions.create(**call_kwargs)
             result = response.choices[0].message.content or ''
+
+            # Clean up markdown code blocks if present (common in vLLM output)
+            if result.startswith('```json'):
+                result = result.replace('```json\n', '').replace('\n```', '').strip()
+            elif result.startswith('```'):
+                result = result.replace('```\n', '').replace('\n```', '').strip()
+
             return json.loads(result)
         except openai.RateLimitError as e:
             raise RateLimitError from e

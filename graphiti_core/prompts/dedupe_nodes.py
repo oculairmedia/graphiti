@@ -20,6 +20,7 @@ from typing import Any, Protocol, TypedDict
 from pydantic import BaseModel, Field
 
 from .models import Message, PromptFunction, PromptVersion
+from ..utils.prompt_utils import enforce_max_prompt_tokens
 
 
 class NodeDuplicate(BaseModel):
@@ -67,6 +68,9 @@ def _existing_entities_block(context: dict[str, Any]) -> str:
 
 
 def node(context: dict[str, Any]) -> list[Message]:
+    # Apply defensive prompt clipping (this already handles previous_episodes)
+    context = enforce_max_prompt_tokens(context)
+
     existing_nodes_block = _existing_entities_block(context)
     return [
         Message(
@@ -77,7 +81,7 @@ def node(context: dict[str, Any]) -> list[Message]:
             role='user',
             content=f"""
         <PREVIOUS MESSAGES>
-        {json.dumps([ep for ep in context['previous_episodes']], indent=2)}
+        {json.dumps(context.get('previous_episodes', []), indent=2)}
         </PREVIOUS MESSAGES>
         <CURRENT MESSAGE>
         {context['episode_content']}
