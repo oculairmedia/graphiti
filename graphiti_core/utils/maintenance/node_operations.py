@@ -146,6 +146,16 @@ def merge_edge_properties(existing: dict, incoming: dict) -> dict:
     - group_id: use existing (should be same anyway)
     - Other properties: prefer existing unless empty
     """
+
+    def _sanitize_fact_embedding(value: Any) -> Any:
+        if value is None:
+            return None
+        if isinstance(value, list):
+            if len(value) == 0:
+                return None
+            return value
+        return value
+
     merged = dict(existing)
 
     # Handle episodes - union of unique values
@@ -185,7 +195,11 @@ def merge_edge_properties(existing: dict, incoming: dict) -> dict:
         merged['fact'] = incoming['fact']
 
     if 'fact_embedding' in incoming and not existing.get('fact_embedding'):
-        merged['fact_embedding'] = incoming['fact_embedding']
+        sanitized = _sanitize_fact_embedding(incoming['fact_embedding'])
+        if sanitized is not None:
+            merged['fact_embedding'] = sanitized
+        elif 'fact_embedding' not in merged:
+            merged['fact_embedding'] = None
 
     # Handle attributes - merge dictionaries
     if 'attributes' in existing or 'attributes' in incoming:

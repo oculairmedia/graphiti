@@ -45,7 +45,7 @@ class WorkerService:
         falkordb_port = int(os.getenv("FALKORDB_PORT", "6379"))
         falkordb_database = os.getenv("FALKORDB_DATABASE", "graphiti_migration")
         
-        worker_count = int(os.getenv("WORKER_COUNT", "4"))
+        worker_count = int(os.getenv("WORKER_COUNT", "2"))
         batch_size = int(os.getenv("BATCH_SIZE", "10"))
         poll_interval = float(os.getenv("POLL_INTERVAL", "1.0"))
         

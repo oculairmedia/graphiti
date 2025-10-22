@@ -20,6 +20,7 @@ from typing import Any, Protocol, TypedDict
 from pydantic import BaseModel, Field
 
 from .models import Message, PromptFunction, PromptVersion
+from ..utils.prompt_utils import enforce_max_prompt_tokens
 
 
 class Edge(BaseModel):
@@ -58,6 +59,7 @@ class Versions(TypedDict):
 
 
 def edge(context: dict[str, Any]) -> list[Message]:
+    context = enforce_max_prompt_tokens(context)
     return [
         Message(
             role='system',
@@ -128,6 +130,7 @@ You may use information from the PREVIOUS MESSAGES only to disambiguate referenc
 
 
 def reflexion(context: dict[str, Any]) -> list[Message]:
+    context = enforce_max_prompt_tokens(context)
     sys_prompt = """You are an AI assistant that determines which facts have not been extracted from the given context"""
 
     user_prompt = f"""
@@ -156,6 +159,7 @@ determine if any facts haven't been extracted.
 
 
 def extract_attributes(context: dict[str, Any]) -> list[Message]:
+    context = enforce_max_prompt_tokens(context)
     return [
         Message(
             role='system',
