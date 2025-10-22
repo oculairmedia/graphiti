@@ -1,0 +1,9 @@
+services:
+  graphiti-worker:
+    environment:
+      # Reduce concurrency to prevent Ollama timeout storms
+      - WORKER_COUNT=2              # Down from 4
+      - BATCH_SIZE=3                # Down from 10
+      - OLLAMA_TIMEOUT_SECONDS=300  # Increase timeout to 5 minutes
+      - OLLAMA_MAX_RETRIES=3        # Reduce retries
+      - POLL_INTERVAL=2.0           # Slow down polling

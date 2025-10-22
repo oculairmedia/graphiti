@@ -41,7 +41,7 @@ impl DeltaTracker {
             current_edges: Arc::new(RwLock::new(HashMap::new())),
             sequence_counter: Arc::new(RwLock::new(0)),
             delta_history: Arc::new(RwLock::new(VecDeque::new())),
-            max_history_size: 100, // Keep last 100 deltas
+            max_history_size: 5, // MEMORY FIX: Reduced from 100 to 5 deltas (was causing 8GB+ memory usage)
         }
     }
     

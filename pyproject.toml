@@ -37,6 +37,9 @@ google-genai = ["google-genai>=1.8.0"]
 falkordb = ["falkordb>=1.1.2,<2.0.0"]
 voyageai = ["voyageai>=0.2.3"]
 sentence-transformers = ["sentence-transformers>=3.2.1"]
+worker = [
+    "msgpack>=1.0.0",
+]
 dev = [
     "pyright>=1.1.380",
     "groq>=0.2.0",
