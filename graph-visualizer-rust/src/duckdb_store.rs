@@ -154,7 +154,8 @@ impl DuckDBStore {
                 edge_type VARCHAR NOT NULL,
                 weight DOUBLE NOT NULL DEFAULT 1.0,
                 color VARCHAR,
-                strength DOUBLE DEFAULT 1.0
+                strength DOUBLE DEFAULT 1.0,
+                PRIMARY KEY (source, target, edge_type)
             )",
             params![]
         )?;
@@ -192,8 +193,8 @@ impl DuckDBStore {
         tx.execute("DELETE FROM nodes", [])?;
         info!("Existing data cleared, proceeding with fresh data load");
         
-        // GRAPH-504: Use simple INSERT since we cleared all data above (atomic replacement)
-        let stmt_node = "INSERT INTO nodes (id, idx, label, node_type, summary, degree_centrality, pagerank_centrality, betweenness_centrality, eigenvector_centrality, x, y, color, size, created_at, created_at_timestamp, cluster, clusterStrength) 
+        // GRAPH-504: Use INSERT OR REPLACE to handle concurrent reloads gracefully
+        let stmt_node = "INSERT OR REPLACE INTO nodes (id, idx, label, node_type, summary, degree_centrality, pagerank_centrality, betweenness_centrality, eigenvector_centrality, x, y, color, size, created_at, created_at_timestamp, cluster, clusterStrength)
                          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         
         let mut node_to_idx = HashMap::new();
@@ -256,8 +257,8 @@ impl DuckDBStore {
             node_to_idx.insert(node.id.clone(), idx as u32);
         }
         
-        // GRAPH-504: Use simple INSERT since we cleared all data above (atomic replacement)
-        let stmt_edge = "INSERT INTO edges (source, sourceidx, target, targetidx, edge_type, weight, color, strength) 
+        // GRAPH-504: Use INSERT OR IGNORE to handle concurrent reloads gracefully
+        let stmt_edge = "INSERT OR IGNORE INTO edges (source, sourceidx, target, targetidx, edge_type, weight, color, strength)
                          VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
         
         for edge in edges.iter() {
@@ -657,7 +658,7 @@ impl DuckDBStore {
                     };
                     
                     tx.execute(
-                        "INSERT INTO edges (source, sourceidx, target, targetidx, edge_type, weight, color, strength) 
+                        "INSERT OR IGNORE INTO edges (source, sourceidx, target, targetidx, edge_type, weight, color, strength)
                          VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                         params![
                             &edge.from,
@@ -733,7 +734,7 @@ impl DuckDBStore {
                     };
                     
                     tx.execute(
-                        "INSERT INTO edges (source, sourceidx, target, targetidx, edge_type, weight, color, strength) 
+                        "INSERT OR IGNORE INTO edges (source, sourceidx, target, targetidx, edge_type, weight, color, strength)
                          VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                         params![
                             &pending.edge.from,
