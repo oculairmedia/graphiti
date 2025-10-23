@@ -44,6 +44,36 @@ from graphiti_core.utils.datetime_utils import ensure_utc, utc_now
 logger = logging.getLogger(__name__)
 
 
+def normalize_relation_type(relation_type: str) -> str:
+    """
+    Normalize relation type to prevent duplicates from case/whitespace variations.
+
+    Converts to uppercase, strips whitespace, and replaces spaces with underscores.
+    Examples:
+        "WORKS_WITH" -> "WORKS_WITH"
+        "Works_With" -> "WORKS_WITH"
+        "WORKS_WITH  " -> "WORKS_WITH"
+        "works with" -> "WORKS_WITH"
+
+    Args:
+        relation_type: Raw relation type string from LLM
+
+    Returns:
+        Normalized relation type string
+    """
+    if not relation_type:
+        return ''
+
+    # Strip leading/trailing whitespace, convert to uppercase, replace spaces with underscores
+    normalized = relation_type.strip().upper().replace(' ', '_')
+
+    # Log normalization if it changed the value (helps debugging)
+    if normalized != relation_type:
+        logger.debug(f'Normalized relation type: "{relation_type}" -> "{normalized}"')
+
+    return normalized
+
+
 async def execute_merge_operations(
     driver,
     merge_operations: list[tuple[str, str]],
@@ -303,10 +333,14 @@ async def extract_edges(
                 )
             except ValueError as e:
                 logger.warning(f'WARNING: Error parsing invalid_at date: {e}. Input: {invalid_at}')
+        # Normalize relation type to prevent duplicates from case/whitespace variations
+        raw_relation_type = edge_data.get('relation_type', '')
+        normalized_relation_type = normalize_relation_type(raw_relation_type)
+
         edge = EntityEdge(
             source_node_uuid=source_node_uuid,
             target_node_uuid=target_node_uuid,
-            name=edge_data.get('relation_type', ''),
+            name=normalized_relation_type,
             group_id=group_id,
             fact=edge_data.get('fact', ''),
             episodes=[episode.uuid],
