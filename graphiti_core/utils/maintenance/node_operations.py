@@ -395,8 +395,8 @@ async def extract_nodes(
 
         labels: list[str] = list({'Entity', str(entity_type_name)})
 
-        # Final safety check before creating EntityNode
-        validated_name = str(extracted_entity.name).strip()
+        # Normalize entity name to prevent duplicates from case/spacing variants
+        validated_name = normalize_entity_name(str(extracted_entity.name))
         if not validated_name or validated_name in ['null', 'None', '']:
             logger.error(
                 f"CRITICAL: Entity name validation failed at EntityNode creation: '{extracted_entity.name}'"
