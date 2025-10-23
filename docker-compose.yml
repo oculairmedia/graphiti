@@ -456,6 +456,7 @@ services:
       - BATCH_SIZE=${BATCH_SIZE:-5}
       - POLL_INTERVAL=${POLL_INTERVAL:-2.0}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - GRAPHITI_ENABLE_AUTO_MERGE=${GRAPHITI_ENABLE_AUTO_MERGE:-true}
     networks:
       - graphiti_network
     depends_on:
