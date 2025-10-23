@@ -17,6 +17,7 @@ import os
 from graphiti_core import Graphiti
 from graphiti_core.nodes import EpisodeType
 from graphiti_core.utils.datetime_utils import utc_now
+from graphiti_core.utils.maintenance.node_operations import normalize_entity_name
 from graphiti_core.ingestion.queue_client import (
     QueuedClient, IngestionTask, TaskType, TaskPriority, QueueMetrics
 )
@@ -502,8 +503,11 @@ class IngestionWorker:
             if not effective_group_id:
                 from graphiti_core.helpers import get_default_group_id
                 effective_group_id = get_default_group_id(self.graphiti.driver.provider)
-            
-            # First check if entity already exists by name and group_id
+
+            # Normalize entity name to prevent duplicates from case/spacing variants
+            normalized_name = normalize_entity_name(entity_name)
+
+            # First check if entity already exists by normalized name and group_id
             existing_query = """
             MATCH (n:Entity)
             WHERE n.name = $name AND n.group_id = $group_id
@@ -511,10 +515,10 @@ class IngestionWorker:
             ORDER BY n.created_at
             LIMIT 1
             """
-            
+
             existing_result, _, _ = await self.graphiti.driver.execute_query(
-                existing_query, 
-                name=entity_name, 
+                existing_query,
+                name=normalized_name,
                 group_id=effective_group_id
             )
             
@@ -530,11 +534,11 @@ class IngestionWorker:
                     
                 return existing_uuid
             else:
-                # Entity doesn't exist, create new one
+                # Entity doesn't exist, create new one with normalized name
                 node = await self.graphiti.save_entity_node(
                     uuid=payload.get('uuid'),
                     group_id=effective_group_id,
-                    name=entity_name,
+                    name=normalized_name,
                     summary=entity_summary
                 )
                 
