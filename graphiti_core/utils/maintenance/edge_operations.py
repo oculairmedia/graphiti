@@ -15,6 +15,8 @@ limitations under the License.
 """
 
 import logging
+import re
+import unicodedata
 from datetime import datetime
 from time import time
 from typing import Any
@@ -43,32 +45,81 @@ from graphiti_core.utils.datetime_utils import ensure_utc, utc_now
 
 logger = logging.getLogger(__name__)
 
+# Translation table for common punctuation separators → underscores
+SEPARATOR_TRANSLATION = str.maketrans({
+    '-': '_',
+    '/': '_',
+    '.': '_',
+    ':': '_',
+    '—': '_',  # em-dash
+    '–': '_',  # en-dash
+})
+
 
 def normalize_relation_type(relation_type: str) -> str:
     """
-    Normalize relation type to prevent duplicates from case/whitespace variations.
+    Normalize relation type to prevent duplicates from Unicode/punctuation/whitespace variations.
 
-    Converts to uppercase, strips whitespace, and replaces spaces with underscores.
+    Applies robust Unicode normalization to ensure visually identical relation types
+    are canonicalized to the same key, preventing duplicate edges.
+
+    Process:
+    1. Unicode NFKC normalization (collapses compatibility chars like full-width letters)
+    2. Case folding (locale-insensitive lowercase)
+    3. Punctuation → underscores (-, /, ., :, etc.)
+    4. Collapse all whitespace (including tabs, NBSP) → single underscore
+    5. Remove non-alphanumeric chars (except underscores)
+    6. Collapse multiple underscores → single underscore
+    7. Convert to uppercase for storage consistency
+
     Examples:
-        "WORKS_WITH" -> "WORKS_WITH"
-        "Works_With" -> "WORKS_WITH"
-        "WORKS_WITH  " -> "WORKS_WITH"
-        "works with" -> "WORKS_WITH"
+        "WORKS_WITH"       -> "WORKS_WITH"
+        "Works With"       -> "WORKS_WITH"
+        "works-with"       -> "WORKS_WITH"
+        "works/with"       -> "WORKS_WITH"
+        "works\twith"      -> "WORKS_WITH" (tab)
+        "works\u00a0with"  -> "WORKS_WITH" (NBSP)
+        "WÖRKS WITH"       -> "WORKS_WITH" (diacritics removed)
+        "  works__with  "  -> "WORKS_WITH"
 
     Args:
         relation_type: Raw relation type string from LLM
 
     Returns:
-        Normalized relation type string
+        Normalized relation type string (uppercase, ASCII alphanumeric + underscores)
     """
     if not relation_type:
         return ''
 
-    # Strip leading/trailing whitespace, convert to uppercase, replace spaces with underscores
-    normalized = relation_type.strip().upper().replace(' ', '_')
+    # 1. Unicode NFKC normalization - collapse compatibility characters
+    normalized = unicodedata.normalize('NFKC', relation_type)
+
+    # 2. Case folding for locale-insensitive comparison
+    normalized = normalized.casefold()
+
+    # 3. Map common punctuation separators to underscores
+    normalized = normalized.translate(SEPARATOR_TRANSLATION)
+
+    # 4. Collapse all whitespace (spaces, tabs, NBSP, etc.) to single underscore
+    normalized = re.sub(r'\s+', '_', normalized.strip())
+
+    # 5. Remove diacritics and non-ASCII chars by decomposing and filtering
+    # This converts "ö" -> "o", "é" -> "e", etc.
+    normalized = ''.join(
+        c for c in unicodedata.normalize('NFD', normalized) if unicodedata.category(c) != 'Mn'
+    )
+
+    # 6. Keep only alphanumeric and underscores
+    normalized = re.sub(r'[^0-9a-z_]', '', normalized)
+
+    # 7. Collapse multiple underscores to single underscore
+    normalized = re.sub(r'_+', '_', normalized)
+
+    # 8. Final uppercase conversion for storage consistency
+    normalized = normalized.upper()
 
     # Log normalization if it changed the value (helps debugging)
-    if normalized != relation_type:
+    if normalized != relation_type.strip():
         logger.debug(f'Normalized relation type: "{relation_type}" -> "{normalized}"')
 
     return normalized
