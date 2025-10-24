@@ -422,10 +422,16 @@ async def add_entity_node(
     request: AddEntityNodeRequest,
     graphiti: ZepGraphitiDep,
 ) -> Any:
+    # Import normalize_entity_name for consistent entity deduplication
+    from graphiti_core.utils.maintenance.node_operations import normalize_entity_name
+
+    # Normalize entity name to prevent duplicates from case/spacing variants
+    normalized_name = normalize_entity_name(request.name)
+
     node = await graphiti.save_entity_node(
         uuid=request.uuid,
         group_id=request.group_id,
-        name=request.name,
+        name=normalized_name,
         summary=request.summary,
     )
     # Invalidate cache after successful data operation
