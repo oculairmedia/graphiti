@@ -78,9 +78,12 @@ def extract_message(context: dict[str, Any]) -> list[Message]:
     sys_prompt = """You are an AI assistant that extracts entity nodes from conversational messages.
     Your primary task is to extract and classify the speaker and other significant entities mentioned in the conversation."""
 
+    # Import safe serializer for datetime handling
+    from graphiti_core.utils.prompt_utils import safe_json_dumps
+
     user_prompt = f"""
 <PREVIOUS MESSAGES>
-{json.dumps(context.get('previous_episodes', []), indent=2)}
+{safe_json_dumps(context.get('previous_episodes', []))}
 </PREVIOUS MESSAGES>
 
 <CURRENT MESSAGE>
@@ -253,6 +256,9 @@ def classify_nodes(context: dict[str, Any]) -> list[Message]:
 
 
 def extract_attributes(context: dict[str, Any]) -> list[Message]:
+    # Import safe serializer for datetime handling
+    from graphiti_core.utils.prompt_utils import safe_json_dumps
+
     return [
         Message(
             role='system',
@@ -263,8 +269,8 @@ def extract_attributes(context: dict[str, Any]) -> list[Message]:
             content=f"""
 
         <MESSAGES>
-        {json.dumps(context['previous_episodes'], indent=2)}
-        {json.dumps(context['episode_content'], indent=2)}
+        {safe_json_dumps(context['previous_episodes'])}
+        {safe_json_dumps(context['episode_content'])}
         </MESSAGES>
 
         Given the above MESSAGES and the following ENTITY, update any of its attributes based on the information provided
@@ -273,9 +279,9 @@ def extract_attributes(context: dict[str, Any]) -> list[Message]:
         Guidelines:
         1. Do not hallucinate entity property values if they cannot be found in the current context.
         2. Only use the provided MESSAGES and ENTITY to set attribute values.
-        3. The summary attribute represents a summary of the ENTITY, and should be updated with new information about the Entity from the MESSAGES. 
+        3. The summary attribute represents a summary of the ENTITY, and should be updated with new information about the Entity from the MESSAGES.
             Summaries must be no longer than 250 words.
-        
+
         <ENTITY>
         {context['node']}
         </ENTITY>
