@@ -21,7 +21,6 @@ dependencies = [
     "posthog>=3.0.0",
     "aiohttp>=3.9.0",
     "httpx>=0.25.0",
-    "llmlingua>=0.1.6",
     "tiktoken>=0.7.0",
 ]
 
@@ -36,7 +35,6 @@ groq = ["groq>=0.2.0"]
 google-genai = ["google-genai>=1.8.0"]
 falkordb = ["falkordb>=1.1.2,<2.0.0"]
 voyageai = ["voyageai>=0.2.3"]
-sentence-transformers = ["sentence-transformers>=3.2.1"]
 worker = [
     "msgpack>=1.0.0",
 ]
@@ -53,8 +51,6 @@ dev = [
     "langchain-anthropic>=0.2.4",
     "langsmith>=0.1.108",
     "langchain-openai>=0.2.6",
-    "sentence-transformers>=3.2.1",
-    "transformers>=4.45.2",
     "voyageai>=0.2.3",
     "pytest>=8.3.3",
     "pytest-asyncio>=0.24.0",

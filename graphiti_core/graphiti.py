@@ -695,20 +695,39 @@ class Graphiti:
 
             edges = resolve_edge_pointers(extracted_edges, uuid_map)
 
-            (resolved_edges, invalidated_edges), hydrated_nodes = await semaphore_gather(
-                resolve_extracted_edges(
+            # Extract attributes with graceful degradation
+            # If attribute extraction fails, we still want to save nodes/edges
+            try:
+                (resolved_edges, invalidated_edges), hydrated_nodes = await semaphore_gather(
+                    resolve_extracted_edges(
+                        self.clients,
+                        edges,
+                        episode,
+                        nodes,
+                        edge_types or {},
+                        edge_type_map or edge_type_map_default,
+                    ),
+                    extract_attributes_from_nodes(
+                        self.clients, nodes, episode, previous_episodes, entity_types
+                    ),
+                    max_coroutines=self.max_coroutines,
+                )
+            except Exception as attr_error:
+                logger.warning(
+                    f'Attribute extraction failed: {attr_error}. '
+                    f'Continuing with nodes without enriched attributes.'
+                )
+                # Still resolve edges, but skip attribute enrichment
+                (resolved_edges, invalidated_edges) = await resolve_extracted_edges(
                     self.clients,
                     edges,
                     episode,
                     nodes,
                     edge_types or {},
                     edge_type_map or edge_type_map_default,
-                ),
-                extract_attributes_from_nodes(
-                    self.clients, nodes, episode, previous_episodes, entity_types
-                ),
-                max_coroutines=self.max_coroutines,
-            )
+                )
+                # Use nodes as-is without attribute enrichment
+                hydrated_nodes = nodes
 
             duplicate_of_edges, merge_operations, duplicate_nodes_to_save = build_duplicate_of_edges(episode, now, node_duplicates)
 

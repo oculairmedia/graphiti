@@ -45,6 +45,10 @@ from graphiti_core.search.search_config_recipes import NODE_HYBRID_SEARCH_RRF
 from graphiti_core.search.search_filters import SearchFilters
 from graphiti_core.utils.datetime_utils import utc_now
 from graphiti_core.utils.prompt_compression import get_prompt_compressor
+from graphiti_core.utils.prompt_utils import (
+    enforce_max_prompt_tokens,
+    rerank_and_budget_episodes,
+)
 
 
 def normalize_entity_name(name: str) -> str:
@@ -291,10 +295,36 @@ async def extract_nodes(
         else []
     )
 
+    # PRD #01: Reranker Context Gating
+    # Use reranker to intelligently select relevant previous episodes
+    enable_rerank = os.getenv('ENABLE_CONTEXT_RERANKING', 'false').lower() == 'true'
+    reranked_context_max_tokens = int(os.getenv('RERANKED_CONTEXT_MAX_TOKENS', '4000'))
+
+    if enable_rerank and previous_episodes and clients.cross_encoder is not None:
+        reranker = clients.cross_encoder
+        try:
+            previous_episodes_context = await rerank_and_budget_episodes(
+                query=episode.content,
+                episodes=previous_episodes,
+                reranker=reranker,
+                max_tokens=reranked_context_max_tokens,
+                enable_rerank=True,
+                min_episodes=1,
+            )
+            logger.info(
+                f'Using reranked context: {len(previous_episodes_context)} episodes '
+                f'(from {len(previous_episodes)} total)'
+            )
+        except Exception as e:
+            logger.warning(f'Reranker failed, using FIFO: {e}')
+            previous_episodes_context = [ep.content for ep in previous_episodes]
+    else:
+        previous_episodes_context = [ep.content for ep in previous_episodes]
+
     context = {
         'episode_content': episode.content,
         'episode_timestamp': episode.valid_at.isoformat(),
-        'previous_episodes': [ep.content for ep in previous_episodes],
+        'previous_episodes': previous_episodes_context,
         'custom_prompt': custom_prompt,
         'entity_types': entity_types_context,
         'source_description': episode.source_description,
@@ -691,15 +721,48 @@ async def resolve_extracted_nodes(
                 }
             )
 
+        # PRD #01: Apply reranking to deduplication context
+        # Use reranker to intelligently select relevant previous episodes for deduplication
+        enable_rerank = os.getenv('ENABLE_CONTEXT_RERANKING', 'false').lower() == 'true'
+        reranked_context_max_tokens = int(os.getenv('RERANKED_CONTEXT_MAX_TOKENS', '4000'))
+
+        previous_episodes_for_context = []
+        if previous_episodes and enable_rerank and clients.cross_encoder is not None:
+            try:
+                # Create a query from the chunk nodes being deduplicated
+                chunk_names = ', '.join([node.name for node in chunk_nodes[:5]])  # Use first 5 node names
+                query = f"Deduplicating entities: {chunk_names}"
+
+                reranked_episodes = await rerank_and_budget_episodes(
+                    query=query,
+                    episodes=previous_episodes,
+                    reranker=clients.cross_encoder,
+                    max_tokens=reranked_context_max_tokens,
+                    enable_rerank=True,
+                    min_episodes=1,
+                )
+                previous_episodes_for_context = [ep['content'] for ep in reranked_episodes]
+                logger.info(
+                    f'Deduplication using reranked context: {len(previous_episodes_for_context)} episodes '
+                    f'(from {len(previous_episodes)} total)'
+                )
+            except Exception as e:
+                logger.warning(f'Reranker failed for deduplication, using raw episodes: {e}')
+                previous_episodes_for_context = [ep.content for ep in previous_episodes] if previous_episodes else []
+        else:
+            previous_episodes_for_context = [ep.content for ep in previous_episodes] if previous_episodes else []
+
         context = {
             'extracted_nodes': extracted_nodes_context,
             'existing_nodes': existing_nodes_metadata,
             'existing_nodes_text': existing_nodes_text,
             'episode_content': episode.content if episode is not None else '',
-            'previous_episodes': [ep.content for ep in previous_episodes]
-            if previous_episodes is not None
-            else [],
+            'previous_episodes': previous_episodes_for_context,
         }
+
+        # CRITICAL FIX: Apply token clipping to prevent context overruns during deduplication
+        # This was causing 66K tokens to be sent to a 27K token model
+        context = enforce_max_prompt_tokens(context)
 
         llm_response = await llm_client.generate_response(
             prompt_library.dedupe_nodes.nodes(context),
@@ -1160,9 +1223,16 @@ async def extract_attributes_from_node(
         else [],
     }
 
+    # CRITICAL FIX: Apply token clipping to prevent context overruns
+    # This was causing 51K tokens to be sent to a 27K token model
+    summary_context = enforce_max_prompt_tokens(summary_context)
+
     # Debug logging: Track LLM call
     logger.debug(
         f'🔍 Calling LLM for summary generation - Episode content length: {len(summary_context.get("episode_content", ""))}'
+    )
+    logger.debug(
+        f'   Previous episodes count: {len(summary_context.get("previous_episodes", []))}'
     )
 
     llm_response = await llm_client.generate_response(
