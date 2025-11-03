@@ -83,6 +83,8 @@ services:
           memory: 512M
     ports:
       - ${RUST_SERVER_PORT:-3000}:3000
+    volumes:
+      - visualizer_duckdb:/app/data
     environment:
       - FALKORDB_HOST=${FALKORDB_HOST:-falkordb}
       - FALKORDB_PORT=${FALKORDB_PORT:-6379}
@@ -94,6 +96,8 @@ services:
       - CACHE_TTL_SECONDS=60
       - RUST_LOG=${RUST_LOG:-info}
       - CENTRALITY_SERVICE_URL=${RUST_CENTRALITY_URL:-http://graphiti-centrality-rs:3003}
+      - DUCKDB_PATH=${DUCKDB_PATH:-/app/data/graph.duckdb}
+      - DUCKDB_MEMORY_LIMIT=${DUCKDB_MEMORY_LIMIT:-2g}
     networks:
       - graphiti_network
     depends_on:
@@ -582,6 +586,10 @@ volumes:
     driver: local
     labels:
       - description=Nginx access and error logs
+  visualizer_duckdb:
+    driver: local
+    labels:
+      - description=Graph visualizer DuckDB persistent cache
 # =============================================================================
 # Networks
 # =============================================================================

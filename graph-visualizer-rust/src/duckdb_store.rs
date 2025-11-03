@@ -86,8 +86,22 @@ impl DuckDBStore {
     }
 
     pub fn new() -> Result<Self> {
-        let conn = Connection::open_in_memory()?;
-        
+        Self::new_with_path(None)
+    }
+
+    pub fn new_with_path(path: Option<&str>) -> Result<Self> {
+        let conn = if let Some(db_path) = path {
+            // Create parent directory if it doesn't exist
+            if let Some(parent) = std::path::Path::new(db_path).parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            info!("Opening persistent DuckDB at: {}", db_path);
+            Connection::open(db_path)?
+        } else {
+            info!("Opening in-memory DuckDB");
+            Connection::open_in_memory()?
+        };
+
         // Create node schema for Arrow
         let schema_nodes = Arc::new(Schema::new(vec![
             Field::new("id", DataType::Utf8, false),
@@ -165,12 +179,26 @@ impl DuckDBStore {
         let _ = conn.execute("ALTER TABLE nodes ADD COLUMN created_at VARCHAR", params![]);
         
         // Create indexes for performance
-        conn.execute("CREATE INDEX idx_nodes_type ON nodes(node_type)", params![])?;
-        conn.execute("CREATE INDEX idx_nodes_idx ON nodes(idx)", params![])?;
-        conn.execute("CREATE INDEX idx_edges_source ON edges(sourceidx)", params![])?;
-        conn.execute("CREATE INDEX idx_edges_target ON edges(targetidx)", params![])?;
-        
-        info!("DuckDB store initialized with in-memory database");
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_nodes_type ON nodes(node_type)", params![])?;
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_nodes_idx ON nodes(idx)", params![])?;
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_edges_source ON edges(sourceidx)", params![])?;
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_edges_target ON edges(targetidx)", params![])?;
+
+        // Create metadata table for cache invalidation
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS metadata (
+                key VARCHAR PRIMARY KEY,
+                value VARCHAR NOT NULL,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )",
+            params![]
+        )?;
+
+        if path.is_some() {
+            info!("DuckDB store initialized with persistent database");
+        } else {
+            info!("DuckDB store initialized with in-memory database");
+        }
         
         Ok(Self {
             conn: Arc::new(Mutex::new(conn)),
@@ -180,9 +208,60 @@ impl DuckDBStore {
         })
     }
     
+    /// Compute a simple checksum of the graph data for cache invalidation
+    fn compute_data_checksum(nodes: &[Node], edges: &[Edge]) -> String {
+        use sha2::{Sha256, Digest};
+        let mut hasher = Sha256::new();
+
+        // Hash node count and edge count
+        hasher.update(nodes.len().to_le_bytes());
+        hasher.update(edges.len().to_le_bytes());
+
+        // Hash first and last few node IDs for quick verification
+        let sample_size = 10.min(nodes.len());
+        for node in nodes.iter().take(sample_size) {
+            hasher.update(node.id.as_bytes());
+        }
+        for node in nodes.iter().rev().take(sample_size) {
+            hasher.update(node.id.as_bytes());
+        }
+
+        format!("{:x}", hasher.finalize())
+    }
+
+    /// Check if cached data is still valid by comparing checksums
+    pub async fn is_cache_valid(&self, nodes: &[Node], edges: &[Edge]) -> bool {
+        let conn = self.conn.lock().unwrap();
+
+        // Get stored checksum
+        let stored_checksum: Option<String> = conn.query_row(
+            "SELECT value FROM metadata WHERE key = 'data_checksum'",
+            params![],
+            |row| row.get(0)
+        ).ok();
+
+        if let Some(stored) = stored_checksum {
+            let current = Self::compute_data_checksum(nodes, edges);
+            let valid = stored == current;
+            if !valid {
+                warn!("Cache invalid: checksum mismatch (stored: {}, current: {})",
+                      &stored[..8], &current[..8]);
+            } else {
+                info!("Cache valid: checksum match");
+            }
+            valid
+        } else {
+            info!("No stored checksum found, cache considered invalid");
+            false
+        }
+    }
+
     pub async fn load_initial_data(&self, nodes: Vec<Node>, edges: Vec<Edge>) -> Result<()> {
         info!("Loading initial data: {} nodes, {} edges", nodes.len(), edges.len());
-        
+
+        // Compute checksum before loading
+        let checksum = Self::compute_data_checksum(&nodes, &edges);
+
         let mut conn = self.conn.lock().unwrap();
         let tx = conn.transaction()?;
         
@@ -290,9 +369,15 @@ impl DuckDBStore {
             }
         }
         
+        // Store checksum for cache validation
+        tx.execute(
+            "INSERT OR REPLACE INTO metadata (key, value) VALUES ('data_checksum', ?)",
+            params![&checksum]
+        )?;
+
         tx.commit()?;
-        
-        info!("Initial data loaded successfully");
+
+        info!("Initial data loaded successfully (checksum: {})", &checksum[..8]);
         Ok(())
     }
     

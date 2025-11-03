@@ -175,6 +175,11 @@ struct CacheResponse {
     cleared_entries: usize,
 }
 
+#[derive(Debug, Serialize)]
+struct HealthResponse {
+    status: &'static str,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 struct UpdateSummaryRequest {
     summary: String,
@@ -213,8 +218,13 @@ async fn main() -> anyhow::Result<()> {
         .await
         .expect("Failed to build FalkorDB client");
     
-    // Initialize DuckDB store
-    let duckdb_store = Arc::new(DuckDBStore::new().expect("Failed to create DuckDB store"));
+    // Initialize DuckDB store with optional persistence
+    let duckdb_path = std::env::var("DUCKDB_PATH").ok();
+    let duckdb_store = if let Some(ref path) = duckdb_path {
+        Arc::new(DuckDBStore::new_with_path(Some(path)).expect("Failed to create persistent DuckDB store"))
+    } else {
+        Arc::new(DuckDBStore::new().expect("Failed to create in-memory DuckDB store"))
+    };
     
     // Create update channel for real-time updates
     let (update_tx, _) = broadcast::channel::<GraphUpdate>(100);
@@ -425,7 +435,7 @@ async fn main() -> anyhow::Result<()> {
         
         info!("Total fetched {} edges from FalkorDB", edges.len());
         
-        let initial_data = GraphData { 
+        let initial_data = GraphData {
             nodes: nodes.clone(),
             edges: edges.clone(),
             stats: GraphStats {
@@ -436,9 +446,23 @@ async fn main() -> anyhow::Result<()> {
                 max_degree: 0.0,
             }
         };
-        
-        duckdb_store.load_initial_data(initial_data.nodes.clone(), initial_data.edges.clone()).await?;
-        info!("Initial data loaded: {} nodes, {} edges", initial_data.nodes.len(), initial_data.edges.len());
+
+        // Check if persistent cache exists and is valid
+        let cache_valid = if duckdb_path.is_some() {
+            duckdb_store.is_cache_valid(&initial_data.nodes, &initial_data.edges).await
+        } else {
+            false
+        };
+
+        if cache_valid {
+            info!("Using valid persistent cache, skipping data load");
+        } else {
+            if duckdb_path.is_some() {
+                info!("Cache invalid or empty, loading fresh data from FalkorDB");
+            }
+            duckdb_store.load_initial_data(initial_data.nodes.clone(), initial_data.edges.clone()).await?;
+            info!("Initial data loaded: {} nodes, {} edges", initial_data.nodes.len(), initial_data.edges.len());
+        }
         
         // Initialize delta tracker with initial data
         let initial_delta = delta_tracker.compute_delta(initial_data.nodes.clone(), initial_data.edges.clone()).await;
@@ -498,7 +522,7 @@ async fn main() -> anyhow::Result<()> {
     let store_clone = state.duckdb_store.clone();
     
     tokio::spawn(async move {
-        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(5));
+        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(30));
         let mut last_node_count = 0;
         let mut last_edge_count = 0;
         let mut last_centrality_sum = 0.0;
@@ -613,6 +637,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Build router - cleaned up for React frontend only
     let app = Router::new()
+        .route("/health", get(health_check))
         .route("/api/stats", get(get_stats))
         .route("/api/queue/status", get(get_queue_status))
         .route("/api/visualize", get(visualize))
@@ -669,6 +694,10 @@ async fn get_stats(State(state): State<AppState>) -> Result<Json<GraphStats>, St
             Err(StatusCode::INTERNAL_SERVER_ERROR)
         }
     }
+}
+
+async fn health_check() -> Json<HealthResponse> {
+    Json(HealthResponse { status: "ok" })
 }
 
 async fn visualize(
