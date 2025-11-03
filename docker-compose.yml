@@ -78,7 +78,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 2G
+          memory: 4G
         reservations:
           memory: 512M
     ports:
@@ -457,6 +457,14 @@ services:
       - POLL_INTERVAL=${POLL_INTERVAL:-2.0}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - GRAPHITI_ENABLE_AUTO_MERGE=${GRAPHITI_ENABLE_AUTO_MERGE:-true}
+      - MAX_PROMPT_TOKENS=${MAX_PROMPT_TOKENS:-6000}
+      - MAX_EPISODE_CONTENT_CHARS=${MAX_EPISODE_CONTENT_CHARS:-1000}
+      - MAX_PREVIOUS_EPISODES=${MAX_PREVIOUS_EPISODES:-1}
+      - STRIP_ANSI_CODES=${STRIP_ANSI_CODES:-true}
+      - ENABLE_CONTEXT_RERANKING=${ENABLE_CONTEXT_RERANKING:-true}
+      - RERANKED_CONTEXT_MAX_TOKENS=${RERANKED_CONTEXT_MAX_TOKENS:-4000}
+      - OLLAMA_RERANKER_MODEL=${OLLAMA_RERANKER_MODEL:-dengcao/Qwen3-Reranker-4B:Q5_K_M}
+      - OLLAMA_RERANKER_BASE_URL=${OLLAMA_RERANKER_BASE_URL:-http://192.168.50.90:8091}
     networks:
       - graphiti_network
     depends_on:
