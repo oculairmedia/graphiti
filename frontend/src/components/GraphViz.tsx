@@ -8,7 +8,8 @@ import { LazyGraphCanvas } from './LazyGraphCanvas';
 // Lazy load modal panels
 const FilterPanel = React.lazy(() => import('./FilterPanel').then(m => ({ default: m.FilterPanel })));
 const StatsPanel = React.lazy(() => import('./StatsPanel').then(m => ({ default: m.StatsPanel })));
-const NodeDetailsPanel = React.lazy(() => import('./NodeDetailsPanel').then(m => ({ default: m.NodeDetailsPanel })));
+// Direct import for NodeDetailsPanel to avoid Vite dynamic import issues
+import { NodeDetailsPanel } from './NodeDetailsPanel';
 import { GraphNavBar } from './GraphNavBar';
 import { CentralityStatsProvider } from '../contexts/CentralityStatsContext';
 
@@ -504,19 +505,17 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
               transition: 'right 0.3s ease-in-out'
             }}
           >
-            <React.Suspense fallback={<div className="w-96 h-96 bg-background/80 backdrop-blur-sm rounded-lg animate-pulse" />}>
-              <CentralityStatsProvider 
-                nodes={transformedData.nodes} 
-                scalingMethod={config.scalingMethod as any || 'iqr'}
-              >
-                <NodeDetailsPanel
-                  node={selectedNode}
-                  connections={selectedNodeConnections}
-                  onClose={() => clearAllSelections()}
-                  onShowNeighbors={handleShowNeighbors}
-                />
-              </CentralityStatsProvider>
-            </React.Suspense>
+            <CentralityStatsProvider 
+              nodes={transformedData.nodes} 
+              scalingMethod={config.scalingMethod as any || 'iqr'}
+            >
+              <NodeDetailsPanel
+                node={selectedNode}
+                connections={selectedNodeConnections}
+                onClose={() => clearAllSelections()}
+                onShowNeighbors={handleShowNeighbors}
+              />
+            </CentralityStatsProvider>
           </div>
         )}
       </div>

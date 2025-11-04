@@ -110,7 +110,8 @@ vi.mock('../../utils/logger', () => ({
 
 vi.mock('../../utils/colorCache', () => ({
   hexToRgba: vi.fn((hex, alpha) => hex),
-  generateHSLColor: vi.fn(() => 'hsl(0, 100%, 50%)')
+  generateHSLColor: vi.fn(() => 'hsl(0, 100%, 50%)'),
+  interpolateColor: vi.fn((color1, color2, ratio) => color1)
 }));
 
 describe('GraphCanvasV2', () => {

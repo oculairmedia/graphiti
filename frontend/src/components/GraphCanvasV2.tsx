@@ -12,12 +12,13 @@ import React, {
   useMemo,
   useImperativeHandle 
 } from 'react';
-import { Cosmograph, prepareCosmographData } from '@cosmograph/react';
+import { Cosmograph } from '@cosmograph/react';
 import '../styles/cosmograph.css';
 import { GraphNode } from '../api/types';
-import type { GraphData, GraphLink } from '../types/graph';
+import type { GraphLink } from '../types/graph';
 import { useGraphConfig } from '../contexts/GraphConfigProvider';
-import { hexToRgba, generateHSLColor, interpolateColor } from '../utils/colorCache';
+import { hexToRgba, interpolateColor } from '../utils/colorCache';
+import { generateNodeTypeColor } from '../utils/nodeTypeColors';
 import { NodeColorManager, getGlobalColorManager } from '../utils/NodeColorManager';
 
 // Import our new hooks
@@ -30,18 +31,17 @@ import { useGraphInteractions } from '../hooks/useGraphInteractions';
 import { useGraphSimulation } from '../hooks/useGraphSimulation';
 import { useGraphVisualEffects } from '../hooks/useGraphVisualEffects';
 import { useCosmographIncrementalUpdates } from '../hooks/useCosmographIncrementalUpdates';
+import { useCosmographDataTransform } from '../hooks/useCosmographDataTransform';
+import { useGraphCanvasEvents } from '../hooks/useGraphCanvasEvents';
+import { useCosmographVisualization } from '../hooks/useCosmographVisualization';
+import { GraphCanvasRenderer } from './GraphCanvasRenderer';
 
 // Additional imports
 import { useLoadingCoordinator } from '../contexts/LoadingCoordinator';
 import { ProgressiveLoadingOverlay } from './ProgressiveLoadingOverlay';
 import { useWebSocketContext } from '../contexts/WebSocketProvider';
 import { GraphOverlays } from './GraphOverlays';
-import { 
-  CosmographDataPreparer, 
-  getGlobalDataPreparer,
-  sanitizeNode,
-  sanitizeLink
-} from '../utils/cosmographDataPreparer';
+// CosmographDataPreparer now handled by useCosmographDataTransform hook
 import { inspectCosmographSchema, attachSchemaDebugger, isSchemaDebuggingEnabled } from '../utils/debugCosmographSchema';
 import { inspectDuckDBSchema } from '../utils/inspectDuckDBSchema';
 import { resetDuckDBStorage } from '../utils/resetDuckDB';
@@ -120,9 +120,8 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
     onNodeSelect, 
     onSelectNodes, 
     onClearSelection, 
-    onNodeHover, 
     onStatsUpdate, 
-    onContextReady, 
+    onContextReady,
     selectedNodes, 
     highlightedNodes, 
     className, 
@@ -228,6 +227,9 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
       },
       debug: false
     });
+    
+    // PERFORMANCE: Hover is now handled by Cosmograph's built-in system
+    // No custom hover state management needed
     
     // Selection management
     const {
@@ -426,10 +428,7 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
         // Click is now handled directly in Cosmograph's onClick
       },
       onNodeHover: (nodeId) => {
-        const node = nodeId ? nodes.find(n => n.id === nodeId) : null;
-        if (onNodeHover) {
-          onNodeHover(node || null);
-        }
+        // Hover is now handled by Cosmograph's built-in onPointMouseOver/Out
       }
     });
     
@@ -478,472 +477,36 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
     
     // === 2. DATA PREPARATION ===
     
-    // Get global data preparer instance
-    const dataPreparerRef = useRef<CosmographDataPreparer>(getGlobalDataPreparer({
-      clusteringMethod: config.clusteringMethod,
-      centralityMetric: config.centralityMetric,
-      clusterStrength: config.clusterStrength,
-      sizeMapping: config.sizeMapping
-    }));
-    
-    // Update preparer config when it changes
-    useEffect(() => {
-      dataPreparerRef.current.updateConfig({
+    // Transform nodes and links for Cosmograph using extracted hook
+    const cosmographData = useCosmographDataTransform(
+      nodes || [],
+      links || [],
+      {
         clusteringMethod: config.clusteringMethod,
         centralityMetric: config.centralityMetric,
-        clusterStrength: config.clusterStrength,
-        sizeMapping: config.sizeMapping
-      });
-    }, [config.clusteringMethod, config.centralityMetric, config.clusterStrength, config.sizeMapping]);
-    
-    // Prepare data for Cosmograph using unified preparer
-    const cosmographData = useMemo(() => {
-      if (!nodes || !links) {
-        return { nodes: [], links: [] };
+        clusterStrength: config.clusterStrength
       }
-      
-      // Use the data preparer for consistent transformation
-      // This ensures both initial load and incremental updates use the same pipeline
-      const preparer = dataPreparerRef.current;
-      
-      // Prepare initial data synchronously (since we're in a useMemo)
-      // The prepareInitialData is async but we can use the synchronous sanitization
-      preparer.reset(); // Clear any previous state
-      
-      // Build node index map and sanitize nodes
-      const nodeIdToIndex = new Map<string, number>();
-      const nodeTypeIndexMap = new Map<string, number>();
-      
-      const transformedNodes = nodes.map((node, index) => {
-        nodeIdToIndex.set(node.id, index);
-        
-        // Get or assign node type index for color generation
-        const nodeType = node.node_type || 'Unknown';
-        if (!nodeTypeIndexMap.has(nodeType)) {
-          nodeTypeIndexMap.set(nodeType, nodeTypeIndexMap.size);
-        }
-        
-        // Use the sanitizeNode function from cosmographDataPreparer
-        // Don't pass sizeMapping - use consistent size calculation
-        return sanitizeNode(node, index, {
-          clusteringMethod: config.clusteringMethod,
-          centralityMetric: config.centralityMetric,
-          clusterStrength: config.clusterStrength,
-          nodeTypeIndexMap
-        });
-      });
-      
-      // Transform links using sanitization
-      const transformedLinks = links
-        .map(link => sanitizeLink(link, nodeIdToIndex))
-        .filter(link => link !== null);
-      
-      return {
-        nodes: transformedNodes,
-        links: transformedLinks
-      };
-    }, [nodes, links, config.clusteringMethod, config.centralityMetric, config.clusterStrength]);
+    );
     
-    // Dynamic point size range based on size mapping strategy (FIXED: now includes sizeMultiplier)
-    // Since all nodes have degree_centrality-based sizes, we adjust the range to simulate different strategies
-    const pointSizeRange = useMemo(() => {
-      const baseMin = config.minNodeSize || 2;
-      const baseMax = config.maxNodeSize || 8;
-      const multiplier = config.sizeMultiplier || 1; // Extract multiplier with fallback to 1.0
-      
-      let adjustedMin: number;
-      let adjustedMax: number;
-      
-      // Adjust range based on the size mapping strategy
-      switch (config.sizeMapping) {
-        case 'uniform':
-          // All nodes same size - very narrow range forces uniformity
-          const uniformSize = (baseMin + baseMax) / 2;
-          adjustedMin = uniformSize;
-          adjustedMax = uniformSize + 0.1; // Near-uniform with tiny variation
-          break;
-        
-        case 'degree':
-        case 'connections':
-          // Degree-based sizing - this is our base, use normal range
-          adjustedMin = baseMin;
-          adjustedMax = baseMax;
-          break;
-        
-        case 'betweenness':
-          // Simulate betweenness by using wider range (more contrast)
-          adjustedMin = baseMin * 0.5;
-          adjustedMax = baseMax * 2.0;
-          break;
-        
-        case 'pagerank':
-        case 'importance':
-          // Simulate pagerank/eigenvector with moderate expansion
-          adjustedMin = baseMin * 0.8;
-          adjustedMax = baseMax * 1.2;
-          break;
-        
-        case 'custom':
-          // Custom sizing - use expanded range
-          adjustedMin = baseMin * 0.7;
-          adjustedMax = baseMax * 1.5;
-          break;
-        
-        default:
-          // Default to base range
-          adjustedMin = baseMin;
-          adjustedMax = baseMax;
-          break;
-      }
-      
-      // Apply size multiplier to the final range
-      const finalRange = [adjustedMin * multiplier, adjustedMax * multiplier];
-      console.log('[GraphCanvasV2] Size calculation - Multiplier:', multiplier, 'Base range:', [adjustedMin, adjustedMax], 'Final range:', finalRange);
-      return finalRange;
-    }, [config.sizeMapping, config.minNodeSize, config.maxNodeSize, config.sizeMultiplier]);
+    // === 3. EVENT HANDLERS ===
     
-    // Initialize and update color manager
-    const colorManagerRef = useRef<NodeColorManager>(getGlobalColorManager({
-      scheme: config.colorScheme || 'by-type',
-      gradientHighColor: config.gradientHighColor,
-      gradientLowColor: config.gradientLowColor,
-      nodeTypeColors: config.nodeTypeColors,
-      normalizeMetrics: true
-    }));
+    // Extract event handling logic into dedicated hook
+    const { handleClick, handleMouseOver, handleMouseOut } = useGraphCanvasEvents({
+      nodes: nodes || [],
+      cosmographRef,
+      onNodeClick,
+      onNodeSelect,
+      onClearSelection
+    });
     
-    // Update color manager when config changes
-    useEffect(() => {
-      colorManagerRef.current.updateConfig({
-        scheme: config.colorScheme || 'by-type',
-        gradientHighColor: config.gradientHighColor,
-        gradientLowColor: config.gradientLowColor,
-        nodeTypeColors: config.nodeTypeColors,
-        normalizeMetrics: true
-      });
-    }, [config.colorScheme, config.gradientHighColor, config.gradientLowColor, config.nodeTypeColors]);
     
-    // Update color manager with nodes data
-    useEffect(() => {
-      if (cosmographData?.nodes) {
-        colorManagerRef.current.setNodes(cosmographData.nodes);
-      }
-    }, [cosmographData?.nodes]);
+    // === VISUALIZATION CONFIGURATION (using extracted hook) ===
+    const visualConfig = useCosmographVisualization({
+      config,
+      cosmographData,
+      glowingNodes
+    });
     
-    // Get appropriate color configuration based on scheme
-    const nodeColorConfig = useMemo(() => {
-      // Determine which column to use for coloring
-      let colorByColumn = 'node_type'; // default
-      let useDirectColoring = false;
-      
-      switch (config.colorScheme) {
-        case 'by-type':
-        default:
-          // Use node_type column with map strategy
-          return {
-            colorBy: 'node_type',
-            strategy: 'map',
-            colorMap: config.nodeTypeColors || {},
-            colorFn: undefined
-          };
-        
-        case 'by-centrality':
-        case 'by-degree':
-          // Use degree_centrality column directly
-          colorByColumn = 'degree_centrality';
-          useDirectColoring = true;
-          break;
-          
-        case 'by-pagerank':
-          // Use pagerank_centrality column directly
-          colorByColumn = 'pagerank_centrality';
-          useDirectColoring = true;
-          break;
-          
-        case 'by-betweenness':
-          // Use betweenness_centrality column directly
-          colorByColumn = 'betweenness_centrality';
-          useDirectColoring = true;
-          break;
-          
-        case 'by-eigenvector':
-          // Use eigenvector_centrality column directly
-          colorByColumn = 'eigenvector_centrality';
-          useDirectColoring = true;
-          break;
-          
-        case 'by-community':
-          // Use cluster column
-          colorByColumn = 'cluster';
-          useDirectColoring = true;
-          break;
-          
-        case 'custom':
-          // Use colorValue column
-          colorByColumn = 'colorValue';
-          useDirectColoring = true;
-          break;
-      }
-      
-      if (useDirectColoring) {
-        // For metric-based coloring, use a function to map values to colors
-        return {
-          colorBy: colorByColumn,
-          strategy: 'direct',
-          colorMap: {},
-          colorFn: (value: number | string) => {
-            // Normalize value and apply gradient
-            const numValue = typeof value === 'number' ? value : parseFloat(String(value)) || 0;
-            const highColor = config.gradientHighColor || '#FF6B6B';
-            const lowColor = config.gradientLowColor || '#4ECDC4';
-            
-            // For cluster/community, use palette
-            if (config.colorScheme === 'by-community') {
-              const communityColors = [
-                '#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6',
-                '#1abc9c', '#34495e', '#e67e22', '#95a5a6', '#d35400',
-                '#16a085', '#27ae60', '#2980b9', '#8e44ad', '#2c3e50',
-                '#f1c40f', '#e74c3c', '#ecf0f1', '#95a5a6', '#34495e'
-              ];
-              // Hash the cluster string to get a consistent index
-              let hash = 0;
-              const clusterStr = String(value);
-              for (let i = 0; i < clusterStr.length; i++) {
-                hash = ((hash << 5) - hash) + clusterStr.charCodeAt(i);
-                hash = hash & hash; // Convert to 32bit integer
-              }
-              const index = Math.abs(hash) % communityColors.length;
-              return communityColors[index];
-            }
-            
-            // For metrics, use gradient (values are already 0-1 normalized)
-            // Support 3-color gradient if midColor is defined
-            if (config.gradientMidColor) {
-              if (numValue < 0.5) {
-                // Low to mid gradient
-                return interpolateColor(lowColor, config.gradientMidColor, numValue * 2);
-              } else {
-                // Mid to high gradient
-                return interpolateColor(config.gradientMidColor, highColor, (numValue - 0.5) * 2);
-              }
-            }
-            // Simple 2-color gradient
-            return interpolateColor(lowColor, highColor, numValue);
-          }
-        };
-      }
-      
-      return {
-        colorBy: 'node_type',
-        strategy: 'map',
-        colorMap: config.nodeTypeColors || {},
-        colorFn: undefined
-      };
-    }, [config.colorScheme, config.nodeTypeColors, config.gradientHighColor, config.gradientLowColor]);
-    
-    // Dynamic link width function based on scheme
-    // Separated from render to prevent reload when cosmographData changes
-    const linkWidthByFn = useMemo(() => {
-      if (config.linkWidthScheme === 'uniform') {
-        return undefined;
-      }
-      
-      // Get min/max from config or use defaults
-      const minWidth = config.linkWidthMin ?? 0.1;
-      const maxWidth = config.linkWidthMax ?? 5;
-      
-      // Return a function that calculates width based on scheme
-      return (edgeType: any, linkIndex: number) => {
-        // Note: We access cosmographData inside the function, but the function
-        // itself is only recreated when linkWidthScheme changes
-        if (!cosmographData?.links || !cosmographData?.nodes) return minWidth;
-        const link = cosmographData.links[linkIndex];
-        if (!link) return minWidth;
-        
-        switch (config.linkWidthScheme) {
-          case 'by-source-pagerank': {
-            const sourceNode = cosmographData.nodes[link.sourceIndex];
-            if (!sourceNode) return minWidth;
-            const pagerank = sourceNode.pagerank_centrality || sourceNode.pagerank || 0;
-            // Scale pagerank (0-1) to width range using min/max
-            return minWidth + (pagerank * (maxWidth - minWidth));
-          }
-          
-          case 'by-source-centrality': {
-            const sourceNode = cosmographData.nodes[link.sourceIndex];
-            if (!sourceNode) return minWidth;
-            const centrality = sourceNode.degree_centrality || 0;
-            // Scale centrality (0-1) to width range using min/max
-            return minWidth + (centrality * (maxWidth - minWidth));
-          }
-          
-          case 'by-source-betweenness': {
-            const sourceNode = cosmographData.nodes[link.sourceIndex];
-            if (!sourceNode) return minWidth;
-            const betweenness = sourceNode.betweenness_centrality || 0;
-            // Scale betweenness (0-1) to width range using min/max
-            return minWidth + (betweenness * (maxWidth - minWidth));
-          }
-          
-          case 'by-weight': {
-            const weight = link.weight || 1;
-            // Normalize weight (assuming 0-10 range) and scale to width range
-            const normalizedWeight = Math.min(weight / 10, 1);
-            return minWidth + (normalizedWeight * (maxWidth - minWidth));
-          }
-          
-          default:
-            return minWidth;
-        }
-      };
-    }, [config.linkWidthScheme, config.linkWidth, config.linkWidthMin, config.linkWidthMax]); // Depend on scheme and min/max
-    
-    // Dynamic link width range based on scheme
-    // This is used when linkWidthByFn is NOT provided (uniform case)
-    // Or to scale the output of linkWidthByFn for other schemes
-    const linkWidthRange = useMemo(() => {
-      const baseValue = config.linkWidth || 2;
-      
-      switch (config.linkWidthScheme) {
-        case 'uniform':
-          // For uniform, use a fixed width (same min and max)
-          return [baseValue, baseValue];
-        
-        case 'by-source-centrality':
-        case 'by-source-pagerank':
-          // For centrality-based, use a range for dynamic sizing
-          return [0.5, baseValue * 3];
-        
-        case 'by-source-betweenness':
-          // Wider range for betweenness
-          return [0.5, baseValue * 4];
-        
-        case 'by-weight':
-          // Range based on weight values
-          return [0.5, baseValue * 3];
-        
-        default:
-          return [baseValue, baseValue];
-      }
-    }, [config.linkWidthScheme, config.linkWidth]);
-    
-    // Enhanced link color function that incorporates both color and transparency schemes
-    // Memoized separately to prevent re-renders when data changes
-    const linkColorByFn = useMemo(() => {
-      // If both schemes are uniform, use undefined to let Cosmograph use default
-      if (config.linkColorScheme === 'uniform' && config.linkOpacityScheme === 'uniform') {
-        return undefined;
-      }
-      
-      return (edgeType: any, linkIndex: number) => {
-        if (!cosmographData?.links || !cosmographData?.nodes) return config.linkColor || '#9CA3AF';
-        const link = cosmographData.links[linkIndex];
-        if (!link) return config.linkColor || '#9CA3AF';
-        
-        // Step 1: Determine base color from color scheme
-        let baseColor = config.linkColor || '#9CA3AF';
-        
-        switch (config.linkColorScheme) {
-          case 'by-type': {
-            const typeColors: Record<string, string> = {
-              'relates_to': '#4ECDC4',
-              'causes': '#F6AD55',
-              'precedes': '#B794F6',
-              'contains': '#90CDF4',
-              'default': config.linkColor || '#9CA3AF'
-            };
-            baseColor = typeColors[edgeType] || (config.linkColor || '#9CA3AF');
-            break;
-          }
-          case 'by-weight': {
-            const weight = link.weight || 0;
-            const maxWeight = Math.max(...cosmographData.links.map(l => l.weight || 0));
-            const ratio = maxWeight > 0 ? weight / maxWeight : 0;
-            const r = Math.round(ratio * 255);
-            const b = Math.round((1 - ratio) * 255);
-            baseColor = `rgb(${r}, 0, ${b})`;
-            break;
-          }
-          case 'by-source-node': {
-            const sourceNode = cosmographData.nodes[link.sourceIndex];
-            if (sourceNode) {
-              // Check if source node is glowing/selected
-              if (glowingNodes.size > 0 && glowingNodes.has(sourceNode.id)) {
-                // Use highlight color for edges from selected nodes
-                baseColor = config.nodeAccessHighlightColor || '#FFD700';
-              } else {
-                // Use normal node type color
-                const nodeType = sourceNode.node_type;
-                baseColor = config.nodeTypeColors?.[nodeType] || generateNodeTypeColor(nodeType);
-              }
-            }
-            break;
-          }
-          case 'gradient': {
-            const sourceNode = cosmographData.nodes[link.sourceIndex];
-            if (sourceNode) {
-              const nodeType = sourceNode.node_type;
-              baseColor = config.nodeTypeColors?.[nodeType] || generateNodeTypeColor(nodeType);
-            }
-            break;
-          }
-          case 'by-community': {
-            const sourceNode = cosmographData.nodes[link.sourceIndex];
-            const targetNode = cosmographData.nodes[link.targetIndex];
-            baseColor = sourceNode?.cluster === targetNode?.cluster ? 
-              (config.linkColor || '#9CA3AF') : '#ff6b6b';
-            break;
-          }
-          case 'by-distance': {
-            // Keep base color for distance, opacity will be handled in transparency
-            break;
-          }
-        }
-        
-        // Step 2: Determine opacity from transparency scheme (using linkOpacityScheme to match control panel)
-        let opacity = config.linkOpacity || 0.85;
-        
-        // Get min/max opacity from config or use defaults
-        const minOpacity = config.linkOpacityMin ?? 0.1;
-        const maxOpacity = config.linkOpacityMax ?? 1;
-        
-        switch (config.linkOpacityScheme) {
-          case 'by-source-centrality': {
-            const sourceNode = cosmographData.nodes[link.sourceIndex];
-            if (!sourceNode) break;
-            const centrality = sourceNode.degree_centrality || 0;
-            // Scale centrality (0-1) to opacity range using min/max
-            opacity = minOpacity + (centrality * (maxOpacity - minOpacity));
-            break;
-          }
-          case 'by-distance': {
-            // Distance-based opacity - closer nodes have more opaque links
-            const weight = link.weight || 1;
-            // Normalize weight (assuming 1-10 range) and invert for opacity
-            const normalizedDistance = Math.min(weight / 10, 1);
-            opacity = maxOpacity - (normalizedDistance * (maxOpacity - minOpacity));
-            break;
-          }
-          case 'uniform':
-          default:
-            // Use the global linkOpacity value
-            opacity = config.linkOpacity || 0.85;
-            break;
-        }
-        
-        // Step 3: Apply opacity to the color
-        return hexToRgba(baseColor, opacity);
-      };
-    }, [
-      config.linkColorScheme, 
-      config.linkOpacityScheme, 
-      config.linkColor, 
-      config.linkOpacity,
-      config.linkOpacityMin,
-      config.linkOpacityMax,
-      config.nodeTypeColors,  // Add this so edges update when node colors change
-      glowingNodes,  // Add for by-source-node highlighting
-      config.nodeAccessHighlightColor  // Add for highlight color
-    ]);
     
     // CSS variables for styling
     const containerStyle: React.CSSProperties = {
@@ -1516,121 +1079,14 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
           selectedNodes={selectedNodes.length}
         />
         
-        <Cosmograph
-          ref={cosmographRef}
-          // Use points/links instead of nodes/links
-          points={cosmographData.nodes}
-          links={cosmographData.links}
-          // Point configuration - tell Cosmograph how to interpret the data
-          pointIdBy="id"
-          pointIndexBy="index"
-          pointLabelBy={config.labelBy || "label"}
-          pointSizeBy="size"
-          pointClusterBy={config.clusteringEnabled ? "cluster" : undefined}
-          pointClusterStrengthBy={config.clusteringEnabled ? "clusterStrength" : undefined}
-          // Label configuration - using Cosmograph's actual API
-          showLabels={config.renderLabels || false}
-          pointLabelFontSize={config.labelSize || 12}
-          pointLabelColor={config.labelColor || "#ffffff"}
-          showDynamicLabels={config.showDynamicLabels || false}
-          showTopLabels={config.showTopLabels || false}
-          showTopLabelsLimit={config.showTopLabelsLimit || 100}
-          showHoveredPointLabel={config.showHoveredNodeLabel !== false}
-          // Use className for background and font weight styling
-          pointLabelClassName={() => 
-            `background: ${config.labelBackgroundColor || 'rgba(0,0,0,0.7)'}; ` +
-            `font-weight: ${config.labelFontWeight || 400}; ` +
-            `padding: 4px 6px; border-radius: 3px;`
-          }
-          hoveredPointLabelClassName={() => 
-            `background: ${config.hoveredLabelBackgroundColor || 'rgba(0,0,0,0.9)'}; ` +
-            `font-weight: ${config.hoveredLabelFontWeight || 600}; ` +
-            `font-size: ${config.hoveredLabelSize || 14}px; ` +
-            `color: ${config.hoveredLabelColor || '#ffffff'}; ` +
-            `padding: 5px 8px; border-radius: 4px;`
-          }
-          // Link configuration - use indices for performance
-          linkSourceBy="source"
-          linkSourceIndexBy="sourceIndex"
-          linkTargetBy="target"
-          linkTargetIndexBy="targetIndex"
-          // Always use edge_type as the base field for linkColorBy
-          linkColorBy="edge_type"
-          // Use memoized link color function that handles both color and transparency
-          linkColorByFn={linkColorByFn}
-          linkWidthBy={
-            // Only use columns that actually exist in the links data
-            // For uniform width, we don't set this to allow linkWidthRange to work
-            config.linkWidthScheme === 'uniform' ? undefined :
-            // For by-weight, use the weight column if it exists
-            config.linkWidthScheme === 'by-weight' && cosmographData.links[0]?.weight ? 'weight' : 
-            // For other schemes, we need a dummy column for linkWidthByFn to work
-            'edge_type'  // Use edge_type as a dummy column for function-based sizing
-          }
-          linkWidthByFn={
-            // IMPORTANT: Don't provide linkWidthByFn for uniform width
-            // This allows linkWidthRange to control the width directly
-            config.linkWidthScheme === 'uniform' ? undefined : linkWidthByFn
-          }
-          linkWidthRange={linkWidthRange}
-          // Link visual properties - increased visibility
-          linkWidth={config.linkWidth || 2}
-          linkOpacity={config.linkOpacity || 0.85}
-          linkColor={config.linkColor || '#9CA3AF'}
-          linkArrows={config.edgeArrows || false}
-          linkArrowSize={config.edgeArrowScale || 1}
-          curvedLinks={config.curvedLinks || false}
-          curvedLinkSegments={config.curvedLinkSegments || 19}
-          curvedLinkWeight={config.curvedLinkWeight || 0.8}
-          curvedLinkControlPointDistance={config.curvedLinkControlPointDistance || 0.5}
-          // Visual configuration
-          backgroundColor={config.backgroundColor}
-          pointSizeStrategy="auto"
-          pointSizeRange={pointSizeRange}
-          // Color configuration
-          pointColorPalette={[
-            '#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6',
-            '#1abc9c', '#34495e', '#e67e22', '#95a5a6', '#d35400'
-          ]}
-          // Use strategy based on color scheme
-          pointColorStrategy={nodeColorConfig.strategy}
-          // Specify which column contains the color data
-          pointColorBy={nodeColorConfig.colorBy}
-          // Use map for type-based coloring
-          pointColorByMap={nodeColorConfig.colorMap}
-          // Use function for metric-based coloring
-          pointColorByFn={nodeColorConfig.colorFn}
-          // Interaction
-          enableDrag={true}
-          enableRightClickRepulsion={true}
-          renderLinks={config.renderLinks !== false}
-          // Point ring colors for hover and focus
-          hoveredPointCursor={config.hoveredPointCursor || "pointer"}
-          hoveredPointRingColor={config.hoveredPointRingColor || "#ff0000"}
-          focusedPointRingColor={glowingNodes.size > 0 ? (config.nodeAccessHighlightColor || "#FFD700") : (config.focusedPointRingColor || "#0066cc")}
-          // Advanced rendering options
-          pixelationThreshold={config.pixelationThreshold || 0}
-          renderSelectedNodesOnTop={config.renderSelectedNodesOnTop || false}
-          pointsOnEdge={config.pointsOnEdge || false}
-          // Layout and simulation - fitView configuration
-          fitViewOnInit={false}  // Disable automatic fitView to prevent simulation interruption (like old implementation)
-          // fitViewDelay={config.fitViewDelay || 500}  // Not needed when fitViewOnInit is false
-          fitViewPadding={config.fitViewPadding !== undefined ? config.fitViewPadding : 0.2}  // Default: 0.2 (20% padding) - normalized value 0-1
-          fitViewDuration={config.fitViewDuration || 1000}  // Default: 1000ms - animation duration
-          simulationEnabled={!config.disableSimulation && config.simulationEnabled !== false}
-          simulationGravity={config.gravity ?? config.simulationGravity ?? 0.1}
-          simulationCenter={config.centerForce ?? config.simulationCenter ?? 0.0}
-          simulationRepulsion={config.repulsion ?? config.simulationRepulsion ?? 0.5}
-          simulationRepulsionTheta={config.simulationRepulsionTheta ?? 1.7}
-          simulationLinkDistance={config.linkDistance ?? config.simulationLinkDistance ?? 2}
-          simulationLinkSpring={config.linkSpring ?? config.simulationLinkSpring ?? 1}
-          simulationLinkDistRandomVariationRange={config.linkDistRandomVariationRange ?? [1, 1.2]}
-          simulationFriction={config.friction ?? config.simulationFriction ?? 0.85}
-          simulationDecay={config.simulationDecay ?? 1000}
-          simulationCluster={config.simulationCluster ?? 0.1}
-          simulationClusterStrength={config.clusterStrength ?? config.simulationClusterStrength}
-          simulationRepulsionFromMouse={config.mouseRepulsion ?? 2.0}
-          // Events
+        
+        <GraphCanvasRenderer
+          cosmographRef={cosmographRef}
+          cosmographData={cosmographData}
+          config={config}
+          visualConfig={visualConfig}
+          eventHandlers={{ handleClick, handleMouseOver, handleMouseOut }}
+          glowingNodes={glowingNodes}
           onReady={() => {
             setIsReady(true);
             setIsCanvasReady(true);
@@ -1638,82 +1094,6 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
             // Check if we have data and notify parent that everything is ready
             if (cosmographRef.current && cosmographData && cosmographData.nodes.length > 0) {
               onContextReady?.(true);
-            }
-          }}
-          onClick={async (index?: number, pointPosition?: [number, number], event?: MouseEvent) => {
-            if (typeof index === 'number' && index >= 0) {
-              // Visual selection first for immediate feedback
-              requestAnimationFrame(() => {
-                if (cosmographRef.current?.selectPoint) {
-                  cosmographRef.current.selectPoint(index);
-                } else if (cosmographRef.current?.selectPoints) {
-                  cosmographRef.current.selectPoints([index]);
-                }
-              });
-              
-              // Try to get node from local state first (for original nodes)
-              if (index < nodes.length) {
-                const node = nodes[index];
-                if (node) {
-                  onNodeClick(node);
-                  onNodeSelect(node.id);
-                  return;
-                }
-              }
-              
-              // For incrementally added nodes, check the data preparer
-              const nodeData = dataPreparerRef.current.getNodeByIndex(index);
-              if (nodeData) {
-                console.log(`[GraphCanvasV2] Clicked on incrementally added node:`, nodeData);
-                
-                // We have the basic node data, now fetch full details from server
-                if (nodeData.id) {
-                  try {
-                    // Import the graph client
-                    const { GraphClient } = await import('../api/graphClient');
-                    const client = new GraphClient();
-                    
-                    // Fetch full node details including centrality
-                    const fullNodeData = await client.getNodeDetails(nodeData.id);
-                    console.log(`[GraphCanvasV2] Fetched full node details:`, fullNodeData);
-                    
-                    // Call the callbacks with the full data
-                    onNodeClick(fullNodeData as any);
-                    onNodeSelect(nodeData.id);
-                  } catch (error) {
-                    console.error(`[GraphCanvasV2] Failed to fetch node details:`, error);
-                    // Fall back to using the minimal data we have
-                    onNodeClick(nodeData);
-                    onNodeSelect(nodeData.id);
-                  }
-                } else {
-                  // Use the minimal data we have
-                  onNodeClick(nodeData);
-                  onNodeSelect(nodeData.id || '');
-                }
-              } else {
-                console.warn(`[GraphCanvasV2] No node data found for index ${index}`);
-              }
-            } else {
-              // Clicked on empty space - clear selection
-              onClearSelection();
-              
-              // Also clear visual selection in Cosmograph
-              requestAnimationFrame(() => {
-                if (cosmographRef.current?.unselectAllPoints) {
-                  cosmographRef.current.unselectAllPoints();
-                }
-              });
-            }
-          }}
-          onMouseMove={(index?: number) => {
-            if (typeof index === 'number' && index >= 0 && index < nodes.length) {
-              const node = nodes[index];
-              if (onNodeHover) {
-                onNodeHover(node);
-              }
-            } else if (onNodeHover) {
-              onNodeHover(null);
             }
           }}
         />
