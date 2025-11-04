@@ -174,8 +174,6 @@ export const GraphCanvasRenderer: React.FC<GraphCanvasRendererProps> = ({
       renderHoveredPointRing={true}
       hoveredPointRingColor="#ffffff"
       hoveredPointCursor="pointer"
-      showHoveredPointLabel={true}
-      hoveredPointLabelClassName="cosmograph-hover-label"
       onPointMouseOver={handleMouseOver}
       onPointMouseOut={handleMouseOut}
       // Events
