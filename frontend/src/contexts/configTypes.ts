@@ -28,8 +28,12 @@ export interface StableConfig {
   linkWidthBy: string;
   linkWidthScheme: string;
   linkWidthScale: number;
+  linkWidthMin: number;
+  linkWidthMax: number;
   linkOpacity: number;
   linkOpacityScheme: string;
+  linkOpacityMin: number;
+  linkOpacityMax: number;
   linkGreyoutOpacity: number;
   linkColor: string;
   linkColorScheme: string;
@@ -82,6 +86,7 @@ export interface StableConfig {
   // Visual defaults
   colorScheme: string;
   gradientHighColor: string;
+  gradientMidColor?: string;
   gradientLowColor: string;
   scalingMethod: string;
   useQuantileScaling: boolean;
@@ -102,9 +107,18 @@ export interface StableConfig {
 export interface DynamicConfig {
   // Frequently toggled settings
   disableSimulation: boolean | null;
+  simulationEnabled?: boolean;
   renderLinks: boolean;
   showLabels: boolean;
   showHoveredNodeLabel: boolean;
+  
+  // Simulation controls (for backward compatibility)
+  simulationGravity?: number;
+  simulationCenter?: number;
+  simulationRepulsion?: number;
+  simulationLinkDistance?: number;
+  simulationLinkSpring?: number;
+  simulationFriction?: number;
   
   // Label optimization settings
   showDynamicLabels: boolean;
@@ -192,14 +206,16 @@ export type GraphConfig = StableConfig & DynamicConfig;
 
 // Helper to check if a config key is stable
 export const isStableConfigKey = (key: string): boolean => {
-  const stableKeys = new Set<keyof StableConfig>([
+const stableKeys = new Set<keyof StableConfig>([
     'gravity', 'repulsion', 'centerForce', 'friction', 'linkSpring',
     'linkDistance', 'linkDistRandomVariationRange', 'mouseRepulsion',
     'simulationDecay', 'simulationRepulsionTheta', 'simulationCluster',
     'simulationClusterStrength', 'simulationImpulse', 'spaceSize',
     'randomSeed', 'useQuadtree', 'useClassicQuadtree', 'quadtreeLevels',
-    'linkWidth', 'linkWidthBy', 'linkWidthScheme', 'linkWidthScale', 'linkOpacity',
-    'linkOpacityScheme', 'linkGreyoutOpacity', 'linkColor', 'linkColorScheme', 'scaleLinksOnZoom',
+    'linkWidth', 'linkWidthBy', 'linkWidthScheme', 'linkWidthScale', 
+    'linkWidthMin', 'linkWidthMax', 'linkOpacity',
+    'linkOpacityScheme', 'linkOpacityMin', 'linkOpacityMax', 'linkGreyoutOpacity', 
+    'linkColor', 'linkColorScheme', 'scaleLinksOnZoom',
     'backgroundColor', 'linkVisibilityDistance', 'linkVisibilityMinTransparency',
     'linkArrows', 'linkArrowsSizeScale', 'curvedLinks', 'curvedLinkSegments',
     'curvedLinkWeight', 'curvedLinkControlPointDistance', 'minNodeSize',
@@ -207,9 +223,12 @@ export const isStableConfigKey = (key: string): boolean => {
     'labelBy', 'labelColor', 'hoveredLabelColor', 'labelSize', 'labelOpacity',
     'labelVisibilityThreshold', 'labelFontWeight', 'labelBackgroundColor',
     'hoveredLabelSize', 'hoveredLabelFontWeight', 'hoveredLabelBackgroundColor',
-    'colorScheme', 'gradientHighColor', 'gradientLowColor', 'hoveredPointCursor',
-    'renderHoveredPointRing', 'hoveredPointRingColor', 'focusedPointRingColor',
-    'fitViewDuration', 'fitViewPadding'
+    'colorScheme', 'gradientHighColor', 'gradientMidColor', 'gradientLowColor', 
+    'hoveredPointCursor', 'renderHoveredPointRing', 'hoveredPointRingColor', 
+    'focusedPointRingColor', 'fitViewDuration', 'fitViewPadding', 'linkStrengthEnabled',
+    'entityEntityStrength', 'episodicStrength', 'defaultLinkStrength',
+    'linkAnimationEnabled', 'linkAnimationAmplitude', 'linkAnimationFrequency',
+    'scalingMethod', 'useQuantileScaling', 'useThresholdScaling', 'quantileBins'
   ]);
   
   return stableKeys.has(key as keyof StableConfig);
@@ -222,9 +241,9 @@ export const splitConfig = (config: GraphConfig): { stable: StableConfig; dynami
   
   Object.entries(config).forEach(([key, value]) => {
     if (isStableConfigKey(key)) {
-      (stable as Record<string, unknown>)[key] = value;
+      (stable as any)[key] = value;
     } else {
-      (dynamic as Record<string, unknown>)[key] = value;
+      (dynamic as any)[key] = value;
     }
   });
   

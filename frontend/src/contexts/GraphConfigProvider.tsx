@@ -4,6 +4,7 @@ import { usePersistedGraphConfig, usePersistedNodeTypes } from '@/hooks/usePersi
 import type { GraphConfig, StableConfig, DynamicConfig } from './configTypes';
 import { isStableConfigKey, splitConfig } from './configTypes';
 import { generateNodeTypeColor } from '../utils/nodeTypeColors';
+import { applyLayout as applyLayoutAlgorithm, type LayoutOptions } from '../utils/layouts';
 export { useGraphConfig, useStableConfig, useDynamicConfig, useGraphControl } from '../hooks/useGraphConfigHooks';
 
 // Cosmograph types
@@ -518,11 +519,11 @@ export function GraphConfigProvider({ children }: { children: ReactNode }) {
     
     try {
       const layoutOptions: LayoutOptions = {
-        type: layoutType,
         ...options
       };
       
-      const positions = await calculateLayoutPositions(
+      const positions = applyLayoutAlgorithm(
+        layoutType,
         graphData.nodes,
         graphData.edges,
         layoutOptions
@@ -536,11 +537,11 @@ export function GraphConfigProvider({ children }: { children: ReactNode }) {
         }));
         
         const links: CosmographLink[] = graphData.edges.map(edge => ({
-          source: edge.source,
-          target: edge.target,
+          source: edge.from || (edge as any).source,
+          target: edge.to || (edge as any).target,
           weight: edge.weight,
           edge_type: edge.edge_type,
-          properties: edge.properties
+          properties: edge.properties as any
         }));
         
         cosmographRef.current.setData(nodesWithPositions, links, false);

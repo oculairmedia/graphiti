@@ -253,5 +253,32 @@ class GraphitiClientFactory:
 
     @staticmethod
     def create_cross_encoder():
-        """Create cross encoder client (currently only OpenAI supported)."""
+        """Create cross encoder client (OpenAI or Ollama)."""
+        import os
+
+        # Check if reranking is enabled
+        enable_rerank = os.getenv('ENABLE_CONTEXT_RERANKING', 'false').lower() == 'true'
+
+        if not enable_rerank:
+            logger.info('Reranking disabled, cross_encoder will be None')
+            return None
+
+        # Check for Ollama reranker
+        ollama_reranker_model = os.getenv('OLLAMA_RERANKER_MODEL')
+        ollama_reranker_base_url = os.getenv('OLLAMA_RERANKER_BASE_URL')
+
+        if ollama_reranker_model and ollama_reranker_base_url:
+            logger.info(
+                f'Creating Ollama reranker with model {ollama_reranker_model} '
+                f'at {ollama_reranker_base_url}'
+            )
+            from graphiti_core.cross_encoder.ollama_reranker_client import OllamaRerankerClient
+
+            return OllamaRerankerClient(
+                model=ollama_reranker_model,
+                base_url=ollama_reranker_base_url,
+            )
+
+        # Fallback to OpenAI reranker
+        logger.info('Creating default OpenAI reranker')
         return OpenAIRerankerClient()

@@ -270,6 +270,11 @@ describe('WebSocket Integration Flow', () => {
         json: async () => ({ sequence: 100, timestamp: Date.now() })
       });
       
+      // Add handler to fetch version on connect
+      wsManager.on('connected', async () => {
+        await fetch('http://localhost:3000/api/graph/version');
+      });
+      
       wsManager.connect();
       await vi.runOnlyPendingTimersAsync();
       
@@ -281,7 +286,26 @@ describe('WebSocket Integration Flow', () => {
     
     it('should handle reconnection with version sync', async () => {
       const onReconnect = vi.fn();
-      wsManager.on('reconnected', onReconnect);
+      wsManager.on('reconnected', async () => {
+        onReconnect();
+        await fetch('http://localhost:3000/api/graph/version');
+      });
+      
+      // Mock fetch for initial connect and reconnect
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ sequence: 100, timestamp: Date.now() })
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ sequence: 150, timestamp: Date.now() })
+        });
+      
+      // Add initial connect handler
+      wsManager.on('connected', async () => {
+        await fetch('http://localhost:3000/api/graph/version');
+      });
       
       wsManager.connect();
       await vi.runOnlyPendingTimersAsync();
@@ -289,12 +313,6 @@ describe('WebSocket Integration Flow', () => {
       // Simulate disconnect
       mockWs = wsManager['ws'] as any;
       mockWs.close();
-      
-      // Mock version for reconnect
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ sequence: 150, timestamp: Date.now() })
-      });
       
       // Wait for reconnect
       await vi.advanceTimersByTimeAsync(2000);
@@ -313,7 +331,12 @@ describe('WebSocket Integration Flow', () => {
     
     it('should trigger data fetch on graph_updated notification', async () => {
       const onNotification = vi.fn();
-      wsManager.on('notification', onNotification);
+      wsManager.on('notification', async (data) => {
+        onNotification(data);
+        if (data.type === 'graph_updated') {
+          await versionSync.fetchChangesSince(data.data.sequence - 1);
+        }
+      });
       
       mockFetch.mockResolvedValueOnce({
         ok: true,

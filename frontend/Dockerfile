@@ -55,7 +55,7 @@ FROM nginx:alpine
 
 RUN apk add --no-cache curl
 
-COPY nginx.conf /etc/nginx/nginx.conf
+COPY nginx.standalone.conf /etc/nginx/nginx.conf
 COPY --from=builder /app/dist /usr/share/nginx/html
 
 RUN echo "OK" > /usr/share/nginx/html/health

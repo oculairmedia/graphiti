@@ -30,7 +30,12 @@ export default defineConfig(({ mode }) => ({
   },
   server: {
     host: "::",
-    port: 8082,
+    port: 8084,
+    // PERFORMANCE: Enable cross-origin isolation for SharedArrayBuffer + Worker multi-threading
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Embedder-Policy': 'require-corp',
+    },
     proxy: {
       '/api': {
         target: 'http://localhost:3000',

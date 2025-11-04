@@ -115,9 +115,32 @@ function sanitizeProperties(properties: any): Record<string, any> {
   return sanitized;
 }
 
+// PERFORMANCE: Cache for sanitized nodes to avoid re-processing
+const sanitizationCache = new Map<string, any>();
+const CACHE_MAX_SIZE = 10000; // Limit cache size to prevent memory issues
+
+/**
+ * Generate cache key for a node
+ */
+function generateNodeCacheKey(
+  nodeId: string,
+  clusteringMethod?: string,
+  isIncremental: boolean = false
+): string {
+  return `${nodeId}-${clusteringMethod || 'none'}-${isIncremental ? 'inc' : 'full'}`;
+}
+
+/**
+ * Clear sanitization cache (call when config changes significantly)
+ */
+export function clearSanitizationCache(): void {
+  sanitizationCache.clear();
+}
+
 /**
  * Transform and sanitize a node for Cosmograph
  * Exported for use in GraphCanvasV2
+ * PERFORMANCE: Now cached to avoid redundant processing
  */
 export function sanitizeNode(
   node: GraphNode,
@@ -125,6 +148,14 @@ export function sanitizeNode(
   config: DataPrepConfig = {},
   isIncremental: boolean = false
 ): any {
+  // PERFORMANCE: Check cache first
+  const cacheKey = generateNodeCacheKey(node.id, config.clusteringMethod, isIncremental);
+  if (sanitizationCache.has(cacheKey)) {
+    const cached = sanitizationCache.get(cacheKey)!;
+    // Update index in case it changed
+    return { ...cached, index: Number(index) };
+  }
+  
   // Get or assign node type index for color generation
   let nodeTypeIndex = 0;
   if (config.nodeTypeIndexMap) {
@@ -192,20 +223,28 @@ export function sanitizeNode(
     if (node.created_at_timestamp !== undefined && node.created_at_timestamp !== null) {
       // If it's already a number, use it directly
       if (typeof node.created_at_timestamp === 'number') {
-        sanitizedNode.created_at_timestamp = node.created_at_timestamp;
+        sanitizedNode.created_at_timestamp = isFinite(node.created_at_timestamp) ? node.created_at_timestamp : Date.now();
       } else {
         // Try to parse as date string
-        const timestamp = new Date(node.created_at_timestamp).getTime();
-        sanitizedNode.created_at_timestamp = isNaN(timestamp) ? Date.now() : timestamp;
+        try {
+          const timestamp = new Date(String(node.created_at_timestamp)).getTime();
+          sanitizedNode.created_at_timestamp = isFinite(timestamp) ? timestamp : Date.now();
+        } catch (e) {
+          sanitizedNode.created_at_timestamp = Date.now();
+        }
       }
     } else if (node.created_at) {
       // Fallback: derive from created_at string
-      const timestamp = new Date(node.created_at).getTime();
-      sanitizedNode.created_at_timestamp = isNaN(timestamp) ? Date.now() : timestamp;
-    } else if (node.properties?.created_at_timestamp) {
-      // Check properties as backup
-      const propTimestamp = Number(node.properties.created_at_timestamp);
-      sanitizedNode.created_at_timestamp = isNaN(propTimestamp) ? Date.now() : propTimestamp;
+      try {
+        const timestamp = new Date(String(node.created_at)).getTime();
+        sanitizedNode.created_at_timestamp = isFinite(timestamp) ? timestamp : Date.now();
+      } catch (e) {
+        sanitizedNode.created_at_timestamp = Date.now();
+      }
+    } else if ((node.properties as any)?.created_at_timestamp) {
+      // Check properties as backup (with type assertion since it's dynamic)
+      const propTimestamp = Number((node.properties as any).created_at_timestamp);
+      sanitizedNode.created_at_timestamp = isFinite(propTimestamp) ? propTimestamp : Date.now();
     } else {
       // Final fallback to current time
       sanitizedNode.created_at_timestamp = Date.now();
@@ -258,20 +297,28 @@ export function sanitizeNode(
     if (node.created_at_timestamp !== undefined && node.created_at_timestamp !== null) {
       // If it's already a number, use it directly
       if (typeof node.created_at_timestamp === 'number') {
-        sanitizedNode.created_at_timestamp = node.created_at_timestamp;
+        sanitizedNode.created_at_timestamp = isFinite(node.created_at_timestamp) ? node.created_at_timestamp : Date.now();
       } else {
         // Try to parse as date string
-        const timestamp = new Date(node.created_at_timestamp).getTime();
-        sanitizedNode.created_at_timestamp = isNaN(timestamp) ? Date.now() : timestamp;
+        try {
+          const timestamp = new Date(String(node.created_at_timestamp)).getTime();
+          sanitizedNode.created_at_timestamp = isFinite(timestamp) ? timestamp : Date.now();
+        } catch (e) {
+          sanitizedNode.created_at_timestamp = Date.now();
+        }
       }
     } else if (node.created_at) {
       // Fallback: derive from created_at string
-      const timestamp = new Date(node.created_at).getTime();
-      sanitizedNode.created_at_timestamp = isNaN(timestamp) ? Date.now() : timestamp;
-    } else if (node.properties?.created_at_timestamp) {
-      // Check properties as backup
-      const propTimestamp = Number(node.properties.created_at_timestamp);
-      sanitizedNode.created_at_timestamp = isNaN(propTimestamp) ? Date.now() : propTimestamp;
+      try {
+        const timestamp = new Date(String(node.created_at)).getTime();
+        sanitizedNode.created_at_timestamp = isFinite(timestamp) ? timestamp : Date.now();
+      } catch (e) {
+        sanitizedNode.created_at_timestamp = Date.now();
+      }
+    } else if ((node.properties as any)?.created_at_timestamp) {
+      // Check properties as backup (with type assertion since it's dynamic)
+      const propTimestamp = Number((node.properties as any).created_at_timestamp);
+      sanitizedNode.created_at_timestamp = isFinite(propTimestamp) ? propTimestamp : Date.now();
     } else {
       // Final fallback to current time
       sanitizedNode.created_at_timestamp = Date.now();
@@ -292,6 +339,16 @@ export function sanitizeNode(
       console.error(`[sanitizeNode] CRITICAL: DuckDB cosmograph_points view requires exactly 16 fields. Have ${fieldCount} fields with unexpected nulls in [${unexpectedNulls.join(', ')}]:`,
         Object.entries(sanitizedNode).map(([k, v]) => `${k}: ${v === null ? 'NULL' : typeof v}`));
     }
+  }
+  
+  // PERFORMANCE: Store in cache (with size limit to prevent memory issues)
+  if (sanitizationCache.size < CACHE_MAX_SIZE) {
+    sanitizationCache.set(cacheKey, sanitizedNode);
+  } else if (sanitizationCache.size === CACHE_MAX_SIZE) {
+    // Clear 20% of cache when limit reached (FIFO)
+    const keysToDelete = Array.from(sanitizationCache.keys()).slice(0, Math.floor(CACHE_MAX_SIZE * 0.2));
+    keysToDelete.forEach(key => sanitizationCache.delete(key));
+    sanitizationCache.set(cacheKey, sanitizedNode);
   }
   
   return sanitizedNode;

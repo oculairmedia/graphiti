@@ -170,21 +170,26 @@ class OpenAIGenericClient(LLMClient):
         retry_count = 0
         last_error = None
 
+        # IMPORTANT: Create deep copy of messages to avoid mutations across retries
+        # Without this, retries will accumulate content and cause role alternation errors
+        import copy
+        messages_copy = copy.deepcopy(messages)
+
         if response_model is not None:
             serialized_model = json.dumps(response_model.model_json_schema())
-            messages[
+            messages_copy[
                 -1
             ].content += (
                 f'\n\nRespond with a JSON object in the following format:\n\n{serialized_model}'
             )
 
         # Add multilingual extraction instructions
-        messages[0].content += MULTILINGUAL_EXTRACTION_RESPONSES
+        messages_copy[0].content += MULTILINGUAL_EXTRACTION_RESPONSES
 
         while retry_count <= self.MAX_RETRIES:
             try:
                 response = await self._generate_response(
-                    messages, response_model, max_tokens=max_tokens, model_size=model_size
+                    messages_copy, response_model, max_tokens=max_tokens, model_size=model_size
                 )
                 return response
             except (RateLimitError, RefusalError):

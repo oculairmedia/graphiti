@@ -1,0 +1,86 @@
+{
+  "configs": [
+    {
+      "name": "baseline",
+      "description": "Original prompts unmodified",
+      "previous_episodes_limit": null,
+      "existing_nodes_limit": null,
+      "compression_enabled": false
+    },
+    {
+      "name": "trim_prev_episodes_5",
+      "description": "Limit previous episodes to last 5",
+      "previous_episodes_limit": 5,
+      "existing_nodes_limit": null,
+      "compression_enabled": false
+    },
+    {
+      "name": "trim_prev_episodes_3",
+      "description": "Limit previous episodes to last 3",
+      "previous_episodes_limit": 3,
+      "existing_nodes_limit": null,
+      "compression_enabled": false
+    },
+    {
+      "name": "trim_existing_nodes_20",
+      "description": "Limit existing nodes to 20 for dedupe",
+      "previous_episodes_limit": null,
+      "existing_nodes_limit": 20,
+      "compression_enabled": false
+    }
+  ],
+  "by_config": {
+    "baseline": {
+      "total_original_tokens": 86682,
+      "total_modified_tokens": 89397,
+      "total_latency": 141541.199,
+      "success_count": 10,
+      "failure_count": 0,
+      "by_prompt_type": {
+        "unknown": {
+          "count": 10,
+          "tokens_saved": -2715
+        }
+      }
+    },
+    "trim_prev_episodes_5": {
+      "total_original_tokens": 86682,
+      "total_modified_tokens": 80822,
+      "total_latency": 129828.485,
+      "success_count": 10,
+      "failure_count": 0,
+      "by_prompt_type": {
+        "unknown": {
+          "count": 10,
+          "tokens_saved": 5860
+        }
+      }
+    },
+    "trim_prev_episodes_3": {
+      "total_original_tokens": 86682,
+      "total_modified_tokens": 78910,
+      "total_latency": 146269.92599999998,
+      "success_count": 10,
+      "failure_count": 0,
+      "by_prompt_type": {
+        "unknown": {
+          "count": 10,
+          "tokens_saved": 7772
+        }
+      }
+    },
+    "trim_existing_nodes_20": {
+      "total_original_tokens": 86682,
+      "total_modified_tokens": 89397,
+      "total_latency": 137260.204,
+      "success_count": 10,
+      "failure_count": 0,
+      "by_prompt_type": {
+        "unknown": {
+          "count": 10,
+          "tokens_saved": -2715
+        }
+      }
+    }
+  }
+}

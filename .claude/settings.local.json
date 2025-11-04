@@ -90,7 +90,23 @@
       "Bash(do:*)",
       "Bash(nvidia-smi)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(dmesg:*)",
+      "Bash(docker system:*)",
+      "Bash(docker image prune:*)",
+      "Bash(docker-compose stop:*)",
+      "Bash(for i in {1..5})",
+      "Bash(docker-compose exec:*)",
+      "Bash(pkill:*)",
+      "Bash(docker stats:*)",
+      "Bash(git reset:*)",
+      "Bash(timeout 60 docker logs:*)",
+      "Bash(docker build:*)",
+      "Bash(tee:*)",
+      "Bash(docker volume rm:*)",
+      "Bash(docker-compose rm:*)",
+      "Bash(timeout 120 docker logs:*)",
+      "Bash(timeout 600 sh:*)"
     ],
     "deny": [],
     "ask": [],
@@ -99,5 +115,5 @@
       "/tmp"
     ]
   },
-  "disableAllHooks": true
+  "disableAllHooks": false
 }

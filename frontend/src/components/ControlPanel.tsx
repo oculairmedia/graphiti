@@ -5,6 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useGraphConfig } from '@/contexts/GraphConfigProvider';
 import type { GraphData, GraphNode } from '@/types/graph';
 import { useConfigPersistence } from '@/hooks/usePersistedConfig';
+import { useDebouncedCallback } from '@/hooks/useDebouncedCallback';
 import { GraphitiSearch } from './GraphitiSearch';
 import type { NodeResult } from '../api/types';
 
@@ -71,6 +72,10 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
   const { resetAllConfig, exportConfig, importConfig, getStorageInfo } = useConfigPersistence();
   
   const [isRefreshing, setIsRefreshing] = useState(false);
+  
+  // PERFORMANCE: Debounce config updates for sliders (150ms delay)
+  // This prevents expensive re-renders while user is dragging sliders
+  const debouncedUpdateConfig = useDebouncedCallback(updateConfig, 150);
   
   // Compute real node types from nodes prop with memoization
   const nodeTypes = React.useMemo(() => computeNodeTypes(nodes), [nodes]);
@@ -290,7 +295,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
                 nodeTypes={nodeTypes}
                 onNodeTypeColorChange={handleNodeTypeColorChange}
                 onNodeTypeVisibilityChange={handleNodeTypeVisibilityChange}
-                onConfigUpdate={updateConfig}
+                onConfigUpdate={debouncedUpdateConfig}
               />
             </TabsContent>
 
@@ -298,7 +303,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
             <TabsContent value="physics" className="mt-0">
               <PhysicsControlsTab
                 config={config}
-                onConfigUpdate={updateConfig}
+                onConfigUpdate={debouncedUpdateConfig}
                 onResetToDefaults={handleResetToDefaults}
               />
             </TabsContent>
@@ -318,7 +323,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
             <TabsContent value="render" className="mt-0">
               <RenderControlsTab
                 config={config}
-                onConfigUpdate={updateConfig}
+                onConfigUpdate={debouncedUpdateConfig}
               />
             </TabsContent>
 
@@ -326,7 +331,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
             <TabsContent value="settings" className="mt-0">
               <SettingsTab
                 config={config}
-                onConfigUpdate={updateConfig}
+                onConfigUpdate={debouncedUpdateConfig}
                 graphStats={nodes && nodes.length > 0 ? {
                   nodeCount: nodes.length,
                   edgeCount: 0  // Edge count would need to be passed separately if needed

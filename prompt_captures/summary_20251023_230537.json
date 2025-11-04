@@ -1,0 +1,16 @@
+{
+  "total_captures": 3,
+  "by_type": {
+    "unknown": {
+      "count": 3,
+      "total_tokens": 10949,
+      "total_latency": 92350.66100000001,
+      "min_tokens": 3044,
+      "max_tokens": 4623,
+      "avg_tokens": 3649.6666666666665,
+      "avg_latency": 30783.55366666667
+    }
+  },
+  "total_tokens": 10949,
+  "total_latency": 92350.66100000001
+}

@@ -137,7 +137,7 @@ impl DuckDBStore {
         
         // Create tables
         conn.execute(
-            "CREATE TABLE nodes (
+            "CREATE TABLE IF NOT EXISTS nodes (
                 id VARCHAR PRIMARY KEY,
                 idx INTEGER NOT NULL,
                 label VARCHAR NOT NULL,
@@ -158,9 +158,9 @@ impl DuckDBStore {
             )",
             params![],
         )?;
-        
+
         conn.execute(
-            "CREATE TABLE edges (
+            "CREATE TABLE IF NOT EXISTS edges (
                 source VARCHAR NOT NULL,
                 sourceidx INTEGER NOT NULL,
                 target VARCHAR NOT NULL,
