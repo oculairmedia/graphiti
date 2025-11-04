@@ -8,11 +8,15 @@ export type GraphNodeProperties = NodeProperties;
 export interface GraphNode {
   id: string;
   label?: string;
+  name?: string; // Alias for label
   node_type: 'Entity' | 'Episodic' | 'Agent' | 'Community' | string;
   summary?: string;
   description?: string;
   created_at?: string;
+  created_at_timestamp?: number;
   updated_at?: string;
+  x?: number;
+  y?: number;
   properties?: NodeProperties;
 }
 
@@ -23,10 +27,23 @@ export interface GraphEdge {
   id: string;
   from: string;
   to: string;
+  source?: string; // Alias for from
+  target?: string; // Alias for to
   label?: string;
   weight?: number;
   edge_type?: string;
   properties?: EdgeProperties;
+}
+
+// GraphLink is an alias for edges with source/target naming
+export interface GraphLink {
+  source: string;
+  target: string;
+  edge_type?: string;
+  weight?: number;
+  name?: string;
+  properties?: EdgeProperties;
+  [key: string]: any;
 }
 
 export interface GraphDataStats {

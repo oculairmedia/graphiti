@@ -64,8 +64,21 @@ export class DuckDBService {
       await this.createTables();
       
       // Load the prefetched data if available
+      let tablesReady = false;
       if (dataPromise) {
-        await this.loadPrefetchedData(dataPromise);
+        const loadedFromPrefetch = await this.loadPrefetchedData(dataPromise);
+        if (loadedFromPrefetch) {
+          tablesReady = await this.ensureGraphTables();
+        }
+      }
+
+      if (!tablesReady) {
+        await this.loadInitialData();
+        tablesReady = await this.ensureGraphTables();
+      }
+
+      if (!tablesReady) {
+        throw new Error('DuckDB graph tables failed to load during initialization');
       }
       
       this._initialized = true;
@@ -146,8 +159,10 @@ export class DuckDBService {
     }
   }
   
-  private async loadPrefetchedData(dataPromise: { nodes: ArrayBuffer; edges: ArrayBuffer } | null): Promise<void> {
-    if (!dataPromise || !this.conn) return;
+  private async loadPrefetchedData(
+    dataPromise: { nodes: ArrayBuffer; edges: ArrayBuffer } | null
+  ): Promise<boolean> {
+    if (!dataPromise || !this.conn) return false;
     
     try {
       const { nodes, edges } = dataPromise;
@@ -213,8 +228,10 @@ export class DuckDBService {
       
       // Skip caching ArrayBuffer data to avoid conversion issues
       // The preloader already handles caching in memory
+      return true;
     } catch (error) {
       console.error('[DuckDB] Failed to load prefetched data:', error);
+      return false;
     }
   }
 
@@ -232,6 +249,31 @@ export class DuckDBService {
     
     // Note: We don't create the tables here anymore
     // They will be created automatically when we insert Arrow data
+  }
+
+  private async ensureGraphTables(): Promise<boolean> {
+    if (!this.conn) return false;
+
+    try {
+      const result = await this.conn.query(`
+        SELECT LOWER(table_name) as name
+        FROM information_schema.tables
+        WHERE LOWER(table_name) IN ('nodes', 'edges')
+      `);
+
+      const tableNames = new Set<string>();
+      for (let i = 0; i < result.numRows; i++) {
+        const name = result.get(i)?.name;
+        if (typeof name === 'string') {
+          tableNames.add(name);
+        }
+      }
+
+      return tableNames.has('nodes') && tableNames.has('edges');
+    } catch (error) {
+      console.error('[DuckDB] Failed to verify graph tables:', error);
+      return false;
+    }
   }
 
   private async loadInitialData(): Promise<void> {
@@ -560,14 +602,25 @@ export class DuckDBService {
 
   async getStats(): Promise<{ nodes: number; edges: number }> {
     if (!this.conn) throw new Error('DuckDB connection not initialized');
-    
-    const nodeResult = await this.conn.query('SELECT COUNT(*) as count FROM nodes');
-    const edgeResult = await this.conn.query('SELECT COUNT(*) as count FROM edges');
-    
-    return {
-      nodes: nodeResult.get(0)?.count || 0,
-      edges: edgeResult.get(0)?.count || 0,
-    };
+
+    const tablesReady = await this.ensureGraphTables();
+    if (!tablesReady) {
+      console.warn('[DuckDB] getStats called before graph tables were ready, returning zeros');
+      return { nodes: 0, edges: 0 };
+    }
+
+    try {
+      const nodeResult = await this.conn.query('SELECT COUNT(*) as count FROM nodes');
+      const edgeResult = await this.conn.query('SELECT COUNT(*) as count FROM edges');
+      
+      return {
+        nodes: nodeResult.get(0)?.count || 0,
+        edges: edgeResult.get(0)?.count || 0,
+      };
+    } catch (error) {
+      console.error('[DuckDB] Failed to read stats:', error);
+      return { nodes: 0, edges: 0 };
+    }
   }
 
   async getNodesForUI(limit?: number): Promise<any[]> {

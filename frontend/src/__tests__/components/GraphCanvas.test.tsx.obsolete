@@ -1,12 +1,13 @@
 /**
- * Comprehensive test suite for GraphCanvas component
- * Tests all major functionality before refactoring
+ * Comprehensive test suite for GraphCanvasV2V2 component
+ * Tests all major functionality
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi, Mock } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import React from 'react';
+import GraphCanvasV2V2 from '../../components/GraphCanvasV2V2';
 import { GraphNode } from '../../api/types';
 
 // Define GraphLink interface here
@@ -131,7 +132,7 @@ const mockLoadingCoordinator = {
   reset: vi.fn(),
 };
 
-describe('GraphCanvas Component', () => {
+describe('GraphCanvasV2V2 Component', () => {
   let user: ReturnType<typeof userEvent.setup>;
 
   beforeEach(() => {
@@ -146,7 +147,7 @@ describe('GraphCanvas Component', () => {
   describe('Rendering', () => {
     it('should render the canvas container', () => {
       const { container } = render(
-        <GraphCanvas
+        <GraphCanvasV2V2
           nodes={mockNodes}
           links={mockLinks}
           onNodeClick={vi.fn()}
@@ -156,13 +157,12 @@ describe('GraphCanvas Component', () => {
         />
       );
 
-      expect(screen.getByTestId('cosmograph-canvas')).toBeInTheDocument();
-      expect(container.querySelector('.graph-canvas-container')).toBeInTheDocument();
+      expect(screen.getByTestId('cosmograph-mock')).toBeInTheDocument();
     });
 
     it('should apply custom className', () => {
       const { container } = render(
-        <GraphCanvas
+        <GraphCanvasV2
           nodes={mockNodes}
           links={mockLinks}
           onNodeClick={vi.fn()}
@@ -178,7 +178,7 @@ describe('GraphCanvas Component', () => {
 
     it('should display loading overlay during data preparation', async () => {
       render(
-        <GraphCanvas
+        <GraphCanvasV2
           nodes={mockNodes}
           links={mockLinks}
           onNodeClick={vi.fn()}
@@ -198,7 +198,7 @@ describe('GraphCanvas Component', () => {
   describe('Data Management', () => {
     it('should prepare and pass data to Cosmograph', async () => {
       render(
-        <GraphCanvas
+        <GraphCanvasV2
           nodes={mockNodes}
           links={mockLinks}
           onNodeClick={vi.fn()}
@@ -217,7 +217,7 @@ describe('GraphCanvas Component', () => {
 
     it('should handle empty data gracefully', () => {
       render(
-        <GraphCanvas
+        <GraphCanvasV2
           nodes={[]}
           links={[]}
           onNodeClick={vi.fn()}
@@ -232,7 +232,7 @@ describe('GraphCanvas Component', () => {
 
     it('should update when nodes prop changes', async () => {
       const { rerender } = render(
-        <GraphCanvas
+        <GraphCanvasV2
           nodes={mockNodes}
           links={mockLinks}
           onNodeClick={vi.fn()}
@@ -250,7 +250,7 @@ describe('GraphCanvas Component', () => {
       }];
 
       rerender(
-        <GraphCanvas
+        <GraphCanvasV2
           nodes={newNodes}
           links={mockLinks}
           onNodeClick={vi.fn()}
@@ -272,7 +272,7 @@ describe('GraphCanvas Component', () => {
       const onSelectNodes = vi.fn();
 
       render(
-        <GraphCanvas
+        <GraphCanvasV2
           nodes={mockNodes}
           links={mockLinks}
           onNodeClick={vi.fn()}
@@ -301,7 +301,7 @@ describe('GraphCanvas Component', () => {
       const onSelectNodes = vi.fn();
 
       render(
-        <GraphCanvas
+        <GraphCanvasV2
           nodes={mockNodes}
           links={mockLinks}
           onNodeClick={vi.fn()}
@@ -320,7 +320,7 @@ describe('GraphCanvas Component', () => {
       const onClearSelection = vi.fn();
 
       const { rerender } = render(
-        <GraphCanvas
+        <GraphCanvasV2
           nodes={mockNodes}
           links={mockLinks}
           onNodeClick={vi.fn()}
@@ -333,7 +333,7 @@ describe('GraphCanvas Component', () => {
 
       // Clear selection
       rerender(
-        <GraphCanvas
+        <GraphCanvasV2
           nodes={mockNodes}
           links={mockLinks}
           onNodeClick={vi.fn()}
@@ -349,7 +349,7 @@ describe('GraphCanvas Component', () => {
 
     it('should highlight selected nodes', () => {
       render(
-        <GraphCanvas
+        <GraphCanvasV2
           nodes={mockNodes}
           links={mockLinks}
           onNodeClick={vi.fn()}
@@ -369,7 +369,7 @@ describe('GraphCanvas Component', () => {
       const onNodeClick = vi.fn();
 
       render(
-        <GraphCanvas
+        <GraphCanvasV2
           nodes={mockNodes}
           links={mockLinks}
           onNodeClick={onNodeClick}
@@ -392,7 +392,7 @@ describe('GraphCanvas Component', () => {
       const onNodeHover = vi.fn();
 
       render(
-        <GraphCanvas
+        <GraphCanvasV2
           nodes={mockNodes}
           links={mockLinks}
           onNodeClick={vi.fn()}
@@ -425,7 +425,7 @@ describe('GraphCanvas Component', () => {
       const onNodeSelect = vi.fn();
 
       render(
-        <GraphCanvas
+        <GraphCanvasV2
           nodes={mockNodes}
           links={mockLinks}
           onNodeClick={onNodeClick}
@@ -455,7 +455,7 @@ describe('GraphCanvas Component', () => {
       const ref = { current: null as any };
 
       render(
-        <GraphCanvas
+        <GraphCanvasV2
           ref={ref}
           nodes={mockNodes}
           links={mockLinks}
@@ -476,7 +476,7 @@ describe('GraphCanvas Component', () => {
       const ref = { current: null as any };
 
       render(
-        <GraphCanvas
+        <GraphCanvasV2
           ref={ref}
           nodes={mockNodes}
           links={mockLinks}
@@ -497,7 +497,7 @@ describe('GraphCanvas Component', () => {
       const ref = { current: null as any };
 
       render(
-        <GraphCanvas
+        <GraphCanvasV2
           ref={ref}
           nodes={mockNodes}
           links={mockLinks}
@@ -516,7 +516,7 @@ describe('GraphCanvas Component', () => {
       const ref = { current: null as any };
 
       render(
-        <GraphCanvas
+        <GraphCanvasV2
           ref={ref}
           nodes={mockNodes}
           links={mockLinks}
@@ -535,7 +535,7 @@ describe('GraphCanvas Component', () => {
   describe('WebSocket Integration', () => {
     it('should subscribe to WebSocket updates', () => {
       render(
-        <GraphCanvas
+        <GraphCanvasV2
           nodes={mockNodes}
           links={mockLinks}
           onNodeClick={vi.fn()}
@@ -553,7 +553,7 @@ describe('GraphCanvas Component', () => {
       const ref = { current: null as any };
 
       render(
-        <GraphCanvas
+        <GraphCanvasV2
           ref={ref}
           nodes={mockNodes}
           links={mockLinks}
@@ -582,7 +582,7 @@ describe('GraphCanvas Component', () => {
       const ref = { current: null as any };
 
       render(
-        <GraphCanvas
+        <GraphCanvasV2
           ref={ref}
           nodes={mockNodes}
           links={mockLinks}
@@ -606,7 +606,7 @@ describe('GraphCanvas Component', () => {
       const ref = { current: null as any };
 
       render(
-        <GraphCanvas
+        <GraphCanvasV2
           ref={ref}
           nodes={mockNodes}
           links={mockLinks}
@@ -642,7 +642,7 @@ describe('GraphCanvas Component', () => {
       const onStatsUpdate = vi.fn();
 
       render(
-        <GraphCanvas
+        <GraphCanvasV2
           nodes={mockNodes}
           links={mockLinks}
           onNodeClick={vi.fn()}
@@ -665,7 +665,7 @@ describe('GraphCanvas Component', () => {
       const ref = { current: null as any };
 
       render(
-        <GraphCanvas
+        <GraphCanvasV2
           ref={ref}
           nodes={mockNodes}
           links={mockLinks}
@@ -701,7 +701,7 @@ describe('GraphCanvas Component', () => {
       const ref = { current: null as any };
 
       render(
-        <GraphCanvas
+        <GraphCanvasV2
           ref={ref}
           nodes={mockNodes}
           links={mockLinks}
@@ -720,7 +720,7 @@ describe('GraphCanvas Component', () => {
       const ref = { current: null as any };
 
       render(
-        <GraphCanvas
+        <GraphCanvasV2
           ref={ref}
           nodes={mockNodes}
           links={mockLinks}
@@ -740,7 +740,7 @@ describe('GraphCanvas Component', () => {
       const ref = { current: null as any };
 
       render(
-        <GraphCanvas
+        <GraphCanvasV2
           ref={ref}
           nodes={mockNodes}
           links={mockLinks}
@@ -768,7 +768,7 @@ describe('GraphCanvas Component', () => {
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
       render(
-        <GraphCanvas
+        <GraphCanvasV2
           nodes={null as any} // Invalid data
           links={mockLinks}
           onNodeClick={vi.fn()}
@@ -798,7 +798,7 @@ describe('GraphCanvas Component', () => {
       vi.mocked(useWebSocketContext).mockReturnValue(localMockWebSocket as any);
 
       render(
-        <GraphCanvas
+        <GraphCanvasV2
           nodes={mockNodes}
           links={mockLinks}
           onNodeClick={vi.fn()}
@@ -824,7 +824,7 @@ describe('GraphCanvas Component', () => {
 
       const { rerender } = render(
         <TestWrapper>
-          <GraphCanvas
+          <GraphCanvasV2
             nodes={mockNodes}
             links={mockLinks}
             onNodeClick={vi.fn()}
@@ -840,7 +840,7 @@ describe('GraphCanvas Component', () => {
       // Re-render with same props
       rerender(
         <TestWrapper>
-          <GraphCanvas
+          <GraphCanvasV2
             nodes={mockNodes}
             links={mockLinks}
             onNodeClick={vi.fn()}
@@ -872,7 +872,7 @@ describe('GraphCanvas Component', () => {
       const startTime = performance.now();
 
       render(
-        <GraphCanvas
+        <GraphCanvasV2
           nodes={largeNodes}
           links={largeLinks}
           onNodeClick={vi.fn()}
@@ -890,10 +890,10 @@ describe('GraphCanvas Component', () => {
   });
 });
 
-describe('GraphCanvas Integration Tests', () => {
+describe('GraphCanvasV2 Integration Tests', () => {
   it('should integrate with all contexts correctly', () => {
     render(
-      <GraphCanvas
+      <GraphCanvasV2
         nodes={mockNodes}
         links={mockLinks}
         onNodeClick={vi.fn()}
@@ -917,7 +917,7 @@ describe('GraphCanvas Integration Tests', () => {
     const onStatsUpdate = vi.fn();
 
     render(
-      <GraphCanvas
+      <GraphCanvasV2
         ref={ref}
         nodes={mockNodes}
         links={mockLinks}

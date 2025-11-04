@@ -484,7 +484,7 @@ export function useGraphDataQuery() {
       `${filterConfig.minEigenvector}_${filterConfig.maxEigenvector}_` +
       `${filterConfig.minConnections}_${filterConfig.maxConnections}_` +
       `${filterConfig.filteredNodeTypes.join(',')}_` +
-      `${filterConfig.startDate?.getTime() || ''}_${filterConfig.endDate?.getTime() || ''}`;
+      `${filterConfig.startDate || ''}_${filterConfig.endDate || ''}`;
   }, [filterConfig]);
 
   // Memoize filter function to prevent recreation

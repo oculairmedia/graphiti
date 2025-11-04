@@ -20,9 +20,36 @@ export function calculateTemporalLayout(
   
   // Extract temporal information
   const nodesWithTime = nodes.map(node => {
-    const dateStr = node.created_at || node.properties?.created || node.properties?.date;
-    const date = dateStr ? new Date(dateStr) : new Date();
-    return { node, date, timestamp: date.getTime() };
+    // Handle various timestamp formats robustly
+    let timestamp: number;
+    
+    // Try created_at_timestamp first (should be a number)
+    if (node.created_at_timestamp && typeof node.created_at_timestamp === 'number') {
+      timestamp = node.created_at_timestamp;
+    } 
+    // Try created_at string
+    else if (node.created_at) {
+      const date = new Date(String(node.created_at));
+      timestamp = date.getTime();
+      if (isNaN(timestamp)) {
+        timestamp = Date.now();
+      }
+    }
+    // Try properties (with type assertion for dynamic properties)
+    else if ((node.properties as any)?.created || (node.properties as any)?.date) {
+      const dateStr = String((node.properties as any).created || (node.properties as any).date);
+      const date = new Date(dateStr);
+      timestamp = date.getTime();
+      if (isNaN(timestamp)) {
+        timestamp = Date.now();
+      }
+    }
+    // Fallback
+    else {
+      timestamp = Date.now();
+    }
+    
+    return { node, date: new Date(timestamp), timestamp };
   });
   
   // Sort by time

@@ -21,7 +21,7 @@ COPY src ./src
 RUN cargo build --release --bin graph-visualizer-backend
 
 # Runtime stage - minimal image
-FROM debian:bookworm-slim AS runtime
+FROM debian:trixie-slim AS runtime
 
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y \
@@ -38,8 +38,9 @@ COPY --from=builder /app/target/release/graph-visualizer-backend /usr/local/bin/
 # Copy static files
 COPY static /static
 
-# Create non-root user
+# Create non-root user and data directory
 RUN useradd -m -u 1001 -U -s /bin/sh appuser && \
+    mkdir -p /app/data && \
     chown -R appuser:appuser /app && \
     chown -R appuser:appuser /static
 

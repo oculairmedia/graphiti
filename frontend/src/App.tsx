@@ -21,7 +21,7 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 5 * 60 * 1000, // Consider data fresh for 5 minutes
-      cacheTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
+      gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes (renamed from cacheTime in v5)
       refetchOnWindowFocus: false, // Don't refetch on window focus
       refetchOnReconnect: false, // Don't refetch on reconnect
       retry: 1, // Retry failed requests only once
@@ -33,11 +33,8 @@ const queryClient = new QueryClient({
 const App = () => {
   // Preload resources for better performance
   React.useEffect(() => {
-    // Clear cache on startup to ensure fresh data
-    console.log('[App] Clearing graph cache on startup to ensure fresh data');
-    graphCache.clearCache().catch(err => {
-      console.error('[App] Failed to clear cache:', err);
-    });
+    // PERFORMANCE: Don't clear cache on startup - let it persist for faster loads
+    // Cache will be invalidated automatically via TTL or WebSocket updates
     
     // Start preloading if not already started
     if (!preloader.isPreloaded('nodes')) {
