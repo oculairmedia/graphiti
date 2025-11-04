@@ -526,6 +526,8 @@ async fn main() -> anyhow::Result<()> {
         let mut last_node_count = 0;
         let mut last_edge_count = 0;
         let mut last_centrality_sum = 0.0;
+        let mut last_fetch_timestamp: Option<String> = None;
+        let mut is_first_sync = true;
         
         loop {
             interval.tick().await;
@@ -582,49 +584,122 @@ async fn main() -> anyhow::Result<()> {
                           last_node_count, current_node_count,
                           last_edge_count, current_edge_count);
                     
-                    // RELOAD DATA FROM FALKORDB INTO DUCKDB
-                    info!("Auto-reloading DuckDB from FalkorDB due to detected changes");
-                    
-                    // Fetch fresh data from FalkorDB
-                    let query = build_query("entire_graph", 100000, 0, None);
-                    if let Ok(graph_data) = execute_graph_query(&client_clone, &graph_name_clone, &query).await {
-                        info!("Fetched {} nodes and {} edges from FalkorDB", 
-                            graph_data.nodes.len(), graph_data.edges.len());
-                        
-                        // Reload DuckDB with fresh data
-                        if let Ok(_) = store_clone.load_initial_data(graph_data.nodes.clone(), graph_data.edges.clone()).await {
-                            info!("DuckDB reloaded successfully with fresh data");
+                    // INCREMENTAL UPDATE: Only fetch new data since last sync
+                    if is_first_sync || last_fetch_timestamp.is_none() {
+                        // First sync: do a full load
+                        info!("First sync detected - performing full data load");
+                        let query = build_query("entire_graph", 100000, 0, None);
+                        if let Ok(graph_data) = execute_graph_query(&client_clone, &graph_name_clone, &query).await {
+                            info!("Fetched {} nodes and {} edges from FalkorDB", 
+                                graph_data.nodes.len(), graph_data.edges.len());
                             
-                            // Clear caches after successful reload
-                            cache_clone.clear();
-                            let mut arrow_cache_guard = arrow_cache_clone.write().await;
-                            *arrow_cache_guard = None;
-                            drop(arrow_cache_guard);
-                            info!("Caches cleared after successful reload");
-                            
-                            // Compute delta with the new data
-                            let delta = delta_tracker_clone.compute_delta(
-                                graph_data.nodes,
-                                graph_data.edges
-                            ).await;
-                            
-                            // Log delta statistics
-                            info!("Broadcasting delta: {} nodes added, {} nodes updated, {} nodes removed, {} edges added, {} edges updated, {} edges removed",
-                                delta.nodes_added.len(),
-                                delta.nodes_updated.len(),
-                                delta.nodes_removed.len(),
-                                delta.edges_added.len(),
-                                delta.edges_updated.len(),
-                                delta.edges_removed.len()
-                            );
-                            
-                            // Broadcast delta instead of full update
-                            let _ = delta_tx_clone.send(delta);
+                            // Full reload DuckDB with fresh data
+                            if let Ok(_) = store_clone.load_initial_data(graph_data.nodes.clone(), graph_data.edges.clone()).await {
+                                info!("DuckDB loaded successfully with initial data");
+                                
+                                // Get the latest created_at timestamp from the loaded data
+                                let latest_timestamp = graph_data.nodes.iter()
+                                    .filter_map(|n| n.properties.get("created_at"))
+                                    .filter_map(|v| v.as_str())
+                                    .max()
+                                    .map(|s| s.to_string());
+                                
+                                last_fetch_timestamp = latest_timestamp.clone();
+                                is_first_sync = false;
+                                info!("Initial sync complete. Latest timestamp: {:?}", last_fetch_timestamp);
+                                
+                                // Clear caches after successful reload
+                                cache_clone.clear();
+                                let mut arrow_cache_guard = arrow_cache_clone.write().await;
+                                *arrow_cache_guard = None;
+                                drop(arrow_cache_guard);
+                                info!("Caches cleared after initial load");
+                                
+                                // Compute delta with the new data
+                                let delta = delta_tracker_clone.compute_delta(
+                                    graph_data.nodes,
+                                    graph_data.edges
+                                ).await;
+                                
+                                // Log delta statistics
+                                info!("Broadcasting delta: {} nodes added, {} nodes updated, {} nodes removed, {} edges added, {} edges updated, {} edges removed",
+                                    delta.nodes_added.len(),
+                                    delta.nodes_updated.len(),
+                                    delta.nodes_removed.len(),
+                                    delta.edges_added.len(),
+                                    delta.edges_updated.len(),
+                                    delta.edges_removed.len()
+                                );
+                                
+                                // Broadcast delta
+                                let _ = delta_tx_clone.send(delta);
+                            } else {
+                                error!("Failed to load initial data into DuckDB");
+                            }
                         } else {
-                            error!("Failed to reload DuckDB with fresh data");
+                            error!("Failed to fetch initial data from FalkorDB");
                         }
                     } else {
-                        error!("Failed to fetch fresh data from FalkorDB");
+                        // Incremental update: fetch only new data
+                        let timestamp = last_fetch_timestamp.as_ref().unwrap();
+                        info!("Performing incremental update from timestamp: {}", timestamp);
+                        
+                        let query = format!("incremental_fetch|{}", timestamp);
+                        if let Ok(graph_data) = execute_graph_query(&client_clone, &graph_name_clone, &query).await {
+                            let new_node_count = graph_data.nodes.len();
+                            let new_edge_count = graph_data.edges.len();
+                            
+                            info!("Fetched {} new nodes and {} new edges since {}", 
+                                new_node_count, new_edge_count, timestamp);
+                            
+                            if new_node_count > 0 || new_edge_count > 0 {
+                                // Use incremental update method instead of full reload
+                                if let Ok(_) = store_clone.update_incremental(graph_data.nodes.clone(), graph_data.edges.clone()).await {
+                                    info!("✨ DuckDB updated incrementally: +{} nodes, +{} edges", 
+                                        new_node_count, new_edge_count);
+                                    
+                                    // Update timestamp to latest from new data
+                                    let latest_timestamp = graph_data.nodes.iter()
+                                        .filter_map(|n| n.properties.get("created_at"))
+                                        .filter_map(|v| v.as_str())
+                                        .max()
+                                        .map(|s| s.to_string())
+                                        .or(last_fetch_timestamp.clone());
+                                    
+                                    last_fetch_timestamp = latest_timestamp;
+                                    info!("Incremental update complete. New timestamp: {:?}", last_fetch_timestamp);
+                                    
+                                    // Clear caches after successful update
+                                    cache_clone.clear();
+                                    let mut arrow_cache_guard = arrow_cache_clone.write().await;
+                                    *arrow_cache_guard = None;
+                                    drop(arrow_cache_guard);
+                                    info!("Caches cleared after incremental update");
+                                    
+                                    // Compute delta with the new data
+                                    let delta = delta_tracker_clone.compute_delta(
+                                        graph_data.nodes,
+                                        graph_data.edges
+                                    ).await;
+                                    
+                                    // Log delta statistics
+                                    info!("Broadcasting delta: {} nodes added, {} nodes updated, {} edges added",
+                                        delta.nodes_added.len(),
+                                        delta.nodes_updated.len(),
+                                        delta.edges_added.len()
+                                    );
+                                    
+                                    // Broadcast delta
+                                    let _ = delta_tx_clone.send(delta);
+                                } else {
+                                    error!("Failed to perform incremental update on DuckDB");
+                                }
+                            } else {
+                                info!("No new data found since last fetch - skipping update");
+                            }
+                        } else {
+                            error!("Failed to fetch incremental data from FalkorDB");
+                        }
                     }
                 }
                 
@@ -861,6 +936,11 @@ fn build_query(query_type: &str, limit: usize, offset: usize, search: Option<&st
             "ENTIRE_GRAPH_SPECIAL".to_string()
         },
         
+        // Incremental fetch - query_type format starts with "incremental_fetch|"
+        query if query.starts_with("incremental_fetch|") => {
+            query.to_string() // Pass through to execute_graph_query for special handling
+        },
+        
         "high_degree" => format!(
             r#"
             MATCH (n) 
@@ -930,8 +1010,115 @@ async fn execute_graph_query(client: &FalkorAsyncClient, graph_name: &str, query
     let mut nodes_map: HashMap<String, Node> = HashMap::new();
     let mut edges = Vec::new();
     
+    // Special handling for incremental fetch query
+    if query.starts_with("incremental_fetch|") {
+        let timestamp = query.strip_prefix("incremental_fetch|").unwrap_or("");
+        info!("Performing incremental fetch for nodes created after: {}", timestamp);
+        
+        // Query only nodes created after the timestamp
+        let nodes_query = format!(r#"
+            MATCH (n)
+            WHERE EXISTS(n.created_at) AND n.created_at > '{}'
+            RETURN 
+                n.uuid as id,
+                n.name as name,
+                COALESCE(n.type, labels(n)[0]) as node_type,
+                COALESCE(n.degree_centrality, 0) as degree_centrality,
+                COALESCE(n.pagerank_centrality, 0) as pagerank_centrality,
+                COALESCE(n.betweenness_centrality, 0) as betweenness_centrality,
+                COALESCE(n.eigenvector_centrality, 0) as eigenvector_centrality,
+                n.created_at as created_at,
+                n.summary as summary
+        "#, timestamp);
+        
+        let mut graph = client.select_graph(graph_name);
+        let mut nodes_result = graph.query(&nodes_query).execute().await?;
+        
+        // Collect new node IDs
+        let mut new_node_ids = Vec::new();
+        
+        // Process new nodes
+        while let Some(row) = nodes_result.data.next() {
+            if row.len() >= 9 {
+                let node_id = value_to_string(&row[0]);
+                let node_name = value_to_string(&row[1]);
+                let node_type = value_to_string(&row[2]);
+                let degree_centrality = value_to_f64(&row[3]);
+                let pagerank_centrality = value_to_f64(&row[4]);
+                let betweenness_centrality = value_to_f64(&row[5]);
+                let eigenvector_centrality = value_to_f64(&row[6]);
+                let created_at = value_to_string(&row[7]);
+                let summary_text = row[8].as_string().map(|s| s.to_string());
+                
+                // Build properties object
+                let mut node_props = HashMap::new();
+                node_props.insert("name".to_string(), serde_json::Value::String(node_name.clone()));
+                node_props.insert("type".to_string(), serde_json::Value::String(node_type.clone()));
+                node_props.insert("degree_centrality".to_string(), serde_json::json!(degree_centrality));
+                node_props.insert("pagerank_centrality".to_string(), serde_json::json!(pagerank_centrality));
+                node_props.insert("betweenness_centrality".to_string(), serde_json::json!(betweenness_centrality));
+                node_props.insert("eigenvector_centrality".to_string(), serde_json::json!(eigenvector_centrality));
+                
+                if !created_at.is_empty() {
+                    node_props.insert("created_at".to_string(), serde_json::Value::String(created_at));
+                }
+                
+                new_node_ids.push(node_id.clone());
+                
+                nodes_map.insert(node_id.clone(), Node {
+                    id: node_id,
+                    label: truncate_string(&node_name, 50),
+                    node_type,
+                    summary: summary_text,
+                    properties: node_props,
+                });
+            }
+        }
+        
+        info!("Fetched {} new nodes created after {}", nodes_map.len(), timestamp);
+        
+        // Query edges connected to new nodes (both incoming and outgoing)
+        if !new_node_ids.is_empty() {
+            let node_ids_str = new_node_ids.iter()
+                .map(|id| format!("'{}'", id.replace("'", "\\'")))
+                .collect::<Vec<_>>()
+                .join(", ");
+            
+            let edges_query = format!(r#"
+                MATCH (n)-[r]->(m)
+                WHERE n.uuid IN [{}] OR m.uuid IN [{}]
+                RETURN 
+                    n.uuid as source_id,
+                    m.uuid as target_id,
+                    type(r) as rel_type,
+                    COALESCE(r.weight, 1.0) as weight
+            "#, node_ids_str, node_ids_str);
+            
+            let mut graph = client.select_graph(graph_name);
+            let mut edges_result = graph.query(&edges_query).execute().await?;
+            
+            // Process edges
+            while let Some(row) = edges_result.data.next() {
+                if row.len() >= 4 {
+                    let source_id = value_to_string(&row[0]);
+                    let target_id = value_to_string(&row[1]);
+                    let rel_type = value_to_string(&row[2]);
+                    let weight = row[3].to_f64().unwrap_or(1.0);
+                    
+                    edges.push(Edge {
+                        from: source_id,
+                        to: target_id,
+                        edge_type: rel_type,
+                        weight,
+                    });
+                }
+            }
+            
+            info!("Fetched {} edges connected to new nodes", edges.len());
+        }
+    }
     // Special handling for entire_graph query
-    if query == "ENTIRE_GRAPH_SPECIAL" {
+    else if query == "ENTIRE_GRAPH_SPECIAL" {
         // GRAPH-502: Implement Paginated Node Loading
         // Instead of loading all nodes at once with properties(n), use batches to avoid memory exhaustion
         let node_batch_size = 100; // Ultra-small batch size for severe FalkorDB memory constraints

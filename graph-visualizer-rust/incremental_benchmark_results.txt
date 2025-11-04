@@ -1,0 +1,240 @@
+   Compiling graph-visualizer-backend v0.1.0 (/opt/stacks/graphiti/graph-visualizer-rust)
+warning: unused variable: `nodes`
+  --> benches/incremental_update.rs:19:21
+   |
+19 |                 let nodes: Vec<MockNode> = (0..count)
+   |                     ^^^^^ help: if this is intentional, prefix it with an underscore: `_nodes`
+   |
+   = note: `#[warn(unused_variables)]` on by default
+
+warning: unused variable: `old_nodes`
+  --> benches/incremental_update.rs:61:21
+   |
+61 |                 let old_nodes: Vec<MockNode> = (0..size)
+   |                     ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_old_nodes`
+
+warning: unused variable: `new_nodes`
+  --> benches/incremental_update.rs:68:21
+   |
+68 |                 let new_nodes: Vec<MockNode> = (0..size + 10)
+   |                     ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_new_nodes`
+
+warning: fields `id` and `label` are never read
+ --> benches/incremental_update.rs:6:5
+  |
+5 | struct MockNode {
+  |        -------- fields in this struct
+6 |     id: String,
+  |     ^^
+7 |     label: String,
+  |     ^^^^^
+  |
+  = note: `MockNode` has a derived impl for the trait `Clone`, but this is intentionally ignored during dead code analysis
+  = note: `#[warn(dead_code)]` on by default
+
+warning: unused import: `warn`
+  --> src/main.rs:17:35
+   |
+17 | use tracing::{error, info, debug, warn};
+   |                                   ^^^^
+   |
+   = note: `#[warn(unused_imports)]` on by default
+
+warning: unused variable: `max_retries`
+    --> src/main.rs:1212:13
+     |
+1212 |         let max_retries = 3;
+     |             ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_max_retries`
+     |
+     = note: `#[warn(unused_variables)]` on by default
+
+warning: `graph-visualizer-backend` (bench "incremental_update") generated 4 warnings
+warning: variable `successful_delete` is assigned to, but never used
+    --> src/main.rs:2592:29
+     |
+2592 |                     let mut successful_delete = 0u64;
+     |                             ^^^^^^^^^^^^^^^^^
+     |
+     = note: consider using `_successful_delete` instead
+
+warning: value assigned to `successful_delete` is never read
+    --> src/main.rs:2603:68
+     |
+2603 | ...                   "successful_delete_counter" => successful_delete = value,
+     |                                                      ^^^^^^^^^^^^^^^^^
+     |
+     = help: maybe it is overwritten before being read?
+     = note: `#[warn(unused_assignments)]` on by default
+
+warning: unused variable: `update_tx_clone`
+   --> src/main.rs:517:9
+    |
+517 |     let update_tx_clone = update_tx.clone();
+    |         ^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_update_tx_clone`
+
+warning: unused variable: `cache_config_clone`
+   --> src/main.rs:520:9
+    |
+520 |     let cache_config_clone = state.cache_config.clone();
+    |         ^^^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_cache_config_clone`
+
+warning: fields `event_type`, `timestamp`, `group_id`, `episode`, and `metadata` are never read
+    --> src/main.rs:2212:5
+     |
+2211 | struct DataIngestionWebhook {
+     |        -------------------- fields in this struct
+2212 |     event_type: String,
+     |     ^^^^^^^^^^
+2213 |     operation: String,
+2214 |     timestamp: String,
+     |     ^^^^^^^^^
+2215 |     group_id: Option<String>,
+     |     ^^^^^^^^
+2216 |     episode: Option<serde_json::Value>,
+     |     ^^^^^^^
+...
+2219 |     metadata: Option<serde_json::Value>,
+     |     ^^^^^^^^
+     |
+     = note: `DataIngestionWebhook` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+     = note: `#[warn(dead_code)]` on by default
+
+warning: fields `uuid`, `fact`, `episodes`, and `created_at` are never read
+    --> src/main.rs:2235:5
+     |
+2234 | struct GraphitiEdge {
+     |        ------------ fields in this struct
+2235 |     uuid: String,
+     |     ^^^^
+...
+2239 |     fact: Option<String>,
+     |     ^^^^
+2240 |     episodes: Vec<String>,
+     |     ^^^^^^^^
+2241 |     created_at: Option<String>,
+     |     ^^^^^^^^^^
+     |
+     = note: `GraphitiEdge` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+
+warning: methods `queue_node_update`, `queue_node_deletions`, and `queue_edge_deletions` are never used
+   --> src/duckdb_store.rs:648:18
+    |
+ 63 | impl DuckDBStore {
+    | ---------------- methods in this implementation
+...
+648 |     pub async fn queue_node_update(&self, node: Node) {
+    |                  ^^^^^^^^^^^^^^^^^
+...
+664 |     pub async fn queue_node_deletions(&self, node_ids: Vec<String>) {
+    |                  ^^^^^^^^^^^^^^^^^^^^
+...
+669 |     pub async fn queue_edge_deletions(&self, edge_pairs: Vec<(String, String)>) {
+    |                  ^^^^^^^^^^^^^^^^^^^^
+
+warning: associated function `record_batch_to_json` is never used
+  --> src/arrow_converter.rs:25:12
+   |
+ 9 | impl ArrowConverter {
+   | ------------------- associated function in this implementation
+...
+25 |     pub fn record_batch_to_json(batch: &RecordBatch) -> Result<String> {
+   |            ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `arrow_array_value_to_json` is never used
+  --> src/arrow_converter.rs:44:4
+   |
+44 | fn arrow_array_value_to_json(array: &dyn arrow::array::Array, index: usize) -> Result<serde_json::Value> {
+   |    ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: methods `reset` and `get_stats` are never used
+   --> src/delta_tracker.rs:155:18
+    |
+ 37 | impl DeltaTracker {
+    | ----------------- methods in this implementation
+...
+155 |     pub async fn reset(&self) {
+    |                  ^^^^^
+...
+167 |     pub async fn get_stats(&self) -> (usize, usize, u64) {
+    |                  ^^^^^^^^^
+
+warning: `graph-visualizer-backend` (bin "graph-visualizer-backend") generated 12 warnings (run `cargo fix --bin "graph-visualizer-backend"` to apply 1 suggestion)
+    Finished `bench` profile [optimized] target(s) in 21.79s
+warning: the following packages contain code that will be rejected by a future version of Rust: redis v0.24.0
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running benches/incremental_update.rs (target/release/deps/incremental_update-e4fb5e84380758af)
+Gnuplot not found, using plotters backend
+Benchmarking incremental_update/add_nodes/1
+Benchmarking incremental_update/add_nodes/1: Warming up for 3.0000 s
+Benchmarking incremental_update/add_nodes/1: Collecting 100 samples in estimated 5.0487 s (71k iterations)
+Benchmarking incremental_update/add_nodes/1: Analyzing
+incremental_update/add_nodes/1
+                        time:   [70.910 µs 71.914 µs 73.166 µs]
+Found 8 outliers among 100 measurements (8.00%)
+  5 (5.00%) high mild
+  3 (3.00%) high severe
+Benchmarking incremental_update/add_nodes/10
+Benchmarking incremental_update/add_nodes/10: Warming up for 3.0000 s
+Benchmarking incremental_update/add_nodes/10: Collecting 100 samples in estimated 5.0533 s (71k iterations)
+Benchmarking incremental_update/add_nodes/10: Analyzing
+incremental_update/add_nodes/10
+                        time:   [72.243 µs 73.307 µs 74.460 µs]
+Found 6 outliers among 100 measurements (6.00%)
+  3 (3.00%) high mild
+  3 (3.00%) high severe
+Benchmarking incremental_update/add_nodes/100
+Benchmarking incremental_update/add_nodes/100: Warming up for 3.0000 s
+Benchmarking incremental_update/add_nodes/100: Collecting 100 samples in estimated 5.0156 s (71k iterations)
+Benchmarking incremental_update/add_nodes/100: Analyzing
+incremental_update/add_nodes/100
+                        time:   [72.581 µs 73.806 µs 75.097 µs]
+Found 6 outliers among 100 measurements (6.00%)
+  5 (5.00%) high mild
+  1 (1.00%) high severe
+Benchmarking incremental_update/add_nodes/1000
+Benchmarking incremental_update/add_nodes/1000: Warming up for 3.0000 s
+Benchmarking incremental_update/add_nodes/1000: Collecting 100 samples in estimated 5.2207 s (71k iterations)
+Benchmarking incremental_update/add_nodes/1000: Analyzing
+incremental_update/add_nodes/1000
+                        time:   [73.166 µs 75.278 µs 77.683 µs]
+Found 8 outliers among 100 measurements (8.00%)
+  6 (6.00%) high mild
+  2 (2.00%) high severe
+
+Benchmarking timestamp_query
+Benchmarking timestamp_query: Warming up for 3.0000 s
+Benchmarking timestamp_query: Collecting 100 samples in estimated 5.1887 s (45k iterations)
+Benchmarking timestamp_query: Analyzing
+timestamp_query         time:   [115.07 µs 118.86 µs 123.99 µs]
+Found 7 outliers among 100 measurements (7.00%)
+  4 (4.00%) high mild
+  3 (3.00%) high severe
+
+Benchmarking delta_computation/compute_delta/10
+Benchmarking delta_computation/compute_delta/10: Warming up for 3.0000 s
+Benchmarking delta_computation/compute_delta/10: Collecting 100 samples in estimated 5.3809 s (66k iterations)
+Benchmarking delta_computation/compute_delta/10: Analyzing
+delta_computation/compute_delta/10
+                        time:   [82.496 µs 83.426 µs 84.407 µs]
+Found 8 outliers among 100 measurements (8.00%)
+  4 (4.00%) high mild
+  4 (4.00%) high severe
+Benchmarking delta_computation/compute_delta/100
+Benchmarking delta_computation/compute_delta/100: Warming up for 3.0000 s
+Benchmarking delta_computation/compute_delta/100: Collecting 100 samples in estimated 5.3789 s (61k iterations)
+Benchmarking delta_computation/compute_delta/100: Analyzing
+delta_computation/compute_delta/100
+                        time:   [84.269 µs 86.101 µs 88.198 µs]
+Found 7 outliers among 100 measurements (7.00%)
+  4 (4.00%) high mild
+  3 (3.00%) high severe
+Benchmarking delta_computation/compute_delta/1000
+Benchmarking delta_computation/compute_delta/1000: Warming up for 3.0000 s
+Benchmarking delta_computation/compute_delta/1000: Collecting 100 samples in estimated 5.1318 s (61k iterations)
+Benchmarking delta_computation/compute_delta/1000: Analyzing
+delta_computation/compute_delta/1000
+                        time:   [81.857 µs 83.252 µs 84.936 µs]
+Found 5 outliers among 100 measurements (5.00%)
+  3 (3.00%) high mild
+  2 (2.00%) high severe
+
