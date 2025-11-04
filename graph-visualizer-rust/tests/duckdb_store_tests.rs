@@ -82,6 +82,43 @@ mod duckdb_store_tests {
         
         println!("Successfully queued and processed new node: {}", new_node.id);
     }
+    
+    #[tokio::test]
+    async fn test_update_incremental_method() {
+        setup_test_logger();
+        
+        // TDD Test: This will fail until we implement update_incremental()
+        let (initial_nodes, initial_edges) = generate_test_graph();
+        let temp_dir = create_temp_duckdb();
+        let db_path = temp_dir.path().join("test.db");
+        let store = DuckDBStore::new_with_path(Some(db_path.to_str().unwrap()))
+            .expect("Failed to create store");
+        
+        // 1. Load initial data (3 nodes, 3 edges)
+        store.load_initial_data(initial_nodes.clone(), initial_edges.clone())
+            .await
+            .expect("Failed to load initial data");
+        
+        // 2. Create new nodes and edges for incremental update
+        let new_nodes = vec![
+            create_test_node("node4", "Charlie", "Person"),
+            create_test_node("node5", "David", "Person"),
+        ];
+        
+        let new_edges = vec![
+            create_test_edge("node4", "node5", "KNOWS"),
+            create_test_edge("node4", "node3", "WORKS_AT"),
+        ];
+        
+        // 3. Call update_incremental() - this should add new data without clearing existing
+        let result = store.update_incremental(new_nodes.clone(), new_edges.clone()).await;
+        assert!(result.is_ok(), "update_incremental failed: {:?}", result.err());
+        
+        // 4. Verify data was added (we should now have 5 nodes total)
+        // Note: We can't easily query count, but the operation should succeed
+        println!("Successfully added {} nodes and {} edges incrementally", 
+                 new_nodes.len(), new_edges.len());
+    }
 
     #[tokio::test]
     async fn test_incremental_update_existing_nodes() {

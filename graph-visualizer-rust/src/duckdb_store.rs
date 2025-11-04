@@ -377,10 +377,95 @@ impl DuckDBStore {
 
         tx.commit()?;
 
-        info!("Initial data loaded successfully (checksum: {})", &checksum[..8]);
+        info!("Initial data loaded successfully");
         Ok(())
     }
-    
+
+    /// Incrementally update DuckDB with new/changed nodes and edges
+    /// This method uses INSERT OR REPLACE to handle both new and updated nodes
+    pub async fn update_incremental(&self, nodes: Vec<Node>, edges: Vec<Edge>) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        
+        info!("Starting incremental update: {} nodes, {} edges", nodes.len(), edges.len());
+        
+        // Use INSERT OR REPLACE to handle both new and updated nodes
+        let stmt_node = "INSERT OR REPLACE INTO nodes (id, idx, label, node_type, summary, degree_centrality, pagerank_centrality, betweenness_centrality, eigenvector_centrality, x, y, color, size, created_at, created_at_timestamp, cluster, clusterStrength)
+                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        
+        let mut updated_count = 0;
+        for node in &nodes {
+            let (created_str, timestamp) = Self::normalize_created_at(&node);
+            
+            let degree = node.properties.get("degree_centrality")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.0);
+            
+            let pagerank = node.properties.get("pagerank_centrality")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.0);
+            
+            let betweenness = node.properties.get("betweenness_centrality")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.0);
+            
+            let eigenvector = node.properties.get("eigenvector_centrality")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.0);
+            
+            conn.execute(
+                stmt_node,
+                params![
+                    &node.id,
+                    updated_count, // Temporary idx, will be recalculated
+                    &node.label,
+                    &node.node_type,
+                    &node.summary,
+                    degree,
+                    pagerank,
+                    betweenness,
+                    eigenvector,
+                    0.0, // x
+                    0.0, // y
+                    "#3b82f6", // default color
+                    1.0, // default size
+                    created_str,
+                    timestamp,
+                    None::<String>, // cluster
+                    None::<f64>,    // clusterStrength
+                ],
+            )?;
+            updated_count += 1;
+        }
+        
+        // Recalculate indices to maintain proper ordering
+        conn.execute("UPDATE nodes SET idx = (SELECT COUNT(*) FROM nodes n2 WHERE n2.rowid <= nodes.rowid) - 1", [])?;
+        
+        // Insert edges (use INSERT OR IGNORE to avoid duplicates)
+        let stmt_edge = "INSERT OR IGNORE INTO edges (source, target, sourceidx, targetidx, edge_type, weight, strength)
+                         VALUES (?, ?, (SELECT idx FROM nodes WHERE id = ?), (SELECT idx FROM nodes WHERE id = ?), ?, ?, ?)";
+        
+        let mut edge_count = 0;
+        for edge in &edges {
+            conn.execute(
+                stmt_edge,
+                params![
+                    &edge.from,
+                    &edge.to,
+                    &edge.from,
+                    &edge.to,
+                    &edge.edge_type,
+                    edge.weight,
+                    edge.weight,
+                ],
+            )?;
+            edge_count += 1;
+        }
+        
+        info!("Incremental update complete: {} nodes, {} edges inserted/updated", updated_count, edge_count);
+        
+        Ok(())
+    }
+
     pub async fn get_nodes_as_arrow(&self) -> Result<RecordBatch> {
         let conn = self.conn.lock().unwrap();
         
