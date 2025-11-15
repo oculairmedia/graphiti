@@ -119,11 +119,21 @@ clear_falkordb() {
 # Function to trigger sync service restore
 trigger_restore() {
     log "Triggering Neo4j -> FalkorDB restore via sync service..."
-    
+
     # The sync service runs continuously, so we just need to verify it's working
     # Check sync service health
     if curl -sf "$SYNC_SERVICE_URL/health" >/dev/null 2>&1; then
         log_success "Sync service is healthy and will restore FalkorDB automatically"
+
+        # Verify disaster recovery is enabled (optional check)
+        log "Verifying disaster recovery configuration..."
+        if curl -sf "$SYNC_SERVICE_URL/metrics" 2>/dev/null | grep -q "disaster_recovery"; then
+            log_success "Disaster recovery metrics available"
+        else
+            log_warning "Disaster recovery metrics not found - ensure SYNC_DISASTER_AUTO_RECOVER=true"
+            log_warning "Cold boot may not work if auto-recovery is disabled"
+        fi
+
         return 0
     else
         log_error "Sync service is not responding at $SYNC_SERVICE_URL/health"

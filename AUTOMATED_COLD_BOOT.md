@@ -61,6 +61,46 @@ graphiti-worker:
 - Timeout: 30 minutes (configurable via `INIT_MAX_WAIT`)
 - Only starts processing after FalkorDB is fully restored
 
+### Automatic Disaster Recovery
+
+The `graphiti-sync-rs` service includes intelligent disaster recovery that makes cold boot automatic:
+
+```yaml
+graphiti-sync-rs:
+  command: ["sync-loop", "falkor-to-neo4j"]  # Normal: FalkorDB → Neo4j
+  environment:
+    - SYNC_DISASTER_AUTO_RECOVER=true  # Enables automatic recovery
+    - SYNC_FALKOR_AUTORESTORE_THRESHOLD=0.80  # Triggers at 80% data loss
+```
+
+**How it works:**
+
+1. **Normal Operations:**
+   - Worker writes to FalkorDB (fast, in-memory)
+   - Sync service: FalkorDB → Neo4j (persistence)
+   - Neo4j is the persistent source of truth
+
+2. **Cold Boot Scenario:**
+   - FalkorDB is empty (in-memory cache lost)
+   - Sync service detects disaster: "FalkorDB empty, Neo4j has data"
+   - **Automatic reverse sync** triggers: Neo4j → FalkorDB
+   - Restores all nodes and edges from Neo4j
+   - Returns to normal direction after recovery
+
+3. **Self-Healing:**
+   - Handles FalkorDB crashes automatically
+   - No manual intervention needed
+   - Guarantees data consistency
+
+**Expected disaster recovery logs:**
+```
+graphiti-sync-rs | 🔍 Checking for disaster state (FalkorDB → Neo4j)
+graphiti-sync-rs | 🚨 DISASTER DETECTED: FalkorDB is EMPTY but Neo4j has 31556 items!
+graphiti-sync-rs | 🚨 Disaster detected - initiating automatic recovery
+graphiti-sync-rs | 🔄 Performing recovery sync: Neo4j → FalkorDB
+graphiti-sync-rs | ✅ Recovery complete: 31556 nodes, 8807 edges synced
+```
+
 ## Monitoring Progress
 
 ### Check Init Service Status
