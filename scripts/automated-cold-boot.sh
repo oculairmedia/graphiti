@@ -81,15 +81,15 @@ done
 
 # Step 4: Wait for restore (both nodes AND edges)
 log "Step 4: Waiting for Neo4j -> FalkorDB restore..."
-log "This may take several minutes (syncing nodes + edges)..."
+log "This may take a while (syncing nodes + edges)..."
+log "No timeout - will wait indefinitely for sync to stabilize"
 
 last_node_count=0
 last_edge_count=0
 stable_count=0
-restore_timeout=1200  # Increased to 20 minutes for edge sync
 elapsed=0
 
-while [ $elapsed -lt $restore_timeout ]; do
+while true; do
     # Get current node count
     current_node_count=$(docker-compose exec -T falkordb redis-cli \
         GRAPH.QUERY graphiti_migration "MATCH (n) RETURN count(n)" 2>/dev/null | \
@@ -114,6 +114,7 @@ while [ $elapsed -lt $restore_timeout ]; do
             fi
         else
             stable_count=0
+            # Log progress every 30 seconds to reduce noise
             if [ $((elapsed % 30)) -eq 0 ]; then
                 log "Progress: $current_node_count nodes, $current_edge_count edges..."
             fi
@@ -126,19 +127,6 @@ while [ $elapsed -lt $restore_timeout ]; do
     sleep 5
     elapsed=$((elapsed + 5))
 done
-
-if [ $stable_count -lt 3 ]; then
-    log_warning "Restore may not be complete"
-    log_warning "Current state: $last_node_count nodes, $last_edge_count edges"
-    
-    # Ask if user wants to continue anyway
-    read -p "Continue starting services? (y/N): " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        log_error "Aborted by user"
-        exit 1
-    fi
-fi
 
 # Step 5: Start remaining services
 log "Step 5: Starting remaining services..."

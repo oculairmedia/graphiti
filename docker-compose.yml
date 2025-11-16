@@ -105,6 +105,8 @@ services:
         condition: service_healthy
       graphiti-centrality-rs:
         condition: service_healthy
+      graphiti-init:
+        condition: service_completed_successfully
     healthcheck:
       test:
         - CMD
@@ -188,13 +190,16 @@ services:
   graphiti-sync-rs:
     image: rust-sync-poc-rust-sync:latest
     restart: unless-stopped
-    command: ["sync-loop", "falkor-to-neo4j"]
+    command:
+      - sync-loop
+      - neo4j-to-falkor
     ports:
       - ${SYNC_HEALTH_PORT:-18080}:8080
       - ${SYNC_METRICS_PORT:-18081}:8081
     volumes:
       - sync_metadata:/data
     environment:
+      - SYNC_DISASTER_AUTO_RECOVER=true
       - SYNC_NEO4J_URI=bolt://neo4j:7687
       - SYNC_NEO4J_USER=${NEO4J_USER:-neo4j}
       - SYNC_NEO4J_PASSWORD=${NEO4J_PASSWORD:-graphiti123}
@@ -230,7 +235,7 @@ services:
       resources:
         limits:
           memory: 512M
-          cpus: '1.0'
+          cpus: "1.0"
     labels:
       - homepage.group=Knowledge Management
       - homepage.name=Neo4j-FalkorDB Sync
@@ -441,8 +446,10 @@ services:
   graphiti-init:
     image: alpine:latest
     container_name: graphiti-init
-    restart: "no"  # Run once on startup, don't restart
-    entrypoint: ["/bin/sh", "-c"]
+    restart: no # Run once on startup, don't restart
+    entrypoint:
+      - /bin/sh
+      - -c
     command:
       - |
         # Install required tools
@@ -514,8 +521,12 @@ services:
   graphiti-worker:
     image: ghcr.io/oculairmedia/graphiti-worker:feature-chutes-ai-integration
     restart: unless-stopped
-    entrypoint: ["/scripts/worker-entrypoint.sh"]
-    command: ["python", "-u", "worker/worker.py"]
+    entrypoint:
+      - /scripts/worker-entrypoint.sh
+    command:
+      - python
+      - -u
+      - worker/worker.py
     volumes:
       - ./scripts:/scripts:ro
       - init_ready_marker:/tmp:ro
@@ -672,7 +683,6 @@ services:
       - homepage.icon=si-react
       - homepage.href=http://${HOMEPAGE_HOST:-192.168.50.90}:${FRONTEND_PORT:-8084}
       - homepage.description=React frontend interface
-
   # ===========================================================================
   # Monitoring Stack
   # ===========================================================================
@@ -682,13 +692,13 @@ services:
     container_name: graphiti-prometheus
     restart: unless-stopped
     command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
-      - '--web.console.templates=/usr/share/prometheus/consoles'
-      - '--web.enable-lifecycle'
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.console.libraries=/usr/share/prometheus/console_libraries
+      - --web.console.templates=/usr/share/prometheus/consoles
+      - --web.enable-lifecycle
     ports:
-      - "${PROMETHEUS_PORT:-9090}:9090"
+      - ${PROMETHEUS_PORT:-9090}:9090
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
@@ -700,13 +710,12 @@ services:
       - homepage.icon=si-prometheus
       - homepage.href=http://${HOMEPAGE_HOST:-192.168.50.90}:${PROMETHEUS_PORT:-9090}
       - homepage.description=Metrics collection and storage
-
   grafana:
     image: grafana/grafana:latest
     container_name: graphiti-grafana
     restart: unless-stopped
     ports:
-      - "${GRAFANA_PORT:-3001}:3000"
+      - ${GRAFANA_PORT:-3001}:3000
     environment:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
@@ -728,13 +737,12 @@ services:
       - homepage.icon=si-grafana
       - homepage.href=http://${HOMEPAGE_HOST:-192.168.50.90}:${GRAFANA_PORT:-3001}
       - homepage.description=Metrics visualization and dashboards
-
   redis-exporter:
     image: oliver006/redis_exporter:latest
     container_name: graphiti-redis-exporter
     restart: unless-stopped
     ports:
-      - "${REDIS_EXPORTER_PORT:-9121}:9121"
+      - ${REDIS_EXPORTER_PORT:-9121}:9121
     environment:
       - REDIS_ADDR=redis://falkordb:6379
     networks:
@@ -746,7 +754,6 @@ services:
       - homepage.name=Redis Exporter
       - homepage.icon=si-redis
       - homepage.description=FalkorDB metrics exporter
-
 # =============================================================================
 # Shared Volumes
 # =============================================================================

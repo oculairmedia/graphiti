@@ -19,7 +19,7 @@ FALKORDB_HOST="${FALKORDB_HOST:-falkordb}"
 FALKORDB_PORT="${FALKORDB_PORT:-6379}"
 FALKORDB_DATABASE="${FALKORDB_DATABASE:-graphiti_migration}"
 SYNC_SERVICE_URL="${SYNC_SERVICE_URL:-http://graphiti-sync-rs:8080}"
-SYNC_TIMEOUT="${SYNC_TIMEOUT:-600}"  # 10 minutes
+SYNC_TIMEOUT="${SYNC_TIMEOUT:-0}"  # No timeout - wait indefinitely for sync
 CHECK_INTERVAL="${CHECK_INTERVAL:-5}"  # 5 seconds
 
 # Colors for output
@@ -145,14 +145,26 @@ wait_for_restore() {
     local elapsed=0
     
     log "Waiting for Neo4j -> FalkorDB restore to complete..."
-    log "This may take several minutes (syncing nodes + edges)..."
+    log "This may take a while (syncing nodes + edges)..."
+    if [ "$timeout" -eq 0 ]; then
+        log "No timeout set - will wait indefinitely for sync to stabilize"
+    else
+        log "Timeout: ${timeout}s"
+    fi
     
     # Wait for both nodes AND edges to appear and stabilize
     local last_node_count=0
     local last_edge_count=0
     local stable_count=0
     
-    while [ $elapsed -lt $timeout ]; do
+    while true; do
+        # Check timeout only if set (non-zero)
+        if [ "$timeout" -gt 0 ] && [ "$elapsed" -ge "$timeout" ]; then
+            log_error "Restore did not complete within ${timeout}s"
+            log_error "Current state: $last_node_count nodes, $last_edge_count edges"
+            return 1
+        fi
+        
         local current_node_count=$(count_falkor_nodes)
         local current_edge_count=$(count_falkor_edges)
         
@@ -170,7 +182,10 @@ wait_for_restore() {
                 fi
             else
                 stable_count=0
-                log "Progress: $current_node_count nodes, $current_edge_count edges..."
+                # Log progress every 30 seconds to reduce noise
+                if [ $((elapsed % 30)) -eq 0 ]; then
+                    log "Progress: $current_node_count nodes, $current_edge_count edges..."
+                fi
             fi
             
             last_node_count=$current_node_count
@@ -180,10 +195,6 @@ wait_for_restore() {
         sleep $CHECK_INTERVAL
         elapsed=$((elapsed + CHECK_INTERVAL))
     done
-    
-    log_error "Restore did not complete within ${timeout}s"
-    log_error "Current state: $last_node_count nodes, $last_edge_count edges"
-    return 1
 }
 
 # Function to verify restore quality
