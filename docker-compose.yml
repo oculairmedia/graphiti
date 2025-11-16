@@ -201,6 +201,7 @@ services:
       - sync_metadata:/data
     environment:
       - SYNC_DISASTER_AUTO_RECOVER=true
+      - FORCE_UNSAFE_SYNC=true
       - SYNC_NEO4J_URI=bolt://neo4j:7687
       - SYNC_NEO4J_USER=${NEO4J_USER:-neo4j}
       - SYNC_NEO4J_PASSWORD=${NEO4J_PASSWORD:-graphiti123}
@@ -221,7 +222,6 @@ services:
       - SYNC_FALKOR_AUTORESTORE_THRESHOLD=0.80
       - SYNC_BACKOFF_INITIAL_MS=1000
       - SYNC_BACKOFF_MAX_MS=300000
-      - FORCE_UNSAFE_SYNC=${FORCE_UNSAFE_SYNC:-false}
       - RUST_LOG=${RUST_LOG:-info}
     networks:
       - graphiti_network
