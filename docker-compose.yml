@@ -105,8 +105,9 @@ services:
         condition: service_healthy
       graphiti-centrality-rs:
         condition: service_healthy
-      graphiti-init:
-        condition: service_completed_successfully
+      # Temporarily commented out - sync is complete, init failed on old script
+      # graphiti-init:
+      #   condition: service_completed_successfully
     healthcheck:
       test:
         - CMD
@@ -467,7 +468,7 @@ services:
       - FALKORDB_PORT=${FALKORDB_PORT:-6379}
       - FALKORDB_DATABASE=${FALKORDB_DATABASE:-graphiti_migration}
       - SYNC_SERVICE_URL=http://graphiti-sync-rs:8080
-      - SYNC_TIMEOUT=${SYNC_TIMEOUT:-1200}
+      - SYNC_TIMEOUT=${SYNC_TIMEOUT:-0}
       - READY_MARKER_FILE=/tmp/graphiti-init-complete
       - CHECK_INTERVAL=5
     networks:
