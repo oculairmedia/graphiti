@@ -116,7 +116,13 @@ impl SearchEngine {
         for method in &config.search_methods {
             let edges = match method {
                 SearchMethod::Fulltext => {
-                    fulltext::search_edges(&mut falkor_conn, query, filters, self.max_method_results).await?
+                    fulltext::search_edges(
+                        &mut falkor_conn,
+                        query,
+                        filters,
+                        self.max_method_results,
+                    )
+                    .await?
                 }
                 SearchMethod::Similarity if query_vector.is_some() => {
                     similarity::search_edges_by_embedding(
@@ -166,7 +172,13 @@ impl SearchEngine {
         for method in &config.search_methods {
             let nodes = match method {
                 SearchMethod::Fulltext => {
-                    fulltext::search_nodes(&mut falkor_conn, query, filters, self.max_method_results).await?
+                    fulltext::search_nodes(
+                        &mut falkor_conn,
+                        query,
+                        filters,
+                        self.max_method_results,
+                    )
+                    .await?
                 }
                 SearchMethod::Similarity if query_vector.is_some() => {
                     similarity::search_nodes_by_embedding(

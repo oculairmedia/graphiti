@@ -91,7 +91,11 @@ pub async fn search_handler(
     }
 
     // Create search engine with pools
-    let mut engine = SearchEngine::new(state.falkor_pool.clone(), state.redis_pool.clone(), state.config.max_method_results);
+    let mut engine = SearchEngine::new(
+        state.falkor_pool.clone(),
+        state.redis_pool.clone(),
+        state.config.max_method_results,
+    );
 
     // Execute search
     let results = engine.search(request).await?;
