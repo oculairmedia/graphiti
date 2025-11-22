@@ -14,6 +14,7 @@ pub struct Config {
     pub enable_simd: bool,
     pub parallel_threshold: usize,
     pub embedding_dimension: usize,
+    pub max_method_results: usize,
 }
 
 impl Config {
@@ -43,6 +44,9 @@ impl Config {
                 .parse()?,
             embedding_dimension: env::var("EMBEDDING_DIMENSION")
                 .unwrap_or_else(|_| "2560".to_string()) // Default to Qwen3-Embedding-4B dimension
+                .parse()?,
+            max_method_results: env::var("MAX_METHOD_RESULTS")
+                .unwrap_or_else(|_| "1000".to_string()) // Increased from hardcoded 100
                 .parse()?,
         })
     }

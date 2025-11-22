@@ -21,15 +21,17 @@ pub struct SearchEngine {
     #[allow(dead_code)]
     redis_pool: RedisPool,
     cache: EnhancedCache,
+    max_method_results: usize,
 }
 
 impl SearchEngine {
-    pub fn new(falkor_pool: FalkorPool, redis_pool: RedisPool) -> Self {
+    pub fn new(falkor_pool: FalkorPool, redis_pool: RedisPool, max_method_results: usize) -> Self {
         let cache = EnhancedCache::new(redis_pool.clone());
         Self {
             falkor_pool,
             redis_pool,
             cache,
+            max_method_results,
         }
     }
 
@@ -114,7 +116,7 @@ impl SearchEngine {
         for method in &config.search_methods {
             let edges = match method {
                 SearchMethod::Fulltext => {
-                    fulltext::search_edges(&mut falkor_conn, query, filters, 100).await?
+                    fulltext::search_edges(&mut falkor_conn, query, filters, self.max_method_results).await?
                 }
                 SearchMethod::Similarity if query_vector.is_some() => {
                     similarity::search_edges_by_embedding(
@@ -122,7 +124,7 @@ impl SearchEngine {
                         query_vector.unwrap(),
                         config.sim_min_score,
                         filters,
-                        100,
+                        self.max_method_results,
                     )
                     .await?
                 }
@@ -164,7 +166,7 @@ impl SearchEngine {
         for method in &config.search_methods {
             let nodes = match method {
                 SearchMethod::Fulltext => {
-                    fulltext::search_nodes(&mut falkor_conn, query, filters, 100).await?
+                    fulltext::search_nodes(&mut falkor_conn, query, filters, self.max_method_results).await?
                 }
                 SearchMethod::Similarity if query_vector.is_some() => {
                     similarity::search_nodes_by_embedding(
@@ -172,7 +174,7 @@ impl SearchEngine {
                         query_vector.unwrap(),
                         config.sim_min_score,
                         filters,
-                        100,
+                        self.max_method_results,
                     )
                     .await?
                 }

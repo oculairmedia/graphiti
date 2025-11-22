@@ -105,9 +105,8 @@ services:
         condition: service_healthy
       graphiti-centrality-rs:
         condition: service_healthy
-      # Temporarily commented out - sync is complete, init failed on old script
-      # graphiti-init:
-      #   condition: service_completed_successfully
+      graphiti-init:
+        condition: service_completed_successfully
     healthcheck:
       test:
         - CMD
@@ -116,8 +115,8 @@ services:
         - http://localhost:3000/api/stats
       interval: 15s
       timeout: 5s
-      retries: 5
-      start_period: 30s
+      retries: 100
+      start_period: 3600s
     labels:
       - homepage.group=Knowledge Management
       - homepage.name=Graph Visualizer
@@ -166,6 +165,7 @@ services:
       - REDIS_URL=${REDIS_URL:-redis://falkordb:6379}
       - RUST_LOG=${RUST_LOG:-info}
       - EMBEDDING_DIMENSION=${EMBEDDING_DIMENSION:-2560}
+      - MAX_METHOD_RESULTS=${MAX_METHOD_RESULTS:-1000}
       - OLLAMA_BASE_URL=${OLLAMA_EMBEDDING_BASE_URL:-http://100.81.139.20:11434/v1}
       - OLLAMA_EMBEDDING_MODEL=${OLLAMA_EMBEDDING_MODEL:-dengcao/Qwen3-Embedding-4B:Q4_K_M}
     networks:
