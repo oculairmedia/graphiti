@@ -5,12 +5,11 @@ import { useGraphConfig } from '../contexts/GraphConfigProvider';
 import { ControlPanel } from './ControlPanel';
 import { LazyGraphCanvas } from './LazyGraphCanvas';
 
-// Lazy load modal panels
+// Lazy load modal panels - PERFORMANCE FIX (GRAPH-42): Lazy load all conditional panels
 const FilterPanel = React.lazy(() => import('./FilterPanel').then(m => ({ default: m.FilterPanel })));
 const StatsPanel = React.lazy(() => import('./StatsPanel').then(m => ({ default: m.StatsPanel })));
 const MonitoringDashboard = React.lazy(() => import('./MonitoringDashboard').then(m => ({ default: m.MonitoringDashboard })));
-// Direct import for NodeDetailsPanel to avoid Vite dynamic import issues
-import { NodeDetailsPanel } from './NodeDetailsPanel';
+const NodeDetailsPanel = React.lazy(() => import('./NodeDetailsPanel').then(m => ({ default: m.NodeDetailsPanel })));
 import { GraphNavBar } from './GraphNavBar';
 import { CentralityStatsProvider } from '../contexts/CentralityStatsContext';
 

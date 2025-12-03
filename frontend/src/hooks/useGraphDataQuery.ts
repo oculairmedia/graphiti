@@ -469,8 +469,10 @@ export function useGraphDataQuery() {
     config.endDate
   ]);
 
-  // Cache for filter results to avoid recalculating for the same nodes
-  const filterCacheRef = useRef(new Map<string, boolean>());
+  // PERFORMANCE FIX (GRAPH-39): LRU cache for filter results with max 1000 entries
+  // Previous implementation grew to 10K entries before clearing entirely
+  const filterCacheRef = useRef<Map<string, boolean>>(new Map());
+  const LRU_CACHE_MAX_SIZE = 1000;
 
   // Precomputed filter config hash to avoid repeated JSON.stringify
   const filterConfigHashRef = useRef<string>('');
@@ -585,12 +587,14 @@ export function useGraphDataQuery() {
       }
     }
     
-    // Cache the result
+    // Cache the result - PERFORMANCE FIX (GRAPH-39): LRU eviction instead of full clear
     filterCacheRef.current.set(cacheKey, true);
     
-    // Clear cache if it gets too large
-    if (filterCacheRef.current.size > 10000) {
-      filterCacheRef.current.clear();
+    // LRU eviction: remove oldest entries when cache exceeds max size
+    if (filterCacheRef.current.size > LRU_CACHE_MAX_SIZE) {
+      // Map maintains insertion order, so first entries are oldest
+      const keysToDelete = Array.from(filterCacheRef.current.keys()).slice(0, 100);
+      keysToDelete.forEach(key => filterCacheRef.current.delete(key));
     }
     
     return true;
