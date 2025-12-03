@@ -48,7 +48,8 @@ interface GraphCanvasRendererProps {
   config: any; // GraphConfig type
   visualConfig: VisualizationConfig;
   eventHandlers: EventHandlers;
-  glowingNodes: Map<string, number>;
+  // PERFORMANCE FIX: Changed from Map to boolean to prevent re-renders on every glow change
+  hasGlowingNodes: boolean;
   onReady: () => void;
 }
 
@@ -56,13 +57,14 @@ interface GraphCanvasRendererProps {
  * Pure rendering component for Cosmograph
  * All logic and state management happens in parent component
  */
-export const GraphCanvasRenderer: React.FC<GraphCanvasRendererProps> = ({
+// PERFORMANCE FIX: Memoize renderer to prevent unnecessary Cosmograph re-renders
+export const GraphCanvasRenderer: React.FC<GraphCanvasRendererProps> = React.memo(({
   cosmographRef,
   cosmographData,
   config,
   visualConfig,
   eventHandlers,
-  glowingNodes,
+  hasGlowingNodes,
   onReady
 }) => {
   const { pointSizeRange, linkWidthRange, nodeColorConfig, linkWidthByFn, linkColorByFn } = visualConfig;
@@ -163,7 +165,8 @@ export const GraphCanvasRenderer: React.FC<GraphCanvasRendererProps> = ({
       enableRightClickRepulsion={true}
       renderLinks={config.renderLinks !== false}
       // Point ring colors for hover and focus
-      focusedPointRingColor={glowingNodes.size > 0 ? (config.nodeAccessHighlightColor || "#FFD700") : (config.focusedPointRingColor || "#0066cc")}
+      // PERFORMANCE FIX: Use boolean instead of checking Map.size to avoid re-renders
+      focusedPointRingColor={hasGlowingNodes ? (config.nodeAccessHighlightColor || "#FFD700") : (config.focusedPointRingColor || "#0066cc")}
       // Layout and simulation - fitView configuration
       fitViewOnInit={false}  // Disable automatic fitView to prevent simulation interruption (like old implementation)
       // fitViewDelay={config.fitViewDelay || 500}  // Not needed when fitViewOnInit is false
@@ -193,4 +196,15 @@ export const GraphCanvasRenderer: React.FC<GraphCanvasRendererProps> = ({
       onClick={handleClick}
     />
   );
-};
+}, (prevProps, nextProps) => {
+  // Custom comparison to prevent unnecessary re-renders
+  // Only re-render if these critical props change
+  return (
+    prevProps.cosmographData === nextProps.cosmographData &&
+    prevProps.config === nextProps.config &&
+    prevProps.visualConfig === nextProps.visualConfig &&
+    prevProps.eventHandlers === nextProps.eventHandlers &&
+    prevProps.hasGlowingNodes === nextProps.hasGlowingNodes
+    // Note: cosmographRef and onReady are stable refs/callbacks
+  );
+});

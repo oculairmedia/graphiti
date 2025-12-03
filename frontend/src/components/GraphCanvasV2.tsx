@@ -144,6 +144,10 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
     const [loadingPhase, setLoadingPhase] = useState<string>('');
     const [loadingProgress, setLoadingProgress] = useState<{ loaded: number; total: number }>({ loaded: 0, total: 0 });
     
+    // PERFORMANCE FIX: Refs for logging counts without causing callback recreation
+    const nodesLengthRef = useRef<number>(0);
+    const linksLengthRef = useRef<number>(0);
+    
     // Attach debugger on mount (only if debugging is enabled)
     useEffect(() => {
       if (isSchemaDebuggingEnabled()) {
@@ -238,6 +242,16 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
       debug: false
     });
     
+    // PERFORMANCE FIX: Keep refs updated for logging without causing callback recreation
+    useEffect(() => {
+      nodesLengthRef.current = nodes?.length || 0;
+      linksLengthRef.current = links?.length || 0;
+    }, [nodes?.length, links?.length]);
+    
+    // PERFORMANCE FIX (GRAPH-36): Use extracted hook for O(1) node lookups
+    // IMPORTANT: Must be defined before useGraphSelection which uses nodeIndexMap
+    const { nodeIndexMap, getNodeIndex, getNodeIndices } = useGraphNodeIndex(nodes);
+    
     // PERFORMANCE: Hover is now handled by Cosmograph's built-in system
     // No custom hover state management needed
     
@@ -257,13 +271,20 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
       getSelectedNodes: getSelectedNodesList
     } = useGraphSelection(nodes, links as any, {
       multiSelect: true,
+      // PERFORMANCE FIX: Use nodeIndexMap for O(1) lookups instead of O(n*m) filter
       onSelectionChange: useCallback((event) => {
-        // Only handle node selection events
         if (onSelectNodes && event.target === 'node' && event.ids) {
-          const selectedNodeObjects = nodes.filter(n => event.ids.includes(n.id));
+          // Use nodeIndexMap for O(1) lookups per selected node
+          const selectedNodeObjects: GraphNode[] = [];
+          for (const id of event.ids) {
+            const index = nodeIndexMap.get(id);
+            if (index !== undefined && nodes[index]) {
+              selectedNodeObjects.push(nodes[index]);
+            }
+          }
           onSelectNodes(selectedNodeObjects);
         }
-      }, [onSelectNodes, nodes])
+      }, [onSelectNodes, nodeIndexMap, nodes])
     });
     
     // WebSocket callbacks
@@ -290,13 +311,15 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
           sizeMapping: config.sizeMapping
         },
         onError: (error) => {
-          console.error('[GraphCanvasV2] Incremental update error:', error);
+          // Only log errors in development
+          if (process.env.NODE_ENV === 'development') {
+            console.error('[GraphCanvasV2] Incremental update error:', error);
+          }
         },
-        onSuccess: (operation, count) => {
-          console.log(`[GraphCanvasV2] Incremental ${operation}: ${count} items`);
+        onSuccess: (_operation, _count) => {
+          // Success logging removed for performance
         },
         fallbackToFullUpdate: (fallbackNodes, fallbackEdges) => {
-          console.log('[GraphCanvasV2] Falling back to full update');
           // Fall back to traditional state update
           setData(fallbackNodes, fallbackEdges as any);
         }
@@ -309,8 +332,7 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
         if (incrementalUpdatesReady && replaceDataWithConfig) {
           const success = await replaceDataWithConfig(event.nodes, event.edges);
           if (success) {
-            console.log('[GraphCanvasV2] Replaced data using setConfig (no hard reload)');
-            return;
+            return; // Data replaced using setConfig (no hard reload)
           }
         }
         // Fall back to traditional state update
@@ -318,42 +340,27 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
       }
     }, [setData, incrementalUpdatesReady, replaceDataWithConfig]);
     
+    // PERFORMANCE FIX: Use refs for logging to avoid callback recreation on data changes
     const handleDeltaUpdate = useCallback(async (event: any) => {
-      console.log('[GraphCanvasV2] Received delta update:', event);
-      console.log(`[GraphCanvasV2] Current graph size: ${nodes.length} nodes, ${links.length} edges`);
-      
       // Try incremental update first if Cosmograph is ready
       if (incrementalUpdatesReady && cosmographRef.current) {
         const success = await applyDelta(event);
         if (success) {
-          console.log('[GraphCanvasV2] Applied incremental update successfully');
-          
-          // DON'T update React state for incremental updates
-          // This would trigger a re-render and cause a hard reload
-          // The graph is already updated via Cosmograph's incremental API
-          // React state will be out of sync but that's acceptable for performance
-          
-          console.log(`[GraphCanvasV2] After incremental update: ${nodes.length} nodes, ${links.length} edges`);
           return; // Exit early - incremental update succeeded
         }
       }
       
       // Fall back to traditional state-based updates
-      console.log('[GraphCanvasV2] Using traditional state update');
-      
       // Handle node updates
       if (event.nodes && event.nodes.length > 0) {
         if (event.operation === 'add') {
-          console.log('[GraphCanvasV2] Adding nodes:', event.nodes.length);
           addNodes(event.nodes);
         } else if (event.operation === 'update') {
-          console.log('[GraphCanvasV2] Updating nodes:', event.nodes.length);
           updateNodes(event.nodes);
         } else if (event.operation === 'delete') {
-          console.log('[GraphCanvasV2] Removing nodes:', event.nodes.length);
           const nodeIds = typeof event.nodes[0] === 'string' 
             ? event.nodes 
-            : event.nodes.map(n => n.id);
+            : event.nodes.map((n: any) => n.id);
           removeNodes(nodeIds);
         }
       }
@@ -361,23 +368,17 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
       // Handle edge updates
       if (event.edges && event.edges.length > 0) {
         if (event.operation === 'add') {
-          console.log('[GraphCanvasV2] Adding edges:', event.edges.length);
           addLinks(event.edges);
         } else if (event.operation === 'update') {
-          console.log('[GraphCanvasV2] Updating/adding edges:', event.edges.length);
           addLinks(event.edges);
         } else if (event.operation === 'delete') {
-          console.log('[GraphCanvasV2] Removing edges:', event.edges.length);
           const edgeIds = typeof event.edges[0] === 'string'
             ? event.edges
-            : event.edges.map(e => `${e.from || e.source}-${e.to || e.target}`);
+            : event.edges.map((e: any) => `${e.from || e.source}-${e.to || e.target}`);
           removeLinks(edgeIds);
         }
       }
-      
-      // Log final count after traditional update
-      console.log(`[GraphCanvasV2] After traditional update: ${nodes.length} nodes, ${links.length} edges`);
-    }, [incrementalUpdatesReady, applyDelta, addNodes, updateNodes, removeNodes, addLinks, removeLinks, nodes.length, links.length]);
+    }, [incrementalUpdatesReady, applyDelta, addNodes, updateNodes, removeNodes, addLinks, removeLinks]);
     
     // WebSocket updates
     const {
@@ -395,7 +396,7 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
       onNodeAccess: handleNodeAccess,
       onGraphUpdate: handleGraphUpdate,
       onDeltaUpdate: handleDeltaUpdate,
-      debug: true  // Enable debug logging to monitor updates
+      debug: false  // PERFORMANCE: Disabled in production
     });
     
     // Camera controls
@@ -487,8 +488,7 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
     
     // === 2. DATA PREPARATION ===
     
-    // PERFORMANCE FIX (GRAPH-36): Use extracted hook for O(1) node lookups
-    const { nodeIndexMap, getNodeIndex, getNodeIndices } = useGraphNodeIndex(nodes);
+    // Note: nodeIndexMap, getNodeIndex, getNodeIndices are defined earlier (before useGraphSelection)
     
     // Transform nodes and links for Cosmograph using extracted hook
     const cosmographData = useCosmographDataTransform(
@@ -541,38 +541,68 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
     
     // === 3. IMPERATIVE HANDLE ===
     
+    // PERFORMANCE FIX (P3-2): Store dependencies in refs to avoid handle recreation
+    // These refs are updated by effects and read by the imperative handle
+    const nodeIndexMapRef = useRef(nodeIndexMap);
+    const statisticsRef = useRef(statistics);
+    const clearAllSelectionRef = useRef(clearAllSelection);
+    const selectSingleNodeRef = useRef(selectSingleNode);
+    const selectMultipleNodesRef = useRef(selectMultipleNodes);
+    const setDataRef = useRef(setData);
+    const addNodesRef = useRef(addNodes);
+    const addLinksRef = useRef(addLinks);
+    const updateNodesRef = useRef(updateNodes);
+    const updateLinksRef = useRef(updateLinks);
+    const removeNodesRef = useRef(removeNodes);
+    const removeLinksRef = useRef(removeLinks);
+    const reheatRef = useRef(reheat);
+    const configRef = useRef(config);
+    
+    // Keep refs in sync with latest values
+    useEffect(() => {
+      nodeIndexMapRef.current = nodeIndexMap;
+      statisticsRef.current = statistics;
+      clearAllSelectionRef.current = clearAllSelection;
+      selectSingleNodeRef.current = selectSingleNode;
+      selectMultipleNodesRef.current = selectMultipleNodes;
+      setDataRef.current = setData;
+      addNodesRef.current = addNodes;
+      addLinksRef.current = addLinks;
+      updateNodesRef.current = updateNodes;
+      updateLinksRef.current = updateLinks;
+      removeNodesRef.current = removeNodes;
+      removeLinksRef.current = removeLinks;
+      reheatRef.current = reheat;
+      configRef.current = config;
+    });
+    
+    // Now useImperativeHandle has NO dependencies - methods read from refs
     useImperativeHandle(ref, () => ({
       // Selection methods
       clearSelection: () => {
-        clearAllSelection();
-        setGlowingNodes(new Map()); // Clear glowing nodes
+        clearAllSelectionRef.current();
+        setGlowingNodes(new Map());
         if (cosmographRef.current?.unselectAllPoints) {
           cosmographRef.current.unselectAllPoints();
         }
       },
       selectNode: (node: GraphNode) => {
-        selectSingleNode(node.id);
-        // Add to glowing nodes for highlight color
+        selectSingleNodeRef.current(node.id);
         setGlowingNodes(new Map([[node.id, Date.now()]]));
-        // Also select in Cosmograph - O(1) lookup using nodeIndexMap
-        const index = nodeIndexMap.get(node.id);
+        const index = nodeIndexMapRef.current.get(node.id);
         if (index !== undefined && cosmographRef.current?.selectPoint) {
           cosmographRef.current.selectPoint(index, false, false);
         }
       },
       selectNodes: (nodeList: GraphNode[]) => {
-        selectMultipleNodes(nodeList.map(n => n.id));
-        // Add all to glowing nodes for highlight color
-        const newGlowing = new Map();
+        selectMultipleNodesRef.current(nodeList.map(n => n.id));
+        const newGlowing = new Map<string, number>();
         const now = Date.now();
-        nodeList.forEach(node => {
-          newGlowing.set(node.id, now);
-        });
+        nodeList.forEach(node => newGlowing.set(node.id, now));
         setGlowingNodes(newGlowing);
-        // Also select in Cosmograph - O(1) lookup per node using nodeIndexMap
         const indices: number[] = [];
         nodeList.forEach(node => {
-          const index = nodeIndexMap.get(node.id);
+          const index = nodeIndexMapRef.current.get(node.id);
           if (index !== undefined) indices.push(index);
         });
         if (indices.length > 0 && cosmographRef.current?.selectPoints) {
@@ -580,18 +610,19 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
         }
       },
       
-      // Camera methods - O(1) lookup per node using nodeIndexMap
+      // Camera methods - read nodeIndexMap from ref
       focusOnNodes: (nodeIds: string[], duration?: number, padding?: number) => {
-        // Get indices for the node IDs using O(1) Map lookup
         const indices: number[] = [];
         nodeIds.forEach(id => {
-          const index = nodeIndexMap.get(id);
+          const index = nodeIndexMapRef.current.get(id);
           if (index !== undefined) indices.push(index);
         });
         if (indices.length > 0 && cosmographRef.current?.fitViewByIndices) {
           cosmographRef.current.fitViewByIndices(indices, duration, padding);
         }
       },
+      
+      // These methods just forward to cosmographRef - no deps needed
       zoomIn: () => {
         if (cosmographRef.current?.getZoomLevel && cosmographRef.current?.setZoomLevel) {
           const currentZoom = cosmographRef.current.getZoomLevel();
@@ -605,156 +636,102 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
         }
       },
       fitView: (duration?: number, padding?: number) => {
-        if (cosmographRef.current?.fitView) {
-          cosmographRef.current.fitView(duration, padding);
-        }
+        cosmographRef.current?.fitView?.(duration, padding);
       },
       fitViewByPointIndices: (indices: number[], duration?: number, padding?: number) => {
-        if (cosmographRef.current?.fitViewByIndices) {
-          cosmographRef.current.fitViewByIndices(indices, duration, padding);
-        }
+        cosmographRef.current?.fitViewByIndices?.(indices, duration, padding);
       },
       zoomToPoint: (index: number, duration?: number, scale?: number, canZoomOut?: boolean) => {
-        if (cosmographRef.current?.zoomToPoint) {
-          cosmographRef.current.zoomToPoint(index, duration, scale, canZoomOut);
-        }
+        cosmographRef.current?.zoomToPoint?.(index, duration, scale, canZoomOut);
       },
       trackPointPositionsByIndices: (indices: number[]) => {
-        if (cosmographRef.current?.trackPointPositionsByIndices) {
-          cosmographRef.current.trackPointPositionsByIndices(indices);
-        }
+        cosmographRef.current?.trackPointPositionsByIndices?.(indices);
       },
       getTrackedPointPositionsMap: () => {
-        if (cosmographRef.current?.getTrackedPointPositionsMap) {
-          return cosmographRef.current.getTrackedPointPositionsMap();
-        }
-        return undefined;
+        return cosmographRef.current?.getTrackedPointPositionsMap?.();
       },
       
-      // Data methods
+      // Data methods - read from refs
       setData: (newNodes: GraphNode[], newLinks: GraphLink[], runSimulation = true) => {
-        setData(newNodes, newLinks as any);
-        if (runSimulation && config.simulationEnabled && cosmographRef.current?.restart) {
-          cosmographRef.current.restart();
+        setDataRef.current(newNodes, newLinks as any);
+        if (runSimulation && configRef.current.simulationEnabled) {
+          cosmographRef.current?.restart?.();
         }
       },
       restart: () => {
-        if (cosmographRef.current?.restart) {
-          cosmographRef.current.restart();
-        }
+        cosmographRef.current?.restart?.();
       },
       getLiveStats: () => ({
-        nodeCount: statistics.nodeCount,
-        edgeCount: statistics.edgeCount,
-        lastUpdated: statistics.lastUpdated
+        nodeCount: statisticsRef.current.nodeCount,
+        edgeCount: statisticsRef.current.edgeCount,
+        lastUpdated: statisticsRef.current.lastUpdated
       }),
       
-      // Selection tools (need Cosmograph integration)
+      // Selection tools - just forward to cosmographRef
       activateRectSelection: () => {
-        if (cosmographRef.current?.activateRectSelection) {
-          cosmographRef.current.activateRectSelection();
-        }
+        cosmographRef.current?.activateRectSelection?.();
       },
       deactivateRectSelection: () => {
-        if (cosmographRef.current?.deactivateRectSelection) {
-          cosmographRef.current.deactivateRectSelection();
-        }
+        cosmographRef.current?.deactivateRectSelection?.();
       },
       activatePolygonalSelection: () => {
-        if (cosmographRef.current?.activatePolygonalSelection) {
-          cosmographRef.current.activatePolygonalSelection();
-        }
+        cosmographRef.current?.activatePolygonalSelection?.();
       },
       deactivatePolygonalSelection: () => {
-        if (cosmographRef.current?.deactivatePolygonalSelection) {
-          cosmographRef.current.deactivatePolygonalSelection();
-        }
+        cosmographRef.current?.deactivatePolygonalSelection?.();
       },
       selectPointsInRect: (selection, addToSelection) => {
-        if (cosmographRef.current?.selectPointsInRect) {
-          cosmographRef.current.selectPointsInRect(selection, addToSelection);
-        }
+        cosmographRef.current?.selectPointsInRect?.(selection, addToSelection);
       },
       selectPointsInPolygon: (polygonPoints, addToSelection) => {
-        if (cosmographRef.current?.selectPointsInPolygon) {
-          cosmographRef.current.selectPointsInPolygon(polygonPoints, addToSelection);
-        }
+        cosmographRef.current?.selectPointsInPolygon?.(polygonPoints, addToSelection);
       },
       getConnectedPointIndices: (index: number) => {
-        if (cosmographRef.current?.getConnectedPointIndices) {
-          return cosmographRef.current.getConnectedPointIndices(index);
-        }
-        return undefined;
+        return cosmographRef.current?.getConnectedPointIndices?.(index);
       },
       getPointIndicesByExactValues: (keyValues) => {
-        if (cosmographRef.current?.getPointIndicesByExactValues) {
-          return cosmographRef.current.getPointIndicesByExactValues(keyValues);
-        }
-        return undefined;
+        return cosmographRef.current?.getPointIndicesByExactValues?.(keyValues);
       },
       
-      // Incremental update methods
+      // Incremental update methods - read from refs
       addIncrementalData: (newNodes: GraphNode[], newLinks: GraphLink[]) => {
-        addNodes(newNodes);
-        addLinks(newLinks as any);
-        if (config.simulationEnabled) {
-          reheat(0.3);
+        addNodesRef.current(newNodes);
+        addLinksRef.current(newLinks as any);
+        if (configRef.current.simulationEnabled) {
+          reheatRef.current(0.3);
         }
       },
       updateNodes: (updatedNodes: GraphNode[]) => {
-        updateNodes(updatedNodes);
+        updateNodesRef.current(updatedNodes);
       },
       updateLinks: (updatedLinks: GraphLink[]) => {
-        updateLinks(updatedLinks);
+        updateLinksRef.current(updatedLinks);
       },
       removeNodes: (nodeIds: string[]) => {
-        removeNodes(nodeIds);
+        removeNodesRef.current(nodeIds);
       },
       removeLinks: (linkIds: string[]) => {
-        removeLinks(linkIds);
+        removeLinksRef.current(linkIds);
       },
       
-      // Simulation control
+      // Simulation control - just forward to cosmographRef
       startSimulation: (alpha?: number) => {
-        if (cosmographRef.current?.start) {
-          cosmographRef.current.start(alpha);
-        }
+        cosmographRef.current?.start?.(alpha);
       },
       pauseSimulation: () => {
-        if (cosmographRef.current?.pause) {
-          cosmographRef.current.pause();
-        }
+        cosmographRef.current?.pause?.();
       },
       resumeSimulation: () => {
-        if (cosmographRef.current?.start) {
-          cosmographRef.current.start(0.3); // Resume with moderate energy
-        }
+        cosmographRef.current?.start?.(0.3);
       },
-      keepSimulationRunning: (enable: boolean) => {
-        // This would control whether simulation auto-restarts
+      keepSimulationRunning: (_enable: boolean) => {
         // Currently handled via config settings
       },
-      setIncrementalUpdateFlag: (enabled: boolean) => {
+      setIncrementalUpdateFlag: (_enabled: boolean) => {
         // Flag for incremental updates - managed internally
       },
-      // Expose the cosmograph ref
       getCosmographRef: () => cosmographRef
-    }), [
-      nodes,
-      nodeIndexMap,  // PERFORMANCE FIX: Add nodeIndexMap for O(1) lookups
-      statistics,
-      clearAllSelection,
-      selectSingleNode,
-      selectMultipleNodes,
-      setData,
-      addNodes,
-      addLinks,
-      updateNodes,
-      updateLinks,
-      removeNodes,
-      removeLinks,
-      config.simulationEnabled
-    ]);
+    }), [setGlowingNodes]); // Only setGlowingNodes is needed - it's stable from useState
     
     // === 4. EFFECTS ===
     
@@ -904,16 +881,24 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
     }, [highlightedNodes, highlightNodeVisuals, nodes, nodeIndexMap]);
     
     // Handle selected nodes - simplified to just update internal state
+    // PERFORMANCE FIX: Use Set operations instead of Array.includes (O(1) vs O(n))
     useEffect(() => {
-      // Ensure selectedNodes is defined and is an array
       if (selectedNodes && Array.isArray(selectedNodes) && selectedNodeIds) {
-        const currentSelection = Array.from(selectedNodeIds);
-        const toSelect = selectedNodes.filter(id => !currentSelection.includes(id));
-        const toDeselect = currentSelection.filter(id => !selectedNodes.includes(id));
+        const selectedSet = new Set(selectedNodes);
         
-        // Update selection state
-        toSelect.forEach(id => selectSingleNode(id));
-        toDeselect.forEach(id => deselectNode(id));
+        // Find nodes to select (in selectedNodes but not in selectedNodeIds)
+        for (const id of selectedNodes) {
+          if (!selectedNodeIds.has(id)) {
+            selectSingleNode(id);
+          }
+        }
+        
+        // Find nodes to deselect (in selectedNodeIds but not in selectedNodes)
+        for (const id of selectedNodeIds) {
+          if (!selectedSet.has(id)) {
+            deselectNode(id);
+          }
+        }
       }
     }, [selectedNodes, selectedNodeIds, selectSingleNode, deselectNode]);
     
@@ -1048,7 +1033,7 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
           config={config}
           visualConfig={visualConfig}
           eventHandlers={eventHandlers}
-          glowingNodes={glowingNodes}
+          hasGlowingNodes={glowingNodes.size > 0}
           onReady={() => {
             setIsReady(true);
             setIsCanvasReady(true);

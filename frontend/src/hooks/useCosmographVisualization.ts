@@ -48,6 +48,10 @@ export function useCosmographVisualization({
   glowingNodes
 }: UseCosmographVisualizationProps): VisualizationConfig {
   
+  // PERFORMANCE FIX: Use ref for glowingNodes to avoid function recreation
+  const glowingNodesRef = useRef(glowingNodes);
+  glowingNodesRef.current = glowingNodes;
+  
   // === POINT SIZE CONFIGURATION ===
   const pointSizeRange = useMemo(() => {
     const baseMin = config.minNodeSize || 2;
@@ -279,6 +283,18 @@ export function useCosmographVisualization({
   }, [config.linkWidthScheme, config.linkWidth]);
   
   // === LINK COLOR CONFIGURATION ===
+  
+  // PERFORMANCE FIX: Pre-compute maxWeight once instead of for every link
+  const maxLinkWeight = useMemo(() => {
+    if (!cosmographData?.links || config.linkColorScheme !== 'by-weight') return 0;
+    let max = 0;
+    for (let i = 0; i < cosmographData.links.length; i++) {
+      const w = cosmographData.links[i].weight || 0;
+      if (w > max) max = w;
+    }
+    return max;
+  }, [cosmographData?.links, config.linkColorScheme]);
+  
   const linkColorByFn = useMemo(() => {
     if (config.linkColorScheme === 'uniform' && config.linkOpacityScheme === 'uniform') {
       return undefined;
@@ -306,8 +322,8 @@ export function useCosmographVisualization({
         }
         case 'by-weight': {
           const weight = link.weight || 0;
-          const maxWeight = Math.max(...cosmographData.links.map(l => l.weight || 0));
-          const ratio = maxWeight > 0 ? weight / maxWeight : 0;
+          // PERFORMANCE FIX: Use pre-computed maxWeight instead of O(n) scan per link
+          const ratio = maxLinkWeight > 0 ? weight / maxLinkWeight : 0;
           const r = Math.round(ratio * 255);
           const b = Math.round((1 - ratio) * 255);
           baseColor = `rgb(${r}, 0, ${b})`;
@@ -316,7 +332,9 @@ export function useCosmographVisualization({
         case 'by-source-node': {
           const sourceNode = cosmographData.nodes[link.sourceIndex];
           if (sourceNode) {
-            if (glowingNodes.size > 0 && glowingNodes.has(sourceNode.id)) {
+            // PERFORMANCE FIX: Read from ref to avoid dependency on glowingNodes
+            const currentGlowing = glowingNodesRef.current;
+            if (currentGlowing.size > 0 && currentGlowing.has(sourceNode.id)) {
               baseColor = config.nodeAccessHighlightColor || '#FFD700';
             } else {
               const nodeType = sourceNode.node_type;
@@ -379,8 +397,9 @@ export function useCosmographVisualization({
     config.linkOpacityMin,
     config.linkOpacityMax,
     config.nodeTypeColors,
-    glowingNodes,
-    config.nodeAccessHighlightColor
+    // PERFORMANCE FIX: Removed glowingNodes from deps - now uses ref
+    config.nodeAccessHighlightColor,
+    maxLinkWeight // Pre-computed max weight for by-weight scheme
   ]);
   
   return {
