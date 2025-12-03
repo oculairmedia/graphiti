@@ -36,6 +36,13 @@ import { useGraphCanvasEvents } from '../hooks/useGraphCanvasEvents';
 import { useCosmographVisualization } from '../hooks/useCosmographVisualization';
 import { GraphCanvasRenderer } from './GraphCanvasRenderer';
 
+// PERFORMANCE FIX (GRAPH-35): Extracted hooks for better separation of concerns
+import { useGraphGlowEffects } from '../hooks/useGraphGlowEffects';
+import { useGraphFPS } from '../hooks/useGraphFPS';
+import { useGraphNodeIndex } from '../hooks/useGraphNodeIndex';
+import { useGraphLiveCounts } from '../hooks/useGraphLiveCounts';
+import { useGraphNodeAccessEvents } from '../hooks/useGraphNodeAccessEvents';
+
 // Additional imports
 import { useLoadingCoordinator } from '../contexts/LoadingCoordinator';
 import { ProgressiveLoadingOverlay } from './ProgressiveLoadingOverlay';
@@ -149,22 +156,25 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
       }
     }, [isCanvasReady]);
     
-    // Glowing nodes state for real-time access highlighting
-    const [glowingNodes, setGlowingNodes] = useState<Map<string, number>>(new Map());
-    const glowTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-    
-    // Live stats state for overlays
-    const [liveNodeCount, setLiveNodeCount] = useState<number>(0);
-    const [liveEdgeCount, setLiveEdgeCount] = useState<number>(0);
-    const [fps, setFps] = useState<number>(60);
-    const fpsIntervalRef = useRef<NodeJS.Timeout | null>(null);
-    const lastFrameTimeRef = useRef<number>(performance.now());
-    const frameCountRef = useRef<number>(0);
+    // PERFORMANCE FIX (GRAPH-35): Use extracted hook for glow effects
+    const {
+      glowingNodes,
+      setGlowingNodes,
+      addGlowingNodes,
+      clearGlowingNodes,
+      glowTimeoutRef
+    } = useGraphGlowEffects({ fadeDuration: 2000, cleanupDelay: 100 });
     
     // Context hooks
     const { config, setCosmographRef } = useGraphConfig();
     const loadingCoordinator = useLoadingCoordinator();
-    const { subscribe: subscribeToWebSocket } = useWebSocketContext();
+    
+    // PERFORMANCE FIX (GRAPH-35): Use extracted hook for live counts (WebSocket delta tracking)
+    const {
+      liveNodeCount,
+      liveEdgeCount,
+      resetCounts
+    } = useGraphLiveCounts({ debug: false });
     
     // === 1. HOOKS ===
     
@@ -477,17 +487,8 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
     
     // === 2. DATA PREPARATION ===
     
-    // PERFORMANCE FIX (GRAPH-36): Create node ID→index Map for O(1) lookups
-    // Previously used findIndex() which is O(n) per lookup, causing O(n*m) for selections
-    const nodeIndexMap = useMemo(() => {
-      const map = new Map<string, number>();
-      if (nodes) {
-        nodes.forEach((node, index) => {
-          map.set(node.id, index);
-        });
-      }
-      return map;
-    }, [nodes]);
+    // PERFORMANCE FIX (GRAPH-36): Use extracted hook for O(1) node lookups
+    const { nodeIndexMap, getNodeIndex, getNodeIndices } = useGraphNodeIndex(nodes);
     
     // Transform nodes and links for Cosmograph using extracted hook
     const cosmographData = useCosmographDataTransform(
@@ -750,30 +751,23 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
     
     // === 4. EFFECTS ===
     
-    // Clean up old glowing nodes after fade duration
-    useEffect(() => {
-      if (glowingNodes.size === 0) return;
-      
-      const timeout = setTimeout(() => {
-        const now = Date.now();
-        const updatedGlowingNodes = new Map(glowingNodes);
-        let hasChanges = false;
-        
-        // Remove nodes that have finished glowing
-        glowingNodes.forEach((startTime, nodeId) => {
-          if (now - startTime >= 2000) { // 2 second fade duration
-            updatedGlowingNodes.delete(nodeId);
-            hasChanges = true;
-          }
-        });
-        
-        if (hasChanges) {
-          setGlowingNodes(updatedGlowingNodes);
-        }
-      }, 2100); // Check slightly after fade duration
-      
-      return () => clearTimeout(timeout);
-    }, [glowingNodes]);
+    // PERFORMANCE FIX (GRAPH-35): Use extracted hook for FPS tracking
+    const { fps } = useGraphFPS({
+      enabled: config.showFPS,
+      hasData: (cosmographData?.nodes?.length || 0) > 0,
+      stateUpdateInterval: 2000
+    });
+    
+    // PERFORMANCE FIX (GRAPH-35): Use extracted hook for node access events
+    useGraphNodeAccessEvents({
+      cosmographRef,
+      getNodeIndices,
+      addGlowingNodes,
+      clearGlowingNodes,
+      glowTimeoutRef,
+      glowDuration: 2000,
+      debug: false
+    });
     
     // Expose DuckDB utilities for debugging
     useEffect(() => {
@@ -783,139 +777,6 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
         (window as any).cosmographRef = cosmographRef;
       }
     }, []);
-    
-    // Subscribe to WebSocket events for node access highlighting and live counts
-    useEffect(() => {
-      const unsubscribe = subscribeToWebSocket((event: any) => {
-        // Handle delta updates for live counts
-        if (event.type === 'delta' && event.data) {
-          const deltaData = event.data;
-          if (deltaData.added_nodes?.length > 0 || deltaData.removed_nodes?.length > 0) {
-            // Update live node count
-            setLiveNodeCount(prev => {
-              const newCount = prev + (deltaData.added_nodes?.length || 0) - (deltaData.removed_nodes?.length || 0);
-              console.log('[GraphCanvasV2] Live node count updated:', newCount);
-              return newCount;
-            });
-          }
-          if (deltaData.added_edges?.length > 0 || deltaData.removed_edges?.length > 0) {
-            // Update live edge count
-            setLiveEdgeCount(prev => {
-              const newCount = prev + (deltaData.added_edges?.length || 0) - (deltaData.removed_edges?.length || 0);
-              console.log('[GraphCanvasV2] Live edge count updated:', newCount);
-              return newCount;
-            });
-          }
-        }
-        
-        if (event.type === 'node_access' && event.node_ids) {
-          console.log('[GraphCanvasV2] Node access event received:', {
-            nodeIds: event.node_ids,
-            nodeCount: event.node_ids.length
-          });
-          
-          // Cancel any existing glow timeout
-          if (glowTimeoutRef.current) {
-            clearTimeout(glowTimeoutRef.current);
-          }
-          
-          const now = Date.now();
-          
-          // Update glowing nodes map
-          setGlowingNodes(() => {
-            const updated = new Map<string, number>();
-            event.node_ids.forEach((nodeId: string) => {
-              updated.set(nodeId, now);
-            });
-            return updated;
-          });
-          
-          // Highlight nodes in Cosmograph using focus (shows the gold ring)
-          // O(1) lookup per node using nodeIndexMap
-          if (cosmographRef.current && nodes) {
-            const indices: number[] = [];
-            event.node_ids.forEach((nodeId: string) => {
-              const index = nodeIndexMap.get(nodeId);
-              if (index !== undefined) indices.push(index);
-            });
-            
-            if (indices.length > 0) {
-              // Select all nodes for visual effect
-              if (cosmographRef.current.selectPoints) {
-                cosmographRef.current.selectPoints(indices, false);
-              }
-              // Focus on the first node to show the ring
-              if (cosmographRef.current.setFocusedPoint) {
-                cosmographRef.current.setFocusedPoint(indices[0]);
-              }
-            }
-          }
-          
-          // Remove glow after 2 seconds
-          glowTimeoutRef.current = setTimeout(() => {
-            setGlowingNodes(new Map());
-            // Clear focus and selection in Cosmograph
-            if (cosmographRef.current) {
-              if (cosmographRef.current.setFocusedPoint) {
-                cosmographRef.current.setFocusedPoint(undefined);
-              }
-              if (cosmographRef.current.unselectAllPoints) {
-                cosmographRef.current.unselectAllPoints();
-              }
-            }
-          }, 2000);
-        }
-      });
-      
-      return () => {
-        unsubscribe();
-        if (glowTimeoutRef.current) {
-          clearTimeout(glowTimeoutRef.current);
-        }
-      };
-    }, [subscribeToWebSocket, nodes]);
-    
-    // FPS calculation effect - PERFORMANCE FIX (GRAPH-40): Use ref to store FPS value
-    // Only update state every 2 seconds instead of every second to reduce re-renders
-    const fpsRef = useRef<number>(60);
-    useEffect(() => {
-      let animationFrameId: number;
-      let lastTime = performance.now();
-      let frameCount = 0;
-      let lastStateUpdate = performance.now();
-      
-      const calculateFPS = () => {
-        const now = performance.now();
-        const delta = now - lastTime;
-        frameCount++;
-        
-        // Calculate FPS every second (stored in ref, no re-render)
-        if (delta >= 1000) {
-          fpsRef.current = Math.round((frameCount * 1000) / delta);
-          frameCount = 0;
-          lastTime = now;
-          
-          // Only update React state every 2 seconds to minimize re-renders
-          if (now - lastStateUpdate >= 2000) {
-            setFps(fpsRef.current);
-            lastStateUpdate = now;
-          }
-        }
-        
-        animationFrameId = requestAnimationFrame(calculateFPS);
-      };
-      
-      // Start FPS calculation
-      if (config.showFPS && cosmographData?.nodes?.length > 0) {
-        animationFrameId = requestAnimationFrame(calculateFPS);
-      }
-      
-      return () => {
-        if (animationFrameId) {
-          cancelAnimationFrame(animationFrameId);
-        }
-      };
-    }, [config.showFPS, cosmographData?.nodes?.length]);
     
     // Cleanup on unmount - PERFORMANCE FIX (GRAPH-37): Proper WebGL cleanup
     useEffect(() => {
@@ -940,16 +801,13 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
         if (glowTimeoutRef.current) {
           clearTimeout(glowTimeoutRef.current);
         }
-        if (fpsIntervalRef.current) {
-          clearInterval(fpsIntervalRef.current);
-        }
         
         // Notify parent that context is no longer ready
         if (onContextReady) {
           onContextReady(false);
         }
       };
-    }, [onContextReady]);
+    }, [onContextReady, glowTimeoutRef]);
     
     // Update Cosmograph ref in context - use a flag to prevent loops
     const hasSetRef = useRef(false);
@@ -1072,8 +930,8 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
     useEffect(() => {
       if (cosmographData) {
         // Initialize live counts from initial data (even if empty)
-        setLiveNodeCount(cosmographData.nodes?.length || 0);
-        setLiveEdgeCount(cosmographData.links?.length || 0);
+        // PERFORMANCE FIX (GRAPH-35): Use hook's resetCounts function
+        resetCounts(cosmographData.nodes?.length || 0, cosmographData.links?.length || 0);
 
         // Only mark complete if not already complete
         if (loadingCoordinator.getStageStatus('dataPreparation') !== 'complete') {
@@ -1092,7 +950,7 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
           });
         }
       }
-    }, [cosmographData?.nodes?.length, cosmographData?.links?.length]); // Use stable dependencies
+    }, [cosmographData?.nodes?.length, cosmographData?.links?.length, resetCounts]); // Use stable dependencies
     
     // === 5. RENDER ===
     
