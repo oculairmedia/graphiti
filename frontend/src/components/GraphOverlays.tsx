@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo, useMemo } from 'react';
 import { useGraphConfig } from '../contexts/GraphConfigProvider';
 import { Card } from '@/components/ui/card';
 
@@ -12,7 +12,9 @@ interface GraphOverlaysProps {
   liveEdgeCount?: number;
 }
 
-export const GraphOverlays: React.FC<GraphOverlaysProps> = ({
+// PERFORMANCE FIX: Memoize component to prevent re-renders when parent re-renders
+// Only re-render when actual displayed values change
+const GraphOverlaysComponent: React.FC<GraphOverlaysProps> = ({
   nodeCount,
   edgeCount,
   visibleNodes,
@@ -23,15 +25,23 @@ export const GraphOverlays: React.FC<GraphOverlaysProps> = ({
 }) => {
   const { config } = useGraphConfig();
   
+  // Memoize config values we actually use to reduce re-renders from config changes
+  const showNodeCount = config.showNodeCount;
+  const showDebugInfo = config.showDebugInfo;
+  const showFPS = config.showFPS;
+  const layout = config.layout;
+  const colorScheme = config.colorScheme;
+  const disableSimulation = config.disableSimulation;
+  
   // Don't render anything if all overlays are disabled
-  if (!config.showNodeCount && !config.showDebugInfo && !config.showFPS) {
+  if (!showNodeCount && !showDebugInfo && !showFPS) {
     return null;
   }
   
   return (
     <div className="absolute top-4 left-4 z-10 space-y-2 pointer-events-none">
       {/* Node Count Overlay */}
-      {config.showNodeCount && (
+      {showNodeCount && (
         <Card className="bg-background/80 backdrop-blur-sm border-border/50 p-2 px-3">
           <div className="text-sm space-y-1">
             <div className="flex items-center justify-between gap-4">
@@ -65,7 +75,7 @@ export const GraphOverlays: React.FC<GraphOverlaysProps> = ({
       )}
       
       {/* FPS Counter */}
-      {config.showFPS && fps !== undefined && (
+      {showFPS && fps !== undefined && (
         <Card className="bg-background/80 backdrop-blur-sm border-border/50 p-2 px-3">
           <div className="text-sm flex items-center gap-2">
             <span className="text-muted-foreground">FPS:</span>
@@ -81,15 +91,15 @@ export const GraphOverlays: React.FC<GraphOverlaysProps> = ({
       )}
       
       {/* Debug Info Overlay */}
-      {config.showDebugInfo && (
+      {showDebugInfo && (
         <Card className="bg-background/80 backdrop-blur-sm border-border/50 p-2 px-3">
           <div className="text-xs space-y-1 font-mono">
             <div className="text-muted-foreground font-semibold mb-1">Debug Info</div>
             <div>Memory: {getMemoryUsage()}</div>
             <div>Renderer: WebGL</div>
-            <div>Layout: {config.layout || 'force'}</div>
-            <div>Color: {config.colorScheme}</div>
-            <div>Simulation: {config.disableSimulation ? 'paused' : 'running'}</div>
+            <div>Layout: {layout || 'force'}</div>
+            <div>Color: {colorScheme}</div>
+            <div>Simulation: {disableSimulation ? 'paused' : 'running'}</div>
             {visibleNodes !== undefined && visibleNodes < nodeCount && (
               <div className="text-yellow-500">
                 Virtualized: {((visibleNodes / nodeCount) * 100).toFixed(1)}%
@@ -113,5 +123,20 @@ function getMemoryUsage(): string {
   }
   return 'N/A';
 }
+
+// PERFORMANCE FIX: Wrap in React.memo with custom comparison
+// Only re-render when displayed values actually change
+export const GraphOverlays = memo(GraphOverlaysComponent, (prevProps, nextProps) => {
+  // Return true if props are equal (should NOT re-render)
+  return (
+    prevProps.nodeCount === nextProps.nodeCount &&
+    prevProps.edgeCount === nextProps.edgeCount &&
+    prevProps.visibleNodes === nextProps.visibleNodes &&
+    prevProps.selectedNodes === nextProps.selectedNodes &&
+    prevProps.fps === nextProps.fps &&
+    prevProps.liveNodeCount === nextProps.liveNodeCount &&
+    prevProps.liveEdgeCount === nextProps.liveEdgeCount
+  );
+});
 
 export default GraphOverlays;

@@ -66,21 +66,21 @@ export const GraphControlContext = createContext<GraphControlContextType | undef
 
 // Default configurations
 const defaultStableConfig: StableConfig = {
-  // Physics - Optimized simulation parameters based on Cosmograph v2.0 docs
+  // Physics - PERFORMANCE OPTIMIZED for 48K nodes + 121K edges
   gravity: 0.25,  // Increased from 0.05 - better clustering
-  repulsion: 1.0,  // Reduced from 3.0 - less spread, tighter layout
+  repulsion: 0.5,  // REDUCED from 1.0 - less GPU work per frame
   centerForce: 0.10,
-  friction: 0.85,  // Reduced from 0.86 - slightly smoother movement
-  linkSpring: 0.15,  // Slightly increased for stronger connections
-  linkDistance: 10,  // Increased from 3.1 - better spacing (Cosmograph default)
-  linkDistRandomVariationRange: [1, 1.2],
-  mouseRepulsion: 2.0,  // Reduced from 10.0 - more subtle interaction
-  simulationDecay: 5000, // Reduced from 10000 - faster convergence (5 seconds)
-  simulationRepulsionTheta: 1.15,  // Reduced from 1.70 - more accurate (Cosmograph default)
-  simulationCluster: 0.1, // Default cluster coefficient
-  simulationClusterStrength: 0.5,  // Not using - kills performance
+  friction: 0.90,  // INCREASED from 0.85 - faster settling, less movement
+  linkSpring: 0.1,  // REDUCED from 0.15 - less spring calculations
+  linkDistance: 10,  // Keep at 10 for good spacing
+  linkDistRandomVariationRange: [1, 1.1],  // REDUCED variation range
+  mouseRepulsion: 1.0,  // REDUCED from 2.0 - less CPU work on mouse move
+  simulationDecay: 1000, // REDUCED from 5000 - simulation stops after 1 second
+  simulationRepulsionTheta: 1.7,  // INCREASED from 1.15 - faster approximation (less accurate but faster)
+  simulationCluster: 0.05, // REDUCED from 0.1
+  simulationClusterStrength: 0.3,  // REDUCED from 0.5
   simulationImpulse: 0.01,
-  spaceSize: 4096,  // Keep at 4096, increase to 8192 only for very large graphs
+  spaceSize: 8192,  // INCREASED from 4096 - better for large graphs
   
   // Quadtree optimization
   useQuadtree: true,
@@ -107,10 +107,10 @@ const defaultStableConfig: StableConfig = {
   // Link Visibility
   linkVisibilityDistance: [50, 200],
   linkVisibilityMinTransparency: 0.05,
-  linkArrows: true,
+  linkArrows: false,  // DISABLED - arrows are expensive with 121K edges
   linkArrowsSizeScale: 1,
   
-  // Curved Links
+  // Curved Links - DISABLED for performance
   curvedLinks: false,
   curvedLinkSegments: 10,
   curvedLinkWeight: 0.5,
@@ -168,30 +168,30 @@ const defaultStableConfig: StableConfig = {
 };
 
 const defaultDynamicConfig: DynamicConfig = {
-  // Frequently toggled
+  // Frequently toggled - PERFORMANCE OPTIMIZED
   disableSimulation: false,
   renderLinks: true,
-  showLabels: true,
-  showHoveredNodeLabel: false, // Disabled for performance
+  showLabels: false,  // DISABLED - labels are expensive with 48K nodes
+  showHoveredNodeLabel: true,  // Show label only on hover (cheap)
   
   // Label optimization settings
-  showDynamicLabels: true,
-  showTopLabels: true,
-  showTopLabelsLimit: 100,
+  showDynamicLabels: false,  // DISABLED for performance
+  showTopLabels: false,  // DISABLED for performance
+  showTopLabelsLimit: 50,  // REDUCED from 100
   
   // Dynamic node configuration
   nodeTypeColors: {},
   nodeTypeVisibility: {},
   nodeAccessHighlightColor: '#FFD700',
-  sizeMapping: 'degree',
+  sizeMapping: 'uniform',  // CHANGED from 'degree' - uniform is faster (no calculations)
   
-  // Clustering configuration
-  clusteringEnabled: true,
+  // Clustering configuration - SIMPLIFIED for performance
+  clusteringEnabled: false,  // DISABLED - clustering is expensive
   pointClusterBy: 'node_type',
   pointClusterStrengthBy: 'clusterStrength',
   clusteringMethod: 'none',
-  centralityMetric: 'pagerank',
-  clusterStrength: 0.5,
+  centralityMetric: 'degree',  // CHANGED from 'pagerank' - degree is pre-computed
+  clusterStrength: 0.3,  // REDUCED from 0.5
   clusterPositions: undefined,
   clusterMapping: undefined,
   

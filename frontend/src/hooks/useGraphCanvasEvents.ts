@@ -5,9 +5,27 @@
  * Extracted from GraphCanvasV2 to improve testability and separation of concerns.
  */
 
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 import { GraphNode } from '../types/graph';
 import { GraphClient } from '../api/graphClient';
+
+// PERFORMANCE FIX: Cache node details to avoid redundant network requests
+// LRU-style cache with max 500 entries
+const NODE_DETAILS_CACHE_MAX = 500;
+const nodeDetailsCache = new Map<string, GraphNode>();
+
+function getCachedNodeDetails(nodeId: string): GraphNode | undefined {
+  return nodeDetailsCache.get(nodeId);
+}
+
+function setCachedNodeDetails(nodeId: string, node: GraphNode): void {
+  // Simple LRU: delete oldest entries if over limit
+  if (nodeDetailsCache.size >= NODE_DETAILS_CACHE_MAX) {
+    const firstKey = nodeDetailsCache.keys().next().value;
+    if (firstKey) nodeDetailsCache.delete(firstKey);
+  }
+  nodeDetailsCache.set(nodeId, node);
+}
 
 interface EventHandlersConfig {
   nodes: GraphNode[];
@@ -55,18 +73,24 @@ export const useGraphCanvasEvents = ({
           onNodeClick(node);
           onNodeSelect(node.id);
           
-          // Fetch full details in background and update panel when ready
+          // PERFORMANCE FIX: Check cache first, then fetch if needed
           if (node.id) {
-            const client = new GraphClient();
-            client.getNodeDetails(node.id)
-              .then(fullNodeData => {
-                console.log(`[useGraphCanvasEvents] Updated with full node details:`, fullNodeData);
-                onNodeClick(fullNodeData as any);
-              })
-              .catch(error => {
-                console.error(`[useGraphCanvasEvents] Failed to fetch node details:`, error);
-                // Already showing basic data, so no need to do anything
-              });
+            const cached = getCachedNodeDetails(node.id);
+            if (cached) {
+              // Use cached data immediately
+              onNodeClick(cached);
+            } else {
+              // Fetch full details in background and cache
+              const client = new GraphClient();
+              client.getNodeDetails(node.id)
+                .then(fullNodeData => {
+                  setCachedNodeDetails(node.id, fullNodeData as GraphNode);
+                  onNodeClick(fullNodeData as any);
+                })
+                .catch(() => {
+                  // Already showing basic data, so no need to do anything
+                });
+            }
           }
           return;
         }
@@ -75,24 +99,26 @@ export const useGraphCanvasEvents = ({
       // For incrementally added nodes, access node directly by index
       const nodeData = nodes[index];
       if (nodeData) {
-        console.log(`[useGraphCanvasEvents] Clicked on node:`, nodeData);
-        
         // Show the panel immediately with available data
         onNodeClick(nodeData);
         onNodeSelect(nodeData.id || '');
         
-        // Fetch full details in background if we have an ID
+        // PERFORMANCE FIX: Check cache first, then fetch if needed
         if (nodeData.id) {
-          const client = new GraphClient();
-          client.getNodeDetails(nodeData.id)
-            .then(fullNodeData => {
-              console.log(`[useGraphCanvasEvents] Updated with full node details:`, fullNodeData);
-              onNodeClick(fullNodeData as any);
-            })
-            .catch(error => {
-              console.error(`[useGraphCanvasEvents] Failed to fetch node details:`, error);
-              // Already showing basic data, so no need to do anything
-            });
+          const cached = getCachedNodeDetails(nodeData.id);
+          if (cached) {
+            onNodeClick(cached);
+          } else {
+            const client = new GraphClient();
+            client.getNodeDetails(nodeData.id)
+              .then(fullNodeData => {
+                setCachedNodeDetails(nodeData.id, fullNodeData as GraphNode);
+                onNodeClick(fullNodeData as any);
+              })
+              .catch(() => {
+                // Already showing basic data, so no need to do anything
+              });
+          }
         }
       } else {
         console.warn(`[useGraphCanvasEvents] No node data found for index ${index}`);
