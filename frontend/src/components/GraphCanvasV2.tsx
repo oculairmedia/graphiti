@@ -512,6 +512,13 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
       onClearSelection
     });
     
+    // PERFORMANCE FIX: Memoize eventHandlers object to prevent re-renders
+    const eventHandlers = useMemo(() => ({
+      handleClick,
+      handleMouseOver,
+      handleMouseOut
+    }), [handleClick, handleMouseOver, handleMouseOut]);
+    
     
     // === VISUALIZATION CONFIGURATION (using extracted hook) ===
     const visualConfig = useCosmographVisualization({
@@ -758,16 +765,60 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
       stateUpdateInterval: 2000
     });
     
-    // PERFORMANCE FIX (GRAPH-35): Use extracted hook for node access events
-    useGraphNodeAccessEvents({
-      cosmographRef,
-      getNodeIndices,
-      addGlowingNodes,
-      clearGlowingNodes,
-      glowTimeoutRef,
-      glowDuration: 2000,
-      debug: false
-    });
+    // Subscribe to WebSocket events for node access highlighting
+    // NOTE: Kept inline instead of using useGraphNodeAccessEvents hook due to
+    // stale closure issues with getNodeIndices when nodes change
+    const { subscribe: subscribeToWebSocket } = useWebSocketContext();
+    useEffect(() => {
+      const unsubscribe = subscribeToWebSocket((event: any) => {
+        if (event.type === 'node_access' && event.node_ids) {
+          // Cancel any existing glow timeout
+          if (glowTimeoutRef.current) {
+            clearTimeout(glowTimeoutRef.current);
+          }
+          
+          // Update glowing nodes
+          addGlowingNodes(event.node_ids);
+          
+          // Highlight nodes in Cosmograph using O(1) lookups
+          if (cosmographRef.current && nodes) {
+            const indices = getNodeIndices(event.node_ids);
+            
+            if (indices.length > 0) {
+              // Select all nodes for visual effect
+              if (cosmographRef.current.selectPoints) {
+                cosmographRef.current.selectPoints(indices, false);
+              }
+              // Focus on the first node to show the ring
+              if (cosmographRef.current.setFocusedPoint) {
+                cosmographRef.current.setFocusedPoint(indices[0]);
+              }
+            }
+          }
+          
+          // Remove glow after 2 seconds
+          glowTimeoutRef.current = setTimeout(() => {
+            clearGlowingNodes();
+            // Clear focus and selection in Cosmograph
+            if (cosmographRef.current) {
+              if (cosmographRef.current.setFocusedPoint) {
+                cosmographRef.current.setFocusedPoint(undefined);
+              }
+              if (cosmographRef.current.unselectAllPoints) {
+                cosmographRef.current.unselectAllPoints();
+              }
+            }
+          }, 2000);
+        }
+      });
+      
+      return () => {
+        unsubscribe();
+        if (glowTimeoutRef.current) {
+          clearTimeout(glowTimeoutRef.current);
+        }
+      };
+    }, [subscribeToWebSocket, nodes, getNodeIndices, addGlowingNodes, clearGlowingNodes, glowTimeoutRef]);
     
     // Expose DuckDB utilities for debugging
     useEffect(() => {
@@ -996,7 +1047,7 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
           cosmographData={cosmographData}
           config={config}
           visualConfig={visualConfig}
-          eventHandlers={{ handleClick, handleMouseOver, handleMouseOut }}
+          eventHandlers={eventHandlers}
           glowingNodes={glowingNodes}
           onReady={() => {
             setIsReady(true);
