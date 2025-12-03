@@ -477,6 +477,18 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
     
     // === 2. DATA PREPARATION ===
     
+    // PERFORMANCE FIX (GRAPH-36): Create node ID→index Map for O(1) lookups
+    // Previously used findIndex() which is O(n) per lookup, causing O(n*m) for selections
+    const nodeIndexMap = useMemo(() => {
+      const map = new Map<string, number>();
+      if (nodes) {
+        nodes.forEach((node, index) => {
+          map.set(node.id, index);
+        });
+      }
+      return map;
+    }, [nodes]);
+    
     // Transform nodes and links for Cosmograph using extracted hook
     const cosmographData = useCosmographDataTransform(
       nodes || [],
@@ -534,9 +546,9 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
         selectSingleNode(node.id);
         // Add to glowing nodes for highlight color
         setGlowingNodes(new Map([[node.id, Date.now()]]));
-        // Also select in Cosmograph
-        const index = nodes.findIndex(n => n.id === node.id);
-        if (index >= 0 && cosmographRef.current?.selectPoint) {
+        // Also select in Cosmograph - O(1) lookup using nodeIndexMap
+        const index = nodeIndexMap.get(node.id);
+        if (index !== undefined && cosmographRef.current?.selectPoint) {
           cosmographRef.current.selectPoint(index, false, false);
         }
       },
@@ -549,20 +561,24 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
           newGlowing.set(node.id, now);
         });
         setGlowingNodes(newGlowing);
-        // Also select in Cosmograph
-        const indices = nodeList.map(node => nodes.findIndex(n => n.id === node.id)).filter(i => i >= 0);
+        // Also select in Cosmograph - O(1) lookup per node using nodeIndexMap
+        const indices: number[] = [];
+        nodeList.forEach(node => {
+          const index = nodeIndexMap.get(node.id);
+          if (index !== undefined) indices.push(index);
+        });
         if (indices.length > 0 && cosmographRef.current?.selectPoints) {
           cosmographRef.current.selectPoints(indices, false);
         }
       },
       
-      // Camera methods
+      // Camera methods - O(1) lookup per node using nodeIndexMap
       focusOnNodes: (nodeIds: string[], duration?: number, padding?: number) => {
-        // Get indices for the node IDs
+        // Get indices for the node IDs using O(1) Map lookup
         const indices: number[] = [];
         nodeIds.forEach(id => {
-          const index = nodes.findIndex(n => n.id === id);
-          if (index >= 0) indices.push(index);
+          const index = nodeIndexMap.get(id);
+          if (index !== undefined) indices.push(index);
         });
         if (indices.length > 0 && cosmographRef.current?.fitViewByIndices) {
           cosmographRef.current.fitViewByIndices(indices, duration, padding);
@@ -717,6 +733,7 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
       getCosmographRef: () => cosmographRef
     }), [
       nodes,
+      nodeIndexMap,  // PERFORMANCE FIX: Add nodeIndexMap for O(1) lookups
       statistics,
       clearAllSelection,
       selectSingleNode,
@@ -814,11 +831,12 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
           });
           
           // Highlight nodes in Cosmograph using focus (shows the gold ring)
+          // O(1) lookup per node using nodeIndexMap
           if (cosmographRef.current && nodes) {
             const indices: number[] = [];
             event.node_ids.forEach((nodeId: string) => {
-              const index = nodes.findIndex(n => n.id === nodeId);
-              if (index >= 0) indices.push(index);
+              const index = nodeIndexMap.get(nodeId);
+              if (index !== undefined) indices.push(index);
             });
             
             if (indices.length > 0) {
@@ -857,23 +875,31 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
       };
     }, [subscribeToWebSocket, nodes]);
     
-    // FPS calculation effect
+    // FPS calculation effect - PERFORMANCE FIX (GRAPH-40): Use ref to store FPS value
+    // Only update state every 2 seconds instead of every second to reduce re-renders
+    const fpsRef = useRef<number>(60);
     useEffect(() => {
       let animationFrameId: number;
       let lastTime = performance.now();
       let frameCount = 0;
+      let lastStateUpdate = performance.now();
       
       const calculateFPS = () => {
         const now = performance.now();
         const delta = now - lastTime;
         frameCount++;
         
-        // Update FPS every second
+        // Calculate FPS every second (stored in ref, no re-render)
         if (delta >= 1000) {
-          const currentFps = Math.round((frameCount * 1000) / delta);
-          setFps(currentFps);
+          fpsRef.current = Math.round((frameCount * 1000) / delta);
           frameCount = 0;
           lastTime = now;
+          
+          // Only update React state every 2 seconds to minimize re-renders
+          if (now - lastStateUpdate >= 2000) {
+            setFps(fpsRef.current);
+            lastStateUpdate = now;
+          }
         }
         
         animationFrameId = requestAnimationFrame(calculateFPS);
@@ -891,9 +917,34 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
       };
     }, [config.showFPS, cosmographData?.nodes?.length]);
     
-    // Cleanup on unmount
+    // Cleanup on unmount - PERFORMANCE FIX (GRAPH-37): Proper WebGL cleanup
     useEffect(() => {
       return () => {
+        // Clean up WebGL resources to prevent memory leaks
+        if (cosmographRef.current) {
+          // Dispose of Cosmograph instance if it has a dispose method
+          if (typeof cosmographRef.current.dispose === 'function') {
+            cosmographRef.current.dispose();
+          }
+          // Clear any tracked points
+          if (typeof cosmographRef.current.trackPointPositionsByIndices === 'function') {
+            cosmographRef.current.trackPointPositionsByIndices([]);
+          }
+          // Stop any running simulation
+          if (typeof cosmographRef.current.pause === 'function') {
+            cosmographRef.current.pause();
+          }
+        }
+        
+        // Clear any pending timeouts
+        if (glowTimeoutRef.current) {
+          clearTimeout(glowTimeoutRef.current);
+        }
+        if (fpsIntervalRef.current) {
+          clearInterval(fpsIntervalRef.current);
+        }
+        
+        // Notify parent that context is no longer ready
         if (onContextReady) {
           onContextReady(false);
         }
@@ -910,13 +961,14 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
     }, [cosmographRef.current]); // eslint-disable-line react-hooks/exhaustive-deps
     
     // Handle highlighted nodes - visual selection for Show Neighbors
+    // PERFORMANCE FIX (GRAPH-36): O(1) lookup per node instead of O(n) findIndex
     useEffect(() => {
       if (highlightedNodes && highlightedNodes.length > 0 && cosmographRef.current && nodes) {
-        // Find indices of highlighted nodes
+        // Find indices of highlighted nodes using O(1) Map lookup
         const indices: number[] = [];
         highlightedNodes.forEach(nodeId => {
-          const index = nodes.findIndex(n => n.id === nodeId);
-          if (index >= 0) indices.push(index);
+          const index = nodeIndexMap.get(nodeId);
+          if (index !== undefined) indices.push(index);
         });
         
         // Select nodes visually in Cosmograph
@@ -940,7 +992,7 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
           cosmographRef.current.unselectAllPoints();
         }
       }
-    }, [highlightedNodes, highlightNodeVisuals, nodes]);
+    }, [highlightedNodes, highlightNodeVisuals, nodes, nodeIndexMap]);
     
     // Handle selected nodes - simplified to just update internal state
     useEffect(() => {
