@@ -7,8 +7,16 @@
  * to ensure zero regressions. All props are preserved exactly as they were.
  */
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Cosmograph } from '@cosmograph/react';
+
+// PERFORMANCE FIX: Module-level constants to avoid array recreation on each render
+const DEFAULT_COLOR_PALETTE = [
+  '#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6',
+  '#1abc9c', '#34495e', '#e67e22', '#95a5a6', '#d35400'
+] as const;
+
+const DEFAULT_LINK_DIST_VARIATION_RANGE = [1, 1.2] as const;
 
 interface CosmographData {
   nodes: any[];
@@ -62,6 +70,23 @@ export const GraphCanvasRenderer: React.FC<GraphCanvasRendererProps> = ({
   
   const CosmographAny = Cosmograph as any;
   
+  // PERFORMANCE FIX: Memoize label class name functions to avoid recreation on each render
+  const pointLabelClassName = useMemo(() => () => 
+    `background: ${config.labelBackgroundColor || 'rgba(0,0,0,0.7)'}; ` +
+    `font-weight: ${config.labelFontWeight || 400}; ` +
+    `padding: 4px 6px; border-radius: 3px;`,
+    [config.labelBackgroundColor, config.labelFontWeight]
+  );
+  
+  const hoveredPointLabelClassName = useMemo(() => () =>
+    `background: ${config.hoveredLabelBackgroundColor || 'rgba(0,0,0,0.9)'}; ` +
+    `font-weight: ${config.hoveredLabelFontWeight || 600}; ` +
+    `font-size: ${config.hoveredLabelSize || 14}px; ` +
+    `color: ${config.hoveredLabelColor || '#ffffff'}; ` +
+    `padding: 5px 8px; border-radius: 4px;`,
+    [config.hoveredLabelBackgroundColor, config.hoveredLabelFontWeight, config.hoveredLabelSize, config.hoveredLabelColor]
+  );
+  
   return (
     <CosmographAny
       ref={cosmographRef}
@@ -83,19 +108,9 @@ export const GraphCanvasRenderer: React.FC<GraphCanvasRendererProps> = ({
       showTopLabels={config.showTopLabels || false}
       showTopLabelsLimit={config.showTopLabelsLimit || 100}
       showHoveredPointLabel={config.showHoveredNodeLabel !== false}
-      // Use className for background and font weight styling
-      pointLabelClassName={() => 
-        `background: ${config.labelBackgroundColor || 'rgba(0,0,0,0.7)'}; ` +
-        `font-weight: ${config.labelFontWeight || 400}; ` +
-        `padding: 4px 6px; border-radius: 3px;`
-      }
-      hoveredPointLabelClassName={() => 
-        `background: ${config.hoveredLabelBackgroundColor || 'rgba(0,0,0,0.9)'}; ` +
-        `font-weight: ${config.hoveredLabelFontWeight || 600}; ` +
-        `font-size: ${config.hoveredLabelSize || 14}px; ` +
-        `color: ${config.hoveredLabelColor || '#ffffff'}; ` +
-        `padding: 5px 8px; border-radius: 4px;`
-      }
+      // Use className for background and font weight styling (memoized)
+      pointLabelClassName={pointLabelClassName}
+      hoveredPointLabelClassName={hoveredPointLabelClassName}
       // Link configuration - use indices for performance
       linkSourceBy="source"
       linkSourceIndexBy="sourceIndex"
@@ -134,10 +149,7 @@ export const GraphCanvasRenderer: React.FC<GraphCanvasRendererProps> = ({
       pointSizeStrategy="auto"
       pointSizeRange={pointSizeRange}
       // Color configuration
-      pointColorPalette={[
-        '#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6',
-        '#1abc9c', '#34495e', '#e67e22', '#95a5a6', '#d35400'
-      ]}
+      pointColorPalette={DEFAULT_COLOR_PALETTE}
       // Use strategy based on color scheme
       pointColorStrategy={nodeColorConfig.strategy}
       // Specify which column contains the color data
@@ -164,7 +176,7 @@ export const GraphCanvasRenderer: React.FC<GraphCanvasRendererProps> = ({
       simulationRepulsionTheta={config.simulationRepulsionTheta ?? 1.7}
       simulationLinkDistance={config.linkDistance ?? config.simulationLinkDistance ?? 2}
       simulationLinkSpring={config.linkSpring ?? config.simulationLinkSpring ?? 1}
-      simulationLinkDistRandomVariationRange={config.linkDistRandomVariationRange ?? [1, 1.2]}
+      simulationLinkDistRandomVariationRange={config.linkDistRandomVariationRange ?? DEFAULT_LINK_DIST_VARIATION_RANGE}
       simulationFriction={config.friction ?? config.simulationFriction ?? 0.85}
       simulationDecay={config.simulationDecay ?? 1000}
       simulationCluster={config.simulationCluster ?? 0.1}

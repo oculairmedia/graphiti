@@ -6,6 +6,14 @@ import { generateNodeTypeColor } from '../utils/nodeTypeColors';
 // GraphConfig type - we'll use any for now since it's dynamically typed
 type GraphConfig = any;
 
+// PERFORMANCE FIX: Module-level constant to avoid array recreation on each render
+const COMMUNITY_COLORS = [
+  '#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6',
+  '#1abc9c', '#34495e', '#e67e22', '#95a5a6', '#d35400',
+  '#16a085', '#27ae60', '#2980b9', '#8e44ad', '#2c3e50',
+  '#f1c40f', '#e74c3c', '#ecf0f1', '#95a5a6', '#34495e'
+] as const;
+
 interface CosmographData {
   nodes: any[];
   links: any[];
@@ -170,20 +178,14 @@ export function useCosmographVisualization({
           const lowColor = config.gradientLowColor || '#4ECDC4';
           
           if (config.colorScheme === 'by-community') {
-            const communityColors = [
-              '#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6',
-              '#1abc9c', '#34495e', '#e67e22', '#95a5a6', '#d35400',
-              '#16a085', '#27ae60', '#2980b9', '#8e44ad', '#2c3e50',
-              '#f1c40f', '#e74c3c', '#ecf0f1', '#95a5a6', '#34495e'
-            ];
             let hash = 0;
             const clusterStr = String(value);
             for (let i = 0; i < clusterStr.length; i++) {
               hash = ((hash << 5) - hash) + clusterStr.charCodeAt(i);
               hash = hash & hash;
             }
-            const index = Math.abs(hash) % communityColors.length;
-            return communityColors[index];
+            const index = Math.abs(hash) % COMMUNITY_COLORS.length;
+            return COMMUNITY_COLORS[index];
           }
           
           if (config.gradientMidColor) {
