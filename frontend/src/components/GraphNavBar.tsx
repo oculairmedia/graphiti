@@ -1,5 +1,5 @@
 import React from 'react';
-import { Download, Upload, Camera, Play, Pause, Settings, BarChart3, Maximize2 } from 'lucide-react';
+import { Download, Upload, Camera, Play, Pause, Settings, BarChart3, Maximize2, Activity } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { GraphSearch } from './GraphSearch';
@@ -24,6 +24,7 @@ interface GraphNavBarProps {
   onToggleSimulation: () => void;
   onSettingsClick: () => void;
   onStatsClick: () => void;
+  onMonitoringClick: () => void;
   onFullscreenClick: () => void;
 }
 
@@ -45,6 +46,7 @@ export const GraphNavBar: React.FC<GraphNavBarProps> = ({
   onToggleSimulation,
   onSettingsClick,
   onStatsClick,
+  onMonitoringClick,
   onFullscreenClick,
 }) => {
   return (
@@ -130,6 +132,15 @@ export const GraphNavBar: React.FC<GraphNavBarProps> = ({
           title="Statistics"
         >
           <BarChart3 className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onMonitoringClick}
+          className="hover:bg-primary/10"
+          title="System Monitoring"
+        >
+          <Activity className="h-4 w-4" />
         </Button>
         <Button
           variant="ghost"

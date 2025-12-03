@@ -279,6 +279,12 @@ export function useCosmographIncrementalUpdates(
       return false;
     }
 
+    // Guard: Skip if empty array (would cause SQL syntax error)
+    if (!nodeIds || nodeIds.length === 0) {
+      log('No nodes to remove (empty array)');
+      return true; // Not an error, just nothing to do
+    }
+
     try {
       log(`Removing ${nodeIds.length} nodes`);
       await cosmographRef.current.removePointsByIds(nodeIds);
@@ -364,6 +370,12 @@ export function useCosmographIncrementalUpdates(
     if (!cosmographRef.current?.removeLinksByPointIdPairs) {
       log('Cosmograph removeLinksByPointIdPairs method not available');
       return false;
+    }
+
+    // Guard: Skip if empty array (would cause SQL syntax error)
+    if (!edgePairs || edgePairs.length === 0) {
+      log('No edges to remove (empty array)');
+      return true; // Not an error, just nothing to do
     }
 
     try {
