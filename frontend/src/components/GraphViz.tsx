@@ -8,6 +8,7 @@ import { LazyGraphCanvas } from './LazyGraphCanvas';
 // Lazy load modal panels
 const FilterPanel = React.lazy(() => import('./FilterPanel').then(m => ({ default: m.FilterPanel })));
 const StatsPanel = React.lazy(() => import('./StatsPanel').then(m => ({ default: m.StatsPanel })));
+const MonitoringDashboard = React.lazy(() => import('./MonitoringDashboard').then(m => ({ default: m.MonitoringDashboard })));
 // Direct import for NodeDetailsPanel to avoid Vite dynamic import issues
 import { NodeDetailsPanel } from './NodeDetailsPanel';
 import { GraphNavBar } from './GraphNavBar';
@@ -37,6 +38,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
   // const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const [showStatsPanel, setShowStatsPanel] = useState(false);
+  const [showMonitoringPanel, setShowMonitoringPanel] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isSimulationRunning, setIsSimulationRunning] = useState(true);
   
@@ -364,6 +366,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
           onToggleSimulation={toggleSimulation}
           onSettingsClick={() => setLeftPanelCollapsed(!leftPanelCollapsed)}
           onStatsClick={() => setShowStatsPanel(true)}
+          onMonitoringClick={() => setShowMonitoringPanel(true)}
           onFullscreenClick={toggleFullscreen}
         />
 
@@ -433,7 +436,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
 
         {showStatsPanel && (
           <React.Suspense fallback={<div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>}>
-            <StatsPanel 
+            <StatsPanel
               isOpen={showStatsPanel}
               onClose={() => setShowStatsPanel(false)}
               data={transformedData.nodes.length > 0 ? {
@@ -447,6 +450,15 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
                 stats: data?.stats || {}
               } : undefined}
               liveStats={liveStats}
+            />
+          </React.Suspense>
+        )}
+
+        {showMonitoringPanel && (
+          <React.Suspense fallback={<div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>}>
+            <MonitoringDashboard
+              isOpen={showMonitoringPanel}
+              onClose={() => setShowMonitoringPanel(false)}
             />
           </React.Suspense>
         )}

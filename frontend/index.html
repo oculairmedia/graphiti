@@ -34,7 +34,8 @@
         window.__PRELOAD_CACHE__ = {};
         window.__PRELOAD_START_TIME__ = performance.now();
         
-        const serverUrl = 'http://192.168.50.90:3000';
+        // Use current origin (goes through nginx on port 8088)
+        const serverUrl = window.location.origin;
         // Add cache-busting timestamp to ensure fresh data
         const cacheBuster = '?t=' + Date.now();
         

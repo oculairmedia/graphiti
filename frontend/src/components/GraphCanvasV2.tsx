@@ -1018,11 +1018,11 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
     
     // Mark dataPreparation and canvas stages complete when cosmograph data is ready
     useEffect(() => {
-      if (cosmographData && cosmographData.nodes?.length > 0) {
-        // Initialize live counts from initial data
-        setLiveNodeCount(cosmographData.nodes.length);
+      if (cosmographData) {
+        // Initialize live counts from initial data (even if empty)
+        setLiveNodeCount(cosmographData.nodes?.length || 0);
         setLiveEdgeCount(cosmographData.links?.length || 0);
-        
+
         // Only mark complete if not already complete
         if (loadingCoordinator.getStageStatus('dataPreparation') !== 'complete') {
           loadingCoordinator.setStageComplete('dataPreparation', {
@@ -1030,12 +1030,13 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
             linksCount: cosmographData.links?.length || 0
           });
         }
-        
+
         // Only mark canvas complete if not already complete
+        // Mark complete even with empty data so loading screen doesn't hang
         if (loadingCoordinator.getStageStatus('canvas') !== 'complete') {
           loadingCoordinator.setStageComplete('canvas', {
             canvasReady: true,
-            hasData: true
+            hasData: (cosmographData.nodes?.length || 0) > 0
           });
         }
       }
