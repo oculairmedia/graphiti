@@ -226,6 +226,12 @@ export function useGraphWebSocket(config: UseGraphWebSocketConfig = {}) {
 
   // Batch processing timer
   const batchTimerRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // PERFORMANCE FIX (GRAPH-41): Reusable arrays to avoid allocation on every batch
+  const batchNodesArrayRef = useRef<GraphNode[]>([]);
+  const batchEdgesArrayRef = useRef<GraphLink[]>([]);
+  const batchNodeIdsArrayRef = useRef<string[]>([]);
+  const batchEdgeIdsArrayRef = useRef<string[]>([]);
 
   // Update rate calculation
   const updateTimestampsRef = useRef<number[]>([]);
@@ -283,15 +289,26 @@ export function useGraphWebSocket(config: UseGraphWebSocketConfig = {}) {
     
     log(`Processing batch: ${batch.nodes.size} nodes, ${batch.edges.size} edges`);
     
-    // Create delta update event
-    // Use the stored operation from the batch
+    // PERFORMANCE FIX (GRAPH-41): Reuse arrays instead of Array.from on every batch
+    // Clear and repopulate the reusable arrays
+    batchNodesArrayRef.current.length = 0;
+    batchEdgesArrayRef.current.length = 0;
+    batchNodeIdsArrayRef.current.length = 0;
+    batchEdgeIdsArrayRef.current.length = 0;
+    
+    batch.nodes.forEach(node => batchNodesArrayRef.current.push(node));
+    batch.edges.forEach(edge => batchEdgesArrayRef.current.push(edge));
+    batch.deletedNodeIds.forEach(id => batchNodeIdsArrayRef.current.push(id));
+    batch.deletedEdgeIds.forEach(id => batchEdgeIdsArrayRef.current.push(id));
+    
+    // Create delta update event using reusable arrays
     const event: DeltaUpdateEvent = {
       type: 'delta_update',
       operation: (batch as any).operation || (batch.deletedNodeIds.size > 0 || batch.deletedEdgeIds.size > 0 ? 'delete' : 'update'),
-      nodes: Array.from(batch.nodes.values()),
-      edges: Array.from(batch.edges.values()),
-      nodeIds: Array.from(batch.deletedNodeIds),
-      edgeIds: Array.from(batch.deletedEdgeIds),
+      nodes: batchNodesArrayRef.current,
+      edges: batchEdgesArrayRef.current,
+      nodeIds: batchNodeIdsArrayRef.current,
+      edgeIds: batchEdgeIdsArrayRef.current,
       timestamp: batch.timestamp,
       source: 'rust'
     };

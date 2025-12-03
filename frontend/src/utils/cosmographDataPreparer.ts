@@ -152,8 +152,10 @@ export function sanitizeNode(
   const cacheKey = generateNodeCacheKey(node.id, config.clusteringMethod, isIncremental);
   if (sanitizationCache.has(cacheKey)) {
     const cached = sanitizationCache.get(cacheKey)!;
-    // Update index in case it changed
-    return { ...cached, index: Number(index) };
+    // PERFORMANCE FIX (GRAPH-38): Mutate index in place instead of creating new object
+    // This avoids object allocation on cache hits (majority of calls after initial load)
+    cached.index = Number(index);
+    return cached;
   }
   
   // Get or assign node type index for color generation

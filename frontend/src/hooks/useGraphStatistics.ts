@@ -145,10 +145,13 @@ export function useGraphStatistics(
     
     // Calculate node degrees
     const degrees = calculateNodeDegrees(nodes, links);
-    const degreeValues = Array.from(degrees.values());
     
-    // Calculate isolated nodes
-    const isolatedNodes = degreeValues.filter(d => d === 0).length;
+    // PERFORMANCE FIX (GRAPH-44): Count isolated nodes with direct iteration
+    // instead of Array.from().filter() which creates 2 intermediate arrays
+    let isolatedNodes = 0;
+    degrees.forEach(degree => {
+      if (degree === 0) isolatedNodes++;
+    });
     
     // Performance tracking
     const updateTime = performance.now() - startTime;

@@ -45,6 +45,10 @@ export function useOptimizedIncrementalUpdates({
   const nodesRef = useRef<Map<string, GraphNode>>(new Map());
   const edgesRef = useRef<Map<string, GraphLink>>(new Map());
   
+  // PERFORMANCE FIX (GRAPH-41): Reusable arrays to avoid allocation on every delta
+  const nodesArrayRef = useRef<GraphNode[]>([]);
+  const edgesArrayRef = useRef<GraphLink[]>([]);
+  
   const [state, setState] = useState<IncrementalUpdateState>({
     isProcessing: false,
     queueSize: 0,
@@ -165,12 +169,17 @@ export function useOptimizedIncrementalUpdates({
     
     // Notify if there were changes
     if ((nodesChanged || edgesChanged) && onUpdate) {
-      const nodes = Array.from(nodesRef.current.values());
-      const edges = Array.from(edgesRef.current.values());
+      // PERFORMANCE FIX (GRAPH-41): Reuse arrays instead of creating new ones with Array.from
+      // Clear and repopulate the reusable arrays
+      nodesArrayRef.current.length = 0;
+      edgesArrayRef.current.length = 0;
+      
+      nodesRef.current.forEach(node => nodesArrayRef.current.push(node));
+      edgesRef.current.forEach(edge => edgesArrayRef.current.push(edge));
       
       // Use requestAnimationFrame to batch UI updates
       requestAnimationFrame(() => {
-        onUpdate(nodes, edges);
+        onUpdate(nodesArrayRef.current, edgesArrayRef.current);
       });
     }
     
@@ -286,9 +295,16 @@ export function useOptimizedIncrementalUpdates({
   }, [onUpdate]);
   
   const getCurrentData = useCallback(() => {
+    // PERFORMANCE FIX (GRAPH-41): Reuse arrays for getCurrentData
+    nodesArrayRef.current.length = 0;
+    edgesArrayRef.current.length = 0;
+    
+    nodesRef.current.forEach(node => nodesArrayRef.current.push(node));
+    edgesRef.current.forEach(edge => edgesArrayRef.current.push(edge));
+    
     return {
-      nodes: Array.from(nodesRef.current.values()),
-      edges: Array.from(edgesRef.current.values()),
+      nodes: nodesArrayRef.current,
+      edges: edgesArrayRef.current,
     };
   }, []);
   
