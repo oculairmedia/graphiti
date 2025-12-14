@@ -710,8 +710,8 @@ class Graphiti:
                     f'Episode {episode.uuid}: Using cached resolved nodes ({len(state.resolved_nodes)} nodes)'
                 )
                 nodes = state.resolved_nodes
-                uuid_map = state.uuid_map
-                node_duplicates = state.node_duplicates
+                uuid_map = state.uuid_map or {}
+                node_duplicates = state.node_duplicates or []
 
             # Stage 3: Extract edges (with retry)
             if not state.edges_extracted:
