@@ -46,7 +46,7 @@ impl Config {
                 .unwrap_or_else(|_| "2560".to_string()) // Default to Qwen3-Embedding-4B dimension
                 .parse()?,
             max_method_results: env::var("MAX_METHOD_RESULTS")
-                .unwrap_or_else(|_| "1000".to_string()) // Increased from hardcoded 100
+                .unwrap_or_else(|_| "200".to_string()) // Reduced from 1000 - fulltext index is fast, don't need huge over-fetch
                 .parse()?,
         })
     }
