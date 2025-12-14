@@ -2,7 +2,10 @@
 
 use anyhow::Result;
 use chrono::{DateTime, Utc};
-use falkordb::{AsyncGraph, FalkorAsyncClient, FalkorClientBuilder, FalkorConnectionInfo, FalkorValue, LazyResultSet};
+use falkordb::{
+    AsyncGraph, FalkorAsyncClient, FalkorClientBuilder, FalkorConnectionInfo, FalkorValue,
+    LazyResultSet,
+};
 use tracing::instrument;
 use uuid::Uuid;
 
@@ -81,7 +84,11 @@ fn parse_edges_from_properties(result: LazyResultSet<'_>) -> Result<Vec<Edge>> {
             fact,
             created_at,
             episodes: vec![], // We don't fetch episodes in this optimized path
-            group_id: if group_id.is_empty() { None } else { Some(group_id) },
+            group_id: if group_id.is_empty() {
+                None
+            } else {
+                Some(group_id)
+            },
             weight: weight as f32,
         });
     }
@@ -148,22 +155,24 @@ impl FalkorClientV2 {
         match self.graph.query(&cypher).execute().await {
             Ok(result) => {
                 let mut nodes = parser_v2::parse_nodes_from_falkor_v2(result.data)?;
-                
+
                 // Apply group filter if specified (post-filtering since fulltext index doesn't support it)
                 if let Some(groups) = group_ids {
                     if !groups.is_empty() {
-                        nodes.retain(|n| {
-                            n.group_id.as_ref().map_or(false, |g| groups.contains(g))
-                        });
+                        nodes.retain(|n| n.group_id.as_ref().map_or(false, |g| groups.contains(g)));
                     }
                 }
-                
+
                 Ok(nodes)
             }
             Err(e) => {
                 // Fallback to CONTAINS-based search if fulltext index fails
-                tracing::warn!("Fulltext index query failed, falling back to CONTAINS: {:?}", e);
-                self.fulltext_search_nodes_fallback(query, group_ids, limit).await
+                tracing::warn!(
+                    "Fulltext index query failed, falling back to CONTAINS: {:?}",
+                    e
+                );
+                self.fulltext_search_nodes_fallback(query, group_ids, limit)
+                    .await
             }
         }
     }
@@ -244,9 +253,14 @@ impl FalkorClientV2 {
                 }
             }
             Err(e) => {
-                tracing::warn!("HNSW vector index query failed for nodes, falling back to brute-force: {:?}", e);
+                tracing::warn!(
+                    "HNSW vector index query failed for nodes, falling back to brute-force: {:?}",
+                    e
+                );
                 // Fallback to brute-force if vector index not available
-                return self.similarity_search_nodes_brute_force(embedding, limit, min_score, group_ids).await;
+                return self
+                    .similarity_search_nodes_brute_force(embedding, limit, min_score, group_ids)
+                    .await;
             }
         }
 
@@ -400,8 +414,13 @@ impl FalkorClientV2 {
             }
             Err(e) => {
                 // Fallback to CONTAINS-based search if fulltext index fails
-                tracing::warn!("Fulltext index query failed, falling back to CONTAINS: {:?}", e);
-                return self.fulltext_search_edges_fallback(query, group_ids, limit).await;
+                tracing::warn!(
+                    "Fulltext index query failed, falling back to CONTAINS: {:?}",
+                    e
+                );
+                return self
+                    .fulltext_search_edges_fallback(query, group_ids, limit)
+                    .await;
             }
         };
 
@@ -448,7 +467,10 @@ impl FalkorClientV2 {
             uuid_list, group_filter
         );
 
-        tracing::debug!("Fulltext edge query (phase 2 - fetch): fetching {} edges", edge_uuids.len());
+        tracing::debug!(
+            "Fulltext edge query (phase 2 - fetch): fetching {} edges",
+            edge_uuids.len()
+        );
 
         let fetch_result = self.graph.query(&fetch_cypher).execute().await?;
         parse_edges_from_properties(fetch_result.data)
@@ -526,8 +548,12 @@ impl FalkorClientV2 {
         match self.graph.query(&vector_query_cypher).execute().await {
             Ok(result) => {
                 let query_time = start.elapsed();
-                tracing::debug!("HNSW query completed in {:?}, got {} rows", query_time, result.data.len());
-                
+                tracing::debug!(
+                    "HNSW query completed in {:?}, got {} rows",
+                    query_time,
+                    result.data.len()
+                );
+
                 // Extract UUIDs from the vector index results
                 for row in result.data {
                     if row.len() >= 2 {
@@ -538,9 +564,14 @@ impl FalkorClientV2 {
                 }
             }
             Err(e) => {
-                tracing::warn!("HNSW vector index query failed, falling back to brute-force: {:?}", e);
+                tracing::warn!(
+                    "HNSW vector index query failed, falling back to brute-force: {:?}",
+                    e
+                );
                 // Fallback to brute-force if vector index not available
-                return self.similarity_search_edges_brute_force(embedding, limit, min_score, group_ids).await;
+                return self
+                    .similarity_search_edges_brute_force(embedding, limit, min_score, group_ids)
+                    .await;
             }
         }
 
@@ -588,7 +619,7 @@ impl FalkorClientV2 {
         // Fetch edge data WITHOUT embeddings for 100x faster performance
         // Returning full edge objects (a, r, b) includes fact_embedding which is 2560 floats per edge
         let fetch_start = std::time::Instant::now();
-        
+
         let uuid_list = edge_uuids
             .iter()
             .map(|u| format!("'{}'", u))
@@ -612,7 +643,11 @@ impl FalkorClientV2 {
         );
 
         let fetch_result = self.graph.query(&fetch_cypher).execute().await?;
-        tracing::debug!("Fetch query completed in {:?}, got {} results", fetch_start.elapsed(), fetch_result.data.len());
+        tracing::debug!(
+            "Fetch query completed in {:?}, got {} results",
+            fetch_start.elapsed(),
+            fetch_result.data.len()
+        );
 
         // Parse edges using the optimized property-based parser
         parse_edges_from_properties(fetch_result.data)
@@ -628,9 +663,13 @@ impl FalkorClientV2 {
         min_score: f32,
         group_ids: Option<&[String]>,
     ) -> Result<Vec<Edge>> {
-        tracing::info!("Using brute-force similarity search for edges (limit: {}, min_score: {})", limit, min_score);
+        tracing::info!(
+            "Using brute-force similarity search for edges (limit: {}, min_score: {})",
+            limit,
+            min_score
+        );
         let start = std::time::Instant::now();
-        
+
         let embedding_str = embedding
             .iter()
             .map(|v| v.to_string())
@@ -670,8 +709,12 @@ impl FalkorClientV2 {
         match self.graph.query(&cypher).execute().await {
             Ok(result) => {
                 let query_time = start.elapsed();
-                tracing::info!("Brute-force query completed in {:?}, got {} rows", query_time, result.data.len());
-                
+                tracing::info!(
+                    "Brute-force query completed in {:?}, got {} rows",
+                    query_time,
+                    result.data.len()
+                );
+
                 for row in result.data {
                     if row.len() >= 2 {
                         if let Some(falkordb::FalkorValue::String(uuid)) = row.first() {
