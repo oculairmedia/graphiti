@@ -159,7 +159,7 @@ impl FalkorClientV2 {
                 // Apply group filter if specified (post-filtering since fulltext index doesn't support it)
                 if let Some(groups) = group_ids {
                     if !groups.is_empty() {
-                        nodes.retain(|n| n.group_id.as_ref().map_or(false, |g| groups.contains(g)));
+                        nodes.retain(|n| n.group_id.as_ref().is_some_and(|g| groups.contains(g)));
                     }
                 }
 
