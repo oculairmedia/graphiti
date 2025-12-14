@@ -27,7 +27,7 @@ from typing_extensions import Any
 
 from graphiti_core.driver.driver import GraphDriver, GraphDriverSession
 from graphiti_core.edges import Edge, EntityEdge, EpisodicEdge, create_entity_edge_embeddings
-
+from graphiti_core.errors import DuplicateEdgeError
 
 from graphiti_core.embedder import EmbedderClient
 from graphiti_core.graph_queries import (
@@ -254,9 +254,63 @@ async def add_nodes_and_edges_bulk_tx(
             logger.error(f'Unexpected error during entity node bulk save: {e}')
             raise
 
+    # Guard: check for existing MENTIONS edges with same UUIDs but different endpoints
+    episodic_edge_uuids = [e.uuid for e in episodic_edges]
+    if episodic_edge_uuids:
+        existing_episodic = await tx.run(
+            """
+            MATCH (src)-[e:MENTIONS]->(tgt)
+            WHERE e.uuid IN $uuids
+            RETURN e.uuid AS uuid, src.uuid AS source_uuid, tgt.uuid AS target_uuid
+            """,
+            uuids=episodic_edge_uuids,
+        )
+        existing_episodic_map = {
+            r['uuid']: (r['source_uuid'], r['target_uuid']) for r in existing_episodic
+        }
+        for edge in episodic_edges:
+            if edge.uuid in existing_episodic_map:
+                ex_src, ex_tgt = existing_episodic_map[edge.uuid]
+                if ex_src != edge.source_node_uuid or ex_tgt != edge.target_node_uuid:
+                    raise DuplicateEdgeError(
+                        edge_uuid=edge.uuid,
+                        new_source=edge.source_node_uuid,
+                        new_target=edge.target_node_uuid,
+                        existing_source=ex_src,
+                        existing_target=ex_tgt,
+                    )
+
     await tx.run(
         EPISODIC_EDGE_SAVE_BULK, episodic_edges=[edge.model_dump() for edge in episodic_edges]
     )
+
+    # Guard: check for existing RELATES_TO edges with same UUIDs but different endpoints
+    entity_edge_uuids = [e['uuid'] for e in edges]
+    if entity_edge_uuids:
+        existing_entity = await tx.run(
+            """
+            MATCH (src:Entity)-[e:RELATES_TO]->(tgt:Entity)
+            WHERE e.uuid IN $uuids
+            RETURN e.uuid AS uuid, src.uuid AS source_uuid, tgt.uuid AS target_uuid
+            """,
+            uuids=entity_edge_uuids,
+        )
+        existing_entity_map = {
+            r['uuid']: (r['source_uuid'], r['target_uuid']) for r in existing_entity
+        }
+        for edge in edges:
+            edge_uuid = edge['uuid']
+            if edge_uuid in existing_entity_map:
+                ex_src, ex_tgt = existing_entity_map[edge_uuid]
+                if ex_src != edge['source_node_uuid'] or ex_tgt != edge['target_node_uuid']:
+                    raise DuplicateEdgeError(
+                        edge_uuid=edge_uuid,
+                        new_source=edge['source_node_uuid'],
+                        new_target=edge['target_node_uuid'],
+                        existing_source=ex_src,
+                        existing_target=ex_tgt,
+                    )
+
     entity_edge_save_bulk = get_entity_edge_save_bulk_query(driver.provider)
     await tx.run(entity_edge_save_bulk, entity_edges=edges)
 
@@ -536,10 +590,28 @@ E = typing.TypeVar('E', bound=Edge)
 
 
 def resolve_edge_pointers(edges: list[E], uuid_map: dict[str, str]):
+    use_deterministic_uuids = os.getenv('USE_DETERMINISTIC_UUIDS', 'false').lower() == 'true'
+    if use_deterministic_uuids:
+        from graphiti_core.utils.uuid_utils import generate_deterministic_edge_uuid
+
     for edge in edges:
-        source_uuid = edge.source_node_uuid
-        target_uuid = edge.target_node_uuid
-        edge.source_node_uuid = uuid_map.get(source_uuid, source_uuid)
-        edge.target_node_uuid = uuid_map.get(target_uuid, target_uuid)
+        original_source_uuid = edge.source_node_uuid
+        original_target_uuid = edge.target_node_uuid
+
+        updated_source_uuid = uuid_map.get(original_source_uuid, original_source_uuid)
+        updated_target_uuid = uuid_map.get(original_target_uuid, original_target_uuid)
+
+        edge.source_node_uuid = updated_source_uuid
+        edge.target_node_uuid = updated_target_uuid
+
+        if use_deterministic_uuids:
+            edge_name = getattr(edge, 'name', None)
+            edge_type = edge_name if edge_name else 'MENTIONS'
+            edge.uuid = generate_deterministic_edge_uuid(
+                updated_source_uuid,
+                updated_target_uuid,
+                edge_type,
+                getattr(edge, 'group_id', ''),
+            )
 
     return edges

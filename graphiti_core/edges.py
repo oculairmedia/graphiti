@@ -28,7 +28,7 @@ from typing_extensions import LiteralString
 
 from graphiti_core.driver.driver import GraphDriver
 from graphiti_core.embedder import EmbedderClient
-from graphiti_core.errors import EdgeNotFoundError, GroupsEdgesNotFoundError
+from graphiti_core.errors import DuplicateEdgeError, EdgeNotFoundError, GroupsEdgesNotFoundError
 from graphiti_core.helpers import parse_db_date
 from graphiti_core.models.edges.edge_db_queries import (
     COMMUNITY_EDGE_SAVE,
@@ -176,6 +176,29 @@ class Edge(BaseModel, ABC):
 
 class EpisodicEdge(Edge):
     async def save(self, driver: GraphDriver):
+        # Guard: check for existing edge with same UUID but different endpoints
+        records, _, _ = await driver.execute_query(
+            """
+            MATCH (src)-[e:MENTIONS {uuid: $uuid}]->(tgt)
+            RETURN src.uuid AS source_uuid, tgt.uuid AS target_uuid
+            """,
+            uuid=self.uuid,
+            routing_='r',
+        )
+        if records:
+            existing = records[0]
+            if (
+                existing['source_uuid'] != self.source_node_uuid
+                or existing['target_uuid'] != self.target_node_uuid
+            ):
+                raise DuplicateEdgeError(
+                    edge_uuid=self.uuid,
+                    new_source=self.source_node_uuid,
+                    new_target=self.target_node_uuid,
+                    existing_source=existing['source_uuid'],
+                    existing_target=existing['target_uuid'],
+                )
+
         result = await driver.execute_query(
             EPISODIC_EDGE_SAVE,
             episode_uuid=self.source_node_uuid,
@@ -377,6 +400,29 @@ class EntityEdge(Edge):
         self.fact_embedding = records[0]['fact_embedding']
 
     async def save(self, driver: GraphDriver):
+        # Guard: check for existing edge with same UUID but different endpoints
+        records, _, _ = await driver.execute_query(
+            """
+            MATCH (src:Entity)-[e:RELATES_TO {uuid: $uuid}]->(tgt:Entity)
+            RETURN src.uuid AS source_uuid, tgt.uuid AS target_uuid
+            """,
+            uuid=self.uuid,
+            routing_='r',
+        )
+        if records:
+            existing = records[0]
+            if (
+                existing['source_uuid'] != self.source_node_uuid
+                or existing['target_uuid'] != self.target_node_uuid
+            ):
+                raise DuplicateEdgeError(
+                    edge_uuid=self.uuid,
+                    new_source=self.source_node_uuid,
+                    new_target=self.target_node_uuid,
+                    existing_source=existing['source_uuid'],
+                    existing_target=existing['target_uuid'],
+                )
+
         edge_data: dict[str, Any] = {
             'source_uuid': self.source_node_uuid,
             'target_uuid': self.target_node_uuid,
@@ -606,6 +652,41 @@ def get_episodic_edge_from_record(record: Any) -> EpisodicEdge:
     )
 
 
+def _coerce_embedding_to_float_list(value: Any) -> list[float] | None:
+    if value is None:
+        return None
+
+    if isinstance(value, (list, tuple)):
+        if len(value) == 0:
+            return None
+        if all(isinstance(x, (int, float)) for x in value):
+            return [float(x) for x in value]
+        return None
+
+    # FalkorDB VectorF32 often behaves like a list but may not pass isinstance(list)
+    if hasattr(value, '__iter__') and not isinstance(value, (str, bytes, dict)):
+        try:
+            as_list = list(value)
+            if as_list and all(isinstance(x, (int, float)) for x in as_list):
+                return [float(x) for x in as_list]
+        except Exception:
+            pass
+
+    if isinstance(value, str):
+        # Handle legacy stringified embeddings stored in FalkorDB
+        import json
+
+        try:
+            parsed = json.loads(value)
+        except Exception:
+            return None
+
+        if isinstance(parsed, list) and parsed and all(isinstance(x, (int, float)) for x in parsed):
+            return [float(x) for x in parsed]
+
+    return None
+
+
 def get_entity_edge_from_record(record: Any) -> EntityEdge:
     raw_episodes = record.get('episodes')
     episodes: list[str]
@@ -625,12 +706,14 @@ def get_entity_edge_from_record(record: Any) -> EntityEdge:
     else:
         episodes = []
 
+    fact_embedding = _coerce_embedding_to_float_list(record.get('fact_embedding'))
+
     edge = EntityEdge(
         uuid=record['uuid'],
         source_node_uuid=record['source_node_uuid'],
         target_node_uuid=record['target_node_uuid'],
         fact=record['fact'],
-        fact_embedding=record.get('fact_embedding'),
+        fact_embedding=fact_embedding,
         name=record['name'],
         group_id=record['group_id'],
         episodes=episodes,
