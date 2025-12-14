@@ -28,6 +28,7 @@ from graphiti_core.llm_client import LLMClient, LLMConfig, OpenAIClient
 from graphiti_core.llm_client.openai_generic_client import OpenAIGenericClient
 from graphiti_core.llm_client.cerebras_client import CerebrasClient
 from graphiti_core.llm_client.chutes_client import ChutesClient
+from graphiti_core.llm_client.anthropic_client import AnthropicClient
 from graphiti_core.llm_client.fallback_client import FallbackLLMClient
 
 logger = logging.getLogger(__name__)
@@ -52,6 +53,8 @@ class GraphitiClientFactory:
         use_cerebras_lower = use_cerebras_raw.lower()
         use_chutes_raw = os.getenv('USE_CHUTES', '')
         use_chutes_lower = use_chutes_raw.lower()
+        use_anthropic_raw = os.getenv('USE_ANTHROPIC', '')
+        use_anthropic_lower = use_anthropic_raw.lower()
         use_ollama_raw = os.getenv('USE_OLLAMA', '')
         use_ollama_lower = use_ollama_raw.lower()
 
@@ -60,6 +63,9 @@ class GraphitiClientFactory:
         )
         logger.info(
             f'Environment check: USE_CHUTES="{use_chutes_raw}" -> "{use_chutes_lower}" -> {use_chutes_lower == "true"}'
+        )
+        logger.info(
+            f'Environment check: USE_ANTHROPIC="{use_anthropic_raw}" -> "{use_anthropic_lower}" -> {use_anthropic_lower == "true"}'
         )
         logger.info(
             f'Environment check: USE_OLLAMA="{use_ollama_raw}" -> "{use_ollama_lower}" -> {use_ollama_lower == "true"}'
@@ -132,7 +138,43 @@ class GraphitiClientFactory:
 
                 logger.error(f'Full traceback: {traceback.format_exc()}')
 
-        # 3. Try to create Ollama client (lowest priority, final fallback)
+        # 3. Try to create Anthropic client
+        if use_anthropic_lower == 'true':
+            try:
+                anthropic_model = os.getenv('ANTHROPIC_MODEL', 'claude-3-5-haiku-latest')
+                anthropic_small_model = os.getenv(
+                    'ANTHROPIC_SMALL_MODEL', 'claude-3-5-haiku-latest'
+                )
+                anthropic_api_key = os.getenv('ANTHROPIC_API_KEY')
+                anthropic_base_url = os.getenv('ANTHROPIC_BASE_URL')  # Optional custom endpoint
+
+                logger.info(
+                    f'Creating Anthropic LLM client with model {anthropic_model}'
+                    + (f' at {anthropic_base_url}' if anthropic_base_url else '')
+                )
+                logger.info(f'Anthropic API key present: {anthropic_api_key is not None}')
+
+                config = LLMConfig(
+                    api_key=anthropic_api_key,
+                    model=anthropic_model,
+                    small_model=anthropic_small_model,
+                    base_url=anthropic_base_url,
+                    temperature=0.7,
+                    max_tokens=4000,
+                )
+
+                anthropic_client = AnthropicClient(config=config)
+                available_clients.append(anthropic_client)
+                client_names.append('Anthropic')
+                logger.info('AnthropicClient instantiated successfully!')
+
+            except Exception as e:
+                logger.error(f'Failed to create Anthropic LLM client: {e}')
+                import traceback
+
+                logger.error(f'Full traceback: {traceback.format_exc()}')
+
+        # 4. Try to create Ollama client (lowest priority, final fallback)
         if use_ollama_lower == 'true':
             try:
                 from openai import AsyncOpenAI
