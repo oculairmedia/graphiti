@@ -16,6 +16,7 @@ limitations under the License.
 
 import json
 import logging
+import re
 import typing
 from typing import ClassVar
 
@@ -32,6 +33,150 @@ from .errors import RateLimitError, RefusalError
 logger = logging.getLogger(__name__)
 
 DEFAULT_MODEL = 'gpt-4.1-mini'
+
+
+def _robust_json_parse(content: str) -> dict[str, typing.Any]:
+    """
+    Robust JSON parser that handles common LLM output issues.
+
+    Handles:
+    - Multiple JSON objects concatenated (takes first one)
+    - Markdown code blocks (```json ... ```)
+    - Explanatory text around JSON
+    - Trailing commas
+    - Single quotes instead of double quotes
+
+    Args:
+        content: Raw LLM response content
+
+    Returns:
+        Parsed dictionary
+
+    Raises:
+        json.JSONDecodeError: If no valid JSON can be extracted
+    """
+    content = content.strip()
+
+    # Strategy 1: Try direct parsing first
+    try:
+        return json.loads(content)
+    except json.JSONDecodeError:
+        pass
+
+    # Strategy 2: Handle markdown code blocks
+    if '```json' in content:
+        try:
+            # Extract content between ```json and ```
+            match = re.search(r'```json\s*(.*?)\s*```', content, re.DOTALL)
+            if match:
+                return json.loads(match.group(1))
+        except json.JSONDecodeError:
+            pass
+
+    if '```' in content:
+        try:
+            # Extract content between ``` and ```
+            match = re.search(r'```\s*(.*?)\s*```', content, re.DOTALL)
+            if match:
+                return json.loads(match.group(1))
+        except json.JSONDecodeError:
+            pass
+
+    # Strategy 3: Extract first complete JSON object or array (handles multiple objects/extra text)
+    # This specifically addresses the "Extra data: line 2 column 1" error
+    try:
+        # Find the first { or [ and track brackets to find matching } or ]
+        obj_idx = content.find('{')
+        arr_idx = content.find('[')
+
+        # Determine which comes first (or only one exists)
+        if obj_idx == -1 and arr_idx == -1:
+            pass  # No JSON structure found
+        else:
+            # Use whichever comes first (or the one that exists)
+            if obj_idx == -1:
+                start_idx, open_char, close_char = arr_idx, '[', ']'
+            elif arr_idx == -1:
+                start_idx, open_char, close_char = obj_idx, '{', '}'
+            else:
+                # Both exist - use whichever comes first
+                if obj_idx < arr_idx:
+                    start_idx, open_char, close_char = obj_idx, '{', '}'
+                else:
+                    start_idx, open_char, close_char = arr_idx, '[', ']'
+
+            depth = 0
+            in_string = False
+            escape_next = False
+
+            for i, char in enumerate(content[start_idx:], start_idx):
+                if escape_next:
+                    escape_next = False
+                    continue
+                if char == '\\':
+                    escape_next = True
+                    continue
+                if char == '"' and not escape_next:
+                    in_string = not in_string
+                    continue
+                if in_string:
+                    continue
+                if char == open_char:
+                    depth += 1
+                elif char == close_char:
+                    depth -= 1
+                    if depth == 0:
+                        json_str = content[start_idx : i + 1]
+                        return json.loads(json_str)
+    except json.JSONDecodeError:
+        pass
+
+    # Strategy 4: Try regex to extract JSON object
+    try:
+        # Match a JSON object pattern
+        json_pattern = r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}'
+        matches = re.findall(json_pattern, content, re.DOTALL)
+
+        for match in matches:
+            try:
+                return json.loads(match)
+            except json.JSONDecodeError:
+                # Try with cleanup
+                cleaned = match
+                # Replace single quotes with double quotes (careful with apostrophes)
+                cleaned = re.sub(r"(?<![a-zA-Z])'([^']*)'(?![a-zA-Z])", r'"\1"', cleaned)
+                # Fix trailing commas
+                cleaned = re.sub(r',\s*}', '}', cleaned)
+                cleaned = re.sub(r',\s*]', ']', cleaned)
+                try:
+                    return json.loads(cleaned)
+                except json.JSONDecodeError:
+                    continue
+    except Exception:
+        pass
+
+    # Strategy 5: Last resort - try to find any JSON-like structure
+    try:
+        # Remove common prefixes/suffixes that models add
+        cleaned = content
+        prefixes_to_remove = [
+            'Here is the JSON:',
+            "Here's the JSON:",
+            'JSON:',
+            'Output:',
+            'Result:',
+        ]
+        for prefix in prefixes_to_remove:
+            if cleaned.lower().startswith(prefix.lower()):
+                cleaned = cleaned[len(prefix) :].strip()
+
+        # Try parsing the cleaned content
+        return json.loads(cleaned)
+    except json.JSONDecodeError:
+        pass
+
+    # If all strategies fail, raise the original error
+    raise json.JSONDecodeError(f'Could not extract valid JSON from response', content, 0)
 
 
 class OpenAIGenericClient(LLMClient):
@@ -101,7 +246,9 @@ class OpenAIGenericClient(LLMClient):
 
         # Detect if we're using vLLM (check for common vLLM patterns in base_url)
         base_url = str(self.client.base_url) if hasattr(self.client, 'base_url') else ''
-        is_vllm = 'vllm' in base_url.lower() or ':11434' in base_url  # vLLM or Ollama-like endpoints
+        is_vllm = (
+            'vllm' in base_url.lower() or ':11434' in base_url
+        )  # vLLM or Ollama-like endpoints
 
         # Prepare API call kwargs
         call_kwargs = {
@@ -118,39 +265,33 @@ class OpenAIGenericClient(LLMClient):
             if is_vllm:
                 # vLLM uses guided_json via extra_body when using OpenAI SDK
                 call_kwargs['extra_body'] = {'guided_json': json_schema}
-                logger.debug(f"Using vLLM guided_json with schema: {response_model.__name__}")
+                logger.debug(f'Using vLLM guided_json with schema: {response_model.__name__}')
             else:
                 # OpenAI uses response_format
                 call_kwargs['response_format'] = {
                     'type': 'json_schema',
-                    'json_schema': {
-                        'name': 'response',
-                        'strict': False,
-                        'schema': json_schema
-                    }
+                    'json_schema': {'name': 'response', 'strict': False, 'schema': json_schema},
                 }
-                logger.debug(f"Using OpenAI structured output with schema: {response_model.__name__}")
+                logger.debug(
+                    f'Using OpenAI structured output with schema: {response_model.__name__}'
+                )
         else:
             if is_vllm:
                 # vLLM: use basic guided_json for free-form JSON via extra_body
                 call_kwargs['extra_body'] = {'guided_json': {'type': 'object'}}
-                logger.debug("Using vLLM guided_json with basic object schema")
+                logger.debug('Using vLLM guided_json with basic object schema')
             else:
                 # OpenAI: use response_format
                 call_kwargs['response_format'] = {'type': 'json_object'}
-                logger.debug("Using OpenAI basic JSON object format")
+                logger.debug('Using OpenAI basic JSON object format')
 
         try:
             response = await self.client.chat.completions.create(**call_kwargs)
             result = response.choices[0].message.content or ''
 
-            # Clean up markdown code blocks if present (common in vLLM output)
-            if result.startswith('```json'):
-                result = result.replace('```json\n', '').replace('\n```', '').strip()
-            elif result.startswith('```'):
-                result = result.replace('```\n', '').replace('\n```', '').strip()
-
-            return json.loads(result)
+            # Use robust JSON parser to handle common LLM output issues
+            # This handles: multiple JSON objects, markdown blocks, explanatory text, etc.
+            return _robust_json_parse(result)
         except openai.RateLimitError as e:
             raise RateLimitError from e
         except Exception as e:
@@ -173,6 +314,7 @@ class OpenAIGenericClient(LLMClient):
         # IMPORTANT: Create deep copy of messages to avoid mutations across retries
         # Without this, retries will accumulate content and cause role alternation errors
         import copy
+
         messages_copy = copy.deepcopy(messages)
 
         if response_model is not None:
