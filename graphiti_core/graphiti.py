@@ -45,6 +45,7 @@ from graphiti_core.utils.resilient_ingestion import (
     retry_with_backoff,
 )
 from graphiti_core.nodes import CommunityNode, EntityNode, EpisodeType, EpisodicNode
+from graphiti_core.errors import NodeNotFoundError
 from graphiti_core.search.search import SearchConfig, search
 from graphiti_core.search.search_config import DEFAULT_SEARCH_LIMIT, SearchResults
 from graphiti_core.search.search_config_recipes import (
@@ -195,7 +196,7 @@ class Graphiti:
             self.cross_encoder = cross_encoder
         else:
             self.cross_encoder = GraphitiClientFactory.create_cross_encoder()
-        
+
         self.store_raw_episode_content = store_raw_episode_content
         self.enable_cross_graph_deduplication = enable_cross_graph_deduplication
 
@@ -469,9 +470,11 @@ class Graphiti:
                     valid_at=ensure_utc(reference_time),
                 )
             )
-            
+
             # Debug logging for group_id
-            logger.info(f"Created EpisodicNode with group_id: {episode.group_id} (uuid: {episode.uuid})")
+            logger.info(
+                f'Created EpisodicNode with group_id: {episode.group_id} (uuid: {episode.uuid})'
+            )
 
             # Create default edge type map
             edge_type_map_default = (
@@ -526,7 +529,9 @@ class Graphiti:
                 max_coroutines=self.max_coroutines,
             )
 
-            duplicate_of_edges, merge_operations, duplicate_nodes_to_save = build_duplicate_of_edges(episode, now, node_duplicates)
+            duplicate_of_edges, merge_operations, duplicate_nodes_to_save = (
+                build_duplicate_of_edges(episode, now, node_duplicates)
+            )
 
             entity_edges = resolved_edges + invalidated_edges + duplicate_of_edges
 
@@ -541,24 +546,35 @@ class Graphiti:
             all_nodes_to_save = hydrated_nodes + duplicate_nodes_to_save
 
             await add_nodes_and_edges_bulk(
-                self.driver, [episode], episodic_edges, all_nodes_to_save, entity_edges, self.embedder
+                self.driver,
+                [episode],
+                episodic_edges,
+                all_nodes_to_save,
+                entity_edges,
+                self.embedder,
             )
-            
+
             # Execute merge operations after nodes and edges are saved
             # Feature flag: GRAPHITI_ENABLE_AUTO_MERGE (default: false for safety)
             import os
+
             auto_merge_enabled = os.getenv('GRAPHITI_ENABLE_AUTO_MERGE', 'false').lower() == 'true'
 
             if merge_operations and auto_merge_enabled:
                 from graphiti_core.utils.maintenance.edge_operations import execute_merge_operations
-                logger.info(f"Auto-merge enabled: executing {len(merge_operations)} merge operations")
+
+                logger.info(
+                    f'Auto-merge enabled: executing {len(merge_operations)} merge operations'
+                )
                 await execute_merge_operations(
                     self.driver,
                     merge_operations,
-                    allow_cross_graph_merge=self.enable_cross_graph_deduplication
+                    allow_cross_graph_merge=self.enable_cross_graph_deduplication,
                 )
             elif merge_operations and not auto_merge_enabled:
-                logger.info(f"Auto-merge disabled: skipping {len(merge_operations)} merge operations (set GRAPHITI_ENABLE_AUTO_MERGE=true to enable)")
+                logger.info(
+                    f'Auto-merge disabled: skipping {len(merge_operations)} merge operations (set GRAPHITI_ENABLE_AUTO_MERGE=true to enable)'
+                )
 
             # Update any communities
             if update_communities:
@@ -578,7 +594,7 @@ class Graphiti:
             raise e
 
     ##### RESILIENT INGESTION #####
-    
+
     async def add_episode_resilient(
         self,
         name: str,
@@ -597,13 +613,13 @@ class Graphiti:
     ) -> 'AddEpisodeResults':
         """
         Resilient version of add_episode that can recover from partial failures.
-        
+
         This method implements granular retry logic for each stage of ingestion:
         1. Node extraction
-        2. Node resolution  
+        2. Node resolution
         3. Edge extraction
         4. Episode creation
-        
+
         Each stage can be retried independently, preventing loss of progress when
         providers like Cerebras have elevated error rates.
         """
@@ -618,10 +634,27 @@ class Graphiti:
             validate_group_id(group_id)
 
             # Create episode node first (before other processing)
-            episode = (
-                await EpisodicNode.get_by_uuid(self.driver, uuid)
-                if uuid is not None
-                else EpisodicNode(
+            # If UUID provided, try to fetch existing; if not found, create new with that UUID
+            episode = None
+            if uuid is not None:
+                try:
+                    episode = await EpisodicNode.get_by_uuid(self.driver, uuid)
+                except NodeNotFoundError:
+                    # UUID provided but not found - create new episode with this UUID
+                    logger.info(f'Episode with uuid {uuid} not found, creating new episode')
+                    episode = EpisodicNode(
+                        uuid=uuid,
+                        name=name,
+                        group_id=group_id,
+                        labels=[],
+                        source=source,
+                        content=episode_body,
+                        source_description=source_description,
+                        created_at=now,
+                        valid_at=ensure_utc(reference_time),
+                    )
+            else:
+                episode = EpisodicNode(
                     name=name,
                     group_id=group_id,
                     labels=[],
@@ -631,13 +664,14 @@ class Graphiti:
                     created_at=now,
                     valid_at=ensure_utc(reference_time),
                 )
+
+            logger.info(
+                f'Created EpisodicNode with group_id: {episode.group_id} (uuid: {episode.uuid})'
             )
-            
-            logger.info(f"Created EpisodicNode with group_id: {episode.group_id} (uuid: {episode.uuid})")
 
             # Get or create resilient ingestion state
             state = ingestion_cache.get_or_create_state(episode.uuid, group_id)
-            
+
             # Get previous episodes
             previous_episodes = (
                 await self.retrieve_episodes(
@@ -657,10 +691,12 @@ class Graphiti:
                 )
                 state.mark_nodes_extracted(extracted_nodes)
             else:
-                logger.info(f"Episode {episode.uuid}: Using cached extracted nodes ({len(state.extracted_nodes)} nodes)")
+                logger.info(
+                    f'Episode {episode.uuid}: Using cached extracted nodes ({len(state.extracted_nodes)} nodes)'
+                )
                 extracted_nodes = state.extracted_nodes
 
-            # Stage 2: Resolve nodes (with retry)  
+            # Stage 2: Resolve nodes (with retry)
             if not state.nodes_resolved:
                 nodes, uuid_map, node_duplicates = await self._resolve_nodes_with_retry(
                     extracted_nodes, episode, previous_episodes, entity_types, state
@@ -670,7 +706,9 @@ class Graphiti:
                 state.uuid_map = uuid_map
                 state.node_duplicates = node_duplicates
             else:
-                logger.info(f"Episode {episode.uuid}: Using cached resolved nodes ({len(state.resolved_nodes)} nodes)")
+                logger.info(
+                    f'Episode {episode.uuid}: Using cached resolved nodes ({len(state.resolved_nodes)} nodes)'
+                )
                 nodes = state.resolved_nodes
                 uuid_map = state.uuid_map
                 node_duplicates = state.node_duplicates
@@ -678,12 +716,19 @@ class Graphiti:
             # Stage 3: Extract edges (with retry)
             if not state.edges_extracted:
                 extracted_edges = await self._extract_edges_with_retry(
-                    episode, extracted_nodes, previous_episodes, edge_type_map, 
-                    group_id, edge_types, state
+                    episode,
+                    extracted_nodes,
+                    previous_episodes,
+                    edge_type_map,
+                    group_id,
+                    edge_types,
+                    state,
                 )
                 state.mark_edges_extracted(extracted_edges)
             else:
-                logger.info(f"Episode {episode.uuid}: Using cached extracted edges ({len(state.extracted_edges)} edges)")
+                logger.info(
+                    f'Episode {episode.uuid}: Using cached extracted edges ({len(state.extracted_edges)} edges)'
+                )
                 extracted_edges = state.extracted_edges
 
             # Continue with edge processing (non-LLM operations, less likely to fail)
@@ -729,7 +774,9 @@ class Graphiti:
                 # Use nodes as-is without attribute enrichment
                 hydrated_nodes = nodes
 
-            duplicate_of_edges, merge_operations, duplicate_nodes_to_save = build_duplicate_of_edges(episode, now, node_duplicates)
+            duplicate_of_edges, merge_operations, duplicate_nodes_to_save = (
+                build_duplicate_of_edges(episode, now, node_duplicates)
+            )
 
             entity_edges = resolved_edges + invalidated_edges + duplicate_of_edges
             episodic_edges = build_episodic_edges(nodes, episode.uuid, now)
@@ -744,24 +791,40 @@ class Graphiti:
                 all_nodes_to_save = hydrated_nodes + duplicate_nodes_to_save
 
                 await add_nodes_and_edges_bulk(
-                    self.driver, [episode], episodic_edges, all_nodes_to_save, entity_edges, self.embedder
+                    self.driver,
+                    [episode],
+                    episodic_edges,
+                    all_nodes_to_save,
+                    entity_edges,
+                    self.embedder,
                 )
-                
+
                 # Execute merge operations after nodes and edges are saved
                 # Feature flag: GRAPHITI_ENABLE_AUTO_MERGE (default: false for safety)
-                auto_merge_enabled = os.getenv('GRAPHITI_ENABLE_AUTO_MERGE', 'false').lower() == 'true'
+                auto_merge_enabled = (
+                    os.getenv('GRAPHITI_ENABLE_AUTO_MERGE', 'false').lower() == 'true'
+                )
 
                 if merge_operations and auto_merge_enabled:
-                    from graphiti_core.utils.maintenance.edge_operations import execute_merge_operations
-                    logger.info(f"Auto-merge enabled: executing {len(merge_operations)} merge operations")
+                    from graphiti_core.utils.maintenance.edge_operations import (
+                        execute_merge_operations,
+                    )
+
+                    logger.info(
+                        f'Auto-merge enabled: executing {len(merge_operations)} merge operations'
+                    )
                     await execute_merge_operations(
-                        self.driver, merge_operations, allow_cross_graph_merge=self.enable_cross_graph_deduplication
+                        self.driver,
+                        merge_operations,
+                        allow_cross_graph_merge=self.enable_cross_graph_deduplication,
                     )
                 elif merge_operations and not auto_merge_enabled:
-                    logger.info(f"Auto-merge disabled: skipping {len(merge_operations)} merge operations (set GRAPHITI_ENABLE_AUTO_MERGE=true to enable)")
-                
+                    logger.info(
+                        f'Auto-merge disabled: skipping {len(merge_operations)} merge operations (set GRAPHITI_ENABLE_AUTO_MERGE=true to enable)'
+                    )
+
                 state.mark_completed()
-                logger.info(f"Episode {episode.uuid}: Successfully saved to database")
+                logger.info(f'Episode {episode.uuid}: Successfully saved to database')
 
             # Update communities if requested
             if update_communities:
@@ -775,14 +838,16 @@ class Graphiti:
 
             # Clean up cache for completed episodes
             ingestion_cache.remove_state(episode.uuid)
-            
+
             end = time()
             logger.info(f'Completed resilient add_episode in {(end - start) * 1000} ms')
 
             return AddEpisodeResults(episode=episode, nodes=nodes, edges=entity_edges)
 
         except Exception as e:
-            logger.error(f"Resilient ingestion failed for episode {episode.uuid if 'episode' in locals() else 'unknown'}: {e}")
+            logger.error(
+                f'Resilient ingestion failed for episode {episode.uuid if "episode" in locals() else "unknown"}: {e}'
+            )
             raise e
 
     @retry_with_backoff(max_retries=3, base_delay=2.0)
@@ -796,8 +861,10 @@ class Graphiti:
     ) -> list[dict[str, Any]]:
         """Extract nodes with retry logic."""
         state.nodes_extract_attempts += 1
-        logger.info(f"Episode {episode.uuid}: Extracting nodes (attempt {state.nodes_extract_attempts})")
-        
+        logger.info(
+            f'Episode {episode.uuid}: Extracting nodes (attempt {state.nodes_extract_attempts})'
+        )
+
         return await extract_nodes(
             self.clients, episode, previous_episodes, entity_types, excluded_entity_types
         )
@@ -805,7 +872,7 @@ class Graphiti:
     @retry_with_backoff(max_retries=3, base_delay=2.0)
     async def _resolve_nodes_with_retry(
         self,
-        extracted_nodes: list[dict[str, Any]], 
+        extracted_nodes: list[dict[str, Any]],
         episode: EpisodicNode,
         previous_episodes: list[EpisodicNode],
         entity_types: dict[str, BaseModel] | None,
@@ -813,8 +880,10 @@ class Graphiti:
     ) -> tuple[list[EntityNode], dict[str, str], list[EntityNode]]:
         """Resolve nodes with retry logic."""
         state.nodes_resolve_attempts += 1
-        logger.info(f"Episode {episode.uuid}: Resolving nodes (attempt {state.nodes_resolve_attempts})")
-        
+        logger.info(
+            f'Episode {episode.uuid}: Resolving nodes (attempt {state.nodes_resolve_attempts})'
+        )
+
         return await resolve_extracted_nodes(
             self.clients,
             extracted_nodes,
@@ -838,14 +907,16 @@ class Graphiti:
     ) -> list[dict[str, Any]]:
         """Extract edges with retry logic."""
         state.edges_extract_attempts += 1
-        logger.info(f"Episode {episode.uuid}: Extracting edges (attempt {state.edges_extract_attempts})")
-        
+        logger.info(
+            f'Episode {episode.uuid}: Extracting edges (attempt {state.edges_extract_attempts})'
+        )
+
         edge_type_map_default = (
             {('Entity', 'Entity'): list(edge_types.keys())}
             if edge_types is not None
             else {('Entity', 'Entity'): []}
         )
-        
+
         return await extract_edges(
             self.clients,
             episode,
@@ -923,9 +994,9 @@ class Graphiti:
                 if episode.uuid is not None:
                     existing_episode = await EpisodicNode.get_by_uuid(self.driver, episode.uuid)
                     if existing_episode is not None:
-                        logger.info(f"Skipping already processed episode: {episode.uuid}")
+                        logger.info(f'Skipping already processed episode: {episode.uuid}')
                         continue  # Skip this episode as it's already been processed
-                
+
                 # Create new episode (either UUID is None or episode doesn't exist in DB)
                 new_episode = EpisodicNode(
                     name=episode.name,
@@ -940,14 +1011,14 @@ class Graphiti:
                 # If episode had a UUID, preserve it for deterministic processing
                 if episode.uuid is not None:
                     new_episode.uuid = episode.uuid
-                    
+
                 new_episodes.append(new_episode)
-            
+
             episodes = new_episodes
-            
+
             # Early return if no new episodes to process
             if not episodes:
-                logger.info("No new episodes to process - all episodes already exist")
+                logger.info('No new episodes to process - all episodes already exist')
                 return
 
             episodes_by_uuid: dict[str, EpisodicNode] = {
@@ -979,11 +1050,11 @@ class Graphiti:
 
             # Dedupe extracted nodes in memory
             nodes_by_episode, uuid_map = await dedupe_nodes_bulk(
-                self.clients, 
-                extracted_nodes_bulk, 
-                episode_context, 
+                self.clients,
+                extracted_nodes_bulk,
+                episode_context,
                 entity_types,
-                enable_cross_graph_deduplication=self.enable_cross_graph_deduplication
+                enable_cross_graph_deduplication=self.enable_cross_graph_deduplication,
             )
 
             # Create Episodic Edges
@@ -1147,18 +1218,18 @@ class Graphiti:
             duplicate_of_edges: list[EntityEdge] = []
             merge_operations: list[tuple[str, str]] = []
             duplicate_nodes_to_save: list[EntityNode] = []
-            
+
             if node_duplicates:
                 # Use the first episode's timestamp for duplicate edges
                 # (or could aggregate across all episodes if preferred)
-                duplicate_of_edges, merge_operations, duplicate_nodes_to_save = build_duplicate_of_edges(
-                    episodes[0], now, node_duplicates
+                duplicate_of_edges, merge_operations, duplicate_nodes_to_save = (
+                    build_duplicate_of_edges(episodes[0], now, node_duplicates)
                 )
                 logger.info(f'Found {len(node_duplicates)} duplicates to merge in bulk pipeline')
-            
+
             # Combine all nodes to be saved (including duplicate nodes)
             all_nodes_to_save = final_hydrated_nodes + duplicate_nodes_to_save
-            
+
             # save data to KG
             await add_nodes_and_edges_bulk(
                 self.driver,
@@ -1168,18 +1239,21 @@ class Graphiti:
                 resolved_edges + invalidated_edges + duplicate_of_edges,
                 self.embedder,
             )
-            
+
             # Execute merge operations after nodes and edges are saved
             # Feature flag: GRAPHITI_ENABLE_AUTO_MERGE (default: false for safety)
             auto_merge_enabled = os.getenv('GRAPHITI_ENABLE_AUTO_MERGE', 'false').lower() == 'true'
 
             if merge_operations and auto_merge_enabled:
                 from graphiti_core.utils.maintenance.edge_operations import execute_merge_operations
-                logger.info(f"Auto-merge enabled: executing {len(merge_operations)} merge operations (bulk)")
+
+                logger.info(
+                    f'Auto-merge enabled: executing {len(merge_operations)} merge operations (bulk)'
+                )
                 merge_stats = await execute_merge_operations(
                     self.driver,
                     merge_operations,
-                    allow_cross_graph_merge=self.enable_cross_graph_deduplication
+                    allow_cross_graph_merge=self.enable_cross_graph_deduplication,
                 )
                 logger.info(
                     f'Bulk merge complete: {merge_stats["total_merges"]} merges, '
