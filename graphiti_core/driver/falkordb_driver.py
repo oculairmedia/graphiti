@@ -104,8 +104,8 @@ def _wrap_vector_params_in_query(query: str, params: dict[str, Any]) -> str:
     # Handle top-level vector parameters (existing functionality)
     for key, val in params.items():
         if _is_vector_list(val):
-            needle = f"${key}"
-            wrapped = f"vecf32({needle})"
+            needle = f'${key}'
+            wrapped = f'vecf32({needle})'
             # Skip if already wrapped to avoid double-wrapping
             if wrapped in query:
                 continue
@@ -143,7 +143,9 @@ def _wrap_vector_params_in_query(query: str, params: dict[str, Any]) -> str:
                 context = query_text[context_start:context_end]
 
                 # If it's in a vector operation context and not already wrapped
-                if ('vec.cosineDistance' in context or 'vector.similarity' in context) and f'vecf32({original})' not in context:
+                if (
+                    'vec.cosineDistance' in context or 'vector.similarity' in context
+                ) and f'vecf32({original})' not in context:
                     replacements.append((start, end, f'vecf32({original})'))
 
             # Apply replacements in reverse order to maintain indices
@@ -205,41 +207,61 @@ class FalkorDriverSession(GraphDriverSession):
     async def run(self, query: str | list, **kwargs: Any) -> Any:
         # FalkorDB does not support argument for Label Set, so it's converted into an array of queries
         if isinstance(query, list):
+            results = []
             for cypher, params in query:
                 params = convert_datetimes_to_strings(params)
                 params = _preprocess_vectors_in_params(params)
                 wrapped_cypher = _wrap_vector_params_in_query(str(cypher), params)
                 summary = _summarize_params(params)
-                logger.info("Falkor RUN(list) query:\n%s\nparams=%s", wrapped_cypher[:2000], summary)
+                logger.info(
+                    'Falkor RUN(list) query:\n%s\nparams=%s', wrapped_cypher[:2000], summary
+                )
                 try:
-                    await self.graph.query(wrapped_cypher, params)  # type: ignore[reportUnknownArgumentType]
+                    result = await self.graph.query(wrapped_cypher, params)  # type: ignore[reportUnknownArgumentType]
+                    # Convert result to list of dicts
+                    if result and hasattr(result, 'header') and hasattr(result, 'result_set'):
+                        header = [h[1] for h in result.header]
+                        for row in result.result_set:
+                            record = {}
+                            for i, field_name in enumerate(header):
+                                record[field_name] = row[i] if i < len(row) else None
+                            results.append(record)
                 except Exception:
                     logger.error(
-                        "Falkor RUN(list) query failed:\n%s\nparams=%s",
+                        'Falkor RUN(list) query failed:\n%s\nparams=%s',
                         wrapped_cypher[:2000],
                         summary,
                         exc_info=True,
                     )
                     raise
+            return results
         else:
             params = _flatten_params(dict(kwargs))
             params = convert_datetimes_to_strings(params)
             params = _preprocess_vectors_in_params(params)
             wrapped_query = _wrap_vector_params_in_query(str(query), params)
             summary = _summarize_params(params)
-            logger.info("Falkor RUN query:\n%s\nparams=%s", wrapped_query[:2000], summary)
+            logger.info('Falkor RUN query:\n%s\nparams=%s', wrapped_query[:2000], summary)
             try:
-                await self.graph.query(wrapped_query, params)  # type: ignore[reportUnknownArgumentType]
+                result = await self.graph.query(wrapped_query, params)  # type: ignore[reportUnknownArgumentType]
+                # Convert result to list of dicts
+                records = []
+                if result and hasattr(result, 'header') and hasattr(result, 'result_set'):
+                    header = [h[1] for h in result.header]
+                    for row in result.result_set:
+                        record = {}
+                        for i, field_name in enumerate(header):
+                            record[field_name] = row[i] if i < len(row) else None
+                        records.append(record)
+                return records
             except Exception:
                 logger.error(
-                    "Falkor RUN query failed:\n%s\nparams=%s",
+                    'Falkor RUN query failed:\n%s\nparams=%s',
                     wrapped_query[:2000],
                     summary,
                     exc_info=True,
                 )
                 raise
-        # Assuming `graph.query` is async (ideal); otherwise, wrap in executor
-        return None
 
 
 class FalkorDriver(GraphDriver):
@@ -266,11 +288,13 @@ class FalkorDriver(GraphDriver):
             # If a FalkorDB instance is provided, use it directly
             self.client = falkor_db
             self._database = database  # BUG FIX: Set database even when falkor_db is provided
-            logger.info(f"FalkorDriver initialized with provided client, database: {self._database}")
+            logger.info(
+                f'FalkorDriver initialized with provided client, database: {self._database}'
+            )
         else:
             self.client = FalkorDB(host=host, port=port, username=username, password=password)
             self._database = database
-            logger.info(f"FalkorDriver initialized with database: {self._database}")
+            logger.info(f'FalkorDriver initialized with database: {self._database}')
 
         self.fulltext_syntax = '@'  # FalkorDB uses a redisearch-like syntax for fulltext queries see https://redis.io/docs/latest/develop/ai/search-and-query/query/full-text/
 
@@ -298,7 +322,12 @@ class FalkorDriver(GraphDriver):
         cypher_query_ = _wrap_vector_params_in_query(cypher_query_, params)
 
         summary = _summarize_params(params)
-        logger.info("Falkor EXECUTE query on graph '%s':\n%s\nparams=%s", graph_name, cypher_query_[:2000], summary)
+        logger.info(
+            "Falkor EXECUTE query on graph '%s':\n%s\nparams=%s",
+            graph_name,
+            cypher_query_[:2000],
+            summary,
+        )
         try:
             result = await graph.query(cypher_query_, params)  # type: ignore[reportUnknownArgumentType]
         except Exception as e:
