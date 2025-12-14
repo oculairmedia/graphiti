@@ -17,6 +17,7 @@ import inspect
 
 from graphiti_core import Graphiti
 from graphiti_core.nodes import EpisodeType
+from graphiti_core.errors import NodeNotFoundError, EdgeNotFoundError
 from graphiti_core.utils.datetime_utils import utc_now
 from graphiti_core.utils.maintenance.node_operations import normalize_entity_name
 from graphiti_core.ingestion.queue_client import (
@@ -862,10 +863,14 @@ class IngestionWorker:
         logger.error(traceback.format_exc())
 
         # Classify error and determine action
-        if isinstance(error, PermanentError):
+        # NodeNotFoundError and EdgeNotFoundError are permanent - the data doesn't exist
+        if isinstance(error, (PermanentError, NodeNotFoundError, EdgeNotFoundError)):
             # Move to dead letter queue
             await self._move_to_dlq(task, error)
             await self.queue.delete(message_id, poll_tag)
+            logger.warning(
+                f'Task {task.id} permanently failed ({type(error).__name__}), moved to DLQ'
+            )
 
         elif isinstance(error, TransientError) or task.retry_count < task.max_retries:
             # Retry with exponential backoff
