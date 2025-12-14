@@ -81,3 +81,23 @@ class GroupIdValidationError(GraphitiError):
     def __init__(self, group_id: str):
         self.message = f'group_id "{group_id}" must contain only alphanumeric characters, dashes, or underscores'
         super().__init__(self.message)
+
+
+class DuplicateEdgeError(GraphitiError):
+    """Raised when attempting to save an edge with a UUID that already exists on different endpoints."""
+
+    def __init__(
+        self,
+        edge_uuid: str,
+        new_source: str,
+        new_target: str,
+        existing_source: str,
+        existing_target: str,
+    ):
+        self.message = (
+            f'Edge UUID {edge_uuid} already exists with different endpoints. '
+            f'Existing: ({existing_source})->({existing_target}), '
+            f'New: ({new_source})->({new_target}). '
+            f'This indicates a UUID collision or stale edge data.'
+        )
+        super().__init__(self.message)
