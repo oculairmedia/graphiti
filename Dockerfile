@@ -31,7 +31,7 @@ COPY ./maintenance_extract_entities.py ./
 
 # Install graphiti-core in development mode with FalkorDB support (uses source directly)
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install --system -e .[falkordb]
+    uv pip install --system -e .[falkordb,anthropic]
 
 # Install server dependencies and ensure it uses our development graphiti-core
 WORKDIR /app/server
@@ -39,10 +39,10 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --no-dev
 # Install our development graphiti-core into server venv to override PyPI version
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install --python .venv/bin/python -e /app[falkordb,cerebras]
-# Ensure falkordb and cerebras are available in server venv
+    uv pip install --python .venv/bin/python -e /app[falkordb,cerebras,anthropic]
+# Ensure falkordb, cerebras, and anthropic are available in server venv
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install --python .venv/bin/python falkordb>=1.1.2 cerebras-cloud-sdk>=1.46.0
+    uv pip install --python .venv/bin/python falkordb>=1.1.2 cerebras-cloud-sdk>=1.46.0 anthropic>=0.49.0
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \
