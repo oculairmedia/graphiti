@@ -14,7 +14,8 @@ struct RerankerRequest {
 #[derive(Debug, Deserialize)]
 struct RerankerResult {
     index: usize,
-    score: f32,
+    #[serde(alias = "score", alias = "relevance_score")]
+    relevance_score: f32,
 }
 
 #[derive(Debug, Deserialize)]
@@ -80,7 +81,7 @@ impl RerankerClient {
         Ok(reranker_response
             .results
             .into_iter()
-            .map(|r| (r.index, r.score))
+            .map(|r| (r.index, r.relevance_score))
             .collect())
     }
 }
