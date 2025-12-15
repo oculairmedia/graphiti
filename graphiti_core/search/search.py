@@ -80,9 +80,9 @@ async def search(
     # Check if Rust search is enabled
     use_rust_search = os.getenv('USE_RUST_SEARCH', 'false').lower() == 'true'
     rust_search_url = os.getenv('RUST_SEARCH_URL', 'http://localhost:3004')
-    
+
     if use_rust_search:
-        logger.info(f"Using Rust search service at {rust_search_url}")
+        logger.info(f'Using Rust search service at {rust_search_url}')
         try:
             # Convert filters to dict format for Rust service
             filters_dict = {}
@@ -99,7 +99,7 @@ async def search(
                     filters_dict['created_after'] = search_filter.created_after.isoformat()
                 if hasattr(search_filter, 'created_before') and search_filter.created_before:
                     filters_dict['created_before'] = search_filter.created_before.isoformat()
-            
+
             # Use Rust search service
             return await rust_search(
                 query=query,
@@ -111,9 +111,9 @@ async def search(
                 query_vector=query_vector,
             )
         except Exception as e:
-            logger.error(f"Rust search failed, falling back to Python: {e}")
+            logger.error(f'Rust search failed, falling back to Python: {e}')
             # Fall through to Python implementation
-    
+
     driver = clients.driver
     embedder = clients.embedder
     cross_encoder = clients.cross_encoder
@@ -212,26 +212,37 @@ async def edge_search(
 ) -> list[EntityEdge]:
     if config is None:
         return []
-    search_results: list[list[EntityEdge]] = list(
-        await semaphore_gather(
-            *[
-                edge_fulltext_search(driver, query, search_filter, group_ids, 2 * limit),
-                edge_similarity_search(
-                    driver,
-                    query_vector,
-                    None,
-                    None,
-                    search_filter,
-                    group_ids,
-                    2 * limit,
-                    config.sim_min_score,
-                ),
-                edge_bfs_search(
-                    driver, bfs_origin_node_uuids, config.bfs_max_depth, search_filter, 2 * limit
-                ),
-            ]
+
+    # Build search tasks based on configured search methods (upstream fix #788)
+    search_tasks = []
+    if EdgeSearchMethod.bm25 in config.search_methods:
+        search_tasks.append(
+            edge_fulltext_search(driver, query, search_filter, group_ids, 2 * limit)
         )
-    )
+    if EdgeSearchMethod.cosine_similarity in config.search_methods:
+        search_tasks.append(
+            edge_similarity_search(
+                driver,
+                query_vector,
+                None,
+                None,
+                search_filter,
+                group_ids,
+                2 * limit,
+                config.sim_min_score,
+            )
+        )
+    if EdgeSearchMethod.bfs in config.search_methods:
+        search_tasks.append(
+            edge_bfs_search(
+                driver, bfs_origin_node_uuids, config.bfs_max_depth, search_filter, 2 * limit
+            )
+        )
+
+    # Execute only the configured search methods
+    search_results: list[list[EntityEdge]] = []
+    if search_tasks:
+        search_results = list(await semaphore_gather(*search_tasks))
 
     if EdgeSearchMethod.bfs in config.search_methods and bfs_origin_node_uuids is None:
         source_node_uuids = [edge.source_node_uuid for result in search_results for edge in result]
@@ -312,19 +323,30 @@ async def node_search(
 ) -> list[EntityNode]:
     if config is None:
         return []
-    search_results: list[list[EntityNode]] = list(
-        await semaphore_gather(
-            *[
-                node_fulltext_search(driver, query, search_filter, group_ids, 2 * limit),
-                node_similarity_search(
-                    driver, query_vector, search_filter, group_ids, 2 * limit, config.sim_min_score
-                ),
-                node_bfs_search(
-                    driver, bfs_origin_node_uuids, search_filter, config.bfs_max_depth, 2 * limit
-                ),
-            ]
+
+    # Build search tasks based on configured search methods (upstream fix #788)
+    search_tasks = []
+    if NodeSearchMethod.bm25 in config.search_methods:
+        search_tasks.append(
+            node_fulltext_search(driver, query, search_filter, group_ids, 2 * limit)
         )
-    )
+    if NodeSearchMethod.cosine_similarity in config.search_methods:
+        search_tasks.append(
+            node_similarity_search(
+                driver, query_vector, search_filter, group_ids, 2 * limit, config.sim_min_score
+            )
+        )
+    if NodeSearchMethod.bfs in config.search_methods:
+        search_tasks.append(
+            node_bfs_search(
+                driver, bfs_origin_node_uuids, search_filter, config.bfs_max_depth, 2 * limit
+            )
+        )
+
+    # Execute only the configured search methods
+    search_results: list[list[EntityNode]] = []
+    if search_tasks:
+        search_results = list(await semaphore_gather(*search_tasks))
 
     if NodeSearchMethod.bfs in config.search_methods and bfs_origin_node_uuids is None:
         origin_node_uuids = [node.uuid for result in search_results for node in result]
