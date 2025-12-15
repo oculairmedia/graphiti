@@ -1,5 +1,6 @@
 use crate::error::SearchResult;
 use crate::models::{Edge, EdgeReranker, Node, NodeReranker};
+use crate::reranker::RerankerClient;
 use crate::search::similarity::cosine_similarity_simd;
 use std::collections::{HashMap, HashSet};
 use tracing::instrument;
@@ -160,12 +161,14 @@ pub fn _node_distance_rerank<T>(
         .collect()
 }
 
-#[instrument(skip(method_results, query_vector))]
-pub fn rerank_edges(
+#[instrument(skip(method_results, query_vector, reranker_client))]
+pub async fn rerank_edges(
     method_results: Vec<Vec<Edge>>,
     reranker: &EdgeReranker,
+    query: &str,
     query_vector: Option<&[f32]>,
     mmr_lambda: f32,
+    reranker_client: Option<&RerankerClient>,
 ) -> SearchResult<Vec<Edge>> {
     match reranker {
         EdgeReranker::Rrf => Ok(reciprocal_rank_fusion(method_results, 60.0, |edge| {
@@ -182,18 +185,43 @@ pub fn rerank_edges(
             ))
         }
         EdgeReranker::CrossEncoder => {
-            // Cross-encoder reranking would require a model
-            // For now, just combine and deduplicate
-            let mut seen = HashSet::new();
-            let mut result = Vec::new();
-            for edges in method_results {
-                for edge in edges {
-                    if seen.insert(edge.uuid) {
-                        result.push(edge);
+            if method_results.iter().all(|list| list.is_empty()) {
+                return Ok(vec![]);
+            }
+
+            if let Some(client) = reranker_client {
+                let all_edges: Vec<Edge> = method_results
+                    .iter()
+                    .flat_map(|list| list.iter().cloned())
+                    .collect();
+                let documents: Vec<String> = all_edges.iter().map(|e| e.fact.clone()).collect();
+                let top_k = Some(documents.len().min(100));
+
+                match client.rerank(query, documents, top_k).await {
+                    Ok(ranked) => {
+                        let mut seen = HashSet::new();
+                        let mut result = Vec::with_capacity(ranked.len());
+                        for (idx, _score) in ranked {
+                            if let Some(edge) = all_edges.get(idx).cloned() {
+                                if seen.insert(edge.uuid) {
+                                    result.push(edge);
+                                }
+                            }
+                        }
+                        Ok(result)
+                    }
+                    Err(e) => {
+                        tracing::warn!("Cross-encoder failed, falling back to RRF: {}", e);
+                        Ok(reciprocal_rank_fusion(method_results, 60.0, |edge| {
+                            edge.uuid.to_string()
+                        }))
                     }
                 }
+            } else {
+                Ok(reciprocal_rank_fusion(method_results, 60.0, |edge| {
+                    edge.uuid.to_string()
+                }))
             }
-            Ok(result)
         }
         EdgeReranker::NodeDistance => {
             // Would require distance calculation from graph
@@ -209,13 +237,15 @@ pub fn rerank_edges(
     }
 }
 
-#[instrument(skip(method_results, query_vector))]
-pub fn rerank_nodes(
+#[instrument(skip(method_results, query_vector, reranker_client))]
+pub async fn rerank_nodes(
     method_results: Vec<Vec<Node>>,
     reranker: &NodeReranker,
+    query: &str,
     query_vector: Option<&[f32]>,
     mmr_lambda: f32,
     centrality_boost_factor: f32,
+    reranker_client: Option<&RerankerClient>,
 ) -> SearchResult<Vec<Node>> {
     match reranker {
         NodeReranker::Rrf => Ok(reciprocal_rank_fusion(method_results, 60.0, |node| {
@@ -232,17 +262,46 @@ pub fn rerank_nodes(
             ))
         }
         NodeReranker::CrossEncoder => {
-            // Cross-encoder reranking would require a model
-            let mut seen = HashSet::new();
-            let mut result = Vec::new();
-            for nodes in method_results {
-                for node in nodes {
-                    if seen.insert(node.uuid) {
-                        result.push(node);
+            if method_results.iter().all(|list| list.is_empty()) {
+                return Ok(vec![]);
+            }
+
+            if let Some(client) = reranker_client {
+                let all_nodes: Vec<Node> = method_results
+                    .iter()
+                    .flat_map(|list| list.iter().cloned())
+                    .collect();
+                let documents: Vec<String> = all_nodes
+                    .iter()
+                    .map(|n| n.summary.clone().unwrap_or_else(|| n.name.clone()))
+                    .collect();
+                let top_k = Some(documents.len().min(100));
+
+                match client.rerank(query, documents, top_k).await {
+                    Ok(ranked) => {
+                        let mut seen = HashSet::new();
+                        let mut result = Vec::with_capacity(ranked.len());
+                        for (idx, _score) in ranked {
+                            if let Some(node) = all_nodes.get(idx).cloned() {
+                                if seen.insert(node.uuid) {
+                                    result.push(node);
+                                }
+                            }
+                        }
+                        Ok(result)
+                    }
+                    Err(e) => {
+                        tracing::warn!("Cross-encoder failed, falling back to RRF: {}", e);
+                        Ok(reciprocal_rank_fusion(method_results, 60.0, |node| {
+                            node.uuid.to_string()
+                        }))
                     }
                 }
+            } else {
+                Ok(reciprocal_rank_fusion(method_results, 60.0, |node| {
+                    node.uuid.to_string()
+                }))
             }
-            Ok(result)
         }
         NodeReranker::CentralityBoosted => {
             let all_nodes: Vec<Node> = method_results.into_iter().flatten().collect();
@@ -266,12 +325,50 @@ pub fn rerank_nodes(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::Utc;
+    use uuid::Uuid;
+    use wiremock::matchers::{body_string_contains, method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
 
     #[derive(Debug, Clone)]
     struct MockNode {
         id: String,
         centrality: Option<f32>,
         embedding: Option<Vec<f32>>,
+    }
+
+    fn test_edge(fact: &str) -> Edge {
+        Edge {
+            uuid: Uuid::new_v4(),
+            source_node_uuid: Uuid::new_v4(),
+            target_node_uuid: Uuid::new_v4(),
+            fact: fact.to_string(),
+            created_at: Utc::now(),
+            episodes: vec![],
+            group_id: None,
+            weight: 1.0,
+        }
+    }
+
+    fn test_node(name: &str, summary: Option<&str>) -> Node {
+        Node {
+            uuid: Uuid::new_v4(),
+            name: name.to_string(),
+            node_type: "Test".to_string(),
+            summary: summary.map(|s| s.to_string()),
+            created_at: Utc::now(),
+            embedding: None,
+            group_id: None,
+            centrality: None,
+        }
+    }
+
+    fn edge_uuids(edges: &[Edge]) -> Vec<Uuid> {
+        edges.iter().map(|e| e.uuid).collect()
+    }
+
+    fn node_uuids(nodes: &[Node]) -> Vec<Uuid> {
+        nodes.iter().map(|n| n.uuid).collect()
     }
 
     #[test]
@@ -320,5 +417,83 @@ mod tests {
 
         // Despite lower semantic similarity, high_centrality should rank first due to boost
         assert_eq!(result[0].id, "high_centrality");
+    }
+
+    #[tokio::test]
+    async fn test_rerank_edges_crossencoder_falls_back_to_rrf_when_disabled() {
+        let edge_a = test_edge("A");
+        let edge_b = test_edge("B");
+
+        let method_results = vec![vec![edge_a.clone(), edge_b.clone()], vec![edge_b.clone()]];
+        let expected = reciprocal_rank_fusion(method_results.clone(), 60.0, |e| e.uuid.to_string());
+
+        let got = rerank_edges(
+            method_results,
+            &EdgeReranker::CrossEncoder,
+            "q",
+            None,
+            0.5,
+            None,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(edge_uuids(&got), edge_uuids(&expected));
+    }
+
+    #[tokio::test]
+    async fn test_rerank_nodes_crossencoder_falls_back_to_rrf_when_disabled() {
+        let node_a = test_node("A", None);
+        let node_b = test_node("B", None);
+
+        let method_results = vec![vec![node_a.clone(), node_b.clone()], vec![node_b.clone()]];
+        let expected = reciprocal_rank_fusion(method_results.clone(), 60.0, |n| n.uuid.to_string());
+
+        let got = rerank_nodes(
+            method_results,
+            &NodeReranker::CrossEncoder,
+            "q",
+            None,
+            0.5,
+            0.0,
+            None,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(node_uuids(&got), node_uuids(&expected));
+    }
+
+    #[tokio::test]
+    async fn test_rerank_nodes_crossencoder_falls_back_to_rrf_on_http_error() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/rerank"))
+            .and(body_string_contains("\"query\""))
+            .respond_with(ResponseTemplate::new(500).set_body_string("boom"))
+            .mount(&server)
+            .await;
+
+        let client = RerankerClient::new(&server.uri(), 2_000).unwrap();
+
+        let node_a = test_node("A", Some("node A"));
+        let node_b = test_node("B", Some("node B"));
+
+        let method_results = vec![vec![node_a.clone(), node_b.clone()], vec![node_b.clone()]];
+        let expected = reciprocal_rank_fusion(method_results.clone(), 60.0, |n| n.uuid.to_string());
+
+        let got = rerank_nodes(
+            method_results,
+            &NodeReranker::CrossEncoder,
+            "q",
+            None,
+            0.5,
+            0.0,
+            Some(&client),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(node_uuids(&got), node_uuids(&expected));
     }
 }

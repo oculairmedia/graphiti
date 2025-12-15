@@ -22,16 +22,23 @@ pub struct SearchEngine {
     redis_pool: RedisPool,
     cache: EnhancedCache,
     max_method_results: usize,
+    reranker_client: Option<crate::reranker::RerankerClient>,
 }
 
 impl SearchEngine {
-    pub fn new(falkor_pool: FalkorPool, redis_pool: RedisPool, max_method_results: usize) -> Self {
+    pub fn new(
+        falkor_pool: FalkorPool,
+        redis_pool: RedisPool,
+        max_method_results: usize,
+        reranker_client: Option<crate::reranker::RerankerClient>,
+    ) -> Self {
         let cache = EnhancedCache::new(redis_pool.clone());
         Self {
             falkor_pool,
             redis_pool,
             cache,
             max_method_results,
+            reranker_client,
         }
     }
 
@@ -148,9 +155,12 @@ impl SearchEngine {
         let reranked = reranking::rerank_edges(
             method_results,
             &config.reranker,
+            query,
             query_vector,
             config.mmr_lambda,
-        )?;
+            self.reranker_client.as_ref(),
+        )
+        .await?;
 
         Ok(reranked)
     }
@@ -204,10 +214,13 @@ impl SearchEngine {
         let reranked = reranking::rerank_nodes(
             method_results,
             &config.reranker,
+            query,
             query_vector,
             config.mmr_lambda,
             config.centrality_boost_factor.unwrap_or(1.0),
-        )?;
+            self.reranker_client.as_ref(),
+        )
+        .await?;
 
         Ok(reranked)
     }

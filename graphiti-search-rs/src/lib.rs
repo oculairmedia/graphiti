@@ -6,6 +6,7 @@ pub mod error;
 pub mod falkor;
 pub mod handlers;
 pub mod models;
+pub mod reranker;
 pub mod search;
 
 // Re-export AppState

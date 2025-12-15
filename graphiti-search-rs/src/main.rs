@@ -16,6 +16,7 @@ mod error;
 mod falkor;
 mod handlers;
 mod models;
+mod reranker;
 mod search;
 
 use crate::config::Config;
