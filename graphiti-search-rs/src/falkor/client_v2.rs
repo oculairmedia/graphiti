@@ -425,7 +425,12 @@ impl FalkorClientV2 {
         };
 
         if edge_uuids.is_empty() {
-            return Ok(Vec::new());
+            // FalkorDB doesn't support fulltext indexes on relationships,
+            // so fall back to CONTAINS-based search
+            tracing::debug!("Fulltext index returned no results, falling back to CONTAINS search");
+            return self
+                .fulltext_search_edges_fallback(query, group_ids, limit)
+                .await;
         }
 
         // Fetch edge data WITHOUT embeddings for performance

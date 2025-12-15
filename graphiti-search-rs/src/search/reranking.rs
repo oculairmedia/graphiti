@@ -197,8 +197,18 @@ pub async fn rerank_edges(
                 let documents: Vec<String> = all_edges.iter().map(|e| e.fact.clone()).collect();
                 let top_k = Some(documents.len().min(100));
 
+                tracing::info!(
+                    "CrossEncoder reranking {} edges for query: {}",
+                    documents.len(),
+                    query
+                );
+
                 match client.rerank(query, documents, top_k).await {
                     Ok(ranked) => {
+                        tracing::info!(
+                            "CrossEncoder returned {} ranked results",
+                            ranked.len()
+                        );
                         let mut seen = HashSet::new();
                         let mut result = Vec::with_capacity(ranked.len());
                         for (idx, _score) in ranked {
@@ -218,6 +228,7 @@ pub async fn rerank_edges(
                     }
                 }
             } else {
+                tracing::debug!("CrossEncoder requested but no reranker_client available, using RRF");
                 Ok(reciprocal_rank_fusion(method_results, 60.0, |edge| {
                     edge.uuid.to_string()
                 }))
