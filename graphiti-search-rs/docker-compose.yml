@@ -17,6 +17,9 @@ services:
       - ENABLE_SIMD=true
       - PARALLEL_THRESHOLD=100
       - RUST_LOG=graphiti_search=debug,info
+      - RERANKER_ENABLED=${RERANKER_ENABLED:-false}
+      - RERANKER_URL=${RERANKER_URL:-http://100.81.139.20:11435}
+      - RERANKER_TIMEOUT_MS=${RERANKER_TIMEOUT_MS:-5000}
     depends_on:
       - falkordb
       - redis

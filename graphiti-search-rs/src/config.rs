@@ -15,6 +15,13 @@ pub struct Config {
     pub parallel_threshold: usize,
     pub embedding_dimension: usize,
     pub max_method_results: usize,
+
+    /// Enable cross-encoder reranking
+    pub reranker_enabled: bool,
+    /// URL of the cross-encoder reranker service
+    pub reranker_url: String,
+    /// Timeout for reranker requests (ms)
+    pub reranker_timeout_ms: u64,
 }
 
 impl Config {
@@ -47,6 +54,16 @@ impl Config {
                 .parse()?,
             max_method_results: env::var("MAX_METHOD_RESULTS")
                 .unwrap_or_else(|_| "200".to_string()) // Reduced from 1000 - fulltext index is fast, don't need huge over-fetch
+                .parse()?,
+
+            reranker_enabled: env::var("RERANKER_ENABLED")
+                .unwrap_or_else(|_| "false".to_string())
+                .to_lowercase()
+                == "true",
+            reranker_url: env::var("RERANKER_URL")
+                .unwrap_or_else(|_| "http://100.81.139.20:11435".to_string()),
+            reranker_timeout_ms: env::var("RERANKER_TIMEOUT_MS")
+                .unwrap_or_else(|_| "5000".to_string())
                 .parse()?,
         })
     }
