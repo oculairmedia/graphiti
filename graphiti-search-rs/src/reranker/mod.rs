@@ -3,9 +3,14 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
+/// Request format for vLLM /v1/rerank endpoint
 #[derive(Debug, Serialize)]
 struct RerankerRequest {
+    /// Model name (e.g., "qwen3-reranker-4b")
+    model: String,
+    /// The search query
     query: String,
+    /// Documents to rerank
     documents: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     top_k: Option<usize>,
@@ -49,6 +54,7 @@ impl RerankerClient {
         top_k: Option<usize>,
     ) -> SearchResult<Vec<(usize, f32)>> {
         let request = RerankerRequest {
+            model: "qwen3-reranker-4b".to_string(),
             query: query.to_string(),
             documents,
             top_k,
@@ -56,7 +62,7 @@ impl RerankerClient {
 
         let response = self
             .client
-            .post(format!("{}/rerank", self.base_url))
+            .post(format!("{}/v1/rerank", self.base_url))
             .json(&request)
             .send()
             .await
@@ -78,10 +84,12 @@ impl RerankerClient {
             .await
             .map_err(|e| SearchError::Reranking(format!("Invalid reranker response: {e}")))?;
 
+        // Invert scores: the vLLM Qwen3-Reranker model produces inverted relevance scores
+        // (higher scores for less relevant documents), so we flip them with 1.0 - score
         Ok(reranker_response
             .results
             .into_iter()
-            .map(|r| (r.index, r.relevance_score))
+            .map(|r| (r.index, 1.0 - r.relevance_score))
             .collect())
     }
 }
