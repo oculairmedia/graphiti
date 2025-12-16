@@ -9,16 +9,17 @@ async fn test_reranker_client_success() {
     let mock_server = MockServer::start().await;
 
     Mock::given(method("POST"))
-        .and(path("/rerank"))
+        .and(path("/v1/rerank"))
         .and(body_json(json!({
+            "model": "qwen3-reranker-4b",
             "query": "test query",
             "documents": ["doc1", "doc2"],
             "top_k": 10
         })))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "results": [
-                {"index": 1, "score": 0.95},
-                {"index": 0, "score": 0.72}
+                {"index": 1, "relevance_score": 0.05},
+                {"index": 0, "relevance_score": 0.28}
             ]
         })))
         .mount(&mock_server)
@@ -35,6 +36,7 @@ async fn test_reranker_client_success() {
         .await
         .unwrap();
 
+    // Scores are inverted (1.0 - score), so 0.05 -> 0.95, 0.28 -> 0.72
     assert_eq!(ranked, vec![(1, 0.95), (0, 0.72)]);
 }
 
@@ -43,7 +45,7 @@ async fn test_reranker_client_timeout() {
     let mock_server = MockServer::start().await;
 
     Mock::given(method("POST"))
-        .and(path("/rerank"))
+        .and(path("/v1/rerank"))
         .respond_with(ResponseTemplate::new(200).set_delay(std::time::Duration::from_secs(5)))
         .mount(&mock_server)
         .await;
