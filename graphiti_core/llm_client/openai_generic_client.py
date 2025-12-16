@@ -244,11 +244,22 @@ class OpenAIGenericClient(LLMClient):
             elif m.role == 'system':
                 openai_messages.append({'role': 'system', 'content': m.content})
 
-        # Detect if we're using vLLM (check for common vLLM patterns in base_url)
+        # Detect backend type from base_url
         base_url = str(self.client.base_url) if hasattr(self.client, 'base_url') else ''
         is_vllm = (
             'vllm' in base_url.lower() or ':11434' in base_url
         )  # vLLM or Ollama-like endpoints
+
+        # Detect litellm proxy - common ports are 8082, 4000, or "litellm" in URL
+        # litellm proxy doesn't properly handle json_schema response_format
+        # (it echoes back the schema instead of filling it with data)
+        is_litellm = ':8082' in base_url or ':4000' in base_url or 'litellm' in base_url.lower()
+
+        # Check if model is Anthropic (which doesn't support json_schema response_format)
+        model_name = (self.model or DEFAULT_MODEL).lower()
+        is_anthropic_model = any(
+            name in model_name for name in ['haiku', 'sonnet', 'opus', 'claude']
+        )
 
         # Prepare API call kwargs
         call_kwargs = {
@@ -258,8 +269,17 @@ class OpenAIGenericClient(LLMClient):
             'max_tokens': self.max_tokens,
         }
 
-        # Configure response format based on whether response_model is provided
-        if response_model is not None:
+        # Configure response format based on backend and response_model
+        # IMPORTANT: litellm proxy with Anthropic models doesn't support json_schema
+        # The prompt already instructs the model to return JSON, so we don't need response_format
+        if is_litellm or is_anthropic_model:
+            # For litellm proxy or Anthropic models, don't use response_format
+            # The system prompt already instructs JSON output
+            # response_format with json_schema causes the model to echo the schema back
+            logger.debug(
+                f'Using prompt-based JSON output (litellm={is_litellm}, anthropic={is_anthropic_model})'
+            )
+        elif response_model is not None:
             json_schema = response_model.model_json_schema()
 
             if is_vllm:
@@ -317,7 +337,19 @@ class OpenAIGenericClient(LLMClient):
 
         messages_copy = copy.deepcopy(messages)
 
-        if response_model is not None:
+        # Detect if we should skip schema injection
+        # For litellm proxy and Anthropic models, appending the schema causes the model
+        # to echo back the schema instead of filling it with data
+        base_url = str(self.client.base_url) if hasattr(self.client, 'base_url') else ''
+        model_name = (self.model or DEFAULT_MODEL).lower()
+        is_litellm = ':8082' in base_url or ':4000' in base_url or 'litellm' in base_url.lower()
+        is_anthropic_model = any(
+            name in model_name for name in ['haiku', 'sonnet', 'opus', 'claude']
+        )
+        skip_schema_injection = is_litellm or is_anthropic_model
+
+        if response_model is not None and not skip_schema_injection:
+            # Only inject schema for backends that support it properly (OpenAI, vLLM)
             serialized_model = json.dumps(response_model.model_json_schema())
             messages_copy[
                 -1
