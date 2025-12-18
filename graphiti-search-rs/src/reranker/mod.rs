@@ -62,7 +62,7 @@ impl RerankerClient {
 
         let response = self
             .client
-            .post(format!("{}/v1/rerank", self.base_url))
+            .post(format!("{}/rerank", self.base_url))
             .json(&request)
             .send()
             .await
