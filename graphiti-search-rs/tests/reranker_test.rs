@@ -9,7 +9,7 @@ async fn test_reranker_client_success() {
     let mock_server = MockServer::start().await;
 
     Mock::given(method("POST"))
-        .and(path("/v1/rerank"))
+        .and(path("/rerank"))
         .and(body_json(json!({
             "model": "qwen3-reranker-4b",
             "query": "test query",
@@ -45,7 +45,7 @@ async fn test_reranker_client_timeout() {
     let mock_server = MockServer::start().await;
 
     Mock::given(method("POST"))
-        .and(path("/v1/rerank"))
+        .and(path("/rerank"))
         .respond_with(ResponseTemplate::new(200).set_delay(std::time::Duration::from_secs(5)))
         .mount(&mock_server)
         .await;
