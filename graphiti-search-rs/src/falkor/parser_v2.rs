@@ -114,6 +114,7 @@ pub fn parse_edges_with_properties_from_falkor_v2(result: LazyResultSet<'_>) -> 
                     episodes: Vec::new(),
                     group_id,
                     weight,
+                    score: None,
                 };
 
                 edges.push(edge);
@@ -167,6 +168,7 @@ fn parse_single_node_v2(falkor_node: &falkordb::Node) -> Result<Option<Node>> {
         embedding: None, // Embeddings are not returned in queries
         group_id,
         centrality,
+        score: None,
     }))
 }
 
@@ -204,6 +206,7 @@ fn parse_single_edge_v2(
         episodes,
         group_id,
         weight,
+        score: None,
     }))
 }
 

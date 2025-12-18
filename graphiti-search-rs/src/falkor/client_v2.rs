@@ -90,6 +90,7 @@ fn parse_edges_from_properties(result: LazyResultSet<'_>) -> Result<Vec<Edge>> {
                 Some(group_id)
             },
             weight: weight as f32,
+            score: None,
         });
     }
 

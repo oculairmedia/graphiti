@@ -6,11 +6,12 @@ use std::collections::{HashMap, HashSet};
 use tracing::instrument;
 
 /// Reciprocal Rank Fusion (RRF) for combining multiple ranked lists
+/// Returns items with their RRF scores
 pub fn reciprocal_rank_fusion<T: Clone>(
     ranked_lists: Vec<Vec<T>>,
     k: f32,
     get_id: impl Fn(&T) -> String + Sync,
-) -> Vec<T> {
+) -> Vec<(T, f32)> {
     let mut scores: HashMap<String, (T, f32)> = HashMap::new();
 
     for list in ranked_lists {
@@ -27,10 +28,11 @@ pub fn reciprocal_rank_fusion<T: Clone>(
 
     let mut results: Vec<(T, f32)> = scores.into_values().collect();
     results.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
-    results.into_iter().map(|(item, _)| item).collect()
+    results
 }
 
 /// Centrality-based boosting for structurally important nodes
+/// Returns items with their combined scores
 pub fn centrality_boosted_rerank<T: Clone>(
     items: Vec<T>,
     query_embedding: Option<&[f32]>,
@@ -38,9 +40,9 @@ pub fn centrality_boosted_rerank<T: Clone>(
     get_centrality: impl Fn(&T) -> Option<f32> + Sync,
     boost_factor: f32,
     limit: usize,
-) -> Vec<T> {
+) -> Vec<(T, f32)> {
     if items.is_empty() {
-        return items;
+        return vec![];
     }
 
     let query = query_embedding.unwrap_or(&[]);
@@ -73,28 +75,31 @@ pub fn centrality_boosted_rerank<T: Clone>(
     // Sort by combined score (descending)
     scored_items.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
 
-    // Return top results
-    scored_items
-        .into_iter()
-        .take(limit)
-        .map(|(item, _)| item)
-        .collect()
+    // Return top results with scores
+    scored_items.into_iter().take(limit).collect()
 }
 
 /// Maximal Marginal Relevance (MMR) for diversity-aware reranking
+/// Returns items with their MMR scores
 pub fn maximal_marginal_relevance<T: Clone>(
     items: Vec<T>,
     query_embedding: Option<&[f32]>,
     get_embedding: impl Fn(&T) -> Option<&[f32]> + Sync,
     lambda: f32,
     limit: usize,
-) -> Vec<T> {
+) -> Vec<(T, f32)> {
     if items.is_empty() || query_embedding.is_none() {
-        return items.into_iter().take(limit).collect();
+        // Return items with default scores when no embedding available
+        return items
+            .into_iter()
+            .take(limit)
+            .enumerate()
+            .map(|(i, item)| (item, 1.0 / (i + 1) as f32))
+            .collect();
     }
 
     let query = query_embedding.unwrap();
-    let mut selected = Vec::new();
+    let mut selected: Vec<(T, f32)> = Vec::new();
     let mut remaining: Vec<(usize, &T)> = items.iter().enumerate().collect();
 
     while selected.len() < limit && !remaining.is_empty() {
@@ -106,7 +111,7 @@ pub fn maximal_marginal_relevance<T: Clone>(
 
                     let max_similarity = selected
                         .iter()
-                        .filter_map(|s: &T| get_embedding(s))
+                        .filter_map(|(s, _): &(T, f32)| get_embedding(s))
                         .map(|s_emb| cosine_similarity_simd(item_emb, s_emb))
                         .max_by(|a, b| a.partial_cmp(b).unwrap())
                         .unwrap_or(0.0);
@@ -118,13 +123,13 @@ pub fn maximal_marginal_relevance<T: Clone>(
             })
             .collect();
 
-        if let Some((max_idx, _)) = scores
+        if let Some((max_idx, &max_score)) = scores
             .iter()
             .enumerate()
             .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap())
         {
             let (orig_idx, _item) = remaining.remove(max_idx);
-            selected.push(items[orig_idx].clone());
+            selected.push((items[orig_idx].clone(), max_score));
         } else {
             break;
         }
@@ -161,6 +166,17 @@ pub fn _node_distance_rerank<T>(
         .collect()
 }
 
+/// Helper to apply scores to edges from scored tuples
+fn apply_scores_to_edges(scored: Vec<(Edge, f32)>) -> Vec<Edge> {
+    scored
+        .into_iter()
+        .map(|(mut edge, score)| {
+            edge.score = Some(score);
+            edge
+        })
+        .collect()
+}
+
 #[instrument(skip(method_results, query_vector, reranker_client))]
 pub async fn rerank_edges(
     method_results: Vec<Vec<Edge>>,
@@ -171,18 +187,20 @@ pub async fn rerank_edges(
     reranker_client: Option<&RerankerClient>,
 ) -> SearchResult<Vec<Edge>> {
     match reranker {
-        EdgeReranker::Rrf => Ok(reciprocal_rank_fusion(method_results, 60.0, |edge| {
-            edge.uuid.to_string()
-        })),
+        EdgeReranker::Rrf => {
+            let scored = reciprocal_rank_fusion(method_results, 60.0, |edge| edge.uuid.to_string());
+            Ok(apply_scores_to_edges(scored))
+        }
         EdgeReranker::Mmr => {
             let all_edges: Vec<Edge> = method_results.into_iter().flatten().collect();
-            Ok(maximal_marginal_relevance(
+            let scored = maximal_marginal_relevance(
                 all_edges,
                 query_vector,
                 |_edge| None, // Edges typically don't have embeddings
                 mmr_lambda,
                 100,
-            ))
+            );
+            Ok(apply_scores_to_edges(scored))
         }
         EdgeReranker::CrossEncoder => {
             if method_results.iter().all(|list| list.is_empty()) {
@@ -208,9 +226,10 @@ pub async fn rerank_edges(
                         tracing::info!("CrossEncoder returned {} ranked results", ranked.len());
                         let mut seen = HashSet::new();
                         let mut result = Vec::with_capacity(ranked.len());
-                        for (idx, _score) in ranked {
-                            if let Some(edge) = all_edges.get(idx).cloned() {
+                        for (idx, score) in ranked {
+                            if let Some(mut edge) = all_edges.get(idx).cloned() {
                                 if seen.insert(edge.uuid) {
+                                    edge.score = Some(score);
                                     result.push(edge);
                                 }
                             }
@@ -219,32 +238,63 @@ pub async fn rerank_edges(
                     }
                     Err(e) => {
                         tracing::warn!("Cross-encoder failed, falling back to RRF: {}", e);
-                        Ok(reciprocal_rank_fusion(method_results, 60.0, |edge| {
+                        let scored = reciprocal_rank_fusion(method_results, 60.0, |edge| {
                             edge.uuid.to_string()
-                        }))
+                        });
+                        Ok(apply_scores_to_edges(scored))
                     }
                 }
             } else {
                 tracing::debug!(
                     "CrossEncoder requested but no reranker_client available, using RRF"
                 );
-                Ok(reciprocal_rank_fusion(method_results, 60.0, |edge| {
-                    edge.uuid.to_string()
-                }))
+                let scored =
+                    reciprocal_rank_fusion(method_results, 60.0, |edge| edge.uuid.to_string());
+                Ok(apply_scores_to_edges(scored))
             }
         }
         EdgeReranker::NodeDistance => {
-            // Would require distance calculation from graph
+            // Would require distance calculation from graph - assign decreasing scores
             let all_edges: Vec<Edge> = method_results.into_iter().flatten().collect();
-            Ok(all_edges)
+            let len = all_edges.len();
+            Ok(all_edges
+                .into_iter()
+                .enumerate()
+                .map(|(i, mut edge)| {
+                    edge.score = Some(1.0 - (i as f32 / len.max(1) as f32));
+                    edge
+                })
+                .collect())
         }
         EdgeReranker::EpisodeMentions => {
-            // Sort by number of episode mentions
+            // Sort by number of episode mentions and assign scores based on episode count
             let mut all_edges: Vec<Edge> = method_results.into_iter().flatten().collect();
             all_edges.sort_by_key(|edge| std::cmp::Reverse(edge.episodes.len()));
-            Ok(all_edges)
+            let max_episodes = all_edges
+                .first()
+                .map(|e| e.episodes.len())
+                .unwrap_or(1)
+                .max(1);
+            Ok(all_edges
+                .into_iter()
+                .map(|mut edge| {
+                    edge.score = Some(edge.episodes.len() as f32 / max_episodes as f32);
+                    edge
+                })
+                .collect())
         }
     }
+}
+
+/// Helper to apply scores to nodes from scored tuples
+fn apply_scores_to_nodes(scored: Vec<(Node, f32)>) -> Vec<Node> {
+    scored
+        .into_iter()
+        .map(|(mut node, score)| {
+            node.score = Some(score);
+            node
+        })
+        .collect()
 }
 
 #[instrument(skip(method_results, query_vector, reranker_client))]
@@ -258,18 +308,20 @@ pub async fn rerank_nodes(
     reranker_client: Option<&RerankerClient>,
 ) -> SearchResult<Vec<Node>> {
     match reranker {
-        NodeReranker::Rrf => Ok(reciprocal_rank_fusion(method_results, 60.0, |node| {
-            node.uuid.to_string()
-        })),
+        NodeReranker::Rrf => {
+            let scored = reciprocal_rank_fusion(method_results, 60.0, |node| node.uuid.to_string());
+            Ok(apply_scores_to_nodes(scored))
+        }
         NodeReranker::Mmr => {
             let all_nodes: Vec<Node> = method_results.into_iter().flatten().collect();
-            Ok(maximal_marginal_relevance(
+            let scored = maximal_marginal_relevance(
                 all_nodes,
                 query_vector,
                 |node| node.embedding.as_deref(),
                 mmr_lambda,
                 100,
-            ))
+            );
+            Ok(apply_scores_to_nodes(scored))
         }
         NodeReranker::CrossEncoder => {
             if method_results.iter().all(|list| list.is_empty()) {
@@ -291,9 +343,10 @@ pub async fn rerank_nodes(
                     Ok(ranked) => {
                         let mut seen = HashSet::new();
                         let mut result = Vec::with_capacity(ranked.len());
-                        for (idx, _score) in ranked {
-                            if let Some(node) = all_nodes.get(idx).cloned() {
+                        for (idx, score) in ranked {
+                            if let Some(mut node) = all_nodes.get(idx).cloned() {
                                 if seen.insert(node.uuid) {
+                                    node.score = Some(score);
                                     result.push(node);
                                 }
                             }
@@ -302,32 +355,42 @@ pub async fn rerank_nodes(
                     }
                     Err(e) => {
                         tracing::warn!("Cross-encoder failed, falling back to RRF: {}", e);
-                        Ok(reciprocal_rank_fusion(method_results, 60.0, |node| {
+                        let scored = reciprocal_rank_fusion(method_results, 60.0, |node| {
                             node.uuid.to_string()
-                        }))
+                        });
+                        Ok(apply_scores_to_nodes(scored))
                     }
                 }
             } else {
-                Ok(reciprocal_rank_fusion(method_results, 60.0, |node| {
-                    node.uuid.to_string()
-                }))
+                let scored =
+                    reciprocal_rank_fusion(method_results, 60.0, |node| node.uuid.to_string());
+                Ok(apply_scores_to_nodes(scored))
             }
         }
         NodeReranker::CentralityBoosted => {
             let all_nodes: Vec<Node> = method_results.into_iter().flatten().collect();
-            Ok(centrality_boosted_rerank(
+            let scored = centrality_boosted_rerank(
                 all_nodes,
                 query_vector,
                 |node| node.embedding.as_deref(),
                 |node| node.centrality,
                 centrality_boost_factor,
                 100,
-            ))
+            );
+            Ok(apply_scores_to_nodes(scored))
         }
         NodeReranker::NodeDistance | NodeReranker::EpisodeMentions => {
-            // Would require additional context
+            // Would require additional context - assign decreasing scores
             let all_nodes: Vec<Node> = method_results.into_iter().flatten().collect();
-            Ok(all_nodes)
+            let len = all_nodes.len();
+            Ok(all_nodes
+                .into_iter()
+                .enumerate()
+                .map(|(i, mut node)| {
+                    node.score = Some(1.0 - (i as f32 / len.max(1) as f32));
+                    node
+                })
+                .collect())
         }
     }
 }
@@ -357,6 +420,7 @@ mod tests {
             episodes: vec![],
             group_id: None,
             weight: 1.0,
+            score: None,
         }
     }
 
@@ -370,6 +434,7 @@ mod tests {
             embedding: None,
             group_id: None,
             centrality: None,
+            score: None,
         }
     }
 
@@ -390,7 +455,9 @@ mod tests {
         let result = reciprocal_rank_fusion(vec![list1, list2, list3], 60.0, |s| s.to_string());
 
         // "c" should rank highest as it appears in all lists
-        assert_eq!(result[0], "c");
+        assert_eq!(result[0].0, "c");
+        // Should have a score
+        assert!(result[0].1 > 0.0);
     }
 
     #[test]
@@ -426,7 +493,9 @@ mod tests {
         );
 
         // Despite lower semantic similarity, high_centrality should rank first due to boost
-        assert_eq!(result[0].id, "high_centrality");
+        assert_eq!(result[0].0.id, "high_centrality");
+        // Should have a score
+        assert!(result[0].1 > 0.0);
     }
 
     #[tokio::test]
@@ -435,7 +504,9 @@ mod tests {
         let edge_b = test_edge("B");
 
         let method_results = vec![vec![edge_a.clone(), edge_b.clone()], vec![edge_b.clone()]];
-        let expected = reciprocal_rank_fusion(method_results.clone(), 60.0, |e| e.uuid.to_string());
+        let expected_scored =
+            reciprocal_rank_fusion(method_results.clone(), 60.0, |e| e.uuid.to_string());
+        let expected_uuids: Vec<Uuid> = expected_scored.iter().map(|(e, _)| e.uuid).collect();
 
         let got = rerank_edges(
             method_results,
@@ -448,7 +519,9 @@ mod tests {
         .await
         .unwrap();
 
-        assert_eq!(edge_uuids(&got), edge_uuids(&expected));
+        assert_eq!(edge_uuids(&got), expected_uuids);
+        // Verify scores are set
+        assert!(got.iter().all(|e| e.score.is_some()));
     }
 
     #[tokio::test]
@@ -457,7 +530,9 @@ mod tests {
         let node_b = test_node("B", None);
 
         let method_results = vec![vec![node_a.clone(), node_b.clone()], vec![node_b.clone()]];
-        let expected = reciprocal_rank_fusion(method_results.clone(), 60.0, |n| n.uuid.to_string());
+        let expected_scored =
+            reciprocal_rank_fusion(method_results.clone(), 60.0, |n| n.uuid.to_string());
+        let expected_uuids: Vec<Uuid> = expected_scored.iter().map(|(n, _)| n.uuid).collect();
 
         let got = rerank_nodes(
             method_results,
@@ -471,7 +546,9 @@ mod tests {
         .await
         .unwrap();
 
-        assert_eq!(node_uuids(&got), node_uuids(&expected));
+        assert_eq!(node_uuids(&got), expected_uuids);
+        // Verify scores are set
+        assert!(got.iter().all(|n| n.score.is_some()));
     }
 
     #[tokio::test]
@@ -490,7 +567,9 @@ mod tests {
         let node_b = test_node("B", Some("node B"));
 
         let method_results = vec![vec![node_a.clone(), node_b.clone()], vec![node_b.clone()]];
-        let expected = reciprocal_rank_fusion(method_results.clone(), 60.0, |n| n.uuid.to_string());
+        let expected_scored =
+            reciprocal_rank_fusion(method_results.clone(), 60.0, |n| n.uuid.to_string());
+        let expected_uuids: Vec<Uuid> = expected_scored.iter().map(|(n, _)| n.uuid).collect();
 
         let got = rerank_nodes(
             method_results,
@@ -504,6 +583,8 @@ mod tests {
         .await
         .unwrap();
 
-        assert_eq!(node_uuids(&got), node_uuids(&expected));
+        assert_eq!(node_uuids(&got), expected_uuids);
+        // Verify scores are set
+        assert!(got.iter().all(|n| n.score.is_some()));
     }
 }

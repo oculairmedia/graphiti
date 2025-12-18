@@ -12,6 +12,8 @@ pub struct Node {
     pub embedding: Option<Vec<f32>>,
     pub group_id: Option<String>,
     pub centrality: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub score: Option<f32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -24,6 +26,8 @@ pub struct Edge {
     pub episodes: Vec<Uuid>,
     pub group_id: Option<String>,
     pub weight: f32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub score: Option<f32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

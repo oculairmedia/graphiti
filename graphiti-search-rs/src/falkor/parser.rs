@@ -111,6 +111,7 @@ fn parse_single_node(node_data: &Value) -> Result<Option<Node>> {
             embedding: None,
             group_id,
             centrality,
+            score: None,
         }))
     } else {
         Ok(None)
@@ -332,6 +333,7 @@ fn parse_single_edge(
         episodes: Vec::new(),
         group_id,
         weight,
+        score: None,
     }))
 }
 
