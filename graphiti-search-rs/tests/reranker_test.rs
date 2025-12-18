@@ -36,8 +36,8 @@ async fn test_reranker_client_success() {
         .await
         .unwrap();
 
-    // Scores are inverted (1.0 - score), so 0.05 -> 0.95, 0.28 -> 0.72
-    assert_eq!(ranked, vec![(1, 0.95), (0, 0.72)]);
+    // Scores are returned directly (higher = more relevant)
+    assert_eq!(ranked, vec![(1, 0.05), (0, 0.28)]);
 }
 
 #[tokio::test]

@@ -84,12 +84,12 @@ impl RerankerClient {
             .await
             .map_err(|e| SearchError::Reranking(format!("Invalid reranker response: {e}")))?;
 
-        // Invert scores: the vLLM Qwen3-Reranker model produces inverted relevance scores
-        // (higher scores for less relevant documents), so we flip them with 1.0 - score
+        // Return scores directly: the Qwen3-Reranker model produces relevance scores
+        // where higher values indicate more relevant documents (0.99 = highly relevant, 0.01 = not relevant)
         Ok(reranker_response
             .results
             .into_iter()
-            .map(|r| (r.index, 1.0 - r.relevance_score))
+            .map(|r| (r.index, r.relevance_score))
             .collect())
     }
 }
