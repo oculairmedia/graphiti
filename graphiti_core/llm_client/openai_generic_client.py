@@ -364,11 +364,11 @@ class OpenAIGenericClient(LLMClient):
 
         # Configure response format based on backend and response_model
         # IMPORTANT: litellm proxy with Anthropic models doesn't support json_schema
-        # The prompt already instructs the model to return JSON, so we don't need response_format
+        # For these backends, we rely on explicit prompt instructions for JSON output
         if is_litellm or is_anthropic_model:
             # For litellm proxy or Anthropic models, don't use response_format
-            # The system prompt already instructs JSON output
             # response_format with json_schema causes the model to echo the schema back
+            # Instead, we add explicit JSON-only instructions to the prompt
             logger.debug(
                 f'Using prompt-based JSON output (litellm={is_litellm}, anthropic={is_anthropic_model})'
             )
@@ -449,6 +449,26 @@ class OpenAIGenericClient(LLMClient):
             ].content += (
                 f'\n\nRespond with a JSON object in the following format:\n\n{serialized_model}'
             )
+        elif response_model is not None and skip_schema_injection:
+            # For litellm/Anthropic: add explicit JSON-only instruction with schema
+            serialized_model = json.dumps(response_model.model_json_schema())
+            messages_copy[-1].content += f"""
+
+CRITICAL OUTPUT FORMAT INSTRUCTIONS:
+- You MUST return ONLY valid JSON matching this exact schema
+- Do NOT wrap the JSON in markdown code blocks (no ```json or ```)
+- Do NOT include explanatory text, tables, or formatting before or after the JSON
+- Do NOT return markdown, HTML, or any other format
+- Return ONLY the raw JSON object, starting with {{ and ending with }}
+
+Required JSON schema:
+{serialized_model}
+
+Example of correct output format:
+{{"extracted_entities": [{{"name": "example", "entity_type_id": 0}}]}}
+
+IMPORTANT: Your entire response must be ONLY the JSON object - nothing else.
+"""
 
         # Add multilingual extraction instructions
         messages_copy[0].content += MULTILINGUAL_EXTRACTION_RESPONSES
