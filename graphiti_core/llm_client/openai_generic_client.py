@@ -20,6 +20,12 @@ import re
 import typing
 from typing import ClassVar
 
+
+def _testonly_robust_json_parse(content: str) -> dict[str, typing.Any]:
+    """Test-only wrapper to exercise the internal robust parser."""
+    return _robust_json_parse(content)
+
+
 import openai
 from openai import AsyncOpenAI
 from openai.types.chat import ChatCompletionMessageParam
@@ -35,6 +41,43 @@ logger = logging.getLogger(__name__)
 DEFAULT_MODEL = 'gpt-4.1-mini'
 
 
+def _looks_like_json_schema(obj: typing.Any) -> bool:
+    if not isinstance(obj, dict):
+        return False
+
+    schema_keys = {'$defs', 'properties', 'required', 'title', 'type', 'description'}
+    return any(key in obj for key in schema_keys)
+
+
+def _extract_schema_embedded_values(obj: dict[str, typing.Any]) -> dict[str, typing.Any] | None:
+    """
+    Some backends (notably proxy layers) sometimes echo JSON schemas.
+
+    Common patterns observed:
+    - Data mixed with schema at top-level alongside `$defs` / `properties`
+    - Data nested under `properties.<field>.value` or `properties.<field>.default`
+
+    Returns extracted data fields, or None if nothing recognizable is found.
+    """
+
+    data_fields: dict[str, typing.Any] = {
+        key: value
+        for key, value in obj.items()
+        if key not in ['$defs', 'properties', 'required', 'title', 'type', 'description']
+    }
+
+    properties = obj.get('properties')
+    if isinstance(properties, dict):
+        for prop_key, prop_value in properties.items():
+            if isinstance(prop_value, dict):
+                if 'value' in prop_value:
+                    data_fields[prop_key] = prop_value['value']
+                elif prop_key not in data_fields and 'default' in prop_value:
+                    data_fields[prop_key] = prop_value['default']
+
+    return data_fields or None
+
+
 def _robust_json_parse(content: str) -> dict[str, typing.Any]:
     """
     Robust JSON parser that handles common LLM output issues.
@@ -45,6 +88,7 @@ def _robust_json_parse(content: str) -> dict[str, typing.Any]:
     - Explanatory text around JSON
     - Trailing commas
     - Single quotes instead of double quotes
+    - Schema-echo responses from proxy backends
 
     Args:
         content: Raw LLM response content
@@ -59,7 +103,12 @@ def _robust_json_parse(content: str) -> dict[str, typing.Any]:
 
     # Strategy 1: Try direct parsing first
     try:
-        return json.loads(content)
+        parsed = json.loads(content)
+        if _looks_like_json_schema(parsed):
+            extracted = _extract_schema_embedded_values(parsed)
+            if extracted is not None:
+                return extracted
+        return parsed
     except json.JSONDecodeError:
         pass
 
@@ -69,7 +118,12 @@ def _robust_json_parse(content: str) -> dict[str, typing.Any]:
             # Extract content between ```json and ```
             match = re.search(r'```json\s*(.*?)\s*```', content, re.DOTALL)
             if match:
-                return json.loads(match.group(1))
+                parsed = json.loads(match.group(1))
+                if _looks_like_json_schema(parsed):
+                    extracted = _extract_schema_embedded_values(parsed)
+                    if extracted is not None:
+                        return extracted
+                return parsed
         except json.JSONDecodeError:
             pass
 
@@ -78,7 +132,12 @@ def _robust_json_parse(content: str) -> dict[str, typing.Any]:
             # Extract content between ``` and ```
             match = re.search(r'```\s*(.*?)\s*```', content, re.DOTALL)
             if match:
-                return json.loads(match.group(1))
+                parsed = json.loads(match.group(1))
+                if _looks_like_json_schema(parsed):
+                    extracted = _extract_schema_embedded_values(parsed)
+                    if extracted is not None:
+                        return extracted
+                return parsed
         except json.JSONDecodeError:
             pass
 
@@ -127,7 +186,12 @@ def _robust_json_parse(content: str) -> dict[str, typing.Any]:
                     depth -= 1
                     if depth == 0:
                         json_str = content[start_idx : i + 1]
-                        return json.loads(json_str)
+                        parsed = json.loads(json_str)
+                        if _looks_like_json_schema(parsed):
+                            extracted = _extract_schema_embedded_values(parsed)
+                            if extracted is not None:
+                                return extracted
+                        return parsed
     except json.JSONDecodeError:
         pass
 
@@ -139,7 +203,12 @@ def _robust_json_parse(content: str) -> dict[str, typing.Any]:
 
         for match in matches:
             try:
-                return json.loads(match)
+                parsed = json.loads(match)
+                if _looks_like_json_schema(parsed):
+                    extracted = _extract_schema_embedded_values(parsed)
+                    if extracted is not None:
+                        return extracted
+                return parsed
             except json.JSONDecodeError:
                 # Try with cleanup
                 cleaned = match
@@ -149,7 +218,12 @@ def _robust_json_parse(content: str) -> dict[str, typing.Any]:
                 cleaned = re.sub(r',\s*}', '}', cleaned)
                 cleaned = re.sub(r',\s*]', ']', cleaned)
                 try:
-                    return json.loads(cleaned)
+                    parsed = json.loads(cleaned)
+                    if _looks_like_json_schema(parsed):
+                        extracted = _extract_schema_embedded_values(parsed)
+                        if extracted is not None:
+                            return extracted
+                    return parsed
                 except json.JSONDecodeError:
                     continue
     except Exception:
@@ -171,7 +245,12 @@ def _robust_json_parse(content: str) -> dict[str, typing.Any]:
                 cleaned = cleaned[len(prefix) :].strip()
 
         # Try parsing the cleaned content
-        return json.loads(cleaned)
+        parsed = json.loads(cleaned)
+        if _looks_like_json_schema(parsed):
+            extracted = _extract_schema_embedded_values(parsed)
+            if extracted is not None:
+                return extracted
+        return parsed
     except json.JSONDecodeError:
         pass
 

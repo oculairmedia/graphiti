@@ -345,9 +345,28 @@ async def extract_nodes(
                 prompt_library.extract_nodes.extract_json(context), response_model=ExtractedEntities
             )
 
-        # Hardened entity extraction - handle dict, object, and garbage payloads safely
+        # Hardened entity extraction - handle dict, list, object, and garbage payloads safely
         extracted_entities: list[ExtractedEntity] = []
-        entities_data = llm_response.get('extracted_entities', [])
+
+        # Handle case where LLM returns a list directly instead of a dict
+        if isinstance(llm_response, list):
+            logger.warning(
+                f'LLM returned list instead of dict, treating as extracted_entities directly'
+            )
+            entities_data = llm_response
+        elif isinstance(llm_response, dict):
+            # Try multiple common key variations that LLMs might use
+            entities_data = (
+                llm_response.get('extracted_entities')
+                or llm_response.get('entities')
+                or llm_response.get('extractedEntities')
+                or []
+            )
+        else:
+            logger.warning(
+                f'LLM returned unexpected type {type(llm_response).__name__}, treating as empty'
+            )
+            entities_data = []
         dropped_payloads = 0
 
         for entity_data in entities_data:
@@ -360,14 +379,18 @@ async def extract_nodes(
                     extracted_entities.append(ExtractedEntity(**entity_data))
                 else:
                     # Garbage payload - log and skip
-                    logger.warning(f"Dropped invalid entity payload: type={type(entity_data).__name__}, value={entity_data}")
+                    logger.warning(
+                        f'Dropped invalid entity payload: type={type(entity_data).__name__}, value={entity_data}'
+                    )
                     dropped_payloads += 1
             except Exception as e:
-                logger.error(f"Failed to construct entity from {entity_data}: {e}")
+                logger.error(f'Failed to construct entity from {entity_data}: {e}')
                 dropped_payloads += 1
 
         if dropped_payloads > 0:
-            logger.warning(f"Episode {episode.uuid}: Dropped {dropped_payloads} invalid entity payloads during extraction")
+            logger.warning(
+                f'Episode {episode.uuid}: Dropped {dropped_payloads} invalid entity payloads during extraction'
+            )
 
         reflexion_iterations += 1
         if reflexion_iterations < MAX_REFLEXION_ITERATIONS:
@@ -730,8 +753,10 @@ async def resolve_extracted_nodes(
         if previous_episodes and enable_rerank and clients.cross_encoder is not None:
             try:
                 # Create a query from the chunk nodes being deduplicated
-                chunk_names = ', '.join([node.name for node in chunk_nodes[:5]])  # Use first 5 node names
-                query = f"Deduplicating entities: {chunk_names}"
+                chunk_names = ', '.join(
+                    [node.name for node in chunk_nodes[:5]]
+                )  # Use first 5 node names
+                query = f'Deduplicating entities: {chunk_names}'
 
                 reranked_episodes = await rerank_and_budget_episodes(
                     query=query,
@@ -748,9 +773,13 @@ async def resolve_extracted_nodes(
                 )
             except Exception as e:
                 logger.warning(f'Reranker failed for deduplication, using raw episodes: {e}')
-                previous_episodes_for_context = [ep.content for ep in previous_episodes] if previous_episodes else []
+                previous_episodes_for_context = (
+                    [ep.content for ep in previous_episodes] if previous_episodes else []
+                )
         else:
-            previous_episodes_for_context = [ep.content for ep in previous_episodes] if previous_episodes else []
+            previous_episodes_for_context = (
+                [ep.content for ep in previous_episodes] if previous_episodes else []
+            )
 
         context = {
             'extracted_nodes': extracted_nodes_context,
@@ -1157,6 +1186,12 @@ async def extract_attributes_from_nodes(
 ) -> list[EntityNode]:
     llm_client = clients.llm_client
     embedder = clients.embedder
+
+    if os.getenv('ENABLE_ATTRIBUTE_EXTRACTION', 'true').lower() != 'true':
+        logger.info('Skipping entity attribute extraction (ENABLE_ATTRIBUTE_EXTRACTION != true)')
+        await create_entity_node_embeddings(embedder, nodes)
+        return nodes
+
     updated_nodes: list[EntityNode] = await semaphore_gather(
         *[
             extract_attributes_from_node(
@@ -1231,9 +1266,7 @@ async def extract_attributes_from_node(
     logger.debug(
         f'🔍 Calling LLM for summary generation - Episode content length: {len(summary_context.get("episode_content", ""))}'
     )
-    logger.debug(
-        f'   Previous episodes count: {len(summary_context.get("previous_episodes", []))}'
-    )
+    logger.debug(f'   Previous episodes count: {len(summary_context.get("previous_episodes", []))}')
 
     llm_response = await llm_client.generate_response(
         prompt_library.extract_nodes.extract_attributes(summary_context),

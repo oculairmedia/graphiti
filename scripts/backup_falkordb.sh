@@ -9,9 +9,10 @@ set -e
 # Configuration (can be overridden by environment variables)
 CONTAINER_NAME="${CONTAINER_NAME:-graphiti-falkordb-1}"
 BACKUP_DIR="${BACKUP_DIR:-/opt/stacks/graphiti/backups/falkordb}"
-BACKUP_RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-7}"
-BACKUP_RETENTION_WEEKLY="${BACKUP_RETENTION_WEEKLY:-4}"  # Keep 4 weekly backups
-BACKUP_RETENTION_MONTHLY="${BACKUP_RETENTION_MONTHLY:-3}" # Keep 3 monthly backups
+BACKUP_RETENTION_SNAPSHOTS="${BACKUP_RETENTION_SNAPSHOTS:-2}"  # Keep last 2 snapshots
+BACKUP_RETENTION_DAILY="${BACKUP_RETENTION_DAILY:-2}"          # Keep last 2 daily backups
+BACKUP_RETENTION_WEEKLY="${BACKUP_RETENTION_WEEKLY:-2}"        # Keep last 2 weekly backups
+BACKUP_RETENTION_MONTHLY="${BACKUP_RETENTION_MONTHLY:-2}"      # Keep last 2 monthly backups
 
 # Logging
 LOG_FILE="/var/log/falkordb-backup.log"
@@ -64,33 +65,35 @@ backup_rdb() {
     log "Starting $backup_type backup: $backup_name"
     
     # Get initial LASTSAVE before triggering BGSAVE
-    local initial_save=$(docker exec "$CONTAINER_NAME" redis-cli LASTSAVE | tr -d '\r\n')
+    local initial_save=$(docker exec "$CONTAINER_NAME" redis-cli LASTSAVE 2>/dev/null | tr -d '\r\n' | tr -d ' ')
+    log "Initial LASTSAVE: $initial_save"
     
     # Trigger background save
     docker exec "$CONTAINER_NAME" redis-cli BGSAVE
     
-    # Wait for BGSAVE to complete
-    sleep 2  # Give BGSAVE time to start
-    
-    # Maximum wait time (30 seconds)
-    local max_wait=30
+    # Wait for BGSAVE to complete (max 60 seconds for large databases)
+    local max_wait=60
     local waited=0
     
     while [ $waited -lt $max_wait ]; do
-        local current_save=$(docker exec "$CONTAINER_NAME" redis-cli LASTSAVE | tr -d '\r\n')
-        if [[ "$current_save" != "$initial_save" ]]; then
-            break
+        sleep 2
+        local bgsave_in_progress=$(docker exec "$CONTAINER_NAME" redis-cli INFO persistence 2>/dev/null | grep rdb_bgsave_in_progress | cut -d: -f2 | tr -d '\r\n' | tr -d ' ')
+        if [[ "$bgsave_in_progress" == "0" ]]; then
+            local current_save=$(docker exec "$CONTAINER_NAME" redis-cli LASTSAVE 2>/dev/null | tr -d '\r\n' | tr -d ' ')
+            if [[ "$current_save" != "$initial_save" ]]; then
+                log "BGSAVE completed in ${waited}s (LASTSAVE: $current_save)"
+                break
+            fi
         fi
-        sleep 1
-        ((waited++))
+        ((waited+=2))
     done
     
-    if [ $waited -eq $max_wait ]; then
-        log "WARNING: BGSAVE may not have completed within $max_wait seconds"
+    if [ $waited -ge $max_wait ]; then
+        log "WARNING: BGSAVE may not have completed within $max_wait seconds, proceeding anyway"
     fi
     
     # Copy the RDB file
-    docker cp "$CONTAINER_NAME:/var/lib/falkordb/data/dump.rdb" "$backup_path"
+    docker cp "$CONTAINER_NAME:/var/lib/falkordb/data/falkordb.rdb" "$backup_path"
     
     # Verify backup
     if [[ -f "$backup_path" && -s "$backup_path" ]]; then
@@ -150,18 +153,32 @@ backup_aof() {
     fi
 }
 
-# Cleanup old backups based on retention policy
+# Cleanup old backups based on retention count (keep last N)
 cleanup_backups() {
     local backup_type="$1"
-    local retention_days="$2"
+    local keep_count="$2"
     
-    log "Cleaning up old $backup_type backups (retention: $retention_days days)"
+    log "Cleaning up old $backup_type backups (keeping last $keep_count)"
     
-    find "$BACKUP_DIR/$backup_type" -name "falkordb_${backup_type}_*.rdb" -mtime +$retention_days -delete 2>/dev/null || true
-    find "$BACKUP_DIR/$backup_type" -name "falkordb_${backup_type}_*.rdb.meta" -mtime +$retention_days -delete 2>/dev/null || true
+    # Get list of backups sorted by time (newest first), skip the first N, delete the rest
+    local backup_dir="$BACKUP_DIR/$backup_type"
+    local count=0
     
-    local remaining=$(find "$BACKUP_DIR/$backup_type" -name "falkordb_${backup_type}_*.rdb" | wc -l)
-    log "Cleanup completed: $remaining $backup_type backups remaining"
+    # Delete old RDB files (keep last N)
+    ls -t "$backup_dir"/falkordb_${backup_type}_*.rdb 2>/dev/null | tail -n +$((keep_count + 1)) | while read -r file; do
+        log "Deleting old backup: $(basename "$file")"
+        rm -f "$file" "${file}.meta"
+        ((count++)) || true
+    done
+    
+    # Also clean up any manual backups older than the oldest kept backup
+    ls -t "$backup_dir"/falkordb_manual_*.rdb 2>/dev/null | tail -n +$((keep_count + 1)) | while read -r file; do
+        log "Deleting old manual backup: $(basename "$file")"
+        rm -f "$file"
+    done
+    
+    local remaining=$(find "$backup_dir" -name "*.rdb" 2>/dev/null | wc -l)
+    log "Cleanup completed: $remaining backups remaining in $backup_type"
 }
 
 # Send backup notification
@@ -195,18 +212,19 @@ main() {
     case "$backup_type" in
         "daily")
             backup_rdb "daily"
-            cleanup_backups "daily" "$BACKUP_RETENTION_DAYS"
+            cleanup_backups "daily" "$BACKUP_RETENTION_DAILY"
             ;;
         "weekly")
             backup_rdb "weekly"
-            cleanup_backups "weekly" "$((BACKUP_RETENTION_WEEKLY * 7))"
+            cleanup_backups "weekly" "$BACKUP_RETENTION_WEEKLY"
             ;;
         "monthly")
             backup_rdb "monthly"
-            cleanup_backups "monthly" "$((BACKUP_RETENTION_MONTHLY * 30))"
+            cleanup_backups "monthly" "$BACKUP_RETENTION_MONTHLY"
             ;;
         "snapshot")
             backup_rdb "snapshots"
+            cleanup_backups "snapshots" "$BACKUP_RETENTION_SNAPSHOTS"
             backup_aof
             ;;
         *)

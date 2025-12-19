@@ -546,18 +546,13 @@ services:
   graphiti-worker:
     image: ghcr.io/oculairmedia/graphiti-worker:main
     restart: unless-stopped
-    entrypoint:
-      - /scripts/worker-entrypoint.sh
     command:
       - python
       - -u
       - worker/worker_service.py
     volumes:
       - ./scripts:/scripts:ro
-      - init_ready_marker:/tmp:ro
     environment:
-      - READY_MARKER_FILE=/tmp/graphiti-init-complete
-      - MAX_WAIT_SECONDS=${INIT_MAX_WAIT:-1800}
       - QUEUE_URL=http://graphiti-queued:8080
       - NEO4J_URI=${NEO4J_URI:-bolt://neo4j:7687}
       - NEO4J_USER=${NEO4J_USER:-neo4j}
@@ -595,6 +590,7 @@ services:
       - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-ollama}
       - WORKER_COUNT=${WORKER_COUNT:-2}
       - BATCH_SIZE=${BATCH_SIZE:-5}
+      - ENABLE_ATTRIBUTE_EXTRACTION=${ENABLE_ATTRIBUTE_EXTRACTION:-false}
       - POLL_INTERVAL=${POLL_INTERVAL:-2.0}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - GRAPHITI_ENABLE_AUTO_MERGE=${GRAPHITI_ENABLE_AUTO_MERGE:-true}

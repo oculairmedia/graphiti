@@ -17,7 +17,7 @@ limitations under the License.
 import json
 from typing import Any, Protocol, TypedDict
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from .models import Message, PromptFunction, PromptVersion
 from ..utils.prompt_utils import enforce_max_prompt_tokens
@@ -29,6 +29,18 @@ class ExtractedEntity(BaseModel):
         description='ID of the classified entity type. '
         'Must be one of the provided entity_type_id integers.',
     )
+
+    def __init__(self, **data):
+        # Handle common LLM field name variations
+        if 'entity_name' in data and 'name' not in data:
+            data['name'] = data.pop('entity_name')
+        if 'entityName' in data and 'name' not in data:
+            data['name'] = data.pop('entityName')
+        if 'entity_type' in data and 'entity_type_id' not in data:
+            # Try to convert string type to id (default to 0)
+            data['entity_type_id'] = 0
+            data.pop('entity_type')
+        super().__init__(**data)
 
 
 class ExtractedEntities(BaseModel):
@@ -262,30 +274,38 @@ def extract_attributes(context: dict[str, Any]) -> list[Message]:
     return [
         Message(
             role='system',
-            content='You are a helpful assistant that extracts entity properties from the provided text.',
+            content="""You are a JSON extraction assistant. You MUST respond with ONLY a valid JSON object.
+
+CRITICAL RULES:
+- Output ONLY a single JSON object - no explanations, no markdown, no extra text
+- Do not wrap the JSON in code blocks or backticks
+- Do not output multiple JSON objects
+- Do not include any text before or after the JSON
+- The response must be parseable by json.loads() directly""",
         ),
         Message(
             role='user',
-            content=f"""
+            content=f"""Extract entity properties from the provided text and return them as a JSON object.
 
-        <MESSAGES>
-        {safe_json_dumps(context['previous_episodes'])}
-        {safe_json_dumps(context['episode_content'])}
-        </MESSAGES>
+<MESSAGES>
+{safe_json_dumps(context['previous_episodes'])}
+{safe_json_dumps(context['episode_content'])}
+</MESSAGES>
 
-        Given the above MESSAGES and the following ENTITY, update any of its attributes based on the information provided
-        in MESSAGES. Use the provided attribute descriptions to better understand how each attribute should be determined.
+Given the above MESSAGES and the following ENTITY, update any of its attributes based on the information provided
+in MESSAGES. Use the provided attribute descriptions to better understand how each attribute should be determined.
 
-        Guidelines:
-        1. Do not hallucinate entity property values if they cannot be found in the current context.
-        2. Only use the provided MESSAGES and ENTITY to set attribute values.
-        3. The summary attribute represents a summary of the ENTITY, and should be updated with new information about the Entity from the MESSAGES.
-            Summaries must be no longer than 250 words.
+Guidelines:
+1. Do not hallucinate entity property values if they cannot be found in the current context.
+2. Only use the provided MESSAGES and ENTITY to set attribute values.
+3. The summary attribute represents a summary of the ENTITY, and should be updated with new information about the Entity from the MESSAGES.
+    Summaries must be no longer than 250 words.
+4. Return ONLY the JSON object with the extracted attributes - no other text.
 
-        <ENTITY>
-        {context['node']}
-        </ENTITY>
-        """,
+<ENTITY>
+{context['node']}
+</ENTITY>
+""",
         ),
     ]
 
