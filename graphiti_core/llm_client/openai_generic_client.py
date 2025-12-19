@@ -99,7 +99,15 @@ def _robust_json_parse(content: str) -> dict[str, typing.Any]:
     Raises:
         json.JSONDecodeError: If no valid JSON can be extracted
     """
+    raw_content = content
     content = content.strip()
+
+    if not content:
+        raise json.JSONDecodeError(
+            'Could not extract valid JSON from response (empty response from LLM)',
+            raw_content,
+            0,
+        )
 
     # Strategy 1: Try direct parsing first
     try:
@@ -255,6 +263,12 @@ def _robust_json_parse(content: str) -> dict[str, typing.Any]:
         pass
 
     # If all strategies fail, raise the original error
+    truncated_content = content[:500] if len(content) > 500 else content
+    logger.error(
+        f'Failed to extract JSON from LLM response. '
+        f'Response length: {len(raw_content)} chars. '
+        f'First 500 chars (after strip): {truncated_content!r}'
+    )
     raise json.JSONDecodeError(f'Could not extract valid JSON from response', content, 0)
 
 
@@ -471,7 +485,7 @@ class OpenAIGenericClient(LLMClient):
                 )
 
                 error_message = Message(role='user', content=error_context)
-                messages.append(error_message)
+                messages_copy.append(error_message)
                 logger.warning(
                     f'Retrying after application error (attempt {retry_count}/{self.MAX_RETRIES}): {e}'
                 )
