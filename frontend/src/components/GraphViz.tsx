@@ -20,8 +20,6 @@ import { CentralityStatsProvider } from '../contexts/CentralityStatsContext';
 const GraphTimeline = React.lazy(() => import('./GraphTimeline').then(m => ({ default: m.GraphTimeline })));
 type GraphTimelineHandle = any; // Type will be resolved at runtime
 import { useGraphDataQuery } from '../hooks/useGraphDataQuery';
-// GRAPH-87: Migrated from useIncrementalUpdates to useCosmographIncrementalUpdates
-import { useCosmographIncrementalUpdates } from '../hooks/useCosmographIncrementalUpdates';
 import { GraphNode } from '../types/graph';
 import { GraphLink } from '../types/graph';
 import type { GraphCanvasHandle, GraphVizProps } from '../types/components';
@@ -101,24 +99,9 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
     setHoveredNode(node?.id || null);
   });
   
-  // GRAPH-87: Migrated to consolidated useCosmographIncrementalUpdates hook
-  const { 
-    cosmographNodes, 
-    cosmographLinks,
-    resetData
-  } = useCosmographIncrementalUpdates({
-    initialNodes: nodesWithDegrees,
-    initialLinks: graphData?.links || [],
-    selectedNodeId: selectedNode?.id || null,
-    hoveredNodeId: hoveredNode || null,
-    highlightedNodeIds: highlightedNodes,
-    onNodesChange: () => {
-      // Update timeline when data changes
-      lastDataUpdateTime.current = Date.now();
-      // Use instant mode for real-time updates to prevent animation lag
-      setTimelineUpdateMode('instant');
-    }
-  });
+  // Use data directly from useGraphDataQuery - properly handle undefined/empty states
+  const cosmographNodes = useMemo(() => nodesWithDegrees || [], [nodesWithDegrees]);
+  const cosmographLinks = useMemo(() => graphData?.links || [], [graphData?.links]);
 
   // Track data updates for timeline animation mode
   useEffect(() => {
@@ -134,13 +117,6 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
       lastDataUpdateTime.current = now;
     }
   }, [graphData, setTimelineUpdateMode]);
-
-  // Sync cosmograph data when graphData changes
-  useEffect(() => {
-    if (nodesWithDegrees.length > 0 || graphData?.links?.length) {
-      resetData(nodesWithDegrees, graphData?.links || [], 'graphData');
-    }
-  }, [nodesWithDegrees, graphData?.links, resetData]);
 
   // Handle live stats updates from GraphCanvas
   const handleLiveStatsUpdate = useCallback((stats: { nodeCount: number; edgeCount: number }) => {

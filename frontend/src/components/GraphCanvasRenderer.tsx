@@ -72,6 +72,10 @@ export const GraphCanvasRenderer: React.FC<GraphCanvasRendererProps> = React.mem
   
   const CosmographAny = Cosmograph as any;
   
+  // Safety check - ensure data arrays exist before rendering Cosmograph
+  const safeNodes = cosmographData?.nodes || [];
+  const safeLinks = cosmographData?.links || [];
+  
   // PERFORMANCE FIX: Memoize label class name functions to avoid recreation on each render
   const pointLabelClassName = useMemo(() => () => 
     `background: ${config.labelBackgroundColor || 'rgba(0,0,0,0.7)'}; ` +
@@ -93,8 +97,9 @@ export const GraphCanvasRenderer: React.FC<GraphCanvasRendererProps> = React.mem
     <CosmographAny
       ref={cosmographRef}
       // Use points/links instead of nodes/links
-      points={cosmographData.nodes}
-      links={cosmographData.links}
+      // Safety: use empty arrays if data is undefined to prevent .length errors
+      points={safeNodes}
+      links={safeLinks}
       // Point configuration - tell Cosmograph how to interpret the data
       pointIdBy="id"
       pointIndexBy="index"
