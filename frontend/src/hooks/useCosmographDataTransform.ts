@@ -58,6 +58,10 @@ export const useCosmographDataTransform = (
   links: GraphLink[],
   config: TransformConfig
 ): CosmographData => {
+  // Ensure nodes and links are always arrays to prevent .map() errors
+  const safeNodes = Array.isArray(nodes) ? nodes : [];
+  const safeLinks = Array.isArray(links) ? links : [];
+  
   // Reference to the data preparer (singleton pattern)
   const dataPreparerRef = useRef<CosmographDataPreparer>(
     getGlobalDataPreparer({
@@ -69,8 +73,8 @@ export const useCosmographDataTransform = (
   
   // PERFORMANCE FIX (GRAPH-67): Use content-based hashes instead of array references
   // This prevents re-processing when arrays are recreated with same content
-  const nodesHash = useMemo(() => generateNodesHash(nodes), [nodes]);
-  const linksHash = useMemo(() => generateLinksHash(links), [links]);
+  const nodesHash = useMemo(() => generateNodesHash(safeNodes), [safeNodes]);
+  const linksHash = useMemo(() => generateLinksHash(safeLinks), [safeLinks]);
   
   // Store previous result to return stable reference when content hasn't changed
   const prevResultRef = useRef<CosmographData>({ nodes: [], links: [] });
@@ -95,7 +99,7 @@ export const useCosmographDataTransform = (
     const nodeTypeIndexMap = new Map<string, number>();
     
     // Transform nodes with sanitization
-    const transformedNodes = nodes.map((node, index) => {
+    const transformedNodes = safeNodes.map((node, index) => {
       nodeIdToIndex.set(node.id, index);
       
       // Track node type for color generation
@@ -114,7 +118,7 @@ export const useCosmographDataTransform = (
     });
     
     // Transform links with sanitization and filtering
-    const transformedLinks = links
+    const transformedLinks = safeLinks
       .map(link => sanitizeLink(link, nodeIdToIndex))
       .filter(link => link !== null);
     
