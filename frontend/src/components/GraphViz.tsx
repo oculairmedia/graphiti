@@ -5,7 +5,7 @@ import { useGraphConfig } from '../contexts/GraphConfigProvider';
 import { ControlPanel } from './ControlPanel';
 import { LazyGraphCanvas } from './LazyGraphCanvas';
 
-// Zustand stores - GRAPH-93: Migrated from useState to Zustand
+// GRAPH-93: Zustand stores for global state management
 import { useUIStore, useGraphStore, useSelectionStore } from '../stores';
 
 // Lazy load modal panels - PERFORMANCE FIX (GRAPH-42): Lazy load all conditional panels
@@ -20,8 +20,6 @@ import { CentralityStatsProvider } from '../contexts/CentralityStatsContext';
 const GraphTimeline = React.lazy(() => import('./GraphTimeline').then(m => ({ default: m.GraphTimeline })));
 type GraphTimelineHandle = any; // Type will be resolved at runtime
 import { useGraphDataQuery } from '../hooks/useGraphDataQuery';
-// GRAPH-86: Migrated from useNodeSelection to useGraphSelection
-import { useGraphSelection } from '../hooks/useGraphSelection';
 // GRAPH-87: Migrated from useIncrementalUpdates to useCosmographIncrementalUpdates
 import { useCosmographIncrementalUpdates } from '../hooks/useCosmographIncrementalUpdates';
 import { GraphNode } from '../api/types';
@@ -55,6 +53,16 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
     setContextReady,
     setLiveStats,
   } = useGraphStore();
+  
+  // GRAPH-93: Selection state from Zustand store (replaces useGraphSelection hook)
+  const {
+    selectedNode,
+    hoveredNode,
+    highlightedNodes,
+    selectNode,
+    setHoveredNode,
+    clearAll: clearSelection,
+  } = useSelectionStore();
 
   // Refs
   const graphCanvasRef = useRef<GraphCanvasHandle>(null);
@@ -78,16 +86,6 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
     isRefetching
   } = useGraphDataQuery();
   
-  // GRAPH-86: Migrated to consolidated useGraphSelection hook
-  const {
-    selectedNode,
-    setSelectedNode,
-    hoveredNode,
-    setHoveredNode,
-    highlightedNodes,
-    clearSelection
-  } = useGraphSelection();
-  
   // Calculate node degrees for sizing
   const nodesWithDegrees = useMemo(() => {
     if (!graphData?.nodes) return [];
@@ -96,11 +94,11 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
 
   // Use stable callback to avoid re-renders
   const handleNodeClick = useStableCallback((node: GraphNode | null) => {
-    setSelectedNode(node);
+    selectNode(node);
   });
 
   const handleNodeHover = useStableCallback((node: GraphNode | null) => {
-    setHoveredNode(node);
+    setHoveredNode(node?.id || null);
   });
   
   // GRAPH-87: Migrated to consolidated useCosmographIncrementalUpdates hook
@@ -112,7 +110,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
     initialNodes: nodesWithDegrees,
     initialLinks: graphData?.links || [],
     selectedNodeId: selectedNode?.id || null,
-    hoveredNodeId: hoveredNode?.id || null,
+    hoveredNodeId: hoveredNode || null,
     highlightedNodeIds: highlightedNodes,
     onNodesChange: () => {
       // Update timeline when data changes
@@ -151,24 +149,24 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
 
   // Handle closing the details panel
   const handleCloseDetails = useCallback(() => {
-    setSelectedNode(null);
-  }, [setSelectedNode]);
+    selectNode(null);
+  }, [selectNode]);
 
   // Handle timeline node selection
   const handleTimelineNodeSelect = useCallback((nodeId: string | null) => {
     if (!nodeId) {
-      setSelectedNode(null);
+      selectNode(null);
       return;
     }
     
     // Find the node in our data
     const node = cosmographNodes.find(n => n.id === nodeId);
     if (node) {
-      setSelectedNode(node);
+      selectNode(node);
       // Focus on the node in the graph
       graphCanvasRef.current?.focusNode(nodeId);
     }
-  }, [cosmographNodes, setSelectedNode]);
+  }, [cosmographNodes, selectNode]);
 
   // Stable graph props for child components
   const stableGraphProps = useMemo(() => {
@@ -231,7 +229,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
                 nodes={cosmographNodes}
                 links={cosmographLinks}
                 selectedNode={selectedNode}
-                hoveredNode={hoveredNode}
+                hoveredNode={hoveredNode ? cosmographNodes.find(n => n.id === hoveredNode) || null : null}
                 onNodeClick={handleNodeClick}
                 onNodeHover={handleNodeHover}
                 isSimulationRunning={isSimulationRunning}
