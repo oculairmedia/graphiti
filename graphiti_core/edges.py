@@ -62,6 +62,13 @@ class Edge(BaseModel, ABC):
     source_node_uuid: str
     target_node_uuid: str
     created_at: datetime
+    # Optional fields for cross-group edge UUID collision prevention
+    source_node_group_id: str | None = Field(
+        default=None, description='Source node group_id for cross-group edge UUID generation'
+    )
+    target_node_group_id: str | None = Field(
+        default=None, description='Target node group_id for cross-group edge UUID generation'
+    )
 
     @root_validator(pre=True)
     def generate_uuid_if_needed(cls, values):
@@ -84,6 +91,10 @@ class Edge(BaseModel, ABC):
             target_uuid = values.get('target_node_uuid')
             group_id = values.get('group_id')
 
+            # Get optional source/target group_ids for cross-group collision prevention
+            source_group_id = values.get('source_node_group_id')
+            target_group_id = values.get('target_node_group_id')
+
             # Check if this is an EpisodicEdge (no name field) vs EntityEdge (has name field)
             if 'name' not in values:
                 # For EpisodicEdges, use 'MENTIONS' as the edge type
@@ -93,9 +104,15 @@ class Edge(BaseModel, ABC):
                 edge_name = values.get('name', 'RELATES_TO')
 
             if source_uuid and target_uuid and group_id:
-                # Generate deterministic UUID for edges
+                # Generate deterministic UUID for edges, including source/target group_ids
+                # to prevent cross-group UUID collisions
                 values['uuid'] = generate_deterministic_edge_uuid(
-                    source_uuid, target_uuid, edge_name, group_id
+                    source_uuid,
+                    target_uuid,
+                    edge_name,
+                    group_id,
+                    source_group_id=source_group_id,
+                    target_group_id=target_group_id,
                 )
                 return values
 

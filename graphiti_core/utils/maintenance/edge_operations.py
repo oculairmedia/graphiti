@@ -194,13 +194,34 @@ def build_episodic_edges(
     entity_nodes: list[EntityNode],
     episode_uuid: str,
     created_at: datetime,
+    episode_group_id: str | None = None,
 ) -> list[EpisodicEdge]:
+    """
+    Build episodic MENTIONS edges from an episode to entity nodes.
+
+    Args:
+        entity_nodes: List of entity nodes mentioned in the episode
+        episode_uuid: UUID of the source episode
+        created_at: Timestamp for edge creation
+        episode_group_id: Optional group_id of the episode (for cross-group edge UUID generation)
+
+    Returns:
+        List of EpisodicEdge objects
+
+    Note:
+        When episode_group_id differs from node.group_id, this creates a cross-group edge.
+        The source_node_group_id and target_node_group_id are passed to ensure deterministic
+        UUID generation doesn't collide with edges in other graph partitions.
+    """
     episodic_edges: list[EpisodicEdge] = [
         EpisodicEdge(
             source_node_uuid=episode_uuid,
             target_node_uuid=node.uuid,
             created_at=created_at,
             group_id=node.group_id,
+            # Include source/target group_ids for cross-group UUID collision prevention
+            source_node_group_id=episode_group_id,
+            target_node_group_id=node.group_id,
         )
         for node in entity_nodes
     ]
@@ -236,6 +257,9 @@ def build_duplicate_of_edges(
                 target_node_uuid=target_node.uuid,
                 name='IS_DUPLICATE_OF',
                 group_id=episode.group_id,
+                # Include source/target group_ids for cross-group UUID collision prevention
+                source_node_group_id=source_node.group_id,
+                target_node_group_id=target_node.group_id,
                 fact=f'{source_node.name} is a duplicate of {target_node.name}',
                 episodes=[episode.uuid],
                 created_at=created_at,

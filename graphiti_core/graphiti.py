@@ -535,7 +535,9 @@ class Graphiti:
 
             entity_edges = resolved_edges + invalidated_edges + duplicate_of_edges
 
-            episodic_edges = build_episodic_edges(nodes, episode.uuid, now)
+            episodic_edges = build_episodic_edges(
+                nodes, episode.uuid, now, episode_group_id=episode.group_id
+            )
 
             episode.entity_edges = [edge.uuid for edge in entity_edges]
 
@@ -779,7 +781,9 @@ class Graphiti:
             )
 
             entity_edges = resolved_edges + invalidated_edges + duplicate_of_edges
-            episodic_edges = build_episodic_edges(nodes, episode.uuid, now)
+            episodic_edges = build_episodic_edges(
+                nodes, episode.uuid, now, episode_group_id=episode.group_id
+            )
             episode.entity_edges = [edge.uuid for edge in entity_edges]
 
             # Save to database
@@ -1060,7 +1064,13 @@ class Graphiti:
             # Create Episodic Edges
             episodic_edges: list[EpisodicEdge] = []
             for episode_uuid, nodes in nodes_by_episode.items():
-                episodic_edges.extend(build_episodic_edges(nodes, episode_uuid, now))
+                # Get episode's group_id for cross-group edge UUID generation
+                episode_group_id = episodes_by_uuid.get(episode_uuid, episodes[0]).group_id
+                episodic_edges.extend(
+                    build_episodic_edges(
+                        nodes, episode_uuid, now, episode_group_id=episode_group_id
+                    )
+                )
 
             # re-map edge pointers so that they don't point to discard dupe nodes
             extracted_edges_bulk_updated: list[list[EntityEdge]] = [
