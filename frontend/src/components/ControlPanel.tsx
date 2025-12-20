@@ -2,7 +2,7 @@ import React, { useState, useCallback, memo } from 'react';
 import { ChevronLeft, ChevronRight, Database, Settings2, Palette, Zap, Paintbrush, Layers, Search, BarChart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useGraphConfig } from '@/contexts/GraphConfigProvider';
+import { useGraphConfig } from '@/hooks/useGraphConfigHooks';
 import type { GraphData, GraphNode } from '@/types/graph';
 import { useConfigPersistence } from '@/hooks/usePersistedConfig';
 import { useDebouncedCallback } from '@/hooks/useDebouncedCallback';

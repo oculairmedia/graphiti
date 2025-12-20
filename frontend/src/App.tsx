@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { Suspense } from 'react';
 import { prefetchDNS, preconnect } from 'react-dom';
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -9,12 +9,23 @@ import { ParallelInitProvider } from "@/contexts/ParallelInitProvider";
 import { DuckDBProvider } from "@/contexts/DuckDBProvider";
 import { RustWebSocketProvider } from "@/contexts/RustWebSocketProvider";
 import ErrorBoundary from "./components/ErrorBoundary";
-import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import { memoryMonitor } from "@/utils/memoryMonitor";
-import { preloader } from "@/services/preloader";
 import { preloadDuckDB } from "@/services/duckdb-lazy-loader";
-import { graphCache } from "@/services/graph-cache";
+
+// PERFORMANCE: Lazy load the Index page (contains GraphViz + Cosmograph)
+// This moves ~1MB of D3/Cosmograph code out of the initial bundle
+const Index = React.lazy(() => import("./pages/Index"));
+
+// Loading fallback for initial page load
+const PageLoader = () => (
+  <div className="flex items-center justify-center min-h-screen bg-background">
+    <div className="flex flex-col items-center gap-4">
+      <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+      <p className="text-muted-foreground text-sm">Loading graph visualization...</p>
+    </div>
+  </div>
+);
 
 // Create query client once
 const queryClient = new QueryClient({
@@ -36,11 +47,16 @@ const App = () => {
     // PERFORMANCE: Don't clear cache on startup - let it persist for faster loads
     // Cache will be invalidated automatically via TTL or WebSocket updates
     
-    // Start preloading if not already started
-    if (!preloader.isPreloaded('nodes')) {
-      console.log('[App] Starting data preload...');
-      preloader.startPreloading();
-    }
+    // Start preloading data asynchronously (dynamic import to avoid bundle conflict)
+    import('@/services/preloader').then(({ preloader }) => {
+      if (!preloader.isPreloaded('nodes')) {
+        console.log('[App] Starting data preload...');
+        preloader.startPreloading();
+      }
+      // Log preloader stats
+      const stats = preloader.getStats();
+      console.log('[App] Preloader stats:', stats);
+    });
     
     // Start preloading DuckDB in the background
     preloadDuckDB();
@@ -52,10 +68,6 @@ const App = () => {
       prefetchDNS(url.hostname);
       preconnect(url.origin);
     }
-    
-    // Log preloader stats
-    const stats = preloader.getStats();
-    console.log('[App] Preloader stats:', stats);
     
     // Cleanup memory monitor on app unmount
     return () => {
@@ -73,7 +85,11 @@ const App = () => {
               <Sonner />
               <BrowserRouter>
                 <Routes>
-                  <Route path="/" element={<Index />} />
+                  <Route path="/" element={
+                    <Suspense fallback={<PageLoader />}>
+                      <Index />
+                    </Suspense>
+                  } />
                   {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                   <Route path="*" element={<NotFound />} />
                 </Routes>

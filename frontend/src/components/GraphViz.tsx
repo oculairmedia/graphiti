@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useCallback, useMemo } from 'react';
 import { useStableCallback } from '../hooks/useStableCallback';
 import { CosmographProvider } from '@cosmograph/react';
-import { useGraphConfig } from '../contexts/GraphConfigProvider';
+import { useGraphConfig } from '../hooks/useGraphConfigHooks';
 import { ControlPanel } from './ControlPanel';
 import { LazyGraphCanvas } from './LazyGraphCanvas';
 

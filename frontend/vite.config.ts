@@ -2,6 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
+import { visualizer } from "rollup-plugin-visualizer";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
@@ -15,14 +16,43 @@ export default defineConfig(({ mode }) => ({
     // Optimize chunk splitting
     rollupOptions: {
       output: {
-        manualChunks: {
-          // Split vendor libraries
-          'vendor-react': ['react', 'react-dom'],
-          'vendor-ui': ['@radix-ui/react-dialog', '@radix-ui/react-dropdown-menu', '@radix-ui/react-select', '@radix-ui/react-tabs'],
-          'vendor-cosmograph': ['@cosmograph/react'],
-          'vendor-duckdb': ['@duckdb/duckdb-wasm'],
-          'vendor-arrow': ['apache-arrow'],
-          'vendor-charts': ['recharts', 'd3-scale', 'd3-shape'],
+        manualChunks: (id) => {
+          // Core React - small, critical
+          if (id.includes('node_modules/react/') || id.includes('node_modules/react-dom/')) {
+            return 'vendor-react';
+          }
+          // Radix UI components - used throughout UI
+          if (id.includes('node_modules/@radix-ui/')) {
+            return 'vendor-radix';
+          }
+          // Cosmograph and D3 - large, lazy-loaded with graph
+          if (id.includes('node_modules/@cosmograph/') || id.includes('node_modules/d3')) {
+            return 'vendor-graph';
+          }
+          // DuckDB - large, lazy-loaded
+          if (id.includes('node_modules/@duckdb/') || id.includes('node_modules/apache-arrow')) {
+            return 'vendor-duckdb';
+          }
+          // Charts - used in stats panels
+          if (id.includes('node_modules/recharts')) {
+            return 'vendor-charts';
+          }
+          // Icons - tree-shaken but still sizeable
+          if (id.includes('node_modules/lucide-react')) {
+            return 'vendor-icons';
+          }
+          // TanStack Query - data fetching
+          if (id.includes('node_modules/@tanstack/')) {
+            return 'vendor-query';
+          }
+          // Zustand - state management
+          if (id.includes('node_modules/zustand')) {
+            return 'vendor-zustand';
+          }
+          // Floating UI - used by Radix popovers
+          if (id.includes('node_modules/@floating-ui/')) {
+            return 'vendor-floating';
+          }
         },
         // Optimize chunk names
         chunkFileNames: (chunkInfo) => {
@@ -31,8 +61,8 @@ export default defineConfig(({ mode }) => ({
         },
       },
     },
-    // Increase chunk size warning limit for vendor bundles
-    chunkSizeWarningLimit: 1000,
+    // Silence chunk size warnings - we're intentionally splitting vendors
+    chunkSizeWarningLimit: 600,
   },
   server: {
     host: "::",
@@ -73,8 +103,14 @@ export default defineConfig(({ mode }) => ({
         plugins: ['babel-plugin-react-compiler']
       }
     }),
-    mode === 'development' &&
-    componentTagger(),
+    mode === 'development' && componentTagger(),
+    // Generate bundle analysis on build (open dist/stats.html to view)
+    mode === 'production' && visualizer({
+      filename: 'dist/stats.html',
+      open: false,
+      gzipSize: true,
+      brotliSize: true,
+    }),
   ].filter(Boolean),
   resolve: {
     alias: {

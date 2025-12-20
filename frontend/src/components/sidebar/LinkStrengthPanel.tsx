@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Label } from '../ui/label';
 import { Slider } from '../ui/slider';
 import { Switch } from '../ui/switch';
-import { useGraphConfig } from '../../contexts/GraphConfigProvider';
+import { useGraphConfig } from '../../hooks/useGraphConfigHooks';
 import { useTheme } from '../theme/ThemeContext';
 
 export function LinkStrengthPanel() {

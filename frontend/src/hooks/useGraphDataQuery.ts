@@ -4,7 +4,7 @@ import { graphClient } from '../api/graphClient';
 import { GraphNode } from '../api/types';
 import { GraphLink } from '../types/graph';
 import { useGraphDataDiff } from './useGraphDataDiff';
-import { useGraphConfig } from '../contexts/GraphConfigProvider';
+import { useGraphConfig } from '../hooks/useGraphConfigHooks';
 import { useDuckDB } from '../contexts/DuckDBProvider';
 import { useRustWebSocket } from '../contexts/RustWebSocketProvider';
 import { useRealtimeDataSync } from './useRealtimeDataSync';

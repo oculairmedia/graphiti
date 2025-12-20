@@ -1,5 +1,5 @@
 import React, { memo, useMemo } from 'react';
-import { useGraphConfig } from '../contexts/GraphConfigProvider';
+import { useGraphConfig } from '../hooks/useGraphConfigHooks';
 import { Card } from '@/components/ui/card';
 
 interface GraphOverlaysProps {

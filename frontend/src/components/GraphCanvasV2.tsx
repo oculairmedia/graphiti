@@ -16,7 +16,7 @@ import { Cosmograph } from '@cosmograph/react';
 import '../styles/cosmograph.css';
 import { GraphNode } from '../api/types';
 import type { GraphLink } from '../types/graph';
-import { useGraphConfig } from '../contexts/GraphConfigProvider';
+import { useGraphConfig } from '../hooks/useGraphConfigHooks';
 import { hexToRgba, interpolateColor } from '../utils/colorCache';
 import { generateNodeTypeColor } from '../utils/nodeTypeColors';
 import { NodeColorManager, getGlobalColorManager } from '../utils/NodeColorManager';
