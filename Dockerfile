@@ -26,6 +26,7 @@ COPY ./pyproject.toml ./README.md ./
 COPY ./graphiti_core ./graphiti_core
 COPY ./server ./server
 COPY ./scripts ./scripts
+COPY ./worker ./worker
 COPY ./maintenance_dedupe_entities.py ./
 COPY ./maintenance_extract_entities.py ./
 
@@ -60,6 +61,9 @@ RUN touch /var/log/graphiti_dedupe.log /var/log/graphiti_entity_extraction.log
 
 # Copy websockets install script
 COPY ./server/install_websockets.sh /app/
+
+# Reset workdir for worker service (compose command uses relative paths)
+WORKDIR /app
 
 # Create a startup script that runs cron, installs websockets, and starts uvicorn
 RUN echo '#!/bin/bash\n\
