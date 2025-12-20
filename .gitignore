@@ -174,4 +174,8 @@ backups/
 scripts/backup_*.sh
 scripts/test_restore_*.sh
 scripts/verify_*.sh
-scripts/clean_*.shdata/falkordb_external/
+scripts/clean_*.sh
+
+# FalkorDB data files (large RDB snapshots)
+data/falkordb_external/
+*.rdb
