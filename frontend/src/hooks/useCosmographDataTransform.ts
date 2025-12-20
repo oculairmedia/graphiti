@@ -3,6 +3,9 @@
  * 
  * Handles transformation of graph nodes and links into Cosmograph format.
  * Extracted from GraphCanvasV2 to improve testability and separation of concerns.
+ * 
+ * PERFORMANCE FIX (GRAPH-67): Uses length-based and content-hash dependencies
+ * instead of direct array references to prevent unnecessary re-processing.
  */
 
 import { useMemo, useRef } from 'react';
@@ -25,6 +28,31 @@ interface CosmographData {
   links: any[];
 }
 
+/**
+ * Generate a lightweight content hash for nodes
+ * Only checks IDs to detect actual data changes vs reference changes
+ */
+function generateNodesHash(nodes: GraphNode[]): string {
+  if (!nodes || nodes.length === 0) return '';
+  // Sample first, middle, and last nodes for quick hash
+  const first = nodes[0]?.id || '';
+  const mid = nodes[Math.floor(nodes.length / 2)]?.id || '';
+  const last = nodes[nodes.length - 1]?.id || '';
+  return `${nodes.length}:${first}:${mid}:${last}`;
+}
+
+/**
+ * Generate a lightweight content hash for links
+ */
+function generateLinksHash(links: GraphLink[]): string {
+  if (!links || links.length === 0) return '';
+  const first = links[0];
+  const last = links[links.length - 1];
+  const firstKey = first ? `${first.source || first.from}-${first.target || first.to}` : '';
+  const lastKey = last ? `${last.source || last.from}-${last.target || last.to}` : '';
+  return `${links.length}:${firstKey}:${lastKey}`;
+}
+
 export const useCosmographDataTransform = (
   nodes: GraphNode[],
   links: GraphLink[],
@@ -38,9 +66,25 @@ export const useCosmographDataTransform = (
       clusterStrength: config.clusterStrength
     })
   );
+  
+  // PERFORMANCE FIX (GRAPH-67): Use content-based hashes instead of array references
+  // This prevents re-processing when arrays are recreated with same content
+  const nodesHash = useMemo(() => generateNodesHash(nodes), [nodes]);
+  const linksHash = useMemo(() => generateLinksHash(links), [links]);
+  
+  // Store previous result to return stable reference when content hasn't changed
+  const prevResultRef = useRef<CosmographData>({ nodes: [], links: [] });
+  const prevHashRef = useRef<string>('');
 
   // Memoized transformation of nodes and links
   const cosmographData = useMemo(() => {
+    const currentHash = `${nodesHash}|${linksHash}|${config.clusteringMethod}|${config.centralityMetric}|${config.clusterStrength}`;
+    
+    // PERFORMANCE FIX: Return previous result if content hash matches
+    if (currentHash === prevHashRef.current && prevResultRef.current.nodes.length > 0) {
+      return prevResultRef.current;
+    }
+    
     const preparer = dataPreparerRef.current;
     
     // Reset preparer state for clean transformation
@@ -74,11 +118,17 @@ export const useCosmographDataTransform = (
       .map(link => sanitizeLink(link, nodeIdToIndex))
       .filter(link => link !== null);
     
-    return {
+    const result = {
       nodes: transformedNodes,
       links: transformedLinks
     };
-  }, [nodes, links, config.clusteringMethod, config.centralityMetric, config.clusterStrength]);
+    
+    // Store for future comparison
+    prevHashRef.current = currentHash;
+    prevResultRef.current = result;
+    
+    return result;
+  }, [nodesHash, linksHash, config.clusteringMethod, config.centralityMetric, config.clusterStrength]);
 
   return cosmographData;
 };

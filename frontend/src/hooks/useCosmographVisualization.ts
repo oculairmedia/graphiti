@@ -2,6 +2,7 @@ import { useMemo, useRef, useEffect } from 'react';
 import { NodeColorManager, getGlobalColorManager } from '../utils/NodeColorManager';
 import { hexToRgba, interpolateColor } from '../utils/colorCache';
 import { generateNodeTypeColor } from '../utils/nodeTypeColors';
+import { usePrecomputedLinkColors } from './usePrecomputedLinkColors';
 
 // GraphConfig type - we'll use any for now since it's dynamically typed
 type GraphConfig = any;
@@ -435,11 +436,32 @@ export function useCosmographVisualization({
     maxLinkWeight // Pre-computed max weight for by-weight scheme
   ]);
   
+  // PERFORMANCE FIX (GRAPH-66): Use pre-computed link colors instead of per-frame function
+  // This eliminates 139K function calls per frame during pan/zoom
+  const { linkColorByFn: precomputedLinkColorByFn } = usePrecomputedLinkColors({
+    cosmographData,
+    config: {
+      linkColorScheme: config.linkColorScheme,
+      linkOpacityScheme: config.linkOpacityScheme,
+      linkColor: config.linkColor,
+      linkOpacity: config.linkOpacity,
+      linkOpacityMin: config.linkOpacityMin,
+      linkOpacityMax: config.linkOpacityMax,
+      nodeTypeColors: config.nodeTypeColors,
+      nodeAccessHighlightColor: config.nodeAccessHighlightColor,
+      highlightedEdgeColor: config.highlightedEdgeColor,
+      partialHighlightedEdgeColor: config.partialHighlightedEdgeColor,
+    },
+    highlightedNodes: highlightedNodesRef.current,
+    glowingNodes: glowingNodesRef.current
+  });
+  
   return {
     pointSizeRange,
     linkWidthRange,
     nodeColorConfig,
     linkWidthByFn,
-    linkColorByFn
+    // Use pre-computed colors for better performance
+    linkColorByFn: precomputedLinkColorByFn
   };
 }

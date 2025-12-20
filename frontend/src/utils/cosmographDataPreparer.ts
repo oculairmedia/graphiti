@@ -152,10 +152,11 @@ export function sanitizeNode(
   const cacheKey = generateNodeCacheKey(node.id, config.clusteringMethod, isIncremental);
   if (sanitizationCache.has(cacheKey)) {
     const cached = sanitizationCache.get(cacheKey)!;
-    // PERFORMANCE FIX (GRAPH-38): Mutate index in place instead of creating new object
-    // This avoids object allocation on cache hits (majority of calls after initial load)
-    cached.index = Number(index);
-    return cached;
+    // PERFORMANCE FIX (GRAPH-62): Return shallow copy with updated index
+    // Mutating cached object in place was causing React to detect "changes" 
+    // and trigger unnecessary re-renders. Spread operator creates a new reference
+    // but reuses all the existing property values (cheap shallow copy).
+    return { ...cached, index: Number(index) };
   }
   
   // Get or assign node type index for color generation
