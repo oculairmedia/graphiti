@@ -102,6 +102,10 @@ export function useGraphSelection(
   links: GraphLink[],
   config: UseGraphSelectionConfig = {}
 ) {
+  // Ensure nodes and links are always arrays
+  const safeNodes = Array.isArray(nodes) ? nodes : [];
+  const safeLinks = Array.isArray(links) ? links : [];
+  
   const {
     mode = 'multiple',
     maxSelection = Infinity,
@@ -122,15 +126,15 @@ export function useGraphSelection(
   // GRAPH-85 OPTIMIZATION: Use refs for stable callback access
   // This prevents callbacks from recreating when state changes
   const stateRef = useRef(selectionState);
-  const nodesRef = useRef(nodes);
-  const linksRef = useRef(links);
+  const nodesRef = useRef(safeNodes);
+  const linksRef = useRef(safeLinks);
   const configRef = useRef({ mode, maxSelection, onSelectionChange, onHoverChange, debug });
   const modifiersRef = useRef({ shift: false, ctrl: false, alt: false });
 
   // Keep refs in sync
   useEffect(() => { stateRef.current = selectionState; }, [selectionState]);
-  useEffect(() => { nodesRef.current = nodes; }, [nodes]);
-  useEffect(() => { linksRef.current = links; }, [links]);
+  useEffect(() => { nodesRef.current = safeNodes; }, [safeNodes]);
+  useEffect(() => { linksRef.current = safeLinks; }, [safeLinks]);
   useEffect(() => { 
     configRef.current = { mode, maxSelection, onSelectionChange, onHoverChange, debug }; 
   }, [mode, maxSelection, onSelectionChange, onHoverChange, debug]);
@@ -321,13 +325,14 @@ export function useGraphSelection(
 
   const selectAll = useCallback(() => {
     const { maxSelection } = configRef.current;
-    const nodeIds = nodesRef.current.map(n => n.id).slice(0, maxSelection);
+    const nodes = nodesRef.current || [];
+    const nodeIds = nodes.map(n => n.id).slice(0, maxSelection);
     selectNodes(nodeIds, false);
   }, [selectNodes]);
 
   const selectAllLinks = useCallback(() => {
     const { maxSelection } = configRef.current;
-    const links = linksRef.current;
+    const links = linksRef.current || [];
     const linkIds = links.map((l, i) => `${l.source}-${l.target}-${i}`).slice(0, maxSelection);
     
     setSelectionState(prev => {
@@ -343,7 +348,7 @@ export function useGraphSelection(
 
   const invertSelection = useCallback(() => {
     const { maxSelection } = configRef.current;
-    const nodes = nodesRef.current;
+    const nodes = nodesRef.current || [];
     const state = stateRef.current;
     
     const allNodeIds = new Set(nodes.map(n => n.id));
@@ -370,7 +375,7 @@ export function useGraphSelection(
 
   const selectNodeRange = useCallback((targetNodeId: string) => {
     const state = stateRef.current;
-    const nodes = nodesRef.current;
+    const nodes = nodesRef.current || [];
     
     if (!state.lastSelectedNode) {
       selectNode(targetNodeId);
@@ -423,7 +428,7 @@ export function useGraphSelection(
   }, [selectNodes]);
 
   const selectNodesByType = useCallback((nodeType: string) => {
-    const nodes = nodesRef.current;
+    const nodes = nodesRef.current || [];
     const matchingNodes = nodes.filter(n => n.node_type === nodeType).map(n => n.id);
     selectNodes(matchingNodes, false);
   }, [selectNodes]);
