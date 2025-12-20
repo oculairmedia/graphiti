@@ -21,6 +21,8 @@ from uuid import uuid4
 import pytest
 import pytest_asyncio
 
+pytestmark = pytest.mark.integration
+
 from graphiti_core.driver.falkordb_driver import FalkorDriver
 from graphiti_core.driver.neo4j_driver import Neo4jDriver
 from graphiti_core.edges import EntityEdge

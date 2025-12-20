@@ -20,7 +20,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from graphiti_core.cross_encoder.gemini_reranker_client import GeminiRerankerClient
+try:
+    from graphiti_core.cross_encoder.gemini_reranker_client import GeminiRerankerClient
+except ImportError as exc:  # pragma: no cover
+    pytest.skip(str(exc), allow_module_level=True)
+
 from graphiti_core.llm_client import LLMConfig, RateLimitError
 
 

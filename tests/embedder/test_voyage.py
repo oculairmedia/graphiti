@@ -20,11 +20,15 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from graphiti_core.embedder.voyage import (
-    DEFAULT_EMBEDDING_MODEL,
-    VoyageAIEmbedder,
-    VoyageAIEmbedderConfig,
-)
+try:
+    from graphiti_core.embedder.voyage import (
+        DEFAULT_EMBEDDING_MODEL,
+        VoyageAIEmbedder,
+        VoyageAIEmbedderConfig,
+    )
+except ImportError as exc:  # pragma: no cover
+    pytest.skip(str(exc), allow_module_level=True)
+
 from tests.embedder.embedder_fixtures import create_embedding_values
 
 

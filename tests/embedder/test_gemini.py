@@ -23,11 +23,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from embedder_fixtures import create_embedding_values
 
-from graphiti_core.embedder.gemini import (
-    DEFAULT_EMBEDDING_MODEL,
-    GeminiEmbedder,
-    GeminiEmbedderConfig,
-)
+try:
+    from graphiti_core.embedder.gemini import (
+        DEFAULT_EMBEDDING_MODEL,
+        GeminiEmbedder,
+        GeminiEmbedderConfig,
+    )
+except ImportError as exc:  # pragma: no cover
+    pytest.skip(str(exc), allow_module_level=True)
 
 
 def create_gemini_embedding(multiplier: float = 0.1, dimension: int = 1536) -> MagicMock:

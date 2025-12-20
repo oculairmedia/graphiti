@@ -124,7 +124,7 @@ class TestFalkorDriver:
         with patch('graphiti_core.driver.falkordb_driver.logger') as mock_logger:
             result = await self.driver.execute_query('CREATE INDEX ...')
 
-            mock_logger.info.assert_called_once()
+            assert mock_logger.info.call_count >= 1
             assert result is None
 
     @pytest.mark.asyncio

@@ -1,9 +1,12 @@
-
-import pytest
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
-from sync_service.extractors.falkordb_extractor import FalkorDBExtractor
+import pytest
+
+try:
+    from sync_service.extractors.falkordb_extractor import FalkorDBExtractor
+except ModuleNotFoundError as exc:  # pragma: no cover
+    pytest.skip(str(exc), allow_module_level=True)
 
 
 class StubGraph:
@@ -24,15 +27,44 @@ class StubGraph:
 
 @pytest.mark.asyncio
 async def test_extract_entity_edges_optimized_uses_direct_access_pattern():
-    stub = StubGraph([
+    stub = StubGraph(
         [
-            ['edge-1', 'source-1', 'target-1', '2024-01-01T00:00:00Z', '2024-01-02T00:00:00Z', 0.7, None, None],
-            ['edge-2', 'legacy-source-2', 'legacy-target-2', '2024-01-03T00:00:00Z', None, None, None, None],
-        ],
-        [
-            ['edge-3', 'source-3', 'target-3', '2024-01-04T00:00:00Z', '2024-01-05T00:00:00Z', 0.9, '2024-01-04T00:00:00Z', '2024-01-06T00:00:00Z'],
-        ],
-    ])
+            [
+                [
+                    'edge-1',
+                    'source-1',
+                    'target-1',
+                    '2024-01-01T00:00:00Z',
+                    '2024-01-02T00:00:00Z',
+                    0.7,
+                    None,
+                    None,
+                ],
+                [
+                    'edge-2',
+                    'legacy-source-2',
+                    'legacy-target-2',
+                    '2024-01-03T00:00:00Z',
+                    None,
+                    None,
+                    None,
+                    None,
+                ],
+            ],
+            [
+                [
+                    'edge-3',
+                    'source-3',
+                    'target-3',
+                    '2024-01-04T00:00:00Z',
+                    '2024-01-05T00:00:00Z',
+                    0.9,
+                    '2024-01-04T00:00:00Z',
+                    '2024-01-06T00:00:00Z',
+                ],
+            ],
+        ]
+    )
 
     extractor = FalkorDBExtractor(
         batch_size=1,
@@ -74,10 +106,23 @@ async def test_extract_entity_edges_optimized_uses_direct_access_pattern():
 
 @pytest.mark.asyncio
 async def test_extract_entity_edges_honors_limit_with_optimization():
-    stub = StubGraph([
-        [['edge-limited', 'source-l', 'target-l', '2024-01-07T00:00:00Z', None, None, None, None]],
-        [],
-    ])
+    stub = StubGraph(
+        [
+            [
+                [
+                    'edge-limited',
+                    'source-l',
+                    'target-l',
+                    '2024-01-07T00:00:00Z',
+                    None,
+                    None,
+                    None,
+                    None,
+                ]
+            ],
+            [],
+        ]
+    )
 
     extractor = FalkorDBExtractor(
         batch_size=1,
@@ -102,12 +147,14 @@ async def test_extract_entity_edges_honors_limit_with_optimization():
 
 @pytest.mark.asyncio
 async def test_extract_entity_nodes_orders_by_uuid_instead_of_created_at():
-    stub = StubGraph([
+    stub = StubGraph(
         [
-            ['node-1', {'uuid': 'node-1', 'created_at': None, 'name': 'Alice'}],
-            ['node-2', {'uuid': 'node-2', 'created_at': '2024-01-02T00:00:00Z', 'name': 'Bob'}],
-        ],
-    ])
+            [
+                ['node-1', {'uuid': 'node-1', 'created_at': None, 'name': 'Alice'}],
+                ['node-2', {'uuid': 'node-2', 'created_at': '2024-01-02T00:00:00Z', 'name': 'Bob'}],
+            ],
+        ]
+    )
 
     extractor = FalkorDBExtractor(
         batch_size=2,
