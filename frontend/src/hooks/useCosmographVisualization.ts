@@ -36,6 +36,8 @@ interface UseCosmographVisualizationProps {
   config: GraphConfig;
   cosmographData: CosmographData | null;
   glowingNodes: Map<string, number>;
+  /** Set of highlighted node IDs (from search results) - edges connecting these nodes will be highlighted */
+  highlightedNodes?: Set<string> | string[];
 }
 
 /**
@@ -45,12 +47,24 @@ interface UseCosmographVisualizationProps {
 export function useCosmographVisualization({
   config,
   cosmographData,
-  glowingNodes
+  glowingNodes,
+  highlightedNodes
 }: UseCosmographVisualizationProps): VisualizationConfig {
   
   // PERFORMANCE FIX: Use ref for glowingNodes to avoid function recreation
   const glowingNodesRef = useRef(glowingNodes);
   glowingNodesRef.current = glowingNodes;
+  
+  // Use ref for highlighted nodes to avoid function recreation on every highlight change
+  const highlightedNodesRef = useRef<Set<string>>(new Set());
+  // Convert array to Set if needed
+  if (highlightedNodes) {
+    highlightedNodesRef.current = Array.isArray(highlightedNodes) 
+      ? new Set(highlightedNodes) 
+      : highlightedNodes;
+  } else {
+    highlightedNodesRef.current = new Set();
+  }
   
   // === POINT SIZE CONFIGURATION ===
   const pointSizeRange = useMemo(() => {
@@ -296,16 +310,35 @@ export function useCosmographVisualization({
   }, [cosmographData?.links, config.linkColorScheme]);
   
   const linkColorByFn = useMemo(() => {
-    if (config.linkColorScheme === 'uniform' && config.linkOpacityScheme === 'uniform') {
-      return undefined;
-    }
+    // Note: We always provide a function now to support edge highlighting
+    // The function will short-circuit to baseColor for non-highlighted edges
     
     return (edgeType: any, linkIndex: number) => {
       if (!cosmographData?.links || !cosmographData?.nodes) return config.linkColor || '#9CA3AF';
       const link = cosmographData.links[linkIndex];
       if (!link) return config.linkColor || '#9CA3AF';
       
-      // Step 1: Determine base color
+      // Step 0: Check if this edge connects highlighted nodes (from search)
+      const currentHighlightedNodes = highlightedNodesRef.current;
+      if (currentHighlightedNodes.size > 0) {
+        const sourceHighlighted = currentHighlightedNodes.has(link.source);
+        const targetHighlighted = currentHighlightedNodes.has(link.target);
+        
+        // If both endpoints are highlighted, use bright highlight color
+        if (sourceHighlighted && targetHighlighted) {
+          return config.highlightedEdgeColor || '#FFD700'; // Gold for edges between highlighted nodes
+        }
+        
+        // If only one endpoint is highlighted, use a dimmer version
+        if (sourceHighlighted || targetHighlighted) {
+          return config.partialHighlightedEdgeColor || hexToRgba('#FFD700', 0.5); // Semi-transparent gold
+        }
+        
+        // If there are highlighted nodes but this edge isn't connected, dim it
+        return hexToRgba(config.linkColor || '#9CA3AF', 0.15); // Very dim for non-highlighted edges
+      }
+      
+      // Step 1: Determine base color (no highlighting active)
       let baseColor = config.linkColor || '#9CA3AF';
       
       switch (config.linkColorScheme) {

@@ -118,6 +118,9 @@ export const GraphCanvasRenderer: React.FC<GraphCanvasRendererProps> = React.mem
       linkSourceIndexBy="sourceIndex"
       linkTargetBy="target"
       linkTargetIndexBy="targetIndex"
+      // Use Direct strategy to allow linkColorByFn to return custom colors
+      // This enables edge highlighting for selected/hovered links
+      linkColorStrategy="direct"
       // Always use edge_type as the base field for linkColorBy
       linkColorBy="edge_type"
       // Use memoized link color function that handles both color and transparency

@@ -524,7 +524,8 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
     const visualConfig = useCosmographVisualization({
       config,
       cosmographData,
-      glowingNodes
+      glowingNodes,
+      highlightedNodes
     });
     
     
