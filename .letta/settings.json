@@ -1,5 +1,23 @@
 {
-  "localSharedBlockIds": {
-    "project": "block-d2fef1ae-6e15-458f-9c68-681334bdbe13"
+  "permissions": {
+    "allow": [
+      "Bash(find:*)",
+      "Bash(cat:*)",
+      "Bash(grep:*)",
+      "Bash(sed -n '430,480p' /opt/stacks/graphiti/frontend/src/hooks/useCosmographVisualization.ts)",
+      "Bash(echo:*)",
+      "Bash(npm run build:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(ls:*)",
+      "Bash(head:*)",
+      "Bash(git log:*)",
+      "Bash(sed -n '9,30p' /opt/stacks/graphiti/frontend/src/components/GraphNavBar.tsx)",
+      "Bash(sed -n '239,260p' /opt/stacks/graphiti/frontend/src/components/GraphViz.tsx)",
+      "Bash(wc:*)",
+      "Bash(sed -n '235,265p' /opt/stacks/graphiti/frontend/src/components/GraphViz.tsx)",
+      "Bash(sed -n '235,250p' /opt/stacks/graphiti/frontend/src/components/GraphViz.tsx)",
+      "Bash(git push:*)"
+    ]
   }
 }

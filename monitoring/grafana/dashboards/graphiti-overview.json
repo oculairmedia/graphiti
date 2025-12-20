@@ -1,0 +1,153 @@
+{
+  "dashboard": {
+    "title": "Graphiti Stack Overview",
+    "uid": "graphiti-overview",
+    "tags": ["graphiti", "overview"],
+    "timezone": "browser",
+    "schemaVersion": 27,
+    "version": 1,
+    "refresh": "10s",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Service Health Status",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "up{job=~\"graphiti.*\"}",
+            "legendFormat": "{{job}}"
+          }
+        ],
+        "options": {
+          "graphMode": "none",
+          "colorMode": "background"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "mappings": [
+              {"type": "value", "value": "1", "text": "UP", "color": "green"},
+              {"type": "value", "value": "0", "text": "DOWN", "color": "red"}
+            ]
+          }
+        }
+      },
+      {
+        "id": 2,
+        "title": "Graph Statistics",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0},
+        "targets": [
+          {
+            "expr": "graph_total_nodes",
+            "legendFormat": "Total Nodes"
+          },
+          {
+            "expr": "graph_total_edges",
+            "legendFormat": "Total Edges"
+          }
+        ],
+        "options": {
+          "graphMode": "area",
+          "colorMode": "value"
+        }
+      },
+      {
+        "id": 3,
+        "title": "Sync Service Status",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0},
+        "targets": [
+          {
+            "expr": "sync_items_synced_total",
+            "legendFormat": "Items Synced"
+          },
+          {
+            "expr": "sync_success_rate",
+            "legendFormat": "Success Rate"
+          }
+        ],
+        "options": {
+          "graphMode": "area",
+          "colorMode": "value"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent"
+          }
+        }
+      },
+      {
+        "id": 4,
+        "title": "Database Response Times",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
+        "targets": [
+          {
+            "expr": "neo4j_response_time_ms",
+            "legendFormat": "Neo4j"
+          },
+          {
+            "expr": "falkordb_response_time_ms",
+            "legendFormat": "FalkorDB"
+          }
+        ],
+        "yaxes": [
+          {"format": "ms", "label": "Response Time"}
+        ]
+      },
+      {
+        "id": 5,
+        "title": "Sync Performance",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4},
+        "targets": [
+          {
+            "expr": "rate(sync_items_synced_total[5m])",
+            "legendFormat": "Sync Rate (items/s)"
+          },
+          {
+            "expr": "sync_nodes_synced",
+            "legendFormat": "Nodes Synced"
+          },
+          {
+            "expr": "sync_edges_synced",
+            "legendFormat": "Edges Synced"
+          }
+        ]
+      },
+      {
+        "id": 6,
+        "title": "Worker Activity",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 12},
+        "targets": [
+          {
+            "expr": "rate(worker_episodes_processed_total[5m])",
+            "legendFormat": "Episodes/sec"
+          },
+          {
+            "expr": "worker_entities_created_total",
+            "legendFormat": "Entities Created"
+          }
+        ]
+      },
+      {
+        "id": 7,
+        "title": "Queue Depth",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 12},
+        "targets": [
+          {
+            "expr": "queue_depth",
+            "legendFormat": "Pending Tasks"
+          },
+          {
+            "expr": "queue_processing_rate",
+            "legendFormat": "Processing Rate"
+          }
+        ]
+      }
+    ]
+  }
+}

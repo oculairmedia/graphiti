@@ -1,4 +1,11 @@
+/**
+ * Persisted Configuration Hooks
+ * 
+ * GRAPH-83: Uses canonical useDebouncedCallback instead of inline implementation
+ */
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useDebouncedCallback } from './useDebouncedCallback';
 import { 
   saveConfigToStorage, 
   loadConfigFromStorage, 
@@ -14,32 +21,10 @@ import {
 } from '@/utils/configPersistence';
 import type { SectionConfig } from '@/components/ui/CollapsibleSection';
 
-// Debounced save hook
-const useDebouncedSave = (callback: () => void, delay: number) => {
-  const timeoutRef = useRef<NodeJS.Timeout>();
-  
-  const debouncedSave = useCallback(() => {
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-    }
-    
-    timeoutRef.current = setTimeout(() => {
-      callback();
-    }, delay);
-  }, [callback, delay]);
-  
-  useEffect(() => {
-    return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
-    };
-  }, []);
-  
-  return debouncedSave;
-};
+// ============================================================================
+// usePersistedSections - NodeDetailsPanel section state
+// ============================================================================
 
-// Hook for persisted NodeDetailsPanel sections
 export const usePersistedSections = (defaultSections: SectionConfig[]) => {
   const [sections, setSections] = useState<SectionConfig[]>(defaultSections);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -75,7 +60,7 @@ export const usePersistedSections = (defaultSections: SectionConfig[]) => {
   
   // Save to storage function
   const saveSections = useCallback(() => {
-    if (!isLoaded) return; // Don't save during initial load
+    if (!isLoaded) return;
     
     try {
       const existing = loadConfigFromStorage() || { version: 1, timestamp: Date.now() };
@@ -101,8 +86,8 @@ export const usePersistedSections = (defaultSections: SectionConfig[]) => {
     }
   }, [sections, isLoaded]);
   
-  // Debounced save
-  const debouncedSave = useDebouncedSave(saveSections, 300);
+  // GRAPH-83: Use canonical debounced callback
+  const debouncedSave = useDebouncedCallback(saveSections, 300);
   
   // Enhanced setter that triggers save
   const setPersistedSections = useCallback((newSections: SectionConfig[] | ((prev: SectionConfig[]) => SectionConfig[])) => {
@@ -117,7 +102,10 @@ export const usePersistedSections = (defaultSections: SectionConfig[]) => {
   return [sections, setPersistedSections, isLoaded] as const;
 };
 
-// Hook for persisted graph configuration
+// ============================================================================
+// usePersistedGraphConfig - Graph visualization config
+// ============================================================================
+
 export const usePersistedGraphConfig = <T extends Record<string, unknown>>(defaultConfig: T) => {
   const [config, setConfig] = useState<T>(defaultConfig);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -125,7 +113,6 @@ export const usePersistedGraphConfig = <T extends Record<string, unknown>>(defau
   
   // Load from storage on mount
   useEffect(() => {
-    // Only load on initial mount
     if (!isInitialMount.current) return;
     isInitialMount.current = false;
     
@@ -134,7 +121,6 @@ export const usePersistedGraphConfig = <T extends Record<string, unknown>>(defau
         const stored = loadConfigFromStorage();
         if (stored?.graphConfig) {
           console.log('usePersistedGraphConfig: Loading stored config', stored.graphConfig);
-          // Merge stored config with defaults
           const merged = mergeDifferentialConfig(defaultConfig, stored.graphConfig as Partial<T>);
           setConfig(merged);
         }
@@ -146,17 +132,14 @@ export const usePersistedGraphConfig = <T extends Record<string, unknown>>(defau
     };
     
     loadPersistedData();
-  }, []); // Empty dependency array - only run once
+  }, []);
   
   // Save to storage function
   const saveConfig = useCallback(() => {
-    if (!isLoaded) return; // Don't save during initial load
+    if (!isLoaded) return;
     
     try {
       const existing = loadConfigFromStorage() || { version: 1, timestamp: Date.now() };
-      
-      // Only store differences from defaults
-      // Note: createDifferentialConfig now handles nodeTypeColors/nodeTypeVisibility specially
       const diff = createDifferentialConfig(config, defaultConfig);
       
       const updated: PersistedConfig = {
@@ -173,8 +156,8 @@ export const usePersistedGraphConfig = <T extends Record<string, unknown>>(defau
     }
   }, [config, defaultConfig, isLoaded]);
   
-  // Debounced save
-  const debouncedSave = useDebouncedSave(saveConfig, 300);
+  // GRAPH-83: Use canonical debounced callback
+  const debouncedSave = useDebouncedCallback(saveConfig, 300);
   
   // Enhanced setter that triggers save
   const setPersistedConfig = useCallback((newConfig: T | ((prev: T) => T)) => {
@@ -197,12 +180,14 @@ export const usePersistedGraphConfig = <T extends Record<string, unknown>>(defau
   return [config, setPersistedConfig, isLoaded] as const;
 };
 
-// Hook for complete configuration management
+// ============================================================================
+// useConfigPersistence - Config management utilities
+// ============================================================================
+
 export const useConfigPersistence = () => {
   const resetAllConfig = useCallback(() => {
     try {
       clearPersistedConfig();
-      // Force page reload to reset all state
       window.location.reload();
     } catch (error) {
       // Failed to clear config
@@ -214,8 +199,6 @@ export const useConfigPersistence = () => {
       const stored = loadConfigFromStorage();
       if (stored) {
         exportConfigToFile(stored);
-      } else {
-        // No config to export
       }
     } catch (error) {
       // Export failed
@@ -228,7 +211,6 @@ export const useConfigPersistence = () => {
       
       if (config) {
         saveConfigToStorage(config);
-        // Force page reload to apply imported configuration
         window.location.reload();
         return true;
       }
@@ -254,7 +236,10 @@ export const useConfigPersistence = () => {
   };
 };
 
-// Hook specifically for node type configurations with special handling
+// ============================================================================
+// usePersistedNodeTypes - Node type color/visibility persistence
+// ============================================================================
+
 export const usePersistedNodeTypes = (
   currentNodeTypeColors: Record<string, string>,
   currentNodeTypeVisibility: Record<string, boolean>
@@ -266,40 +251,38 @@ export const usePersistedNodeTypes = (
     providedColors?: Record<string, string>,
     providedVisibility?: Record<string, boolean>
   ) => {
-    // Always load from storage to get the latest persisted values
     const stored = loadConfigFromStorage();
     const storedColors = stored?.graphConfig?.nodeTypeColors || {};
     const storedVisibility = stored?.graphConfig?.nodeTypeVisibility || {};
     
-    // Use provided values as base, or empty objects if not provided
     const baseColors = providedColors || {};
     const baseVisibility = providedVisibility || {};
     
     try {
       // Start with base values, then overlay ALL stored values
-      // This ensures we never lose persisted colors for types not in current graph
       const mergedColors = { ...baseColors };
       const mergedVisibility = { ...baseVisibility };
       
-      // Apply ALL stored colors (not just for types in baseColors)
+      // Apply ALL stored colors
       Object.entries(storedColors).forEach(([type, color]) => {
         mergedColors[type] = color;
       });
       
-      // Apply ALL stored visibility (not just for types in baseVisibility)
+      // Apply ALL stored visibility
       Object.entries(storedVisibility).forEach(([type, visible]) => {
         mergedVisibility[type] = visible;
       });
       
       return { colors: mergedColors, visibility: mergedVisibility };
     } catch (error) {
-      // Fallback to at least returning stored values
-      return { colors: { ...baseColors, ...storedColors }, visibility: { ...baseVisibility, ...storedVisibility } };
+      return { 
+        colors: { ...baseColors, ...storedColors }, 
+        visibility: { ...baseVisibility, ...storedVisibility } 
+      };
     }
-  }, []); // Remove dependencies to make it stable
+  }, []);
   
-  // Set isLoaded on mount
-  React.useEffect(() => {
+  useEffect(() => {
     setIsLoaded(true);
   }, []);
   
