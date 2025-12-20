@@ -7,7 +7,7 @@
 
 import { prepareCosmographData } from '@cosmograph/react';
 import type { GraphNode, GraphLink } from '../types/graph';
-import { generateNodeTypeColor } from './nodeTypeColors';
+import { generateNodeTypeColor } from './NodeColorManager';
 
 /**
  * Configuration for data preparation
@@ -571,4 +571,217 @@ export function resetGlobalDataPreparer(): void {
     globalPreparer.reset();
   }
   globalPreparer = null;
+}
+
+// =============================================================================
+// TRANSFORM UTILITIES (consolidated from cosmographTransformers.ts)
+// =============================================================================
+
+/**
+ * Cosmograph point input format for incremental updates
+ */
+export interface CosmographPointInput {
+  id: string;
+  idx?: number;
+  index?: number;
+  label?: string;
+  name?: string;
+  size?: number;
+  cluster?: string;
+  [key: string]: any;
+}
+
+/**
+ * Cosmograph link input format for incremental updates
+ */
+export interface CosmographLinkInput {
+  source: string;
+  target: string;
+  sourceIndex?: number;
+  targetIndex?: number;
+  weight?: number;
+  edge_type?: string;
+  [key: string]: any;
+}
+
+/**
+ * Delta update types
+ */
+export type DeltaOperation = 'add' | 'update' | 'delete';
+
+export interface DeltaUpdate {
+  operation: DeltaOperation;
+  nodes?: GraphNode[];
+  edges?: GraphLink[];
+  nodeIds?: string[];
+  edgeIds?: string[];
+  timestamp?: number;
+}
+
+/**
+ * Transform a GraphNode to Cosmograph point format (lightweight version)
+ */
+export function transformNodeForCosmograph(
+  node: GraphNode,
+  index?: number
+): CosmographPointInput {
+  return {
+    ...node,
+    id: node.id,
+    idx: index,
+    index: index,
+    label: node.label || node.name || node.id,
+    name: node.name || node.label || node.id,
+    size: node.size || 5,
+    cluster: node.node_type || 'Unknown',
+  };
+}
+
+/**
+ * Transform a GraphLink to Cosmograph link format
+ */
+export function transformEdgeForCosmograph(
+  edge: GraphLink,
+  nodeIdToIndex?: Map<string, number>
+): CosmographLinkInput {
+  const source = edge.source || (edge as any).from;
+  const target = edge.target || (edge as any).to;
+  
+  return {
+    ...edge,
+    source: source,
+    target: target,
+    sourceIndex: nodeIdToIndex?.get(source) ?? -1,
+    targetIndex: nodeIdToIndex?.get(target) ?? -1,
+    weight: edge.weight || 1,
+    edge_type: edge.edge_type || 'default',
+  };
+}
+
+/**
+ * Transform nodes array for batch addition
+ */
+export function transformNodesForCosmograph(
+  nodes: GraphNode[],
+  startIndex?: number
+): CosmographPointInput[] {
+  return nodes.map((node, i) => 
+    transformNodeForCosmograph(node, startIndex ? startIndex + i : undefined)
+  );
+}
+
+/**
+ * Transform edges array for batch addition
+ */
+export function transformEdgesForCosmograph(
+  edges: GraphLink[],
+  nodeIdToIndex?: Map<string, number>
+): CosmographLinkInput[] {
+  return edges.map(edge => transformEdgeForCosmograph(edge, nodeIdToIndex));
+}
+
+/**
+ * Extract edge pairs from edges for removal operations
+ */
+export function extractEdgePairs(
+  edges: (GraphLink | string)[]
+): [string, string][] {
+  return edges.map(edge => {
+    if (typeof edge === 'string') {
+      const [source, ...targetParts] = edge.split('-');
+      const target = targetParts.join('-');
+      return [source, target] as [string, string];
+    } else {
+      const source = edge.source || (edge as any).from;
+      const target = edge.target || (edge as any).to;
+      return [source, target] as [string, string];
+    }
+  });
+}
+
+/**
+ * Build a node ID to index map from current graph data
+ */
+export function buildNodeIdToIndexMap(nodes: GraphNode[]): Map<string, number> {
+  const map = new Map<string, number>();
+  nodes.forEach((node, index) => {
+    map.set(node.id, index);
+  });
+  return map;
+}
+
+/**
+ * Validate that nodes exist for edge endpoints
+ */
+export function filterValidEdges(
+  edges: GraphLink[],
+  nodeIds: Set<string>
+): GraphLink[] {
+  return edges.filter(edge => {
+    const source = edge.source || (edge as any).from;
+    const target = edge.target || (edge as any).to;
+    return nodeIds.has(source) && nodeIds.has(target);
+  });
+}
+
+/**
+ * Check if Cosmograph instance has incremental update methods
+ */
+export function supportsIncrementalUpdates(cosmographRef: any): boolean {
+  return !!(
+    cosmographRef?.current?.addPoints &&
+    cosmographRef?.current?.addLinks &&
+    cosmographRef?.current?.removePointsByIds &&
+    cosmographRef?.current?.removeLinksByPointIdPairs
+  );
+}
+
+/**
+ * Transform a complete delta update for Cosmograph
+ */
+export function transformDeltaForCosmograph(
+  delta: DeltaUpdate,
+  currentNodeCount: number,
+  nodeIdToIndex: Map<string, number>
+): {
+  nodes: CosmographPointInput[];
+  edges: CosmographLinkInput[];
+  nodeIdsToRemove?: string[];
+  edgePairsToRemove?: [string, string][];
+} {
+  const result: {
+    nodes: CosmographPointInput[];
+    edges: CosmographLinkInput[];
+    nodeIdsToRemove?: string[];
+    edgePairsToRemove?: [string, string][];
+  } = {
+    nodes: [],
+    edges: []
+  };
+
+  if (delta.nodes && delta.nodes.length > 0) {
+    if (delta.operation === 'add') {
+      result.nodes = transformNodesForCosmograph(delta.nodes, currentNodeCount);
+      delta.nodes.forEach((node, i) => {
+        nodeIdToIndex.set(node.id, currentNodeCount + i);
+      });
+    } else if (delta.operation === 'update') {
+      result.nodes = delta.nodes.map(node => {
+        const existingIndex = nodeIdToIndex.get(node.id);
+        return transformNodeForCosmograph(node, existingIndex);
+      });
+    } else if (delta.operation === 'delete') {
+      result.nodeIdsToRemove = delta.nodeIds || delta.nodes.map(n => n.id);
+    }
+  }
+
+  if (delta.edges && delta.edges.length > 0) {
+    if (delta.operation === 'add' || delta.operation === 'update') {
+      result.edges = transformEdgesForCosmograph(delta.edges, nodeIdToIndex);
+    } else if (delta.operation === 'delete') {
+      result.edgePairsToRemove = extractEdgePairs(delta.edgeIds || delta.edges);
+    }
+  }
+
+  return result;
 }

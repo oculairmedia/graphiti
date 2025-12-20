@@ -17,7 +17,12 @@
       "Bash(wc:*)",
       "Bash(sed -n '235,265p' /opt/stacks/graphiti/frontend/src/components/GraphViz.tsx)",
       "Bash(sed -n '235,250p' /opt/stacks/graphiti/frontend/src/components/GraphViz.tsx)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(cd /opt/stacks/graphiti/frontend && sed -i \"s|import { hexToRgba, interpolateColor } from '../utils/colorCache';|import { hexToRgba, interpolateColor } from '../utils/NodeColorManager';|g\" src/hooks/useCosmographVisualization.ts && sed -i \"s|import { generateNodeTypeColor } from '../utils/nodeTypeColors';||g\" src/hooks/useCosmographVisualization.ts && sed -i \"s|import { NodeColorManager, getGlobalColorManager } from '../utils/NodeColorManager';|import { NodeColorManager, getGlobalColorManager, generateNodeTypeColor } from '../utils/NodeColorManager';|g\" src/hooks/useCosmographVisualization.ts\necho \"Updated useCosmographVisualization.ts\")",
+      "Bash(cd /opt/stacks/graphiti/frontend && sed -i \"s|import { hexToRgba } from '../utils/colorCache';|import { hexToRgba } from '../utils/NodeColorManager';|g\" src/hooks/usePrecomputedLinkColors.ts && sed -i \"s|import { generateNodeTypeColor } from '../utils/nodeTypeColors';|import { generateNodeTypeColor } from '../utils/NodeColorManager';|g\" src/hooks/usePrecomputedLinkColors.ts\necho \"Updated usePrecomputedLinkColors.ts\")",
+      "Bash(cd /opt/stacks/graphiti/frontend && sed -i \"s|import { hexToRgba, interpolateColor } from '../utils/colorCache';|import { hexToRgba, interpolateColor } from '../utils/NodeColorManager';|g\" src/components/GraphCanvasV2.tsx && sed -i \"s|import { generateNodeTypeColor } from '../utils/nodeTypeColors';|import { generateNodeTypeColor } from '../utils/NodeColorManager';|g\" src/components/GraphCanvasV2.tsx\necho \"Updated GraphCanvasV2.tsx\")",
+      "Bash(cd /opt/stacks/graphiti/frontend && sed -i \"s|import { generateNodeTypeColor } from '../utils/nodeTypeColors';|import { generateNodeTypeColor } from '../utils/NodeColorManager';|g\" src/contexts/GraphConfigContext.tsx src/contexts/GraphConfigProvider.tsx\necho \"Updated context files\")",
+      "Bash(cd /opt/stacks/graphiti/frontend && sed -i \"s|import { generateNodeTypeColor } from './nodeTypeColors';|import { generateNodeTypeColor } from './NodeColorManager';|g\" src/utils/cosmographDataPreparer.ts\necho \"Updated cosmographDataPreparer.ts\")"
     ]
   }
 }

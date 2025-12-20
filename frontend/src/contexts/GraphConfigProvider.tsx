@@ -3,7 +3,7 @@ import type { GraphNode, GraphEdge } from '../types/graph';
 import { usePersistedGraphConfig, usePersistedNodeTypes } from '@/hooks/usePersistedConfig';
 import type { GraphConfig, StableConfig, DynamicConfig } from './configTypes';
 import { isStableConfigKey, splitConfig } from './configTypes';
-import { generateNodeTypeColor } from '../utils/nodeTypeColors';
+import { generateNodeTypeColor } from '../utils/NodeColorManager';
 import { applyLayout as applyLayoutAlgorithm, type LayoutOptions } from '../utils/layouts';
 export { useGraphConfig, useStableConfig, useDynamicConfig, useGraphControl } from '../hooks/useGraphConfigHooks';
 

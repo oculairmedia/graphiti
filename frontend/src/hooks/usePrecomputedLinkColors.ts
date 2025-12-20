@@ -9,8 +9,8 @@
  */
 
 import { useMemo, useRef, useEffect } from 'react';
-import { hexToRgba } from '../utils/colorCache';
-import { generateNodeTypeColor } from '../utils/nodeTypeColors';
+import { hexToRgba } from '../utils/NodeColorManager';
+import { generateNodeTypeColor } from '../utils/NodeColorManager';
 
 interface LinkColorConfig {
   linkColorScheme: string;

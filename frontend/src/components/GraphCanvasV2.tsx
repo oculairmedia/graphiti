@@ -17,8 +17,8 @@ import '../styles/cosmograph.css';
 import { GraphNode } from '../types/graph';
 import type { GraphLink } from '../types/graph';
 import { useGraphConfig } from '../hooks/useGraphConfigHooks';
-import { hexToRgba, interpolateColor } from '../utils/colorCache';
-import { generateNodeTypeColor } from '../utils/nodeTypeColors';
+import { hexToRgba, interpolateColor } from '../utils/NodeColorManager';
+import { generateNodeTypeColor } from '../utils/NodeColorManager';
 import { NodeColorManager, getGlobalColorManager } from '../utils/NodeColorManager';
 
 // Import our new hooks

@@ -8,7 +8,7 @@ import { renderHook, act } from '@testing-library/react';
 import { useCosmographIncrementalUpdates } from '../hooks/useCosmographIncrementalUpdates';
 import type { GraphNode } from '../api/types';
 import type { GraphLink } from '../types/graph';
-import type { DeltaUpdate } from '../utils/cosmographTransformers';
+import type { DeltaUpdate } from '../utils/cosmographDataPreparer';
 
 // Mock Cosmograph instance
 const createMockCosmograph = () => ({

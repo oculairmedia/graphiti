@@ -673,3 +673,20 @@ export function resetGlobalColorManager(): void {
   }
   globalManager = null;
 }
+// ============================================================================
+// GRAPH-84: Centralized Color Exports
+// ============================================================================
+// Re-export all color utilities from this single module
+// Consumers should import from '@/utils/NodeColorManager' for all color needs
+
+// Re-export from colorCache
+export { 
+  colorCache, 
+  hexToRgba, 
+  generateHSLColor, 
+  interpolateColor, 
+  generateColorPalette 
+} from './colorCache';
+
+// Re-export from nodeTypeColors
+export { generateNodeTypeColor } from './nodeTypeColors';

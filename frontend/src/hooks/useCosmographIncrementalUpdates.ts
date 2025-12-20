@@ -6,10 +6,11 @@
  */
 
 import { useCallback, useRef, useState, useEffect } from 'react';
-import type { GraphNode } from '../types/graph';
-import type { GraphLink } from '../types/graph';
+import type { GraphNode, GraphLink } from '../types/graph';
 import FallbackOrchestrator, { UpdateAttempt, ErrorClassifier } from '../utils/updateFallbackStrategies';
 import {
+  CosmographDataPreparer,
+  getGlobalDataPreparer,
   transformNodesForCosmograph,
   transformEdgesForCosmograph,
   extractEdgePairs,
@@ -18,10 +19,6 @@ import {
   type DeltaUpdate,
   type CosmographPointInput,
   type CosmographLinkInput
-} from '../utils/cosmographTransformers';
-import {
-  CosmographDataPreparer,
-  getGlobalDataPreparer
 } from '../utils/cosmographDataPreparer';
 
 /**

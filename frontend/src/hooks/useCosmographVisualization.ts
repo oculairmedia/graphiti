@@ -1,7 +1,7 @@
 import { useMemo, useRef, useEffect } from 'react';
-import { NodeColorManager, getGlobalColorManager } from '../utils/NodeColorManager';
-import { hexToRgba, interpolateColor } from '../utils/colorCache';
-import { generateNodeTypeColor } from '../utils/nodeTypeColors';
+import { NodeColorManager, getGlobalColorManager, generateNodeTypeColor } from '../utils/NodeColorManager';
+import { hexToRgba, interpolateColor } from '../utils/NodeColorManager';
+
 import { usePrecomputedLinkColors } from './usePrecomputedLinkColors';
 
 // GraphConfig type - we'll use any for now since it's dynamically typed

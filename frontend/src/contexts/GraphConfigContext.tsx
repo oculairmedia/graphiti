@@ -3,7 +3,7 @@ import { calculateLayoutPositions, type LayoutOptions } from '../utils/layoutAlg
 import type { GraphNode, GraphEdge } from '../types/graph';
 import { usePersistedGraphConfig, usePersistedNodeTypes } from '@/hooks/usePersistedConfig';
 import type { GraphConfig } from './configTypes';
-import { generateNodeTypeColor } from '../utils/nodeTypeColors';
+import { generateNodeTypeColor } from '../utils/NodeColorManager';
 import type { GraphConfigContextType } from './GraphConfigContextTypes';
 import { GraphConfigContext } from './useGraphConfig';
 
