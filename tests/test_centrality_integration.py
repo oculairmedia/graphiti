@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 import pytest
+import pytest_asyncio
 
 from graphiti_core import Graphiti
 from graphiti_core.edges import EntityEdge
@@ -26,7 +27,7 @@ from graphiti_core.utils.maintenance.centrality_operations import (
 class TestCentralityIntegration:
     """Integration tests for centrality analysis with real Neo4j."""
 
-    @pytest.fixture
+    @pytest_asyncio.fixture
     async def graphiti_instance(self, neo4j_config):
         """Create a real Graphiti instance for testing."""
         graphiti = Graphiti(
@@ -46,7 +47,7 @@ class TestCentralityIntegration:
         # Cleanup after tests
         await graphiti.close()
 
-    @pytest.fixture
+    @pytest_asyncio.fixture
     async def populated_graph(self, graphiti_instance):
         """Create a populated graph for testing centrality."""
         graphiti = graphiti_instance

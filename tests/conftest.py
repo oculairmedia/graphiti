@@ -232,6 +232,40 @@ def populated_driver_with_relationships(populated_driver, test_group_id):
 
 
 # =============================================================================
+# Integration Test Fixtures
+# =============================================================================
+
+
+@pytest.fixture
+def neo4j_config():
+    """
+    Provide Neo4j connection configuration for integration tests.
+
+    Uses environment variables or defaults suitable for local development.
+    Integration tests using this fixture should be marked with @pytest.mark.integration.
+
+    Environment variables:
+        - NEO4J_URI: Neo4j connection URI (default: bolt://localhost:7687)
+        - NEO4J_USER: Neo4j username (default: neo4j)
+        - NEO4J_PASSWORD: Neo4j password (default: graphiti123)
+
+    Usage:
+        @pytest.mark.integration
+        async def test_with_neo4j(neo4j_config):
+            graphiti = Graphiti(
+                neo4j_uri=neo4j_config['uri'],
+                neo4j_user=neo4j_config['user'],
+                neo4j_password=neo4j_config['password'],
+            )
+    """
+    return {
+        'uri': os.environ.get('NEO4J_URI', 'bolt://localhost:7687'),
+        'user': os.environ.get('NEO4J_USER', 'neo4j'),
+        'password': os.environ.get('NEO4J_PASSWORD', 'graphiti123'),
+    }
+
+
+# =============================================================================
 # Environment Fixtures
 # =============================================================================
 

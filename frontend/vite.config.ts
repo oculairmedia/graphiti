@@ -116,5 +116,8 @@ export default defineConfig(({ mode }) => ({
     alias: {
       "@": path.resolve(process.cwd(), "./src"),
     },
+    // CRITICAL: Deduplicate React to fix "Cannot read properties of undefined (reading 'createContext')"
+    // This ensures all packages use the same React instance, preventing version conflicts
+    dedupe: ['react', 'react-dom'],
   },
 }));
