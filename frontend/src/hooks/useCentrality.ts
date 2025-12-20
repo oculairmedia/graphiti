@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { graphClient } from '../api/graphClient';
-import { CentralityMetrics, BulkCentralityResponse, CentralityStats } from '../api/types';
+import { CentralityMetrics, BulkCentralityResponse, CentralityStats } from '../types/graph';
 
 // Hook to fetch centrality for a single node
 export function useNodeCentrality(nodeId: string | null, enabled = true) {

@@ -7,7 +7,7 @@ import type { GraphData, GraphNode } from '@/types/graph';
 import { useConfigPersistence } from '@/hooks/usePersistedConfig';
 import { useDebouncedCallback } from '@/hooks/useDebouncedCallback';
 import { GraphitiSearch } from './GraphitiSearch';
-import type { NodeResult } from '../api/types';
+import type { NodeResult } from '../types/graph';
 
 // Import tab components
 import { QueryControlsTab } from './ControlPanel/QueryControlsTab';

@@ -9,7 +9,7 @@
  * - Memory-efficient processing
  */
 
-import { GraphNode } from '@/api/types';
+import { GraphNode } from '@/types/graph';
 import { GraphLink } from '@/types/graph';
 import { logger } from '@/utils/logger';
 

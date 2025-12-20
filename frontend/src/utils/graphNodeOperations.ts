@@ -3,7 +3,7 @@
  * Pure functions for node manipulation and transformation
  */
 
-import { GraphNode } from '../api/types';
+import { GraphNode } from '../types/graph';
 
 /**
  * Transform raw nodes into Cosmograph-compatible format

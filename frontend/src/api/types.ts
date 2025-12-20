@@ -1,10 +1,64 @@
-// Types matching the Rust server API responses
+/**
+ * API Types - Re-exports from canonical source
+ * 
+ * GRAPH-82: This file now re-exports types from @/types/graph.ts
+ * for backwards compatibility. New code should import directly from @/types/graph.
+ * 
+ * @deprecated Import from '@/types/graph' instead
+ */
 
-import type { NodeProperties as BaseNodeProperties } from '../types/properties';
+// Re-export all types from the canonical source
+export {
+  // Node types
+  type GraphNode,
+  type IndexedGraphNode,
+  type TransformedGraphNode,
+  type NodeProperties,
+  type GraphNodeProperties,
+  
+  // Edge types
+  type GraphEdge,
+  type GraphLink,
+  type TransformedGraphLink,
+  type EdgeProperties,
+  type GraphEdgeProperties,
+  
+  // Data containers
+  type GraphData,
+  type GraphLinkData,
+  type GraphDataStats,
+  
+  // Statistics
+  type NodeTypeStats,
+  type CentralityMetrics,
+  type CentralityStats,
+  type BulkCentralityResponse,
+  type GraphStats,
+  type ApiGraphStats,
+  
+  // API types
+  type QueryResponse,
+  type QueryParams,
+  type SearchRequest,
+  type SearchResponse,
+  type NodeDetails,
+  type ErrorResponse,
+  
+  // Graphiti types
+  type NodeResult,
+  type QueueStatus,
+  
+  // Utility functions
+  edgeToLink,
+  linkToEdge,
+  hasNodeCentrality,
+  getNodeLabel,
+} from '../types/graph';
 
-// Extended node properties from API (includes additional fields)
-export interface NodeProperties extends BaseNodeProperties {
-  // Additional API-specific properties
+// Legacy type alias for NodeProperties with API-specific extensions
+// This was previously defined here with additional fields
+export interface ExtendedNodeProperties {
+  // Centrality metrics
   pagerank?: number;
   degree?: number;
   connections?: number;
@@ -12,134 +66,23 @@ export interface NodeProperties extends BaseNodeProperties {
   importance?: number;
   custom_score?: number;
   date?: string;
-}
-
-export interface GraphNode {
-  id: string;
-  label: string;
-  node_type: string;
-  summary?: string;  // Add summary field for node description/content
-  size: number;
-  color: string;
-  properties: NodeProperties;
-  created_at?: string;
-  created_at_timestamp?: number;  // Unix timestamp in milliseconds
-  updated_at?: string;
-}
-
-export interface GraphEdge {
-  from: string;
-  to: string;
-  edge_type: string;
-  weight: number;
-}
-
-export interface GraphStats {
-  total_nodes: number;
-  total_edges: number;
-  node_types: Record<string, number>;
-  edge_types?: Record<string, number>;
-  avg_degree: number;
-  density?: number;
-  max_degree?: number;
-}
-
-export interface GraphData {
-  nodes: GraphNode[];
-  edges: GraphEdge[];
-  stats: GraphStats;
-}
-
-export interface QueryResponse {
-  data: GraphData;
-  has_more: boolean;
-  execution_time_ms: number;
-}
-
-export interface QueryParams {
-  query_type?: string;
-  limit?: number;
-  offset?: number;
-  search?: string;
-}
-
-export interface SearchRequest {
-  query: string;
-  node_types?: string[];
-  limit?: number;
-}
-
-export interface SearchResponse {
-  nodes: GraphNode[];
-  total: number;
-}
-
-export interface NodeDetails extends GraphNode {
+  
+  // Standard centrality (from base)
+  degree_centrality?: number;
+  betweenness_centrality?: number;
+  closeness_centrality?: number;
+  eigenvector_centrality?: number;
+  pagerank_centrality?: number;
+  
+  // Temporal
   created_at?: string;
   updated_at?: string;
-  centrality?: CentralityMetrics;
-  connections: {
-    incoming: GraphEdge[];
-    outgoing: GraphEdge[];
-  };
-}
-
-export interface ErrorResponse {
-  error: string;
-  details?: string;
-}
-
-// Centrality types
-export interface CentralityMetrics {
-  degree: number;
-  betweenness: number;
-  pagerank: number;
-  eigenvector: number;
-}
-
-export interface CentralityStats {
-  min_degree: number;
-  max_degree: number;
-  avg_degree: number;
-  min_betweenness: number;
-  max_betweenness: number;
-  avg_betweenness: number;
-  min_pagerank: number;
-  max_pagerank: number;
-  avg_pagerank: number;
-  min_eigenvector: number;
-  max_eigenvector: number;
-  avg_eigenvector: number;
-}
-
-export interface BulkCentralityResponse {
-  [nodeId: string]: CentralityMetrics;
-}
-
-export interface QueueStatus {
-  status: string;
-  visible_messages: number;
-  invisible_messages: number;
-  total_processed: number;
-  total_failed: number;
-  success_rate: number;
-  last_updated: string;
-}
-
-// Graphiti-specific types (from Python server)
-export interface NodeResult {
-  uuid: string;
-  name: string;
-  summary: string;
-  labels: string[];
-  group_id: string;
-  created_at: string;
-  attributes: {
-    labels?: string[];
-    betweenness_centrality?: number;
-    pagerank_centrality?: number;
-    degree_centrality?: number;
-    eigenvector_centrality?: number;
-    [key: string]: any;
-  };
+  
+  // Metadata
+  source?: string;
+  confidence?: number;
+  tags?: string[];
+  
+  // Index for type compatibility
+  [key: string]: unknown;
 }

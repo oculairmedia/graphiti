@@ -1,8 +1,16 @@
-// Web Worker for heavy data processing operations
+/**
+ * Web Worker for heavy data processing operations
+ * 
+ * GRAPH-82: Uses canonical types from @/types/graph
+ */
+
+// Note: Workers can't use path aliases, so we define minimal interfaces
+// that match the canonical types. These should stay in sync with types/graph.ts
 
 interface GraphNode {
   id: string;
   label?: string;
+  name?: string;
   node_type: string;
   properties?: Record<string, unknown>;
   size?: number;
@@ -63,56 +71,69 @@ interface ProcessDataResponse {
   };
 }
 
-// Reusable node transformation logic
+/**
+ * Transform a raw node into an indexed node with computed properties
+ */
 function transformNode(node: GraphNode, index: number): TransformedNode {
-  const createdAt = node.properties?.created_at || node.created_at || node.properties?.created || null;
-  const degree = Number(node.properties?.degree_centrality || 0);
+  const props = node.properties || {};
+  const createdAt = (props.created_at as string) || node.created_at || (props.created as string) || null;
+  const degree = Number(props.degree_centrality || 0);
   
   return {
     id: String(node.id),
-    index: index,
-    label: String(node.label || node.id),
+    index,
+    label: String(node.label || node.name || node.id),
     node_type: String(node.node_type || 'Unknown'),
-    centrality: Number(node.properties?.degree_centrality || node.properties?.pagerank_centrality || node.size || 1),
+    centrality: Number(props.degree_centrality || props.pagerank_centrality || node.size || 1),
     cluster: String(node.node_type || 'Unknown'),
     clusterStrength: 0.7,
     degree_centrality: degree,
-    pagerank_centrality: Number(node.properties?.pagerank_centrality || 0),
-    betweenness_centrality: Number(node.properties?.betweenness_centrality || 0),
-    eigenvector_centrality: Number(node.properties?.eigenvector_centrality || 0),
+    pagerank_centrality: Number(props.pagerank_centrality || 0),
+    betweenness_centrality: Number(props.betweenness_centrality || 0),
+    eigenvector_centrality: Number(props.eigenvector_centrality || 0),
     created_at: createdAt,
     created_at_timestamp: createdAt ? new Date(createdAt).getTime() : null,
-    // Keep original properties
+    // Preserve original properties
     properties: node.properties,
     size: node.size,
     x: node.x,
-    y: node.y
+    y: node.y,
   };
 }
 
-// Reusable link transformation logic
+/**
+ * Transform a raw link into an indexed link
+ */
 function transformLink(link: GraphLink, nodeIndexMap: Map<string, number>): TransformedLink | null {
-  const sourceIndex = nodeIndexMap.get(String(link.source || link.from));
-  const targetIndex = nodeIndexMap.get(String(link.target || link.to));
+  const source = String(link.source || link.from);
+  const target = String(link.target || link.to);
+  
+  const sourceIndex = nodeIndexMap.get(source);
+  const targetIndex = nodeIndexMap.get(target);
   
   if (sourceIndex === undefined || targetIndex === undefined) {
     return null;
   }
   
   return {
-    source: String(link.source || link.from),
-    sourceIndex: sourceIndex,
-    target: String(link.target || link.to),
-    targetIndex: targetIndex,
+    source,
+    sourceIndex,
+    target,
+    targetIndex,
     edge_type: String(link.edge_type || 'default'),
     weight: Number(link.weight || 1),
     created_at: link.created_at,
-    updated_at: link.updated_at
+    updated_at: link.updated_at,
   };
 }
 
-// Process large datasets in chunks to avoid blocking
-async function processDataInChunks(nodes: GraphNode[], links: GraphLink[]): Promise<ProcessDataResponse['data']> {
+/**
+ * Process large datasets in chunks to avoid blocking the worker thread
+ */
+async function processDataInChunks(
+  nodes: GraphNode[],
+  links: GraphLink[]
+): Promise<ProcessDataResponse['data']> {
   const CHUNK_SIZE = 1000;
   const transformedNodes: TransformedNode[] = [];
   const nodeIndexMap = new Map<string, number>();
@@ -140,7 +161,7 @@ async function processDataInChunks(nodes: GraphNode[], links: GraphLink[]): Prom
     const chunk = links.slice(i, i + CHUNK_SIZE);
     const transformed = chunk
       .map(link => transformLink(link, nodeIndexMap))
-      .filter(Boolean);
+      .filter((link): link is TransformedLink => link !== null);
     transformedLinks.push(...transformed);
     
     // Yield to allow other operations
@@ -152,7 +173,7 @@ async function processDataInChunks(nodes: GraphNode[], links: GraphLink[]): Prom
   return {
     nodes: transformedNodes,
     links: transformedLinks,
-    nodeIndexMap: Array.from(nodeIndexMap.entries())
+    nodeIndexMap: Array.from(nodeIndexMap.entries()),
   };
 }
 
@@ -167,12 +188,12 @@ self.addEventListener('message', async (event: MessageEvent<ProcessDataMessage>)
         
         self.postMessage({
           type: 'DATA_TRANSFORMED',
-          data: result
+          data: result,
         });
       } catch (error) {
         self.postMessage({
           type: 'ERROR',
-          error: error instanceof Error ? error.message : 'Unknown error'
+          error: error instanceof Error ? error.message : 'Unknown error',
         });
       }
       break;

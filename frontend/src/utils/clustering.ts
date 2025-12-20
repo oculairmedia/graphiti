@@ -3,7 +3,7 @@
  * Provides functions to compute cluster assignments based on various methods
  */
 
-import { GraphNode } from '../api/types';
+import { GraphNode } from '../types/graph';
 
 export type ClusteringMethod = 'nodeType' | 'centrality' | 'custom' | 'none';
 export type CentralityMetric = 'degree' | 'pagerank' | 'betweenness' | 'eigenvector';

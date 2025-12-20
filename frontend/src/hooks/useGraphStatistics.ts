@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { GraphNode } from '../api/types';
+import { GraphNode } from '../types/graph';
 import { GraphLink } from '../types/graph';
 import { calculateNodeStats, calculateNodeDegrees } from '../utils/graphNodeOperations';
 import { calculateLinkStats } from '../utils/graphLinkOperations';

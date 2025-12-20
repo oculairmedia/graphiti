@@ -22,7 +22,7 @@ type GraphTimelineHandle = any; // Type will be resolved at runtime
 import { useGraphDataQuery } from '../hooks/useGraphDataQuery';
 // GRAPH-87: Migrated from useIncrementalUpdates to useCosmographIncrementalUpdates
 import { useCosmographIncrementalUpdates } from '../hooks/useCosmographIncrementalUpdates';
-import { GraphNode } from '../api/types';
+import { GraphNode } from '../types/graph';
 import { GraphLink } from '../types/graph';
 import type { GraphCanvasHandle, GraphVizProps } from '../types/components';
 import { getErrorMessage } from '../types/errors';

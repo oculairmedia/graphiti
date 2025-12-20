@@ -1,5 +1,5 @@
 import { useRef, useMemo } from 'react';
-import { GraphNode } from '../api/types';
+import { GraphNode } from '../types/graph';
 import type { GraphLink } from '../types/graph';
 import { logger } from '../utils/logger';
 

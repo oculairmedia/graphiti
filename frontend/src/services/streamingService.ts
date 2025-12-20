@@ -5,7 +5,7 @@
 
 import * as arrow from 'apache-arrow';
 import { logger } from '../utils/logger';
-import { GraphNode } from '../api/types';
+import { GraphNode } from '../types/graph';
 import { GraphLink } from '../types/graph';
 
 interface StreamChunk {

@@ -3,7 +3,7 @@ import { Filter, Route, Focus, Trash2, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useGraphConfig } from '@/hooks/useGraphConfigHooks';
-import { GraphNode } from '../api/types';
+import { GraphNode } from '../types/graph';
 
 interface GraphSearchProps {
   className?: string;

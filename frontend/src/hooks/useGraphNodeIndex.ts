@@ -7,7 +7,7 @@
  */
 
 import { useMemo } from 'react';
-import { GraphNode } from '../api/types';
+import { GraphNode } from '../types/graph';
 
 interface NodeIndexReturn {
   nodeIndexMap: Map<string, number>;

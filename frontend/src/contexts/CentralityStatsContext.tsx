@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useMemo, ReactNode } from 'react';
-import { GraphNode } from '../api/types';
+import { GraphNode } from '../types/graph';
 
 export type ScalingMethod = 'moving-average' | 'iqr' | 'winsorized' | 'mad' | 'raw' | 'log-sensitivity';
 

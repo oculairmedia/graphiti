@@ -9,7 +9,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { cn } from '@/lib/utils';
 import { useGraphitiSearch } from '@/hooks/useGraphitiSearch';
 import type { GraphCanvasRef } from '@/types/graphCanvas';
-import type { NodeResult } from '@/api/types';
+import type { NodeResult } from '@/types/graph';
 
 interface GraphitiSearchProps {
   graphCanvasRef?: React.RefObject<GraphCanvasRef>;

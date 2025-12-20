@@ -5,7 +5,7 @@
  * Used for incremental updates to avoid full graph re-renders.
  */
 
-import type { GraphNode } from '../api/types';
+import type { GraphNode } from '../types/graph';
 import type { GraphLink } from '../types/graph';
 
 /**

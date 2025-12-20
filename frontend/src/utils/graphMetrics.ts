@@ -2,7 +2,7 @@
  * Graph Metrics Calculation Utilities
  */
 
-import { GraphNode } from '../api/types';
+import { GraphNode } from '../types/graph';
 import { GraphLink } from '../types/graph';
 
 /**

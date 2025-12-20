@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { QueueStatus } from '@/api/types';
+import { QueueStatus } from '@/types/graph';
 import { GraphClient } from '@/api/graphClient';
 
 interface UseQueueStatusOptions {

@@ -7,7 +7,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { GraphSearch } from './GraphSearch';
-import { GraphNode } from '../api/types';
+import { GraphNode } from '../types/graph';
 import { WebSocketStatus } from './WebSocketStatus';
 
 // GRAPH-93: Zustand stores for global state

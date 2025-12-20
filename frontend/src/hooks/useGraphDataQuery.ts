@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { graphClient } from '../api/graphClient';
-import { GraphNode } from '../api/types';
+import { GraphNode } from '../types/graph';
 import { GraphLink } from '../types/graph';
 import { useGraphDataDiff } from './useGraphDataDiff';
 import { useGraphConfig } from '../hooks/useGraphConfigHooks';

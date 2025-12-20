@@ -1,25 +1,20 @@
 /**
- * Graph Selection Hook
- * Handles node and edge selection, multi-selection, and selection operations
+ * Graph Selection Hook - GRAPH-85 Optimized
+ * 
+ * Handles node and edge selection with optimized memoization.
+ * Uses refs for state access to prevent callback recreation on every state change.
  */
 
-import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
-import { GraphNode } from '../api/types';
-import { GraphLink } from '../types/graph';
+import { useState, useCallback, useRef, useEffect } from 'react';
+import { GraphNode, GraphLink } from '../types/graph';
 
-/**
- * Selection mode types
- */
+// ============================================================================
+// Types
+// ============================================================================
+
 export type SelectionMode = 'single' | 'multiple' | 'range' | 'path';
-
-/**
- * Selection type
- */
 export type SelectionType = 'node' | 'link' | 'mixed';
 
-/**
- * Selection state
- */
 export interface SelectionState {
   selectedNodes: Set<string>;
   selectedLinks: Set<string>;
@@ -30,9 +25,6 @@ export interface SelectionState {
   selectionBox: SelectionBox | null;
 }
 
-/**
- * Selection box for area selection
- */
 export interface SelectionBox {
   startX: number;
   startY: number;
@@ -41,9 +33,6 @@ export interface SelectionBox {
   active: boolean;
 }
 
-/**
- * Selection event
- */
 export interface SelectionEvent {
   type: 'select' | 'deselect' | 'clear' | 'hover';
   target: 'node' | 'link' | 'all';
@@ -56,41 +45,58 @@ export interface SelectionEvent {
   };
 }
 
-/**
- * Hook configuration
- */
 export interface UseGraphSelectionConfig {
-  // Selection mode
   mode?: SelectionMode;
-  
-  // Maximum number of items that can be selected
   maxSelection?: number;
-  
-  // Enable selection persistence
   persistSelection?: boolean;
-  
-  // Storage key for persistence
   storageKey?: string;
-  
-  // Callback when selection changes
   onSelectionChange?: (event: SelectionEvent) => void;
-  
-  // Callback when hover changes
   onHoverChange?: (nodeId: string | null, linkId: string | null) => void;
-  
-  // Enable keyboard shortcuts
   enableKeyboardShortcuts?: boolean;
-  
-  // Enable area selection
   enableAreaSelection?: boolean;
-  
-  // Debug mode
   debug?: boolean;
 }
 
-/**
- * Graph Selection Hook
- */
+// ============================================================================
+// Initial State
+// ============================================================================
+
+const createInitialState = (persistSelection: boolean, storageKey: string): SelectionState => {
+  if (persistSelection && typeof window !== 'undefined') {
+    try {
+      const saved = localStorage.getItem(storageKey);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return {
+          selectedNodes: new Set(parsed.selectedNodes || []),
+          selectedLinks: new Set(parsed.selectedLinks || []),
+          hoveredNode: null,
+          hoveredLink: null,
+          lastSelectedNode: parsed.lastSelectedNode || null,
+          lastSelectedLink: parsed.lastSelectedLink || null,
+          selectionBox: null
+        };
+      }
+    } catch (e) {
+      console.error('Failed to load persisted selection:', e);
+    }
+  }
+  
+  return {
+    selectedNodes: new Set(),
+    selectedLinks: new Set(),
+    hoveredNode: null,
+    hoveredLink: null,
+    lastSelectedNode: null,
+    lastSelectedLink: null,
+    selectionBox: null
+  };
+};
+
+// ============================================================================
+// Main Hook
+// ============================================================================
+
 export function useGraphSelection(
   nodes: GraphNode[],
   links: GraphLink[],
@@ -108,100 +114,74 @@ export function useGraphSelection(
     debug = false
   } = config;
 
-  // Selection state
-  const [selectionState, setSelectionState] = useState<SelectionState>(() => {
-    // Load persisted selection if enabled
-    if (persistSelection && typeof window !== 'undefined') {
-      try {
-        const saved = localStorage.getItem(storageKey);
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          return {
-            selectedNodes: new Set(parsed.selectedNodes || []),
-            selectedLinks: new Set(parsed.selectedLinks || []),
-            hoveredNode: null,
-            hoveredLink: null,
-            lastSelectedNode: parsed.lastSelectedNode || null,
-            lastSelectedLink: parsed.lastSelectedLink || null,
-            selectionBox: null
-          };
-        }
-      } catch (e) {
-        console.error('Failed to load persisted selection:', e);
-      }
-    }
-    
-    return {
-      selectedNodes: new Set(),
-      selectedLinks: new Set(),
-      hoveredNode: null,
-      hoveredLink: null,
-      lastSelectedNode: null,
-      lastSelectedLink: null,
-      selectionBox: null
-    };
-  });
+  // State
+  const [selectionState, setSelectionState] = useState<SelectionState>(() => 
+    createInitialState(persistSelection, storageKey)
+  );
 
-  // Track keyboard modifiers
-  const modifiersRef = useRef({
-    shift: false,
-    ctrl: false,
-    alt: false
-  });
+  // GRAPH-85 OPTIMIZATION: Use refs for stable callback access
+  // This prevents callbacks from recreating when state changes
+  const stateRef = useRef(selectionState);
+  const nodesRef = useRef(nodes);
+  const linksRef = useRef(links);
+  const configRef = useRef({ mode, maxSelection, onSelectionChange, onHoverChange, debug });
+  const modifiersRef = useRef({ shift: false, ctrl: false, alt: false });
 
-  /**
-   * Log debug message
-   */
-  const log = useCallback((message: string, ...args: any[]) => {
-    if (debug) {
+  // Keep refs in sync
+  useEffect(() => { stateRef.current = selectionState; }, [selectionState]);
+  useEffect(() => { nodesRef.current = nodes; }, [nodes]);
+  useEffect(() => { linksRef.current = links; }, [links]);
+  useEffect(() => { 
+    configRef.current = { mode, maxSelection, onSelectionChange, onHoverChange, debug }; 
+  }, [mode, maxSelection, onSelectionChange, onHoverChange, debug]);
+
+  // ============================================================================
+  // Internal Helpers (not memoized - only used internally)
+  // ============================================================================
+
+  const log = (message: string, ...args: any[]) => {
+    if (configRef.current.debug) {
       console.debug(`[useGraphSelection] ${message}`, ...args);
     }
-  }, [debug]);
+  };
 
-  /**
-   * Trigger selection event
-   */
-  const triggerEvent = useCallback((
+  const triggerEvent = (
     type: SelectionEvent['type'],
     target: SelectionEvent['target'],
     ids: string[]
   ) => {
-    if (onSelectionChange) {
-      const event: SelectionEvent = {
-        type,
-        target,
-        ids,
-        timestamp: Date.now(),
-        modifiers: { ...modifiersRef.current }
-      };
-      onSelectionChange(event);
-    }
-  }, [onSelectionChange]);
+    configRef.current.onSelectionChange?.({
+      type,
+      target,
+      ids,
+      timestamp: Date.now(),
+      modifiers: { ...modifiersRef.current }
+    });
+  };
 
-  /**
-   * Select a single node
-   */
+  // ============================================================================
+  // Selection Operations (stable callbacks using refs)
+  // ============================================================================
+
   const selectNode = useCallback((nodeId: string, addToSelection: boolean = false) => {
     log(`Selecting node: ${nodeId}, addToSelection: ${addToSelection}`);
     
     setSelectionState(prev => {
+      const { mode, maxSelection } = configRef.current;
       const newSelectedNodes = new Set(prev.selectedNodes);
       const newSelectedLinks = new Set(prev.selectedLinks);
       
       if (mode === 'single' || !addToSelection) {
-        // Clear existing selection
         newSelectedNodes.clear();
         newSelectedLinks.clear();
       }
       
-      // Check max selection limit
       if (newSelectedNodes.size >= maxSelection) {
         log(`Max selection limit reached: ${maxSelection}`);
         return prev;
       }
       
       newSelectedNodes.add(nodeId);
-      
       triggerEvent('select', 'node', [nodeId]);
       
       return {
@@ -211,22 +191,18 @@ export function useGraphSelection(
         lastSelectedNode: nodeId
       };
     });
-  }, [mode, maxSelection, triggerEvent, log]);
+  }, []); // Empty deps - uses refs
 
-  /**
-   * Select multiple nodes
-   */
   const selectNodes = useCallback((nodeIds: string[], addToSelection: boolean = false) => {
-    log(`Selecting ${nodeIds.length} nodes, addToSelection: ${addToSelection}`);
+    log(`Selecting ${nodeIds.length} nodes`);
     
     setSelectionState(prev => {
+      const { maxSelection } = configRef.current;
       const newSelectedNodes = new Set(addToSelection ? prev.selectedNodes : []);
       const newSelectedLinks = addToSelection ? new Set(prev.selectedLinks) : new Set();
       
-      // Add nodes up to max selection limit
       const availableSlots = maxSelection - newSelectedNodes.size;
       const nodesToAdd = nodeIds.slice(0, availableSlots);
-      
       nodesToAdd.forEach(id => newSelectedNodes.add(id));
       
       triggerEvent('select', 'node', nodesToAdd);
@@ -238,25 +214,17 @@ export function useGraphSelection(
         lastSelectedNode: nodesToAdd[nodesToAdd.length - 1] || prev.lastSelectedNode
       };
     });
-  }, [maxSelection, triggerEvent, log]);
+  }, []);
 
-  /**
-   * Select a single link
-   */
   const selectLink = useCallback((linkId: string, addToSelection: boolean = false) => {
-    log(`Selecting link: ${linkId}, addToSelection: ${addToSelection}`);
-    
     setSelectionState(prev => {
+      const { maxSelection } = configRef.current;
       const newSelectedNodes = addToSelection ? new Set(prev.selectedNodes) : new Set();
       const newSelectedLinks = new Set(addToSelection ? prev.selectedLinks : []);
       
-      if (newSelectedLinks.size >= maxSelection) {
-        log(`Max selection limit reached: ${maxSelection}`);
-        return prev;
-      }
+      if (newSelectedLinks.size >= maxSelection) return prev;
       
       newSelectedLinks.add(linkId);
-      
       triggerEvent('select', 'link', [linkId]);
       
       return {
@@ -266,18 +234,12 @@ export function useGraphSelection(
         lastSelectedLink: linkId
       };
     });
-  }, [maxSelection, triggerEvent, log]);
+  }, []);
 
-  /**
-   * Deselect a node
-   */
   const deselectNode = useCallback((nodeId: string) => {
-    log(`Deselecting node: ${nodeId}`);
-    
     setSelectionState(prev => {
       const newSelectedNodes = new Set(prev.selectedNodes);
       newSelectedNodes.delete(nodeId);
-      
       triggerEvent('deselect', 'node', [nodeId]);
       
       return {
@@ -286,18 +248,12 @@ export function useGraphSelection(
         lastSelectedNode: prev.lastSelectedNode === nodeId ? null : prev.lastSelectedNode
       };
     });
-  }, [triggerEvent, log]);
+  }, []);
 
-  /**
-   * Deselect multiple nodes
-   */
   const deselectNodes = useCallback((nodeIds: string[]) => {
-    log(`Deselecting ${nodeIds.length} nodes`);
-    
     setSelectionState(prev => {
       const newSelectedNodes = new Set(prev.selectedNodes);
       nodeIds.forEach(id => newSelectedNodes.delete(id));
-      
       triggerEvent('deselect', 'node', nodeIds);
       
       return {
@@ -306,18 +262,12 @@ export function useGraphSelection(
         lastSelectedNode: nodeIds.includes(prev.lastSelectedNode || '') ? null : prev.lastSelectedNode
       };
     });
-  }, [triggerEvent, log]);
+  }, []);
 
-  /**
-   * Deselect a link
-   */
   const deselectLink = useCallback((linkId: string) => {
-    log(`Deselecting link: ${linkId}`);
-    
     setSelectionState(prev => {
       const newSelectedLinks = new Set(prev.selectedLinks);
       newSelectedLinks.delete(linkId);
-      
       triggerEvent('deselect', 'link', [linkId]);
       
       return {
@@ -326,37 +276,26 @@ export function useGraphSelection(
         lastSelectedLink: prev.lastSelectedLink === linkId ? null : prev.lastSelectedLink
       };
     });
-  }, [triggerEvent, log]);
+  }, []);
 
-  /**
-   * Toggle node selection
-   */
   const toggleNodeSelection = useCallback((nodeId: string) => {
-    const isSelected = selectionState.selectedNodes.has(nodeId);
-    
-    if (isSelected) {
+    const state = stateRef.current;
+    if (state.selectedNodes.has(nodeId)) {
       deselectNode(nodeId);
     } else {
-      selectNode(nodeId, mode === 'multiple');
+      selectNode(nodeId, configRef.current.mode === 'multiple');
     }
-  }, [selectionState.selectedNodes, selectNode, deselectNode, mode]);
+  }, [selectNode, deselectNode]);
 
-  /**
-   * Toggle link selection
-   */
   const toggleLinkSelection = useCallback((linkId: string) => {
-    const isSelected = selectionState.selectedLinks.has(linkId);
-    
-    if (isSelected) {
+    const state = stateRef.current;
+    if (state.selectedLinks.has(linkId)) {
       deselectLink(linkId);
     } else {
-      selectLink(linkId, mode === 'multiple');
+      selectLink(linkId, configRef.current.mode === 'multiple');
     }
-  }, [selectionState.selectedLinks, selectLink, deselectLink, mode]);
+  }, [selectLink, deselectLink]);
 
-  /**
-   * Clear all selections
-   */
   const clearSelection = useCallback(() => {
     log('Clearing all selections');
     
@@ -378,55 +317,48 @@ export function useGraphSelection(
         selectionBox: null
       };
     });
-  }, [triggerEvent, log]);
+  }, []);
 
-  /**
-   * Select all nodes
-   */
-  const selectAllNodes = useCallback(() => {
-    const nodeIds = nodes.map(n => n.id).slice(0, maxSelection);
+  const selectAll = useCallback(() => {
+    const { maxSelection } = configRef.current;
+    const nodeIds = nodesRef.current.map(n => n.id).slice(0, maxSelection);
     selectNodes(nodeIds, false);
-  }, [nodes, maxSelection, selectNodes]);
+  }, [selectNodes]);
 
-  /**
-   * Select all links
-   */
   const selectAllLinks = useCallback(() => {
+    const { maxSelection } = configRef.current;
+    const links = linksRef.current;
     const linkIds = links.map((l, i) => `${l.source}-${l.target}-${i}`).slice(0, maxSelection);
     
     setSelectionState(prev => {
-      const newSelectedLinks = new Set(linkIds);
-      
       triggerEvent('select', 'link', linkIds);
-      
       return {
         ...prev,
         selectedNodes: new Set(),
-        selectedLinks: newSelectedLinks,
+        selectedLinks: new Set(linkIds),
         lastSelectedLink: linkIds[linkIds.length - 1] || null
       };
     });
-  }, [links, maxSelection, triggerEvent]);
+  }, []);
 
-  /**
-   * Invert selection
-   */
   const invertSelection = useCallback(() => {
+    const { maxSelection } = configRef.current;
+    const nodes = nodesRef.current;
+    const state = stateRef.current;
+    
     const allNodeIds = new Set(nodes.map(n => n.id));
     const newSelectedNodes = new Set<string>();
     
     allNodeIds.forEach(id => {
-      if (!selectionState.selectedNodes.has(id)) {
+      if (!state.selectedNodes.has(id)) {
         newSelectedNodes.add(id);
       }
     });
     
-    // Limit to max selection
     const limitedNodes = Array.from(newSelectedNodes).slice(0, maxSelection);
     
     setSelectionState(prev => {
       triggerEvent('select', 'node', limitedNodes);
-      
       return {
         ...prev,
         selectedNodes: new Set(limitedNodes),
@@ -434,19 +366,19 @@ export function useGraphSelection(
         lastSelectedNode: limitedNodes[limitedNodes.length - 1] || null
       };
     });
-  }, [nodes, selectionState.selectedNodes, maxSelection, triggerEvent]);
+  }, []);
 
-  /**
-   * Select nodes by range (between last selected and target)
-   */
   const selectNodeRange = useCallback((targetNodeId: string) => {
-    if (!selectionState.lastSelectedNode) {
+    const state = stateRef.current;
+    const nodes = nodesRef.current;
+    
+    if (!state.lastSelectedNode) {
       selectNode(targetNodeId);
       return;
     }
     
     const nodeIds = nodes.map(n => n.id);
-    const startIdx = nodeIds.indexOf(selectionState.lastSelectedNode);
+    const startIdx = nodeIds.indexOf(state.lastSelectedNode);
     const endIdx = nodeIds.indexOf(targetNodeId);
     
     if (startIdx === -1 || endIdx === -1) {
@@ -456,15 +388,11 @@ export function useGraphSelection(
     
     const rangeStart = Math.min(startIdx, endIdx);
     const rangeEnd = Math.max(startIdx, endIdx);
-    const rangeNodes = nodeIds.slice(rangeStart, rangeEnd + 1);
-    
-    selectNodes(rangeNodes, false);
-  }, [nodes, selectionState.lastSelectedNode, selectNode, selectNodes]);
+    selectNodes(nodeIds.slice(rangeStart, rangeEnd + 1), false);
+  }, [selectNode, selectNodes]);
 
-  /**
-   * Select connected nodes
-   */
   const selectConnectedNodes = useCallback((nodeId: string, depth: number = 1) => {
+    const links = linksRef.current;
     const connected = new Set<string>([nodeId]);
     const toProcess = [nodeId];
     
@@ -492,91 +420,60 @@ export function useGraphSelection(
     }
     
     selectNodes(Array.from(connected), false);
-  }, [links, selectNodes]);
+  }, [selectNodes]);
 
-  /**
-   * Select nodes by type
-   */
   const selectNodesByType = useCallback((nodeType: string) => {
-    const matchingNodes = nodes
-      .filter(n => n.node_type === nodeType)
-      .map(n => n.id);
-    
+    const nodes = nodesRef.current;
+    const matchingNodes = nodes.filter(n => n.node_type === nodeType).map(n => n.id);
     selectNodes(matchingNodes, false);
-  }, [nodes, selectNodes]);
+  }, [selectNodes]);
 
-  /**
-   * Set hover state
-   */
+  // ============================================================================
+  // Hover Operations
+  // ============================================================================
+
   const setHoveredNode = useCallback((nodeId: string | null) => {
     setSelectionState(prev => {
       if (prev.hoveredNode === nodeId) return prev;
-      
-      if (onHoverChange) {
-        onHoverChange(nodeId, prev.hoveredLink);
-      }
-      
+      configRef.current.onHoverChange?.(nodeId, prev.hoveredLink);
       return { ...prev, hoveredNode: nodeId };
     });
-  }, [onHoverChange]);
+  }, []);
 
   const setHoveredLink = useCallback((linkId: string | null) => {
     setSelectionState(prev => {
       if (prev.hoveredLink === linkId) return prev;
-      
-      if (onHoverChange) {
-        onHoverChange(prev.hoveredNode, linkId);
-      }
-      
+      configRef.current.onHoverChange?.(prev.hoveredNode, linkId);
       return { ...prev, hoveredLink: linkId };
     });
-  }, [onHoverChange]);
+  }, []);
 
-  /**
-   * Start area selection
-   */
+  // ============================================================================
+  // Area Selection
+  // ============================================================================
+
   const startAreaSelection = useCallback((x: number, y: number) => {
     if (!enableAreaSelection) return;
     
-    log('Starting area selection at', x, y);
-    
     setSelectionState(prev => ({
       ...prev,
-      selectionBox: {
-        startX: x,
-        startY: y,
-        endX: x,
-        endY: y,
-        active: true
-      }
+      selectionBox: { startX: x, startY: y, endX: x, endY: y, active: true }
     }));
-  }, [enableAreaSelection, log]);
+  }, [enableAreaSelection]);
 
-  /**
-   * Update area selection
-   */
   const updateAreaSelection = useCallback((x: number, y: number) => {
     setSelectionState(prev => {
       if (!prev.selectionBox?.active) return prev;
-      
       return {
         ...prev,
-        selectionBox: {
-          ...prev.selectionBox,
-          endX: x,
-          endY: y
-        }
+        selectionBox: { ...prev.selectionBox, endX: x, endY: y }
       };
     });
   }, []);
 
-  /**
-   * End area selection
-   */
-  const endAreaSelection = useCallback((
-    nodePositions: Map<string, { x: number; y: number }>
-  ) => {
-    const box = selectionState.selectionBox;
+  const endAreaSelection = useCallback((nodePositions: Map<string, { x: number; y: number }>) => {
+    const state = stateRef.current;
+    const box = state.selectionBox;
     if (!box?.active) return;
     
     const minX = Math.min(box.startX, box.endX);
@@ -585,7 +482,6 @@ export function useGraphSelection(
     const maxY = Math.max(box.startY, box.endY);
     
     const selectedNodeIds: string[] = [];
-    
     nodePositions.forEach((pos, nodeId) => {
       if (pos.x >= minX && pos.x <= maxX && pos.y >= minY && pos.y <= maxY) {
         selectedNodeIds.push(nodeId);
@@ -593,55 +489,49 @@ export function useGraphSelection(
     });
     
     selectNodes(selectedNodeIds, modifiersRef.current.shift);
-    
-    setSelectionState(prev => ({
-      ...prev,
-      selectionBox: null
-    }));
-  }, [selectionState.selectionBox, selectNodes]);
+    setSelectionState(prev => ({ ...prev, selectionBox: null }));
+  }, [selectNodes]);
 
-  /**
-   * Get selection statistics
-   */
-  const getSelectionStats = useCallback(() => ({
-    selectedNodeCount: selectionState.selectedNodes.size,
-    selectedLinkCount: selectionState.selectedLinks.size,
-    totalSelected: selectionState.selectedNodes.size + selectionState.selectedLinks.size,
-    hasSelection: selectionState.selectedNodes.size > 0 || selectionState.selectedLinks.size > 0,
-    isMaxed: selectionState.selectedNodes.size + selectionState.selectedLinks.size >= maxSelection
-  }), [selectionState, maxSelection]);
+  // ============================================================================
+  // Query Functions (use state directly - these are expected to change)
+  // ============================================================================
 
-  /**
-   * Check if node is selected
-   */
   const isNodeSelected = useCallback((nodeId: string): boolean => {
-    return selectionState.selectedNodes.has(nodeId);
-  }, [selectionState.selectedNodes]);
+    return stateRef.current.selectedNodes.has(nodeId);
+  }, []);
 
-  /**
-   * Check if link is selected
-   */
   const isLinkSelected = useCallback((linkId: string): boolean => {
-    return selectionState.selectedLinks.has(linkId);
-  }, [selectionState.selectedLinks]);
+    return stateRef.current.selectedLinks.has(linkId);
+  }, []);
 
-  /**
-   * Get selected nodes
-   */
   const getSelectedNodes = useCallback((): GraphNode[] => {
-    return nodes.filter(n => selectionState.selectedNodes.has(n.id));
-  }, [nodes, selectionState.selectedNodes]);
+    const state = stateRef.current;
+    const nodes = nodesRef.current;
+    return nodes.filter(n => state.selectedNodes.has(n.id));
+  }, []);
 
-  /**
-   * Get selected links
-   */
   const getSelectedLinks = useCallback((): GraphLink[] => {
-    return links.filter((l, i) => 
-      selectionState.selectedLinks.has(`${l.source}-${l.target}-${i}`)
-    );
-  }, [links, selectionState.selectedLinks]);
+    const state = stateRef.current;
+    const links = linksRef.current;
+    return links.filter((l, i) => state.selectedLinks.has(`${l.source}-${l.target}-${i}`));
+  }, []);
 
-  // Persist selection if enabled
+  const getSelectionStats = useCallback(() => {
+    const state = stateRef.current;
+    const { maxSelection } = configRef.current;
+    return {
+      selectedNodeCount: state.selectedNodes.size,
+      selectedLinkCount: state.selectedLinks.size,
+      totalSelected: state.selectedNodes.size + state.selectedLinks.size,
+      hasSelection: state.selectedNodes.size > 0 || state.selectedLinks.size > 0,
+      isMaxed: state.selectedNodes.size + state.selectedLinks.size >= maxSelection
+    };
+  }, []);
+
+  // ============================================================================
+  // Persistence
+  // ============================================================================
+
   useEffect(() => {
     if (persistSelection && typeof window !== 'undefined') {
       const toSave = {
@@ -659,7 +549,10 @@ export function useGraphSelection(
     }
   }, [persistSelection, storageKey, selectionState]);
 
-  // Keyboard event handlers
+  // ============================================================================
+  // Keyboard Shortcuts
+  // ============================================================================
+
   useEffect(() => {
     if (!enableKeyboardShortcuts) return;
     
@@ -670,18 +563,15 @@ export function useGraphSelection(
         alt: e.altKey
       };
       
-      // Ctrl+A: Select all
       if (e.ctrlKey && e.key === 'a') {
         e.preventDefault();
-        selectAllNodes();
+        selectAll();
       }
       
-      // Escape: Clear selection
       if (e.key === 'Escape') {
         clearSelection();
       }
       
-      // Ctrl+I: Invert selection
       if (e.ctrlKey && e.key === 'i') {
         e.preventDefault();
         invertSelection();
@@ -703,7 +593,11 @@ export function useGraphSelection(
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [enableKeyboardShortcuts, selectAllNodes, clearSelection, invertSelection]);
+  }, [enableKeyboardShortcuts, selectAll, clearSelection, invertSelection]);
+
+  // ============================================================================
+  // Return Value
+  // ============================================================================
 
   return {
     // Selection state
@@ -712,6 +606,10 @@ export function useGraphSelection(
     hoveredNode: selectionState.hoveredNode,
     hoveredLink: selectionState.hoveredLink,
     selectionBox: selectionState.selectionBox,
+    
+    // Renamed for GraphCanvasV2 compatibility
+    selectedNodeIds: selectionState.selectedNodes,
+    selectedLinkIds: selectionState.selectedLinks,
     
     // Selection operations
     selectNode,
@@ -723,7 +621,8 @@ export function useGraphSelection(
     toggleNodeSelection,
     toggleLinkSelection,
     clearSelection,
-    selectAllNodes,
+    selectAll,
+    selectAllNodes: selectAll,
     selectAllLinks,
     invertSelection,
     selectNodeRange,
@@ -748,9 +647,10 @@ export function useGraphSelection(
   };
 }
 
-/**
- * Simple selection hook for basic use cases
- */
+// ============================================================================
+// Simple Selection Hook (for basic use cases)
+// ============================================================================
+
 export function useSimpleSelection() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   
@@ -786,12 +686,5 @@ export function useSimpleSelection() {
     return selectedIds.has(id);
   }, [selectedIds]);
   
-  return {
-    selectedIds,
-    select,
-    deselect,
-    toggle,
-    clear,
-    isSelected
-  };
+  return { selectedIds, select, deselect, toggle, clear, isSelected };
 }

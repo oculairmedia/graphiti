@@ -6,7 +6,7 @@
  */
 
 import { useCallback, useRef, useState, useEffect } from 'react';
-import type { GraphNode } from '../api/types';
+import type { GraphNode } from '../types/graph';
 import type { GraphLink } from '../types/graph';
 import FallbackOrchestrator, { UpdateAttempt, ErrorClassifier } from '../utils/updateFallbackStrategies';
 import {
