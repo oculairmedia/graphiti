@@ -174,4 +174,4 @@ backups/
 scripts/backup_*.sh
 scripts/test_restore_*.sh
 scripts/verify_*.sh
-scripts/clean_*.sh
+scripts/clean_*.shdata/falkordb_external/
