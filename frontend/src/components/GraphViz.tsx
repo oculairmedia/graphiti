@@ -1,9 +1,12 @@
-import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import React, { useRef, useEffect, useCallback, useMemo } from 'react';
 import { useStableCallback } from '../hooks/useStableCallback';
 import { CosmographProvider } from '@cosmograph/react';
 import { useGraphConfig } from '../contexts/GraphConfigProvider';
 import { ControlPanel } from './ControlPanel';
 import { LazyGraphCanvas } from './LazyGraphCanvas';
+
+// Zustand stores - GRAPH-93: Migrated from useState to Zustand
+import { useUIStore, useGraphStore, useSelectionStore } from '../stores';
 
 // Lazy load modal panels - PERFORMANCE FIX (GRAPH-42): Lazy load all conditional panels
 const FilterPanel = React.lazy(() => import('./FilterPanel').then(m => ({ default: m.FilterPanel })));
@@ -33,612 +36,323 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
   const { applyLayout, zoomIn, zoomOut, fitView } = useGraphConfig();
   const { config } = useGraphConfig();
   
-  // UI State
-  const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);
-  const [showFilterPanel, setShowFilterPanel] = useState(false);
-  const [showStatsPanel, setShowStatsPanel] = useState(false);
-  const [showMonitoringPanel, setShowMonitoringPanel] = useState(false);
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const [isSimulationRunning, setIsSimulationRunning] = useState(true);
+  // GRAPH-93: UI State from Zustand store (replaces 10 useState calls)
+  const {
+    leftPanelCollapsed,
+    setLeftPanelCollapsed,
+    showFilterPanel,
+    setShowFilterPanel,
+    showStatsPanel,
+    setShowStatsPanel,
+    showMonitoringPanel,
+    setShowMonitoringPanel,
+    isFullscreen,
+    setIsFullscreen,
+    isTimelineVisible,
+    setIsTimelineVisible,
+    timelineUpdateMode,
+    setTimelineUpdateMode,
+  } = useUIStore();
   
-  // Live stats from GraphCanvas for real-time updates
-  const [liveStats, setLiveStats] = useState<{ nodeCount: number; edgeCount: number; lastUpdated: number } | null>(null);
-  
+  // GRAPH-93: Graph state from Zustand store
+  const {
+    isSimulationRunning,
+    setSimulationRunning,
+    isContextReady,
+    setContextReady,
+    liveStats,
+    setLiveStats,
+  } = useGraphStore();
 
   // Refs
   const graphCanvasRef = useRef<GraphCanvasHandle>(null);
   const timelineRef = useRef<GraphTimelineHandle>(null);
   const stableGraphPropsRef = useRef<{ nodes: GraphNode[], links: GraphLink[] } | null>(null);
   
-  // Timeline visibility state
-  const [isTimelineVisible, setIsTimelineVisible] = useState(() => {
-    // Load from localStorage
-    const saved = localStorage.getItem('graphiti.timeline.visible');
-    return saved !== null ? saved === 'true' : true;
-  });
-  
-  // Track if Cosmograph context is ready for timeline
-  const [isContextReady, setIsContextReady] = useState(false);
-  
   // Track recent data updates to optimize timeline animation mode
   const lastDataUpdateTime = useRef<number>(0);
-  const [timelineUpdateMode, setTimelineUpdateMode] = useState<'instant' | 'animated'>('animated');
 
   // Handle context ready state from GraphCanvas
   const handleContextReady = useCallback((ready: boolean) => {
-    setIsContextReady(ready);
-  }, []);
+    setContextReady(ready);
+  }, [setContextReady]);
 
   // Handle timeline visibility change
   const handleTimelineVisibilityChange = useCallback((visible: boolean) => {
     setIsTimelineVisible(visible);
-    localStorage.setItem('graphiti.timeline.visible', String(visible));
-  }, []);
+  }, [setIsTimelineVisible]);
 
   // Toggle timeline visibility
   const toggleTimeline = useCallback(() => {
-    const newVisibility = !isTimelineVisible;
-    setIsTimelineVisible(newVisibility);
-    localStorage.setItem('graphiti.timeline.visible', String(newVisibility));
-  }, [isTimelineVisible]);
+    setIsTimelineVisible(!isTimelineVisible);
+  }, [isTimelineVisible, setIsTimelineVisible]);
 
-  // Handle stats updates from GraphCanvas
-  const handleStatsUpdate = useCallback((stats: { nodeCount: number; edgeCount: number; lastUpdated: number }) => {
-    setLiveStats(stats);
-  }, []);
-
-  // Keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Ctrl/Cmd + T to toggle timeline
-      if ((e.ctrlKey || e.metaKey) && e.key === 't') {
-        e.preventDefault();
-        toggleTimeline();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [toggleTimeline]);
-
-  // Custom hooks
-  const {
-    data,
-    transformedData,
-    isLoading,
+  // Fetch graph data using React Query
+  const { 
+    data: graphData, 
+    isLoading, 
     error,
-    dataDiff,
-    isIncrementalUpdate,
-    setIsIncrementalUpdate,
-    isGraphInitialized,
-    stableDataRef,
-    pendingUpdate,
+    refetch,
+    isRefetching
   } = useGraphDataQuery();
   
-  // GRAPH-86: Use modern useGraphSelection hook
+  // GRAPH-86: Migrated to consolidated useGraphSelection hook
   const {
-    selectedNodes: selectedNodeSet,
-    hoveredNode: hoveredNodeId,
-    selectNode,
-    selectNodes,
-    selectConnectedNodes,
-    clearSelection,
+    selectedNode,
+    setSelectedNode,
+    hoveredNode,
     setHoveredNode,
-    toggleNodeSelection,
-    getSelectedNodes,
-  } = useGraphSelection(
-    transformedData?.nodes || [],
-    transformedData?.links || [],
-    { 
-      mode: 'multiple',
-      enableKeyboardShortcuts: true,
-      debug: false
-    }
-  );
+    highlightedNodes,
+    setHighlightedNodes,
+    clearSelection
+  } = useGraphSelection();
   
-  // GRAPH-86: Compatibility layer - derive legacy-style values from modern hook
-  const selectedNodes = useMemo(() => Array.from(selectedNodeSet), [selectedNodeSet]);
-  const selectedNode = useMemo(() => {
-    if (selectedNodes.length === 0) return null;
-    return transformedData?.nodes.find(n => n.id === selectedNodes[0]) ?? null;
-  }, [selectedNodes, transformedData?.nodes]);
-  const hoveredNode = useMemo(() => {
-    if (!hoveredNodeId) return null;
-    return transformedData?.nodes.find(n => n.id === hoveredNodeId) ?? null;
-  }, [hoveredNodeId, transformedData?.nodes]);
-  
-  // GRAPH-86: Map legacy handlers to modern API
-  const handleNodeClick = useCallback((node: GraphNode) => {
-    selectNode(node.id);
-  }, [selectNode]);
-  
-  const handleNodeSelect = useCallback((nodeId: string) => {
-    toggleNodeSelection(nodeId);
-  }, [toggleNodeSelection]);
-  
-  const handleNodeSelectWithCosmograph = useCallback((node: GraphNode) => {
-    selectNode(node.id);
-    // Also select in Cosmograph for visual effects if ref is available
-    if (graphCanvasRef.current && typeof graphCanvasRef.current.selectNode === 'function') {
-      graphCanvasRef.current.selectNode(node);
-    }
-  }, [selectNode]);
-  
-  const handleHighlightNodes = useCallback((nodes: GraphNode[]) => {
-    const nodeIds = nodes.map(n => n.id);
-    selectNodes(nodeIds, false);
-  }, [selectNodes]);
-  
-  const handleSelectNodes = useCallback((nodes: GraphNode[]) => {
-    const nodeIds = nodes.map(n => n.id);
-    selectNodes(nodeIds, false);
-  }, [selectNodes]);
-  
-  const handleShowNeighbors = useCallback((nodeId: string) => {
-    selectConnectedNodes(nodeId, 1);
-  }, [selectConnectedNodes]);
-  
-  const handleNodeHover = useCallback((node: GraphNode | null) => {
-    setHoveredNode(node?.id ?? null);
-  }, [setHoveredNode]);
-  
-  const clearAllSelections = useCallback(() => {
-    clearSelection();
-    // Clear GraphCanvas selection if ref is available
-    if (graphCanvasRef.current && typeof graphCanvasRef.current.clearSelection === 'function') {
-      graphCanvasRef.current.clearSelection();
-    }
-  }, [clearSelection]);
-  
-  // highlightedNodes - use selectedNodes for highlighting (modern hook doesn't separate these)
-  const highlightedNodes = selectedNodes;
+  // Calculate node degrees for sizing
+  const nodesWithDegrees = useMemo(() => {
+    if (!graphData?.nodes) return [];
+    return calculateNodeDegrees(graphData.nodes, graphData.links || []);
+  }, [graphData?.nodes, graphData?.links]);
 
-  // Calculate actual node degrees from edges for accurate connection counts
-  const nodeDegreeMap = useMemo(() => {
-    if (!transformedData?.nodes || !transformedData?.links) {
-      return new Map<string, number>();
-    }
-    return calculateNodeDegrees(transformedData.nodes, transformedData.links);
-  }, [transformedData?.nodes, transformedData?.links]);
+  // Use stable callback to avoid re-renders
+  const handleNodeClick = useStableCallback((node: GraphNode | null) => {
+    setSelectedNode(node);
+  });
 
-  // Get actual connection count for selected node
-  const selectedNodeConnections = selectedNode ? (nodeDegreeMap.get(selectedNode.id) || 0) : 0;
-
-  // GRAPH-87: Use modern useCosmographIncrementalUpdates hook
-  const {
-    applyDelta,
-    replaceDataWithConfig,
-    metrics: incrementalMetrics,
-    isReady: incrementalUpdatesReady
-  } = useCosmographIncrementalUpdates(
-    graphCanvasRef,
-    transformedData?.nodes || [],
-    transformedData?.links || [],
-    {
-      debug: false,
-      config: {
-        clusteringMethod: config.clusteringMethod,
-        centralityMetric: config.centralityMetric,
-        clusterStrength: config.clusterStrength
-      },
-      onError: (error) => {
-        console.error('[GraphViz] Incremental update error:', error);
-      }
-    }
-  );
+  const handleNodeHover = useStableCallback((node: GraphNode | null) => {
+    setHoveredNode(node);
+  });
   
-  // GRAPH-87: Apply incremental updates when dataDiff changes
+  // GRAPH-87: Migrated to consolidated useCosmographIncrementalUpdates hook
+  const { 
+    cosmographNodes, 
+    cosmographLinks,
+    updateNodes,
+    updateLinks,
+    removeNodes,
+    removeLinks,
+    resetData
+  } = useCosmographIncrementalUpdates({
+    initialNodes: nodesWithDegrees,
+    initialLinks: graphData?.links || [],
+    selectedNodeId: selectedNode?.id || null,
+    hoveredNodeId: hoveredNode?.id || null,
+    highlightedNodeIds: highlightedNodes,
+    onNodesChange: (nodes) => {
+      // Update timeline when data changes
+      lastDataUpdateTime.current = Date.now();
+      // Use instant mode for real-time updates to prevent animation lag
+      setTimelineUpdateMode('instant');
+    }
+  });
+
+  // Track data updates for timeline animation mode
   useEffect(() => {
-    // Skip if no changes, initial load, or graph not initialized
-    if (!dataDiff.hasChanges || dataDiff.isInitialLoad || !isGraphInitialized) {
-      return;
-    }
-    
-    // Skip if incremental updates not ready
-    if (!incrementalUpdatesReady) {
-      return;
-    }
-    
-    // Build delta object from dataDiff
-    const delta = {
-      addedNodes: dataDiff.addedNodes || [],
-      addedEdges: dataDiff.addedLinks || [],
-      updatedNodes: dataDiff.updatedNodes || [],
-      updatedEdges: dataDiff.updatedLinks || [],
-      removedNodeIds: dataDiff.removedNodeIds || [],
-      removedEdgeIds: dataDiff.removedLinkIds || []
-    };
-    
-    // Check if there's actually something to apply
-    const hasChanges = delta.addedNodes.length > 0 || 
-                       delta.addedEdges.length > 0 || 
-                       delta.updatedNodes.length > 0 || 
-                       delta.updatedEdges.length > 0 || 
-                       delta.removedNodeIds.length > 0 || 
-                       delta.removedEdgeIds.length > 0;
-    
-    if (hasChanges) {
-      applyDelta(delta).catch(error => {
-        console.error('[GraphViz] Delta apply failed:', error);
-      });
-    }
-  }, [dataDiff, isGraphInitialized, incrementalUpdatesReady, applyDelta]);
-  
-  // Preload resources for better performance
-  useEffect(() => {
-    // Note: Shader preloading removed - shader files not present in public directory
-    // Cosmograph handles its own WebGL shader loading internally
-    
-    // Graph data endpoints are loaded on demand by the query hooks
-  }, []);
-
-  // Use stable callbacks for navigation handlers
-  const handleZoomIn = useStableCallback(zoomIn);
-  const handleZoomOut = useStableCallback(zoomOut);
-  const handleFitView = useStableCallback(fitView);
-
-  const handleLayoutChange = useCallback((layoutType: string) => {
-    if (transformedData && transformedData.nodes.length > 0) {
-      applyLayout(layoutType, {}, { 
-        nodes: transformedData.nodes, 
-        edges: transformedData.links.map(link => ({ 
-          from: link.source, 
-          to: link.target, 
-          ...link 
-        })) 
-      });
-    }
-  }, [applyLayout, transformedData]);
-
-  const toggleFullscreen = useCallback(() => {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen();
-      setIsFullscreen(true);
-    } else {
-      document.exitFullscreen();
-      setIsFullscreen(false);
-    }
-  }, []);
-
-  const handleDownloadGraph = useCallback(() => {
-    if (!data) return;
-    
-    const graphData = {
-      nodes: data.nodes,
-      edges: data.edges,
-      metadata: {
-        exportedAt: new Date().toISOString(),
-        totalNodes: data.nodes.length,
-        totalEdges: data.edges.length
-      }
-    };
-    
-    const blob = new Blob([JSON.stringify(graphData, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `graphiti-export-${new Date().toISOString().split('T')[0]}.json`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  }, [data]);
-
-  const handleCaptureScreenshot = useCallback(async () => {
-    try {
-      const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
-      const video = document.createElement('video');
-      video.srcObject = stream;
-      video.play();
-      
-      video.addEventListener('loadedmetadata', () => {
-        const canvas = document.createElement('canvas');
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        const ctx = canvas.getContext('2d');
-        ctx?.drawImage(video, 0, 0);
-        
-        canvas.toBlob((blob) => {
-          if (blob) {
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = `graphiti-screenshot-${new Date().toISOString().split('T')[0]}.png`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            URL.revokeObjectURL(url);
-          }
-        }, 'image/png');
-        
-        stream.getTracks().forEach(track => track.stop());
-      });
-    } catch (error) {
-      // Screenshot capture failed - user cancelled or not supported
-      console.info('Screenshot capture cancelled or not supported');
-    }
-  }, []);
-
-  const toggleSimulation = useCallback(() => {
-    if (!graphCanvasRef.current) return;
-    
-    if (isSimulationRunning) {
-      graphCanvasRef.current.pauseSimulation();
-      setIsSimulationRunning(false);
-    } else {
-      graphCanvasRef.current.resumeSimulation();
-      setIsSimulationRunning(true);
-    }
-  }, [isSimulationRunning]);
-
-  useEffect(() => {
-    const handleFullscreenChange = () => {
-      setIsFullscreen(!!document.fullscreenElement);
-    };
-
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
-    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
-  }, []);
-
-  // Cleanup refs on unmount to prevent memory leaks
-  useEffect(() => {
-    return () => {
-      // Clear data refs
-      stableGraphPropsRef.current = null;
-      
-      // Clear any pending operations
-      if (graphCanvasRef.current) {
-        graphCanvasRef.current = null;
-      }
-    };
-  }, []);
-
-  // Memoize data for rendering to prevent unnecessary re-renders
-  const dataToUse = useMemo(() => {
-    if (isIncrementalUpdate && stableGraphPropsRef.current) {
-      return stableGraphPropsRef.current;
-    }
-    
-    // Update stable props when not in incremental update mode
-    if (!isIncrementalUpdate && transformedData) {
-      stableGraphPropsRef.current = {
-        nodes: transformedData.nodes,
-        links: transformedData.links
-      };
-      
-      // Track data update frequency for timeline optimization
+    if (graphData) {
       const now = Date.now();
       const timeSinceLastUpdate = now - lastDataUpdateTime.current;
-      lastDataUpdateTime.current = now;
       
-      // If updates are happening frequently (< 3 seconds apart), use instant mode
-      // Otherwise, allow smooth animations
-      if (timeSinceLastUpdate < 3000) {
-        setTimelineUpdateMode('instant');
-      } else {
-        // Delay switching back to animated mode to avoid flickering
-        setTimeout(() => setTimelineUpdateMode('animated'), 5000);
+      // If we haven't had an update in 2 seconds, switch back to animated mode
+      if (timeSinceLastUpdate > 2000) {
+        setTimelineUpdateMode('animated');
       }
+      
+      lastDataUpdateTime.current = now;
+    }
+  }, [graphData, setTimelineUpdateMode]);
+
+  // Sync cosmograph data when graphData changes
+  useEffect(() => {
+    if (nodesWithDegrees.length > 0 || graphData?.links?.length) {
+      resetData(nodesWithDegrees, graphData?.links || [], 'graphData');
+    }
+  }, [nodesWithDegrees, graphData?.links, resetData]);
+
+  // Handle fullscreen toggle
+  const toggleFullscreen = useCallback(() => {
+    setIsFullscreen(!isFullscreen);
+  }, [isFullscreen, setIsFullscreen]);
+
+  // Handle simulation toggle
+  const toggleSimulation = useCallback(() => {
+    setSimulationRunning(!isSimulationRunning);
+  }, [isSimulationRunning, setSimulationRunning]);
+
+  // Handle live stats updates from GraphCanvas
+  const handleLiveStatsUpdate = useCallback((stats: { nodeCount: number; edgeCount: number }) => {
+    setLiveStats({ ...stats, lastUpdated: Date.now() });
+  }, [setLiveStats]);
+
+  // Handle closing the details panel
+  const handleCloseDetails = useCallback(() => {
+    setSelectedNode(null);
+  }, [setSelectedNode]);
+
+  // Handle timeline node selection
+  const handleTimelineNodeSelect = useCallback((nodeId: string | null) => {
+    if (!nodeId) {
+      setSelectedNode(null);
+      return;
     }
     
-    return transformedData || { nodes: [], links: [] };
-  }, [isIncrementalUpdate, transformedData]);
+    // Find the node in our data
+    const node = cosmographNodes.find(n => n.id === nodeId);
+    if (node) {
+      setSelectedNode(node);
+      // Focus on the node in the graph
+      graphCanvasRef.current?.focusNode(nodeId);
+    }
+  }, [cosmographNodes, setSelectedNode]);
 
-  // Note: Loading is now handled by UnifiedLoadingScreen in ParallelInitProvider
-  // This is only for edge cases where data might be loading after initial load
+  // Stable graph props for child components
+  const stableGraphProps = useMemo(() => {
+    const props = {
+      nodes: cosmographNodes,
+      links: cosmographLinks,
+    };
+    stableGraphPropsRef.current = props;
+    return props;
+  }, [cosmographNodes, cosmographLinks]);
 
-  // Handle error state
+  // Error state
   if (error) {
     return (
-      <div className={`h-screen w-full flex items-center justify-center bg-background ${className}`}>
-        <div className="text-destructive text-center">
-          <p>Error loading graph: {(error as Error).message}</p>
-          <p className="text-sm text-muted-foreground mt-2">
-            Make sure the Rust server is running at localhost:3000
-          </p>
-        </div>
-      </div>
-    );
-  }
-  
-  // Handle empty data state after loading
-  if (!data?.nodes?.length) {
-    return (
-      <div className={`h-screen w-full flex items-center justify-center bg-background ${className}`}>
-        <div className="text-muted-foreground text-center">
-          <p>No graph data available</p>
+      <div className="flex items-center justify-center h-full bg-background">
+        <div className="text-center p-8">
+          <h2 className="text-xl font-semibold text-destructive mb-2">Error Loading Graph</h2>
+          <p className="text-muted-foreground mb-4">{getErrorMessage(error)}</p>
+          <button 
+            onClick={() => refetch()}
+            className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
+          >
+            Retry
+          </button>
         </div>
       </div>
     );
   }
 
   return (
-    <CosmographProvider>
-      <div className={`h-screen w-full flex flex-col bg-background overflow-hidden ${className}`}>
-        {/* Top Navigation Bar */}
-        <GraphNavBar
-          totalNodes={data?.nodes.length || 0}
-          visibleNodes={transformedData.nodes.length}
-          isVirtualized={false}
-          isSimulationRunning={isSimulationRunning}
-          selectedNodes={selectedNodes}
-          allNodes={transformedData.nodes}
-          onNodeSelect={handleNodeSelectWithCosmograph}
-          onHighlightNodes={handleHighlightNodes}
-          onSelectNodes={handleSelectNodes}
-          onClearSelection={clearAllSelections}
-          onFilterClick={() => setShowFilterPanel(true)}
-          onDownload={handleDownloadGraph}
-          onUpload={() => {/* Upload functionality would require file input */}}
-          onScreenshot={handleCaptureScreenshot}
-          onToggleSimulation={toggleSimulation}
-          onSettingsClick={() => setLeftPanelCollapsed(!leftPanelCollapsed)}
-          onStatsClick={() => setShowStatsPanel(true)}
-          onMonitoringClick={() => setShowMonitoringPanel(true)}
-          onFullscreenClick={toggleFullscreen}
-        />
+    <CosmographProvider nodes={cosmographNodes} links={cosmographLinks}>
+      <CentralityStatsProvider>
+        <div className={`relative h-full w-full overflow-hidden ${isFullscreen ? 'fixed inset-0 z-50' : ''} ${className || ''}`}>
+          {/* Navigation Bar */}
+          <GraphNavBar
+            isFullscreen={isFullscreen}
+            onToggleFullscreen={toggleFullscreen}
+            isTimelineVisible={isTimelineVisible}
+            onToggleTimeline={toggleTimeline}
+            showFilterPanel={showFilterPanel}
+            onToggleFilterPanel={() => setShowFilterPanel(!showFilterPanel)}
+            showStatsPanel={showStatsPanel}
+            onToggleStatsPanel={() => setShowStatsPanel(!showStatsPanel)}
+            showMonitoringPanel={showMonitoringPanel}
+            onToggleMonitoringPanel={() => setShowMonitoringPanel(!showMonitoringPanel)}
+            isSimulationRunning={isSimulationRunning}
+            onToggleSimulation={toggleSimulation}
+            onZoomIn={zoomIn}
+            onZoomOut={zoomOut}
+            onFitView={fitView}
+            onRefresh={() => refetch()}
+            isRefreshing={isRefetching}
+            liveStats={liveStats}
+          />
 
-        {/* Main Content Area */}
-        <div className="flex-1 flex overflow-hidden">
-          {/* Left Control Panel */}
-          <div className={`${leftPanelCollapsed ? 'w-12' : 'w-80'} transition-all duration-300 flex-shrink-0`}>
-            <ControlPanel 
-              collapsed={leftPanelCollapsed}
-              onToggleCollapse={() => setLeftPanelCollapsed(!leftPanelCollapsed)}
-              onLayoutChange={handleLayoutChange}
-              graphCanvasRef={graphCanvasRef}
-              nodes={transformedData.nodes}
-              onNodeSelect={handleNodeClick}
-            />
-          </div>
+          {/* Main Content Area */}
+          <div className="flex h-[calc(100%-48px)] mt-12">
+            {/* Left Control Panel */}
+            <div className={`transition-all duration-300 ${leftPanelCollapsed ? 'w-0' : 'w-64'} overflow-hidden`}>
+              <ControlPanel
+                collapsed={leftPanelCollapsed}
+                onToggleCollapse={() => setLeftPanelCollapsed(!leftPanelCollapsed)}
+                onApplyLayout={applyLayout}
+              />
+            </div>
 
-          {/* Main Graph Viewport - Using refactored components */}
-          <div className="flex-1 relative">
-            {/* Real-time update indicator */}
-            {pendingUpdate && (
-              <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-40">
-                <div className="bg-primary/90 text-primary-foreground px-4 py-2 rounded-lg shadow-lg flex items-center space-x-2">
-                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
-                  <span className="text-sm font-medium">Updating graph...</span>
-                </div>
+            {/* Graph Canvas */}
+            <div className="flex-1 relative">
+              <LazyGraphCanvas
+                ref={graphCanvasRef}
+                nodes={cosmographNodes}
+                links={cosmographLinks}
+                selectedNode={selectedNode}
+                hoveredNode={hoveredNode}
+                onNodeClick={handleNodeClick}
+                onNodeHover={handleNodeHover}
+                isSimulationRunning={isSimulationRunning}
+                onLiveStatsUpdate={handleLiveStatsUpdate}
+                onContextReady={handleContextReady}
+                config={config}
+              />
+
+              {/* Timeline */}
+              {isTimelineVisible && isContextReady && (
+                <React.Suspense fallback={<div className="absolute bottom-0 left-0 right-0 h-32 bg-background/50 animate-pulse" />}>
+                  <GraphTimeline
+                    ref={timelineRef}
+                    nodes={cosmographNodes}
+                    links={cosmographLinks}
+                    onNodeSelect={handleTimelineNodeSelect}
+                    selectedNodeId={selectedNode?.id || null}
+                    updateMode={timelineUpdateMode}
+                  />
+                </React.Suspense>
+              )}
+            </div>
+
+            {/* Right Panel - Node Details */}
+            {selectedNode && (
+              <div className="w-80 border-l border-border overflow-auto">
+                <React.Suspense fallback={<div className="p-4 animate-pulse">Loading details...</div>}>
+                  <NodeDetailsPanel
+                    node={selectedNode}
+                    onClose={handleCloseDetails}
+                  />
+                </React.Suspense>
               </div>
             )}
-            
-            <LazyGraphCanvas
-              ref={graphCanvasRef}
-              nodes={dataToUse.nodes}
-              links={dataToUse.links}
-            selectedNodes={selectedNodes}
-            highlightedNodes={highlightedNodes}
-            selectedNode={selectedNode}
-            stats={data?.stats}
-            onNodeClick={handleNodeClick}
-            onNodeSelect={handleNodeSelect}
-            onSelectNodes={handleSelectNodes}
-            onNodeHover={handleNodeHover}
-            onClearSelection={clearAllSelections}
-            onShowNeighbors={handleShowNeighbors}
-            onZoomIn={handleZoomIn}
-            onZoomOut={handleZoomOut}
-            onFitView={handleFitView}
-            onScreenshot={handleCaptureScreenshot}
-            onToggleTimeline={toggleTimeline}
-            isTimelineVisible={isTimelineVisible}
-              onStatsUpdate={handleStatsUpdate}
-              onContextReady={handleContextReady}
-            />
           </div>
 
-        </div>
-
-        {/* Modal Panels */}
-        {showFilterPanel && (
-          <React.Suspense fallback={<div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>}>
-            <FilterPanel 
-              isOpen={showFilterPanel}
-              onClose={() => setShowFilterPanel(false)}
-              data={data}
-            />
-          </React.Suspense>
-        )}
-
-        {showStatsPanel && (
-          <React.Suspense fallback={<div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>}>
-            <StatsPanel
-              isOpen={showStatsPanel}
-              onClose={() => setShowStatsPanel(false)}
-              data={transformedData.nodes.length > 0 ? {
-                nodes: transformedData.nodes,
-                edges: transformedData.links?.map(link => ({
-                  source: link.source,
-                  target: link.target,
-                  edge_type: link.edge_type || '',
-                  weight: link.weight || 1
-                })) || [],
-                stats: data?.stats || {}
-              } : undefined}
-              liveStats={liveStats}
-            />
-          </React.Suspense>
-        )}
-
-        {showMonitoringPanel && (
-          <React.Suspense fallback={<div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>}>
-            <MonitoringDashboard
-              isOpen={showMonitoringPanel}
-              onClose={() => setShowMonitoringPanel(false)}
-            />
-          </React.Suspense>
-        )}
-        
-        {/* Timeline at the bottom - Only render when context is ready */}
-        {data && data.nodes && data.nodes.length > 0 && isContextReady && (
-          <div className={`fixed bottom-0 z-50 transition-all duration-300`}
-            style={{
-              left: leftPanelCollapsed ? '48px' : '320px',
-              right: '0px' // Timeline maintains full width, Node Details Panel overlays on top
-            }}
-          >
-            <React.Suspense fallback={<div className="h-20 bg-background/80 backdrop-blur-sm" />}>
-              <GraphTimeline 
-                ref={timelineRef}
-                isVisible={isTimelineVisible}
-                onVisibilityChange={handleTimelineVisibilityChange}
-                cosmographRef={graphCanvasRef}
-                selectedCount={selectedNodes.length}
-                onClearSelection={clearAllSelections}
-                onScreenshot={handleCaptureScreenshot}
-                onTimeRangeChange={(range) => {
-                  // Handle timeline range changes
-                }}
-                updateMode={timelineUpdateMode}
-                className=""
+          {/* Modal Panels */}
+          {showFilterPanel && (
+            <React.Suspense fallback={<div className="fixed inset-0 bg-background/50 animate-pulse" />}>
+              <FilterPanel
+                isOpen={showFilterPanel}
+                onClose={() => setShowFilterPanel(false)}
               />
             </React.Suspense>
-          </div>
-        )}
-        
-        {/* Show loading indicator when timeline should be visible but context not ready */}
-        {data && data.nodes && data.nodes.length > 0 && !isContextReady && isTimelineVisible && (
-          <div className={`fixed bottom-0 z-50 transition-all duration-300`}
-            style={{
-              left: leftPanelCollapsed ? '48px' : '320px',
-              right: '0px', // Timeline maintains full width, Node Details Panel overlays on top
-              height: '180px'
-            }}
-          >
-            <div className="h-full bg-background/80 backdrop-blur-sm border-t border-border flex items-center justify-center">
-              <div className="text-muted-foreground">Initializing timeline...</div>
-            </div>
-          </div>
-        )}
-        
-        {/* Node Details Panel - Show when a node is selected (rendered last to be on top) */}
-        {selectedNode && (
-          <div 
-            className="absolute z-[55]" 
-            style={{ 
-              top: '80px', // Below the nav bar
-              right: '60px', // Fixed right margin after removing right panel
-              maxHeight: 'calc(100vh - 280px)', // Leave space for nav and timeline
-              pointerEvents: 'auto',
-              transition: 'right 0.3s ease-in-out'
-            }}
-          >
-            <CentralityStatsProvider 
-              nodes={transformedData.nodes} 
-              scalingMethod={config.scalingMethod as any || 'iqr'}
-            >
-              <NodeDetailsPanel
-                node={selectedNode}
-                connections={selectedNodeConnections}
-                onClose={() => clearAllSelections()}
-                onShowNeighbors={handleShowNeighbors}
+          )}
+
+          {showStatsPanel && (
+            <React.Suspense fallback={<div className="fixed inset-0 bg-background/50 animate-pulse" />}>
+              <StatsPanel
+                isOpen={showStatsPanel}
+                onClose={() => setShowStatsPanel(false)}
+                nodes={cosmographNodes}
+                links={cosmographLinks}
               />
-            </CentralityStatsProvider>
-          </div>
-        )}
-      </div>
+            </React.Suspense>
+          )}
+
+          {showMonitoringPanel && (
+            <React.Suspense fallback={<div className="fixed inset-0 bg-background/50 animate-pulse" />}>
+              <MonitoringDashboard
+                isOpen={showMonitoringPanel}
+                onClose={() => setShowMonitoringPanel(false)}
+              />
+            </React.Suspense>
+          )}
+
+          {/* Loading Overlay */}
+          {isLoading && (
+            <div className="absolute inset-0 flex items-center justify-center bg-background/80 z-40">
+              <div className="flex flex-col items-center gap-4">
+                <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+                <p className="text-muted-foreground">Loading graph data...</p>
+              </div>
+            </div>
+          )}
+        </div>
+      </CentralityStatsProvider>
     </CosmographProvider>
   );
 };
