@@ -78,9 +78,7 @@ class OllamaRerankerClient(CrossEncoderClient):
                 'documents': passages,
             }
 
-            logger.debug(
-                f'Reranking {len(passages)} passages with query length {len(query)} chars'
-            )
+            logger.debug(f'Reranking {len(passages)} passages with query length {len(query)} chars')
 
             response = await self.client.post(
                 f'{self.base_url}/rerank',
@@ -90,15 +88,16 @@ class OllamaRerankerClient(CrossEncoderClient):
 
             result = response.json()
 
-            # Adapter returns: {"results": [{"index": 0, "relevance_score": 0.95}, ...]}
-            # Extract scores and map back to passages
+            # Handle two response formats:
+            # 1. Letta adapter: {"results": [{"index": 0, "relevance_score": 0.95}, ...]}
+            # 2. vLLM reranker: {"results": [{"index": 0, "relevance_score": 0.95, "document": {...}}, ...]}
             results = result.get('results', [])
 
             if not results:
                 logger.warning('Ollama reranker returned no results, returning original order')
                 return [(p, 1.0 / (i + 1)) for i, p in enumerate(passages)]
 
-            # Build scored passages list
+            # Build scored passages list (handle both formats)
             scored_passages = []
             for item in results:
                 idx = item['index']
@@ -118,7 +117,9 @@ class OllamaRerankerClient(CrossEncoderClient):
             return scored_passages
 
         except httpx.HTTPStatusError as e:
-            logger.error(f'Ollama reranker HTTP error: {e.response.status_code} - {e.response.text}')
+            logger.error(
+                f'Ollama reranker HTTP error: {e.response.status_code} - {e.response.text}'
+            )
             # Fallback: return passages in original order with decreasing scores
             return [(p, 1.0 / (i + 1)) for i, p in enumerate(passages)]
         except Exception as e:
@@ -134,6 +135,7 @@ class OllamaRerankerClient(CrossEncoderClient):
         """Cleanup on deletion."""
         try:
             import asyncio
+
             asyncio.create_task(self.close())
         except Exception:
             pass
