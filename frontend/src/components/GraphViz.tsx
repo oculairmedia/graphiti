@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useCallback, useMemo } from 'react';
 import { useStableCallback } from '../hooks/useStableCallback';
 import { CosmographProvider } from '@cosmograph/react';
-import { useGraphConfig } from '../hooks/useGraphConfigHooks';
+import { useGraphConfig } from '../contexts/GraphConfigProvider';
 import { ControlPanel } from './ControlPanel';
 import { LazyGraphCanvas } from './LazyGraphCanvas';
 
@@ -31,25 +31,19 @@ import { getErrorMessage } from '../types/errors';
 import { calculateNodeDegrees } from '../utils/graphNodeOperations';
 
 export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
-  // Component rendering
-  
   const { applyLayout, zoomIn, zoomOut, fitView } = useGraphConfig();
   const { config } = useGraphConfig();
   
-  // GRAPH-93: UI State from Zustand store (replaces 10 useState calls)
+  // GRAPH-93: UI State from Zustand store
   const {
     leftPanelCollapsed,
     setLeftPanelCollapsed,
     showFilterPanel,
     setShowFilterPanel,
     showStatsPanel,
-    setShowStatsPanel,
     showMonitoringPanel,
-    setShowMonitoringPanel,
     isFullscreen,
-    setIsFullscreen,
     isTimelineVisible,
-    setIsTimelineVisible,
     timelineUpdateMode,
     setTimelineUpdateMode,
   } = useUIStore();
@@ -57,10 +51,8 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
   // GRAPH-93: Graph state from Zustand store
   const {
     isSimulationRunning,
-    setSimulationRunning,
     isContextReady,
     setContextReady,
-    liveStats,
     setLiveStats,
   } = useGraphStore();
 
@@ -76,16 +68,6 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
   const handleContextReady = useCallback((ready: boolean) => {
     setContextReady(ready);
   }, [setContextReady]);
-
-  // Handle timeline visibility change
-  const handleTimelineVisibilityChange = useCallback((visible: boolean) => {
-    setIsTimelineVisible(visible);
-  }, [setIsTimelineVisible]);
-
-  // Toggle timeline visibility
-  const toggleTimeline = useCallback(() => {
-    setIsTimelineVisible(!isTimelineVisible);
-  }, [isTimelineVisible, setIsTimelineVisible]);
 
   // Fetch graph data using React Query
   const { 
@@ -103,7 +85,6 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
     hoveredNode,
     setHoveredNode,
     highlightedNodes,
-    setHighlightedNodes,
     clearSelection
   } = useGraphSelection();
   
@@ -126,10 +107,6 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
   const { 
     cosmographNodes, 
     cosmographLinks,
-    updateNodes,
-    updateLinks,
-    removeNodes,
-    removeLinks,
     resetData
   } = useCosmographIncrementalUpdates({
     initialNodes: nodesWithDegrees,
@@ -137,7 +114,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
     selectedNodeId: selectedNode?.id || null,
     hoveredNodeId: hoveredNode?.id || null,
     highlightedNodeIds: highlightedNodes,
-    onNodesChange: (nodes) => {
+    onNodesChange: () => {
       // Update timeline when data changes
       lastDataUpdateTime.current = Date.now();
       // Use instant mode for real-time updates to prevent animation lag
@@ -166,16 +143,6 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
       resetData(nodesWithDegrees, graphData?.links || [], 'graphData');
     }
   }, [nodesWithDegrees, graphData?.links, resetData]);
-
-  // Handle fullscreen toggle
-  const toggleFullscreen = useCallback(() => {
-    setIsFullscreen(!isFullscreen);
-  }, [isFullscreen, setIsFullscreen]);
-
-  // Handle simulation toggle
-  const toggleSimulation = useCallback(() => {
-    setSimulationRunning(!isSimulationRunning);
-  }, [isSimulationRunning, setSimulationRunning]);
 
   // Handle live stats updates from GraphCanvas
   const handleLiveStatsUpdate = useCallback((stats: { nodeCount: number; edgeCount: number }) => {
@@ -235,26 +202,15 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
     <CosmographProvider nodes={cosmographNodes} links={cosmographLinks}>
       <CentralityStatsProvider>
         <div className={`relative h-full w-full overflow-hidden ${isFullscreen ? 'fixed inset-0 z-50' : ''} ${className || ''}`}>
-          {/* Navigation Bar */}
+          {/* Navigation Bar - GRAPH-93: Now reads most state from Zustand stores */}
           <GraphNavBar
-            isFullscreen={isFullscreen}
-            onToggleFullscreen={toggleFullscreen}
-            isTimelineVisible={isTimelineVisible}
-            onToggleTimeline={toggleTimeline}
-            showFilterPanel={showFilterPanel}
-            onToggleFilterPanel={() => setShowFilterPanel(!showFilterPanel)}
-            showStatsPanel={showStatsPanel}
-            onToggleStatsPanel={() => setShowStatsPanel(!showStatsPanel)}
-            showMonitoringPanel={showMonitoringPanel}
-            onToggleMonitoringPanel={() => setShowMonitoringPanel(!showMonitoringPanel)}
-            isSimulationRunning={isSimulationRunning}
-            onToggleSimulation={toggleSimulation}
+            nodes={cosmographNodes}
+            links={cosmographLinks}
             onZoomIn={zoomIn}
             onZoomOut={zoomOut}
             onFitView={fitView}
             onRefresh={() => refetch()}
             isRefreshing={isRefetching}
-            liveStats={liveStats}
           />
 
           {/* Main Content Area */}
@@ -326,7 +282,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
             <React.Suspense fallback={<div className="fixed inset-0 bg-background/50 animate-pulse" />}>
               <StatsPanel
                 isOpen={showStatsPanel}
-                onClose={() => setShowStatsPanel(false)}
+                onClose={() => useUIStore.getState().setShowStatsPanel(false)}
                 nodes={cosmographNodes}
                 links={cosmographLinks}
               />
@@ -337,7 +293,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
             <React.Suspense fallback={<div className="fixed inset-0 bg-background/50 animate-pulse" />}>
               <MonitoringDashboard
                 isOpen={showMonitoringPanel}
-                onClose={() => setShowMonitoringPanel(false)}
+                onClose={() => useUIStore.getState().setShowMonitoringPanel(false)}
               />
             </React.Suspense>
           )}
