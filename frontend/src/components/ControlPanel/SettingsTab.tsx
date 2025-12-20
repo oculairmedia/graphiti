@@ -229,11 +229,11 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({
           <CardContent className="space-y-2">
             <div className="flex justify-between">
               <span className="text-sm text-muted-foreground">Total Nodes</span>
-              <Badge variant="outline">{graphStats.nodeCount.toLocaleString()}</Badge>
+              <Badge variant="outline">{(graphStats.nodeCount ?? 0).toLocaleString()}</Badge>
             </div>
             <div className="flex justify-between">
               <span className="text-sm text-muted-foreground">Total Edges</span>
-              <Badge variant="outline">{graphStats.edgeCount.toLocaleString()}</Badge>
+              <Badge variant="outline">{(graphStats.edgeCount ?? 0).toLocaleString()}</Badge>
             </div>
             <Separator className="my-2" />
             <div className="flex justify-between">

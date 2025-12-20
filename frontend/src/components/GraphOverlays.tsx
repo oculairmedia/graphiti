@@ -47,21 +47,21 @@ const GraphOverlaysComponent: React.FC<GraphOverlaysProps> = ({
             <div className="flex items-center justify-between gap-4">
               <span className="text-muted-foreground">Nodes:</span>
               <span className="font-mono font-medium">
-                {(liveNodeCount ?? nodeCount).toLocaleString()}
+                {(liveNodeCount ?? nodeCount ?? 0).toLocaleString()}
                 {liveNodeCount !== undefined && <span className="text-xs text-green-500 ml-1">(Live)</span>}
               </span>
             </div>
             <div className="flex items-center justify-between gap-4">
               <span className="text-muted-foreground">Edges:</span>
               <span className="font-mono font-medium">
-                {(liveEdgeCount ?? edgeCount).toLocaleString()}
+                {(liveEdgeCount ?? edgeCount ?? 0).toLocaleString()}
                 {liveEdgeCount !== undefined && <span className="text-xs text-green-500 ml-1">(Live)</span>}
               </span>
             </div>
             {visibleNodes !== undefined && visibleNodes !== nodeCount && (
               <div className="flex items-center justify-between gap-4">
                 <span className="text-muted-foreground">Visible:</span>
-                <span className="font-mono font-medium">{visibleNodes.toLocaleString()}</span>
+                <span className="font-mono font-medium">{(visibleNodes ?? 0).toLocaleString()}</span>
               </div>
             )}
             {selectedNodes !== undefined && selectedNodes > 0 && (

@@ -72,8 +72,9 @@ export const GraphNavBar: React.FC<GraphNavBarProps> = ({
   } = useSelectionStore();
   
   // Use live stats if available, otherwise use passed nodes/links
-  const nodeCount = liveStats?.nodeCount ?? nodes.length;
-  const edgeCount = liveStats?.edgeCount ?? links.length;
+  // Add ?? 0 fallback for extra safety during initial render
+  const nodeCount = liveStats?.nodeCount ?? nodes?.length ?? 0;
+  const edgeCount = liveStats?.edgeCount ?? links?.length ?? 0;
   
   const handleNodeSelect = (node: GraphNode) => {
     selectNode(node);
