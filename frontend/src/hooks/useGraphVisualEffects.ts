@@ -670,25 +670,46 @@ export function useGraphVisualEffects(
 
 /**
  * Simple visual effects hook
+ * PERFORMANCE FIX (GRAPH-69): Properly track and cleanup auto-clear timeout
  */
 export function useSimpleVisualEffects(
   onHighlight?: (nodeIds: string[]) => void
 ) {
   const [highlightedNodes, setHighlightedNodes] = useState<Set<string>>(new Set());
+  const autoClearTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (autoClearTimeoutRef.current) {
+        clearTimeout(autoClearTimeoutRef.current);
+      }
+    };
+  }, []);
   
   const highlight = useCallback((nodeIds: string[]) => {
+    // Cancel any pending auto-clear
+    if (autoClearTimeoutRef.current) {
+      clearTimeout(autoClearTimeoutRef.current);
+    }
+    
     setHighlightedNodes(new Set(nodeIds));
     if (onHighlight) {
       onHighlight(nodeIds);
     }
     
     // Auto-clear after 2 seconds
-    setTimeout(() => {
+    autoClearTimeoutRef.current = setTimeout(() => {
       setHighlightedNodes(new Set());
+      autoClearTimeoutRef.current = null;
     }, 2000);
   }, [onHighlight]);
   
   const clearHighlight = useCallback(() => {
+    if (autoClearTimeoutRef.current) {
+      clearTimeout(autoClearTimeoutRef.current);
+      autoClearTimeoutRef.current = null;
+    }
     setHighlightedNodes(new Set());
   }, []);
   

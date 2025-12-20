@@ -19,11 +19,14 @@ export function useServiceWorker() {
   });
   
   // Register service worker
+  // PERFORMANCE FIX (GRAPH-69): Properly track and cleanup the update interval
   useEffect(() => {
     if (!status.isSupported) {
       logger.warn('Service Worker not supported in this browser');
       return;
     }
+    
+    let updateIntervalId: ReturnType<typeof setInterval> | null = null;
     
     const registerServiceWorker = async () => {
       try {
@@ -61,7 +64,7 @@ export function useServiceWorker() {
         });
         
         // Check for updates periodically
-        setInterval(() => {
+        updateIntervalId = setInterval(() => {
           registration.update();
         }, 60000); // Check every minute
         
@@ -74,6 +77,13 @@ export function useServiceWorker() {
     
     // Get initial cache size
     getCacheSize();
+    
+    // Cleanup interval on unmount
+    return () => {
+      if (updateIntervalId) {
+        clearInterval(updateIntervalId);
+      }
+    };
   }, [status.isSupported]);
   
   // Send message to service worker

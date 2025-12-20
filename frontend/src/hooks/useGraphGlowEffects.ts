@@ -29,8 +29,15 @@ export function useGraphGlowEffects(options: GlowEffectsOptions = {}): GlowEffec
   const glowTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   // Add a single glowing node
+  // PERFORMANCE FIX (GRAPH-72): Only create new Map if node wasn't already glowing
   const addGlowingNode = useCallback((nodeId: string) => {
     setGlowingNodes(prev => {
+      // Skip if node is already glowing with recent timestamp (within 100ms)
+      const existingTime = prev.get(nodeId);
+      if (existingTime && Date.now() - existingTime < 100) {
+        return prev; // Return same reference to avoid re-render
+      }
+      // Only create new Map when actually adding/updating
       const updated = new Map(prev);
       updated.set(nodeId, Date.now());
       return updated;
@@ -60,23 +67,30 @@ export function useGraphGlowEffects(options: GlowEffectsOptions = {}): GlowEffec
   }, [glowingNodes]);
   
   // Clean up old glowing nodes after fade duration
+  // PERFORMANCE FIX (GRAPH-72): Only create new Map when there are expired nodes
   useEffect(() => {
     if (glowingNodes.size === 0) return;
     
     const timeout = setTimeout(() => {
       const now = Date.now();
-      const updatedGlowingNodes = new Map(glowingNodes);
-      let hasChanges = false;
       
-      // Remove nodes that have finished glowing
-      glowingNodes.forEach((startTime, nodeId) => {
+      // First pass: check if any nodes need removal (no allocation)
+      let hasExpired = false;
+      for (const [, startTime] of glowingNodes) {
         if (now - startTime >= fadeDuration) {
-          updatedGlowingNodes.delete(nodeId);
-          hasChanges = true;
+          hasExpired = true;
+          break;
         }
-      });
+      }
       
-      if (hasChanges) {
+      // Only allocate new Map if we found expired nodes
+      if (hasExpired) {
+        const updatedGlowingNodes = new Map<string, number>();
+        glowingNodes.forEach((startTime, nodeId) => {
+          if (now - startTime < fadeDuration) {
+            updatedGlowingNodes.set(nodeId, startTime);
+          }
+        });
         setGlowingNodes(updatedGlowingNodes);
       }
     }, fadeDuration + cleanupDelay);
