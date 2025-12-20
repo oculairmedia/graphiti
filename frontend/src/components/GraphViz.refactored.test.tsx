@@ -24,26 +24,30 @@ vi.mock('../hooks/useGraphDataQuery', () => ({
   })),
 }));
 
-// Mock useNodeSelection
-vi.mock('../hooks/useNodeSelection', () => ({
-  useNodeSelection: vi.fn(() => ({
-    selectedNode: null,
-    selectedNodes: [],
+// GRAPH-86: Mock useGraphSelection (migrated from useNodeSelection)
+vi.mock('../hooks/useGraphSelection', () => ({
+  useGraphSelection: vi.fn(() => ({
+    selectedNodes: new Set<string>(),
+    selectedLinks: new Set<string>(),
     hoveredNode: null,
-    hoveredConnectedNodes: [],
-    handleNodeClick: vi.fn(),
-    handleNodeSelect: vi.fn(),
-    handleNodeHover: vi.fn(),
-    handleClearSelection: vi.fn(),
-    handleSelectNodes: vi.fn(),
+    hoveredLink: null,
+    selectNode: vi.fn(),
+    selectNodes: vi.fn(),
+    selectConnectedNodes: vi.fn(),
+    clearSelection: vi.fn(),
+    setHoveredNode: vi.fn(),
+    toggleNodeSelection: vi.fn(),
+    getSelectedNodes: vi.fn(() => []),
   })),
 }));
 
-// Mock useIncrementalUpdates
-vi.mock('../hooks/useIncrementalUpdates', () => ({
-  useIncrementalUpdates: vi.fn(() => ({
-    processUpdate: vi.fn(),
-    isProcessing: false,
+// GRAPH-87: Mock useCosmographIncrementalUpdates (migrated from useIncrementalUpdates)
+vi.mock('../hooks/useCosmographIncrementalUpdates', () => ({
+  useCosmographIncrementalUpdates: vi.fn(() => ({
+    applyDelta: vi.fn().mockResolvedValue(undefined),
+    replaceDataWithConfig: vi.fn().mockResolvedValue(undefined),
+    metrics: { updateCount: 0, lastUpdateTime: 0 },
+    isReady: true,
   })),
 }));
 

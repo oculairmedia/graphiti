@@ -17,8 +17,10 @@ import { CentralityStatsProvider } from '../contexts/CentralityStatsContext';
 const GraphTimeline = React.lazy(() => import('./GraphTimeline').then(m => ({ default: m.GraphTimeline })));
 type GraphTimelineHandle = any; // Type will be resolved at runtime
 import { useGraphDataQuery } from '../hooks/useGraphDataQuery';
-import { useNodeSelection } from '../hooks/useNodeSelection';
-import { useIncrementalUpdates } from '../hooks/useIncrementalUpdates';
+// GRAPH-86: Migrated from useNodeSelection to useGraphSelection
+import { useGraphSelection } from '../hooks/useGraphSelection';
+// GRAPH-87: Migrated from useIncrementalUpdates to useCosmographIncrementalUpdates
+import { useCosmographIncrementalUpdates } from '../hooks/useCosmographIncrementalUpdates';
 import { GraphNode } from '../api/types';
 import { GraphLink } from '../types/graph';
 import type { GraphCanvasHandle, GraphVizProps } from '../types/components';
@@ -33,8 +35,6 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
   
   // UI State
   const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);
-  // Right panel removed - no longer needed
-  // const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const [showStatsPanel, setShowStatsPanel] = useState(false);
   const [showMonitoringPanel, setShowMonitoringPanel] = useState(false);
@@ -115,23 +115,83 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
     pendingUpdate,
   } = useGraphDataQuery();
   
+  // GRAPH-86: Use modern useGraphSelection hook
   const {
-    selectedNodes,
-    selectedNode,
-    highlightedNodes,
-    hoveredNode,
-    hoveredConnectedNodes,
-    handleNodeSelect,
-    handleNodeClick,
-    handleNodeSelectWithCosmograph,
-    handleHighlightNodes,
-    handleSelectNodes,
-    handleShowNeighbors,
-    handleNodeHover,
-    clearAllSelections,
-  } = useNodeSelection(transformedData, graphCanvasRef);
+    selectedNodes: selectedNodeSet,
+    hoveredNode: hoveredNodeId,
+    selectNode,
+    selectNodes,
+    selectConnectedNodes,
+    clearSelection,
+    setHoveredNode,
+    toggleNodeSelection,
+    getSelectedNodes,
+  } = useGraphSelection(
+    transformedData?.nodes || [],
+    transformedData?.links || [],
+    { 
+      mode: 'multiple',
+      enableKeyboardShortcuts: true,
+      debug: false
+    }
+  );
   
-  // Hover state is managed by useNodeSelection hook
+  // GRAPH-86: Compatibility layer - derive legacy-style values from modern hook
+  const selectedNodes = useMemo(() => Array.from(selectedNodeSet), [selectedNodeSet]);
+  const selectedNode = useMemo(() => {
+    if (selectedNodes.length === 0) return null;
+    return transformedData?.nodes.find(n => n.id === selectedNodes[0]) ?? null;
+  }, [selectedNodes, transformedData?.nodes]);
+  const hoveredNode = useMemo(() => {
+    if (!hoveredNodeId) return null;
+    return transformedData?.nodes.find(n => n.id === hoveredNodeId) ?? null;
+  }, [hoveredNodeId, transformedData?.nodes]);
+  
+  // GRAPH-86: Map legacy handlers to modern API
+  const handleNodeClick = useCallback((node: GraphNode) => {
+    selectNode(node.id);
+  }, [selectNode]);
+  
+  const handleNodeSelect = useCallback((nodeId: string) => {
+    toggleNodeSelection(nodeId);
+  }, [toggleNodeSelection]);
+  
+  const handleNodeSelectWithCosmograph = useCallback((node: GraphNode) => {
+    selectNode(node.id);
+    // Also select in Cosmograph for visual effects if ref is available
+    if (graphCanvasRef.current && typeof graphCanvasRef.current.selectNode === 'function') {
+      graphCanvasRef.current.selectNode(node);
+    }
+  }, [selectNode]);
+  
+  const handleHighlightNodes = useCallback((nodes: GraphNode[]) => {
+    const nodeIds = nodes.map(n => n.id);
+    selectNodes(nodeIds, false);
+  }, [selectNodes]);
+  
+  const handleSelectNodes = useCallback((nodes: GraphNode[]) => {
+    const nodeIds = nodes.map(n => n.id);
+    selectNodes(nodeIds, false);
+  }, [selectNodes]);
+  
+  const handleShowNeighbors = useCallback((nodeId: string) => {
+    selectConnectedNodes(nodeId, 1);
+  }, [selectConnectedNodes]);
+  
+  const handleNodeHover = useCallback((node: GraphNode | null) => {
+    setHoveredNode(node?.id ?? null);
+  }, [setHoveredNode]);
+  
+  const clearAllSelections = useCallback(() => {
+    clearSelection();
+    // Clear GraphCanvas selection if ref is available
+    if (graphCanvasRef.current && typeof graphCanvasRef.current.clearSelection === 'function') {
+      graphCanvasRef.current.clearSelection();
+    }
+  }, [clearSelection]);
+  
+  // highlightedNodes - use selectedNodes for highlighting (modern hook doesn't separate these)
+  const highlightedNodes = selectedNodes;
 
   // Calculate actual node degrees from edges for accurate connection counts
   const nodeDegreeMap = useMemo(() => {
@@ -144,16 +204,65 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
   // Get actual connection count for selected node
   const selectedNodeConnections = selectedNode ? (nodeDegreeMap.get(selectedNode.id) || 0) : 0;
 
-  // Apply incremental updates
-  useIncrementalUpdates(
+  // GRAPH-87: Use modern useCosmographIncrementalUpdates hook
+  const {
+    applyDelta,
+    replaceDataWithConfig,
+    metrics: incrementalMetrics,
+    isReady: incrementalUpdatesReady
+  } = useCosmographIncrementalUpdates(
     graphCanvasRef,
-    dataDiff,
-    isGraphInitialized,
-    isIncrementalUpdate,
-    setIsIncrementalUpdate,
-    data,
-    stableDataRef
+    transformedData?.nodes || [],
+    transformedData?.links || [],
+    {
+      debug: false,
+      config: {
+        clusteringMethod: config.clusteringMethod,
+        centralityMetric: config.centralityMetric,
+        clusterStrength: config.clusterStrength
+      },
+      onError: (error) => {
+        console.error('[GraphViz] Incremental update error:', error);
+      }
+    }
   );
+  
+  // GRAPH-87: Apply incremental updates when dataDiff changes
+  useEffect(() => {
+    // Skip if no changes, initial load, or graph not initialized
+    if (!dataDiff.hasChanges || dataDiff.isInitialLoad || !isGraphInitialized) {
+      return;
+    }
+    
+    // Skip if incremental updates not ready
+    if (!incrementalUpdatesReady) {
+      return;
+    }
+    
+    // Build delta object from dataDiff
+    const delta = {
+      addedNodes: dataDiff.addedNodes || [],
+      addedEdges: dataDiff.addedLinks || [],
+      updatedNodes: dataDiff.updatedNodes || [],
+      updatedEdges: dataDiff.updatedLinks || [],
+      removedNodeIds: dataDiff.removedNodeIds || [],
+      removedEdgeIds: dataDiff.removedLinkIds || []
+    };
+    
+    // Check if there's actually something to apply
+    const hasChanges = delta.addedNodes.length > 0 || 
+                       delta.addedEdges.length > 0 || 
+                       delta.updatedNodes.length > 0 || 
+                       delta.updatedEdges.length > 0 || 
+                       delta.removedNodeIds.length > 0 || 
+                       delta.removedEdgeIds.length > 0;
+    
+    if (hasChanges) {
+      applyDelta(delta).catch(error => {
+        console.error('[GraphViz] Delta apply failed:', error);
+      });
+    }
+  }, [dataDiff, isGraphInitialized, incrementalUpdatesReady, applyDelta]);
   
   // Preload resources for better performance
   useEffect(() => {
