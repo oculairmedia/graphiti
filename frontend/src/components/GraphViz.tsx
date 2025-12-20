@@ -204,14 +204,20 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
                 ref={graphCanvasRef}
                 nodes={cosmographNodes}
                 links={cosmographLinks}
-                selectedNode={selectedNode}
-                hoveredNode={hoveredNode ? cosmographNodes.find(n => n.id === hoveredNode) || null : null}
+                selectedNodes={selectedNode ? [selectedNode.id] : []}
+                highlightedNodes={highlightedNodes || []}
                 onNodeClick={handleNodeClick}
+                onNodeSelect={(nodeId: string) => {
+                  const node = cosmographNodes.find(n => n.id === nodeId);
+                  if (node) selectNode(node);
+                }}
+                onSelectNodes={(nodes: GraphNode[]) => {
+                  if (nodes.length > 0) selectNode(nodes[0]);
+                }}
+                onClearSelection={clearSelection}
                 onNodeHover={handleNodeHover}
-                isSimulationRunning={isSimulationRunning}
-                onLiveStatsUpdate={handleLiveStatsUpdate}
+                onStatsUpdate={handleLiveStatsUpdate}
                 onContextReady={handleContextReady}
-                config={config}
               />
 
               {/* Timeline */}

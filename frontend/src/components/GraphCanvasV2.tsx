@@ -129,12 +129,12 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
     onClearSelection, 
     onStatsUpdate, 
     onContextReady,
-    selectedNodes, 
-    highlightedNodes, 
+    selectedNodes = [], 
+    highlightedNodes = [], 
     className, 
     stats, 
-    nodes: initialNodes, 
-    links: initialLinks 
+    nodes: initialNodes = [], 
+    links: initialLinks = [] 
   }, ref) => {
     
     // Component state
@@ -1024,7 +1024,7 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
           liveEdgeCount={liveEdgeCount}
           fps={fps}
           visibleNodes={cosmographData?.nodes?.length}
-          selectedNodes={selectedNodes.length}
+          selectedNodes={selectedNodes?.length ?? 0}
         />
         
         
