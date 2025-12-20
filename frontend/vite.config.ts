@@ -5,6 +5,12 @@ import { componentTagger } from "lovable-tagger";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
+  // PERFORMANCE FIX (GRAPH-68): Strip console.log/debug in production builds
+  // This eliminates 80+ console statements that cause GC pressure from string allocations
+  // Note: console.error and console.warn are preserved for production error tracking
+  esbuild: {
+    pure: mode === 'production' ? ['console.log', 'console.debug', 'console.info'] : [],
+  },
   build: {
     // Optimize chunk splitting
     rollupOptions: {
