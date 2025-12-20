@@ -98,11 +98,7 @@ export default defineConfig(({ mode }) => ({
     },
   },
   plugins: [
-    react({
-      babel: {
-        plugins: ['babel-plugin-react-compiler']
-      }
-    }),
+    react(),
     mode === 'development' && componentTagger(),
     // Generate bundle analysis on build (open dist/stats.html to view)
     mode === 'production' && visualizer({
