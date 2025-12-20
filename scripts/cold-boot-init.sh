@@ -21,6 +21,8 @@ FALKORDB_DATABASE="${FALKORDB_DATABASE:-graphiti_migration}"
 SYNC_SERVICE_URL="${SYNC_SERVICE_URL:-http://graphiti-sync-rs:8080}"
 SYNC_TIMEOUT="${SYNC_TIMEOUT:-0}"  # No timeout - wait indefinitely for sync
 CHECK_INTERVAL="${CHECK_INTERVAL:-5}"  # 5 seconds
+SKIP_CLEAR="${SKIP_CLEAR:-1}"  # Default to skipping clear since FalkorDB is now persistent
+MIN_NODES_FOR_VALID_DATA="${MIN_NODES_FOR_VALID_DATA:-1000}"  # Minimum nodes to consider data valid
 
 # Colors for output
 RED='\033[0;31m'
@@ -254,13 +256,25 @@ main() {
     
     # Step 2: Check if restore is needed
     log "Step 2: Checking if restore is needed..."
-    local falkor_count=$(count_falkor_nodes)
+    local falkor_node_count=$(count_falkor_nodes)
+    local falkor_edge_count=$(count_falkor_edges)
     
-    if [ "$falkor_count" -gt 0 ]; then
-        log_warning "FalkorDB already contains $falkor_count nodes"
+    if [ "$falkor_node_count" -gt "$MIN_NODES_FOR_VALID_DATA" ] && [ "$falkor_edge_count" -gt 0 ]; then
+        log_success "FalkorDB already contains valid data: $falkor_node_count nodes, $falkor_edge_count edges"
+        
+        if [ "${SKIP_CLEAR:-1}" = "1" ]; then
+            log_success "SKIP_CLEAR=1: Keeping existing FalkorDB data (persistence enabled)"
+            log_success "Skipping sync - data already present from RDB persistence"
+            create_ready_marker
+            log_success "================================================"
+            log_success "🎉 Cold Boot Initialization Complete (Fast Path)!"
+            log_success "FalkorDB data preserved from previous session"
+            log_success "================================================"
+            exit 0
+        fi
         
         if [ "${NO_PROMPT:-0}" = "1" ]; then
-            log "Auto-mode: Clearing and restoring from Neo4j..."
+            log_warning "NO_PROMPT=1 and SKIP_CLEAR=0: Clearing and restoring from Neo4j..."
         else
             read -p "Clear and restore from Neo4j? (y/N): " -n 1 -r
             echo
@@ -270,9 +284,14 @@ main() {
                 exit 0
             fi
         fi
+    elif [ "$falkor_node_count" -gt 0 ]; then
+        log_warning "FalkorDB has partial data: $falkor_node_count nodes, $falkor_edge_count edges"
+        log_warning "Data appears incomplete, will sync from Neo4j..."
+    else
+        log "FalkorDB is empty, will sync from Neo4j..."
     fi
     
-    # Step 3: Clear FalkorDB
+    # Step 3: Clear FalkorDB (only if we reach here)
     log "Step 3: Clearing FalkorDB..."
     if ! clear_falkordb; then
         log_error "Failed to clear FalkorDB"
