@@ -9,8 +9,13 @@ services:
   # =============================================================================
   # Core Database Services
   # =============================================================================
+  # =============================================================================
+  # Neo4j - DISABLED (FalkorDB is now primary with RDB persistence)
+  # =============================================================================
+  # To re-enable: remove profiles line and run docker-compose up -d neo4j
   neo4j:
     image: neo4j:5.26.2
+    profiles: ["disabled"]  # Disabled - FalkorDB has persistence now
     restart: unless-stopped
     ports:
       - 7474:7474 # HTTP
@@ -39,7 +44,7 @@ services:
       - homepage.name=Neo4j
       - homepage.icon=si-neo4j
       - homepage.href=http://${HOMEPAGE_HOST:-192.168.50.90}:7474
-      - homepage.description=Primary graph database (persistent storage)
+      - homepage.description=Primary graph database (persistent storage) - DISABLED
   falkordb:
     image: falkordb/falkordb:latest
     restart: unless-stopped
@@ -203,8 +208,13 @@ services:
       - homepage.icon=si-elasticsearch
       - homepage.href=http://${HOMEPAGE_HOST:-192.168.50.90}:${RUST_SEARCH_PORT:-3004}
       - homepage.description=High-performance graph search
+  # =============================================================================
+  # Sync Service - DISABLED (FalkorDB has RDB persistence, no sync needed)
+  # =============================================================================
+  # To re-enable: remove profiles line and run docker-compose up -d graphiti-sync-rs
   graphiti-sync-rs:
     image: rust-sync-poc-rust-sync:latest
+    profiles: ["disabled"]  # Disabled - FalkorDB has persistence now
     restart: unless-stopped
     command:
       - sync-loop
@@ -257,7 +267,7 @@ services:
       - homepage.name=Neo4j-FalkorDB Sync
       - homepage.icon=si-rust
       - homepage.href=http://${HOMEPAGE_HOST:-192.168.50.90}:${SYNC_HEALTH_PORT:-18080}
-      - homepage.description=Real-time Neo4j to FalkorDB synchronization
+      - homepage.description=Real-time Neo4j to FalkorDB synchronization - DISABLED
   # =============================================================================
   # API and Processing Services
   # =============================================================================
@@ -340,8 +350,6 @@ services:
     networks:
       - graphiti_network
     depends_on:
-      neo4j:
-        condition: service_healthy
       falkordb:
         condition: service_healthy
       graphiti-centrality-rs:
@@ -468,6 +476,8 @@ services:
   # =============================================================================
   # Cold Boot Initialization Service
   # =============================================================================
+  # Simplified: Just waits for FalkorDB to be healthy (RDB reload ~2min)
+  # No longer needs Neo4j or sync service
   graphiti-init:
     image: alpine:latest
     container_name: graphiti-init
@@ -477,38 +487,38 @@ services:
       - -c
     command:
       - |
-        # Install required tools
-        apk add --no-cache curl redis bash grep coreutils
-        # Run init script
-        bash /scripts/cold-boot-init.sh --no-prompt
+        # Simple init: just verify FalkorDB has data loaded from RDB
+        apk add --no-cache redis bash
+        echo "Waiting for FalkorDB RDB reload to complete..."
+        sleep 5
+        # Check edge count
+        EDGES=$(redis-cli -h falkordb -p 6379 GRAPH.QUERY graphiti_migration "MATCH ()-[r]->() RETURN count(r)" --csv 2>/dev/null | tail -1)
+        echo "FalkorDB has $EDGES edges loaded from RDB persistence"
+        if [ "$EDGES" -gt 0 ]; then
+          echo "✅ FalkorDB ready with persisted data"
+        else
+          echo "⚠️ FalkorDB empty - this may be first boot or RDB was lost"
+        fi
+        touch /tmp/graphiti-init-complete
+        echo "Init complete"
     volumes:
       - ./scripts:/scripts:ro
       - init_ready_marker:/tmp
     environment:
-      - NEO4J_URI=${NEO4J_URI:-bolt://neo4j:7687}
-      - NEO4J_USER=${NEO4J_USER:-neo4j}
-      - NEO4J_PASSWORD=${NEO4J_PASSWORD:-graphiti123}
       - FALKORDB_HOST=${FALKORDB_HOST:-falkordb}
       - FALKORDB_PORT=${FALKORDB_PORT:-6379}
       - FALKORDB_DATABASE=${FALKORDB_DATABASE:-graphiti_migration}
-      - SYNC_SERVICE_URL=http://graphiti-sync-rs:8080
-      - SYNC_TIMEOUT=${SYNC_TIMEOUT:-0}
       - READY_MARKER_FILE=/tmp/graphiti-init-complete
-      - CHECK_INTERVAL=5
     networks:
       - graphiti_network
     depends_on:
-      neo4j:
-        condition: service_healthy
       falkordb:
         condition: service_healthy
-      graphiti-sync-rs:
-        condition: service_started
     labels:
       - homepage.group=Knowledge Management
       - homepage.name=Init Service
       - homepage.icon=si-bootstrap
-      - homepage.description=Cold boot initialization (auto-restores FalkorDB)
+      - homepage.description=Cold boot initialization (verifies FalkorDB RDB loaded)
   # =============================================================================
   # Queue and Worker Services
   # =============================================================================
@@ -614,8 +624,6 @@ services:
     networks:
       - graphiti_network
     depends_on:
-      neo4j:
-        condition: service_healthy
       graphiti-queued:
         condition: service_healthy
       falkordb:

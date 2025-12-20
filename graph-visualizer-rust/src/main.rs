@@ -35,6 +35,36 @@ use cache::EnhancedCache;
 use websocket::{websocket_handler, BroadcastExt};
 use deadpool_redis::{Config as RedisConfig, Runtime};
 
+// Loading progress tracking for frontend display
+#[derive(Clone, Debug, Serialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum LoadingState {
+    Initializing,
+    LoadingNodes,
+    LoadingEdges,
+    Indexing,
+    Ready,
+    Error,
+}
+
+impl Default for LoadingState {
+    fn default() -> Self {
+        LoadingState::Initializing
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Default)]
+pub struct LoadingProgress {
+    pub state: LoadingState,
+    pub total_nodes: usize,
+    pub loaded_nodes: usize,
+    pub total_edges_estimated: usize,
+    pub loaded_edges: usize,
+    pub current_phase: String,
+    pub started_at: Option<u64>,
+    pub error: Option<String>,
+}
+
 #[derive(Clone)]
 pub struct AppState {
     pub(crate) client: Arc<FalkorAsyncClient>,
@@ -49,6 +79,7 @@ pub struct AppState {
     pub(crate) centrality_url: String,
     pub(crate) cache_config: CacheConfig,
     pub(crate) enhanced_cache: Option<Arc<EnhancedCache>>,
+    pub(crate) loading_progress: Arc<RwLock<LoadingProgress>>,
 }
 
 #[derive(Clone)]
@@ -281,6 +312,17 @@ async fn main() -> anyhow::Result<()> {
         None
     };
     
+    // Initialize loading progress tracker
+    let loading_progress = Arc::new(RwLock::new(LoadingProgress {
+        state: LoadingState::Initializing,
+        current_phase: "initializing".to_string(),
+        started_at: Some(std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs()),
+        ..Default::default()
+    }));
+    
     let state = AppState {
         client: Arc::new(client),
         graph_name: graph_name.clone(),
@@ -294,6 +336,7 @@ async fn main() -> anyhow::Result<()> {
         centrality_url,
         cache_config,
         enhanced_cache,
+        loading_progress: loading_progress.clone(),
     };
     
     // Load initial data into DuckDB with optimized separate queries
@@ -317,6 +360,14 @@ async fn main() -> anyhow::Result<()> {
         info!("Loading initial graph data into DuckDB with limits - Nodes: {}, Edges: {}, Min Degree: {}", 
               node_limit, edge_limit, min_degree);
         let prerender_start = std::time::Instant::now();
+        
+        // Update loading state to loading nodes
+        {
+            let mut progress = loading_progress.write().await;
+            progress.state = LoadingState::LoadingNodes;
+            progress.current_phase = "loading_nodes".to_string();
+            progress.total_nodes = node_limit;
+        }
         
         // Step 1: Load nodes first (much more efficient)
         // If min_degree is 0, load ALL nodes without filtering
@@ -394,6 +445,17 @@ async fn main() -> anyhow::Result<()> {
             }
         }
         
+        // Update progress: nodes loaded
+        {
+            let mut progress = loading_progress.write().await;
+            progress.loaded_nodes = nodes.len();
+            progress.total_nodes = nodes.len();
+            progress.state = LoadingState::LoadingEdges;
+            progress.current_phase = "loading_edges".to_string();
+            progress.total_edges_estimated = edge_limit; // Will be refined as we load
+        }
+        info!("Nodes loaded: {}", nodes.len());
+        
         // Step 2: Load edges only for loaded nodes - paginate to avoid FalkorDB's 10K result limit
         let mut edges = Vec::new();
         let batch_size: usize = 5000;
@@ -408,7 +470,9 @@ async fn main() -> anyhow::Result<()> {
                 batch_size.min((edge_limit as usize).saturating_sub(offset))
             );
             
-            info!("Fetching edges batch: offset={}, limit={}", offset, batch_size);
+            info!("Fetching edges batch: offset={}, limit={}, progress={:.1}%", 
+                  offset, batch_size, 
+                  if edge_limit > 0 { (edges.len() as f64 / edge_limit as f64) * 100.0 } else { 0.0 });
             
             let mut graph = state.client.select_graph(&graph_name);
             let mut edges_result = graph.query(&edges_query).execute().await?;
@@ -426,6 +490,12 @@ async fn main() -> anyhow::Result<()> {
             
             info!("Batch fetched {} edges", batch_count);
             
+            // Update progress after each batch
+            {
+                let mut progress = loading_progress.write().await;
+                progress.loaded_edges = edges.len();
+            }
+            
             if batch_count < batch_size || edges.len() >= edge_limit as usize {
                 break;
             }
@@ -434,6 +504,15 @@ async fn main() -> anyhow::Result<()> {
         }
         
         info!("Total fetched {} edges from FalkorDB", edges.len());
+        
+        // Update progress: edges loaded, now indexing
+        {
+            let mut progress = loading_progress.write().await;
+            progress.loaded_edges = edges.len();
+            progress.total_edges_estimated = edges.len();
+            progress.state = LoadingState::Indexing;
+            progress.current_phase = "indexing".to_string();
+        }
         
         let initial_data = GraphData {
             nodes: nodes.clone(),
@@ -492,6 +571,13 @@ async fn main() -> anyhow::Result<()> {
                 
                 *state.arrow_cache.write().await = Some(cache);
                 info!("Arrow cache prerendered in {:?}. Initial load will be instant!", prerender_start.elapsed());
+                
+                // Mark loading as complete
+                {
+                    let mut progress = loading_progress.write().await;
+                    progress.state = LoadingState::Ready;
+                    progress.current_phase = "ready".to_string();
+                }
             }
         }
     }
@@ -713,6 +799,7 @@ async fn main() -> anyhow::Result<()> {
     // Build router - cleaned up for React frontend only
     let app = Router::new()
         .route("/health", get(health_check))
+        .route("/api/loading-status", get(get_loading_status))
         .route("/api/stats", get(get_stats))
         .route("/api/queue/status", get(get_queue_status))
         .route("/api/visualize", get(visualize))
@@ -773,6 +860,68 @@ async fn get_stats(State(state): State<AppState>) -> Result<Json<GraphStats>, St
 
 async fn health_check() -> Json<HealthResponse> {
     Json(HealthResponse { status: "ok" })
+}
+
+#[derive(Debug, Serialize)]
+struct LoadingStatusResponse {
+    state: LoadingState,
+    progress_percent: f64,
+    current_phase: String,
+    nodes_loaded: usize,
+    nodes_total: usize,
+    edges_loaded: usize,
+    edges_total: usize,
+    elapsed_seconds: f64,
+    estimated_remaining_seconds: Option<f64>,
+    ready: bool,
+}
+
+async fn get_loading_status(State(state): State<AppState>) -> Json<LoadingStatusResponse> {
+    let progress = state.loading_progress.read().await;
+    
+    let node_percent = if progress.total_nodes > 0 {
+        (progress.loaded_nodes as f64 / progress.total_nodes as f64) * 100.0
+    } else { 0.0 };
+    
+    let edge_percent = if progress.total_edges_estimated > 0 {
+        (progress.loaded_edges as f64 / progress.total_edges_estimated as f64) * 100.0
+    } else { 0.0 };
+    
+    // Overall progress: nodes are 20%, edges are 60%, indexing is 20%
+    let overall_percent = match progress.state {
+        LoadingState::Initializing => 0.0,
+        LoadingState::LoadingNodes => node_percent * 0.2,
+        LoadingState::LoadingEdges => 20.0 + (edge_percent * 0.6),
+        LoadingState::Indexing => 80.0 + 10.0, // 90% during indexing
+        LoadingState::Ready => 100.0,
+        LoadingState::Error => 0.0,
+    };
+    
+    let elapsed = progress.started_at.map(|s| {
+        (std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() - s) as f64
+    }).unwrap_or(0.0);
+    
+    let estimated_remaining = if overall_percent > 5.0 && overall_percent < 100.0 {
+        Some((elapsed / overall_percent) * (100.0 - overall_percent))
+    } else { 
+        None 
+    };
+    
+    Json(LoadingStatusResponse {
+        state: progress.state.clone(),
+        progress_percent: overall_percent,
+        current_phase: progress.current_phase.clone(),
+        nodes_loaded: progress.loaded_nodes,
+        nodes_total: progress.total_nodes,
+        edges_loaded: progress.loaded_edges,
+        edges_total: progress.total_edges_estimated,
+        elapsed_seconds: elapsed,
+        estimated_remaining_seconds: estimated_remaining,
+        ready: progress.state == LoadingState::Ready,
+    })
 }
 
 async fn visualize(

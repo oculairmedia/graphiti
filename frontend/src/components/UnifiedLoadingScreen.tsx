@@ -1,12 +1,14 @@
 /**
  * UnifiedLoadingScreen - Single loading experience for the entire app
  * Shows progress across all loading stages with smooth transitions
+ * Includes server-side loading progress when backend is still initializing
  */
 
 import React, { useMemo, useState, useEffect } from 'react';
 import { useLoadingCoordinator } from '../contexts/LoadingCoordinator';
+import { useServerLoadingStatus } from '../hooks/useServerLoadingStatus';
 import { Progress } from './ui/progress';
-import { CheckCircle2, Circle, Loader2, AlertCircle } from 'lucide-react';
+import { CheckCircle2, Circle, Loader2, AlertCircle, Server } from 'lucide-react';
 
 interface UnifiedLoadingScreenProps {
   className?: string;
@@ -23,7 +25,18 @@ export const UnifiedLoadingScreen: React.FC<UnifiedLoadingScreenProps> = ({ clas
     error
   } = useLoadingCoordinator();
   
+  // Server loading status - shows backend progress during cold start
+  const serverStatus = useServerLoadingStatus({
+    pollInterval: 1000,
+    onReady: () => {
+      console.log('[UnifiedLoadingScreen] Server is ready');
+    }
+  });
+  
   const [isFading, setIsFading] = useState(false);
+  
+  // Show server loading progress if server isn't ready yet
+  const showServerProgress = !serverStatus.isReady && serverStatus.status !== null;
   
   // Start fading when fully loaded
   useEffect(() => {
@@ -120,6 +133,56 @@ export const UnifiedLoadingScreen: React.FC<UnifiedLoadingScreenProps> = ({ clas
             <Progress value={overallProgress} className="h-2" />
           </div>
         </div>
+
+        {/* Server loading progress - shown during backend cold start */}
+        {showServerProgress && (
+          <div className="mb-6 p-4 bg-secondary/50 rounded-lg border border-border">
+            <div className="flex items-center space-x-2 mb-3">
+              <Server className="h-5 w-5 text-primary" />
+              <span className="font-medium text-foreground">Backend Loading Graph Data</span>
+            </div>
+            
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm text-muted-foreground">
+                <span>
+                  {serverStatus.currentPhase === 'loading_nodes' && 'Loading nodes...'}
+                  {serverStatus.currentPhase === 'loading_edges' && 'Loading edges...'}
+                  {serverStatus.currentPhase === 'indexing' && 'Building indexes...'}
+                  {serverStatus.currentPhase === 'initializing' && 'Initializing...'}
+                </span>
+                <span>{Math.round(serverStatus.progressPercent)}%</span>
+              </div>
+              <Progress value={serverStatus.progressPercent} className="h-2" />
+              
+              <div className="flex justify-between text-xs text-muted-foreground mt-2">
+                <div className="space-x-4">
+                  {serverStatus.nodesProgress && (
+                    <span>Nodes: {serverStatus.nodesProgress}</span>
+                  )}
+                  {serverStatus.edgesProgress && (
+                    <span>Edges: {serverStatus.edgesProgress}</span>
+                  )}
+                </div>
+                {serverStatus.timeRemaining && (
+                  <span className="text-primary">{serverStatus.timeRemaining}</span>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {/* Connection error message */}
+        {serverStatus.error && (
+          <div className="mb-6 p-4 bg-yellow-500/10 rounded-lg border border-yellow-500/30">
+            <div className="flex items-center space-x-2 mb-2">
+              <AlertCircle className="h-5 w-5 text-yellow-500" />
+              <span className="font-medium text-yellow-500">Connecting to server...</span>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              The visualization server is starting up. This may take a few moments.
+            </p>
+          </div>
+        )}
 
         {/* Stage list */}
         <div className="space-y-3">
