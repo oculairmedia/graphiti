@@ -26,7 +26,23 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     this.setState({ error, errorInfo });
     
-    // Log error for debugging
+    // Log error for debugging - always log to console for visibility
+    console.error('=== ErrorBoundary caught an error ===');
+    console.error('Error:', error);
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
+    console.error('Component stack:', errorInfo.componentStack);
+    console.error('=====================================');
+    
+    // Also expose to window for easy retrieval
+    (window as unknown as Record<string, unknown>).__GRAPHITI_LAST_ERROR__ = {
+      error: error.toString(),
+      message: error.message,
+      stack: error.stack,
+      componentStack: errorInfo.componentStack,
+      timestamp: new Date().toISOString(),
+    };
+    
     logger.error('ErrorBoundary caught an error:', error, errorInfo);
     
     // Call custom error handler if provided
@@ -71,15 +87,36 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
               </button>
             </div>
 
-            {process.env.NODE_ENV === 'development' && this.state.error && (
-              <details className="mt-6 text-left">
+            {this.state.error && (
+              <details className="mt-6 text-left" open>
                 <summary className="cursor-pointer text-sm text-muted-foreground mb-2">
-                  Show Error Details
+                  Error Details (check browser console for full stack)
                 </summary>
-                <pre className="text-xs bg-muted p-3 rounded overflow-auto max-h-32">
-                  {this.state.error.toString()}
-                  {this.state.errorInfo?.componentStack}
-                </pre>
+                <div className="space-y-2">
+                  <div className="text-xs bg-red-900/20 border border-red-500/30 p-3 rounded">
+                    <strong className="text-red-400">Error:</strong>
+                    <pre className="mt-1 text-red-300 whitespace-pre-wrap break-all">
+                      {this.state.error.message || this.state.error.toString()}
+                    </pre>
+                  </div>
+                  <div className="text-xs bg-muted p-3 rounded overflow-auto max-h-48">
+                    <strong className="text-muted-foreground">Stack Trace:</strong>
+                    <pre className="mt-1 whitespace-pre-wrap break-all">
+                      {this.state.error.stack}
+                    </pre>
+                  </div>
+                  {this.state.errorInfo?.componentStack && (
+                    <div className="text-xs bg-muted p-3 rounded overflow-auto max-h-32">
+                      <strong className="text-muted-foreground">Component Stack:</strong>
+                      <pre className="mt-1 whitespace-pre-wrap">
+                        {this.state.errorInfo.componentStack}
+                      </pre>
+                    </div>
+                  )}
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Tip: Run <code className="bg-muted px-1 rounded">window.__GRAPHITI_LAST_ERROR__</code> in console for full error object
+                  </p>
+                </div>
               </details>
             )}
           </div>
