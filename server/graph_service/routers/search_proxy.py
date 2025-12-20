@@ -10,21 +10,35 @@ from typing import Optional, List, Dict, Any, Set
 import os
 import logging
 from graph_service.webhooks import webhook_service
-from graph_service.dto.retrieve import SearchQuery, NodeSearchQuery, SearchConfig, NodeReranker, SearchMethod
+from graph_service.dto.retrieve import (
+    SearchQuery,
+    NodeSearchQuery,
+    SearchConfig,
+    NodeReranker,
+    SearchMethod,
+)
 from difflib import SequenceMatcher
 import hashlib
 
-router = APIRouter(tags=["search"])
+router = APIRouter(tags=['search'])
 logger = logging.getLogger(__name__)
 
 # Rust search service URL
 # Use environment variable or fallback to localhost for development
 RUST_SEARCH_URL = os.getenv('RUST_SEARCH_URL', 'http://localhost:3004')
 
+# Cross-encoder reranker URL (vLLM reranker server)
+# vLLM reranker on the same server as gemma LLM
+RERANKER_URL = os.getenv('RERANKER_URL', 'http://100.81.139.20:11435')
+RERANKER_ENABLED = os.getenv('RERANKER_ENABLED', 'true').lower() == 'true'
+RERANKER_TIMEOUT = float(os.getenv('RERANKER_TIMEOUT', '30.0'))
+
 # Remove local SearchQuery - using from dto.retrieve now
+
 
 class FactResult(BaseModel):
     """Individual fact from search results"""
+
     uuid: str
     name: str
     fact: str
@@ -34,28 +48,37 @@ class FactResult(BaseModel):
     expired_at: Optional[str] = None
     score: Optional[float] = None  # Relevance score from search
 
+
 class SearchResults(BaseModel):
     """Search results response"""
+
     facts: List[FactResult]
+
 
 # Remove local NodeSearchQuery - using from dto.retrieve now
 
+
 class NodeResult(BaseModel):
     """Node result matching frontend expectations"""
+
     uuid: str
     name: str
-    summary: str = ""  # Always present, defaults to empty string
+    summary: str = ''  # Always present, defaults to empty string
     labels: List[str] = Field(default_factory=list)
     group_id: str  # Always present
     created_at: str  # Always present (ISO format string)
     attributes: Dict[str, Any] = Field(default_factory=dict)
 
+
 class NodeSearchResults(BaseModel):
     """Node search results response"""
+
     nodes: List[NodeResult]
+
 
 class EdgeResult(BaseModel):
     """Edge result matching frontend expectations"""
+
     uuid: str
     name: str
     fact: str
@@ -64,40 +87,190 @@ class EdgeResult(BaseModel):
     created_at: Optional[str] = None
     expired_at: Optional[str] = None
 
+
 class EdgesByNodeResponse(BaseModel):
     """Edges by node response matching frontend expectations"""
+
     edges: List[EdgeResult]
     source_edges: List[EdgeResult]
     target_edges: List[EdgeResult]
+
 
 async def generate_embedding(text: str) -> Optional[List[float]]:
     """Generate embedding for the query text using Ollama"""
     try:
         ollama_url = os.getenv('OLLAMA_BASE_URL', 'http://192.168.50.80:11434/v1')
         ollama_model = os.getenv('OLLAMA_EMBEDDING_MODEL', 'mxbai-embed-large:latest')
-        
-        async with httpx.AsyncClient(timeout=10.0) as client:
+
+        async with httpx.AsyncClient(timeout=60.0) as client:
             response = await client.post(
-                f"{ollama_url}/embeddings",
-                json={
-                    "input": text,
-                    "model": ollama_model
-                },
-                headers={"Authorization": "Bearer ollama"}
+                f'{ollama_url}/embeddings',
+                json={'input': text, 'model': ollama_model},
+                headers={'Authorization': 'Bearer ollama'},
             )
-            
+
             if response.status_code == 200:
                 result = response.json()
                 # Extract embedding from response
                 if 'data' in result and len(result['data']) > 0:
                     return result['data'][0]['embedding']
             else:
-                logger.warning(f"Failed to generate embedding: {response.status_code}")
-                
+                logger.warning(f'Failed to generate embedding: {response.status_code}')
+
     except Exception as e:
-        logger.error(f"Error generating embedding: {e}")
-    
+        logger.error(f'Error generating embedding: {e}')
+
     return None
+
+
+async def rerank_facts_with_cross_encoder(
+    query: str, facts: List[FactResult], top_k: int = 10
+) -> List[FactResult]:
+    """
+    Rerank facts using the vLLM cross-encoder reranker.
+    Falls back to original order if reranking fails.
+
+    Uses batch rerank endpoint for efficiency - vLLM returns proper document indices.
+    """
+    if not RERANKER_ENABLED or not facts:
+        return facts
+
+    try:
+        async with httpx.AsyncClient(timeout=RERANKER_TIMEOUT) as client:
+            logger.info(f'[SEARCH] Reranking {len(facts)} facts with vLLM cross-encoder')
+
+            # Extract document texts for reranking
+            documents = [fact.fact for fact in facts]
+
+            # Call vLLM rerank endpoint with all documents at once
+            response = await client.post(
+                f'{RERANKER_URL}/v1/rerank',
+                json={
+                    'model': 'qwen3-reranker-4b',
+                    'query': query,
+                    'documents': documents,
+                },
+            )
+
+            if response.status_code != 200:
+                logger.warning(f'[SEARCH] Reranker returned status {response.status_code}')
+                return facts[:top_k]
+
+            result = response.json()
+            results = result.get('results', [])
+
+            if not results:
+                logger.warning('[SEARCH] Reranker returned empty results')
+                return facts[:top_k]
+
+            # vLLM returns results sorted by relevance, with original indices
+            reranked_facts: List[FactResult] = []
+            for item in results[:top_k]:
+                idx = item.get('index', 0)
+                score = float(item.get('relevance_score', 0.0))
+                if 0 <= idx < len(facts):
+                    fact = facts[idx]
+                    fact.score = score
+                    reranked_facts.append(fact)
+
+            logger.info(
+                f'[SEARCH] Cross-encoder reranked {len(facts)} -> {len(reranked_facts)} facts'
+            )
+            return reranked_facts
+
+    except Exception as e:
+        logger.warning(f'[SEARCH] Cross-encoder reranking failed: {e}')
+
+    # Fallback to original facts
+    return facts[:top_k]
+
+
+def extract_keywords(query_text: str) -> List[str]:
+    """
+    Extract potential entity names (capitalized words) from query.
+    This helps with queries like "What does Emmanuel work on?" where
+    fulltext search won't match "Emmanuel" in the phrase.
+
+    IMPORTANT: The Rust fulltext search uses CONTAINS with the ENTIRE query string,
+    not individual words. So we prioritize proper nouns (names) and return only those
+    if found, to avoid diluting the search with generic terms.
+    """
+    import re
+
+    # Find capitalized words that aren't at sentence start
+    # Also find words that look like names (2+ chars, capitalized)
+    words = query_text.split()
+    proper_nouns: List[str] = []
+    other_keywords: List[str] = []
+    stop_words = {
+        'what',
+        'does',
+        'who',
+        'where',
+        'when',
+        'how',
+        'why',
+        'the',
+        'is',
+        'are',
+        'was',
+        'were',
+        'has',
+        'have',
+        'had',
+        'do',
+        'did',
+        'can',
+        'could',
+        'would',
+        'should',
+        'will',
+        'work',
+        'worked',
+        'working',
+        'works',
+        'on',
+        'in',
+        'at',
+        'to',
+        'for',
+        'with',
+        'about',
+        'from',
+        'tell',
+        'me',
+        'projects',
+        'project',
+        'things',
+        'stuff',
+        'information',
+    }
+
+    for i, word in enumerate(words):
+        # Clean word
+        clean_word = re.sub(r'[^\w]', '', word)
+        if not clean_word:
+            continue
+
+        # Skip stop words
+        if clean_word.lower() in stop_words:
+            continue
+
+        # Proper nouns (capitalized, not first word which is often capitalized anyway)
+        if clean_word[0].isupper() and len(clean_word) >= 2:
+            # Check if it's likely a name (not first word, or looks like a name)
+            if i > 0 or len(clean_word) >= 4:
+                proper_nouns.append(clean_word)
+        # Other significant words (4+ chars, not stop word)
+        elif len(clean_word) >= 4:
+            other_keywords.append(clean_word)
+
+    # Prioritize proper nouns - if we have names, use those
+    # This prevents "projects Emmanuel" from diluting to just "projects"
+    if proper_nouns:
+        return proper_nouns
+    return other_keywords
+
 
 @router.post('/search', response_model=SearchResults, status_code=status.HTTP_200_OK)
 async def search_proxy(query: SearchQuery) -> SearchResults:
@@ -108,157 +281,184 @@ async def search_proxy(query: SearchQuery) -> SearchResults:
     try:
         # Don't generate embeddings here - let Rust service handle it
         # The Rust service has Ollama embedding generation built-in
-        
+
         # Use configuration from request or defaults
         config = query.config or SearchConfig()
-        
+
+        # NOTE: Python-side reranking is DEPRECATED - Rust service handles reranking now
+        # We still over-fetch slightly to allow for deduplication, but not 10x anymore
+        retrieval_limit = max(query.max_facts * 2, 50)
+
+        # Extract keywords for fulltext search (helps with questions like "What does Emmanuel work on?")
+        # The Rust service's fulltext uses CONTAINS which needs individual terms, not phrases
+        keywords = extract_keywords(query.query)
+        search_query = query.query
+        if keywords:
+            # Use ONLY keywords for fulltext matching to improve recall
+            # The cross-encoder reranker will still use the full query for relevance scoring
+            search_query = ' '.join(keywords)
+            logger.info(
+                f'[SEARCH] Using keywords for retrieval: {keywords} (reranking with full query)'
+            )
+
         # Transform request to Rust service format with configurable options
         rust_request = {
-            "query": query.query,
-            "config": {
-                "limit": query.max_facts,
-                "reranker_min_score": 0.0,
-                "edge_config": {
-                    "search_methods": [method.value for method in config.search_methods],
-                    "reranker": config.reranker.value,
-                    "bfs_max_depth": config.bfs_max_depth,
-                    "sim_min_score": config.similarity_threshold,
-                    "mmr_lambda": config.mmr_lambda,
-                    "centrality_boost_factor": config.centrality_boost_factor
+            'query': search_query,
+            'config': {
+                'limit': retrieval_limit,
+                'reranker_min_score': 0.0,
+                'edge_config': {
+                    'search_methods': [method.value for method in config.search_methods],
+                    'reranker': config.reranker.value,
+                    'bfs_max_depth': config.bfs_max_depth,
+                    'sim_min_score': config.similarity_threshold,
+                    'mmr_lambda': config.mmr_lambda,
+                    'centrality_boost_factor': config.centrality_boost_factor,
                 },
-                "node_config": {
-                    "search_methods": [method.value for method in config.search_methods],
-                    "reranker": config.reranker.value,
-                    "bfs_max_depth": config.bfs_max_depth,
-                    "sim_min_score": config.similarity_threshold,
-                    "mmr_lambda": config.mmr_lambda,
-                    "centrality_boost_factor": config.centrality_boost_factor
-                }
+                'node_config': {
+                    'search_methods': [method.value for method in config.search_methods],
+                    'reranker': config.reranker.value,
+                    'bfs_max_depth': config.bfs_max_depth,
+                    'sim_min_score': config.similarity_threshold,
+                    'mmr_lambda': config.mmr_lambda,
+                    'centrality_boost_factor': config.centrality_boost_factor,
+                },
             },
-            "filters": {}
+            'filters': {},
         }
-        
+
         # Add group filters if provided
         if query.group_ids:
-            rust_request["filters"]["group_ids"] = query.group_ids
-        
+            rust_request['filters']['group_ids'] = query.group_ids
+
         # Don't add query_vector - let Rust service generate it
-        logger.info(f"Forwarding search query to Rust service: {query.query}")
-        
+        logger.info(
+            f'Forwarding search query to Rust service: {query.query} (retrieval_limit={retrieval_limit})'
+        )
+
         # Forward to Rust service
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.post(
-                f"{RUST_SEARCH_URL}/search",
-                json=rust_request
-            )
-            
+        import time
+
+        rust_start = time.time()
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.post(f'{RUST_SEARCH_URL}/search', json=rust_request)
+            rust_elapsed = time.time() - rust_start
+            logger.info(f'[SEARCH] Rust service took {rust_elapsed:.2f}s')
+
             if response.status_code != 200:
                 raise HTTPException(
                     status_code=response.status_code,
-                    detail=f"Rust search service error: {response.text}"
+                    detail=f'Rust search service error: {response.text}',
                 )
-            
+
             rust_result = response.json()
-            
+
             # Transform Rust response to API format
             facts = []
             seen_facts: Set[str] = set()  # For exact deduplication
             seen_similar: List[str] = []  # For similarity deduplication
-            
+
             def is_duplicate(fact_text: str, similarity_threshold: float = 0.85) -> bool:
                 """Check if fact is duplicate or too similar to existing facts"""
                 # Check exact match using hash
                 fact_hash = hashlib.md5(fact_text.lower().strip().encode()).hexdigest()
                 if fact_hash in seen_facts:
                     return True
-                
+
                 # Check similarity to existing facts
                 for existing in seen_similar:
                     similarity = SequenceMatcher(None, fact_text.lower(), existing.lower()).ratio()
                     if similarity > similarity_threshold:
-                        logger.debug(f"Deduplicating similar facts (similarity={similarity:.2f})")
+                        logger.debug(f'Deduplicating similar facts (similarity={similarity:.2f})')
                         return True
-                
+
                 # Not a duplicate, add to tracking sets
                 seen_facts.add(fact_hash)
                 seen_similar.append(fact_text)
                 return False
-            
+
             # Extract facts from edges with deduplication
-            for edge in rust_result.get("edges", []):
-                fact_text = edge.get("fact", edge.get("name", ""))
+            for edge in rust_result.get('edges', []):
+                fact_text = edge.get('fact', edge.get('name', ''))
                 if not fact_text or is_duplicate(fact_text):
                     continue
-                    
+
                 fact = FactResult(
-                    uuid=edge.get("uuid", ""),
-                    name=edge.get("name", ""),
+                    uuid=edge.get('uuid', ''),
+                    name=edge.get('name', ''),
                     fact=fact_text,
-                    valid_at=edge.get("valid_at"),
-                    invalid_at=edge.get("invalid_at"),
-                    created_at=edge.get("created_at"),
-                    expired_at=edge.get("expired_at"),
-                    score=edge.get("score")  # Include relevance score
+                    valid_at=edge.get('valid_at'),
+                    invalid_at=edge.get('invalid_at'),
+                    created_at=edge.get('created_at'),
+                    expired_at=edge.get('expired_at'),
+                    score=edge.get('score'),  # Include relevance score
                 )
                 facts.append(fact)
-            
+
             # Also include nodes as facts if no edges found
             if not facts:
-                for node in rust_result.get("nodes", []):
-                    fact_text = node.get("summary", node.get("name", ""))
+                for node in rust_result.get('nodes', []):
+                    fact_text = node.get('summary', node.get('name', ''))
                     if not fact_text or is_duplicate(fact_text):
                         continue
-                        
+
                     fact = FactResult(
-                        uuid=node.get("uuid", ""),
-                        name=node.get("name", ""),
+                        uuid=node.get('uuid', ''),
+                        name=node.get('name', ''),
                         fact=fact_text,
-                        valid_at=node.get("valid_at"),
-                        invalid_at=node.get("invalid_at"),
-                        created_at=node.get("created_at"),
+                        valid_at=node.get('valid_at'),
+                        invalid_at=node.get('invalid_at'),
+                        created_at=node.get('created_at'),
                         expired_at=None,
-                        score=node.get("score")  # Include relevance score
+                        score=node.get('score'),  # Include relevance score
                     )
                     facts.append(fact)
-            
-            logger.info(f"[SEARCH] Deduplication: {len(rust_result.get('edges', [])) + len(rust_result.get('nodes', []))} -> {len(facts)} facts")
-            
+
+            logger.info(
+                f'[SEARCH] Deduplication: {len(rust_result.get("edges", [])) + len(rust_result.get("nodes", []))} -> {len(facts)} facts'
+            )
+
             # Sort facts by score (highest first) if scores are available
             facts.sort(key=lambda f: f.score if f.score is not None else 0.0, reverse=True)
-            
+
+            # NOTE: Python-side reranking is DEPRECATED - Rust service handles reranking now
+            # Apply max_facts limit (reranking already done by Rust if configured)
+            facts = facts[: query.max_facts]
+
             # Collect node IDs for webhook
             node_ids = set()
-            for edge in rust_result.get("edges", []):
-                if edge.get("source_node_uuid"):
-                    node_ids.add(edge.get("source_node_uuid"))
-                if edge.get("target_node_uuid"):
-                    node_ids.add(edge.get("target_node_uuid"))
-            for node in rust_result.get("nodes", []):
-                if node.get("uuid"):
-                    node_ids.add(node.get("uuid"))
-            
+            for edge in rust_result.get('edges', []):
+                if edge.get('source_node_uuid'):
+                    node_ids.add(edge.get('source_node_uuid'))
+                if edge.get('target_node_uuid'):
+                    node_ids.add(edge.get('target_node_uuid'))
+            for node in rust_result.get('nodes', []):
+                if node.get('uuid'):
+                    node_ids.add(node.get('uuid'))
+
             # Emit webhook event for accessed nodes
             if node_ids:
-                logger.info(f"[SEARCH] Emitting node access for {len(node_ids)} nodes")
+                logger.info(f'[SEARCH] Emitting node access for {len(node_ids)} nodes')
                 await webhook_service.emit_node_access(
                     node_ids=list(node_ids),
-                    access_type="search",
+                    access_type='search',
                     query=query.query,
-                    metadata={"group_ids": query.group_ids}
+                    metadata={'group_ids': query.group_ids},
                 )
-            
+
             return SearchResults(facts=facts)
-            
+
     except httpx.RequestError as e:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Failed to connect to search service: {str(e)}"
+            detail=f'Failed to connect to search service: {str(e)}',
         )
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Search proxy error: {str(e)}"
+            detail=f'Search proxy error: {str(e)}',
         )
+
 
 @router.post('/search/nodes', response_model=NodeSearchResults, status_code=status.HTTP_200_OK)
 async def search_nodes(query: NodeSearchQuery) -> NodeSearchResults:
@@ -269,108 +469,107 @@ async def search_nodes(query: NodeSearchQuery) -> NodeSearchResults:
     try:
         # Use configuration from request or defaults
         config = query.config or SearchConfig()
-        
+
         # Transform request to Rust service format with configurable options
         rust_request = {
-            "query": query.query,
-            "config": {
-                "limit": query.max_nodes,
-                "reranker_min_score": 0.0,
-                "node_config": {
-                    "search_methods": [method.value for method in config.search_methods],
-                    "reranker": config.reranker.value,
-                    "bfs_max_depth": config.bfs_max_depth,
-                    "sim_min_score": config.similarity_threshold,
-                    "mmr_lambda": config.mmr_lambda,
-                    "centrality_boost_factor": config.centrality_boost_factor
+            'query': query.query,
+            'config': {
+                'limit': query.max_nodes,
+                'reranker_min_score': 0.0,
+                'node_config': {
+                    'search_methods': [method.value for method in config.search_methods],
+                    'reranker': config.reranker.value,
+                    'bfs_max_depth': config.bfs_max_depth,
+                    'sim_min_score': config.similarity_threshold,
+                    'mmr_lambda': config.mmr_lambda,
+                    'centrality_boost_factor': config.centrality_boost_factor,
                 },
-                "edge_config": {
-                    "search_methods": [],  # Disable edge search for node-only queries
-                    "reranker": "rrf",
-                    "bfs_max_depth": 1,
-                    "sim_min_score": 0.3,
-                    "mmr_lambda": 0.5
-                }
+                'edge_config': {
+                    'search_methods': [],  # Disable edge search for node-only queries
+                    'reranker': 'rrf',
+                    'bfs_max_depth': 1,
+                    'sim_min_score': 0.3,
+                    'mmr_lambda': 0.5,
+                },
             },
-            "filters": {}
+            'filters': {},
         }
-        
+
         # Add filters if provided
         if query.group_ids:
-            rust_request["filters"]["group_ids"] = query.group_ids
+            rust_request['filters']['group_ids'] = query.group_ids
         if query.entity:
-            rust_request["filters"]["entity_type"] = query.entity
+            rust_request['filters']['entity_type'] = query.entity
         if query.center_node_uuid:
-            rust_request["filters"]["center_node_uuid"] = query.center_node_uuid
-        
-        logger.info(f"Forwarding node search query to Rust service: {query.query}")
-        
+            rust_request['filters']['center_node_uuid'] = query.center_node_uuid
+
+        logger.info(f'Forwarding node search query to Rust service: {query.query}')
+
         # Forward to Rust service
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.post(
-                f"{RUST_SEARCH_URL}/search",
-                json=rust_request
-            )
-            
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.post(f'{RUST_SEARCH_URL}/search', json=rust_request)
+
             if response.status_code != 200:
                 raise HTTPException(
                     status_code=response.status_code,
-                    detail=f"Rust search service error: {response.text}"
+                    detail=f'Rust search service error: {response.text}',
                 )
-            
+
             rust_result = response.json()
-            
+
             # Transform Rust response to frontend format
             nodes = []
             node_ids = []
-            for node in rust_result.get("nodes", []):
+            for node in rust_result.get('nodes', []):
                 # Extract node_type as a label
-                node_type = node.get("node_type", "entity")
+                node_type = node.get('node_type', 'entity')
                 labels = [node_type] if node_type else []
-                
-                node_uuid = node.get("uuid", "")
+
+                node_uuid = node.get('uuid', '')
                 node_result = NodeResult(
                     uuid=node_uuid,
-                    name=node.get("name", ""),
-                    summary=node.get("summary", ""),  # Default to empty string
+                    name=node.get('name', '') or '',
+                    summary=node.get('summary', '') or '',  # Handle None values
                     labels=labels,
-                    group_id=node.get("group_id", ""),  # Default to empty string if missing
-                    created_at=node.get("created_at", ""),  # Default to empty string if missing
-                    attributes={}  # Rust doesn't return attributes, use empty dict
+                    group_id=node.get('group_id', '') or '',  # Handle None values
+                    created_at=node.get('created_at', '') or '',  # Handle None values
+                    attributes={},  # Rust doesn't return attributes, use empty dict
                 )
                 nodes.append(node_result)
                 if node_uuid:
                     node_ids.append(node_uuid)
-            
+
             # Emit webhook event for accessed nodes
             if node_ids:
-                logger.info(f"[NODE_SEARCH] Emitting node access for {len(node_ids)} nodes")
+                logger.info(f'[NODE_SEARCH] Emitting node access for {len(node_ids)} nodes')
                 await webhook_service.emit_node_access(
                     node_ids=node_ids,
-                    access_type="node_search",
+                    access_type='node_search',
                     query=query.query,
                     metadata={
-                        "group_ids": query.group_ids,
-                        "center_node_uuid": query.center_node_uuid,
-                        "entity": query.entity,
-                        "max_nodes": query.max_nodes
-                    }
+                        'group_ids': query.group_ids,
+                        'center_node_uuid': query.center_node_uuid,
+                        'entity': query.entity,
+                        'max_nodes': query.max_nodes,
+                    },
                 )
-            
+
             return NodeSearchResults(nodes=nodes)
-            
+
     except httpx.RequestError as e:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Failed to connect to search service: {str(e)}"
+            detail=f'Failed to connect to search service: {str(e)}',
         )
     except Exception as e:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Node search error: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f'Node search error: {str(e)}'
         )
 
-@router.get('/edges/by-node/{node_uuid}', response_model=EdgesByNodeResponse, status_code=status.HTTP_200_OK)
+
+@router.get(
+    '/edges/by-node/{node_uuid}', response_model=EdgesByNodeResponse, status_code=status.HTTP_200_OK
+)
 async def get_edges_by_node(node_uuid: str) -> EdgesByNodeResponse:
     """
     Get all edges connected to a specific node.
@@ -379,110 +578,106 @@ async def get_edges_by_node(node_uuid: str) -> EdgesByNodeResponse:
     try:
         # Query Rust service for edges
         rust_request = {
-            "query": "",  # Empty query for direct UUID lookup
-            "config": {
-                "limit": 100,
-                "edge_config": {
-                    "enabled": True,
-                    "limit": 100,
-                    "search_methods": ["fulltext"],
-                    "reranker": "rrf",
-                    "bfs_max_depth": 1,
-                    "sim_min_score": 0.3,  # Filter weak semantic matches
-                    "mmr_lambda": 0.5
+            'query': '',  # Empty query for direct UUID lookup
+            'config': {
+                'limit': 100,
+                'edge_config': {
+                    'enabled': True,
+                    'limit': 100,
+                    'search_methods': ['fulltext'],
+                    'reranker': 'rrf',
+                    'bfs_max_depth': 1,
+                    'sim_min_score': 0.3,  # Filter weak semantic matches
+                    'mmr_lambda': 0.5,
                 },
-                "node_config": {
-                    "enabled": False,
-                    "limit": 0,
-                    "search_methods": [],
-                    "reranker": "rrf",
-                    "bfs_max_depth": 1,
-                    "sim_min_score": 0.3,  # Filter weak semantic matches
-                    "mmr_lambda": 0.5
-                }
+                'node_config': {
+                    'enabled': False,
+                    'limit': 0,
+                    'search_methods': [],
+                    'reranker': 'rrf',
+                    'bfs_max_depth': 1,
+                    'sim_min_score': 0.3,  # Filter weak semantic matches
+                    'mmr_lambda': 0.5,
+                },
             },
-            "filters": {
-                "node_uuid": node_uuid
-            }
+            'filters': {'node_uuid': node_uuid},
         }
-        
-        logger.info(f"Fetching edges for node: {node_uuid}")
-        
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.post(
-                f"{RUST_SEARCH_URL}/search",
-                json=rust_request
-            )
-            
+
+        logger.info(f'Fetching edges for node: {node_uuid}')
+
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.post(f'{RUST_SEARCH_URL}/search', json=rust_request)
+
             if response.status_code != 200:
                 raise HTTPException(
                     status_code=response.status_code,
-                    detail=f"Rust search service error: {response.text}"
+                    detail=f'Rust search service error: {response.text}',
                 )
-            
+
             rust_result = response.json()
-            
+
             # Transform edges to frontend format
             all_edges = []
             source_edges = []
             target_edges = []
-            
-            for edge in rust_result.get("edges", []):
+
+            for edge in rust_result.get('edges', []):
                 edge_result = EdgeResult(
-                    uuid=edge.get("uuid", ""),
-                    name=edge.get("name", ""),
-                    fact=edge.get("fact", ""),
-                    valid_at=edge.get("valid_at"),
-                    invalid_at=edge.get("invalid_at"),
-                    created_at=edge.get("created_at"),
-                    expired_at=edge.get("expired_at")
+                    uuid=edge.get('uuid', ''),
+                    name=edge.get('name', ''),
+                    fact=edge.get('fact', ''),
+                    valid_at=edge.get('valid_at'),
+                    invalid_at=edge.get('invalid_at'),
+                    created_at=edge.get('created_at'),
+                    expired_at=edge.get('expired_at'),
                 )
-                
+
                 all_edges.append(edge_result)
-                
+
                 # Categorize by source/target
-                if edge.get("source_node_uuid") == node_uuid:
+                if edge.get('source_node_uuid') == node_uuid:
                     source_edges.append(edge_result)
-                elif edge.get("target_node_uuid") == node_uuid:
+                elif edge.get('target_node_uuid') == node_uuid:
                     target_edges.append(edge_result)
-            
+
             # Collect node IDs for webhook
             node_ids = {node_uuid}  # Include the queried node
-            for edge in rust_result.get("edges", []):
-                source_uuid = edge.get("source_node_uuid")
-                target_uuid = edge.get("target_node_uuid")
+            for edge in rust_result.get('edges', []):
+                source_uuid = edge.get('source_node_uuid')
+                target_uuid = edge.get('target_node_uuid')
                 if source_uuid and source_uuid != node_uuid:
                     node_ids.add(source_uuid)
                 if target_uuid and target_uuid != node_uuid:
                     node_ids.add(target_uuid)
-            
+
             # Emit webhook event for accessed nodes
             if node_ids:
-                logger.info(f"[EDGES_BY_NODE] Emitting node access for {len(node_ids)} nodes")
+                logger.info(f'[EDGES_BY_NODE] Emitting node access for {len(node_ids)} nodes')
                 await webhook_service.emit_node_access(
                     node_ids=list(node_ids),
-                    access_type="node_edges_access",
-                    metadata={"center_node_uuid": node_uuid}
+                    access_type='node_edges_access',
+                    metadata={'center_node_uuid': node_uuid},
                 )
-            
+
             return EdgesByNodeResponse(
-                edges=all_edges,
-                source_edges=source_edges,
-                target_edges=target_edges
+                edges=all_edges, source_edges=source_edges, target_edges=target_edges
             )
-            
+
     except httpx.RequestError as e:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Failed to connect to search service: {str(e)}"
+            detail=f'Failed to connect to search service: {str(e)}',
         )
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error fetching edges: {str(e)}"
+            detail=f'Error fetching edges: {str(e)}',
         )
 
-@router.patch('/nodes/{node_uuid}/summary', response_model=NodeResult, status_code=status.HTTP_200_OK)
+
+@router.patch(
+    '/nodes/{node_uuid}/summary', response_model=NodeResult, status_code=status.HTTP_200_OK
+)
 async def update_node_summary(node_uuid: str, summary_update: Dict[str, Any]) -> NodeResult:
     """
     Update the summary of a specific node.
@@ -490,25 +685,25 @@ async def update_node_summary(node_uuid: str, summary_update: Dict[str, Any]) ->
     For now, it returns a mock response.
     """
     try:
-        summary = summary_update.get("summary", "")
-        
+        summary = summary_update.get('summary', '')
+
         # TODO: Implement actual node update in FalkorDB
         # For now, return a mock response
-        logger.info(f"Updating summary for node {node_uuid}: {summary[:50]}...")
-        
+        logger.info(f'Updating summary for node {node_uuid}: {summary[:50]}...')
+
         # Return mock updated node
         return NodeResult(
             uuid=node_uuid,
-            name="Updated Node",
-            node_type="entity",
+            name='Updated Node',
+            node_type='entity',
             summary=summary,
             created_at=None,
             group_id=None,
-            centrality=None
+            centrality=None,
         )
-        
+
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error updating node summary: {str(e)}"
+            detail=f'Error updating node summary: {str(e)}',
         )
