@@ -188,18 +188,18 @@ export function useCosmographIncrementalUpdates(
         if (schemaDebugEnabled) {
           // Log exact field count and names for debugging
           const fieldNames = Object.keys(sample);
-          console.log('[useCosmographIncrementalUpdates] Exact fields being sent:', fieldNames);
-          console.log('[useCosmographIncrementalUpdates] Field count:', fieldNames.length);
-          console.log('[useCosmographIncrementalUpdates] Field values:', fieldNames.map(f => `${f}: ${typeof sample[f]}`));
+          log('Exact fields being sent:', fieldNames);
+          log('Field count:', fieldNames.length);
+          log('Field values:', fieldNames.map(f => `${f}: ${typeof sample[f]}`));
         }
         
-        // Check for problematic fields
+        // Check for problematic fields (only warn in debug mode)
         const hasArrays = Object.values(sample).some(v => Array.isArray(v));
         const hasObjects = Object.values(sample).some(v => 
           v !== null && typeof v === 'object' && !Array.isArray(v) && v !== sample.properties
         );
-        if (hasArrays || hasObjects) {
-          console.warn('[useCosmographIncrementalUpdates] Node still has complex types!');
+        if ((hasArrays || hasObjects) && debug) {
+          log('Warning: Node still has complex types!');
         }
       }
       
@@ -322,22 +322,20 @@ export function useCosmographIncrementalUpdates(
       }
       
       log(`Adding ${sanitizedLinks.length} sanitized edges (from ${edges.length} input)`);
-      if (sanitizedLinks.length > 0) {
+      if (sanitizedLinks.length > 0 && debug) {
         const sample = sanitizedLinks[0];
         log('Sanitized link sample:', sample);
         
         // Debug: Check what fields are actually being sent
         const fieldNames = Object.keys(sample);
         const fieldTypes = Object.entries(sample).map(([k, v]) => `${k}:${typeof v}`);
-        console.log('[DEBUG] Link fields being sent to DuckDB:', fieldNames);
-        console.log('[DEBUG] Link field types:', fieldTypes);
-        console.log('[DEBUG] Link field values:', Object.entries(sample).map(([k, v]) => `${k}=${v}`));
-        console.log('[DEBUG] Link field count:', fieldNames.length);
+        log('Link fields being sent to DuckDB:', fieldNames);
+        log('Link field types:', fieldTypes);
         
         // Check for null/undefined
         const nullFields = Object.entries(sample).filter(([k, v]) => v === null || v === undefined);
         if (nullFields.length > 0) {
-          console.error('[DEBUG] WARNING: Link has null/undefined fields:', nullFields.map(([k]) => k));
+          log('WARNING: Link has null/undefined fields:', nullFields.map(([k]) => k));
         }
       }
       

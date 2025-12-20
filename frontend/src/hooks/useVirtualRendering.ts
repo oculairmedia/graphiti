@@ -266,8 +266,8 @@ export function useVirtualRendering(
     handleViewportChange();
 
     // Set up event listeners (these would need to be implemented in Cosmograph)
-    // For now, we'll use a polling approach
-    const intervalId = setInterval(handleViewportChange, 100);
+    // For now, we'll use a polling approach (250ms to reduce overhead)
+    const intervalId = setInterval(handleViewportChange, 250);
 
     return () => {
       clearInterval(intervalId);

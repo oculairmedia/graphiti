@@ -80,14 +80,6 @@ interface StatsPanelProps {
 
 // Compute real statistics from graph data
 const computeGraphStats = (data?: GraphData): GraphStats | null => {
-  console.log('[StatsPanel] Computing stats from data:', {
-    hasData: !!data,
-    hasNodes: !!data?.nodes,
-    nodeCount: data?.nodes?.length || 0,
-    hasEdges: !!data?.edges,
-    edgeCount: data?.edges?.length || 0
-  });
-  
   if (!data || !data.nodes || !data.edges) {
     return null;
   }

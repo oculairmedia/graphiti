@@ -1,5 +1,11 @@
 import { useEffect, useRef, useCallback } from 'react';
 
+// Production-safe logging
+const isDev = import.meta.env.DEV;
+const log = isDev ? console.log.bind(console) : () => {};
+const logWarn = isDev ? console.warn.bind(console) : () => {};
+const logError = console.error.bind(console);
+
 interface DeltaUpdate {
   type: 'graph:delta';
   data: {
@@ -31,7 +37,7 @@ export function useRustWebSocket(options: RustWebSocketOptions = {}) {
   const connect = useCallback(() => {
     // Prevent duplicate connections
     if (isConnectingRef.current || wsRef.current?.readyState === WebSocket.CONNECTING || wsRef.current?.readyState === WebSocket.OPEN) {
-      console.log('[useRustWebSocket] Already connected or connecting, skipping');
+      log('[useRustWebSocket] Already connected or connecting, skipping');
       return;
     }
     
@@ -49,14 +55,14 @@ export function useRustWebSocket(options: RustWebSocketOptions = {}) {
       }
     }
     
-    console.log('[useRustWebSocket] Connecting to Rust server:', rustWsUrl);
+    log('[useRustWebSocket] Connecting to Rust server:', rustWsUrl);
     
     try {
       const ws = new WebSocket(rustWsUrl);
       wsRef.current = ws;
 
       ws.onopen = () => {
-        console.log('[useRustWebSocket] Connected to Rust server');
+        log('[useRustWebSocket] Connected to Rust server');
         isConnectingRef.current = false;
         reconnectCountRef.current = 0;
         
@@ -71,11 +77,8 @@ export function useRustWebSocket(options: RustWebSocketOptions = {}) {
       ws.onmessage = (event) => {
         try {
           const message = JSON.parse(event.data);
-          console.log('[useRustWebSocket] Message received:', message.type);
-          
           // Handle both graph:delta and graph:update message types
           if ((message.type === 'graph:delta' || message.type === 'graph:update') && onDeltaUpdate) {
-            console.log('[useRustWebSocket] Delta/Update data:', message);
             
             // Transform graph:update to delta format if needed
             if (message.type === 'graph:update' && message.data) {
@@ -95,24 +98,24 @@ export function useRustWebSocket(options: RustWebSocketOptions = {}) {
             }
           }
         } catch (error) {
-          console.error('[useRustWebSocket] Error parsing message:', error);
+          logError('[useRustWebSocket] Error parsing message:', error);
         }
       };
 
       ws.onerror = (error) => {
-        console.error('[useRustWebSocket] WebSocket error:', error);
+        logError('[useRustWebSocket] WebSocket error:', error);
         isConnectingRef.current = false;
       };
 
       ws.onclose = () => {
-        console.log('[useRustWebSocket] Connection closed');
+        log('[useRustWebSocket] Connection closed');
         wsRef.current = null;
         isConnectingRef.current = false;
         
         // Attempt reconnection
         if (reconnectCountRef.current < reconnectAttempts) {
           reconnectCountRef.current++;
-          console.log(`[useRustWebSocket] Reconnecting... (${reconnectCountRef.current}/${reconnectAttempts})`);
+          log(`[useRustWebSocket] Reconnecting... (${reconnectCountRef.current}/${reconnectAttempts})`);
           
           reconnectTimeoutRef.current = setTimeout(() => {
             connect();
@@ -120,7 +123,7 @@ export function useRustWebSocket(options: RustWebSocketOptions = {}) {
         }
       };
     } catch (error) {
-      console.error('[useRustWebSocket] Failed to create WebSocket:', error);
+      logError('[useRustWebSocket] Failed to create WebSocket:', error);
       isConnectingRef.current = false;
     }
   }, [onDeltaUpdate, reconnectAttempts, reconnectDelay]);
@@ -142,7 +145,7 @@ export function useRustWebSocket(options: RustWebSocketOptions = {}) {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify(message));
     } else {
-      console.warn('[useRustWebSocket] WebSocket not connected');
+      logWarn('[useRustWebSocket] WebSocket not connected');
     }
   }, []);
 

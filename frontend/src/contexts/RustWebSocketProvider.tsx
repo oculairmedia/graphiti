@@ -1,5 +1,11 @@
 import React, { createContext, useContext, useCallback, useRef, useEffect, useState } from 'react';
 
+// Production-safe logging - only log in development mode
+const isDev = import.meta.env.DEV;
+const log = isDev ? console.log.bind(console) : () => {};
+const logWarn = isDev ? console.warn.bind(console) : () => {};
+const logError = console.error.bind(console); // Always log errors
+
 interface DeltaUpdate {
   type: 'graph:delta' | 'graph:update';
   data: {
@@ -36,12 +42,12 @@ export function RustWebSocketProvider({ children }: { children: React.ReactNode 
   const connect = useCallback(() => {
     // Prevent duplicate connections
     if (isConnectingRef.current || wsRef.current?.readyState === WebSocket.CONNECTING || wsRef.current?.readyState === WebSocket.OPEN) {
-      console.log('[RustWebSocketProvider] Already connected or connecting, skipping. readyState:', wsRef.current?.readyState);
+      log('[RustWebSocketProvider] Already connected or connecting, skipping. readyState:', wsRef.current?.readyState);
       return;
     }
     
     const connId = ++connectionIdRef.current;
-    console.log(`[RustWebSocketProvider] Starting new connection attempt #${connId}`);
+    log(`[RustWebSocketProvider] Starting new connection attempt #${connId}`);
     isConnectingRef.current = true;
     isIntentionalCloseRef.current = false; // Reset the intentional close flag
     
@@ -80,15 +86,15 @@ export function RustWebSocketProvider({ children }: { children: React.ReactNode 
       rustWsUrl = 'ws://localhost:3000/ws';
     }
     
-    console.log(`[RustWebSocketProvider #${connId}] Connecting to Rust server:`, rustWsUrl);
+    log(`[RustWebSocketProvider #${connId}] Connecting to Rust server:`, rustWsUrl);
     
     try {
       const ws = new WebSocket(rustWsUrl);
       wsRef.current = ws;
 
       ws.onopen = () => {
-        console.log(`[RustWebSocketProvider #${connId}] ✅ Connected to Rust server at ${rustWsUrl}`);
-        console.log(`[RustWebSocketProvider #${connId}] Connection stats: attempts=${reconnectCountRef.current + 1}, readyState=${ws.readyState}`);
+        log(`[RustWebSocketProvider #${connId}] Connected to Rust server at ${rustWsUrl}`);
+        log(`[RustWebSocketProvider #${connId}] Connection stats: attempts=${reconnectCountRef.current + 1}, readyState=${ws.readyState}`);
         isConnectingRef.current = false;
         setIsConnected(true);
         reconnectCountRef.current = 0;
@@ -109,9 +115,9 @@ export function RustWebSocketProvider({ children }: { children: React.ReactNode 
             type: 'subscribe:deltas'
           });
           ws.send(subscribeMessage);
-          console.log('[RustWebSocketProvider] Sent subscribe:deltas message');
+          log('[RustWebSocketProvider] Sent subscribe:deltas message');
         } catch (error) {
-          console.error('[RustWebSocketProvider] Failed to send subscribe message:', error);
+          logError('[RustWebSocketProvider] Failed to send subscribe message:', error);
         }
         
         // Start heartbeat to keep connection alive
@@ -122,47 +128,34 @@ export function RustWebSocketProvider({ children }: { children: React.ReactNode 
           if (ws.readyState === WebSocket.OPEN) {
             try {
               ws.send(JSON.stringify({ type: 'ping' }));
-              console.log('[RustWebSocketProvider] Sent ping');
+              log('[RustWebSocketProvider] Sent ping');
             } catch (error) {
-              console.error('[RustWebSocketProvider] Failed to send ping:', error);
+              logError('[RustWebSocketProvider] Failed to send ping:', error);
             }
           }
         }, PING_INTERVAL);
         
-        console.log('[RustWebSocketProvider] Connected, subscribed to delta updates, heartbeat started');
+        log('[RustWebSocketProvider] Connected, subscribed to delta updates, heartbeat started');
       };
 
       ws.onmessage = (event) => {
         try {
           const message = JSON.parse(event.data);
-          console.log(`[RustWebSocketProvider #${connId}] Message received:`, message.type, message);
-          
           // Handle subscription confirmation
           if (message.type === 'subscribed:deltas') {
-            console.log('[RustWebSocketProvider] Delta subscription confirmed');
+            log('[RustWebSocketProvider] Delta subscription confirmed');
           }
           
-          // Handle pong response
+          // Handle pong response - no logging needed for pong
           else if (message.type === 'pong') {
-            console.log('[RustWebSocketProvider] Pong received');
+            // Silent pong handling
           }
           
           // Handle both graph:delta and graph:update message types
           else if (message.type === 'graph:delta' || message.type === 'graph:update') {
-            console.log('[RustWebSocketProvider] Delta/Update data:', message);
-            
             // Handle GraphDelta format from Rust server
             if (message.type === 'graph:delta' && message.data) {
               const data = message.data;
-              
-              console.log('[RustWebSocketProvider] Processing delta:', {
-                nodes_added: data.nodes_added?.length || 0,
-                nodes_updated: data.nodes_updated?.length || 0,
-                nodes_removed: data.nodes_removed?.length || 0,
-                edges_added: data.edges_added?.length || 0,
-                edges_updated: data.edges_updated?.length || 0,
-                edges_removed: data.edges_removed?.length || 0
-              });
               
               // Send added nodes/edges - THIS IS THE IMPORTANT ONE FOR REAL-TIME
               if ((data.nodes_added?.length > 0) || (data.edges_added?.length > 0)) {
@@ -175,23 +168,11 @@ export function RustWebSocketProvider({ children }: { children: React.ReactNode 
                     timestamp: data.timestamp || Date.now()
                   }
                 };
-                console.log('[RustWebSocketProvider] Sending ADD message:', {
-                  nodes: addMessage.data.nodes.length,
-                  edges: addMessage.data.edges.length
-                });
                 subscribersRef.current.forEach(callback => callback(addMessage));
               }
               
-              // Skip node updates - not needed for real-time sync
+              // Skip node/edge updates - not needed for real-time sync
               // We only care about new nodes/edges being added
-              if (data.nodes_updated?.length > 0) {
-                console.log('[RustWebSocketProvider] Skipping node updates:', data.nodes_updated.length);
-              }
-              
-              // Skip edge updates too - they're causing issues
-              if (data.edges_updated?.length > 0) {
-                console.log('[RustWebSocketProvider] Skipping edge updates:', data.edges_updated.length);
-              }
               
               // Send removed nodes/edges
               if ((data.nodes_removed?.length > 0) || (data.edges_removed?.length > 0)) {
@@ -204,10 +185,6 @@ export function RustWebSocketProvider({ children }: { children: React.ReactNode 
                     timestamp: data.timestamp || Date.now()
                   }
                 };
-                console.log('[RustWebSocketProvider] Sending DELETE message:', {
-                  nodes: deleteMessage.data.nodes.length,
-                  edges: deleteMessage.data.edges.length
-                });
                 subscribersRef.current.forEach(callback => callback(deleteMessage));
               }
             }
@@ -226,17 +203,12 @@ export function RustWebSocketProvider({ children }: { children: React.ReactNode 
             }
           }
         } catch (error) {
-          console.error('[RustWebSocketProvider] Error parsing message:', error);
+          logError('[RustWebSocketProvider] Error parsing message:', error);
         }
       };
 
       ws.onerror = (error) => {
-        console.error(`[RustWebSocketProvider #${connId}] ❌ WebSocket error:`, {
-          error,
-          url: rustWsUrl,
-          readyState: ws.readyState,
-          reconnectCount: reconnectCountRef.current
-        });
+        logError(`[RustWebSocketProvider #${connId}] WebSocket error:`, error);
         isConnectingRef.current = false;
         
         // Update global debug info
@@ -250,14 +222,7 @@ export function RustWebSocketProvider({ children }: { children: React.ReactNode 
       };
 
       ws.onclose = (event) => {
-        console.log(`[RustWebSocketProvider #${connId}] ⚪ Connection closed:`, {
-          code: event.code,
-          reason: event.reason || 'No reason provided',
-          wasClean: event.wasClean,
-          intentional: isIntentionalCloseRef.current,
-          url: rustWsUrl,
-          reconnectCount: reconnectCountRef.current
-        });
+        log(`[RustWebSocketProvider #${connId}] Connection closed: code=${event.code}`);
         wsRef.current = null;
         isConnectingRef.current = false;
         setIsConnected(false);
@@ -285,7 +250,7 @@ export function RustWebSocketProvider({ children }: { children: React.ReactNode 
         // Only attempt reconnection if this wasn't an intentional close
         if (!isIntentionalCloseRef.current && reconnectCountRef.current < reconnectAttempts) {
           reconnectCountRef.current++;
-          console.log(`[RustWebSocketProvider] Reconnecting... (${reconnectCountRef.current}/${reconnectAttempts})`);
+          log(`[RustWebSocketProvider] Reconnecting... (${reconnectCountRef.current}/${reconnectAttempts})`);
           
           reconnectTimeoutRef.current = setTimeout(() => {
             connect();
@@ -293,7 +258,7 @@ export function RustWebSocketProvider({ children }: { children: React.ReactNode 
         }
       };
     } catch (error) {
-      console.error('[RustWebSocketProvider] Failed to create WebSocket:', error);
+      logError('[RustWebSocketProvider] Failed to create WebSocket:', error);
       isConnectingRef.current = false;
     }
   }, []);
@@ -340,14 +305,9 @@ export function RustWebSocketProvider({ children }: { children: React.ReactNode 
   }, []); // Remove connect dependency to prevent re-renders
 
   const subscribe = useCallback((callback: (update: DeltaUpdate) => void) => {
-    console.log('[RustWebSocketProvider] Adding subscriber, current count:', subscribersRef.current.size);
     subscribersRef.current.add(callback);
-    console.log('[RustWebSocketProvider] After adding, subscriber count:', subscribersRef.current.size);
-    
     return () => {
-      console.log('[RustWebSocketProvider] Removing subscriber');
       subscribersRef.current.delete(callback);
-      console.log('[RustWebSocketProvider] After removing, subscriber count:', subscribersRef.current.size);
     };
   }, []);
 
@@ -355,7 +315,7 @@ export function RustWebSocketProvider({ children }: { children: React.ReactNode 
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify(message));
     } else {
-      console.warn('[RustWebSocketProvider] WebSocket not connected');
+      logWarn('[RustWebSocketProvider] WebSocket not connected');
     }
   }, []);
 
