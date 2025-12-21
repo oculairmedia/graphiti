@@ -1,35 +1,31 @@
 // Performance utilities for debouncing, throttling, and request optimization
 
-export function debounce<T extends (...args: any[]) => any>(
+export function debounce<T extends (...args: unknown[]) => unknown>(
   func: T,
   wait: number
 ): (...args: Parameters<T>) => void {
   let timeout: NodeJS.Timeout | null = null;
   
-  return function(this: any, ...args: Parameters<T>) {
-    const context = this;
-    
+  return function(this: unknown, ...args: Parameters<T>) {
     if (timeout) clearTimeout(timeout);
     
     timeout = setTimeout(() => {
-      func.apply(context, args);
+      func.apply(this, args);
     }, wait);
   };
 }
 
-export function throttle<T extends (...args: any[]) => any>(
+export function throttle<T extends (...args: unknown[]) => unknown>(
   func: T,
   limit: number
 ): (...args: Parameters<T>) => void {
   let inThrottle = false;
   let lastArgs: Parameters<T> | null = null;
-  let lastContext: any = null;
+  let lastContext: unknown = null;
   
-  return function(this: any, ...args: Parameters<T>) {
-    const context = this;
-    
+  return function(this: unknown, ...args: Parameters<T>) {
     if (!inThrottle) {
-      func.apply(context, args);
+      func.apply(this, args);
       inThrottle = true;
       
       setTimeout(() => {
@@ -43,7 +39,8 @@ export function throttle<T extends (...args: any[]) => any>(
       }, limit);
     } else {
       lastArgs = args;
-      lastContext = context;
+      // eslint-disable-next-line @typescript-eslint/no-this-alias
+      lastContext = this;
     }
   };
 }

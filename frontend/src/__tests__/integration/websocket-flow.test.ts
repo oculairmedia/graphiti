@@ -235,7 +235,7 @@ describe('WebSocket Integration Flow', () => {
   let mockWs: MockWebSocket;
   
   beforeEach(() => {
-    // @ts-ignore
+    // @ts-expect-error - Mocking global WebSocket for tests
     global.WebSocket = MockWebSocket;
     
     wsManager = new WebSocketManager('ws://localhost:3000');
