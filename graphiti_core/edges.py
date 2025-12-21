@@ -36,6 +36,7 @@ from graphiti_core.models.edges.edge_db_queries import (
     EPISODIC_EDGE_SAVE,
 )
 from graphiti_core.nodes import Node
+from graphiti_core.utils.datetime_utils import utc_now
 from graphiti_core.utils.uuid_utils import generate_deterministic_edge_uuid
 
 logger = logging.getLogger(__name__)
@@ -46,6 +47,7 @@ ENTITY_EDGE_RETURN: LiteralString = """
             startNode(e).uuid AS source_node_uuid,
             endNode(e).uuid AS target_node_uuid,
             e.created_at AS created_at,
+            e.updated_at AS updated_at,
             e.name AS name,
             e.group_id AS group_id,
             e.fact AS fact,
@@ -62,6 +64,10 @@ class Edge(BaseModel, ABC):
     source_node_uuid: str
     target_node_uuid: str
     created_at: datetime
+    updated_at: datetime | None = Field(
+        default=None,
+        description='datetime of when the edge was last updated (for incremental sync)',
+    )
     # Optional fields for cross-group edge UUID collision prevention
     source_node_group_id: str | None = Field(
         default=None, description='Source node group_id for cross-group edge UUID generation'
@@ -216,6 +222,9 @@ class EpisodicEdge(Edge):
                     existing_target=existing['target_uuid'],
                 )
 
+        # Always set updated_at to current time on save
+        self.updated_at = utc_now()
+
         result = await driver.execute_query(
             EPISODIC_EDGE_SAVE,
             episode_uuid=self.source_node_uuid,
@@ -223,6 +232,7 @@ class EpisodicEdge(Edge):
             uuid=self.uuid,
             group_id=self.group_id,
             created_at=self.created_at,
+            updated_at=self.updated_at,
         )
 
         logger.debug(f'Saved edge to Graph: {self.uuid}')
@@ -239,7 +249,8 @@ class EpisodicEdge(Edge):
             e.group_id AS group_id,
             n.uuid AS source_node_uuid, 
             m.uuid AS target_node_uuid, 
-            e.created_at AS created_at
+            e.created_at AS created_at,
+            e.updated_at AS updated_at
         """,
             uuid=uuid,
             routing_='r',
@@ -262,7 +273,8 @@ class EpisodicEdge(Edge):
             e.group_id AS group_id,
             n.uuid AS source_node_uuid, 
             m.uuid AS target_node_uuid, 
-            e.created_at AS created_at
+            e.created_at AS created_at,
+            e.updated_at AS updated_at
         """,
             uuids=uuids,
             routing_='r',
@@ -297,7 +309,8 @@ class EpisodicEdge(Edge):
             e.group_id AS group_id,
             n.uuid AS source_node_uuid, 
             m.uuid AS target_node_uuid, 
-            e.created_at AS created_at
+            e.created_at AS created_at,
+            e.updated_at AS updated_at
         ORDER BY e.uuid DESC 
         """
             + limit_query,
@@ -440,6 +453,9 @@ class EntityEdge(Edge):
                     existing_target=existing['target_uuid'],
                 )
 
+        # Always set updated_at to current time on save
+        self.updated_at = utc_now()
+
         edge_data: dict[str, Any] = {
             'source_uuid': self.source_node_uuid,
             'target_uuid': self.target_node_uuid,
@@ -450,6 +466,7 @@ class EntityEdge(Edge):
             'fact_embedding': self.fact_embedding,
             'episodes': self.episodes,
             'created_at': self.created_at,
+            'updated_at': self.updated_at,
             'expired_at': self.expired_at,
             'valid_at': self.valid_at,
             'invalid_at': self.invalid_at,
@@ -566,6 +583,9 @@ class EntityEdge(Edge):
 
 class CommunityEdge(Edge):
     async def save(self, driver: GraphDriver):
+        # Always set updated_at to current time on save
+        self.updated_at = utc_now()
+
         result = await driver.execute_query(
             COMMUNITY_EDGE_SAVE,
             community_uuid=self.source_node_uuid,
@@ -573,6 +593,7 @@ class CommunityEdge(Edge):
             uuid=self.uuid,
             group_id=self.group_id,
             created_at=self.created_at,
+            updated_at=self.updated_at,
         )
 
         logger.debug(f'Saved edge to Graph: {self.uuid}')
@@ -589,7 +610,8 @@ class CommunityEdge(Edge):
             e.group_id AS group_id,
             n.uuid AS source_node_uuid, 
             m.uuid AS target_node_uuid, 
-            e.created_at AS created_at
+            e.created_at AS created_at,
+            e.updated_at AS updated_at
         """,
             uuid=uuid,
             routing_='r',
@@ -610,7 +632,8 @@ class CommunityEdge(Edge):
             e.group_id AS group_id,
             n.uuid AS source_node_uuid, 
             m.uuid AS target_node_uuid, 
-            e.created_at AS created_at
+            e.created_at AS created_at,
+            e.updated_at AS updated_at
         """,
             uuids=uuids,
             routing_='r',
@@ -643,7 +666,8 @@ class CommunityEdge(Edge):
             e.group_id AS group_id,
             n.uuid AS source_node_uuid, 
             m.uuid AS target_node_uuid, 
-            e.created_at AS created_at
+            e.created_at AS created_at,
+            e.updated_at AS updated_at
         ORDER BY e.uuid DESC
         """
             + limit_query,
@@ -666,6 +690,7 @@ def get_episodic_edge_from_record(record: Any) -> EpisodicEdge:
         source_node_uuid=record['source_node_uuid'],
         target_node_uuid=record['target_node_uuid'],
         created_at=parse_db_date(record['created_at']),  # type: ignore
+        updated_at=parse_db_date(record.get('updated_at')),
     )
 
 
@@ -735,9 +760,10 @@ def get_entity_edge_from_record(record: Any) -> EntityEdge:
         group_id=record['group_id'],
         episodes=episodes,
         created_at=parse_db_date(record['created_at']),  # type: ignore
-        expired_at=parse_db_date(record['expired_at']),
-        valid_at=parse_db_date(record['valid_at']),
-        invalid_at=parse_db_date(record['invalid_at']),
+        updated_at=parse_db_date(record.get('updated_at')),
+        expired_at=parse_db_date(record.get('expired_at')),
+        valid_at=parse_db_date(record.get('valid_at')),
+        invalid_at=parse_db_date(record.get('invalid_at')),
         attributes=record.get('attributes') or {},
     )
 
@@ -750,6 +776,7 @@ def get_entity_edge_from_record(record: Any) -> EntityEdge:
         edge.attributes.pop('group_id', None)
         edge.attributes.pop('episodes', None)
         edge.attributes.pop('created_at', None)
+        edge.attributes.pop('updated_at', None)
         edge.attributes.pop('expired_at', None)
         edge.attributes.pop('valid_at', None)
         edge.attributes.pop('invalid_at', None)
@@ -764,6 +791,7 @@ def get_community_edge_from_record(record: Any):
         source_node_uuid=record['source_node_uuid'],
         target_node_uuid=record['target_node_uuid'],
         created_at=parse_db_date(record['created_at']),  # type: ignore
+        updated_at=parse_db_date(record.get('updated_at')),
     )
 
 

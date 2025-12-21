@@ -17,7 +17,7 @@ limitations under the License.
 EPISODIC_NODE_SAVE = """
         MERGE (n:Episodic {uuid: $uuid})
         SET n = {uuid: $uuid, name: $name, group_id: $group_id, source_description: $source_description, source: $source, content: $content, 
-        entity_edges: $entity_edges, created_at: $created_at, valid_at: $valid_at}
+        entity_edges: $entity_edges, created_at: $created_at, valid_at: $valid_at, updated_at: $updated_at}
         RETURN n.uuid AS uuid"""
 
 EPISODIC_NODE_SAVE_BULK = """
@@ -25,7 +25,7 @@ EPISODIC_NODE_SAVE_BULK = """
     MERGE (n:Episodic {uuid: episode.uuid, group_id: episode.group_id})
     SET n = {uuid: episode.uuid, name: episode.name, group_id: episode.group_id, source_description: episode.source_description, 
         source: episode.source, content: episode.content, 
-    entity_edges: episode.entity_edges, created_at: episode.created_at, valid_at: episode.valid_at}
+    entity_edges: episode.entity_edges, created_at: episode.created_at, valid_at: episode.valid_at, updated_at: episode.updated_at}
     RETURN n.uuid AS uuid
 """
 
@@ -45,6 +45,6 @@ ENTITY_NODE_SAVE_BULK = """
 
 COMMUNITY_NODE_SAVE = """
         MERGE (n:Community {uuid: $uuid})
-        SET n = {uuid: $uuid, name: $name, group_id: $group_id, summary: $summary, created_at: $created_at}
+        SET n = {uuid: $uuid, name: $name, group_id: $group_id, summary: $summary, created_at: $created_at, updated_at: $updated_at}
         SET n.name_embedding = vecf32($name_embedding)
         RETURN n.uuid AS uuid"""

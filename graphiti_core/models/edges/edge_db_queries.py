@@ -18,7 +18,7 @@ EPISODIC_EDGE_SAVE = """
         MATCH (episode:Episodic {uuid: $episode_uuid}) 
         MATCH (node:Entity {uuid: $entity_uuid}) 
         MERGE (episode)-[r:MENTIONS {uuid: $uuid, group_id: $group_id}]->(node)
-        SET r = {uuid: $uuid, group_id: $group_id, created_at: $created_at}
+        SET r = {uuid: $uuid, group_id: $group_id, created_at: $created_at, updated_at: $updated_at}
         RETURN r.uuid AS uuid"""
 
 EPISODIC_EDGE_SAVE_BULK = """
@@ -26,7 +26,7 @@ EPISODIC_EDGE_SAVE_BULK = """
     MATCH (episode:Episodic {uuid: edge.source_node_uuid}) 
     MATCH (node:Entity {uuid: edge.target_node_uuid}) 
     MERGE (episode)-[r:MENTIONS {uuid: edge.uuid, group_id: edge.group_id}]->(node)
-    SET r = {uuid: edge.uuid, group_id: edge.group_id, created_at: edge.created_at}
+    SET r = {uuid: edge.uuid, group_id: edge.group_id, created_at: edge.created_at, updated_at: edge.updated_at}
     RETURN r.uuid AS uuid
 """
 
@@ -52,5 +52,5 @@ COMMUNITY_EDGE_SAVE = """
         MATCH (community:Community {uuid: $community_uuid}) 
         MATCH (node:Entity | Community {uuid: $entity_uuid}) 
         MERGE (community)-[r:HAS_MEMBER {uuid: $uuid, group_id: $group_id}]->(node)
-        SET r = {uuid: $uuid, group_id: $group_id, created_at: $created_at}
+        SET r = {uuid: $uuid, group_id: $group_id, created_at: $created_at, updated_at: $updated_at}
         RETURN r.uuid AS uuid"""

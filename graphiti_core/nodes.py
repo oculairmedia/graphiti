@@ -46,7 +46,8 @@ ENTITY_NODE_RETURN: LiteralString = """
             n.uuid As uuid, 
             n.name AS name,
             n.group_id AS group_id,
-            n.created_at AS created_at, 
+            n.created_at AS created_at,
+            n.updated_at AS updated_at, 
             n.summary AS summary,
             labels(n) AS labels,
             properties(n) AS attributes"""
@@ -89,16 +90,20 @@ class EpisodeType(Enum):
 
 
 class Node(BaseModel, ABC):
-    uuid: str = Field(default="", description='UUID of the node')
+    uuid: str = Field(default='', description='UUID of the node')
     name: str = Field(description='name of the node')
     group_id: str = Field(description='partition of the graph')
     labels: list[str] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=lambda: utc_now())
+    updated_at: datetime | None = Field(
+        default=None,
+        description='datetime of when the node was last updated (for incremental sync)',
+    )
 
     @root_validator(pre=True)
     def generate_uuid_if_needed(cls, values):
         uuid_value = values.get('uuid', '')
-        
+
         # If UUID is already provided and valid, use it
         if uuid_value and str(uuid_value).strip():
             try:
@@ -106,38 +111,39 @@ class Node(BaseModel, ABC):
                 return values
             except ValueError:
                 raise ValueError('Invalid UUID format')
-        
+
         # Check if deterministic UUID generation is enabled
         use_deterministic_uuids = os.getenv('USE_DETERMINISTIC_UUIDS', 'false').lower() == 'true'
-        
+
         if use_deterministic_uuids:
             # Get name and group_id from values
             name = values.get('name')
             group_id = values.get('group_id')
-            
+
             if name and group_id:
                 # For EpisodicNode, include content to ensure unique UUIDs for different episodes
                 # This prevents information loss when multiple episodes have the same name
                 if cls.__name__ == 'EpisodicNode':
                     content = values.get('content', '')
                     valid_at = values.get('valid_at')
-                    
+
                     # Create a unique identifier that includes content hash and timestamp
                     import hashlib
+
                     content_hash = hashlib.md5(content.encode('utf-8')).hexdigest()[:8]
                     timestamp_str = str(valid_at) if valid_at else str(utc_now())
-                    unique_name = f"{name}_{content_hash}_{timestamp_str}"
-                    
+                    unique_name = f'{name}_{content_hash}_{timestamp_str}'
+
                     values['uuid'] = generate_deterministic_uuid(unique_name, group_id)
                 else:
                     # For other node types, use original logic
                     values['uuid'] = generate_deterministic_uuid(name, group_id)
                 return values
-        
+
         # Fall back to random UUID
         values['uuid'] = str(uuid4())
         return values
-    
+
     @validator('uuid')
     def validate_uuid_final(cls, v):
         if not v or not v.strip():
@@ -147,7 +153,7 @@ class Node(BaseModel, ABC):
         except ValueError:
             raise ValueError('Invalid UUID format')
         return v
-    
+
     @validator('name')
     def validate_name(cls, v):
         if not v or not v.strip():
@@ -155,18 +161,20 @@ class Node(BaseModel, ABC):
         if len(v.strip()) > 255:
             raise ValueError('Name cannot exceed 255 characters')
         return v.strip()
-    
+
     @validator('group_id')
     def validate_group_id(cls, v):
         if not v or not v.strip():
             raise ValueError('Group ID cannot be empty')
         # Allow alphanumeric, underscores, hyphens, dots
         if not re.match(r'^[a-zA-Z0-9_.-]+$', v):
-            raise ValueError('Group ID must contain only alphanumeric characters, underscores, hyphens, and dots')
+            raise ValueError(
+                'Group ID must contain only alphanumeric characters, underscores, hyphens, and dots'
+            )
         if len(v) > 100:
             raise ValueError('Group ID cannot exceed 100 characters')
         return v
-    
+
     @validator('labels')
     def validate_labels(cls, v):
         if not isinstance(v, list):
@@ -240,7 +248,7 @@ class EpisodicNode(Node):
         if len(v.strip()) > 1000:
             raise ValueError('Source description cannot exceed 1000 characters')
         return v.strip()
-    
+
     @validator('content')
     def validate_content(cls, v):
         if not v or not v.strip():
@@ -248,13 +256,13 @@ class EpisodicNode(Node):
         if len(v.strip()) > 100000:
             raise ValueError('Episode content cannot exceed 100000 characters')
         return v.strip()
-    
+
     @validator('valid_at')
     def validate_valid_at(cls, v):
         if not isinstance(v, datetime):
             raise ValueError('valid_at must be a datetime object')
         return v
-    
+
     @validator('entity_edges')
     def validate_entity_edges(cls, v):
         if not isinstance(v, list):
@@ -271,6 +279,9 @@ class EpisodicNode(Node):
         return v
 
     async def save(self, driver: GraphDriver):
+        # Always set updated_at to current time on save
+        self.updated_at = utc_now()
+
         result = await driver.execute_query(
             EPISODIC_NODE_SAVE,
             uuid=self.uuid,
@@ -282,6 +293,7 @@ class EpisodicNode(Node):
             created_at=self.created_at,
             valid_at=self.valid_at,
             source=self.source.value,
+            updated_at=self.updated_at,
         )
 
         logger.debug(f'Saved Node to Graph: {self.uuid}')
@@ -295,6 +307,7 @@ class EpisodicNode(Node):
         MATCH (e:Episodic {uuid: $uuid})
             RETURN e.content AS content,
             e.created_at AS created_at,
+            e.updated_at AS updated_at,
             e.valid_at AS valid_at,
             e.uuid AS uuid,
             e.name AS name,
@@ -322,6 +335,7 @@ class EpisodicNode(Node):
             RETURN DISTINCT
             e.content AS content,
             e.created_at AS created_at,
+            e.updated_at AS updated_at,
             e.valid_at AS valid_at,
             e.uuid AS uuid,
             e.name AS name,
@@ -358,6 +372,7 @@ class EpisodicNode(Node):
             RETURN DISTINCT
             e.content AS content,
             e.created_at AS created_at,
+            e.updated_at AS updated_at,
             e.valid_at AS valid_at,
             e.uuid AS uuid,
             e.name AS name,
@@ -386,6 +401,7 @@ class EpisodicNode(Node):
             RETURN DISTINCT
             e.content AS content,
             e.created_at AS created_at,
+            e.updated_at AS updated_at,
             e.valid_at AS valid_at,
             e.uuid AS uuid,
             e.name AS name,
@@ -409,7 +425,7 @@ class EntityNode(Node):
     attributes: dict[str, Any] = Field(
         default={}, description='Additional attributes of the node. Dependent on node labels'
     )
-    
+
     @validator('name_embedding')
     def validate_name_embedding(cls, v):
         if v is not None:
@@ -423,25 +439,28 @@ class EntityNode(Node):
             if len(v) > 4096:
                 raise ValueError('Name embedding dimension too large (max 4096)')
         return v
-    
+
     @validator('summary')
     def validate_summary(cls, v):
         if v is not None and len(v) > 10000:
-            logger.warning(f"Truncating summary from {len(v)} to 10000 characters")
+            logger.warning(f'Truncating summary from {len(v)} to 10000 characters')
             return v[:10000]
         return v
-    
+
     @validator('attributes')
     def validate_attributes(cls, v):
         if not isinstance(v, dict):
             raise ValueError('Attributes must be a dictionary')
-        
+
         # Validate centrality scores if present
         centrality_fields = [
-            'centrality_pagerank', 'centrality_degree', 'centrality_betweenness', 
-            'centrality_eigenvector', 'centrality_importance'
+            'centrality_pagerank',
+            'centrality_degree',
+            'centrality_betweenness',
+            'centrality_eigenvector',
+            'centrality_importance',
         ]
-        
+
         for field in centrality_fields:
             if field in v:
                 score = v[field]
@@ -452,7 +471,11 @@ class EntityNode(Node):
                     # Degree centrality can exceed 1.0 in directed graphs or weighted graphs
                     if score < 0.0:
                         raise ValueError(f'{field} must be >= 0.0, got {score}')
-                elif field in ['centrality_pagerank', 'centrality_betweenness', 'centrality_eigenvector']:
+                elif field in [
+                    'centrality_pagerank',
+                    'centrality_betweenness',
+                    'centrality_eigenvector',
+                ]:
                     # These centrality measures are typically normalized to [0,1]
                     if not (0.0 <= score <= 1.0):
                         raise ValueError(f'{field} must be between 0.0 and 1.0, got {score}')
@@ -460,12 +483,12 @@ class EntityNode(Node):
                     # Importance score can be any non-negative value
                     if score < 0.0:
                         raise ValueError(f'{field} must be >= 0.0, got {score}')
-        
+
         # Validate other common attributes
         if 'created_at' in v and v['created_at'] is not None:
             if not isinstance(v['created_at'], (datetime, str)):
                 raise ValueError('created_at must be a datetime or ISO string')
-        
+
         return v
 
     async def generate_name_embedding(self, embedder: EmbedderClient):
@@ -490,6 +513,9 @@ class EntityNode(Node):
         self.name_embedding = records[0]['name_embedding']
 
     async def save(self, driver: GraphDriver):
+        # Always set updated_at to current time on save
+        self.updated_at = utc_now()
+
         entity_data: dict[str, Any] = {
             'uuid': self.uuid,
             'name': self.name,
@@ -497,6 +523,7 @@ class EntityNode(Node):
             'group_id': self.group_id,
             'summary': self.summary,
             'created_at': self.created_at,
+            'updated_at': self.updated_at,
         }
 
         entity_data.update(self.attributes or {})
@@ -593,6 +620,9 @@ class CommunityNode(Node):
     summary: str = Field(description='region summary of member nodes', default_factory=str)
 
     async def save(self, driver: GraphDriver):
+        # Always set updated_at to current time on save
+        self.updated_at = utc_now()
+
         result = await driver.execute_query(
             COMMUNITY_NODE_SAVE,
             uuid=self.uuid,
@@ -601,6 +631,7 @@ class CommunityNode(Node):
             summary=self.summary,
             name_embedding=self.name_embedding,
             created_at=self.created_at,
+            updated_at=self.updated_at,
         )
 
         logger.debug(f'Saved Node to Graph: {self.uuid}')
@@ -637,7 +668,8 @@ class CommunityNode(Node):
             n.uuid As uuid, 
             n.name AS name,
             n.group_id AS group_id,
-            n.created_at AS created_at, 
+            n.created_at AS created_at,
+            n.updated_at AS updated_at, 
             n.summary AS summary
         """,
             uuid=uuid,
@@ -660,7 +692,8 @@ class CommunityNode(Node):
             n.uuid As uuid, 
             n.name AS name,
             n.group_id AS group_id,
-            n.created_at AS created_at, 
+            n.created_at AS created_at,
+            n.updated_at AS updated_at, 
             n.summary AS summary
         """,
             uuids=uuids,
@@ -692,7 +725,8 @@ class CommunityNode(Node):
             n.uuid As uuid, 
             n.name AS name,
             n.group_id AS group_id,
-            n.created_at AS created_at, 
+            n.created_at AS created_at,
+            n.updated_at AS updated_at, 
             n.summary AS summary
         ORDER BY n.uuid DESC
         """
@@ -712,6 +746,7 @@ class CommunityNode(Node):
 def get_episodic_node_from_record(record: Any) -> EpisodicNode:
     created_at = parse_db_date(record['created_at'])
     valid_at = parse_db_date(record['valid_at'])
+    updated_at = parse_db_date(record.get('updated_at'))
 
     if created_at is None:
         raise ValueError(f'created_at cannot be None for episode {record.get("uuid", "unknown")}')
@@ -721,6 +756,7 @@ def get_episodic_node_from_record(record: Any) -> EpisodicNode:
     return EpisodicNode(
         content=record['content'],
         created_at=created_at,
+        updated_at=updated_at,
         valid_at=valid_at,
         uuid=record['uuid'],
         group_id=record['group_id'],
@@ -739,6 +775,7 @@ def get_entity_node_from_record(record: Any) -> EntityNode:
         group_id=record['group_id'],
         labels=record['labels'],
         created_at=parse_db_date(record['created_at']),  # type: ignore
+        updated_at=parse_db_date(record.get('updated_at')),
         summary=record['summary'],
         attributes=record['attributes'],
     )
@@ -749,6 +786,7 @@ def get_entity_node_from_record(record: Any) -> EntityNode:
     entity_node.attributes.pop('name_embedding', None)
     entity_node.attributes.pop('summary', None)
     entity_node.attributes.pop('created_at', None)
+    entity_node.attributes.pop('updated_at', None)
 
     return entity_node
 
@@ -758,8 +796,9 @@ def get_community_node_from_record(record: Any) -> CommunityNode:
         uuid=record['uuid'],
         name=record['name'],
         group_id=record['group_id'],
-        name_embedding=record['name_embedding'],
+        name_embedding=record.get('name_embedding'),
         created_at=parse_db_date(record['created_at']),  # type: ignore
+        updated_at=parse_db_date(record.get('updated_at')),
         summary=record['summary'],
     )
 
