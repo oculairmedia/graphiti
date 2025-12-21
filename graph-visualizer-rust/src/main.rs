@@ -608,7 +608,9 @@ async fn main() -> anyhow::Result<()> {
     let store_clone = state.duckdb_store.clone();
     
     tokio::spawn(async move {
-        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(30));
+        // GRAPH-97: Reduced from 30s to 5s for faster change detection
+        // Safe due to optimized combined query (GRAPH-95)
+        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(5));
         let mut last_node_count = 0;
         let mut last_edge_count = 0;
         let mut last_centrality_sum = 0.0;
