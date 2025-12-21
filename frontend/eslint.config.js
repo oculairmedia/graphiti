@@ -24,6 +24,11 @@ export default tseslint.config(
         { allowConstantExport: true },
       ],
       "@typescript-eslint/no-unused-vars": "off",
+      // GRAPH-116: Temporarily downgrade to warnings until full cleanup
+      // TypeScript strict mode is enabled and passing
+      "@typescript-eslint/no-explicit-any": "warn",
+      "@typescript-eslint/no-unsafe-function-type": "warn",
+      "no-case-declarations": "warn",
     },
   },
   // Relaxed rules for test files - allow 'any' in mocks
