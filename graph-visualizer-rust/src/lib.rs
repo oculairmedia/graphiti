@@ -7,6 +7,7 @@ pub mod duckdb_store;
 pub mod delta_tracker;
 pub mod cache;
 pub mod stream_consumer;  // GRAPH-107: Redis stream consumer for real-time updates
+pub mod reconciliation;   // GRAPH-112: Paginated ID fetching for memory safety
 // pub mod websocket; // Commented out - requires AppState from main.rs
 // pub mod arrow_converter; // Commented out - not needed for tests
 

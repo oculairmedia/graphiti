@@ -29,6 +29,7 @@ mod delta_tracker;
 mod cache;
 mod websocket;
 mod stream_consumer;  // GRAPH-107: Redis stream consumer for real-time updates
+mod reconciliation;   // GRAPH-112: Paginated ID fetching for memory safety
 
 use duckdb_store::{DuckDBStore, GraphUpdate, UpdateOperation};
 use arrow_converter::ArrowConverter;
