@@ -75,6 +75,10 @@
     "zod": "^3.23.8",
     "zustand": "5.0.9"
   },
+  "optionalDependencies": {
+    "@rollup/rollup-win32-x64-msvc": "4.54.0",
+    "@rollup/rollup-linux-x64-gnu": "4.54.0"
+  },
   "devDependencies": {
     "@eslint/js": "^9.9.0",
     "@tailwindcss/typography": "^0.5.15",
