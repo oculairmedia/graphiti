@@ -1214,14 +1214,17 @@ async fn execute_graph_query(client: &FalkorAsyncClient, graph_name: &str, query
     let mut edges = Vec::new();
     
     // Special handling for incremental fetch query
+    // GRAPH-103: Use updated_at for true incremental sync (captures updates, not just new records)
     if query.starts_with("incremental_fetch|") {
         let timestamp = query.strip_prefix("incremental_fetch|").unwrap_or("");
-        info!("Performing incremental fetch for nodes created after: {}", timestamp);
+        info!("Performing incremental fetch for nodes/edges updated after: {}", timestamp);
         
-        // Query only nodes created after the timestamp
+        // Query nodes updated after the timestamp (updated_at field added in GRAPH-99)
+        // Falls back to created_at for backward compatibility with older records
         let nodes_query = format!(r#"
             MATCH (n)
-            WHERE EXISTS(n.created_at) AND n.created_at > '{}'
+            WHERE (EXISTS(n.updated_at) AND n.updated_at > '{}') 
+               OR (NOT EXISTS(n.updated_at) AND EXISTS(n.created_at) AND n.created_at > '{}')
             RETURN 
                 n.uuid as id,
                 n.name as name,
@@ -1230,9 +1233,9 @@ async fn execute_graph_query(client: &FalkorAsyncClient, graph_name: &str, query
                 COALESCE(n.pagerank_centrality, 0) as pagerank_centrality,
                 COALESCE(n.betweenness_centrality, 0) as betweenness_centrality,
                 COALESCE(n.eigenvector_centrality, 0) as eigenvector_centrality,
-                n.created_at as created_at,
+                COALESCE(n.updated_at, n.created_at) as updated_at,
                 n.summary as summary
-        "#, timestamp);
+        "#, timestamp, timestamp);
         
         let mut graph = client.select_graph(graph_name);
         let mut nodes_result = graph.query(&nodes_query).execute().await?;
@@ -1250,7 +1253,7 @@ async fn execute_graph_query(client: &FalkorAsyncClient, graph_name: &str, query
                 let pagerank_centrality = value_to_f64(&row[4]);
                 let betweenness_centrality = value_to_f64(&row[5]);
                 let eigenvector_centrality = value_to_f64(&row[6]);
-                let created_at = value_to_string(&row[7]);
+                let updated_at = value_to_string(&row[7]);
                 let summary_text = row[8].as_string().map(|s| s.to_string());
                 
                 // Build properties object
@@ -1262,8 +1265,8 @@ async fn execute_graph_query(client: &FalkorAsyncClient, graph_name: &str, query
                 node_props.insert("betweenness_centrality".to_string(), serde_json::json!(betweenness_centrality));
                 node_props.insert("eigenvector_centrality".to_string(), serde_json::json!(eigenvector_centrality));
                 
-                if !created_at.is_empty() {
-                    node_props.insert("created_at".to_string(), serde_json::Value::String(created_at));
+                if !updated_at.is_empty() {
+                    node_props.insert("updated_at".to_string(), serde_json::Value::String(updated_at));
                 }
                 
                 new_node_ids.push(node_id.clone());
@@ -1278,30 +1281,46 @@ async fn execute_graph_query(client: &FalkorAsyncClient, graph_name: &str, query
             }
         }
         
-        info!("Fetched {} new nodes created after {}", nodes_map.len(), timestamp);
+        info!("Fetched {} nodes updated after {}", nodes_map.len(), timestamp);
         
-        // Query edges connected to new nodes (both incoming and outgoing)
+        // GRAPH-103: Also query edges that were updated since the timestamp
+        // This catches edge updates even if the connected nodes weren't updated
+        let edges_query = format!(r#"
+            MATCH (n)-[r]->(m)
+            WHERE (EXISTS(r.updated_at) AND r.updated_at > '{}')
+               OR (NOT EXISTS(r.updated_at) AND EXISTS(r.created_at) AND r.created_at > '{}')
+            RETURN 
+                n.uuid as source_id,
+                m.uuid as target_id,
+                type(r) as rel_type,
+                COALESCE(r.weight, 1.0) as weight,
+                COALESCE(r.updated_at, r.created_at) as updated_at
+        "#, timestamp, timestamp);
+        
+        // Also query edges connected to updated nodes (both incoming and outgoing)
+        // This ensures we have all edges for newly fetched nodes
         if !new_node_ids.is_empty() {
             let node_ids_str = new_node_ids.iter()
                 .map(|id| format!("'{}'", id.replace("'", "\\'")))
                 .collect::<Vec<_>>()
                 .join(", ");
             
-            let edges_query = format!(r#"
+            let node_edges_query = format!(r#"
                 MATCH (n)-[r]->(m)
                 WHERE n.uuid IN [{}] OR m.uuid IN [{}]
                 RETURN 
                     n.uuid as source_id,
                     m.uuid as target_id,
                     type(r) as rel_type,
-                    COALESCE(r.weight, 1.0) as weight
+                    COALESCE(r.weight, 1.0) as weight,
+                    COALESCE(r.updated_at, r.created_at) as updated_at
             "#, node_ids_str, node_ids_str);
             
             let mut graph = client.select_graph(graph_name);
-            let mut edges_result = graph.query(&edges_query).execute().await?;
+            let mut node_edges_result = graph.query(&node_edges_query).execute().await?;
             
-            // Process edges
-            while let Some(row) = edges_result.data.next() {
+            // Process edges connected to updated nodes
+            while let Some(row) = node_edges_result.data.next() {
                 if row.len() >= 4 {
                     let source_id = value_to_string(&row[0]);
                     let target_id = value_to_string(&row[1]);
@@ -1317,7 +1336,39 @@ async fn execute_graph_query(client: &FalkorAsyncClient, graph_name: &str, query
                 }
             }
             
-            info!("Fetched {} edges connected to new nodes", edges.len());
+            info!("Fetched {} edges connected to updated nodes", edges.len());
+        }
+        
+        // Also fetch edges that were updated directly (even if connected nodes weren't updated)
+        {
+            let mut graph = client.select_graph(graph_name);
+            let mut updated_edges_result = graph.query(&edges_query).execute().await?;
+            let initial_count = edges.len();
+            
+            while let Some(row) = updated_edges_result.data.next() {
+                if row.len() >= 4 {
+                    let source_id = value_to_string(&row[0]);
+                    let target_id = value_to_string(&row[1]);
+                    let rel_type = value_to_string(&row[2]);
+                    let weight = row[3].to_f64().unwrap_or(1.0);
+                    
+                    // Avoid duplicates - check if this edge already exists
+                    let edge_key = (source_id.clone(), target_id.clone());
+                    if !edges.iter().any(|e| e.from == edge_key.0 && e.to == edge_key.1) {
+                        edges.push(Edge {
+                            from: source_id,
+                            to: target_id,
+                            edge_type: rel_type,
+                            weight,
+                        });
+                    }
+                }
+            }
+            
+            let new_edges = edges.len() - initial_count;
+            if new_edges > 0 {
+                info!("Fetched {} additional edges updated since {}", new_edges, timestamp);
+            }
         }
     }
     // Special handling for entire_graph query

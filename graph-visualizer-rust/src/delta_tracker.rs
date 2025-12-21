@@ -210,6 +210,7 @@ fn properties_equal_meaningful(a: &HashMap<String, serde_json::Value>, b: &HashM
     // Fields to ignore when comparing properties (volatile/computed fields)
     const IGNORED_FIELDS: &[&str] = &[
         "created_at",           // Timestamp might have formatting differences
+        "updated_at",           // GRAPH-103: Always changes on save, not meaningful for delta comparison
         "degree_centrality",    // Computed metric that might vary slightly
         "pagerank_centrality",  // Computed metric that might vary slightly
         "betweenness_centrality", // Computed metric that might vary slightly
