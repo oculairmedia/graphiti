@@ -33,47 +33,79 @@
         // Start fetching critical data immediately
         window.__PRELOAD_CACHE__ = {};
         window.__PRELOAD_START_TIME__ = performance.now();
-        
-        // Use current origin (goes through nginx on port 8088)
-        const serverUrl = window.location.origin;
+
+        // Get server URL from meta tag for remote server support
+        // This allows early preload to work correctly in dev mode (where proxy may not be ready)
+        var metaTag = document.querySelector('meta[name="rust-server-url"]');
+        var serverUrl = metaTag ? metaTag.getAttribute('content') : window.location.origin;
+        console.log('[EarlyPreload] Using server URL:', serverUrl);
+
         // Add cache-busting timestamp to ensure fresh data
         const cacheBuster = '?t=' + Date.now();
         
-        // Fetch nodes data
-        window.__PRELOAD_CACHE__.nodesPromise = fetch(serverUrl + '/api/arrow/nodes' + cacheBuster, {
+        // Helper function to add timeout to fetch
+        function fetchWithTimeout(url, options, timeoutMs) {
+          return Promise.race([
+            fetch(url, options),
+            new Promise(function(_, reject) {
+              setTimeout(function() { reject(new Error('Fetch timeout after ' + timeoutMs + 'ms')); }, timeoutMs);
+            })
+          ]);
+        }
+
+        // Fetch nodes data with CORS support and 30s timeout
+        window.__PRELOAD_CACHE__.nodesPromise = fetchWithTimeout(serverUrl + '/api/arrow/nodes' + cacheBuster, {
+          method: 'GET',
+          mode: 'cors',
           cache: 'no-cache',
+          credentials: 'omit',
           headers: {
+            'Accept': 'application/octet-stream',
             'Cache-Control': 'no-cache',
             'Pragma': 'no-cache'
           }
-        })
-          .then(r => r.arrayBuffer())
-          .then(data => {
+        }, 30000)
+          .then(function(r) {
+            if (!r.ok) {
+              throw new Error('HTTP ' + r.status + ': ' + r.statusText);
+            }
+            return r.arrayBuffer();
+          })
+          .then(function(data) {
             console.log('[EarlyPreload] Nodes loaded:', (data.byteLength / 1024).toFixed(2) + 'KB');
             window.__PRELOAD_CACHE__.nodes = data;
             return data;
           })
-          .catch(err => {
-            console.error('[EarlyPreload] Failed to preload nodes:', err);
+          .catch(function(err) {
+            console.error('[EarlyPreload] Failed to preload nodes:', err.message || err);
             return null;
           });
-        
-        // Fetch edges data
-        window.__PRELOAD_CACHE__.edgesPromise = fetch(serverUrl + '/api/arrow/edges' + cacheBuster, {
+
+        // Fetch edges data with CORS support and 30s timeout
+        window.__PRELOAD_CACHE__.edgesPromise = fetchWithTimeout(serverUrl + '/api/arrow/edges' + cacheBuster, {
+          method: 'GET',
+          mode: 'cors',
           cache: 'no-cache',
+          credentials: 'omit',
           headers: {
+            'Accept': 'application/octet-stream',
             'Cache-Control': 'no-cache',
             'Pragma': 'no-cache'
           }
-        })
-          .then(r => r.arrayBuffer())
-          .then(data => {
+        }, 30000)
+          .then(function(r) {
+            if (!r.ok) {
+              throw new Error('HTTP ' + r.status + ': ' + r.statusText);
+            }
+            return r.arrayBuffer();
+          })
+          .then(function(data) {
             console.log('[EarlyPreload] Edges loaded:', (data.byteLength / 1024).toFixed(2) + 'KB');
             window.__PRELOAD_CACHE__.edges = data;
             return data;
           })
-          .catch(err => {
-            console.error('[EarlyPreload] Failed to preload edges:', err);
+          .catch(function(err) {
+            console.error('[EarlyPreload] Failed to preload edges:', err.message || err);
             return null;
           });
         
@@ -81,10 +113,28 @@
         Promise.all([
           window.__PRELOAD_CACHE__.nodesPromise,
           window.__PRELOAD_CACHE__.edgesPromise
-        ]).then(() => {
-          const elapsed = performance.now() - window.__PRELOAD_START_TIME__;
-          console.log('[EarlyPreload] Data preloading completed in', elapsed.toFixed(2) + 'ms');
+        ]).then(function(results) {
+          var elapsed = performance.now() - window.__PRELOAD_START_TIME__;
+          var nodesLoaded = results[0] && results[0].byteLength > 0;
+          var edgesLoaded = results[1] && results[1].byteLength > 0;
+          console.log('[EarlyPreload] Data preloading completed in', elapsed.toFixed(2) + 'ms', {
+            nodesLoaded: nodesLoaded,
+            edgesLoaded: edgesLoaded,
+            nodesSize: results[0] ? results[0].byteLength : 0,
+            edgesSize: results[1] ? results[1].byteLength : 0
+          });
         });
+
+        // Timeout warning after 5 seconds
+        setTimeout(function() {
+          if (!window.__PRELOAD_CACHE__.nodes || !window.__PRELOAD_CACHE__.edges) {
+            console.warn('[EarlyPreload] Still waiting after 5 seconds - possible network/CORS issue', {
+              nodesLoaded: !!window.__PRELOAD_CACHE__.nodes,
+              edgesLoaded: !!window.__PRELOAD_CACHE__.edges,
+              serverUrl: serverUrl
+            });
+          }
+        }, 5000);
       })();
     </script>
   </head>

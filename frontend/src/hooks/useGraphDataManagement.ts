@@ -133,6 +133,44 @@ export function useGraphDataManagement(config: UseGraphDataManagementConfig = {}
     });
   }
 
+  // Track if this is the first render to avoid double-setting data
+  const isFirstRenderRef = useRef(true);
+  const prevInitialNodesLengthRef = useRef(initialNodes.length);
+
+  // CRITICAL FIX: Sync state when initialNodes/initialLinks props change
+  // This handles the case where data is loaded asynchronously (e.g., from DuckDB)
+  // and passed as props after initial render
+  useEffect(() => {
+    // Skip first render - state is already initialized with initialNodes
+    if (isFirstRenderRef.current) {
+      isFirstRenderRef.current = false;
+      return;
+    }
+
+    // Only sync if the data has actually changed (not just reference)
+    const hasNewData = initialNodes.length > 0 && 
+      (initialNodes.length !== prevInitialNodesLengthRef.current || 
+       dataState.nodes.length === 0);
+
+    if (hasNewData) {
+      console.log('[useGraphDataManagement] Syncing with new initialNodes:', {
+        prevLength: prevInitialNodesLengthRef.current,
+        newLength: initialNodes.length,
+        currentStateLength: dataState.nodes.length
+      });
+      prevInitialNodesLengthRef.current = initialNodes.length;
+      
+      // Update state with new data
+      setDataState(prev => ({
+        ...prev,
+        nodes: initialNodes,
+        links: initialLinks,
+        lastUpdate: Date.now(),
+        updateCount: prev.updateCount + 1
+      }));
+    }
+  }, [initialNodes.length, initialLinks.length]);
+
   // Cache management
   const cacheRef = useRef<Map<string, CacheEntry>>(new Map());
   const cacheSizeRef = useRef(0);

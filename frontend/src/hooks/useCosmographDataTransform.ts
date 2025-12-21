@@ -10,7 +10,7 @@
 
 import { useMemo, useRef } from 'react';
 import { GraphNode, GraphLink } from '../types/graph';
-import { 
+import {
   CosmographDataPreparer,
   getGlobalDataPreparer,
   sanitizeNode,
@@ -61,7 +61,9 @@ export const useCosmographDataTransform = (
   // Ensure nodes and links are always arrays to prevent .map() errors
   const safeNodes = Array.isArray(nodes) ? nodes : [];
   const safeLinks = Array.isArray(links) ? links : [];
-  
+
+  // Debug: Only log once when data first arrives (not on every render)
+
   // Reference to the data preparer (singleton pattern)
   const dataPreparerRef = useRef<CosmographDataPreparer>(
     getGlobalDataPreparer({
@@ -70,12 +72,12 @@ export const useCosmographDataTransform = (
       clusterStrength: config.clusterStrength
     })
   );
-  
+
   // PERFORMANCE FIX (GRAPH-67): Use content-based hashes instead of array references
   // This prevents re-processing when arrays are recreated with same content
   const nodesHash = useMemo(() => generateNodesHash(safeNodes), [safeNodes]);
   const linksHash = useMemo(() => generateLinksHash(safeLinks), [safeLinks]);
-  
+
   // Store previous result to return stable reference when content hasn't changed
   const prevResultRef = useRef<CosmographData>({ nodes: [], links: [] });
   const prevHashRef = useRef<string>('');
@@ -83,31 +85,31 @@ export const useCosmographDataTransform = (
   // Memoized transformation of nodes and links
   const cosmographData = useMemo(() => {
     const currentHash = `${nodesHash}|${linksHash}|${config.clusteringMethod}|${config.centralityMetric}|${config.clusterStrength}`;
-    
+
     // PERFORMANCE FIX: Return previous result if content hash matches
     if (currentHash === prevHashRef.current && prevResultRef.current.nodes.length > 0) {
       return prevResultRef.current;
     }
-    
+
     const preparer = dataPreparerRef.current;
-    
+
     // Reset preparer state for clean transformation
     preparer.reset();
-    
+
     // Build index maps for efficient lookups
     const nodeIdToIndex = new Map<string, number>();
     const nodeTypeIndexMap = new Map<string, number>();
-    
+
     // Transform nodes with sanitization
     const transformedNodes = safeNodes.map((node, index) => {
       nodeIdToIndex.set(node.id, index);
-      
+
       // Track node type for color generation
       const nodeType = node.node_type || 'Unknown';
       if (!nodeTypeIndexMap.has(nodeType)) {
         nodeTypeIndexMap.set(nodeType, nodeTypeIndexMap.size);
       }
-      
+
       // Sanitize and transform node for Cosmograph
       return sanitizeNode(node, index, {
         clusteringMethod: config.clusteringMethod,
@@ -116,21 +118,26 @@ export const useCosmographDataTransform = (
         nodeTypeIndexMap
       });
     });
-    
+
     // Transform links with sanitization and filtering
     const transformedLinks = safeLinks
       .map(link => sanitizeLink(link, nodeIdToIndex))
       .filter(link => link !== null);
-    
+
     const result = {
       nodes: transformedNodes,
       links: transformedLinks
     };
-    
+
+    // Debug: Only log when data is first ready (not on every transform)
+    if (transformedNodes.length > 0 && prevResultRef.current.nodes.length === 0) {
+      console.log('[useCosmographDataTransform] Data ready:', transformedNodes.length, 'nodes,', transformedLinks.length, 'links');
+    }
+
     // Store for future comparison
     prevHashRef.current = currentHash;
     prevResultRef.current = result;
-    
+
     return result;
   }, [nodesHash, linksHash, config.clusteringMethod, config.centralityMetric, config.clusterStrength]);
 

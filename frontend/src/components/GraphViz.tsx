@@ -29,7 +29,7 @@ import { calculateNodeDegrees } from '../utils/graphNodeOperations';
 export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
   const { applyLayout, zoomIn, zoomOut, fitView } = useGraphConfig();
   const { config } = useGraphConfig();
-  
+
   // GRAPH-93: UI State from Zustand store
   const {
     leftPanelCollapsed,
@@ -43,7 +43,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
     timelineUpdateMode,
     setTimelineUpdateMode,
   } = useUIStore();
-  
+
   // GRAPH-93: Graph state from Zustand store
   const {
     isSimulationRunning,
@@ -51,14 +51,14 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
     setContextReady,
     setLiveStats,
   } = useGraphStore();
-  
+
   // GRAPH-93: Selection state from Zustand store (replaces useGraphSelection hook)
   const {
     selectedNode,
     hoveredNode,
     highlightedNodes,
     selectNode,
-    setHoveredNode,
+    hoverNodeById: setHoveredNode,
     clearAll: clearSelection,
   } = useSelectionStore();
 
@@ -66,7 +66,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
   const graphCanvasRef = useRef<GraphCanvasHandle>(null);
   const timelineRef = useRef<GraphTimelineHandle>(null);
   const stableGraphPropsRef = useRef<{ nodes: GraphNode[], links: GraphLink[] } | null>(null);
-  
+
   // Track recent data updates to optimize timeline animation mode
   const lastDataUpdateTime = useRef<number>(0);
 
@@ -76,19 +76,12 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
   }, [setContextReady]);
 
   // Fetch graph data using React Query
-  const { 
-    data: graphData, 
-    isLoading, 
+  const {
+    transformedData,
+    isLoading,
     error,
-    refetch,
-    isRefetching
+    refreshDuckDBData
   } = useGraphDataQuery();
-  
-  // Calculate node degrees for sizing
-  const nodesWithDegrees = useMemo(() => {
-    if (!graphData?.nodes) return [];
-    return calculateNodeDegrees(graphData.nodes, graphData.links || []);
-  }, [graphData?.nodes, graphData?.links]);
 
   // Use stable callback to avoid re-renders
   const handleNodeClick = useStableCallback((node: GraphNode | null) => {
@@ -96,27 +89,41 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
   });
 
   const handleNodeHover = useStableCallback((node: GraphNode | null) => {
-    setHoveredNode(node?.id || null);
+    if (setHoveredNode) {
+      setHoveredNode(node?.id || null);
+    }
   });
-  
-  // Use data directly from useGraphDataQuery - properly handle undefined/empty states
-  const cosmographNodes = useMemo(() => nodesWithDegrees || [], [nodesWithDegrees]);
-  const cosmographLinks = useMemo(() => graphData?.links || [], [graphData?.links]);
+
+  // Use transformedData directly - it already has correct structure and centrality calculations
+  // IMPORTANT: Only use data when we actually have it to prevent Cosmograph errors
+  const hasValidData = !isLoading && transformedData?.nodes?.length > 0;
+  const cosmographNodes = useMemo(() => hasValidData ? transformedData?.nodes : [], [transformedData, hasValidData]);
+  const cosmographLinks = useMemo(() => hasValidData ? transformedData?.links : [], [transformedData, hasValidData]);
+
+  // DEBUG: Log what transformedData contains (only when state changes significantly)
+  useEffect(() => {
+    if (hasValidData) {
+      console.log('[GraphViz] Data ready:', {
+        nodesCount: cosmographNodes.length,
+        linksCount: cosmographLinks.length
+      });
+    }
+  }, [hasValidData, cosmographNodes.length, cosmographLinks.length]);
 
   // Track data updates for timeline animation mode
   useEffect(() => {
-    if (graphData) {
+    if (transformedData) {
       const now = Date.now();
       const timeSinceLastUpdate = now - lastDataUpdateTime.current;
-      
+
       // If we haven't had an update in 2 seconds, switch back to animated mode
       if (timeSinceLastUpdate > 2000) {
         setTimelineUpdateMode('animated');
       }
-      
+
       lastDataUpdateTime.current = now;
     }
-  }, [graphData, setTimelineUpdateMode]);
+  }, [transformedData, setTimelineUpdateMode]);
 
   // Handle live stats updates from GraphCanvas
   const handleLiveStatsUpdate = useCallback((stats: { nodeCount: number; edgeCount: number }) => {
@@ -134,7 +141,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
       selectNode(null);
       return;
     }
-    
+
     // Find the node in our data
     const node = cosmographNodes.find(n => n.id === nodeId);
     if (node) {
@@ -161,8 +168,8 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
         <div className="text-center p-8">
           <h2 className="text-xl font-semibold text-destructive mb-2">Error Loading Graph</h2>
           <p className="text-muted-foreground mb-4">{getErrorMessage(error)}</p>
-          <button 
-            onClick={() => refetch()}
+          <button
+            onClick={() => refreshDuckDBData()}
             className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
           >
             Retry
@@ -173,8 +180,8 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
   }
 
   return (
-    <CosmographProvider nodes={cosmographNodes} links={cosmographLinks}>
-      <CentralityStatsProvider>
+    <CosmographProvider>
+      <CentralityStatsProvider nodes={cosmographNodes}>
         <div className={`relative h-full w-full overflow-hidden ${isFullscreen ? 'fixed inset-0 z-50' : ''} ${className || ''}`}>
           {/* Navigation Bar - GRAPH-93: Now reads most state from Zustand stores */}
           <GraphNavBar
@@ -183,23 +190,22 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
             onZoomIn={zoomIn}
             onZoomOut={zoomOut}
             onFitView={fitView}
-            onRefresh={() => refetch()}
-            isRefreshing={isRefetching}
+            onRefresh={() => refreshDuckDBData()}
+            isRefreshing={isLoading}
           />
 
-          {/* Main Content Area */}
+          {/* Main Content Area - Flex container for left panel, graph, and right panel */}
           <div className="flex h-[calc(100%-48px)] mt-12">
             {/* Left Control Panel */}
-            <div className={`transition-all duration-300 ${leftPanelCollapsed ? 'w-0' : 'w-64'} overflow-hidden`}>
+            <div className={`transition-all duration-300 ${leftPanelCollapsed ? 'w-12' : 'w-80'} flex-shrink-0 overflow-hidden z-20`}>
               <ControlPanel
                 collapsed={leftPanelCollapsed}
                 onToggleCollapse={() => setLeftPanelCollapsed(!leftPanelCollapsed)}
-                onApplyLayout={applyLayout}
               />
             </div>
 
             {/* Graph Canvas */}
-            <div className="flex-1 relative">
+            <div className="flex-1 relative overflow-hidden bg-background/5">
               <LazyGraphCanvas
                 ref={graphCanvasRef}
                 nodes={cosmographNodes}
@@ -220,24 +226,26 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
                 onContextReady={handleContextReady}
               />
 
-              {/* Timeline */}
+              {/* Timeline - Positioned absolutely at bottom */}
               {isTimelineVisible && isContextReady && (
-                <React.Suspense fallback={<div className="absolute bottom-0 left-0 right-0 h-32 bg-background/50 animate-pulse" />}>
-                  <GraphTimeline
-                    ref={timelineRef}
-                    nodes={cosmographNodes}
-                    links={cosmographLinks}
-                    onNodeSelect={handleTimelineNodeSelect}
-                    selectedNodeId={selectedNode?.id || null}
-                    updateMode={timelineUpdateMode}
-                  />
+                <React.Suspense fallback={<div className="absolute bottom-0 left-0 right-0 h-20 bg-background/50 animate-pulse z-10" />}>
+                  <div className="absolute bottom-0 left-0 right-0 z-10">
+                    <GraphTimeline
+                      ref={timelineRef}
+                      nodes={cosmographNodes}
+                      links={cosmographLinks}
+                      onNodeSelect={handleTimelineNodeSelect}
+                      selectedNodeId={selectedNode?.id || null}
+                      updateMode={timelineUpdateMode}
+                    />
+                  </div>
                 </React.Suspense>
               )}
             </div>
 
             {/* Right Panel - Node Details */}
             {selectedNode && (
-              <div className="w-80 border-l border-border overflow-auto">
+              <div className="w-96 flex-shrink-0 border-l border-border bg-card/95 backdrop-blur-sm shadow-xl z-20 overflow-y-auto">
                 <React.Suspense fallback={<div className="p-4 animate-pulse">Loading details...</div>}>
                   <NodeDetailsPanel
                     node={selectedNode}

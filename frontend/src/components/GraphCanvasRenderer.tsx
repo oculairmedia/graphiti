@@ -75,6 +75,25 @@ export const GraphCanvasRenderer: React.FC<GraphCanvasRendererProps> = React.mem
   // Safety check - ensure data arrays exist before rendering Cosmograph
   const safeNodes = cosmographData?.nodes || [];
   const safeLinks = cosmographData?.links || [];
+
+  // DEBUG: Log what data is being passed to Cosmograph (only when data changes)
+  if (safeNodes.length > 0) {
+    console.log('[GraphCanvasRenderer] Data ready:', {
+      nodesCount: safeNodes.length,
+      linksCount: safeLinks.length,
+      firstNodeKeys: Object.keys(safeNodes[0])
+    });
+  }
+
+  // CRITICAL: Don't render Cosmograph with empty data - it causes DuckDB errors
+  // "Failed to upload points data: The data is invalid or empty"
+  if (safeNodes.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-full w-full">
+        <div className="text-muted-foreground">Waiting for graph data...</div>
+      </div>
+    );
+  }
   
   // PERFORMANCE FIX: Memoize label class name functions to avoid recreation on each render
   const pointLabelClassName = useMemo(() => () => 
