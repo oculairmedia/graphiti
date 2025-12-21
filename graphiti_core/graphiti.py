@@ -31,6 +31,7 @@ from graphiti_core.driver.driver import GraphDriver
 from graphiti_core.driver.neo4j_driver import Neo4jDriver
 from graphiti_core.edges import EntityEdge, EpisodicEdge
 from graphiti_core.embedder import EmbedderClient, OpenAIEmbedder
+from graphiti_core.events import ChangeEventPublisher, set_event_publisher
 from graphiti_core.graphiti_types import GraphitiClients
 from graphiti_core.helpers import (
     get_default_group_id,
@@ -207,8 +208,47 @@ class Graphiti:
             cross_encoder=self.cross_encoder,
         )
 
+        # Initialize event publisher for real-time change sync (GRAPH-106)
+        self._init_event_publisher()
+
         # Capture telemetry event
         self._capture_initialization_telemetry()
+
+    def _init_event_publisher(self):
+        """
+        Initialize the event publisher for real-time change sync (GRAPH-106).
+
+        For FalkorDB, we can reuse the existing Redis connection.
+        For Neo4j, we need a separate Redis client (if configured).
+        """
+        redis_client = None
+
+        # Check if FalkorDB driver (which has a Redis client we can use)
+        if hasattr(self.driver, 'client') and hasattr(self.driver.client, 'connection'):
+            # FalkorDB driver - use its Redis connection
+            redis_client = self.driver.client.connection
+            logger.info('Event publisher: using FalkorDB Redis connection')
+        else:
+            # Neo4j or other driver - check for REDIS_URL environment variable
+            redis_url = os.getenv('GRAPHITI_REDIS_URL')
+            if redis_url:
+                try:
+                    import redis.asyncio as aioredis
+
+                    redis_client = aioredis.from_url(redis_url)
+                    logger.info(f'Event publisher: using Redis from GRAPHITI_REDIS_URL')
+                except ImportError:
+                    logger.warning('Event publisher: redis package not installed')
+                except Exception as e:
+                    logger.warning(f'Event publisher: failed to connect to Redis: {e}')
+            else:
+                logger.info(
+                    'Event publisher: no Redis connection available (set GRAPHITI_REDIS_URL for Neo4j)'
+                )
+
+        # Create and set the publisher
+        self.event_publisher = ChangeEventPublisher(redis_client)
+        set_event_publisher(self.event_publisher)
 
     def _capture_initialization_telemetry(self):
         """Capture telemetry event for Graphiti initialization."""
@@ -554,6 +594,7 @@ class Graphiti:
                 all_nodes_to_save,
                 entity_edges,
                 self.embedder,
+                event_publisher=self.event_publisher,
             )
 
             # Execute merge operations after nodes and edges are saved
@@ -1304,6 +1345,19 @@ class Graphiti:
             *[edge.save(self.driver) for edge in community_edges],
             max_coroutines=self.max_coroutines,
         )
+
+        # Publish change events for community nodes/edges (GRAPH-106)
+        if self.event_publisher is not None and self.event_publisher.is_enabled:
+            try:
+                await self.event_publisher.publish_bulk_changes(
+                    'create', nodes=community_nodes, edges=community_edges, include_data=False
+                )
+                logger.info(
+                    f'Published community change events: {len(community_nodes)} nodes, '
+                    f'{len(community_edges)} edges'
+                )
+            except Exception as e:
+                logger.warning(f'Failed to publish community change events: {e}')
 
         return community_nodes
 

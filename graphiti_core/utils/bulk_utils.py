@@ -18,6 +18,7 @@ import logging
 import os
 import typing
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +29,9 @@ from typing_extensions import Any
 from graphiti_core.driver.driver import GraphDriver, GraphDriverSession
 from graphiti_core.edges import Edge, EntityEdge, EpisodicEdge, create_entity_edge_embeddings
 from graphiti_core.errors import DuplicateEdgeError
+
+if TYPE_CHECKING:
+    from graphiti_core.events import ChangeEventPublisher
 
 from graphiti_core.embedder import EmbedderClient
 from graphiti_core.graph_queries import (
@@ -96,6 +100,7 @@ async def add_nodes_and_edges_bulk(
     entity_nodes: list[EntityNode],
     entity_edges: list[EntityEdge],
     embedder: EmbedderClient,
+    event_publisher: 'ChangeEventPublisher | None' = None,
 ):
     session = driver.session()
     try:
@@ -107,6 +112,7 @@ async def add_nodes_and_edges_bulk(
             entity_edges,
             embedder,
             driver=driver,
+            event_publisher=event_publisher,
         )
     finally:
         await session.close()
@@ -120,6 +126,7 @@ async def add_nodes_and_edges_bulk_tx(
     entity_edges: list[EntityEdge],
     embedder: EmbedderClient,
     driver: GraphDriver,
+    event_publisher: 'ChangeEventPublisher | None' = None,
 ):
     episodes = [episode.model_dump() for episode in episodic_nodes]
     for episode in episodes:
@@ -313,6 +320,35 @@ async def add_nodes_and_edges_bulk_tx(
 
     entity_edge_save_bulk = get_entity_edge_save_bulk_query(driver.provider)
     await tx.run(entity_edge_save_bulk, entity_edges=edges)
+
+    # Publish change events for real-time sync (GRAPH-106)
+    if event_publisher is not None and event_publisher.is_enabled:
+        try:
+            # Publish episodic node events
+            if episodic_nodes:
+                await event_publisher.publish_bulk_changes(
+                    'create', nodes=episodic_nodes, include_data=False
+                )
+
+            # Publish entity node events
+            if entity_nodes:
+                await event_publisher.publish_bulk_changes(
+                    'create', nodes=entity_nodes, include_data=False
+                )
+
+            # Publish entity edge events (these are the RELATES_TO edges)
+            if entity_edges:
+                await event_publisher.publish_bulk_changes(
+                    'create', edges=entity_edges, include_data=False
+                )
+
+            logger.info(
+                f'Published change events: {len(episodic_nodes)} episodic nodes, '
+                f'{len(entity_nodes)} entity nodes, {len(entity_edges)} entity edges'
+            )
+        except Exception as e:
+            # Log but don't fail the transaction - event publishing is best-effort
+            logger.warning(f'Failed to publish change events: {e}')
 
 
 async def extract_nodes_and_edges_bulk(

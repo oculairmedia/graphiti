@@ -168,11 +168,19 @@ class ChangeEventPublisher:
             elif isinstance(node, dict):
                 data = {k: v for k, v in node.items() if k != 'name_embedding'}
 
+        # Extract uuid and group_id from node (handles both objects and dicts)
+        if isinstance(node, dict):
+            node_uuid = node.get('uuid', '')
+            node_group_id = node.get('group_id', '')
+        else:
+            node_uuid = getattr(node, 'uuid', '')
+            node_group_id = getattr(node, 'group_id', '')
+
         event = ChangeEvent(
             action=action,
             entity_type=EntityType.NODE,
-            uuid=getattr(node, 'uuid', node.get('uuid', '')),
-            group_id=getattr(node, 'group_id', node.get('group_id', '')),
+            uuid=node_uuid,
+            group_id=node_group_id,
             timestamp=datetime.utcnow().isoformat(),
             data=data,
         )
@@ -206,11 +214,19 @@ class ChangeEventPublisher:
             elif isinstance(edge, dict):
                 data = {k: v for k, v in edge.items() if k != 'fact_embedding'}
 
+        # Extract uuid and group_id from edge (handles both objects and dicts)
+        if isinstance(edge, dict):
+            edge_uuid = edge.get('uuid', '')
+            edge_group_id = edge.get('group_id', '')
+        else:
+            edge_uuid = getattr(edge, 'uuid', '')
+            edge_group_id = getattr(edge, 'group_id', '')
+
         event = ChangeEvent(
             action=action,
             entity_type=EntityType.EDGE,
-            uuid=getattr(edge, 'uuid', edge.get('uuid', '')),
-            group_id=getattr(edge, 'group_id', edge.get('group_id', '')),
+            uuid=edge_uuid,
+            group_id=edge_group_id,
             timestamp=datetime.utcnow().isoformat(),
             data=data,
         )
@@ -247,11 +263,19 @@ class ChangeEventPublisher:
             elif isinstance(episode, dict):
                 data = {k: v for k, v in episode.items() if k != 'content'}
 
+        # Extract uuid and group_id from episode (handles both objects and dicts)
+        if isinstance(episode, dict):
+            episode_uuid = episode.get('uuid', '')
+            episode_group_id = episode.get('group_id', '')
+        else:
+            episode_uuid = getattr(episode, 'uuid', '')
+            episode_group_id = getattr(episode, 'group_id', '')
+
         event = ChangeEvent(
             action=action,
             entity_type=EntityType.EPISODE,
-            uuid=getattr(episode, 'uuid', episode.get('uuid', '')),
-            group_id=getattr(episode, 'group_id', episode.get('group_id', '')),
+            uuid=episode_uuid,
+            group_id=episode_group_id,
             timestamp=datetime.utcnow().isoformat(),
             data=data,
         )
