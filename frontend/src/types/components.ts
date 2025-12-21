@@ -116,10 +116,12 @@ export type NodeHoverHandler = (node: GraphNode | null) => void;
 export type ClearSelectionHandler = () => void;
 export type ShowNeighborsHandler = (nodeId: string) => void;
 
-// Cosmograph extended interface for internal properties
-export interface CosmographExtended extends CosmographRef {
+// Cosmograph extended type for internal properties
+// Note: CosmographRef is a union type (_Cosmograph | undefined), so we use
+// type intersection instead of interface extension
+export type CosmographExtended = NonNullable<CosmographRef> & {
   _camera?: {
     pan: (delta: { x: number; y: number }) => void;
   };
   _canvasElement?: HTMLCanvasElement;
-}
+};

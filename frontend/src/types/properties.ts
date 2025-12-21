@@ -94,10 +94,39 @@ export function isNodeTemporalProperty(key: string): key is keyof NodeTemporalPr
           'valid_from', 'valid_to'].includes(key);
 }
 
+// List of valid node property keys for runtime checking
+const NODE_PROPERTY_KEYS: ReadonlyArray<keyof NodeProperties> = [
+  // Centrality metrics
+  'degree_centrality', 'betweenness_centrality', 'closeness_centrality',
+  'eigenvector_centrality', 'pagerank_centrality',
+  // Temporal properties
+  'created_at', 'updated_at', 'last_modified', 'occurred_at', 'valid_from', 'valid_to',
+  // Metadata
+  'source', 'confidence', 'version', 'tags', 'category', 'subcategory',
+  // Common properties
+  'name', 'description', 'summary', 'content', 'url',
+  // Numeric properties
+  'weight', 'score', 'rank', 'priority',
+  // Relationship properties
+  'parent_id', 'child_ids', 'related_ids',
+  // Status properties
+  'status', 'visibility',
+  // Custom properties
+  'custom',
+];
+
+// List of valid edge property keys for runtime checking
+const EDGE_PROPERTY_KEYS: ReadonlyArray<keyof EdgeProperties> = [
+  'created_at', 'updated_at', 'valid_from', 'valid_to',
+  'weight', 'confidence', 'strength',
+  'source', 'reason', 'context',
+  'custom',
+];
+
 export function isValidNodeProperty(key: string): key is keyof NodeProperties {
-  return key in {} as NodeProperties;
+  return NODE_PROPERTY_KEYS.includes(key as keyof NodeProperties);
 }
 
 export function isValidEdgeProperty(key: string): key is keyof EdgeProperties {
-  return key in {} as EdgeProperties;
+  return EDGE_PROPERTY_KEYS.includes(key as keyof EdgeProperties);
 }

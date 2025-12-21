@@ -901,8 +901,10 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
     // Re-apply simulation settings when config changes
     useEffect(() => {
       if (cosmographRef.current && !config.disableSimulation) {
-        // Restart simulation with new settings
+        // Restart simulation with new settings and reheat to full energy
         cosmographRef.current.restart?.();
+        // Also call start with high alpha to ensure simulation is active
+        cosmographRef.current.start?.(1.0);
       }
     }, [
       config.repulsion,

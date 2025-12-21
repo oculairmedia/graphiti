@@ -173,15 +173,15 @@ export const PhysicsControlsTab: React.FC<PhysicsControlsTabProps> = ({
           <p className="text-xs text-muted-foreground -mt-2">Speed damping (0 = no friction, 1 = high friction)</p>
 
           <ControlSlider
-            label="Simulation Decay"
+            label="Simulation Duration"
             value={config.simulationDecay}
-            min={0}
-            max={10000}
-            step={100}
+            min={1000}
+            max={300000}
+            step={1000}
             onChange={(value) => onConfigUpdate({ simulationDecay: value })}
-            formatValue={(v) => v.toString()}
+            formatValue={(v) => v >= 60000 ? `${Math.round(v / 60000)}min` : `${Math.round(v / 1000)}s`}
           />
-          <p className="text-xs text-muted-foreground -mt-2">Force decay rate over time</p>
+          <p className="text-xs text-muted-foreground -mt-2">How long simulation runs (1s - 5min). Higher = more dynamic.</p>
 
           <div className="flex items-center space-x-2 p-3 rounded-lg bg-secondary/20 border border-border/30">
             <Checkbox

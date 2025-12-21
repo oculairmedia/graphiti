@@ -358,28 +358,30 @@ export interface QueueStatus {
  * Convert GraphEdge (from/to) to GraphLink (source/target)
  */
 export function edgeToLink(edge: GraphEdge): GraphLink {
-  return {
+  const link: GraphLink = {
     source: edge.from || edge.source || '',
     target: edge.to || edge.target || '',
-    edge_type: edge.edge_type,
-    weight: edge.weight,
-    properties: edge.properties,
   };
+  if (edge.edge_type !== undefined) link.edge_type = edge.edge_type;
+  if (edge.weight !== undefined) link.weight = edge.weight;
+  if (edge.properties !== undefined) link.properties = edge.properties;
+  return link;
 }
 
 /**
  * Convert GraphLink (source/target) to GraphEdge (from/to)
  */
 export function linkToEdge(link: GraphLink): GraphEdge {
-  return {
+  const edge: GraphEdge = {
     from: link.source,
     to: link.target,
     source: link.source,
     target: link.target,
-    edge_type: link.edge_type,
-    weight: link.weight,
-    properties: link.properties,
   };
+  if (link.edge_type !== undefined) edge.edge_type = link.edge_type;
+  if (link.weight !== undefined) edge.weight = link.weight;
+  if (link.properties !== undefined) edge.properties = link.properties;
+  return edge;
 }
 
 /**
