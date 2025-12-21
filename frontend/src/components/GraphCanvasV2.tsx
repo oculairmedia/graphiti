@@ -412,18 +412,16 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
     });
     
     // Interactions
+    // PERFORMANCE FIX: Disable drag tracking - Cosmograph handles drag internally
+    // Having enableDrag: true here was causing re-renders on every mouse move
     const {
-      dragState,
       hoveredNode,
       handleNodeClick: handleInteractionNodeClick,
       handleNodeHover: handleInteractionNodeHover,
-      startNodeDrag,
-      updateNodeDrag,
-      endNodeDrag,
       isInteracting
     } = useGraphInteractions(nodes, links as any, {
       enableClick: true,
-      enableDrag: true,
+      enableDrag: false,  // DISABLED - Cosmograph handles drag internally with enableDrag={true}
       enableHover: true,
       onNodeClick: (nodeId, event) => {
         // Click is now handled directly in Cosmograph's onClick
