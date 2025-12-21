@@ -71,7 +71,9 @@ class ZepGraphiti(Graphiti):
             # Get database name from environment variable
             database = os.getenv('FALKORDB_DATABASE', 'graphiti_migration')
             driver = FalkorDriver(host=host, port=port, username='', password='', database=database)
-            logger.info(f'Using FalkorDB driver with host: {host}, port: {port}, database: {database}')
+            logger.info(
+                f'Using FalkorDB driver with host: {host}, port: {port}, database: {database}'
+            )
         else:
             if not NEO4J_AVAILABLE:
                 raise ImportError('Neo4j driver not available. Install neo4j package.')
@@ -80,9 +82,18 @@ class ZepGraphiti(Graphiti):
             driver = Neo4jDriver(uri, user, password, database)  # type: ignore[assignment]
             logger.info(f'Using Neo4j driver with URI: {uri}, database: {database}')
 
-        super().__init__(uri=uri, user=user, password=password, graph_driver=driver, llm_client=llm_client, embedder=embedder)
+        super().__init__(
+            uri=uri,
+            user=user,
+            password=password,
+            graph_driver=driver,
+            llm_client=llm_client,
+            embedder=embedder,
+        )
 
-    async def save_entity_node(self, name: str, uuid: str, group_id: str, summary: str = '') -> EntityNode:
+    async def save_entity_node(
+        self, name: str, uuid: str, group_id: str, summary: str = ''
+    ) -> EntityNode:
         new_node = EntityNode(
             name=name,
             uuid=uuid,
@@ -120,10 +131,29 @@ class ZepGraphiti(Graphiti):
         for episode in episodes:
             await episode.delete(self.driver)
 
+        # Publish delete events for real-time sync (GRAPH-111)
+        if self.event_publisher is not None and self.event_publisher.is_enabled:
+            for edge in edges:
+                await self.event_publisher.publish_edge_change('delete', edge, include_data=False)
+            for node in nodes:
+                await self.event_publisher.publish_node_change('delete', node, include_data=False)
+            for episode in episodes:
+                await self.event_publisher.publish_episode_change(
+                    'delete', episode, include_data=False
+                )
+            logger.info(
+                f'Published delete events for group {group_id}: '
+                f'{len(edges)} edges, {len(nodes)} nodes, {len(episodes)} episodes'
+            )
+
     async def delete_entity_edge(self, uuid: str) -> None:
         try:
             edge = await EntityEdge.get_by_uuid(self.driver, uuid)
             await EntityEdge.delete(self.driver, edge.uuid)
+            # Publish delete event for real-time sync (GRAPH-111)
+            if self.event_publisher is not None and self.event_publisher.is_enabled:
+                await self.event_publisher.publish_edge_change('delete', edge, include_data=False)
+                logger.debug(f'Published delete event for edge {uuid}')
         except EdgeNotFoundError as e:
             raise HTTPException(status_code=404, detail=e.message) from e
 
@@ -131,13 +161,23 @@ class ZepGraphiti(Graphiti):
         try:
             episode = await EpisodicNode.get_by_uuid(self.driver, uuid)  # type: ignore[attr-defined]
             await episode.delete(self.driver)
+            # Publish delete event for real-time sync (GRAPH-111)
+            if self.event_publisher is not None and self.event_publisher.is_enabled:
+                await self.event_publisher.publish_episode_change(
+                    'delete', episode, include_data=False
+                )
+                logger.debug(f'Published delete event for episode {uuid}')
         except NodeNotFoundError as e:
             raise HTTPException(status_code=404, detail=e.message) from e
 
 
 async def get_graphiti(settings: ZepEnvDep) -> Any:  # Returns generator
-    from graph_service.factories import create_llm_client, create_embedder_client, configure_non_ollama_clients
-    
+    from graph_service.factories import (
+        create_llm_client,
+        create_embedder_client,
+        configure_non_ollama_clients,
+    )
+
     # Delegate client creation to factories
     llm_client = create_llm_client(settings)
     embedder = create_embedder_client(settings)
@@ -166,7 +206,7 @@ async def get_graphiti(settings: ZepEnvDep) -> Any:  # Returns generator
 
 async def initialize_graphiti(settings: ZepEnvDep) -> None:
     from graph_service.factories import create_llm_client, create_embedder_client
-    
+
     # Delegate client creation to factories
     llm_client = create_llm_client(settings)
     embedder = create_embedder_client(settings)
@@ -186,7 +226,7 @@ def get_fact_result_from_edge(edge: EntityEdge) -> FactResult:
     return FactResult(
         uuid=edge.uuid,
         name=edge.name,
-        fact=edge.fact or "",  # Provide empty string if fact is None
+        fact=edge.fact or '',  # Provide empty string if fact is None
         valid_at=edge.valid_at,
         invalid_at=edge.invalid_at,
         created_at=edge.created_at,

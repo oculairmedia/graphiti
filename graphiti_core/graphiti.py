@@ -1553,3 +1553,18 @@ class Graphiti:
             max_coroutines=self.max_coroutines,
         )
         await episode.delete(self.driver)
+
+        # Publish delete events for real-time sync (GRAPH-111)
+        if self.event_publisher is not None and self.event_publisher.is_enabled:
+            # Publish node deletions
+            for node in nodes_to_delete:
+                await self.event_publisher.publish_node_change('delete', node, include_data=False)
+            # Publish edge deletions
+            for edge in edges_to_delete:
+                await self.event_publisher.publish_edge_change('delete', edge, include_data=False)
+            # Publish episode deletion
+            await self.event_publisher.publish_episode_change('delete', episode, include_data=False)
+            logger.info(
+                f'Published delete events: {len(nodes_to_delete)} nodes, '
+                f'{len(edges_to_delete)} edges, 1 episode'
+            )
