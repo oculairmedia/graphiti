@@ -1,5 +1,5 @@
 import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react";
+import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
 import { visualizer } from "rollup-plugin-visualizer";
@@ -29,9 +29,9 @@ export default defineConfig(({ mode }) => ({
       'Cross-Origin-Embedder-Policy': 'require-corp',
     },
     proxy: {
-      '/api': { target: 'http://localhost:3000', changeOrigin: true },
-      '/ws': { target: 'http://localhost:8003', ws: true, changeOrigin: true },
-      '/graphiti': { target: 'http://localhost:8003', changeOrigin: true, rewrite: (p) => p.replace(/^\/graphiti/, '') },
+      '/api': { target: process.env.VITE_RUST_SERVER_URL || 'http://192.168.50.90:3000', changeOrigin: true },
+      '/ws': { target: process.env.VITE_GRAPH_API_URL || 'http://192.168.50.90:8003', ws: true, changeOrigin: true },
+      '/graphiti': { target: process.env.VITE_GRAPH_API_URL || 'http://192.168.50.90:8003', changeOrigin: true, rewrite: (p) => p.replace(/^\/graphiti/, '') },
     },
   },
   plugins: [

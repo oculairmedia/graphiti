@@ -75,7 +75,7 @@ const defaultStableConfig: StableConfig = {
   linkDistance: 10,  // Keep at 10 for good spacing
   linkDistRandomVariationRange: [1, 1.1],  // REDUCED variation range
   mouseRepulsion: 0.2,  // REDUCED from 1.0 (GRAPH-62) - minimal mouse repulsion to reduce physics during pan/zoom
-  simulationDecay: 500, // REDUCED from 1000 (GRAPH-62) - simulation stops after 0.5 seconds for faster settling
+  simulationDecay: 100000, // Keep simulation running for a long time (100 seconds) - users can adjust in physics panel
   simulationRepulsionTheta: 1.7,  // INCREASED from 1.15 - faster approximation (less accurate but faster)
   simulationCluster: 0.05, // REDUCED from 0.1
   simulationClusterStrength: 0.3,  // REDUCED from 0.5

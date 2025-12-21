@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useDeferredValue, useTransition, useEffect } from 'react';
+import React, { useCallback, useState, useDeferredValue, useEffect } from 'react';
 import { X, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -8,9 +8,8 @@ import { Separator } from '@/components/ui/separator';
 import { GraphNode } from '../types/graph';
 import { useGraphConfig } from '../hooks/useGraphConfigHooks';
 import { CollapsibleSection, type SectionConfig } from '@/components/ui/CollapsibleSection';
-import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
-import { arrayMove, SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { restrictToVerticalAxis } from '@dnd-kit/modifiers';
+// PERFORMANCE FIX: Removed DndContext - drag-and-drop for sections was causing lag
+// If section reordering is needed, it can be re-enabled via a settings toggle
 import { usePersistedSections } from '@/hooks/usePersistedConfig';
 import { useNodeCentralityWithFallback } from '@/hooks/useCentrality';
 import { SummaryEditor, SummaryEditButton } from './SummaryEditor';
@@ -25,6 +24,16 @@ interface NodeDetailsPanelProps {
   onShowNeighbors?: (nodeId: string) => void;
 }
 
+// PERFORMANCE FIX: Move default sections outside component to avoid recreation on every render
+const DEFAULT_SECTIONS: SectionConfig[] = [
+  { id: 'summary', title: 'Summary', isCollapsed: false, order: 0, isVisible: true },
+  { id: 'properties', title: 'Properties', isCollapsed: true, order: 1, isVisible: true },
+  { id: 'centrality', title: 'Centrality Metrics', isCollapsed: false, order: 2, isVisible: true },
+  { id: 'connections', title: 'Connections', isCollapsed: false, order: 3, isVisible: true },
+  { id: 'timestamps', title: 'Timeline', isCollapsed: false, order: 4, isVisible: true },
+  { id: 'actions', title: 'Actions', isCollapsed: false, order: 5, isVisible: true },
+];
+
 const NodeDetailsPanelComponent: React.FC<NodeDetailsPanelProps> = ({ 
   node, 
   connections,
@@ -33,18 +42,8 @@ const NodeDetailsPanelComponent: React.FC<NodeDetailsPanelProps> = ({
 }) => {
   const { config } = useGraphConfig();
 
-  // Default section configuration
-  const defaultSections: SectionConfig[] = [
-    { id: 'summary', title: 'Summary', isCollapsed: false, order: 0, isVisible: true },
-    { id: 'properties', title: 'Properties', isCollapsed: true, order: 1, isVisible: true },
-    { id: 'centrality', title: 'Centrality Metrics', isCollapsed: false, order: 2, isVisible: true },
-    { id: 'connections', title: 'Connections', isCollapsed: false, order: 3, isVisible: true },
-    { id: 'timestamps', title: 'Timeline', isCollapsed: false, order: 4, isVisible: true },
-    { id: 'actions', title: 'Actions', isCollapsed: false, order: 5, isVisible: true },
-  ];
-
   // Section state management with persistence
-  const [sections, setPersistedSections, isSectionsLoaded] = usePersistedSections(defaultSections);
+  const [sections, setPersistedSections, isSectionsLoaded] = usePersistedSections(DEFAULT_SECTIONS);
   
   // State for summary expansion and editing
   const [isSummaryExpanded, setIsSummaryExpanded] = useState(false);
@@ -59,49 +58,19 @@ const NodeDetailsPanelComponent: React.FC<NodeDetailsPanelProps> = ({
     setIsEditingSummary(false);
   }, [node.id]);
   
-  // React 19 performance features
-  const [isPending, startTransition] = useTransition();
-
-  // Drag and drop sensors
-  const sensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(KeyboardSensor)
-  );
-
-  // Handle section reordering
-  const handleDragEnd = (event: { active: { id: string }, over: { id: string } }) => {
-    const { active, over } = event;
-
-    if (active.id !== over.id) {
-      setPersistedSections((sections) => {
-        const oldIndex = sections.findIndex((section) => section.id === active.id);
-        const newIndex = sections.findIndex((section) => section.id === over.id);
-
-        const newSections = arrayMove(sections, oldIndex, newIndex);
-        // Update order values
-        return newSections.map((section, index) => ({
-          ...section,
-          order: index
-        }));
-      });
-    }
-  };
-
-  // Handle section collapse toggle with transition for non-blocking updates
-  const handleToggleCollapse = (sectionId: string) => {
-    startTransition(() => {
-      setPersistedSections((sections) =>
-        sections.map((section) =>
-          section.id === sectionId
-            ? { ...section, isCollapsed: !section.isCollapsed }
-            : section
-        )
-      );
-    });
-  };
+  // Handle section collapse toggle - PERFORMANCE FIX: Removed useTransition overhead
+  const handleToggleCollapse = useCallback((sectionId: string) => {
+    setPersistedSections((sections) =>
+      sections.map((section) =>
+        section.id === sectionId
+          ? { ...section, isCollapsed: !section.isCollapsed }
+          : section
+      )
+    );
+  }, [setPersistedSections]);
 
   // Get section by id
-  const getSection = (id: string) => sections.find(s => s.id === id) || defaultSections.find(s => s.id === id)!;
+  const getSection = (id: string) => sections.find(s => s.id === id) || DEFAULT_SECTIONS.find(s => s.id === id)!;
   
   // Convert hex color to HSL for CSS custom properties
   const hexToHsl = useCallback((hex: string) => {
@@ -191,7 +160,7 @@ const NodeDetailsPanelComponent: React.FC<NodeDetailsPanelProps> = ({
   };
 
   return (
-    <Card className="glass-panel w-96 max-h-[calc(100vh-300px)] overflow-hidden animate-fade-in flex flex-col min-w-0">
+    <Card className="glass-panel w-full h-full overflow-hidden animate-fade-in flex flex-col min-w-0">
       <CardHeader className="pb-2 pt-3 px-3 flex-shrink-0">
         <div className="flex items-start justify-between">
           <div className="flex-1 pr-2 min-w-0">
@@ -226,17 +195,11 @@ const NodeDetailsPanelComponent: React.FC<NodeDetailsPanelProps> = ({
       </CardHeader>
 
       <CardContent className="flex-1 overflow-y-auto custom-scrollbar space-y-2 px-3 pb-3 pt-0 min-h-0 min-w-0">
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragEnd={handleDragEnd}
-          modifiers={[restrictToVerticalAxis]}
-        >
-          <SortableContext items={sections.map(s => s.id)} strategy={verticalListSortingStrategy}>
-            {sections
-              .sort((a, b) => a.order - b.order)
-              .map((section) => {
-                const sectionProps = { section, onToggleCollapse: handleToggleCollapse };
+        {/* PERFORMANCE FIX: Removed DndContext - drag-and-drop was causing lag */}
+        {sections
+          .sort((a, b) => a.order - b.order)
+          .map((section) => {
+            const sectionProps = { section, onToggleCollapse: handleToggleCollapse };
                 
                 switch (section.id) {
                   case 'summary': {
@@ -446,8 +409,6 @@ const NodeDetailsPanelComponent: React.FC<NodeDetailsPanelProps> = ({
                     return null;
                 }
               })}
-          </SortableContext>
-        </DndContext>
       </CardContent>
     </Card>
   );

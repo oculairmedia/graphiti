@@ -9,6 +9,8 @@ export interface GraphCanvasHandle {
   clearSelection: () => void;
   selectNode: (node: GraphNode) => void;
   selectNodes: (nodes: GraphNode[]) => void;
+  focusNode: (nodeId: string, duration?: number, scale?: number) => void;
+  focusOnNodes: (nodeIds: string[], duration?: number, padding?: number) => void;
   zoomIn: () => void;
   zoomOut: () => void;
   fitView: (duration?: number, padding?: number) => void;

@@ -61,6 +61,9 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
     hoverNodeById: setHoveredNode,
     clearAll: clearSelection,
   } = useSelectionStore();
+  
+  // Track when we're intentionally clearing selection to prevent race conditions
+  const isClearingRef = useRef(false);
 
   // Refs
   const graphCanvasRef = useRef<GraphCanvasHandle>(null);
@@ -88,10 +91,9 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
     selectNode(node);
   });
 
-  const handleNodeHover = useStableCallback((node: GraphNode | null) => {
-    if (setHoveredNode) {
-      setHoveredNode(node?.id || null);
-    }
+  // PERFORMANCE FIX: Don't propagate hover to React state - let Cosmograph handle it
+  const handleNodeHover = useStableCallback((_node: GraphNode | null) => {
+    // Cosmograph handles hover effects internally - no React state updates needed
   });
 
   // Use transformedData directly - it already has correct structure and centrality calculations
@@ -132,24 +134,11 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
 
   // Handle closing the details panel
   const handleCloseDetails = useCallback(() => {
+    isClearingRef.current = true;
     selectNode(null);
+    // Reset the flag after a short delay to allow re-selection again
+    setTimeout(() => { isClearingRef.current = false; }, 100);
   }, [selectNode]);
-
-  // Handle timeline node selection
-  const handleTimelineNodeSelect = useCallback((nodeId: string | null) => {
-    if (!nodeId) {
-      selectNode(null);
-      return;
-    }
-
-    // Find the node in our data
-    const node = cosmographNodes.find(n => n.id === nodeId);
-    if (node) {
-      selectNode(node);
-      // Focus on the node in the graph
-      graphCanvasRef.current?.focusNode(nodeId);
-    }
-  }, [cosmographNodes, selectNode]);
 
   // Stable graph props for child components
   const stableGraphProps = useMemo(() => {
@@ -201,6 +190,8 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
               <ControlPanel
                 collapsed={leftPanelCollapsed}
                 onToggleCollapse={() => setLeftPanelCollapsed(!leftPanelCollapsed)}
+                nodes={cosmographNodes}
+                graphCanvasRef={graphCanvasRef}
               />
             </div>
 
@@ -218,7 +209,11 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
                   if (node) selectNode(node);
                 }}
                 onSelectNodes={(nodes: GraphNode[]) => {
-                  if (nodes.length > 0) selectNode(nodes[0]);
+                  // Only select if we have nodes AND we're not intentionally clearing
+                  // The isClearingRef prevents race conditions when closing the panel
+                  if (nodes.length > 0 && !isClearingRef.current) {
+                    selectNode(nodes[0]);
+                  }
                 }}
                 onClearSelection={clearSelection}
                 onNodeHover={handleNodeHover}
@@ -226,26 +221,25 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
                 onContextReady={handleContextReady}
               />
 
-              {/* Timeline - Positioned absolutely at bottom */}
-              {isTimelineVisible && isContextReady && (
-                <React.Suspense fallback={<div className="absolute bottom-0 left-0 right-0 h-20 bg-background/50 animate-pulse z-10" />}>
-                  <div className="absolute bottom-0 left-0 right-0 z-10">
+              {/* Timeline - Positioned absolutely at bottom of graph canvas */}
+              {isTimelineVisible && cosmographNodes.length > 0 && (
+                <div className="absolute bottom-0 left-0 right-0 z-20 bg-card/95 backdrop-blur-sm border-t border-border shadow-lg">
+                  <React.Suspense fallback={<div className="h-[180px] bg-background/50 animate-pulse" />}>
                     <GraphTimeline
                       ref={timelineRef}
-                      nodes={cosmographNodes}
-                      links={cosmographLinks}
-                      onNodeSelect={handleTimelineNodeSelect}
-                      selectedNodeId={selectedNode?.id || null}
+                      cosmographRef={graphCanvasRef}
                       updateMode={timelineUpdateMode}
+                      selectedCount={selectedNode ? 1 : 0}
+                      onClearSelection={clearSelection}
                     />
-                  </div>
-                </React.Suspense>
+                  </React.Suspense>
+                </div>
               )}
             </div>
 
             {/* Right Panel - Node Details */}
             {selectedNode && (
-              <div className="w-96 flex-shrink-0 border-l border-border bg-card/95 backdrop-blur-sm shadow-xl z-20 overflow-y-auto">
+              <div className="w-96 h-full flex-shrink-0 border-l border-border bg-card/95 backdrop-blur-sm shadow-xl z-20 overflow-y-auto">
                 <React.Suspense fallback={<div className="p-4 animate-pulse">Loading details...</div>}>
                   <NodeDetailsPanel
                     node={selectedNode}

@@ -282,16 +282,23 @@ export function useCosmographIncrementalUpdates(
       return true; // Not an error, just nothing to do
     }
 
+    // Filter to only include node IDs that exist in our index (prevents empty IN() SQL error)
+    const existingNodeIds = nodeIds.filter(id => nodeIdToIndexRef.current.has(id));
+    if (existingNodeIds.length === 0) {
+      log(`No nodes to remove (none of ${nodeIds.length} node IDs exist in graph)`);
+      return true; // Not an error, just nothing to do
+    }
+
     try {
-      log(`Removing ${nodeIds.length} nodes`);
-      await cosmographRef.current.removePointsByIds(nodeIds);
+      log(`Removing ${existingNodeIds.length} nodes (${nodeIds.length - existingNodeIds.length} already removed)`);
+      await cosmographRef.current.removePointsByIds(existingNodeIds);
       
       // Remove from index map
-      nodeIds.forEach(id => {
+      existingNodeIds.forEach(id => {
         nodeIdToIndexRef.current.delete(id);
       });
       
-      onSuccess?.('removeNodes', nodeIds.length);
+      onSuccess?.('removeNodes', existingNodeIds.length);
       return true;
     } catch (error) {
       log('Failed to remove nodes:', error);
@@ -404,6 +411,13 @@ export function useCosmographIncrementalUpdates(
       return false;
     }
 
+    // Guard: Skip delta processing if initial data hasn't been loaded yet
+    // This prevents errors like "IN ()" when trying to delete nodes before they exist
+    if (currentNodes.length === 0) {
+      log('Skipping delta - initial data not loaded yet');
+      return true; // Not an error, just need to wait for initial data
+    }
+
     // Ensure node index map and data preparer are initialized
     if (nodeIdToIndexRef.current.size === 0 || dataPreparerRef.current.getNodeCount() === 0) {
       await rebuildNodeIndexMap();
@@ -425,7 +439,10 @@ export function useCosmographIncrementalUpdates(
             break;
           case 'delete':
             const nodeIds = delta.nodeIds || delta.nodes.map(n => n.id);
-            success = await applyNodeRemovals(nodeIds) && success;
+            // Guard: Only call removal if we have node IDs
+            if (nodeIds && nodeIds.length > 0) {
+              success = await applyNodeRemovals(nodeIds) && success;
+            }
             break;
         }
       }
@@ -439,7 +456,10 @@ export function useCosmographIncrementalUpdates(
             break;
           case 'delete':
             const pairs = extractEdgePairs(delta.edgeIds || delta.edges);
-            success = await applyEdgeRemovals(pairs) && success;
+            // Guard: Only call removal if we have edge pairs
+            if (pairs && pairs.length > 0) {
+              success = await applyEdgeRemovals(pairs) && success;
+            }
             break;
         }
       }

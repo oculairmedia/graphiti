@@ -149,17 +149,21 @@ export function useGraphSelection(
     }
   };
 
+  // PERFORMANCE FIX: Defer event triggering to avoid state updates during render
   const triggerEvent = (
     type: SelectionEvent['type'],
     target: SelectionEvent['target'],
     ids: string[]
   ) => {
-    configRef.current.onSelectionChange?.({
-      type,
-      target,
-      ids,
-      timestamp: Date.now(),
-      modifiers: { ...modifiersRef.current }
+    // Use queueMicrotask to defer the callback, avoiding "Cannot update during render" warnings
+    queueMicrotask(() => {
+      configRef.current.onSelectionChange?.({
+        type,
+        target,
+        ids,
+        timestamp: Date.now(),
+        modifiers: { ...modifiersRef.current }
+      });
     });
   };
 

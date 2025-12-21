@@ -76,14 +76,7 @@ export const GraphCanvasRenderer: React.FC<GraphCanvasRendererProps> = React.mem
   const safeNodes = cosmographData?.nodes || [];
   const safeLinks = cosmographData?.links || [];
 
-  // DEBUG: Log what data is being passed to Cosmograph (only when data changes)
-  if (safeNodes.length > 0) {
-    console.log('[GraphCanvasRenderer] Data ready:', {
-      nodesCount: safeNodes.length,
-      linksCount: safeLinks.length,
-      firstNodeKeys: Object.keys(safeNodes[0])
-    });
-  }
+  // Logging removed - was causing console spam on every render
 
   // CRITICAL: Don't render Cosmograph with empty data - it causes DuckDB errors
   // "Failed to upload points data: The data is invalid or empty"

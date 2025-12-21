@@ -94,10 +94,19 @@ export class DuckDBService {
       // First check if preloader has already fetched the data
       const { preloader } = await import('./preloader');
       const preloadedData = await preloader.getAllPreloadedData();
-      
+
+      // Debug: Log what preloader returned
+      console.log('[DuckDB] Preloader data check:', {
+        hasNodes: !!preloadedData.nodes,
+        hasEdges: !!preloadedData.edges,
+        nodesSize: preloadedData.nodes?.byteLength || 0,
+        edgesSize: preloadedData.edges?.byteLength || 0,
+        timestamp: preloadedData.timestamp
+      });
+
       if (preloadedData.nodes && preloadedData.edges) {
         console.log('[DuckDB] Using preloaded data from preloader service');
-        return { 
+        return {
           nodes: preloadedData.nodes,
           edges: preloadedData.edges
         };
@@ -120,12 +129,18 @@ export class DuckDBService {
       }
       
       // Prefetch from server in parallel with cache-busting
-      console.log('[DuckDB] Prefetching data from server...');
+      console.log('[DuckDB] Prefetching data from server:', this.rustServerUrl);
       const cacheBuster = `?t=${Date.now()}&r=${Math.random().toString(36).substr(2, 9)}&v=${Math.floor(Math.random() * 1000000)}`;
+      const startTime = performance.now();
+
       const [nodesResponse, edgesResponse] = await Promise.all([
         fetch(`${this.rustServerUrl}/api/arrow/nodes${cacheBuster}`, {
+          method: 'GET',
+          mode: 'cors',
           cache: 'no-cache',
+          credentials: 'omit',
           headers: {
+            'Accept': 'application/octet-stream',
             'Cache-Control': 'no-cache, no-store, must-revalidate',
             'Pragma': 'no-cache',
             'Expires': '0',
@@ -133,8 +148,12 @@ export class DuckDBService {
           }
         }),
         fetch(`${this.rustServerUrl}/api/arrow/edges${cacheBuster}`, {
+          method: 'GET',
+          mode: 'cors',
           cache: 'no-cache',
+          credentials: 'omit',
           headers: {
+            'Accept': 'application/octet-stream',
             'Cache-Control': 'no-cache, no-store, must-revalidate',
             'Pragma': 'no-cache',
             'Expires': '0',
@@ -142,16 +161,30 @@ export class DuckDBService {
           }
         })
       ]);
-      
+
+      console.log('[DuckDB] Fetch responses received:', {
+        nodesOk: nodesResponse.ok,
+        nodesStatus: nodesResponse.status,
+        edgesOk: edgesResponse.ok,
+        edgesStatus: edgesResponse.status,
+        elapsed: (performance.now() - startTime).toFixed(2) + 'ms'
+      });
+
       if (!nodesResponse.ok || !edgesResponse.ok) {
-        throw new Error('Failed to fetch data');
+        throw new Error(`Failed to fetch data: nodes=${nodesResponse.status}, edges=${edgesResponse.status}`);
       }
-      
+
       const [nodesBuffer, edgesBuffer] = await Promise.all([
         nodesResponse.arrayBuffer(),
         edgesResponse.arrayBuffer()
       ]);
-      
+
+      console.log('[DuckDB] Prefetch completed successfully:', {
+        nodesSize: (nodesBuffer.byteLength / 1024).toFixed(2) + 'KB',
+        edgesSize: (edgesBuffer.byteLength / 1024).toFixed(2) + 'KB',
+        totalElapsed: (performance.now() - startTime).toFixed(2) + 'ms'
+      });
+
       return { nodes: nodesBuffer, edges: edgesBuffer };
     } catch (error) {
       console.error('[DuckDB] Prefetch failed:', error);

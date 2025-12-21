@@ -272,19 +272,9 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
     } = useGraphSelection(nodes, links as any, {
       multiSelect: true,
       // PERFORMANCE FIX: Use nodeIndexMap for O(1) lookups instead of O(n*m) filter
-      onSelectionChange: useCallback((event) => {
-        if (onSelectNodes && event.target === 'node' && event.ids) {
-          // Use nodeIndexMap for O(1) lookups per selected node
-          const selectedNodeObjects: GraphNode[] = [];
-          for (const id of event.ids) {
-            const index = nodeIndexMap.get(id);
-            if (index !== undefined && nodes[index]) {
-              selectedNodeObjects.push(nodes[index]);
-            }
-          }
-          onSelectNodes(selectedNodeObjects);
-        }
-      }, [onSelectNodes, nodeIndexMap, nodes])
+      // DISABLED: onSelectionChange was causing panel updates on hover
+      // The click handler in useGraphCanvasEvents already handles selection
+      onSelectionChange: undefined
     });
     
     // WebSocket callbacks

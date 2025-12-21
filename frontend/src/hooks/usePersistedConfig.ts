@@ -26,11 +26,17 @@ import type { SectionConfig } from '@/components/ui/CollapsibleSection';
 // ============================================================================
 
 export const usePersistedSections = (defaultSections: SectionConfig[]) => {
+  // PERFORMANCE FIX: Use ref to track if we've initialized to avoid re-running effect
+  const hasInitializedRef = useRef(false);
   const [sections, setSections] = useState<SectionConfig[]>(defaultSections);
   const [isLoaded, setIsLoaded] = useState(false);
   
-  // Load from storage on mount
+  // Load from storage on mount - only run once
   useEffect(() => {
+    // PERFORMANCE FIX: Only run initialization once
+    if (hasInitializedRef.current) return;
+    hasInitializedRef.current = true;
+    
     const stored = loadConfigFromStorage();
     if (stored?.nodeDetailsSections) {
       try {
@@ -56,7 +62,7 @@ export const usePersistedSections = (defaultSections: SectionConfig[]) => {
       }
     }
     setIsLoaded(true);
-  }, [defaultSections]);
+  }, []); // Empty deps - only run once on mount
   
   // Save to storage function
   const saveSections = useCallback(() => {
