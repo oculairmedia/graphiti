@@ -28,12 +28,14 @@ mod arrow_converter;
 mod delta_tracker;
 mod cache;
 mod websocket;
+mod stream_consumer;  // GRAPH-107: Redis stream consumer for real-time updates
 
 use duckdb_store::{DuckDBStore, GraphUpdate, UpdateOperation};
 use arrow_converter::ArrowConverter;
 use delta_tracker::{DeltaTracker, GraphDelta};
 use cache::EnhancedCache;
 use websocket::{websocket_handler, BroadcastExt};
+use stream_consumer::{StreamConsumer, StreamConsumerConfig, ChangeEvent, ChangeAction, EntityType};  // GRAPH-107
 use deadpool_redis::{Config as RedisConfig, Runtime};
 
 // Loading progress tracking for frontend display
@@ -650,6 +652,83 @@ async fn main() -> anyhow::Result<()> {
                 }
             }
         }
+    });
+    
+    // GRAPH-107: Spawn Redis stream consumer for real-time change events from Graphiti
+    // This consumes events from the 'graphiti:changes' stream published by ChangeEventPublisher
+    let stream_redis_url = format!("redis://{}:{}", falkor_host, falkor_port);
+    let stream_pubsub_tx = pubsub_tx.clone();
+    let stream_store = state.duckdb_store.clone();
+    let stream_client = state.client.clone();
+    let stream_graph_name = graph_name.clone();
+    let stream_delta_tracker = state.delta_tracker.clone();
+    let stream_delta_tx = delta_tx.clone();
+    
+    tokio::spawn(async move {
+        let config = StreamConsumerConfig {
+            redis_url: stream_redis_url,
+            consumer_name: std::env::var("CONSUMER_NAME")
+                .unwrap_or_else(|_| "visualizer-1".to_string()),
+            claim_pending: true,
+            claim_min_idle_ms: 60000,
+        };
+        
+        let consumer = StreamConsumer::new(config);
+        let (event_tx, mut event_rx) = tokio::sync::mpsc::channel::<ChangeEvent>(1000);
+        
+        // Spawn the consumer in a separate task
+        let consumer_handle = tokio::spawn(async move {
+            consumer.run(event_tx).await;
+        });
+        
+        // Process events as they arrive
+        info!("Stream consumer event processor started");
+        while let Some(event) = event_rx.recv().await {
+            debug!(
+                "Processing stream event: {:?} {:?} uuid={}",
+                event.action, event.entity_type, event.uuid
+            );
+            
+            // Handle the event based on type
+            match (&event.action, &event.entity_type) {
+                (ChangeAction::Create, EntityType::Node) | (ChangeAction::Update, EntityType::Node) => {
+                    // For node changes, trigger a targeted node fetch
+                    info!("Stream event: {} node {}", 
+                        if event.action == ChangeAction::Create { "create" } else { "update" },
+                        event.uuid
+                    );
+                    // Signal the sync task to check for changes
+                    let _ = stream_pubsub_tx.try_send(());
+                }
+                (ChangeAction::Create, EntityType::Edge) | (ChangeAction::Update, EntityType::Edge) => {
+                    // For edge changes, trigger a targeted edge fetch
+                    info!("Stream event: {} edge {}", 
+                        if event.action == ChangeAction::Create { "create" } else { "update" },
+                        event.uuid
+                    );
+                    // Signal the sync task to check for changes
+                    let _ = stream_pubsub_tx.try_send(());
+                }
+                (ChangeAction::Delete, EntityType::Node) => {
+                    info!("Stream event: delete node {}", event.uuid);
+                    // Remove from DuckDB - deletion is handled by sync task
+                    let _ = stream_pubsub_tx.try_send(());
+                }
+                (ChangeAction::Delete, EntityType::Edge) => {
+                    info!("Stream event: delete edge {}", event.uuid);
+                    // Remove from DuckDB - deletion is handled by sync task
+                    let _ = stream_pubsub_tx.try_send(());
+                }
+                (_, EntityType::Episode) => {
+                    // Episodes don't affect visualization directly
+                    debug!("Ignoring episode event: {:?} {}", event.action, event.uuid);
+                }
+            }
+        }
+        
+        // If we get here, the event channel was closed
+        warn!("Stream event processor stopped");
+        let _ = consumer_handle.await;
     });
     
     // Spawn background task for monitoring database changes
