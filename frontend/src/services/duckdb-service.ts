@@ -505,60 +505,46 @@ export class DuckDBService {
           const maxIdxResult = await this.conn.query('SELECT COALESCE(MAX(idx), -1) as max_idx FROM nodes');
           let currentIdx = (maxIdxResult.get(0)?.max_idx || -1) + 1;
           
-          // Insert new nodes
-          const stmt = await this.conn.prepare(`
-            INSERT INTO nodes (id, idx, label, node_type, summary, degree_centrality, x, y, color, size)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          `);
-          
+          // Insert new nodes using individual INSERT statements
           for (const node of nodes) {
-            await stmt.run(
-              node.id,
-              currentIdx++,
-              node.label,
-              node.node_type,
-              node.summary || null,
-              node.properties?.degree_centrality || 0,
-              null, // x
-              null, // y
-              node.properties?.color || this.getNodeColor(node.node_type),
-              node.properties?.size || 10
-            );
+            const id = String(node.id).replace(/'/g, "''");
+            const label = String(node.label || '').replace(/'/g, "''");
+            const nodeType = String(node.node_type || '').replace(/'/g, "''");
+            const summary = node.summary ? String(node.summary).replace(/'/g, "''") : null;
+            const degreeCentrality = node.properties?.degree_centrality || 0;
+            const color = String(node.properties?.color || this.getNodeColor(node.node_type)).replace(/'/g, "''");
+            const size = node.properties?.size || 10;
+            
+            await this.conn.query(`
+              INSERT INTO nodes (id, idx, label, node_type, summary, degree_centrality, x, y, color, size)
+              VALUES ('${id}', ${currentIdx++}, '${label}', '${nodeType}', ${summary ? `'${summary}'` : 'NULL'}, ${degreeCentrality}, NULL, NULL, '${color}', ${size})
+            `);
           }
         }
         break;
 
       case 'add_edges':
         if (edges && edges.length > 0) {
-          const stmt = await this.conn.prepare(`
-            INSERT OR IGNORE INTO edges (source, sourceidx, target, targetidx, edge_type, weight, color)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-          `);
-          
           for (const edge of edges) {
             // Get indices for source and target
-            const sourceResult = await this.conn.query(
-              'SELECT idx FROM nodes WHERE id = ?',
-              edge.from
-            );
-            const targetResult = await this.conn.query(
-              'SELECT idx FROM nodes WHERE id = ?',
-              edge.to
-            );
+            const fromId = String(edge.from).replace(/'/g, "''");
+            const toId = String(edge.to).replace(/'/g, "''");
+            
+            const sourceResult = await this.conn.query(`SELECT idx FROM nodes WHERE id = '${fromId}'`);
+            const targetResult = await this.conn.query(`SELECT idx FROM nodes WHERE id = '${toId}'`);
             
             const sourceIdx = sourceResult.get(0)?.idx;
             const targetIdx = targetResult.get(0)?.idx;
             
             if (sourceIdx !== undefined && targetIdx !== undefined) {
-              await stmt.run(
-                edge.from,
-                sourceIdx,
-                edge.to,
-                targetIdx,
-                edge.edge_type,
-                edge.weight || 1.0,
-                this.getEdgeColor(edge.edge_type)
-              );
+              const edgeType = String(edge.edge_type || '').replace(/'/g, "''");
+              const weight = edge.weight || 1.0;
+              const color = String(this.getEdgeColor(edge.edge_type)).replace(/'/g, "''");
+              
+              await this.conn.query(`
+                INSERT OR IGNORE INTO edges (source, sourceidx, target, targetidx, edge_type, weight, color)
+                VALUES ('${fromId}', ${sourceIdx}, '${toId}', ${targetIdx}, '${edgeType}', ${weight}, '${color}')
+              `);
             }
           }
         }
@@ -566,12 +552,14 @@ export class DuckDBService {
 
       case 'update_nodes':
         if (nodes && nodes.length > 0) {
-          const stmt = await this.conn.prepare(`
-            UPDATE nodes SET label = ?, summary = ? WHERE id = ?
-          `);
-          
           for (const node of nodes) {
-            await stmt.run(node.label, node.summary || null, node.id);
+            const id = String(node.id).replace(/'/g, "''");
+            const label = String(node.label || '').replace(/'/g, "''");
+            const summary = node.summary ? String(node.summary).replace(/'/g, "''") : null;
+            
+            await this.conn.query(`
+              UPDATE nodes SET label = '${label}', summary = ${summary ? `'${summary}'` : 'NULL'} WHERE id = '${id}'
+            `);
           }
         }
         break;
@@ -614,16 +602,11 @@ export class DuckDBService {
       }
       
       // Update cluster data for each node
-      const updateStmt = await this.conn.prepare(
-        `UPDATE nodes SET cluster = ?, clusterStrength = ? WHERE idx = ?`
-      );
-      
       for (let i = 0; i < clusterAssignments.length; i++) {
-        await updateStmt.run(
-          String(clusterAssignments[i]),
-          clusterStrengths[i],
-          i
-        );
+        const cluster = String(clusterAssignments[i]).replace(/'/g, "''");
+        const strength = clusterStrengths[i];
+        
+        await this.conn.query(`UPDATE nodes SET cluster = '${cluster}', clusterStrength = ${strength} WHERE idx = ${i}`);
       }
       
       console.log(`[DuckDB] Updated cluster data for ${clusterAssignments.length} nodes`);
@@ -807,12 +790,12 @@ export class DuckDBService {
         return null;
       }
 
-      // Convert to Arrow IPC format
-      const table = result;
-      const buffer = table.serialize();
+      // Convert to Arrow IPC format using arrow.tableToIPC
+      const ipcBuffer = arrow.tableToIPC(result);
       
-      console.log('[DuckDBService] Arrow buffer size:', buffer.byteLength);
-      return buffer;
+      console.log('[DuckDBService] Arrow buffer size:', ipcBuffer.byteLength);
+      // Cast ArrayBufferLike to ArrayBuffer - safe because Uint8Array.buffer is always a proper ArrayBuffer
+      return ipcBuffer.buffer as ArrayBuffer;
     } catch (error) {
       console.error('[DuckDBService] Failed to get Arrow buffer:', error);
       return null;

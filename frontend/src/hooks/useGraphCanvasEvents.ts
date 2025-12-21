@@ -13,7 +13,7 @@ interface EventHandlersConfig {
   cosmographRef: React.RefObject<any>;
   onNodeClick: (node: GraphNode) => void;
   onNodeSelect: (nodeId: string) => void;
-  onClearSelection: () => void;
+  onClearSelection?: () => void;
 }
 
 interface GraphCanvasEventHandlers {
@@ -68,7 +68,7 @@ export const useGraphCanvasEvents = ({
       }
     } else {
       // Clicked on empty space - clear selection
-      onClearSelection();
+      onClearSelection?.();
       
       // Also clear visual selection in Cosmograph
       requestAnimationFrame(() => {

@@ -12,7 +12,9 @@
     "test": "vitest",
     "test:ui": "vitest --ui",
     "test:run": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "typecheck": "tsc -p tsconfig.app.json --noEmit",
+    "prebuild": "npm run typecheck && npm run lint"
   },
   "dependencies": {
     "@cosmograph/react": "^2.0.0-beta.25",

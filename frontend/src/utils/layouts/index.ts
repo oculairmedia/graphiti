@@ -3,7 +3,8 @@ import { calculateRadialLayout } from './radial';
 import { calculateHierarchicalLayout } from './hierarchical';
 import { calculateClusterLayout } from './cluster';
 import { calculateTemporalLayout } from './temporal';
-import type { LayoutAlgorithm } from './types';
+import type { LayoutAlgorithm, LayoutOptions } from './types';
+import type { GraphNode, GraphEdge } from '../../types/graph';
 
 // Export all layout algorithms
 export * from './types';

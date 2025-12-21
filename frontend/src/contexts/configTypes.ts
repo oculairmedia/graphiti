@@ -77,10 +77,10 @@ export interface StableConfig {
   labelSize: number;
   labelOpacity: number;
   labelVisibilityThreshold: number;
-  labelFontWeight: number;
+  labelFontWeight: number | 'normal' | 'bold' | 'lighter' | 'bolder';
   labelBackgroundColor: string;
   hoveredLabelSize: number;
-  hoveredLabelFontWeight: number;
+  hoveredLabelFontWeight: number | 'normal' | 'bold' | 'lighter' | 'bolder';
   hoveredLabelBackgroundColor: string;
   
   // Visual defaults
@@ -202,7 +202,8 @@ export interface DynamicConfig {
   endDate: string;
 }
 
-export type GraphConfig = StableConfig & DynamicConfig;
+// Combine StableConfig and DynamicConfig with index signature for Record<string, unknown> compatibility
+export type GraphConfig = StableConfig & DynamicConfig & { [key: string]: unknown };
 
 // Helper to check if a config key is stable
 export const isStableConfigKey = (key: string): boolean => {

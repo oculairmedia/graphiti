@@ -117,16 +117,16 @@ describe('useGraphStatistics', () => {
     it('should throttle updates', async () => {
       const onStatsUpdate = vi.fn();
       const { rerender } = renderHook(
-        ({ nodes, links }) => useGraphStatistics(nodes, links, { 
+        ({ nodes, links }: { nodes: GraphNode[]; links: GraphLink[] }) => useGraphStatistics(nodes, links, { 
           onStatsUpdate,
           updateThrottle: 200 
         }),
-        { initialProps: { nodes: [], links: [] } }
+        { initialProps: { nodes: [] as GraphNode[], links: [] as GraphLink[] } }
       );
 
       // Rapid updates
-      rerender({ nodes: mockNodes.slice(0, 1), links: [] });
-      rerender({ nodes: mockNodes.slice(0, 2), links: [] });
+      rerender({ nodes: mockNodes.slice(0, 1), links: [] as GraphLink[] });
+      rerender({ nodes: mockNodes.slice(0, 2), links: [] as GraphLink[] });
       rerender({ nodes: mockNodes, links: mockLinks });
 
       // Should not update immediately
@@ -146,11 +146,11 @@ describe('useGraphStatistics', () => {
     it('should allow immediate updates when throttle is 0', async () => {
       const onStatsUpdate = vi.fn();
       const { rerender } = renderHook(
-        ({ nodes }) => useGraphStatistics(nodes, [], { 
+        ({ nodes }: { nodes: GraphNode[] }) => useGraphStatistics(nodes, [] as GraphLink[], { 
           onStatsUpdate,
           updateThrottle: 0 
         }),
-        { initialProps: { nodes: [] } }
+        { initialProps: { nodes: [] as GraphNode[] } }
       );
 
       rerender({ nodes: mockNodes.slice(0, 1) });
@@ -405,8 +405,8 @@ describe('useSimpleGraphStatistics', () => {
 
   it('should update when data changes', () => {
     const { result, rerender } = renderHook(
-      ({ nodes, links }) => useSimpleGraphStatistics(nodes, links),
-      { initialProps: { nodes: [], links: [] } }
+      ({ nodes, links }: { nodes: GraphNode[]; links: GraphLink[] }) => useSimpleGraphStatistics(nodes, links),
+      { initialProps: { nodes: [] as GraphNode[], links: [] as GraphLink[] } }
     );
 
     expect(result.current.nodeCount).toBe(0);

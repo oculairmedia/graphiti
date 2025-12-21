@@ -113,7 +113,7 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
   };
   
   const applyFilters = () => {
-    const newConfig = {
+    const filterUpdates = {
       filteredNodeTypes: tempFilters.selectedTypes,
       minDegree: tempFilters.degreeRange[0],
       maxDegree: tempFilters.degreeRange[1],
@@ -129,12 +129,12 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
       endDate: tempFilters.dateRange.end
     };
     
-    // Apply optimistic update immediately for instant feedback
-    setOptimisticConfig(newConfig);
+    // Apply optimistic update immediately for instant feedback (merge with full config)
+    setOptimisticConfig({ ...config, ...filterUpdates });
     
     // Then apply the actual update in a transition
     startTransition(() => {
-      updateConfig(newConfig);
+      updateConfig(filterUpdates);
     });
     
     onClose();

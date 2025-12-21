@@ -76,7 +76,7 @@ interface ProcessDataResponse {
  */
 function transformNode(node: GraphNode, index: number): TransformedNode {
   const props = node.properties || {};
-  const createdAt = (props.created_at as string) || node.created_at || (props.created as string) || null;
+  const createdAt = (props.created_at as string | undefined) || node.created_at || (props.created as string | undefined);
   const degree = Number(props.degree_centrality || 0);
   
   return {

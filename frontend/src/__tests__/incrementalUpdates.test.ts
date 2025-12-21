@@ -26,9 +26,8 @@ const createMockCosmograph = () => ({
 const createTestNode = (id: string): GraphNode => ({
   id,
   name: `Node ${id}`,
-  entity_type: 'Entity',
+  node_type: 'Entity',
   created_at: new Date().toISOString(),
-  content: `Test node ${id}`,
   properties: {}
 });
 
@@ -36,8 +35,23 @@ const createTestEdge = (source: string, target: string): GraphLink => ({
   source,
   target,
   weight: 1,
-  relationship_type: 'RELATES_TO',
+  edge_type: 'RELATES_TO',
   created_at: new Date().toISOString()
+});
+
+// Helper to create a DeltaUpdate - use flat format for type safety
+const createDelta = (
+  operation: 'add' | 'update' | 'delete',
+  nodes: GraphNode[] | string[],
+  edges: GraphLink[] | string[],
+  timestamp = Date.now()
+): DeltaUpdate => ({
+  operation,
+  nodes: nodes as GraphNode[],
+  edges: edges as GraphLink[],
+  nodeIds: operation === 'delete' ? nodes as string[] : undefined,
+  edgeIds: operation === 'delete' ? edges as string[] : undefined,
+  timestamp
 });
 
 describe('Incremental Updates', () => {
@@ -73,15 +87,9 @@ describe('Incremental Updates', () => {
       const newNodes = [createTestNode('3'), createTestNode('4')];
       
       await act(async () => {
-        const success = await result.current.applyDelta({
-          type: 'graph:delta',
-          data: {
-            operation: 'add',
-            nodes: newNodes,
-            edges: [],
-            timestamp: Date.now()
-          }
-        });
+        const success = await result.current.applyDelta(
+          createDelta('add', newNodes, [])
+        );
         
         expect(success).toBe(true);
         expect(mockCosmograph.addPoints).toHaveBeenCalledTimes(1);
@@ -111,15 +119,9 @@ describe('Incremental Updates', () => {
       );
       
       await act(async () => {
-        const success = await result.current.applyDelta({
-          type: 'graph:delta',
-          data: {
-            operation: 'delete',
-            nodes: ['2'],
-            edges: [],
-            timestamp: Date.now()
-          }
-        });
+        const success = await result.current.applyDelta(
+          createDelta('delete', ['2'], [])
+        );
         
         expect(success).toBe(true);
         expect(mockCosmograph.removePoints).toHaveBeenCalledTimes(1);
@@ -150,15 +152,9 @@ describe('Incremental Updates', () => {
       };
       
       await act(async () => {
-        const success = await result.current.applyDelta({
-          type: 'graph:delta',
-          data: {
-            operation: 'update',
-            nodes: [updatedNode],
-            edges: [],
-            timestamp: Date.now()
-          }
-        });
+        const success = await result.current.applyDelta(
+          createDelta('update', [updatedNode], [])
+        );
         
         // Updates currently fall back to state-based updates
         expect(success).toBe(false);
@@ -191,15 +187,9 @@ describe('Incremental Updates', () => {
       ];
       
       await act(async () => {
-        const success = await result.current.applyDelta({
-          type: 'graph:delta',
-          data: {
-            operation: 'add',
-            nodes: [],
-            edges: newEdges,
-            timestamp: Date.now()
-          }
-        });
+        const success = await result.current.applyDelta(
+          createDelta('add', [], newEdges)
+        );
         
         expect(success).toBe(true);
         expect(mockCosmograph.addLinks).toHaveBeenCalledTimes(1);
@@ -232,15 +222,9 @@ describe('Incremental Updates', () => {
       );
       
       await act(async () => {
-        const success = await result.current.applyDelta({
-          type: 'graph:delta',
-          data: {
-            operation: 'delete',
-            nodes: [],
-            edges: ['1-2', '2-3'],
-            timestamp: Date.now()
-          }
-        });
+        const success = await result.current.applyDelta(
+          createDelta('delete', [], ['1-2', '2-3'])
+        );
         
         expect(success).toBe(true);
         expect(mockCosmograph.removeLinks).toHaveBeenCalledTimes(1);
@@ -273,15 +257,9 @@ describe('Incremental Updates', () => {
       ];
       
       await act(async () => {
-        const success = await result.current.applyDelta({
-          type: 'graph:delta',
-          data: {
-            operation: 'add',
-            nodes: newNodes,
-            edges: newEdges,
-            timestamp: Date.now()
-          }
-        });
+        const success = await result.current.applyDelta(
+          createDelta('add', newNodes, newEdges)
+        );
         
         expect(success).toBe(true);
         expect(mockCosmograph.addPoints).toHaveBeenCalled();
@@ -311,15 +289,9 @@ describe('Incremental Updates', () => {
       );
       
       await act(async () => {
-        const success = await result.current.applyDelta({
-          type: 'graph:delta',
-          data: {
-            operation: 'delete',
-            nodes: ['3', '4'],
-            edges: ['2-3', '3-4'],
-            timestamp: Date.now()
-          }
-        });
+        const success = await result.current.applyDelta(
+          createDelta('delete', ['3', '4'], ['2-3', '3-4'])
+        );
         
         expect(success).toBe(true);
         expect(mockCosmograph.removePoints).toHaveBeenCalled();
@@ -352,15 +324,9 @@ describe('Incremental Updates', () => {
       );
       
       await act(async () => {
-        const success = await result.current.applyDelta({
-          type: 'graph:delta',
-          data: {
-            operation: 'add',
-            nodes: [createTestNode('2')],
-            edges: [],
-            timestamp: Date.now()
-          }
-        });
+        const success = await result.current.applyDelta(
+          createDelta('add', [createTestNode('2')], [])
+        );
         
         expect(success).toBe(false);
         expect(onError).toHaveBeenCalled();
@@ -389,15 +355,9 @@ describe('Incremental Updates', () => {
       // Note: This test would need more complex setup to properly test retry logic
       // as the fallback orchestrator runs asynchronously
       await act(async () => {
-        const success = await result.current.applyDelta({
-          type: 'graph:delta',
-          data: {
-            operation: 'add',
-            nodes: [createTestNode('2')],
-            edges: [],
-            timestamp: Date.now()
-          }
-        });
+        const success = await result.current.applyDelta(
+          createDelta('add', [createTestNode('2')], [])
+        );
         
         // First attempt will fail but retry might succeed
         expect(mockCosmograph.addPoints).toHaveBeenCalled();
@@ -420,15 +380,9 @@ describe('Incremental Updates', () => {
       
       // Perform successful update
       await act(async () => {
-        await result.current.applyDelta({
-          type: 'graph:delta',
-          data: {
-            operation: 'add',
-            nodes: [createTestNode('2')],
-            edges: [],
-            timestamp: Date.now()
-          }
-        });
+        await result.current.applyDelta(
+          createDelta('add', [createTestNode('2')], [])
+        );
       });
       
       const metrics = result.current.metrics;
@@ -454,15 +408,9 @@ describe('Incremental Updates', () => {
       );
       
       await act(async () => {
-        await result.current.applyDelta({
-          type: 'graph:delta',
-          data: {
-            operation: 'add',
-            nodes: [createTestNode('2')],
-            edges: [],
-            timestamp: Date.now()
-          }
-        });
+        await result.current.applyDelta(
+          createDelta('add', [createTestNode('2')], [])
+        );
       });
       
       const metrics = result.current.metrics;
@@ -486,18 +434,12 @@ describe('Incremental Updates', () => {
       );
       
       // Invalid node without ID
-      const invalidNode = { name: 'Invalid' } as any;
+      const invalidNode = { name: 'Invalid' } as GraphNode;
       
       await act(async () => {
-        const success = await result.current.applyDelta({
-          type: 'graph:delta',
-          data: {
-            operation: 'add',
-            nodes: [invalidNode],
-            edges: [],
-            timestamp: Date.now()
-          }
-        });
+        const success = await result.current.applyDelta(
+          createDelta('add', [invalidNode], [])
+        );
         
         // Should handle invalid data gracefully
         expect(success).toBe(true); // Returns true but doesn't add invalid nodes
@@ -524,15 +466,9 @@ describe('Incremental Updates', () => {
       const invalidEdge = createTestEdge('999', '1000');
       
       await act(async () => {
-        const success = await result.current.applyDelta({
-          type: 'graph:delta',
-          data: {
-            operation: 'add',
-            nodes: [],
-            edges: [invalidEdge],
-            timestamp: Date.now()
-          }
-        });
+        const success = await result.current.applyDelta(
+          createDelta('add', [], [invalidEdge])
+        );
         
         // Should skip invalid edges
         expect(success).toBe(true);
@@ -563,24 +499,12 @@ describe('Fallback Strategies', () => {
     // Send multiple updates rapidly
     await act(async () => {
       const promises = [
-        result.current.applyDelta({
-          type: 'graph:delta',
-          data: {
-            operation: 'add',
-            nodes: [createTestNode('1')],
-            edges: [],
-            timestamp: Date.now()
-          }
-        }),
-        result.current.applyDelta({
-          type: 'graph:delta',
-          data: {
-            operation: 'add',
-            nodes: [createTestNode('2')],
-            edges: [],
-            timestamp: Date.now()
-          }
-        })
+        result.current.applyDelta(
+          createDelta('add', [createTestNode('1')], [])
+        ),
+        result.current.applyDelta(
+          createDelta('add', [createTestNode('2')], [])
+        )
       ];
       
       await Promise.all(promises);
@@ -605,15 +529,9 @@ describe('Fallback Strategies', () => {
     
     // Update operations are considered non-critical
     await act(async () => {
-      const success = await result.current.applyDelta({
-        type: 'graph:delta',
-        data: {
-          operation: 'update',
-          nodes: [createTestNode('1')],
-          edges: [],
-          timestamp: Date.now()
-        }
-      });
+      const success = await result.current.applyDelta(
+        createDelta('update', [createTestNode('1')], [])
+      );
       
       // Updates currently return false (skipped)
       expect(success).toBe(false);

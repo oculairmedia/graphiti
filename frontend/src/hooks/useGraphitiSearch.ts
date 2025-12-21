@@ -6,7 +6,7 @@ import type { GraphCanvasRef } from '@/types/graphCanvas';
 import { useDebounce } from './useDebounce';
 
 export interface UseGraphitiSearchOptions {
-  graphCanvasRef?: React.RefObject<GraphCanvasRef>;
+  graphCanvasRef?: React.RefObject<GraphCanvasRef | null>;
   onNodeSelect?: (node: NodeResult) => void;
   defaultMaxNodes?: number;
 }

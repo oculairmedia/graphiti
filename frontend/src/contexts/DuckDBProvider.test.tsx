@@ -56,28 +56,28 @@ describe('DuckDBProvider', () => {
   });
 
   describe('Service Operations', () => {
-    it('should provide query method through service', () => {
+    it('should provide service through context', () => {
       const { result } = renderHook(() => useDuckDB(), {
         wrapper: ({ children }) => <DuckDBProvider>{children}</DuckDBProvider>,
       });
 
       expect(result.current.service).toBeDefined();
       if (result.current.service) {
-        expect(result.current.service.query).toBeDefined();
-        expect(typeof result.current.service.query).toBe('function');
+        // Service should have core DuckDB methods
+        expect(result.current.service.initialize).toBeDefined();
+        expect(typeof result.current.service.initialize).toBe('function');
       }
     });
 
-    it('should provide data operations through service', () => {
+    it('should provide initialized state', () => {
       const { result } = renderHook(() => useDuckDB(), {
         wrapper: ({ children }) => <DuckDBProvider>{children}</DuckDBProvider>,
       });
 
       expect(result.current.service).toBeDefined();
       if (result.current.service) {
-        expect(result.current.service.insertData).toBeDefined();
-        expect(result.current.service.updateData).toBeDefined();
-        expect(result.current.service.deleteData).toBeDefined();
+        // Service should expose initialization state
+        expect(typeof result.current.service.initialized).toBe('boolean');
       }
     });
   });

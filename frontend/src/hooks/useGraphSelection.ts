@@ -55,6 +55,8 @@ export interface UseGraphSelectionConfig {
   enableKeyboardShortcuts?: boolean;
   enableAreaSelection?: boolean;
   debug?: boolean;
+  /** Enable multi-select mode (alias for mode='multiple') */
+  multiSelect?: boolean;
 }
 
 // ============================================================================
@@ -206,8 +208,8 @@ export function useGraphSelection(
     
     setSelectionState(prev => {
       const { maxSelection } = configRef.current;
-      const newSelectedNodes = new Set(addToSelection ? prev.selectedNodes : []);
-      const newSelectedLinks = addToSelection ? new Set(prev.selectedLinks) : new Set();
+      const newSelectedNodes = new Set<string>(addToSelection ? prev.selectedNodes : []);
+      const newSelectedLinks = addToSelection ? new Set<string>(prev.selectedLinks) : new Set<string>();
       
       const availableSlots = maxSelection - newSelectedNodes.size;
       const nodesToAdd = nodeIds.slice(0, availableSlots);
@@ -227,8 +229,8 @@ export function useGraphSelection(
   const selectLink = useCallback((linkId: string, addToSelection: boolean = false) => {
     setSelectionState(prev => {
       const { maxSelection } = configRef.current;
-      const newSelectedNodes = addToSelection ? new Set(prev.selectedNodes) : new Set();
-      const newSelectedLinks = new Set(addToSelection ? prev.selectedLinks : []);
+      const newSelectedNodes = addToSelection ? new Set<string>(prev.selectedNodes) : new Set<string>();
+      const newSelectedLinks = new Set<string>(addToSelection ? prev.selectedLinks : []);
       
       if (newSelectedLinks.size >= maxSelection) return prev;
       

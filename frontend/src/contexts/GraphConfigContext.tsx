@@ -22,6 +22,7 @@ type CosmographRefType = {
   getZoomLevel: () => number;
   fitView: (duration?: number) => void;
   fitViewByPointIndices: (indices: number[], duration?: number, padding?: number) => void;
+  fitViewByIndices: (indices: number[], duration?: number, padding?: number) => void;
   zoomToPoint: (index: number, duration?: number, scale?: number, canZoomOut?: boolean) => void;
   trackPointPositionsByIndices: (indices: number[]) => void;
   getTrackedPointPositionsMap: () => Map<number, [number, number]> | undefined;
@@ -31,7 +32,7 @@ type CosmographRefType = {
   unselectAll: () => void;
   unfocusNode: () => void;
   restart: () => void;
-  start: () => void;
+  start: (alpha?: number) => void;
   setData?: (nodes: GraphNode[], links: CosmographLink[], runSimulation?: boolean) => void;
   _canvasElement?: HTMLCanvasElement;
 }
@@ -44,7 +45,7 @@ const defaultConfig: GraphConfig = {
   friction: 0.86,
   linkSpring: 0.12,
   linkDistance: 3.1,
-  linkDistRandomVariationRange: [1, 1.2],
+  linkDistRandomVariationRange: [1, 1.2] as [number, number],
   mouseRepulsion: 10.0,
   simulationDecay: 10000, // 10 seconds for longer natural simulation
   
@@ -65,8 +66,14 @@ const defaultConfig: GraphConfig = {
   // Appearance
   linkWidth: 1,
   linkWidthBy: 'weight',
+  linkWidthScheme: 'uniform',
   linkWidthScale: 1,
+  linkWidthMin: 0.5,
+  linkWidthMax: 5,
   linkOpacity: 0.8,
+  linkOpacityScheme: 'uniform',
+  linkOpacityMin: 0.1,
+  linkOpacityMax: 1.0,
   linkGreyoutOpacity: 0.1,
   linkColor: '#666666',
   linkColorScheme: 'uniform',
@@ -74,7 +81,7 @@ const defaultConfig: GraphConfig = {
   backgroundColor: '#0a0a0a',
   
   // Link Visibility
-  linkVisibilityDistance: [50, 150],
+  linkVisibilityDistance: [50, 150] as [number, number],
   linkVisibilityMinTransparency: 0.25,
   linkArrows: true,
   linkArrowsSizeScale: 1.0,
@@ -87,6 +94,17 @@ const defaultConfig: GraphConfig = {
   curvedLinkSegments: 19,
   curvedLinkWeight: 0.8,
   curvedLinkControlPointDistance: 0.5,
+  
+  // Link Strength
+  linkStrengthEnabled: true,
+  entityEntityStrength: 1.5,
+  episodicStrength: 0.5,
+  defaultLinkStrength: 1.0,
+  
+  // Link Animation
+  linkAnimationEnabled: false,
+  linkAnimationAmplitude: 0.1,
+  linkAnimationFrequency: 0.5,
   
   // Node sizing
   minNodeSize: 3,
@@ -108,21 +126,27 @@ const defaultConfig: GraphConfig = {
   showDynamicLabels: true,
   showTopLabels: true,
   showTopLabelsLimit: 100,
+  labelBy: 'label',
   labelColor: '#ffffff',
   hoveredLabelColor: '#ffffff',
   labelSize: 12,
   labelOpacity: 80, // Using percentage (0-100)
   labelVisibilityThreshold: 0.5,
-  labelFontWeight: 'normal',
+  labelFontWeight: 'normal' as const,
   labelBackgroundColor: 'rgba(0, 0, 0, 0.7)',
   hoveredLabelSize: 14,
-  hoveredLabelFontWeight: 'bold',
+  hoveredLabelFontWeight: 'bold' as const,
   hoveredLabelBackgroundColor: 'rgba(0, 0, 0, 0.9)',
   
   // Visual preferences
   colorScheme: 'by-type',
   gradientHighColor: '#FF6B6B',
+  gradientMidColor: undefined,
   gradientLowColor: '#4ECDC4',
+  scalingMethod: 'linear',
+  useQuantileScaling: false,
+  useThresholdScaling: false,
+  quantileBins: 5,
   
   // Hover and focus styling
   hoveredPointCursor: 'pointer',
@@ -187,7 +211,19 @@ const defaultConfig: GraphConfig = {
   // Clustering
   clusteringEnabled: true,
   pointClusterBy: 'cluster',
-  pointClusterStrengthBy: 'clusterStrength'
+  pointClusterStrengthBy: 'clusterStrength',
+  clusteringMethod: 'nodeType' as const,
+  centralityMetric: 'degree' as const,
+  clusterStrength: 0.7,
+  clusterPositions: undefined,
+  clusterMapping: undefined,
+  
+  // Fit View
+  fitViewOnInit: true,
+  fitViewDelay: 500,
+  
+  // Interaction
+  followSelectedNode: false
 };
 
 
@@ -331,19 +367,19 @@ export const GraphConfigProvider: React.FC<{ children: ReactNode }> = ({ childre
     
     try {
       // Use current config merged with new options for layout calculation
-      const currentConfig = { ...config, layout: layoutType, ...options };
+      const currentConfig: GraphConfig & Record<string, unknown> = { ...config, layout: layoutType, ...(options || {}) };
       
       // Update config after we have the merged values
-      updateConfig({ layout: layoutType, ...options });
+      updateConfig({ layout: layoutType, ...(options || {}) } as Partial<GraphConfig>);
       
       // Prepare layout options
       const layoutOptions: LayoutOptions = {
-        hierarchyDirection: currentConfig.hierarchyDirection as 'top-down' | 'bottom-up' | 'left-right' | 'right-left',
-        radialCenter: currentConfig.radialCenter,
-        circularOrdering: currentConfig.circularOrdering as 'degree' | 'centrality' | 'type' | 'alphabetical',
-        clusterBy: currentConfig.clusterBy as 'type' | 'community' | 'centrality' | 'temporal',
+        hierarchyDirection: (currentConfig.hierarchyDirection || 'top-down') as 'top-down' | 'bottom-up' | 'left-right' | 'right-left',
+        radialCenter: currentConfig.radialCenter as string | undefined,
+        circularOrdering: (currentConfig.circularOrdering || 'degree') as 'degree' | 'centrality' | 'type' | 'alphabetical',
+        clusterBy: (currentConfig.clusterBy || 'type') as 'type' | 'community' | 'centrality' | 'temporal',
         canvasHeight: 800,
-        ...options
+        ...(options || {})
       };
       
 

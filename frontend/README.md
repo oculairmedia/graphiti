@@ -9,11 +9,83 @@ This frontend connects directly to the Rust visualization server for optimal per
 ## Architecture
 
 ```
-Frontend (React + Cosmograph)
-    ↓
-Rust Server (port 3000)
-    ↓
-FalkorDB
+┌─────────────────────────────────────────────────────────────────┐
+│                         Frontend (React)                         │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐  │
+│  │   Cosmograph    │  │  React Query    │  │   Zustand       │  │
+│  │   (WebGL)       │  │  (Data Fetch)   │  │   (State)       │  │
+│  └────────┬────────┘  └────────┬────────┘  └────────┬────────┘  │
+│           │                    │                    │           │
+│  ┌────────┴────────────────────┴────────────────────┴────────┐  │
+│  │              RustWebSocketProvider (Active)                │  │
+│  │              - Real-time graph updates                     │  │
+│  │              - Delta sync (add/update/delete)              │  │
+│  └────────────────────────────┬─────────────────────────────┘  │
+└───────────────────────────────┼─────────────────────────────────┘
+                                │
+                    ┌───────────┴───────────┐
+                    │                       │
+            ┌───────▼───────┐       ┌───────▼───────┐
+            │ Rust Server   │       │ Python Server │
+            │ (port 3000)   │       │ (port 8003)   │
+            │ ✅ Active     │       │ ⚠️ Deprecated │
+            │               │       │               │
+            │ • Graph data  │       │ • Mutations   │
+            │ • WebSocket   │       │ • Ingestion   │
+            │ • Search      │       │ • node_access │
+            │ • Centrality  │       │   (planned    │
+            └───────┬───────┘       │    move)      │
+                    │               └───────┬───────┘
+                    │                       │
+                    └───────────┬───────────┘
+                                │
+                        ┌───────▼───────┐
+                        │   FalkorDB    │
+                        │  (port 6379)  │
+                        └───────────────┘
+```
+
+## WebSocket Architecture
+
+### Active Provider: RustWebSocketProvider
+
+The frontend uses `RustWebSocketProvider` for all real-time communication:
+
+```
+src/contexts/RustWebSocketProvider.tsx (334 lines)
+    │
+    ├── Connects to: ws://localhost:3000/ws
+    ├── Events: graph:delta, graph:update, stats:update
+    └── Used by: useGraphWebSocket, useRealtimeDataSync
+```
+
+### Deprecated: WebSocketProvider (Python)
+
+The Python WebSocket provider is **no longer in the provider tree** and should not be used:
+
+```
+src/contexts/WebSocketProvider.tsx (256 lines) - ⚠️ NOT MOUNTED
+src/hooks/useWebSocket.ts (313 lines) - ⚠️ ORPHANED
+src/hooks/useRustWebSocket.ts (155 lines) - ❌ DEAD CODE (never imported)
+```
+
+**Note**: The `node_access` event (search highlighting) was originally from Python WebSocket. This feature is planned to move to Rust WebSocket as part of search consolidation.
+
+### Hook Hierarchy
+
+```
+useGraphWebSocket (752 lines) - High-level unified hook
+    │
+    ├── useRustWebSocketContext() - Active, provides real-time updates
+    │
+    └── useWebSocketContext() - ⚠️ Would throw if called (provider not mounted)
+
+Dependent hooks (may need refactoring):
+├── useGraphLiveCounts.ts - Uses useWebSocketContext
+├── useGraphNodeAccessEvents.ts - Uses useWebSocketContext  
+├── useGraphCache.ts - Uses useWebSocketContext
+├── useDuckDBService.ts - Uses useWebSocketContext
+└── useRealtimeDataSync.ts - Uses useRustWebSocket ✅
 ```
 
 ## Development
@@ -33,7 +105,7 @@ npm install
 # Start development server
 npm run dev
 
-# The frontend will be available at http://localhost:8080
+# The frontend will be available at http://localhost:8084
 ```
 
 ### Environment Variables
@@ -42,6 +114,7 @@ Create a `.env` file if you need to override defaults:
 
 ```env
 VITE_RUST_API=http://localhost:3000
+VITE_RUST_WS=ws://localhost:3000/ws
 ```
 
 ## Features
@@ -50,78 +123,77 @@ VITE_RUST_API=http://localhost:3000
 - **Real-time Updates**: WebSocket connection for live graph changes
 - **Advanced Search**: Full-text search with node highlighting
 - **Interactive Controls**: Pan, zoom, node selection, multiple layouts
-- **Performance**: Handles 5000+ nodes at 60 FPS
+- **Centrality Metrics**: PageRank, betweenness, degree centrality
+- **Performance**: Handles 50,000+ nodes at 60 FPS
 
 ## API Integration
 
 The frontend connects to these Rust server endpoints:
 
-- `GET /api/visualize` - Fetch graph data
-- `GET /api/stats` - Get graph statistics
-- `POST /api/search` - Search nodes (coming soon)
-- `GET /api/nodes/{id}` - Get node details (coming soon)
-- `WS /ws` - Real-time updates (coming soon)
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/visualize` | GET | Fetch graph data (nodes + edges) |
+| `/api/stats` | GET | Get graph statistics |
+| `/api/search` | POST | Search nodes |
+| `/api/centrality` | GET | Get centrality metrics |
+| `/health` | GET | Health check |
+| `/ws` | WS | Real-time updates |
 
 ## Project Structure
 
 ```
 src/
-├── api/                # API client and types
-│   ├── graphClient.ts  # Rust API client
-│   └── types.ts        # TypeScript types
-├── components/         # React components
-│   ├── GraphCanvas.tsx # Cosmograph integration
-│   ├── SearchBar.tsx   # Search interface
-│   └── ...            # Other UI components
-└── pages/             # Page components
+├── api/                    # API client and types
+│   ├── graphClient.ts      # Rust API client
+│   └── types.ts            # TypeScript types
+├── components/             # React components
+│   ├── GraphCanvasV2.tsx   # Main Cosmograph integration
+│   ├── SearchBar.tsx       # Search interface
+│   └── ui/                 # Shadcn UI components
+├── contexts/               # React context providers
+│   ├── RustWebSocketProvider.tsx  # ✅ Active WebSocket
+│   ├── WebSocketProvider.tsx      # ⚠️ Deprecated
+│   ├── GraphConfigContext.tsx     # Graph configuration
+│   └── DuckDBProvider.tsx         # DuckDB integration
+├── hooks/                  # Custom React hooks
+│   ├── useGraphWebSocket.ts       # Unified WebSocket hook
+│   ├── useGraphDataQuery.ts       # Data fetching
+│   ├── useGraphSelection.ts       # Node selection
+│   ├── useGraphCamera.ts          # Camera controls
+│   └── useCosmograph*.ts          # Cosmograph integration
+├── lib/                    # Utilities
+└── pages/                  # Page components
 ```
 
 ## Testing
 
 ```bash
-# Run the test script from the root directory
-./test_frontend_integration.sh
+# Run tests
+npm test
+
+# Run tests with UI
+npm run test:ui
+
+# Run tests with coverage
+npm run test:coverage
 ```
 
-This will:
-1. Check if the Rust server is running
-2. Start the frontend development server
-3. Open http://localhost:8080 in your browser
-
-## Building for Production
+## Building
 
 ```bash
+# Production build
 npm run build
+
+# Preview production build
+npm run preview
 ```
 
-The built files will be in the `dist/` directory.
+## Known Issues
 
-## Troubleshooting
+1. **Python WebSocket Orphaned**: Several hooks import `useWebSocketContext()` but the provider is not mounted. These will throw if invoked.
 
-### "Error loading graph"
-- Make sure the Rust server is running at `localhost:3000`
-- Check that FalkorDB is accessible
-- Verify CORS is enabled in the Rust server
-
-### Performance Issues
-- Reduce the node limit in GraphCanvas.tsx
-- Enable FPS monitor to diagnose issues
-- Check browser console for WebGL errors
-
-## Lovable Integration
-
-This project was initially created with [Lovable](https://lovable.dev/projects/c9c6eb4c-f69c-417b-bdb7-8ac318654e44). You can still use Lovable for UI updates and modifications.
-
-## Technologies Used
-
-- **Vite**: Fast build tool and dev server
-- **TypeScript**: Type-safe development
-- **React**: UI framework
-- **shadcn-ui**: Component library
-- **Tailwind CSS**: Utility-first CSS
-- **@cosmograph/react**: GPU-accelerated graph visualization
-- **@tanstack/react-query**: Data fetching and caching
+2. **node_access Feature**: Search highlighting via `node_access` events is currently disabled pending migration to Rust WebSocket.
 
 ## Contributing
 
-This frontend is part of the Graphiti monorepo. Please see the main README for contribution guidelines.
+See [CONTRIBUTING.md](../CONTRIBUTING.md) for development guidelines.

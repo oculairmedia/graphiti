@@ -4,41 +4,8 @@ import type { GraphNode, GraphLink } from './graph';
 import type { GraphConfig } from '../contexts/configTypes';
 import type { CosmographRef } from '@cosmograph/react';
 
-// GraphCanvas component handle interface
-export interface GraphCanvasHandle {
-  clearSelection: () => void;
-  selectNode: (node: GraphNode) => void;
-  selectNodes: (nodes: GraphNode[]) => void;
-  focusNode: (nodeId: string, duration?: number, scale?: number) => void;
-  focusOnNodes: (nodeIds: string[], duration?: number, padding?: number) => void;
-  zoomIn: () => void;
-  zoomOut: () => void;
-  fitView: (duration?: number, padding?: number) => void;
-  fitViewByPointIndices: (indices: number[], duration?: number, padding?: number) => void;
-  zoomToPoint: (index: number, duration?: number, scale?: number, canZoomOut?: boolean) => void;
-  trackPointPositionsByIndices: (indices: number[]) => void;
-  getTrackedPointPositionsMap: () => Map<number, [number, number]> | undefined;
-  setData: (nodes: GraphNode[], links: GraphLink[], runSimulation?: boolean) => void;
-  restart: () => void;
-  activateRectSelection: () => void;
-  deactivateRectSelection: () => void;
-  activatePolygonalSelection: () => void;
-  deactivatePolygonalSelection: () => void;
-  selectPointsInRect: (selection: [[number, number], [number, number]] | null, addToSelection?: boolean) => void;
-  selectPointsInPolygon: (polygonPoints: [number, number][], addToSelection?: boolean) => void;
-  getConnectedPointIndices: (index: number) => number[] | undefined;
-  getPointIndicesByExactValues: (keyValues: Record<string, unknown>) => number[] | undefined;
-  addIncrementalData: (newNodes: GraphNode[], newLinks: GraphLink[], runSimulation?: boolean) => void;
-  updateNodes: (updatedNodes: GraphNode[]) => void;
-  updateLinks: (updatedLinks: GraphLink[]) => void;
-  removeNodes: (nodeIds: string[]) => void;
-  removeLinks: (linkIds: string[]) => void;
-  startSimulation: (alpha?: number) => void;
-  pauseSimulation: () => void;
-  resumeSimulation: () => void;
-  keepSimulationRunning: (enable: boolean) => void;
-  setIncrementalUpdateFlag: (enabled: boolean) => void;
-}
+// Re-export GraphCanvasHandle from the canonical source
+export type { GraphCanvasHandle, GraphCanvasRef } from './graphCanvas';
 
 // Configuration update handler type
 export type ConfigUpdateHandler = (updates: Partial<GraphConfig>) => void;

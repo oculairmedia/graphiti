@@ -99,6 +99,8 @@ const computeGraphStats = (data?: GraphData): GraphStats | null => {
   });
 
   const nodeTypes = Object.entries(typeCount).map(([type, count]) => ({
+    id: type,
+    label: type,
     type,
     count,
     percentage: Math.round((count / totalNodes) * 100),

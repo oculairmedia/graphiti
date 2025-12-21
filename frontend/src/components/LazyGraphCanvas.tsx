@@ -3,6 +3,7 @@ import { Skeleton } from './ui/skeleton';
 
 // Import GraphCanvas type for the ref
 import type { GraphCanvasRef } from '@/types/graphCanvas';
+import type { GraphCanvasComponentProps } from './GraphCanvasV2';
 
 // Lazy load the heavy GraphCanvasV2 component
 const GraphCanvas = React.lazy(() => 
@@ -23,7 +24,7 @@ const GraphCanvasLoader: React.FC = () => (
 );
 
 // Export a wrapped version that handles lazy loading
-export const LazyGraphCanvas = React.forwardRef<GraphCanvasRef, any>((props, ref) => {
+export const LazyGraphCanvas = React.forwardRef<GraphCanvasRef, GraphCanvasComponentProps>((props, ref) => {
   return (
     <Suspense fallback={<GraphCanvasLoader />}>
       <GraphCanvas ref={ref} {...props} />

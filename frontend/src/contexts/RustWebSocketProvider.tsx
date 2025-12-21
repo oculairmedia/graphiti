@@ -29,9 +29,9 @@ export function RustWebSocketProvider({ children }: { children: React.ReactNode 
   const wsRef = useRef<WebSocket | null>(null);
   const subscribersRef = useRef<Set<(update: DeltaUpdate) => void>>(new Set());
   const reconnectCountRef = useRef(0);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout>();
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const isConnectingRef = useRef(false);
-  const pingIntervalRef = useRef<NodeJS.Timeout>();
+  const pingIntervalRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
   const connectionIdRef = useRef(0);
   
   const reconnectAttempts = 5;
@@ -159,8 +159,8 @@ export function RustWebSocketProvider({ children }: { children: React.ReactNode 
               
               // Send added nodes/edges - THIS IS THE IMPORTANT ONE FOR REAL-TIME
               if ((data.nodes_added?.length > 0) || (data.edges_added?.length > 0)) {
-                const addMessage = {
-                  type: 'graph:delta',
+                const addMessage: DeltaUpdate = {
+                  type: 'graph:delta' as const,
                   data: {
                     operation: 'add' as const,
                     nodes: data.nodes_added || [],
@@ -176,8 +176,8 @@ export function RustWebSocketProvider({ children }: { children: React.ReactNode 
               
               // Send removed nodes/edges
               if ((data.nodes_removed?.length > 0) || (data.edges_removed?.length > 0)) {
-                const deleteMessage = {
-                  type: 'graph:delta',
+                const deleteMessage: DeltaUpdate = {
+                  type: 'graph:delta' as const,
                   data: {
                     operation: 'delete' as const,
                     nodes: data.nodes_removed || [],

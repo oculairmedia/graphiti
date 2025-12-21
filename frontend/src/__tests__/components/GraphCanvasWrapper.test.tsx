@@ -87,7 +87,7 @@ describe('GraphCanvas Interface Contract', () => {
 
       mockNodes.forEach(node => {
         expect(screen.getByTestId(`node-${node.id}`)).toBeInTheDocument();
-        expect(screen.getByText(node.name)).toBeInTheDocument();
+        expect(screen.getByText(node.name ?? '')).toBeInTheDocument();
       });
     });
   });

@@ -15,6 +15,7 @@ interface ControlSliderProps {
   showInput?: boolean;
   formatValue?: (value: number) => string;
   icon?: React.ReactNode;
+  disabled?: boolean;
 }
 
 export const ControlSlider: React.FC<ControlSliderProps> = ({
@@ -28,6 +29,7 @@ export const ControlSlider: React.FC<ControlSliderProps> = ({
   showInput = true,
   formatValue,
   icon,
+  disabled,
 }) => {
   // Handle undefined or null values by using the minimum value
   const safeValue = value ?? min;
@@ -61,6 +63,7 @@ export const ControlSlider: React.FC<ControlSliderProps> = ({
             max={max}
             step={step}
             className="w-20 h-7 text-xs text-right"
+            disabled={disabled}
           />
         )}
         {!showInput && (
@@ -74,6 +77,7 @@ export const ControlSlider: React.FC<ControlSliderProps> = ({
         max={max}
         step={step}
         className="w-full"
+        disabled={disabled}
       />
     </div>
   );

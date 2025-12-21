@@ -79,6 +79,8 @@ export interface ConnectionStatus {
   rust: {
     connected: boolean;
     reconnectCount: number;
+    quality?: 'excellent' | 'good' | 'poor' | 'disconnected';
+    latency?: number;
   };
   overall: 'connected' | 'partial' | 'disconnected';
 }
@@ -165,8 +167,12 @@ export function useGraphWebSocket(config: UseGraphWebSocketConfig = {}) {
   } = config;
 
   // Get WebSocket contexts (may be null if not provided)
-  let pythonWs = null;
-  let rustWs = null;
+  // Type definitions for the context values
+  type PythonWsType = ReturnType<typeof useWebSocketContext> | null;
+  type RustWsType = ReturnType<typeof useRustWebSocket> | null;
+  
+  let pythonWs: PythonWsType = null;
+  let rustWs: RustWsType = null;
   
   try {
     pythonWs = enablePython ? useWebSocketContext() : null;
@@ -546,6 +552,7 @@ export function useGraphWebSocket(config: UseGraphWebSocketConfig = {}) {
       ...prev,
       rust: {
         connected: rustWs.isConnected || false,
+        reconnectCount: prev.rust.reconnectCount, // Preserve existing reconnectCount
         quality: 'good', // Rust WS doesn't provide quality metric
         latency: 0 // Rust WS doesn't provide latency metric
       }
@@ -565,24 +572,27 @@ export function useGraphWebSocket(config: UseGraphWebSocketConfig = {}) {
     
     // Subscribe to graph updates
     const unsubGraphUpdate = pythonWs.subscribeToGraphUpdate((event) => {
-      handleGraphUpdate(event.nodes, event.edges);
+      // Event structure: { type: 'graph:update', data: { operation, nodes?, edges?, timestamp } }
+      handleGraphUpdate(event.data?.nodes, event.data?.edges);
     });
     
     // Subscribe to delta updates
     const unsubDeltaUpdate = pythonWs.subscribeToDeltaUpdate((event) => {
+      // Event structure: { type: 'graph:delta', data: { operation, nodes?, edges?, timestamp, ... } }
+      const data = event.data;
       const deltaEvent: DeltaUpdateEvent = {
         type: 'delta_update',
-        operation: event.operation,
-        nodes: event.nodes,
-        edges: event.edges,
-        nodeIds: event.nodeIds,
-        edgeIds: event.edgeIds,
-        timestamp: event.timestamp || Date.now(),
+        operation: data.operation,
+        nodes: data.nodes as GraphNode[] | undefined,
+        edges: data.edges as GraphLink[] | undefined,
+        nodeIds: undefined, // Not provided in this event structure
+        edgeIds: undefined, // Not provided in this event structure
+        timestamp: data.timestamp || Date.now(),
         source: 'python'
       };
       
       if (batchInterval > 0) {
-        addToBatch(event.operation, event.nodes, event.edges, event.nodeIds, event.edgeIds);
+        addToBatch(data.operation, data.nodes as GraphNode[] | undefined, data.edges as GraphLink[] | undefined);
       } else if (onDeltaUpdate) {
         onDeltaUpdate(deltaEvent);
         updateStats('delta');
@@ -591,7 +601,8 @@ export function useGraphWebSocket(config: UseGraphWebSocketConfig = {}) {
     
     // Subscribe to cache invalidation
     const unsubCacheInvalidate = pythonWs.subscribeToCacheInvalidate((event) => {
-      handleCacheInvalidate(event.keys);
+      // Event structure: { type: 'cache:invalidate', data: { keys, ... } }
+      handleCacheInvalidate(event.data?.keys);
     });
     
     // Don't update connection status here - it causes infinite loops
@@ -715,6 +726,7 @@ export function useGraphWebSocket(config: UseGraphWebSocketConfig = {}) {
     // Manual event triggers (for testing or manual updates)
     triggerNodeAccess: handleNodeAccess,
     triggerGraphUpdate: handleGraphUpdate,
+    triggerDeltaUpdate: addToBatch,
     triggerCacheInvalidate: handleCacheInvalidate,
     
     // Batch control

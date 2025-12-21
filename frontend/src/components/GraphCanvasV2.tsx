@@ -76,47 +76,10 @@ interface GraphCanvasProps {
   stats?: GraphStats;
 }
 
-interface GraphCanvasHandle {
-  clearSelection: () => void;
-  selectNode: (node: GraphNode) => void;
-  selectNodes: (nodes: GraphNode[]) => void;
-  focusOnNodes: (nodeIds: string[], duration?: number, padding?: number) => void;
-  zoomIn: () => void;
-  zoomOut: () => void;
-  fitView: (duration?: number, padding?: number) => void;
-  fitViewByPointIndices: (indices: number[], duration?: number, padding?: number) => void;
-  zoomToPoint: (index: number, duration?: number, scale?: number, canZoomOut?: boolean) => void;
-  trackPointPositionsByIndices: (indices: number[]) => void;
-  getTrackedPointPositionsMap: () => Map<number, [number, number]> | undefined;
-  setData: (nodes: GraphNode[], links: GraphLink[], runSimulation?: boolean) => void;
-  restart: () => void;
-  getLiveStats: () => { nodeCount: number; edgeCount: number; lastUpdated: number };
-  // Selection tools
-  activateRectSelection: () => void;
-  deactivateRectSelection: () => void;
-  activatePolygonalSelection: () => void;
-  deactivatePolygonalSelection: () => void;
-  selectPointsInRect: (selection: [[number, number], [number, number]] | null, addToSelection?: boolean) => void;
-  selectPointsInPolygon: (polygonPoints: [number, number][], addToSelection?: boolean) => void;
-  getConnectedPointIndices: (index: number) => number[] | undefined;
-  getPointIndicesByExactValues: (keyValues: Record<string, unknown>) => number[] | undefined;
-  // Incremental update methods
-  addIncrementalData: (newNodes: GraphNode[], newLinks: GraphLink[], runSimulation?: boolean) => void;
-  updateNodes: (updatedNodes: GraphNode[]) => void;
-  updateLinks: (updatedLinks: GraphLink[]) => void;
-  removeNodes: (nodeIds: string[]) => void;
-  removeLinks: (linkIds: string[]) => void;
-  // Simulation control methods
-  startSimulation: (alpha?: number) => void;
-  pauseSimulation: () => void;
-  resumeSimulation: () => void;
-  keepSimulationRunning: (enable: boolean) => void;
-  setIncrementalUpdateFlag: (enabled: boolean) => void;
-  // Get the Cosmograph instance ref
-  getCosmographRef: () => React.RefObject<any>;
-}
+// Import the canonical GraphCanvasHandle type from types/graphCanvas.ts
+import type { GraphCanvasHandle } from '../types/graphCanvas';
 
-interface GraphCanvasComponentProps extends GraphCanvasProps {
+export interface GraphCanvasComponentProps extends GraphCanvasProps {
   nodes: GraphNode[];
   links: GraphLink[];
 }
@@ -270,7 +233,7 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
       isNodeSelected,
       getSelectedNodes: getSelectedNodesList
     } = useGraphSelection(nodes, links as any, {
-      multiSelect: true,
+      mode: 'multiple',
       // PERFORMANCE FIX: Use nodeIndexMap for O(1) lookups instead of O(n*m) filter
       // DISABLED: onSelectionChange was causing panel updates on hover
       // The click handler in useGraphCanvasEvents already handles selection
@@ -295,10 +258,9 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
       {
         debug: true,
         config: {
-          clusteringMethod: config.clusteringMethod,
+        clusteringMethod: config.clusteringMethod,
           centralityMetric: config.centralityMetric,
-          clusterStrength: config.clusterStrength,
-          sizeMapping: config.sizeMapping
+          clusterStrength: config.clusterStrength
         },
         onError: (error) => {
           // Only log errors in development
@@ -463,7 +425,7 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
     } = useGraphVisualEffects(nodes, links as any, {
       enabled: true,
       defaultNodeStyle: {
-        fill: (node: GraphNode) => generateNodeTypeColor(node.node_type),
+        fill: (node: GraphNode) => generateNodeTypeColor(node.node_type, 0),
         strokeWidth: 2,
         opacity: 0.9
       },
@@ -700,7 +662,16 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
         removeNodesRef.current(nodeIds);
       },
       removeLinks: (linkIds: string[]) => {
-        removeLinksRef.current(linkIds);
+        // Convert linkIds to GraphLink objects for the hook that expects GraphLink[]
+        // linkIds are typically "source-target" format
+        const linkIdSet = new Set(linkIds);
+        const linksToRemove = links.filter(link => {
+          const linkId = `${link.source}-${link.target}`;
+          return linkIdSet.has(linkId) || linkIdSet.has(link.source) || linkIdSet.has(link.target);
+        });
+        if (linksToRemove.length > 0) {
+          removeLinksRef.current(linksToRemove);
+        }
       },
       
       // Simulation control - just forward to cosmographRef
@@ -992,7 +963,7 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
     if (error) {
       return (
         <div className="flex items-center justify-center h-full">
-          <div className="text-red-500">Error loading graph: {error}</div>
+          <div className="text-red-500">Error loading graph: {error instanceof Error ? error.message : String(error)}</div>
         </div>
       );
     }
@@ -1002,7 +973,9 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
         {loadingPhase && (
           <ProgressiveLoadingOverlay
             phase={loadingPhase}
-            progress={loadingProgress}
+            loaded={loadingProgress.loaded}
+            total={loadingProgress.total}
+            isVisible={!!loadingPhase}
           />
         )}
         

@@ -37,9 +37,9 @@ interface VisualizationConfig {
 }
 
 interface EventHandlers {
-  handleClick: (nodeIndex: number | undefined) => void;
-  handleMouseOver: (pointIndex: number | null) => void;
-  handleMouseOut: () => void;
+  handleClick: (index?: number, pointPosition?: [number, number], event?: MouseEvent) => void | Promise<void>;
+  handleMouseOver: (index: number, pointPosition: [number, number], event: MouseEvent) => void;
+  handleMouseOut: (event: MouseEvent) => void;
 }
 
 interface GraphCanvasRendererProps {

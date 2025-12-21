@@ -12,21 +12,55 @@ interface CosmographLink {
 }
 
 interface CosmographRefType {
+  // Zoom controls
   setZoomLevel: (level: number, duration?: number) => void;
   getZoomLevel: () => number;
   fitView: (duration?: number) => void;
   fitViewByPointIndices: (indices: number[], duration?: number, padding?: number) => void;
+  fitViewByIndices: (indices: number[], duration?: number, padding?: number) => void;
   zoomToPoint: (index: number, duration?: number, scale?: number, canZoomOut?: boolean) => void;
+  
+  // Position tracking
   trackPointPositionsByIndices: (indices: number[]) => void;
   getTrackedPointPositionsMap: () => Map<number, [number, number]> | undefined;
   getTrackedPointPositionsArray: () => Float32Array | undefined;
+  
+  // Selection methods
   selectNode: (node: unknown) => void;
   selectNodes: (nodes: unknown[]) => void;
+  selectPoint?: (index: number, selectAdjacentLinks?: boolean, selectAdjacentNodes?: boolean) => void;
+  selectPoints?: (indices: number[], selectAdjacentLinks?: boolean) => void;
   unselectAll: () => void;
+  unselectAllPoints?: () => void;
+  setFocusedPoint?: (index: number | null) => void;
   unfocusNode: () => void;
+  
+  // Search/query methods
+  getPointIndicesByExactValues?: (keyValues: Record<string, unknown>) => number[] | undefined;
+  getConnectedPointIndices?: (index: number) => number[] | undefined;
+  
+  // Selection tools
+  activateRectSelection?: () => void;
+  deactivateRectSelection?: () => void;
+  activatePolygonalSelection?: () => void;
+  deactivatePolygonalSelection?: () => void;
+  selectPointsInRect?: (selection: [[number, number], [number, number]] | null, addToSelection?: boolean) => void;
+  selectPointsInPolygon?: (polygonPoints: [number, number][], addToSelection?: boolean) => void;
+  
+  // Simulation control
   restart: () => void;
-  start: () => void;
+  start: (alpha?: number) => void;
+  pause?: () => void;
+  
+  // Data methods
   setData?: (nodes: GraphNode[], links: CosmographLink[], runSimulation?: boolean) => void;
+  addPoints?: (points: unknown[]) => void;
+  removePoints?: (indices: number[]) => void;
+  updatePoints?: (updates: Array<{ index: number; data: unknown }>) => void;
+  addLinks?: (links: CosmographLink[]) => void;
+  removeLinks?: (pairs: [number, number][]) => void;
+  
+  // Internal
   _canvasElement?: HTMLCanvasElement;
 }
 

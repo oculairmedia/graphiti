@@ -173,7 +173,7 @@ export function sanitizeNode(
   const cluster = config.clusteringMethod === 'nodeType' 
     ? String(node.node_type || 'Unknown')
     : config.clusteringMethod === 'centrality'
-    ? String(Math.floor((node.properties?.[config.centralityMetric + '_centrality'] || 0) * 10))
+    ? String(Math.floor(Number(node.properties?.[config.centralityMetric + '_centrality'] || 0) * 10))
     : String(node.node_type || 'Unknown');
   
   // Sanitize all properties
@@ -609,13 +609,26 @@ export interface CosmographLinkInput {
  */
 export type DeltaOperation = 'add' | 'update' | 'delete';
 
+/**
+ * Core delta update payload (flat format)
+ */
 export interface DeltaUpdate {
+  // For flat format
   operation: DeltaOperation;
   nodes?: GraphNode[];
   edges?: GraphLink[];
   nodeIds?: string[];
   edgeIds?: string[];
   timestamp?: number;
+  
+  // For wrapped format (WebSocket events)
+  type?: 'graph:update' | 'graph:delta';
+  data?: {
+    operation: DeltaOperation;
+    nodes?: GraphNode[] | string[];
+    edges?: GraphLink[] | string[];
+    timestamp?: number;
+  };
 }
 
 /**

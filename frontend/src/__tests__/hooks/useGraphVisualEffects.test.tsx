@@ -361,14 +361,14 @@ describe('useGraphVisualEffects', () => {
         useGraphVisualEffects(mockNodes, mockLinks, {
           defaultNodeStyle: {
             fill: (node: GraphNode) => node.node_type === 'person' ? '#ff0000' : '#0000ff',
-            radius: (node: GraphNode) => node.name.length
+            radius: (node: GraphNode) => (node.name ?? '').length
           }
         })
       );
       
       const node1Style = result.current.getNodeStyle(mockNodes[0]); // person type
       expect(node1Style.fill).toBe('#ff0000');
-      expect(node1Style.radius).toBe(mockNodes[0].name.length);
+      expect(node1Style.radius).toBe((mockNodes[0].name ?? '').length);
       
       const node2Style = result.current.getNodeStyle(mockNodes[1]); // organization type
       expect(node2Style.fill).toBe('#0000ff');
@@ -428,7 +428,7 @@ describe('useGraphVisualEffects', () => {
         useGraphVisualEffects(mockNodes, mockLinks)
       );
       
-      let effectId: string;
+      let effectId: string = '';
       act(() => {
         effectId = result.current.addEffect({
           type: 'fade',

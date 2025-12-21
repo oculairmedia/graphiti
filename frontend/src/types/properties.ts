@@ -37,12 +37,24 @@ export interface NodeProperties extends NodeCentralityMetrics, NodeTemporalPrope
   summary?: string;
   content?: string;
   url?: string;
+  source_description?: string;
   
   // Numeric properties
   weight?: number;
   score?: number;
   rank?: number;
   priority?: number;
+  
+  // Graph metric properties (computed)
+  degree?: number;
+  connections?: number;
+  pagerank?: number;
+  
+  // Temporal fields (alternative names)
+  created?: string;
+  created_at_timestamp?: number;
+  updated?: string;
+  date?: string;
   
   // Relationship properties
   parent_id?: string;
@@ -57,6 +69,9 @@ export interface NodeProperties extends NodeCentralityMetrics, NodeTemporalPrope
   custom?: {
     [key: string]: string | number | boolean | null;
   };
+  
+  // Index signature for dynamic properties - allows Record<string, unknown> compatibility
+  [key: string]: unknown;
 }
 
 // Edge properties
@@ -81,6 +96,9 @@ export interface EdgeProperties {
   custom?: {
     [key: string]: string | number | boolean | null;
   };
+  
+  // Index signature for dynamic properties - allows Record<string, unknown> compatibility
+  [key: string]: unknown;
 }
 
 // Type guards
@@ -123,10 +141,12 @@ const EDGE_PROPERTY_KEYS: ReadonlyArray<keyof EdgeProperties> = [
   'custom',
 ];
 
-export function isValidNodeProperty(key: string): key is keyof NodeProperties {
-  return NODE_PROPERTY_KEYS.includes(key as keyof NodeProperties);
+// Check if a key is a known NodeProperties key
+export function isValidNodeProperty(key: string): boolean {
+  return (NODE_PROPERTY_KEYS as readonly string[]).includes(key);
 }
 
-export function isValidEdgeProperty(key: string): key is keyof EdgeProperties {
-  return EDGE_PROPERTY_KEYS.includes(key as keyof EdgeProperties);
+// Check if a key is a known EdgeProperties key
+export function isValidEdgeProperty(key: string): boolean {
+  return (EDGE_PROPERTY_KEYS as readonly string[]).includes(key);
 }

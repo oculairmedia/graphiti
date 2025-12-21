@@ -460,7 +460,7 @@ describe('Memory Optimized Store Integration', () => {
       const edges = store.getEdgesForNode('n0');
       
       // Filter query
-      const filtered = store.filterNodes(n => n.name.includes('1'));
+      const filtered = store.filterNodes(n => (n.name ?? '').includes('1'));
       
       const queryTime = performance.now() - queryStart;
       

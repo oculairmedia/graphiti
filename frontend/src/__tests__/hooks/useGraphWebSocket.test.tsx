@@ -163,9 +163,9 @@ describe('useGraphWebSocket', () => {
   describe('Batching', () => {
     it('should batch delta updates', () => {
       const onDeltaUpdate = vi.fn();
-      let deltaCallback: any;
+      let deltaCallback: ((data: unknown) => void) | null = null;
       
-      mockRustWs.subscribe.mockImplementation((cb) => {
+      (mockRustWs.subscribe as ReturnType<typeof vi.fn>).mockImplementation((cb: (data: unknown) => void) => {
         deltaCallback = cb;
         return vi.fn();
       });
@@ -180,23 +180,25 @@ describe('useGraphWebSocket', () => {
       
       // Send multiple updates
       act(() => {
-        deltaCallback({
-          type: 'graph:delta',
-          data: {
-            operation: 'add',
-            nodes: [mockNodes[0]],
-            timestamp: Date.now()
-          }
-        });
-        
-        deltaCallback({
-          type: 'graph:delta',
-          data: {
-            operation: 'add',
-            nodes: [mockNodes[1]],
-            timestamp: Date.now()
-          }
-        });
+        if (deltaCallback) {
+          deltaCallback({
+            type: 'graph:delta',
+            data: {
+              operation: 'add',
+              nodes: [mockNodes[0]],
+              timestamp: Date.now()
+            }
+          });
+          
+          deltaCallback({
+            type: 'graph:delta',
+            data: {
+              operation: 'add',
+              nodes: [mockNodes[1]],
+              timestamp: Date.now()
+            }
+          });
+        }
       });
       
       // Should not trigger immediately
@@ -217,9 +219,9 @@ describe('useGraphWebSocket', () => {
 
     it('should flush batch when max size is reached', () => {
       const onDeltaUpdate = vi.fn();
-      let deltaCallback: any;
+      let deltaCallback: ((data: unknown) => void) | null = null;
       
-      mockRustWs.subscribe.mockImplementation((cb) => {
+      (mockRustWs.subscribe as ReturnType<typeof vi.fn>).mockImplementation((cb: (data: unknown) => void) => {
         deltaCallback = cb;
         return vi.fn();
       });
@@ -234,23 +236,25 @@ describe('useGraphWebSocket', () => {
       
       // Send updates to exceed max batch size
       act(() => {
-        deltaCallback({
-          type: 'graph:delta',
-          data: {
-            operation: 'add',
-            nodes: [mockNodes[0]],
-            timestamp: Date.now()
-          }
-        });
-        
-        deltaCallback({
-          type: 'graph:delta',
-          data: {
-            operation: 'add',
-            nodes: [mockNodes[1]],
-            timestamp: Date.now()
-          }
-        });
+        if (deltaCallback) {
+          deltaCallback({
+            type: 'graph:delta',
+            data: {
+              operation: 'add',
+              nodes: [mockNodes[0]],
+              timestamp: Date.now()
+            }
+          });
+          
+          deltaCallback({
+            type: 'graph:delta',
+            data: {
+              operation: 'add',
+              nodes: [mockNodes[1]],
+              timestamp: Date.now()
+            }
+          });
+        }
       });
       
       // Should trigger immediately when max size is reached
@@ -259,9 +263,9 @@ describe('useGraphWebSocket', () => {
 
     it('should manually flush batch', () => {
       const onDeltaUpdate = vi.fn();
-      let deltaCallback: any;
+      let deltaCallback: ((data: unknown) => void) | null = null;
       
-      mockRustWs.subscribe.mockImplementation((cb) => {
+      (mockRustWs.subscribe as ReturnType<typeof vi.fn>).mockImplementation((cb: (data: unknown) => void) => {
         deltaCallback = cb;
         return vi.fn();
       });
@@ -275,14 +279,16 @@ describe('useGraphWebSocket', () => {
       
       // Add update to batch
       act(() => {
-        deltaCallback({
-          type: 'graph:delta',
-          data: {
-            operation: 'add',
-            nodes: [mockNodes[0]],
-            timestamp: Date.now()
-          }
-        });
+        if (deltaCallback) {
+          deltaCallback({
+            type: 'graph:delta',
+            data: {
+              operation: 'add',
+              nodes: [mockNodes[0]],
+              timestamp: Date.now()
+            }
+          });
+        }
       });
       
       // Manually flush

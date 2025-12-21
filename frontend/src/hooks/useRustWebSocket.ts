@@ -31,7 +31,7 @@ export function useRustWebSocket(options: RustWebSocketOptions = {}) {
 
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectCountRef = useRef(0);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout>();
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const isConnectingRef = useRef(false);
 
   const connect = useCallback(() => {
@@ -83,10 +83,10 @@ export function useRustWebSocket(options: RustWebSocketOptions = {}) {
             // Transform graph:update to delta format if needed
             if (message.type === 'graph:update' && message.data) {
               // Assume it's an add operation for new data
-              const deltaMessage = {
+              const deltaMessage: DeltaUpdate = {
                 type: 'graph:delta',
                 data: {
-                  operation: 'add',
+                  operation: 'add' as const,
                   nodes: message.data.nodes || [],
                   edges: message.data.edges || [],
                   timestamp: message.data.timestamp || Date.now()

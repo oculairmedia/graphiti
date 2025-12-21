@@ -14,24 +14,26 @@ class WebSocketManager {
   constructor(private url: string) {}
   
   connect() {
-    this.ws = new MockWebSocket(this.url) as any;
-    this.ws.onopen = () => {
-      this.connected = true;
-      this.emit('connected');
-    };
-    this.ws.onclose = () => {
-      this.connected = false;
-      this.emit('disconnected');
-      // Auto-reconnect after delay
-      setTimeout(() => {
-        this.connect();
-        this.emit('reconnected');
-      }, 2000);
-    };
-    this.ws.onmessage = (event: MessageEvent) => {
-      const data = JSON.parse(event.data);
-      this.emit('notification', data);
-    };
+    this.ws = new MockWebSocket(this.url) as MockWebSocket;
+    if (this.ws) {
+      this.ws.onopen = () => {
+        this.connected = true;
+        this.emit('connected');
+      };
+      this.ws.onclose = () => {
+        this.connected = false;
+        this.emit('disconnected');
+        // Auto-reconnect after delay
+        setTimeout(() => {
+          this.connect();
+          this.emit('reconnected');
+        }, 2000);
+      };
+      this.ws.onmessage = (event: MessageEvent) => {
+        const data = JSON.parse(event.data);
+        this.emit('notification', data);
+      };
+    }
   }
   
   disconnect() {

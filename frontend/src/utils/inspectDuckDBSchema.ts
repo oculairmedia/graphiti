@@ -3,12 +3,33 @@
  * Run this in the browser console to see what columns DuckDB actually has
  */
 
+// Extend Element interface to include Cosmograph internal property
+interface ElementWithCosmograph extends Element {
+  __cosmograph?: unknown;
+  _cosmograph?: unknown;
+}
+
+// Interface for DuckDB query results
+interface DuckDBQueryResult {
+  toArray(): Record<string, unknown>[];
+}
+
+// Interface for DuckDB instance
+interface DuckDBInstance {
+  query(sql: string): Promise<DuckDBQueryResult>;
+}
+
 export async function inspectDuckDBSchema() {
   // Get Cosmograph instance from the DOM or window
-  const cosmograph = window['cosmographRef']?.current ||
-                    document.querySelector('[data-cosmograph]')?.__cosmograph || 
-                    document.querySelector('.cosmograph-container')?.__cosmograph ||
-                    (document.querySelector('canvas') as any)?._cosmograph;
+  const cosmographEl = document.querySelector('[data-cosmograph]') as ElementWithCosmograph | null;
+  const containerEl = document.querySelector('.cosmograph-container') as ElementWithCosmograph | null;
+  const canvasEl = document.querySelector('canvas') as (HTMLCanvasElement & { _cosmograph?: unknown }) | null;
+  
+  const windowWithRef = window as unknown as { cosmographRef?: { current?: unknown } };
+  const cosmograph = windowWithRef.cosmographRef?.current ||
+                    cosmographEl?.__cosmograph || 
+                    containerEl?.__cosmograph ||
+                    canvasEl?._cosmograph;
   
   if (!cosmograph) {
     console.error('Could not find Cosmograph instance');
@@ -16,7 +37,9 @@ export async function inspectDuckDBSchema() {
   }
   
   // Access internal DuckDB instance
-  const duckdb = cosmograph._duckdb || cosmograph.duckdb;
+  // Cast cosmograph to access internal properties that may exist at runtime
+  const cosmographWithDuckDB = cosmograph as { _duckdb?: DuckDBInstance; duckdb?: DuckDBInstance };
+  const duckdb = cosmographWithDuckDB._duckdb || cosmographWithDuckDB.duckdb;
   
   if (!duckdb) {
     console.error('DuckDB not initialized in Cosmograph');

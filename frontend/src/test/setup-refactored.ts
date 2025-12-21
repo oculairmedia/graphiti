@@ -1,5 +1,6 @@
 // Setup file that enables refactored components for testing
 import './setup';
+import { beforeAll, afterAll } from 'vitest';
 
 // Enable refactored components globally for tests
 beforeAll(() => {

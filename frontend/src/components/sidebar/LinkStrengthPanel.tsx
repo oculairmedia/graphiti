@@ -4,11 +4,9 @@ import { Label } from '../ui/label';
 import { Slider } from '../ui/slider';
 import { Switch } from '../ui/switch';
 import { useGraphConfig } from '../../hooks/useGraphConfigHooks';
-import { useTheme } from '../theme/ThemeContext';
 
 export function LinkStrengthPanel() {
   const { config, updateConfig } = useGraphConfig();
-  const { theme } = useTheme();
 
   const handleEnabledChange = (checked: boolean) => {
     updateConfig({ linkStrengthEnabled: checked });

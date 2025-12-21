@@ -17,21 +17,14 @@ import { RenderControlsTab } from './ControlPanel/RenderControlsTab';
 import { SettingsTab } from './ControlPanel/SettingsTab';
 import { CentralityControlsTab } from './ControlPanel/CentralityControlsTab';
 
-interface GraphCanvasHandle {
-  clearSelection: () => void;
-  selectNode: (node: GraphNode) => void;
-  selectNodes: (nodes: GraphNode[]) => void;
-  focusOnNodes: (nodeIds: string[], duration?: number, padding?: number) => void;
-  zoomIn: () => void;
-  zoomOut: () => void;
-  fitView: (duration?: number, padding?: number) => void;
-}
+// Use the canonical GraphCanvasHandle from types
+import type { GraphCanvasHandle } from '@/types/graphCanvas';
 
 interface ControlPanelProps {
   collapsed: boolean;
   onToggleCollapse: () => void;
   onLayoutChange?: (layout: string) => void;
-  graphCanvasRef?: React.RefObject<GraphCanvasHandle>;
+  graphCanvasRef?: React.RefObject<GraphCanvasHandle | null>;
   nodes?: GraphNode[];
   onNodeSelect?: (node: GraphNode) => void;
 }

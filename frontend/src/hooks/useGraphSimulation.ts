@@ -268,8 +268,8 @@ export function useGraphSimulation(
               const physicsB = nodePhysicsRef.current.get(nodeB.id);
               if (!physicsB || nodeB.x === undefined || nodeB.y === undefined) return;
 
-              const dx = nodeB.x - nodeA.x;
-              const dy = nodeB.y - nodeA.y;
+              const dx = nodeB.x! - nodeA.x!;
+              const dy = nodeB.y! - nodeA.y!;
               const dist2 = dx * dx + dy * dy;
               
               if (dist2 === 0) return;

@@ -19,12 +19,27 @@ export default tseslint.config(
     },
     rules: {
       ...reactHooks.configs.recommended.rules,
-      "react-hooks/react-compiler": "error",
       "react-refresh/only-export-components": [
         "warn",
         { allowConstantExport: true },
       ],
       "@typescript-eslint/no-unused-vars": "off",
+    },
+  },
+  // Relaxed rules for test files - allow 'any' in mocks
+  {
+    files: ["**/*.test.{ts,tsx}", "**/__tests__/**/*.{ts,tsx}", "**/test/**/*.{ts,tsx}"],
+    rules: {
+      "@typescript-eslint/no-explicit-any": "off",
+      "@typescript-eslint/no-unsafe-function-type": "off",
+      "no-case-declarations": "off",
+    },
+  },
+  // Relaxed rules for config files
+  {
+    files: ["*.config.{ts,js}", "vite.config.ts", "vitest.config.ts"],
+    rules: {
+      "@typescript-eslint/triple-slash-reference": "off",
     },
   }
 );

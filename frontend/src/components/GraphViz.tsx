@@ -202,7 +202,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
                 nodes={cosmographNodes}
                 links={cosmographLinks}
                 selectedNodes={selectedNode ? [selectedNode.id] : []}
-                highlightedNodes={highlightedNodes || []}
+                highlightedNodes={highlightedNodes ? Array.from(highlightedNodes) : []}
                 onNodeClick={handleNodeClick}
                 onNodeSelect={(nodeId: string) => {
                   const node = cosmographNodes.find(n => n.id === nodeId);
@@ -265,8 +265,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
               <StatsPanel
                 isOpen={showStatsPanel}
                 onClose={() => useUIStore.getState().setShowStatsPanel(false)}
-                nodes={cosmographNodes}
-                links={cosmographLinks}
+                data={{ nodes: cosmographNodes, edges: cosmographLinks.map(l => ({ from: l.source, to: l.target, ...l })) }}
               />
             </React.Suspense>
           )}

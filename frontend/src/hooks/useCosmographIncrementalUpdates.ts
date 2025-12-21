@@ -33,6 +33,7 @@ export interface UseCosmographIncrementalUpdatesOptions {
     clusteringMethod?: string;
     centralityMetric?: string;
     clusterStrength?: number;
+    sizeMapping?: string;
   };
 }
 
@@ -548,8 +549,10 @@ export function useCosmographIncrementalUpdates(
         links: data.links
       });
       
-      // Rebuild index map
-      rebuildNodeIndexMap(nodes);
+      // Rebuild index map - uses currentNodes from closure (which will be updated after this call returns)
+      // Note: The nodes parameter here represents the new data, but rebuildNodeIndexMap will use currentNodes
+      // which should be updated by the caller after calling this function
+      await rebuildNodeIndexMap();
       
       const duration = performance.now() - startTime;
       log(`Data replaced successfully using setConfig in ${duration.toFixed(2)}ms`);

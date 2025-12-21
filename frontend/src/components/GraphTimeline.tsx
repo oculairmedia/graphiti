@@ -62,7 +62,7 @@ export const GraphTimeline = forwardRef<GraphTimelineHandle, GraphTimelineProps>
         actualCosmographRef = cosmographRef.current.getCosmographRef();
       }
       
-      const hasCosmo = !!(actualCosmographRef?.current || cosmograph);
+      const hasCosmo = !!((actualCosmographRef as React.RefObject<unknown> | null)?.current || cosmograph);
       setIsCosmographReady(hasCosmo);
       
       if (hasCosmo) {

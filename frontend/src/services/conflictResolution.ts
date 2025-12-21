@@ -438,12 +438,12 @@ export class ConflictResolver {
     const transformedRemote: DeltaOperation[] = [];
 
     for (const localOp of local.operations) {
-      let transformed = localOp;
+      let transformed: DeltaOperation | null = localOp;
       
       for (const remoteOp of remote.operations) {
         if (this.operationsConflict(localOp, remoteOp)) {
           transformed = this.transformOperation(localOp, remoteOp);
-          if (!transformed) return null; // Cannot transform
+          if (transformed === null) return null; // Cannot transform
         }
       }
       
@@ -451,12 +451,12 @@ export class ConflictResolver {
     }
 
     for (const remoteOp of remote.operations) {
-      let transformed = remoteOp;
+      let transformed: DeltaOperation | null = remoteOp;
       
       for (const localOp of local.operations) {
         if (this.operationsConflict(remoteOp, localOp)) {
           transformed = this.transformOperation(remoteOp, localOp);
-          if (!transformed) return null; // Cannot transform
+          if (transformed === null) return null; // Cannot transform
         }
       }
       

@@ -148,17 +148,20 @@ export function useGraphCache(options: UseGraphCacheOptions = {}) {
     
     const prefetchPromises = patterns.map(async (pattern) => {
       if (pattern === 'graph:full') {
-        // Prefetch full graph data
+        // Prefetch full graph data using available methods
         return getCached('graph:full', async () => {
-          const nodes = await duckDBService.query('SELECT * FROM nodes');
-          const edges = await duckDBService.query('SELECT * FROM edges');
+          const nodes = await duckDBService.getNodesForUI();
+          const edges = await duckDBService.getEdgesForUI();
           return { nodes, edges };
         });
       } else if (pattern.startsWith('nodes:')) {
-        // Prefetch specific node types
+        // Prefetch specific node types - use search for now
         const nodeType = pattern.split(':')[1];
         return getCached(pattern, async () => {
-          return duckDBService.query(`SELECT * FROM nodes WHERE type = '${nodeType}'`);
+          // Note: DuckDBService doesn't have a direct query method
+          // Using getNodesForUI and filtering client-side as a workaround
+          const allNodes = await duckDBService.getNodesForUI();
+          return allNodes.filter((n: any) => n.node_type === nodeType);
         });
       }
       // Add more patterns as needed

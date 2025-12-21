@@ -68,7 +68,7 @@ global.ResizeObserver = vi.fn().mockImplementation(() => ({
 }));
 
 // Mock requestAnimationFrame
-global.requestAnimationFrame = vi.fn((cb) => setTimeout(cb, 0));
+global.requestAnimationFrame = vi.fn((cb) => setTimeout(cb, 0) as unknown as number);
 global.cancelAnimationFrame = vi.fn((id) => clearTimeout(id));
 
 // localStorage is already mocked above at line 7-34

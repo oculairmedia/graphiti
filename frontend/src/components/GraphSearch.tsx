@@ -65,7 +65,9 @@ export const GraphSearch: React.FC<GraphSearchProps> = React.memo(({
       const lowercaseValue = value.toLowerCase();
       
       // Try to use Cosmograph's exact value search for better performance
-      if (cosmographRef?.current && typeof cosmographRef.current.getPointIndicesByExactValues === 'function') {
+      // Cast to any since these methods are dynamically available on the Cosmograph instance
+      const cosmoRef = cosmographRef?.current as any;
+      if (cosmoRef && typeof cosmoRef.getPointIndicesByExactValues === 'function') {
         try {
           let searchQuery: Record<string, unknown> = {};
           
@@ -81,7 +83,7 @@ export const GraphSearch: React.FC<GraphSearchProps> = React.memo(({
             searchQuery = { [field]: value };
           }
           
-          const indices = cosmographRef.current.getPointIndicesByExactValues(searchQuery);
+          const indices = cosmoRef.getPointIndicesByExactValues(searchQuery);
           if (indices && indices.length > 0) {
             results = indices.map(idx => nodes[idx]).filter(Boolean);
           }
@@ -190,27 +192,29 @@ export const GraphSearch: React.FC<GraphSearchProps> = React.memo(({
     }
     
     // Focus and select the node in Cosmograph if available
-    if (cosmographRef?.current) {
+    // Cast to any since these methods are dynamically available on the Cosmograph instance
+    const cosmoRef = cosmographRef?.current as any;
+    if (cosmoRef) {
       try {
         // Find the node index for focusing
         const nodeIndex = nodes.findIndex(n => n.id === node.id);
         if (nodeIndex >= 0) {
           // Use Cosmograph's focus methods
-          if (typeof cosmographRef.current.setFocusedPoint === 'function') {
-            cosmographRef.current.setFocusedPoint(nodeIndex);
+          if (typeof cosmoRef.setFocusedPoint === 'function') {
+            cosmoRef.setFocusedPoint(nodeIndex);
           }
           
           // Also select the node
-          if (typeof cosmographRef.current.selectPoint === 'function') {
-            cosmographRef.current.selectPoint(nodeIndex);
-          } else if (typeof cosmographRef.current.selectPoints === 'function') {
-            cosmographRef.current.selectPoints([nodeIndex]);
+          if (typeof cosmoRef.selectPoint === 'function') {
+            cosmoRef.selectPoint(nodeIndex);
+          } else if (typeof cosmoRef.selectPoints === 'function') {
+            cosmoRef.selectPoints([nodeIndex]);
           }
           
           // Zoom to the selected node without restarting simulation
-          if (typeof cosmographRef.current.zoomToPoint === 'function') {
+          if (typeof cosmoRef.zoomToPoint === 'function') {
             // Use smooth zoom without simulation restart to prevent graph reload
-            cosmographRef.current.zoomToPoint(nodeIndex, 500, 3.0, false);
+            cosmoRef.zoomToPoint(nodeIndex, 500, 3.0, false);
           }
         }
       } catch (error) {

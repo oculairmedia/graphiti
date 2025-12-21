@@ -1,7 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, waitFor } from '../test/utils';
-import GraphViewport from './GraphViewportStandalone';
+import { GraphViz } from './GraphViz';
 import React from 'react';
+
+// Type alias for the component name to avoid changing test names
+const GraphViewport = GraphViz;
 
 // Mock the hooks with proper return values
 vi.mock('../hooks/useGraphDataQuery', () => ({

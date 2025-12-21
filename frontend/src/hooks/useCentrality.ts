@@ -48,6 +48,9 @@ export function usePrefetchCentrality() {
   });
 }
 
+// Type for centrality data source
+type CentralitySource = 'api' | 'node' | 'properties' | 'none';
+
 // Hook to get centrality with fallback to node properties
 export function useNodeCentralityWithFallback(
   nodeId: string | null, 
@@ -58,7 +61,7 @@ export function useNodeCentralityWithFallback(
     pagerank_centrality?: number;
     eigenvector_centrality?: number;
   }
-) {
+): { centrality: CentralityMetrics | null; isLoading: boolean; source: CentralitySource } {
   // Disable API calls for now since the endpoints aren't implemented yet
   // Just use the fallback to node properties or direct centrality values
   const { data: centralityData, isLoading, error } = useNodeCentrality(nodeId, false);

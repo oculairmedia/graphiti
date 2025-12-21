@@ -39,6 +39,7 @@ export interface GraphNode {
   
   // Type classification
   node_type: 'Entity' | 'Episodic' | 'Agent' | 'Community' | string;
+  entity_type?: string;  // Alternative name for node_type used in some APIs
   
   // Content fields
   summary?: string;
@@ -54,6 +55,12 @@ export interface GraphNode {
   created_at?: string;
   created_at_timestamp?: number;  // Unix timestamp in milliseconds
   updated_at?: string;
+  
+  // Top-level centrality metrics (hoisted from properties for clustering access)
+  degree_centrality?: number;
+  pagerank?: number;
+  betweenness_centrality?: number;
+  eigenvector_centrality?: number;
   
   // Extended properties (centrality, metadata, custom)
   properties?: NodeProperties;
@@ -176,6 +183,8 @@ export interface NodeTypeStats {
   label: string;
   color: string;
   count: number;
+  type?: string;       // Alternative name for label/id
+  percentage?: number; // Percentage of total nodes
 }
 
 /**
@@ -248,6 +257,8 @@ export interface ApiGraphStats {
   avg_degree: number;
   density?: number;
   max_degree?: number;
+  // Index signature for compatibility with GraphDataStats
+  [key: string]: unknown;
 }
 
 // =============================================================================

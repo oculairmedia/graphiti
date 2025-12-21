@@ -12,7 +12,7 @@ import type { GraphCanvasRef } from '@/types/graphCanvas';
 import type { NodeResult } from '@/types/graph';
 
 interface GraphitiSearchProps {
-  graphCanvasRef?: React.RefObject<GraphCanvasRef>;
+  graphCanvasRef?: React.RefObject<GraphCanvasRef | null>;
   className?: string;
   onNodeSelect?: (node: NodeResult) => void;
 }

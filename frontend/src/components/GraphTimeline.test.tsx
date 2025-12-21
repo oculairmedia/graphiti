@@ -233,16 +233,26 @@ describe('GraphTimeline', () => {
   });
 
   describe('Context Integration', () => {
-    it('should log warning when no cosmograph in context', () => {
+    it('should log warning when no cosmograph in context', async () => {
       const consoleSpy = vi.spyOn(console, 'log');
       
-      // Mock no cosmograph in context
-      vi.mocked(vi.importActual('@cosmograph/react')).useCosmograph = () => ({
-        cosmograph: null,
-        initCosmograph: vi.fn(),
-      });
+      // Reset the module mock to return null cosmograph
+      vi.doMock('@cosmograph/react', () => ({
+        useCosmograph: () => ({
+          cosmograph: null,
+          initCosmograph: vi.fn(),
+        }),
+        CosmographTimeline: vi.fn(({ children, ...props }) => (
+          <div data-testid="cosmograph-timeline" {...props}>
+            {children}
+          </div>
+        )),
+      }));
       
-      render(<GraphTimeline {...defaultProps} />);
+      // Re-import the component to pick up the new mock
+      const { GraphTimeline: MockedGraphTimeline } = await import('./GraphTimeline');
+      
+      render(<MockedGraphTimeline {...defaultProps} />);
       
       // Should log warning about missing cosmograph
       expect(consoleSpy).toHaveBeenCalledWith(

@@ -24,8 +24,8 @@ interface FilterConfig {
   maxEigenvector: number;
   minConnections: number;
   maxConnections: number;
-  startDate?: Date;
-  endDate?: Date;
+  startDate?: string;  // ISO date string format
+  endDate?: string;    // ISO date string format
 }
 
 interface TransformedData {
@@ -82,9 +82,9 @@ export function useGraphDataQuery() {
   const USE_PROGRESSIVE_LOADING = true; // Enable progressive loading
 
   // Fetch graph data from Rust server (disabled when using Arrow)
-  const { data: jsonData, isLoading: isJsonLoading, error } = useQuery({
+  const { data: jsonData, isLoading: isJsonLoading, error } = useQuery<{ nodes: GraphNode[], edges: GraphLink[] }>({
     queryKey: ['graphData'], // Remove config dependencies to prevent refetches on config changes
-    queryFn: async () => {
+    queryFn: async (): Promise<{ nodes: GraphNode[], edges: GraphLink[] }> => {
       if (skipJsonFetch) {
         // Return empty data - we'll use Arrow format from DuckDB instead
         return { nodes: [], edges: [] };
@@ -98,11 +98,11 @@ export function useGraphDataQuery() {
         query_type: 'entire_graph',
         limit: limit
       });
-      return result;
+      return { nodes: result.nodes, edges: result.edges.map(e => ({ ...e, source: e.from, target: e.to })) };
     },
     enabled: !skipJsonFetch, // Disable JSON fetch when using Arrow
     staleTime: 5 * 60 * 1000, // Consider data fresh for 5 minutes
-    cacheTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
+    gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes (renamed from cacheTime in v5)
   });
 
   // Define fetchDuckDBData as a stable callback so it can be called from multiple places
@@ -596,7 +596,7 @@ export function useGraphDataQuery() {
   const previousFilterConfigRef = useRef<FilterConfig | null>(null);
   const previousDataRef = useRef<{ nodes: GraphNode[], edges: GraphLink[] } | null>(null);
 
-  const transformedData = useMemo<TransformedData>(() => {
+  const transformedData = useMemo((): TransformedData => {
     // DEBUG: Log transformation state
     console.log('[useGraphDataQuery] transformedData computing:', {
       isIncrementalUpdate,
@@ -653,7 +653,7 @@ export function useGraphDataQuery() {
       previousTransformedDataRef.current.links.length !== newTransformedData.links.length ||
       (newTransformedData.nodes[0]?.id !== previousTransformedDataRef.current.nodes[0]?.id);
 
-    if (!hasDataChanged) {
+    if (!hasDataChanged && previousTransformedDataRef.current) {
       // Return the previous reference to maintain stability
       return previousTransformedDataRef.current;
     }

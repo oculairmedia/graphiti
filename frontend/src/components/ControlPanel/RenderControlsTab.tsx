@@ -35,11 +35,11 @@ interface RenderControlsTabProps {
     labelBy: string;
     labelVisibilityThreshold: number;
     labelSize: number;
-    labelFontWeight: number;
+    labelFontWeight: number | 'normal' | 'bold' | 'lighter' | 'bolder';
     labelColor: string;
     labelBackgroundColor: string;
     hoveredLabelSize: number;
-    hoveredLabelFontWeight: number;
+    hoveredLabelFontWeight: number | 'normal' | 'bold' | 'lighter' | 'bolder';
     hoveredLabelColor: string;
     hoveredLabelBackgroundColor: string;
     pixelationThreshold: number;
@@ -420,7 +420,7 @@ export const RenderControlsTab: React.FC<RenderControlsTabProps> = ({
                 />
                 <ControlSlider
                   label="Font Weight"
-                  value={config.labelFontWeight}
+                  value={typeof config.labelFontWeight === 'number' ? config.labelFontWeight : 400}
                   min={100}
                   max={900}
                   step={100}
@@ -451,7 +451,7 @@ export const RenderControlsTab: React.FC<RenderControlsTabProps> = ({
                 />
                 <ControlSlider
                   label="Font Weight"
-                  value={config.hoveredLabelFontWeight}
+                  value={typeof config.hoveredLabelFontWeight === 'number' ? config.hoveredLabelFontWeight : 400}
                   min={100}
                   max={900}
                   step={100}
