@@ -16,6 +16,7 @@ use tower_http::{
 };
 use tracing::{error, info, debug, warn};
 use tokio::sync::{broadcast, RwLock};
+use futures::StreamExt;  // GRAPH-98: For pubsub stream iteration
 use arrow::record_batch::RecordBatch;
 use bytes::Bytes;
 use sha2::{Sha256, Digest};
@@ -596,6 +597,61 @@ async fn main() -> anyhow::Result<()> {
         }
     });
     
+    // GRAPH-98: Create channel for pubsub-triggered syncs
+    let (pubsub_tx, mut pubsub_rx) = tokio::sync::mpsc::channel::<()>(10);
+    
+    // GRAPH-98: Spawn Redis pubsub listener for real-time change detection
+    let pubsub_connection_string = format!("redis://{}:{}", falkor_host, falkor_port);
+    let pubsub_tx_clone = pubsub_tx.clone();
+    tokio::spawn(async move {
+        loop {
+            match redis::Client::open(pubsub_connection_string.clone()) {
+                Ok(client) => {
+                    match client.get_async_connection().await {
+                        Ok(conn) => {
+                            info!("Redis pubsub listener connected");
+                            let mut pubsub = conn.into_pubsub();
+                            
+                            // Subscribe to graph-related keyspace events
+                            // FalkorDB uses GRAPH.* commands which trigger keyevent notifications
+                            if let Err(e) = pubsub.psubscribe("__keyevent@0__:graph.*").await {
+                                error!("Failed to subscribe to graph events: {}", e);
+                                tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+                                continue;
+                            }
+                            
+                            info!("Subscribed to Redis keyspace notifications for graph changes");
+                            
+                            // Listen for events
+                            loop {
+                                match pubsub.on_message().next().await {
+                                    Some(msg) => {
+                                        let channel: String = msg.get_channel_name().to_string();
+                                        debug!("Received pubsub event on channel: {}", channel);
+                                        // Signal the sync task to check for changes
+                                        let _ = pubsub_tx_clone.try_send(());
+                                    }
+                                    None => {
+                                        warn!("Pubsub connection closed, reconnecting...");
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            error!("Failed to get Redis pubsub connection: {}", e);
+                            tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+                        }
+                    }
+                }
+                Err(e) => {
+                    error!("Failed to open Redis client for pubsub: {}", e);
+                    tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+                }
+            }
+        }
+    });
+    
     // Spawn background task for monitoring database changes
     let client_clone = state.client.clone();
     let cache_clone = state.graph_cache.clone();
@@ -608,8 +664,8 @@ async fn main() -> anyhow::Result<()> {
     let store_clone = state.duckdb_store.clone();
     
     tokio::spawn(async move {
-        // GRAPH-97: Reduced from 30s to 5s for faster change detection
-        // Safe due to optimized combined query (GRAPH-95)
+        // GRAPH-97: Poll interval as fallback (5s), but pubsub can trigger faster
+        // GRAPH-98: Now also listens for pubsub signals for real-time detection
         let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(5));
         let mut last_node_count = 0;
         let mut last_edge_count = 0;
@@ -618,7 +674,16 @@ async fn main() -> anyhow::Result<()> {
         let mut is_first_sync = true;
         
         loop {
-            interval.tick().await;
+            // Wait for either: timer tick (5s fallback) OR pubsub signal (real-time)
+            tokio::select! {
+                _ = interval.tick() => {
+                    // Regular poll interval - fallback if pubsub isn't working
+                }
+                _ = pubsub_rx.recv() => {
+                    // Pubsub triggered - graph change detected in real-time
+                    debug!("Sync triggered by pubsub notification");
+                }
+            }
             
             // Check database for changes - OPTIMIZED: single combined query instead of 3 separate queries
             // This reduces network round-trips and query overhead by ~60%
