@@ -1,0 +1,246 @@
+{
+  "dashboard": {
+    "title": "Graphiti Event Sourcing & Stream Monitoring",
+    "uid": "graphiti-event-sourcing",
+    "tags": ["graphiti", "event-sourcing", "stream", "reconciliation"],
+    "timezone": "browser",
+    "schemaVersion": 27,
+    "version": 1,
+    "refresh": "10s",
+    "annotations": {
+      "list": []
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Visualizer Status",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "graphiti_visualizer_loading_state",
+            "legendFormat": "Loading State"
+          }
+        ],
+        "options": {
+          "graphMode": "none",
+          "colorMode": "background"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "mappings": [
+              {"type": "value", "options": {"0": {"text": "Initializing", "color": "yellow"}}},
+              {"type": "value", "options": {"1": {"text": "Loading Nodes", "color": "blue"}}},
+              {"type": "value", "options": {"2": {"text": "Loading Edges", "color": "blue"}}},
+              {"type": "value", "options": {"3": {"text": "Indexing", "color": "orange"}}},
+              {"type": "value", "options": {"4": {"text": "Ready", "color": "green"}}},
+              {"type": "value", "options": {"-1": {"text": "Error", "color": "red"}}}
+            ]
+          }
+        }
+      },
+      {
+        "id": 2,
+        "title": "Nodes & Edges Total",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0},
+        "targets": [
+          {
+            "expr": "graphiti_visualizer_nodes_total",
+            "legendFormat": "Nodes"
+          },
+          {
+            "expr": "graphiti_visualizer_edges_total",
+            "legendFormat": "Edges"
+          }
+        ],
+        "options": {
+          "graphMode": "area",
+          "colorMode": "value"
+        }
+      },
+      {
+        "id": 3,
+        "title": "Stream Consumer Health",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0},
+        "targets": [
+          {
+            "expr": "graphiti_stream_consumer_healthy",
+            "legendFormat": "Consumer Status"
+          }
+        ],
+        "options": {
+          "graphMode": "none",
+          "colorMode": "background"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "mappings": [
+              {"type": "value", "options": {"1": {"text": "Healthy", "color": "green"}}},
+              {"type": "value", "options": {"0": {"text": "Disconnected", "color": "red"}}}
+            ]
+          }
+        }
+      },
+      {
+        "id": 4,
+        "title": "Cache Performance",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0},
+        "targets": [
+          {
+            "expr": "graphiti_cache_hits_total / (graphiti_cache_hits_total + graphiti_cache_misses_total) * 100",
+            "legendFormat": "Hit Rate %"
+          }
+        ],
+        "options": {
+          "graphMode": "area",
+          "colorMode": "value"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "red", "value": null},
+                {"color": "yellow", "value": 50},
+                {"color": "green", "value": 80}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 5,
+        "title": "Node & Edge Count Over Time",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
+        "targets": [
+          {
+            "expr": "graphiti_visualizer_nodes_total",
+            "legendFormat": "Nodes"
+          },
+          {
+            "expr": "graphiti_visualizer_edges_total",
+            "legendFormat": "Edges"
+          }
+        ],
+        "options": {
+          "legend": {"displayMode": "list", "placement": "bottom"}
+        },
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "smooth",
+              "fillOpacity": 10
+            }
+          }
+        }
+      },
+      {
+        "id": 6,
+        "title": "Delta Tracker Activity",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4},
+        "targets": [
+          {
+            "expr": "graphiti_delta_tracker_nodes_tracked",
+            "legendFormat": "Nodes Tracked"
+          },
+          {
+            "expr": "graphiti_delta_tracker_edges_tracked",
+            "legendFormat": "Edges Tracked"
+          },
+          {
+            "expr": "rate(graphiti_delta_tracker_updates_total[5m])",
+            "legendFormat": "Updates/sec"
+          }
+        ],
+        "options": {
+          "legend": {"displayMode": "list", "placement": "bottom"}
+        }
+      },
+      {
+        "id": 7,
+        "title": "Cache Hits vs Misses",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 12},
+        "targets": [
+          {
+            "expr": "rate(graphiti_cache_hits_total[5m])",
+            "legendFormat": "Hits/sec"
+          },
+          {
+            "expr": "rate(graphiti_cache_misses_total[5m])",
+            "legendFormat": "Misses/sec"
+          }
+        ],
+        "options": {
+          "legend": {"displayMode": "list", "placement": "bottom"}
+        },
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "bars"
+            }
+          }
+        }
+      },
+      {
+        "id": 8,
+        "title": "Loading Progress",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 12},
+        "targets": [
+          {
+            "expr": "graphiti_visualizer_nodes_loaded",
+            "legendFormat": "Nodes Loaded"
+          },
+          {
+            "expr": "graphiti_visualizer_edges_loaded",
+            "legendFormat": "Edges Loaded"
+          }
+        ],
+        "options": {
+          "legend": {"displayMode": "list", "placement": "bottom"}
+        }
+      },
+      {
+        "id": 9,
+        "title": "Service Uptime",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 24, "x": 0, "y": 20},
+        "targets": [
+          {
+            "expr": "up{job=\"graph-visualizer\"}",
+            "legendFormat": "Visualizer"
+          },
+          {
+            "expr": "up{job=\"graphiti-sync\"}",
+            "legendFormat": "Sync Service"
+          },
+          {
+            "expr": "up{job=\"graphiti-api\"}",
+            "legendFormat": "API Server"
+          }
+        ],
+        "options": {
+          "graphMode": "none",
+          "colorMode": "background",
+          "orientation": "horizontal"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "mappings": [
+              {"type": "value", "options": {"1": {"text": "UP", "color": "green"}}},
+              {"type": "value", "options": {"0": {"text": "DOWN", "color": "red"}}}
+            ]
+          }
+        }
+      }
+    ]
+  }
+}

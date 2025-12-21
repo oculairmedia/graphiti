@@ -17,15 +17,11 @@ scrape_configs:
       - targets: ['graphiti-sync-rs:8081']
     metrics_path: '/metrics'
 
-  # Graph Visualizer
+  # Graph Visualizer - GRAPH-110: Updated to use proper /metrics endpoint
   - job_name: 'graph-visualizer'
     static_configs:
       - targets: ['graph-visualizer-rust:3000']
-    metrics_path: '/api/stats'
-    metric_relabel_configs:
-      - source_labels: [__name__]
-        regex: '.*'
-        action: keep
+    metrics_path: '/metrics'
 
   # Neo4j Metrics
   - job_name: 'neo4j'

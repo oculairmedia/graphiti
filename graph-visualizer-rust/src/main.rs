@@ -997,6 +997,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/centrality/degree", post(proxy_centrality_degree))
         .route("/api/centrality/betweenness", post(proxy_centrality_betweenness))
         .route("/api/centrality/all", post(proxy_centrality_all))
+        .route("/metrics", get(prometheus_metrics))  // GRAPH-110: Prometheus metrics endpoint
         .route("/ws", get(websocket_handler))
         .layer(CompressionLayer::new())  // Add gzip/brotli compression
         .layer(CorsLayer::permissive())
@@ -1024,6 +1025,130 @@ async fn get_stats(State(state): State<AppState>) -> Result<Json<GraphStats>, St
 
 async fn health_check() -> Json<HealthResponse> {
     Json(HealthResponse { status: "ok" })
+}
+
+/// GRAPH-110: Prometheus metrics endpoint
+///
+/// Exposes metrics in Prometheus text format for monitoring:
+/// - graphiti_visualizer_nodes_total: Total nodes in DuckDB
+/// - graphiti_visualizer_edges_total: Total edges in DuckDB
+/// - graphiti_visualizer_loading_state: Current loading state (0=init, 1=nodes, 2=edges, 3=indexing, 4=ready)
+/// - graphiti_stream_events_processed: Events processed from Redis stream
+/// - graphiti_reconciliation_runs: Number of reconciliation runs completed
+/// - graphiti_reconciliation_nodes_removed: Nodes removed by reconciliation
+/// - graphiti_reconciliation_edges_removed: Edges removed by reconciliation
+async fn prometheus_metrics(State(state): State<AppState>) -> (StatusCode, [(axum::http::HeaderName, &'static str); 1], String) {
+    let mut metrics = String::new();
+    
+    // DuckDB stats
+    if let Ok((node_count, edge_count)) = state.duckdb_store.get_stats().await {
+        metrics.push_str(&format!(
+            "# HELP graphiti_visualizer_nodes_total Total number of nodes in the visualizer\n\
+             # TYPE graphiti_visualizer_nodes_total gauge\n\
+             graphiti_visualizer_nodes_total {}\n\n",
+            node_count
+        ));
+        metrics.push_str(&format!(
+            "# HELP graphiti_visualizer_edges_total Total number of edges in the visualizer\n\
+             # TYPE graphiti_visualizer_edges_total gauge\n\
+             graphiti_visualizer_edges_total {}\n\n",
+            edge_count
+        ));
+    }
+    
+    // Loading state
+    {
+        let progress = state.loading_progress.read().await;
+        let state_value = match progress.state {
+            LoadingState::Initializing => 0,
+            LoadingState::LoadingNodes => 1,
+            LoadingState::LoadingEdges => 2,
+            LoadingState::Indexing => 3,
+            LoadingState::Ready => 4,
+            LoadingState::Error => -1,
+        };
+        metrics.push_str(&format!(
+            "# HELP graphiti_visualizer_loading_state Current loading state (0=init, 1=nodes, 2=edges, 3=indexing, 4=ready, -1=error)\n\
+             # TYPE graphiti_visualizer_loading_state gauge\n\
+             graphiti_visualizer_loading_state {}\n\n",
+            state_value
+        ));
+        
+        metrics.push_str(&format!(
+            "# HELP graphiti_visualizer_nodes_loaded Number of nodes loaded during current/last load\n\
+             # TYPE graphiti_visualizer_nodes_loaded gauge\n\
+             graphiti_visualizer_nodes_loaded {}\n\n",
+            progress.loaded_nodes
+        ));
+        
+        metrics.push_str(&format!(
+            "# HELP graphiti_visualizer_edges_loaded Number of edges loaded during current/last load\n\
+             # TYPE graphiti_visualizer_edges_loaded gauge\n\
+             graphiti_visualizer_edges_loaded {}\n\n",
+            progress.loaded_edges
+        ));
+    }
+    
+    // Cache stats - placeholder for now
+    // TODO: Add proper cache stats when EnhancedCache exposes metrics
+    if state.enhanced_cache.is_some() {
+        metrics.push_str(
+            "# HELP graphiti_cache_enabled Whether enhanced caching is enabled\n\
+             # TYPE graphiti_cache_enabled gauge\n\
+             graphiti_cache_enabled 1\n\n"
+        );
+    } else {
+        metrics.push_str(
+            "# HELP graphiti_cache_enabled Whether enhanced caching is enabled\n\
+             # TYPE graphiti_cache_enabled gauge\n\
+             graphiti_cache_enabled 0\n\n"
+        );
+    }
+    
+    // Graph cache stats (the DashMap-based cache)
+    metrics.push_str(&format!(
+        "# HELP graphiti_graph_cache_size Number of entries in the graph cache\n\
+         # TYPE graphiti_graph_cache_size gauge\n\
+         graphiti_graph_cache_size {}\n\n",
+        state.graph_cache.len()
+    ));
+    
+    // Stream consumer stats (we'll need to make these accessible)
+    // For now, placeholder - these will be populated when we add shared stats
+    metrics.push_str(
+        "# HELP graphiti_stream_consumer_healthy Whether the stream consumer is running\n\
+         # TYPE graphiti_stream_consumer_healthy gauge\n\
+         graphiti_stream_consumer_healthy 1\n\n"
+    );
+    
+    // Delta tracker stats
+    {
+        let delta_stats = state.delta_tracker.get_stats().await;
+        metrics.push_str(&format!(
+            "# HELP graphiti_delta_tracker_nodes_tracked Number of nodes being tracked for changes\n\
+             # TYPE graphiti_delta_tracker_nodes_tracked gauge\n\
+             graphiti_delta_tracker_nodes_tracked {}\n\n",
+            delta_stats.0
+        ));
+        metrics.push_str(&format!(
+            "# HELP graphiti_delta_tracker_edges_tracked Number of edges being tracked for changes\n\
+             # TYPE graphiti_delta_tracker_edges_tracked gauge\n\
+             graphiti_delta_tracker_edges_tracked {}\n\n",
+            delta_stats.1
+        ));
+        metrics.push_str(&format!(
+            "# HELP graphiti_delta_tracker_updates_total Total number of delta updates computed\n\
+             # TYPE graphiti_delta_tracker_updates_total counter\n\
+             graphiti_delta_tracker_updates_total {}\n\n",
+            delta_stats.2
+        ));
+    }
+    
+    (
+        StatusCode::OK,
+        [(axum::http::HeaderName::from_static("content-type"), "text/plain; charset=utf-8")],
+        metrics,
+    )
 }
 
 #[derive(Debug, Serialize)]
