@@ -5,6 +5,10 @@ global:
     cluster: 'graphiti-stack'
     environment: 'production'
 
+# GRAPH-114: Alert rules for reconciliation and event sourcing
+rule_files:
+  - 'alerts/*.yml'
+
 scrape_configs:
   # Prometheus self-monitoring
   - job_name: 'prometheus'

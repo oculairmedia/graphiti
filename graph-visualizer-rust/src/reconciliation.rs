@@ -311,6 +311,21 @@ impl ReconciliationService {
         }
     }
 
+    /// Create a new reconciliation service with external stats for metrics sharing
+    ///
+    /// This allows the stats to be accessed from outside the service (e.g., for Prometheus metrics)
+    pub fn with_shared_stats(
+        config: ReconciliationConfig,
+        stats: Arc<tokio::sync::RwLock<ReconciliationStats>>,
+    ) -> Self {
+        Self { config, stats }
+    }
+
+    /// Get a clone of the stats Arc for sharing with other components
+    pub fn stats_handle(&self) -> Arc<tokio::sync::RwLock<ReconciliationStats>> {
+        self.stats.clone()
+    }
+
     /// Get current reconciliation statistics
     pub async fn get_stats(&self) -> ReconciliationStats {
         self.stats.read().await.clone()

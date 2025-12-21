@@ -1,0 +1,97 @@
+# GRAPH-114: Reconciliation and Event Sourcing Alert Rules
+groups:
+  - name: graphiti-reconciliation
+    rules:
+      # Alert when reconciliation hasn't run in over 10 minutes
+      - alert: ReconciliationStale
+        expr: time() - graphiti_reconciliation_last_run_timestamp > 600
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Reconciliation hasn't run recently"
+          description: "No reconciliation run in the last {{ $value | humanizeDuration }}. Expected interval is 5 minutes."
+
+      # Alert when reconciliation is removing too many items (indicates data drift)
+      - alert: HighReconciliationDeletions
+        expr: increase(graphiti_reconciliation_nodes_removed_total[15m]) + increase(graphiti_reconciliation_edges_removed_total[15m]) > 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High number of stale items removed by reconciliation"
+          description: "{{ $value }} items removed in the last 15 minutes. This may indicate data drift or sync issues."
+
+      # Alert when reconciliation errors occur
+      - alert: ReconciliationErrors
+        expr: increase(graphiti_reconciliation_errors_total[1h]) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Reconciliation errors detected"
+          description: "{{ $value }} reconciliation errors in the last hour. Check visualizer logs."
+
+      # Alert when reconciliation duration is too long (performance issue)
+      - alert: ReconciliationSlow
+        expr: graphiti_reconciliation_last_duration_ms > 60000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Reconciliation is taking too long"
+          description: "Last reconciliation took {{ $value | humanize }}ms. This may indicate graph size or query performance issues."
+
+  - name: graphiti-visualizer
+    rules:
+      # Alert when visualizer is not ready
+      - alert: VisualizerNotReady
+        expr: graphiti_visualizer_loading_state != 4
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Graph visualizer is not ready"
+          description: "Visualizer has been in loading state {{ $value }} for over 10 minutes."
+
+      # Alert when visualizer has no data
+      - alert: VisualizerEmpty
+        expr: graphiti_visualizer_nodes_total == 0 and graphiti_visualizer_loading_state == 4
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Visualizer has no data"
+          description: "Visualizer shows ready but has 0 nodes. Data may have been lost."
+
+      # Alert when stream consumer is down
+      - alert: StreamConsumerDown
+        expr: graphiti_stream_consumer_healthy == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis stream consumer is not healthy"
+          description: "Stream consumer disconnected. Real-time updates may not be working."
+
+  - name: graphiti-data-drift
+    rules:
+      # Alert when there's a large backlog of items pending sync
+      - alert: LargeSyncBacklog
+        expr: graphiti_reconciliation_nodes_found_new + graphiti_reconciliation_edges_found_new > 10000
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Large number of items pending sync"
+          description: "{{ $value }} items in FalkorDB are not yet in DuckDB cache. This may indicate sync lag."
+
+      # Alert on significant node/edge count drops (data loss detection)
+      - alert: SignificantDataDrop
+        expr: (graphiti_visualizer_nodes_total - (graphiti_visualizer_nodes_total offset 1h)) / (graphiti_visualizer_nodes_total offset 1h) < -0.1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Significant drop in node count detected"
+          description: "Node count dropped by more than 10% in the last hour. Possible data loss."

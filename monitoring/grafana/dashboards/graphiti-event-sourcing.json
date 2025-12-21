@@ -240,6 +240,259 @@
             ]
           }
         }
+      },
+      {
+        "id": 10,
+        "title": "Reconciliation",
+        "type": "row",
+        "gridPos": {"h": 1, "w": 24, "x": 0, "y": 24},
+        "collapsed": false
+      },
+      {
+        "id": 11,
+        "title": "Reconciliation Runs",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 6, "x": 0, "y": 25},
+        "targets": [
+          {
+            "expr": "graphiti_reconciliation_runs_total",
+            "legendFormat": "Total Runs"
+          }
+        ],
+        "options": {
+          "graphMode": "area",
+          "colorMode": "value"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "blue", "value": null}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 12,
+        "title": "Last Reconciliation Duration",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 6, "x": 6, "y": 25},
+        "targets": [
+          {
+            "expr": "graphiti_reconciliation_last_duration_ms",
+            "legendFormat": "Duration"
+          }
+        ],
+        "options": {
+          "graphMode": "area",
+          "colorMode": "value"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ms",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 30000},
+                {"color": "red", "value": 60000}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 13,
+        "title": "Stale Data Removed",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 6, "x": 12, "y": 25},
+        "targets": [
+          {
+            "expr": "graphiti_reconciliation_nodes_removed_total",
+            "legendFormat": "Nodes Removed"
+          },
+          {
+            "expr": "graphiti_reconciliation_edges_removed_total",
+            "legendFormat": "Edges Removed"
+          }
+        ],
+        "options": {
+          "graphMode": "area",
+          "colorMode": "value"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 100},
+                {"color": "red", "value": 1000}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 14,
+        "title": "Reconciliation Errors",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 6, "x": 18, "y": 25},
+        "targets": [
+          {
+            "expr": "graphiti_reconciliation_errors_total",
+            "legendFormat": "Errors"
+          }
+        ],
+        "options": {
+          "graphMode": "area",
+          "colorMode": "background"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 1},
+                {"color": "red", "value": 5}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 15,
+        "title": "Reconciliation Deletions Over Time",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 29},
+        "targets": [
+          {
+            "expr": "increase(graphiti_reconciliation_nodes_removed_total[5m])",
+            "legendFormat": "Nodes Removed (5m)"
+          },
+          {
+            "expr": "increase(graphiti_reconciliation_edges_removed_total[5m])",
+            "legendFormat": "Edges Removed (5m)"
+          }
+        ],
+        "options": {
+          "legend": {"displayMode": "list", "placement": "bottom"}
+        },
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "bars",
+              "fillOpacity": 50
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 50},
+                {"color": "red", "value": 100}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 16,
+        "title": "Reconciliation Duration Trend",
+        "type": "timeseries",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 29},
+        "targets": [
+          {
+            "expr": "graphiti_reconciliation_last_duration_ms",
+            "legendFormat": "Duration (ms)"
+          }
+        ],
+        "options": {
+          "legend": {"displayMode": "list", "placement": "bottom"}
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ms",
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "smooth",
+              "fillOpacity": 10
+            },
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 30000},
+                {"color": "red", "value": 60000}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 17,
+        "title": "Time Since Last Reconciliation",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 12, "x": 0, "y": 37},
+        "targets": [
+          {
+            "expr": "time() - graphiti_reconciliation_last_run_timestamp",
+            "legendFormat": "Seconds Ago"
+          }
+        ],
+        "options": {
+          "graphMode": "none",
+          "colorMode": "background"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "s",
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 600},
+                {"color": "red", "value": 900}
+              ]
+            }
+          }
+        },
+        "description": "Time since last reconciliation run. Should be < 5 minutes (300s) normally."
+      },
+      {
+        "id": 18,
+        "title": "Pending Sync Items",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 12, "x": 12, "y": 37},
+        "targets": [
+          {
+            "expr": "graphiti_reconciliation_nodes_found_new",
+            "legendFormat": "New Nodes in FalkorDB"
+          },
+          {
+            "expr": "graphiti_reconciliation_edges_found_new",
+            "legendFormat": "New Edges in FalkorDB"
+          }
+        ],
+        "options": {
+          "graphMode": "area",
+          "colorMode": "value"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"color": "green", "value": null},
+                {"color": "yellow", "value": 1000},
+                {"color": "red", "value": 5000}
+              ]
+            }
+          }
+        },
+        "description": "Items in FalkorDB that are not yet in DuckDB. Will be synced by the regular sync task."
       }
     ]
   }

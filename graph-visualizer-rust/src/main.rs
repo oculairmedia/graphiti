@@ -85,6 +85,8 @@ pub struct AppState {
     pub(crate) cache_config: CacheConfig,
     pub(crate) enhanced_cache: Option<Arc<EnhancedCache>>,
     pub(crate) loading_progress: Arc<RwLock<LoadingProgress>>,
+    /// GRAPH-114: Shared reconciliation stats for metrics endpoint
+    pub(crate) reconciliation_stats: Arc<RwLock<ReconciliationStats>>,
 }
 
 #[derive(Clone)]
@@ -328,6 +330,9 @@ async fn main() -> anyhow::Result<()> {
         ..Default::default()
     }));
     
+    // GRAPH-114: Shared reconciliation stats for metrics
+    let reconciliation_stats = Arc::new(RwLock::new(ReconciliationStats::default()));
+    
     let state = AppState {
         client: Arc::new(client),
         graph_name: graph_name.clone(),
@@ -342,6 +347,7 @@ async fn main() -> anyhow::Result<()> {
         cache_config,
         enhanced_cache,
         loading_progress: loading_progress.clone(),
+        reconciliation_stats: reconciliation_stats.clone(),
     };
     
     // Load initial data into DuckDB with optimized separate queries
@@ -738,6 +744,7 @@ async fn main() -> anyhow::Result<()> {
     let recon_client = state.client.clone();
     let recon_graph_name = graph_name.clone();
     let recon_store = state.duckdb_store.clone();
+    let recon_stats = state.reconciliation_stats.clone();  // GRAPH-114: Share stats for metrics
     let (recon_shutdown_tx, recon_shutdown_rx) = tokio::sync::watch::channel(false);
     
     // Store shutdown sender for graceful shutdown (could be added to AppState)
@@ -758,7 +765,8 @@ async fn main() -> anyhow::Result<()> {
                 .unwrap_or(true),
         };
         
-        let service = ReconciliationService::new(config);
+        // GRAPH-114: Use shared stats for Prometheus metrics access
+        let service = ReconciliationService::with_shared_stats(config, recon_stats);
         service.run(recon_client, recon_graph_name, recon_store, recon_shutdown_rx).await;
     });
     
@@ -1141,6 +1149,76 @@ async fn prometheus_metrics(State(state): State<AppState>) -> (StatusCode, [(axu
              # TYPE graphiti_delta_tracker_updates_total counter\n\
              graphiti_delta_tracker_updates_total {}\n\n",
             delta_stats.2
+        ));
+    }
+    
+    // GRAPH-114: Reconciliation service stats
+    {
+        let recon_stats = state.reconciliation_stats.read().await;
+        
+        metrics.push_str(&format!(
+            "# HELP graphiti_reconciliation_runs_total Total number of reconciliation runs completed\n\
+             # TYPE graphiti_reconciliation_runs_total counter\n\
+             graphiti_reconciliation_runs_total {}\n\n",
+            recon_stats.runs_completed
+        ));
+        
+        metrics.push_str(&format!(
+            "# HELP graphiti_reconciliation_last_duration_ms Duration of last reconciliation run in milliseconds\n\
+             # TYPE graphiti_reconciliation_last_duration_ms gauge\n\
+             graphiti_reconciliation_last_duration_ms {}\n\n",
+            recon_stats.last_duration_ms
+        ));
+        
+        metrics.push_str(&format!(
+            "# HELP graphiti_reconciliation_nodes_removed_total Total nodes removed by reconciliation (stale nodes)\n\
+             # TYPE graphiti_reconciliation_nodes_removed_total counter\n\
+             graphiti_reconciliation_nodes_removed_total {}\n\n",
+            recon_stats.nodes_removed
+        ));
+        
+        metrics.push_str(&format!(
+            "# HELP graphiti_reconciliation_edges_removed_total Total edges removed by reconciliation (stale edges)\n\
+             # TYPE graphiti_reconciliation_edges_removed_total counter\n\
+             graphiti_reconciliation_edges_removed_total {}\n\n",
+            recon_stats.edges_removed
+        ));
+        
+        metrics.push_str(&format!(
+            "# HELP graphiti_reconciliation_nodes_found_new Total new nodes found in FalkorDB (pending sync)\n\
+             # TYPE graphiti_reconciliation_nodes_found_new counter\n\
+             graphiti_reconciliation_nodes_found_new {}\n\n",
+            recon_stats.nodes_added
+        ));
+        
+        metrics.push_str(&format!(
+            "# HELP graphiti_reconciliation_edges_found_new Total new edges found in FalkorDB (pending sync)\n\
+             # TYPE graphiti_reconciliation_edges_found_new counter\n\
+             graphiti_reconciliation_edges_found_new {}\n\n",
+            recon_stats.edges_added
+        ));
+        
+        metrics.push_str(&format!(
+            "# HELP graphiti_reconciliation_errors_total Total reconciliation errors\n\
+             # TYPE graphiti_reconciliation_errors_total counter\n\
+             graphiti_reconciliation_errors_total {}\n\n",
+            recon_stats.errors
+        ));
+        
+        // Last run timestamp as a gauge (0 if never run)
+        let last_run_ts = if let Some(ref ts) = recon_stats.last_run {
+            // Parse ISO 8601 timestamp to unix epoch
+            chrono::DateTime::parse_from_rfc3339(ts)
+                .map(|dt| dt.timestamp())
+                .unwrap_or(0)
+        } else {
+            0
+        };
+        metrics.push_str(&format!(
+            "# HELP graphiti_reconciliation_last_run_timestamp Unix timestamp of last reconciliation run\n\
+             # TYPE graphiti_reconciliation_last_run_timestamp gauge\n\
+             graphiti_reconciliation_last_run_timestamp {}\n\n",
+            last_run_ts
         ));
     }
     
