@@ -26,7 +26,7 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 use falkordb::{FalkorValue, FalkorAsyncClient};
-use tracing::{debug, info, warn};
+use tracing::{debug, error, info, warn};
 
 /// Default batch size for paginated queries
 pub const DEFAULT_BATCH_SIZE: usize = 1000;
@@ -253,6 +253,218 @@ impl ReconciliationDiff {
             self.local_only.len(),
             self.common.len()
         )
+    }
+}
+
+/// Statistics for reconciliation runs
+#[derive(Debug, Clone, Default, serde::Serialize)]
+pub struct ReconciliationStats {
+    pub last_run: Option<String>,
+    pub runs_completed: u64,
+    pub nodes_added: u64,
+    pub nodes_removed: u64,
+    pub edges_added: u64,
+    pub edges_removed: u64,
+    pub last_duration_ms: u64,
+    pub errors: u64,
+}
+
+/// Configuration for the reconciliation service
+#[derive(Debug, Clone)]
+pub struct ReconciliationConfig {
+    /// Interval between reconciliation runs (in seconds)
+    pub interval_secs: u64,
+    /// Batch size for ID fetching
+    pub batch_size: usize,
+    /// Whether reconciliation is enabled
+    pub enabled: bool,
+}
+
+impl Default for ReconciliationConfig {
+    fn default() -> Self {
+        Self {
+            interval_secs: 300, // 5 minutes
+            batch_size: DEFAULT_BATCH_SIZE,
+            enabled: true,
+        }
+    }
+}
+
+/// Service that periodically reconciles DuckDB with FalkorDB
+///
+/// This service runs in the background and:
+/// 1. Fetches all node/edge IDs from FalkorDB (paginated)
+/// 2. Compares with local DuckDB state
+/// 3. Removes stale entries from DuckDB that no longer exist in FalkorDB
+/// 4. Optionally fetches new entries that are missing from DuckDB
+pub struct ReconciliationService {
+    config: ReconciliationConfig,
+    stats: Arc<tokio::sync::RwLock<ReconciliationStats>>,
+}
+
+impl ReconciliationService {
+    /// Create a new reconciliation service
+    pub fn new(config: ReconciliationConfig) -> Self {
+        Self {
+            config,
+            stats: Arc::new(tokio::sync::RwLock::new(ReconciliationStats::default())),
+        }
+    }
+
+    /// Get current reconciliation statistics
+    pub async fn get_stats(&self) -> ReconciliationStats {
+        self.stats.read().await.clone()
+    }
+
+    /// Run the reconciliation service in a background task
+    ///
+    /// This spawns a tokio task that runs reconciliation at the configured interval.
+    pub async fn run(
+        &self,
+        client: Arc<FalkorAsyncClient>,
+        graph_name: String,
+        duckdb_store: Arc<crate::duckdb_store::DuckDBStore>,
+        mut shutdown_rx: tokio::sync::watch::Receiver<bool>,
+    ) {
+        if !self.config.enabled {
+            info!("Reconciliation service disabled");
+            return;
+        }
+
+        info!(
+            "Starting reconciliation service (interval: {}s, batch_size: {})",
+            self.config.interval_secs, self.config.batch_size
+        );
+
+        let mut interval = tokio::time::interval(
+            tokio::time::Duration::from_secs(self.config.interval_secs)
+        );
+
+        loop {
+            tokio::select! {
+                _ = interval.tick() => {
+                    if let Err(e) = self.run_reconciliation(
+                        &client,
+                        &graph_name,
+                        &duckdb_store,
+                    ).await {
+                        error!("Reconciliation failed: {}", e);
+                        let mut stats = self.stats.write().await;
+                        stats.errors += 1;
+                    }
+                }
+                _ = shutdown_rx.changed() => {
+                    if *shutdown_rx.borrow() {
+                        info!("Reconciliation service shutting down");
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    /// Run a single reconciliation pass
+    async fn run_reconciliation(
+        &self,
+        client: &Arc<FalkorAsyncClient>,
+        graph_name: &str,
+        duckdb_store: &Arc<crate::duckdb_store::DuckDBStore>,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let start = std::time::Instant::now();
+        info!("Starting reconciliation pass...");
+
+        // Create ID fetcher for FalkorDB
+        let fetcher = IdFetcher::new(client.clone(), graph_name.to_string());
+
+        // Fetch all node IDs from FalkorDB
+        let remote_node_ids = fetcher.fetch_all_node_ids(self.config.batch_size).await?;
+        debug!("Fetched {} node IDs from FalkorDB", remote_node_ids.len());
+
+        // Get all node IDs from DuckDB
+        let local_node_ids = duckdb_store.get_all_node_ids().await?;
+        debug!("Found {} node IDs in DuckDB", local_node_ids.len());
+
+        // Compute node diff
+        let node_diff = ReconciliationDiff::compute(&remote_node_ids, &local_node_ids);
+        
+        let mut nodes_removed = 0;
+        let mut nodes_added = 0;
+
+        // Remove stale nodes from DuckDB (nodes that no longer exist in FalkorDB)
+        if !node_diff.local_only.is_empty() {
+            let stale_ids: Vec<String> = node_diff.local_only.into_iter().collect();
+            info!("Removing {} stale nodes from DuckDB", stale_ids.len());
+            nodes_removed = duckdb_store.delete_nodes_by_ids(&stale_ids).await?;
+            info!("Removed {} stale nodes", nodes_removed);
+        }
+
+        // Note: We don't fetch missing nodes here because:
+        // 1. The regular sync task handles new nodes via timestamps
+        // 2. Adding nodes requires fetching full node data, not just IDs
+        // If needed, remote_only nodes can be logged for the sync task to pick up
+        if !node_diff.remote_only.is_empty() {
+            debug!(
+                "{} nodes in FalkorDB not in DuckDB (will be synced by regular task)",
+                node_diff.remote_only.len()
+            );
+            nodes_added = node_diff.remote_only.len() as u64;
+        }
+
+        // Fetch all edge IDs from FalkorDB
+        let remote_edge_ids = fetcher.fetch_all_edge_ids(self.config.batch_size).await?;
+        debug!("Fetched {} edge IDs from FalkorDB", remote_edge_ids.len());
+
+        // Get all edge IDs from DuckDB
+        let local_edge_ids = duckdb_store.get_all_edge_ids().await?;
+        debug!("Found {} edge IDs in DuckDB", local_edge_ids.len());
+
+        // Compute edge diff
+        let edge_diff = ReconciliationDiff::compute(&remote_edge_ids, &local_edge_ids);
+
+        let mut edges_removed = 0;
+        let edges_added = edge_diff.remote_only.len() as u64;
+
+        // Remove stale edges from DuckDB
+        if !edge_diff.local_only.is_empty() {
+            let stale_pairs: Vec<(String, String)> = edge_diff.local_only
+                .into_iter()
+                .filter_map(|id| {
+                    let parts: Vec<&str> = id.split("->").collect();
+                    if parts.len() == 2 {
+                        Some((parts[0].to_string(), parts[1].to_string()))
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            
+            if !stale_pairs.is_empty() {
+                info!("Removing {} stale edges from DuckDB", stale_pairs.len());
+                edges_removed = duckdb_store.delete_edges_by_pairs(&stale_pairs).await? as u64;
+                info!("Removed {} stale edges", edges_removed);
+            }
+        }
+
+        let duration = start.elapsed();
+
+        // Update stats
+        {
+            let mut stats = self.stats.write().await;
+            stats.runs_completed += 1;
+            stats.last_run = Some(chrono::Utc::now().to_rfc3339());
+            stats.last_duration_ms = duration.as_millis() as u64;
+            stats.nodes_removed += nodes_removed as u64;
+            stats.nodes_added += nodes_added;
+            stats.edges_removed += edges_removed;
+            stats.edges_added += edges_added;
+        }
+
+        info!(
+            "Reconciliation complete in {:?}: removed {} nodes, {} edges; found {} new nodes, {} new edges in FalkorDB",
+            duration, nodes_removed, edges_removed, nodes_added, edges_added
+        );
+
+        Ok(())
     }
 }
 

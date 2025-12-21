@@ -37,6 +37,7 @@ use delta_tracker::{DeltaTracker, GraphDelta};
 use cache::EnhancedCache;
 use websocket::{websocket_handler, BroadcastExt};
 use stream_consumer::{StreamConsumer, StreamConsumerConfig, ChangeEvent, ChangeAction, EntityType};  // GRAPH-107
+use reconciliation::{ReconciliationService, ReconciliationConfig, ReconciliationStats};  // GRAPH-113
 use deadpool_redis::{Config as RedisConfig, Runtime};
 
 // Loading progress tracking for frontend display
@@ -730,6 +731,35 @@ async fn main() -> anyhow::Result<()> {
         // If we get here, the event channel was closed
         warn!("Stream event processor stopped");
         let _ = consumer_handle.await;
+    });
+
+    // GRAPH-113: Spawn periodic reconciliation service
+    // This catches any missed deletions by comparing FalkorDB with DuckDB
+    let recon_client = state.client.clone();
+    let recon_graph_name = graph_name.clone();
+    let recon_store = state.duckdb_store.clone();
+    let (recon_shutdown_tx, recon_shutdown_rx) = tokio::sync::watch::channel(false);
+    
+    // Store shutdown sender for graceful shutdown (could be added to AppState)
+    let _recon_shutdown = recon_shutdown_tx;
+    
+    tokio::spawn(async move {
+        let config = ReconciliationConfig {
+            interval_secs: std::env::var("RECONCILIATION_INTERVAL_SECS")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(300), // Default 5 minutes
+            batch_size: std::env::var("RECONCILIATION_BATCH_SIZE")
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(1000),
+            enabled: std::env::var("RECONCILIATION_ENABLED")
+                .map(|s| s != "false" && s != "0")
+                .unwrap_or(true),
+        };
+        
+        let service = ReconciliationService::new(config);
+        service.run(recon_client, recon_graph_name, recon_store, recon_shutdown_rx).await;
     });
     
     // Spawn background task for monitoring database changes

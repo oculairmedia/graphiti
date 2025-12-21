@@ -1033,6 +1033,104 @@ impl DuckDBStore {
         
         Ok((node_count as usize, edge_count as usize))
     }
+
+    /// GRAPH-113: Get all node IDs from DuckDB for reconciliation
+    ///
+    /// Returns a HashSet of all node IDs currently stored in DuckDB.
+    /// Used by the reconciliation task to compare with FalkorDB state.
+    pub async fn get_all_node_ids(&self) -> Result<std::collections::HashSet<String>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare("SELECT id FROM nodes")?;
+        let ids: Vec<String> = stmt
+            .query_map(params![], |row| row.get(0))?
+            .filter_map(|r| r.ok())
+            .collect();
+        Ok(ids.into_iter().collect())
+    }
+
+    /// GRAPH-113: Get all edge IDs from DuckDB for reconciliation
+    ///
+    /// Returns a HashSet of edge identifiers (source_id + "->" + target_id).
+    /// Used by the reconciliation task to compare with FalkorDB state.
+    pub async fn get_all_edge_ids(&self) -> Result<std::collections::HashSet<String>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare("SELECT source, target FROM edges")?;
+        let ids: Vec<String> = stmt
+            .query_map(params![], |row| {
+                let source: String = row.get(0)?;
+                let target: String = row.get(1)?;
+                Ok(format!("{}->{}", source, target))
+            })?
+            .filter_map(|r| r.ok())
+            .collect();
+        Ok(ids.into_iter().collect())
+    }
+
+    /// GRAPH-113: Delete nodes by IDs (for reconciliation cleanup)
+    ///
+    /// Removes nodes that exist in DuckDB but not in FalkorDB.
+    /// Also removes any edges connected to these nodes.
+    pub async fn delete_nodes_by_ids(&self, ids: &[String]) -> Result<usize> {
+        if ids.is_empty() {
+            return Ok(0);
+        }
+
+        let conn = self.conn.lock().unwrap();
+
+        // Build placeholders for IN clause
+        let placeholders: Vec<String> = ids.iter().enumerate()
+            .map(|(i, _)| format!("${}", i + 1))
+            .collect();
+        let placeholders_str = placeholders.join(", ");
+
+        // First delete edges connected to these nodes
+        let edge_query = format!(
+            "DELETE FROM edges WHERE source IN ({}) OR target IN ({})",
+            placeholders_str, placeholders_str
+        );
+        // Double the params for source and target
+        let mut edge_params: Vec<&dyn duckdb::ToSql> = Vec::new();
+        for id in ids.iter() {
+            edge_params.push(id);
+        }
+        for id in ids.iter() {
+            edge_params.push(id);
+        }
+        conn.execute(&edge_query, edge_params.as_slice())?;
+
+        // Then delete the nodes
+        let node_query = format!(
+            "DELETE FROM nodes WHERE id IN ({})",
+            placeholders_str
+        );
+        let node_params: Vec<&dyn duckdb::ToSql> = ids.iter().map(|s| s as &dyn duckdb::ToSql).collect();
+        let deleted = conn.execute(&node_query, node_params.as_slice())?;
+
+        Ok(deleted)
+    }
+
+    /// GRAPH-113: Delete edges by source-target pairs (for reconciliation cleanup)
+    ///
+    /// Removes edges that exist in DuckDB but not in FalkorDB.
+    pub async fn delete_edges_by_pairs(&self, pairs: &[(String, String)]) -> Result<usize> {
+        if pairs.is_empty() {
+            return Ok(0);
+        }
+
+        let conn = self.conn.lock().unwrap();
+        let mut deleted = 0;
+
+        // Delete edges one by one (safer for large batches)
+        for (source, target) in pairs {
+            let result = conn.execute(
+                "DELETE FROM edges WHERE source = $1 AND target = $2",
+                params![source, target],
+            )?;
+            deleted += result;
+        }
+
+        Ok(deleted)
+    }
     
     fn get_node_color(&self, node_type: &str) -> String {
         match node_type {
