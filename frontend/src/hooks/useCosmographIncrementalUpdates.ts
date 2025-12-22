@@ -192,9 +192,10 @@ export function useCosmographIncrementalUpdates(
         }
         
         // Check for problematic fields (only warn in debug mode)
+        // SanitizedNode should only have primitive types after sanitization
         const hasArrays = Object.values(sample).some(v => Array.isArray(v));
         const hasObjects = Object.values(sample).some(v => 
-          v !== null && typeof v === 'object' && !Array.isArray(v) && v !== sample.properties
+          v !== null && typeof v === 'object' && !Array.isArray(v)
         );
         if ((hasArrays || hasObjects) && debug) {
           log('Warning: Node still has complex types!');

@@ -78,6 +78,37 @@ interface GraphCanvasProps {
 
 // Import the canonical GraphCanvasHandle type from types/graphCanvas.ts
 import type { GraphCanvasHandle } from '../types/graphCanvas';
+import type { CosmographRef } from '@cosmograph/react';
+
+// Type for WebSocket events
+interface WebSocketEvent {
+  type: string;
+  node_ids?: string[];
+  nodes?: GraphNode[];
+  edges?: GraphLink[];
+  operation?: 'add' | 'update' | 'delete';
+}
+
+// Type for delta updates (required operation)
+interface DeltaUpdateEvent extends WebSocketEvent {
+  operation: 'add' | 'update' | 'delete';
+}
+
+// Type for stats callback
+interface StatsUpdatePayload {
+  nodeCount: number;
+  edgeCount: number;
+  lastUpdated: number;
+}
+
+// Extend Window for debugging utilities
+declare global {
+  interface Window {
+    inspectDuckDBSchema: typeof import('../utils/inspectDuckDBSchema').inspectDuckDBSchema;
+    resetDuckDBStorage: typeof import('../utils/resetDuckDB').resetDuckDBStorage;
+    cosmographRef: React.RefObject<CosmographRef> | null;
+  }
+}
 
 export interface GraphCanvasComponentProps extends GraphCanvasProps {
   nodes: GraphNode[];
@@ -101,7 +132,7 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
   }, ref) => {
     
     // Component state
-    const cosmographRef = useRef<any>(null);
+    const cosmographRef = useRef<CosmographRef>(null);
     const [isReady, setIsReady] = useState(false);
     const [isCanvasReady, setIsCanvasReady] = useState(false);
     const [loadingPhase, setLoadingPhase] = useState<string>('');
@@ -146,7 +177,7 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
     // === 1. HOOKS ===
     
     // Memoize the stats update callback to prevent infinite loops
-    const handleStatsUpdate = useCallback((stats: any) => {
+    const handleStatsUpdate = useCallback((stats: StatsUpdatePayload) => {
       if (onStatsUpdate) {
         onStatsUpdate({
           nodeCount: stats.nodeCount,
@@ -162,7 +193,7 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
       updateStatistics,
       getBasicStats,
       getPerformanceMetrics
-    } = useGraphStatistics(initialNodes, initialLinks as any, {
+    } = useGraphStatistics(initialNodes, initialLinks, {
       detailed: true,
       updateThrottle: 1000,
       trackPerformance: true,
@@ -191,7 +222,7 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
       refresh: refreshData
     } = useGraphDataManagement({
       initialNodes: memoizedInitialData.nodes,
-      initialLinks: memoizedInitialData.links as any,
+      initialLinks: memoizedInitialData.links,
       dataSource: {
         enableCache: true,
         cacheDuration: 5 * 60 * 1000,
@@ -232,7 +263,7 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
       selectConnectedNodes,
       isNodeSelected,
       getSelectedNodes: getSelectedNodesList
-    } = useGraphSelection(nodes, links as any, {
+    } = useGraphSelection(nodes, links, {
       mode: 'multiple',
       // PERFORMANCE FIX: Use nodeIndexMap for O(1) lookups instead of O(n*m) filter
       // DISABLED: onSelectionChange was causing panel updates on hover
@@ -241,7 +272,7 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
     });
     
     // WebSocket callbacks
-    const handleNodeAccess = useCallback((event: any) => {
+    const handleNodeAccess = useCallback((event: WebSocketEvent) => {
       // Handle node access events when needed
     }, []);
     
@@ -273,12 +304,12 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
         },
         fallbackToFullUpdate: (fallbackNodes, fallbackEdges) => {
           // Fall back to traditional state update
-          setData(fallbackNodes, fallbackEdges as any);
+          setData(fallbackNodes, fallbackEdges);
         }
       }
     );
     
-    const handleGraphUpdate = useCallback(async (event: any) => {
+    const handleGraphUpdate = useCallback(async (event: WebSocketEvent) => {
       if (event.nodes && event.edges) {
         // Try to use setConfig for seamless data replacement
         if (incrementalUpdatesReady && replaceDataWithConfig) {
@@ -288,15 +319,16 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
           }
         }
         // Fall back to traditional state update
-        setData(event.nodes, event.edges as any);
+        setData(event.nodes, event.edges);
       }
     }, [setData, incrementalUpdatesReady, replaceDataWithConfig]);
     
     // PERFORMANCE FIX: Use refs for logging to avoid callback recreation on data changes
-    const handleDeltaUpdate = useCallback(async (event: any) => {
+    const handleDeltaUpdate = useCallback(async (event: DeltaUpdateEvent) => {
       // Try incremental update first if Cosmograph is ready
       if (incrementalUpdatesReady && cosmographRef.current) {
-        const success = await applyDelta(event);
+        // Cast to DeltaUpdate for applyDelta which expects the imported type
+        const success = await applyDelta(event as unknown as import('../utils/cosmographDataPreparer').DeltaUpdate);
         if (success) {
           return; // Exit early - incremental update succeeded
         }
@@ -310,9 +342,7 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
         } else if (event.operation === 'update') {
           updateNodes(event.nodes);
         } else if (event.operation === 'delete') {
-          const nodeIds = typeof event.nodes[0] === 'string' 
-            ? event.nodes 
-            : event.nodes.map((n: any) => n.id);
+          const nodeIds = event.nodes.map((n: GraphNode) => n.id);
           removeNodes(nodeIds);
         }
       }
@@ -324,10 +354,8 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
         } else if (event.operation === 'update') {
           addLinks(event.edges);
         } else if (event.operation === 'delete') {
-          const edgeIds = typeof event.edges[0] === 'string'
-            ? event.edges
-            : event.edges.map((e: any) => `${e.from || e.source}-${e.to || e.target}`);
-          removeLinks(edgeIds);
+          // removeLinks expects GraphLink[], so we pass the edges directly
+          removeLinks(event.edges);
         }
       }
     }, [incrementalUpdatesReady, applyDelta, addNodes, updateNodes, removeNodes, addLinks, removeLinks]);
@@ -381,7 +409,7 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
       handleNodeClick: handleInteractionNodeClick,
       handleNodeHover: handleInteractionNodeHover,
       isInteracting
-    } = useGraphInteractions(nodes, links as any, {
+    } = useGraphInteractions(nodes, links, {
       enableClick: true,
       enableDrag: false,  // DISABLED - Cosmograph handles drag internally with enableDrag={true}
       enableHover: true,
@@ -402,7 +430,7 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
       restart: restartSim,
       reheat,
       applyLayout
-    } = useGraphSimulation(nodes, links as any, {
+    } = useGraphSimulation(nodes, links, {
       autoStart: false,
       forces: [
         { type: 'charge', strength: -300, enabled: true },
@@ -422,7 +450,7 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
       updateStyle,
       isNodeHighlighted,
       isAnimating: isEffectsAnimating
-    } = useGraphVisualEffects(nodes, links as any, {
+    } = useGraphVisualEffects(nodes, links, {
       enabled: true,
       defaultNodeStyle: {
         fill: (node: GraphNode) => generateNodeTypeColor(node.node_type, 0),
@@ -480,13 +508,13 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
     
     
     // CSS variables for styling
-    const containerStyle: React.CSSProperties = {
-      ['--cosmograph-label-size' as any]: `${config.labelSize}px`,
-      ['--cosmograph-border-width' as any]: '0px',
-      ['--cosmograph-border-color' as any]: 'rgba(0,0,0,0.5)',
+    const containerStyle: React.CSSProperties & Record<string, string> = {
+      '--cosmograph-label-size': `${config.labelSize}px`,
+      '--cosmograph-border-width': '0px',
+      '--cosmograph-border-color': 'rgba(0,0,0,0.5)',
       width: '100%',
       height: '100%',
-      position: 'relative' as const,  // Changed from absolute to relative
+      position: 'relative',  // Changed from absolute to relative
       // Removed inset: 0 which was making it cover everything
     };
     
@@ -604,7 +632,7 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
       
       // Data methods - read from refs
       setData: (newNodes: GraphNode[], newLinks: GraphLink[], runSimulation = true) => {
-        setDataRef.current(newNodes, newLinks as any);
+        setDataRef.current(newNodes, newLinks);
         if (runSimulation && configRef.current.simulationEnabled) {
           cosmographRef.current?.restart?.();
         }
@@ -640,14 +668,21 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
       getConnectedPointIndices: (index: number) => {
         return cosmographRef.current?.getConnectedPointIndices?.(index);
       },
-      getPointIndicesByExactValues: (keyValues) => {
-        return cosmographRef.current?.getPointIndicesByExactValues?.(keyValues);
+      getPointIndicesByExactValues: async (keyValues) => {
+        // Cosmograph's getPointIndicesByExactValues returns a Promise
+        // Our interface accepts Record<string, unknown> but we need to adapt
+        // to Cosmograph's (column, values) signature
+        const entries = Object.entries(keyValues);
+        if (entries.length === 0) return undefined;
+        const [column, value] = entries[0];
+        const values = Array.isArray(value) ? value : [value];
+        return cosmographRef.current?.getPointIndicesByExactValues?.(column, values as (string | number)[]);
       },
       
       // Incremental update methods - read from refs
       addIncrementalData: (newNodes: GraphNode[], newLinks: GraphLink[]) => {
         addNodesRef.current(newNodes);
-        addLinksRef.current(newLinks as any);
+        addLinksRef.current(newLinks);
         if (configRef.current.simulationEnabled) {
           reheatRef.current(0.3);
         }
@@ -707,7 +742,7 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
     // stale closure issues with getNodeIndices when nodes change
     const { subscribe: subscribeToWebSocket } = useWebSocketContext();
     useEffect(() => {
-      const unsubscribe = subscribeToWebSocket((event: any) => {
+      const unsubscribe = subscribeToWebSocket((event: WebSocketEvent) => {
         if (event.type === 'node_access' && event.node_ids) {
           // Cancel any existing glow timeout
           if (glowTimeoutRef.current) {
@@ -760,9 +795,9 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
     // Expose DuckDB utilities for debugging
     useEffect(() => {
       if (typeof window !== 'undefined') {
-        (window as any).inspectDuckDBSchema = inspectDuckDBSchema;
-        (window as any).resetDuckDBStorage = resetDuckDBStorage;
-        (window as any).cosmographRef = cosmographRef;
+        window.inspectDuckDBSchema = inspectDuckDBSchema;
+        window.resetDuckDBStorage = resetDuckDBStorage;
+        window.cosmographRef = cosmographRef;
       }
     }, []);
     
@@ -771,9 +806,10 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
       return () => {
         // Clean up WebGL resources to prevent memory leaks
         if (cosmographRef.current) {
-          // Dispose of Cosmograph instance if it has a dispose method
-          if (typeof cosmographRef.current.dispose === 'function') {
-            cosmographRef.current.dispose();
+          // Cast to unknown to check for optional dispose method (may exist in some versions)
+          const cosmograph = cosmographRef.current as unknown as { dispose?: () => void };
+          if (typeof cosmograph.dispose === 'function') {
+            cosmograph.dispose();
           }
           // Clear any tracked points
           if (typeof cosmographRef.current.trackPointPositionsByIndices === 'function') {
@@ -801,7 +837,8 @@ const GraphCanvasV2 = forwardRef<GraphCanvasHandle, GraphCanvasComponentProps>(
     const hasSetRef = useRef(false);
     useEffect(() => {
       if (cosmographRef.current && !hasSetRef.current) {
-        setCosmographRef(cosmographRef);
+        // Cast to the expected type - Cosmograph from @cosmograph/react is compatible
+        setCosmographRef(cosmographRef as unknown as React.RefObject<import('../contexts/GraphConfigContextTypes').CosmographRefType>);
         hasSetRef.current = true;
       }
     }, [cosmographRef.current]); // eslint-disable-line react-hooks/exhaustive-deps

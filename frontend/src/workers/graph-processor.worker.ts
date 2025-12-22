@@ -1,4 +1,49 @@
 // WebWorker for heavy graph computations
+
+// Worker node type
+interface WorkerNode {
+  id: string;
+  node_type?: string;
+  label?: string;
+  summary?: string;
+  degree_centrality?: number;
+  [key: string]: unknown;
+}
+
+// Worker edge type
+interface WorkerEdge {
+  source: string;
+  target: string;
+  sourceidx?: number;
+  targetidx?: number;
+  [key: string]: unknown;
+}
+
+// Centrality result type
+interface CentralityResult {
+  degree: Record<string, number>;
+  betweenness: Record<string, number>;
+}
+
+// Cluster detection result
+interface ClusterResult {
+  clusters: string[][];
+  clusterCount: number;
+  largestClusterSize: number;
+}
+
+// Path finding result
+interface PathResult {
+  path: string[] | null;
+  length: number;
+}
+
+// Filter result
+interface FilterResult {
+  nodes: WorkerNode[];
+  count: number;
+}
+
 self.addEventListener('message', async (event) => {
   const { type, data } = event.data;
   
@@ -32,8 +77,8 @@ self.addEventListener('message', async (event) => {
 
 // Force-directed layout calculation
 async function processLayout(data: {
-  nodes: any[],
-  edges: any[],
+  nodes: WorkerNode[],
+  edges: WorkerEdge[],
   iterations: number
 }): Promise<{ positions: Float32Array }> {
   const { nodes, edges, iterations = 100 } = data;
@@ -128,9 +173,9 @@ async function processLayout(data: {
 
 // Calculate various centrality metrics
 function calculateCentrality(data: {
-  nodes: any[],
-  edges: any[]
-}): any {
+  nodes: WorkerNode[],
+  edges: WorkerEdge[]
+}): CentralityResult {
   const { nodes, edges } = data;
   
   // Build adjacency list
@@ -200,9 +245,9 @@ function calculateCentrality(data: {
 
 // Cluster detection using connected components
 function detectClusters(data: {
-  nodes: any[],
-  edges: any[]
-}): any {
+  nodes: WorkerNode[],
+  edges: WorkerEdge[]
+}): ClusterResult {
   const { nodes, edges } = data;
   
   // Build adjacency list
@@ -254,11 +299,11 @@ function detectClusters(data: {
 
 // Find shortest path using BFS
 function findShortestPath(data: {
-  nodes: any[],
-  edges: any[],
+  nodes: WorkerNode[],
+  edges: WorkerEdge[],
   sourceId: string,
   targetId: string
-}): any {
+}): PathResult {
   const { nodes, edges, sourceId, targetId } = data;
   
   // Build adjacency list
@@ -297,14 +342,14 @@ function findShortestPath(data: {
 
 // Efficient node filtering
 function filterNodesEfficiently(data: {
-  nodes: any[],
+  nodes: WorkerNode[],
   filters: {
     type?: string[],
     minCentrality?: number,
     maxCentrality?: number,
     searchTerm?: string
   }
-}): any {
+}): FilterResult {
   const { nodes, filters } = data;
   const { type, minCentrality, maxCentrality, searchTerm } = filters;
   

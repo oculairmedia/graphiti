@@ -98,12 +98,12 @@ function sanitizeValue(value: unknown): string | number | boolean | null {
 /**
  * Sanitize properties object to remove nested structures
  */
-function sanitizeProperties(properties: any): Record<string, any> {
+function sanitizeProperties(properties: Record<string, unknown> | undefined | null): Record<string, string | number | boolean | null> {
   if (!properties || typeof properties !== 'object') {
     return {};
   }
   
-  const sanitized: Record<string, any> = {};
+  const sanitized: Record<string, string | number | boolean | null> = {};
   
   for (const [key, value] of Object.entries(properties)) {
     const sanitizedValue = sanitizeValue(value);
@@ -121,8 +121,80 @@ function sanitizeProperties(properties: any): Record<string, any> {
   return sanitized;
 }
 
+/**
+ * Sanitized node type for Cosmograph - must have exactly 16 fields to match cosmograph_points view
+ */
+export interface SanitizedNode {
+  index: number;
+  id: string;
+  label: string;
+  node_type: string;
+  summary: string | null;
+  degree_centrality: number;
+  pagerank_centrality: number;
+  betweenness_centrality: number;
+  eigenvector_centrality: number;
+  x: number | null;
+  y: number | null;
+  color: string;
+  size: number;
+  created_at_timestamp: number;
+  cluster: string;
+  clusterStrength: number;
+}
+
+/**
+ * Sanitized link type for Cosmograph - must have exactly 5 fields
+ */
+export interface SanitizedLink {
+  source: string;
+  target: string;
+  sourceIndex: number;
+  targetIndex: number;
+  edge_type: string;
+}
+
+/**
+ * Minimal node data stored for click handling
+ */
+export interface MinimalNodeData {
+  id: string;
+  label: string;
+  node_type: string;
+  summary?: string;
+}
+
+/**
+ * Cosmograph prepared config shape
+ */
+export interface CosmographPreparedConfig {
+  nodeIdBy: string;
+  nodeIndexBy: string;
+  linkSourceBy: string;
+  linkTargetBy: string;
+}
+
+/**
+ * Initial data preparation result
+ */
+export interface PreparedInitialData {
+  data: {
+    nodes: SanitizedNode[];
+    links: SanitizedLink[];
+  };
+  config: CosmographPreparedConfig;
+}
+
+/**
+ * Incremental data preparation result  
+ */
+export interface PreparedIncrementalData {
+  nodes: SanitizedNode[];
+  links: SanitizedLink[];
+}
+
 // PERFORMANCE: Cache for sanitized nodes to avoid re-processing
-const sanitizationCache = new Map<string, any>();
+const sanitizationCache = new Map<string, SanitizedNode>();
 const CACHE_MAX_SIZE = 10000; // Limit cache size to prevent memory issues
 
 /**
@@ -153,7 +225,7 @@ export function sanitizeNode(
   index: number,
   config: DataPrepConfig = {},
   isIncremental: boolean = false
-): any {
+): SanitizedNode {
   // PERFORMANCE: Check cache first
   const cacheKey = generateNodeCacheKey(node.id, config.clusteringMethod, isIncremental);
   if (sanitizationCache.has(cacheKey)) {
@@ -188,7 +260,7 @@ export function sanitizeNode(
   // Build sanitized node - ensure consistent field count for DuckDB
   // For incremental updates: exactly 11 non-null fields expected
   // Fields that Cosmograph actually uses (based on debug output)
-  const sanitizedNode: any = {};
+  const sanitizedNode: SanitizedNode = {} as SanitizedNode;
   
   if (isIncremental) {
     // Incremental updates: MUST provide exactly 16 NON-NULL fields to match cosmograph_points view schema
@@ -250,9 +322,9 @@ export function sanitizeNode(
       } catch (e) {
         sanitizedNode.created_at_timestamp = Date.now();
       }
-    } else if ((node.properties as any)?.created_at_timestamp) {
+    } else if ((node.properties as Record<string, unknown>)?.created_at_timestamp) {
       // Check properties as backup (with type assertion since it's dynamic)
-      const propTimestamp = Number((node.properties as any).created_at_timestamp);
+      const propTimestamp = Number((node.properties as Record<string, unknown>).created_at_timestamp);
       sanitizedNode.created_at_timestamp = isFinite(propTimestamp) ? propTimestamp : Date.now();
     } else {
       // Final fallback to current time
@@ -324,9 +396,9 @@ export function sanitizeNode(
       } catch (e) {
         sanitizedNode.created_at_timestamp = Date.now();
       }
-    } else if ((node.properties as any)?.created_at_timestamp) {
+    } else if ((node.properties as Record<string, unknown>)?.created_at_timestamp) {
       // Check properties as backup (with type assertion since it's dynamic)
-      const propTimestamp = Number((node.properties as any).created_at_timestamp);
+      const propTimestamp = Number((node.properties as Record<string, unknown>).created_at_timestamp);
       sanitizedNode.created_at_timestamp = isFinite(propTimestamp) ? propTimestamp : Date.now();
     } else {
       // Final fallback to current time
@@ -370,9 +442,11 @@ export function sanitizeNode(
 export function sanitizeLink(
   link: GraphLink,
   nodeIdToIndex: Map<string, number>
-): any | null {
-  const sourceId = String(link.source || link.from);
-  const targetId = String(link.target || link.to);
+): SanitizedLink | null {
+  // GraphLink uses source/target, but may have from/to from conversion
+  const linkWithFrom = link as GraphLink & { from?: string; to?: string };
+  const sourceId = String(link.source || linkWithFrom.from);
+  const targetId = String(link.target || linkWithFrom.to);
   
   const sourceIndex = nodeIdToIndex.get(sourceId);
   const targetIndex = nodeIdToIndex.get(targetId);
@@ -386,14 +460,13 @@ export function sanitizeLink(
   // source, target, sourceIndex, targetIndex, edge_type
   // Any other fields are filtered out internally
   
-  const sanitizedLink: any = {};
-  
-  // Provide ONLY the 5 fields that Cosmograph will pass to DuckDB
-  sanitizedLink.source = String(sourceId);
-  sanitizedLink.target = String(targetId);
-  sanitizedLink.sourceIndex = Number(sourceIndex);
-  sanitizedLink.targetIndex = Number(targetIndex);
-  sanitizedLink.edge_type = String(link.edge_type || 'default');
+  const sanitizedLink: SanitizedLink = {
+    source: String(sourceId),
+    target: String(targetId),
+    sourceIndex: Number(sourceIndex),
+    targetIndex: Number(targetIndex),
+    edge_type: String(link.edge_type || 'default')
+  };
   
   // Note: The "9 columns but 5 values" error occurs because:
   // 1. DuckDB table was created with 9 columns from a previous version
@@ -409,9 +482,9 @@ export function sanitizeLink(
 export class CosmographDataPreparer {
   private config: DataPrepConfig;
   private nodeIdToIndex: Map<string, number> = new Map();
-  private indexToNodeData: Map<number, any> = new Map();  // Store minimal node data
+  private indexToNodeData: Map<number, MinimalNodeData> = new Map();
   private nodeTypeIndexMap: Map<string, number> = new Map();
-  private preparedConfig: any = null;
+  private preparedConfig: CosmographPreparedConfig | null = null;
   
   constructor(config: DataPrepConfig = {}) {
     this.config = { ...config, nodeTypeIndexMap: this.nodeTypeIndexMap };
@@ -423,7 +496,7 @@ export class CosmographDataPreparer {
   async prepareInitialData(
     nodes: GraphNode[],
     links: GraphLink[]
-  ): Promise<{ data: any; config: any }> {
+  ): Promise<PreparedInitialData> {
     // Clear maps
     this.nodeIdToIndex.clear();
     this.indexToNodeData.clear();
@@ -473,9 +546,9 @@ export class CosmographDataPreparer {
   async prepareIncrementalData(
     nodes: GraphNode[],
     links: GraphLink[]
-  ): Promise<{ nodes: any[]; links: any[] }> {
+  ): Promise<PreparedIncrementalData> {
     // Sanitize new nodes
-    const sanitizedNodes: any[] = [];
+    const sanitizedNodes: SanitizedNode[] = [];
     for (const node of nodes) {
       // Skip if already exists
       if (this.nodeIdToIndex.has(node.id)) {
@@ -509,7 +582,7 @@ export class CosmographDataPreparer {
   /**
    * Get the stored preparation config
    */
-  getConfig(): any {
+  getConfig(): CosmographPreparedConfig | null {
     return this.preparedConfig;
   }
   
@@ -537,7 +610,7 @@ export class CosmographDataPreparer {
   /**
    * Get node data by index
    */
-  getNodeByIndex(index: number): any | undefined {
+  getNodeByIndex(index: number): MinimalNodeData | undefined {
     return this.indexToNodeData.get(index);
   }
   
@@ -594,7 +667,7 @@ export interface CosmographPointInput {
   name?: string;
   size?: number;
   cluster?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 /**
@@ -607,7 +680,7 @@ export interface CosmographLinkInput {
   targetIndex?: number;
   weight?: number;
   edge_type?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 /**
@@ -663,8 +736,10 @@ export function transformEdgeForCosmograph(
   edge: GraphLink,
   nodeIdToIndex?: Map<string, number>
 ): CosmographLinkInput {
-  const source = edge.source || (edge as any).from;
-  const target = edge.target || (edge as any).to;
+  // GraphLink uses source/target, but may have from/to from conversion
+  const edgeWithFrom = edge as GraphLink & { from?: string; to?: string };
+  const source = edge.source || edgeWithFrom.from || '';
+  const target = edge.target || edgeWithFrom.to || '';
   
   return {
     ...edge,
@@ -711,8 +786,10 @@ export function extractEdgePairs(
       const target = targetParts.join('-');
       return [source, target] as [string, string];
     } else {
-      const source = edge.source || (edge as any).from;
-      const target = edge.target || (edge as any).to;
+      // GraphLink uses source/target, but may have from/to from conversion
+      const edgeWithFrom = edge as GraphLink & { from?: string; to?: string };
+      const source = edge.source || edgeWithFrom.from || '';
+      const target = edge.target || edgeWithFrom.to || '';
       return [source, target] as [string, string];
     }
   });
@@ -737,16 +814,30 @@ export function filterValidEdges(
   nodeIds: Set<string>
 ): GraphLink[] {
   return edges.filter(edge => {
-    const source = edge.source || (edge as any).from;
-    const target = edge.target || (edge as any).to;
+    // GraphLink uses source/target, but may have from/to from conversion
+    const edgeWithFrom = edge as GraphLink & { from?: string; to?: string };
+    const source = edge.source || edgeWithFrom.from || '';
+    const target = edge.target || edgeWithFrom.to || '';
     return nodeIds.has(source) && nodeIds.has(target);
   });
 }
 
 /**
+ * Cosmograph ref type with optional incremental update methods
+ */
+interface CosmographRefWithMethods {
+  current?: {
+    addPoints?: unknown;
+    addLinks?: unknown;
+    removePointsByIds?: unknown;
+    removeLinksByPointIdPairs?: unknown;
+  } | null;
+}
+
+/**
  * Check if Cosmograph instance has incremental update methods
  */
-export function supportsIncrementalUpdates(cosmographRef: any): boolean {
+export function supportsIncrementalUpdates(cosmographRef: CosmographRefWithMethods | null | undefined): boolean {
   return !!(
     cosmographRef?.current?.addPoints &&
     cosmographRef?.current?.addLinks &&

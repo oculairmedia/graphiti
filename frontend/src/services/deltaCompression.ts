@@ -73,10 +73,15 @@ class PriorityQueue<T> {
   }
 }
 
+// Type for diff operations
+interface DiffObject {
+  [key: string]: unknown;
+}
+
 // Delta compression engine
 export class DeltaCompressor {
   private compressionWorker: Worker | null = null;
-  private previousStates = new Map<string, any>();
+  private previousStates = new Map<string, GraphDelta>();
 
   constructor(private enableWorker = true) {
     if (enableWorker && typeof Worker !== 'undefined') {
@@ -149,7 +154,7 @@ export class DeltaCompressor {
     const previousState = this.previousStates.get(delta.sourceId);
     if (!previousState) return null;
 
-    const diff = this.computeDiff(previousState, delta);
+    const diff = this.computeDiff(previousState as unknown as Record<string, unknown>, delta as unknown as Record<string, unknown>);
     const diffStr = JSON.stringify(diff);
 
     // Store current state for next diff
@@ -167,16 +172,16 @@ export class DeltaCompressor {
     };
   }
 
-  private computeDiff(oldObj: any, newObj: any): any {
-    const diff: any = {};
+  private computeDiff(oldObj: Record<string, unknown>, newObj: Record<string, unknown>): DiffObject {
+    const diff: DiffObject = {};
 
     // Find additions and modifications
     for (const key in newObj) {
       if (!(key in oldObj)) {
         diff['+' + key] = newObj[key];
       } else if (JSON.stringify(oldObj[key]) !== JSON.stringify(newObj[key])) {
-        if (typeof newObj[key] === 'object' && typeof oldObj[key] === 'object') {
-          diff['~' + key] = this.computeDiff(oldObj[key], newObj[key]);
+        if (typeof newObj[key] === 'object' && newObj[key] !== null && typeof oldObj[key] === 'object' && oldObj[key] !== null) {
+          diff['~' + key] = this.computeDiff(oldObj[key] as Record<string, unknown>, newObj[key] as Record<string, unknown>);
         } else {
           diff['~' + key] = newObj[key];
         }
@@ -242,7 +247,7 @@ export class DeltaCompressor {
     };
   }
 
-  private minifyJson(obj: any): any {
+  private minifyJson(obj: unknown): unknown {
     // Map long keys to short ones
     const keyMap: Record<string, string> = {
       'operations': 'o',
@@ -261,7 +266,7 @@ export class DeltaCompressor {
     }
 
     if (typeof obj === 'object' && obj !== null) {
-      const minified: any = {};
+      const minified: Record<string, unknown> = {};
       
       for (const [key, value] of Object.entries(obj)) {
         const newKey = keyMap[key] || key;
@@ -299,14 +304,15 @@ export class DeltaCompressor {
   }
 
   private applyDiff(compressed: CompressedDelta): GraphDelta {
-    const diff = JSON.parse(compressed.data as string);
-    const previousState = this.previousStates.get(compressed.id) || {};
+    const diff = JSON.parse(compressed.data as string) as DiffObject;
+    const previousState = this.previousStates.get(compressed.id);
+    const baseState: Record<string, unknown> = previousState ? previousState as unknown as Record<string, unknown> : {};
     
-    return this.mergeDiff(previousState, diff);
+    return this.mergeDiff(baseState, diff) as unknown as GraphDelta;
   }
 
-  private mergeDiff(base: any, diff: any): any {
-    const result = { ...base };
+  private mergeDiff(base: Record<string, unknown>, diff: DiffObject): Record<string, unknown> {
+    const result: Record<string, unknown> = { ...base };
 
     for (const key in diff) {
       const operation = key[0];
@@ -317,8 +323,8 @@ export class DeltaCompressor {
           result[actualKey] = diff[key];
           break;
         case '~': // Modification
-          if (typeof diff[key] === 'object' && typeof result[actualKey] === 'object') {
-            result[actualKey] = this.mergeDiff(result[actualKey], diff[key]);
+          if (typeof diff[key] === 'object' && diff[key] !== null && typeof result[actualKey] === 'object' && result[actualKey] !== null) {
+            result[actualKey] = this.mergeDiff(result[actualKey] as Record<string, unknown>, diff[key] as DiffObject);
           } else {
             result[actualKey] = diff[key];
           }
@@ -342,11 +348,11 @@ export class DeltaCompressor {
   }
 
   private decompressJson(compressed: CompressedDelta): GraphDelta {
-    const minified = JSON.parse(compressed.data as string);
-    return this.expandJson(minified);
+    const minified = JSON.parse(compressed.data as string) as unknown;
+    return this.expandJson(minified) as GraphDelta;
   }
 
-  private expandJson(obj: any): any {
+  private expandJson(obj: unknown): unknown {
     // Reverse the minification
     const keyMap: Record<string, string> = {
       'o': 'operations',
@@ -365,7 +371,7 @@ export class DeltaCompressor {
     }
 
     if (typeof obj === 'object' && obj !== null) {
-      const expanded: any = {};
+      const expanded: Record<string, unknown> = {};
       
       for (const [key, value] of Object.entries(obj)) {
         const newKey = keyMap[key] || key;

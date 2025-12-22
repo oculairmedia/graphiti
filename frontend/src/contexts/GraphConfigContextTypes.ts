@@ -11,7 +11,7 @@ interface CosmographLink {
   [key: string]: unknown;
 }
 
-interface CosmographRefType {
+export interface CosmographRefType {
   // Zoom controls
   setZoomLevel: (level: number, duration?: number) => void;
   getZoomLevel: () => number;

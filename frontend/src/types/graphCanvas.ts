@@ -26,7 +26,7 @@ export interface GraphCanvasHandle {
   fitViewByPointIndices: (indices: number[], duration?: number, padding?: number) => void;
   zoomToPoint: (index: number, duration?: number, scale?: number, canZoomOut?: boolean) => void;
   trackPointPositionsByIndices: (indices: number[]) => void;
-  getTrackedPointPositionsMap: () => Map<number, [number, number]> | undefined;
+  getTrackedPointPositionsMap: () => ReadonlyMap<number, [number, number]> | undefined;
   
   // Data methods
   setData: (nodes: GraphNode[], links: GraphLink[], runSimulation?: boolean) => void;
@@ -41,7 +41,7 @@ export interface GraphCanvasHandle {
   selectPointsInRect: (selection: [[number, number], [number, number]] | null, addToSelection?: boolean) => void;
   selectPointsInPolygon: (polygonPoints: [number, number][], addToSelection?: boolean) => void;
   getConnectedPointIndices: (index: number) => number[] | undefined;
-  getPointIndicesByExactValues: (keyValues: Record<string, unknown>) => number[] | undefined;
+  getPointIndicesByExactValues: (keyValues: Record<string, unknown>) => Promise<number[]> | number[] | undefined;
   
   // Incremental update methods
   addIncrementalData: (newNodes: GraphNode[], newLinks: GraphLink[], runSimulation?: boolean) => void;
