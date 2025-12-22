@@ -396,12 +396,10 @@ async fn main() -> anyhow::Result<()> {
         
         let mut graph = state.client.select_graph(&graph_name);
         let mut nodes_result = graph.query(&nodes_query).execute().await?;
-        let mut node_ids = Vec::new();
         let mut nodes = Vec::new();
         
         while let Some(row) = nodes_result.data.next() {
             if let Some(id) = row.get(0).and_then(|v| v.as_string()) {
-                node_ids.push(format!("'{}'", id));
                 
                 // Build properties map with real data
                 let mut properties = HashMap::new();
@@ -460,18 +458,24 @@ async fn main() -> anyhow::Result<()> {
         }
         info!("Nodes loaded: {}", nodes.len());
         
-        // Step 2: Load edges only for loaded nodes - paginate to avoid FalkorDB's 10K result limit
+        // Step 2: Load ALL edges from FalkorDB, filter client-side for loaded nodes
+        // This is faster than passing 57K UUIDs in a WHERE IN clause
         let mut edges = Vec::new();
-        let batch_size: usize = 5000;
+        let batch_size: usize = 20000; // Increased from 5000 for fewer round trips
         let mut offset: usize = 0;
         
+        // Build HashSet of loaded node IDs for O(1) lookup filtering
+        let loaded_node_ids: std::collections::HashSet<String> = nodes.iter()
+            .map(|n| n.id.clone())
+            .collect();
+        info!("Built HashSet of {} loaded node IDs for edge filtering", loaded_node_ids.len());
+        
         loop {
+            // Simplified query - no WHERE IN clause, filter client-side
             let edges_query = format!(
-                "MATCH (n)-[r]->(m) WHERE n.uuid IN [{}] AND m.uuid IN [{}] RETURN n.uuid, type(r), m.uuid, r.weight SKIP {} LIMIT {}",
-                node_ids.join(","),
-                node_ids.join(","),
+                "MATCH (n)-[r]->(m) RETURN n.uuid, type(r), m.uuid, r.weight SKIP {} LIMIT {}",
                 offset,
-                batch_size.min((edge_limit as usize).saturating_sub(offset))
+                batch_size
             );
             
             info!("Fetching edges batch: offset={}, limit={}, progress={:.1}%", 
@@ -481,18 +485,26 @@ async fn main() -> anyhow::Result<()> {
             let mut graph = state.client.select_graph(&graph_name);
             let mut edges_result = graph.query(&edges_query).execute().await?;
             let mut batch_count = 0;
+            let mut filtered_count = 0;
             
             while let Some(row) = edges_result.data.next() {
                 batch_count += 1;
-                edges.push(Edge {
-                    from: row.get(0).and_then(|v| v.as_string()).map_or("", |v| v).to_string(),
-                    to: row.get(2).and_then(|v| v.as_string()).map_or("", |v| v).to_string(),
-                    edge_type: row.get(1).and_then(|v| v.as_string()).map_or("", |v| v).to_string(),
-                    weight: row.get(3).and_then(|v| v.to_f64()).unwrap_or(1.0),
-                });
+                let from = row.get(0).and_then(|v| v.as_string()).map_or("", |v| v).to_string();
+                let to = row.get(2).and_then(|v| v.as_string()).map_or("", |v| v).to_string();
+                
+                // Filter: only keep edges where both endpoints are in loaded nodes
+                if loaded_node_ids.contains(&from) && loaded_node_ids.contains(&to) {
+                    edges.push(Edge {
+                        from,
+                        to,
+                        edge_type: row.get(1).and_then(|v| v.as_string()).map_or("", |v| v).to_string(),
+                        weight: row.get(3).and_then(|v| v.to_f64()).unwrap_or(1.0),
+                    });
+                    filtered_count += 1;
+                }
             }
             
-            info!("Batch fetched {} edges", batch_count);
+            info!("Batch fetched {} edges, kept {} after filtering", batch_count, filtered_count);
             
             // Update progress after each batch
             {
@@ -500,6 +512,7 @@ async fn main() -> anyhow::Result<()> {
                 progress.loaded_edges = edges.len();
             }
             
+            // Stop if we got fewer than batch_size (end of data) or hit edge limit
             if batch_count < batch_size || edges.len() >= edge_limit as usize {
                 break;
             }
