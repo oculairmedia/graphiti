@@ -537,11 +537,11 @@ export function GraphConfigProvider({ children }: { children: ReactNode }) {
         }));
         
         const links: CosmographLink[] = graphData.edges.map(edge => ({
-          source: edge.from || (edge as any).source,
-          target: edge.to || (edge as any).target,
+          source: edge.from || edge.source || '',
+          target: edge.to || edge.target || '',
           weight: edge.weight,
           edge_type: edge.edge_type,
-          properties: edge.properties as any
+          properties: edge.properties
         }));
         
         cosmographRef.current.setData(nodesWithPositions, links, false);

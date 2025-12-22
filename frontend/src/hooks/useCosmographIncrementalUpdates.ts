@@ -6,6 +6,7 @@
  */
 
 import { useCallback, useRef, useState, useEffect } from 'react';
+import type { CosmographRef } from '@cosmograph/react';
 import type { GraphNode, GraphLink } from '../types/graph';
 import FallbackOrchestrator, { UpdateAttempt, ErrorClassifier } from '../utils/updateFallbackStrategies';
 import {

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useCallback } from 'react';
+import type { GraphNode, GraphEdge } from '../types/graph';
 
 // Production-safe logging
 const isDev = import.meta.env.DEV;
@@ -10,8 +11,8 @@ interface DeltaUpdate {
   type: 'graph:delta';
   data: {
     operation: 'add' | 'update' | 'delete';
-    nodes?: any[];
-    edges?: any[];
+    nodes?: GraphNode[];
+    edges?: GraphEdge[];
     timestamp: number;
   };
 }
@@ -141,7 +142,7 @@ export function useRustWebSocket(options: RustWebSocketOptions = {}) {
     };
   }, [connect]);
 
-  const sendMessage = useCallback((message: any) => {
+  const sendMessage = useCallback((message: Record<string, unknown>) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify(message));
     } else {

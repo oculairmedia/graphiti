@@ -27,7 +27,27 @@ export interface Force {
   type: ForceType;
   strength: number;
   enabled: boolean;
-  params?: Record<string, any>;
+  params?: ForceParams;
+}
+
+// Type for force parameters - allows numeric and object values
+interface ForceParams {
+  distance?: number;
+  theta?: number;
+  center?: { x: number; y: number };
+  [key: string]: number | { x: number; y: number } | undefined;
+}
+
+// Type for layout parameters
+interface LayoutParams {
+  radius?: number;
+  columns?: number;
+  spacing?: number;
+  width?: number;
+  height?: number;
+  levelSpacing?: number;
+  nodeSpacing?: number;
+  [key: string]: number | undefined;
 }
 
 /**
@@ -48,7 +68,7 @@ export type LayoutType =
  */
 export interface LayoutConfig {
   type: LayoutType;
-  params?: Record<string, any>;
+  params?: LayoutParams;
   animate?: boolean;
   duration?: number;
 }
@@ -210,7 +230,7 @@ export function useGraphSimulation(
   /**
    * Log debug message
    */
-  const log = useCallback((message: string, ...args: any[]) => {
+  const log = useCallback((message: string, ...args: unknown[]) => {
     if (debug) {
       console.debug(`[useGraphSimulation] ${message}`, ...args);
     }

@@ -143,6 +143,7 @@ interface UpdateBatch {
   deletedNodeIds: Set<string>;
   deletedEdgeIds: Set<string>;
   timestamp: number;
+  operation?: DeltaOperation;
 }
 
 /**
@@ -245,7 +246,7 @@ export function useGraphWebSocket(config: UseGraphWebSocketConfig = {}) {
   /**
    * Log debug message
    */
-  const log = useCallback((message: string, ...args: any[]) => {
+  const log = useCallback((message: string, ...args: unknown[]) => {
     if (debug) {
       console.debug(`[useGraphWebSocket] ${message}`, ...args);
     }
@@ -310,7 +311,7 @@ export function useGraphWebSocket(config: UseGraphWebSocketConfig = {}) {
     // Create delta update event using reusable arrays
     const event: DeltaUpdateEvent = {
       type: 'delta_update',
-      operation: (batch as any).operation || (batch.deletedNodeIds.size > 0 || batch.deletedEdgeIds.size > 0 ? 'delete' : 'update'),
+      operation: batch.operation ?? (batch.deletedNodeIds.size > 0 || batch.deletedEdgeIds.size > 0 ? 'delete' : 'update'),
       nodes: batchNodesArrayRef.current,
       edges: batchEdgesArrayRef.current,
       nodeIds: batchNodeIdsArrayRef.current,
@@ -349,7 +350,7 @@ export function useGraphWebSocket(config: UseGraphWebSocketConfig = {}) {
     const batch = updateBatchRef.current;
     
     // Store the operation in the batch for later use
-    (batch as any).operation = operation;
+    batch.operation = operation;
     
     // Handle nodes
     if (nodes) {

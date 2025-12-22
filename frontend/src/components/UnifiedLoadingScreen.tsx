@@ -73,9 +73,9 @@ export const UnifiedLoadingScreen: React.FC<UnifiedLoadingScreenProps> = ({ clas
     if (current) {
       // Add metadata to label if available
       if (current.id === 'data' && current.metadata) {
-        const { nodeCount, edgeCount } = current.metadata;
-        if (nodeCount) {
-          return `${current.label} (${nodeCount.toLocaleString()} nodes, ${edgeCount?.toLocaleString() || 0} edges)`;
+        const metadata = current.metadata as { nodeCount?: number; edgeCount?: number };
+        if (metadata.nodeCount) {
+          return `${current.label} (${metadata.nodeCount.toLocaleString()} nodes, ${metadata.edgeCount?.toLocaleString() || 0} edges)`;
         }
       }
       return current.label;

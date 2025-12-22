@@ -12,7 +12,7 @@ export interface LoadingStage {
   status: 'pending' | 'loading' | 'complete' | 'error';
   progress?: number;
   error?: Error;
-  metadata?: any;
+  metadata?: unknown;
 }
 
 interface LoadingCoordinatorState {
@@ -28,7 +28,7 @@ interface LoadingCoordinatorState {
 interface LoadingCoordinatorContextValue extends LoadingCoordinatorState {
   registerStage: (id: string, label: string) => void;
   updateStage: (id: string, updates: Partial<LoadingStage>) => void;
-  setStageComplete: (id: string, metadata?: any) => void;
+  setStageComplete: (id: string, metadata?: unknown) => void;
   setStageError: (id: string, error: Error) => void;
   reset: () => void;
   getStageStatus: (id: string) => LoadingStage['status'] | undefined;
@@ -108,7 +108,7 @@ export const LoadingCoordinatorProvider: React.FC<LoadingCoordinatorProviderProp
   }, []);
 
   // Mark a stage as complete
-  const setStageComplete = useCallback((id: string, metadata?: any) => {
+  const setStageComplete = useCallback((id: string, metadata?: unknown) => {
     setState(prev => {
       const newStages = new Map(prev.stages);
       const stage = newStages.get(id);

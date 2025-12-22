@@ -6,15 +6,21 @@
 
 import { useEffect, useCallback } from 'react';
 import { useWebSocketContext } from '../contexts/WebSocketProvider';
+import type { CosmographRef } from '@cosmograph/react';
+import type { WebSocketEvent, NodeAccessEvent } from './useWebSocket';
 
 interface NodeAccessEventsOptions {
-  cosmographRef: React.RefObject<any>;
+  cosmographRef: React.RefObject<CosmographRef | null>;
   getNodeIndices: (nodeIds: string[]) => number[];
   addGlowingNodes: (nodeIds: string[]) => void;
   clearGlowingNodes: () => void;
   glowTimeoutRef: React.MutableRefObject<NodeJS.Timeout | null>;
   glowDuration?: number;
   debug?: boolean;
+}
+
+function isNodeAccessEvent(event: WebSocketEvent): event is NodeAccessEvent {
+  return event.type === 'node_access' && 'node_ids' in event;
 }
 
 export function useGraphNodeAccessEvents(options: NodeAccessEventsOptions): void {

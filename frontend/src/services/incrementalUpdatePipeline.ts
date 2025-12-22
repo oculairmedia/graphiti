@@ -13,6 +13,26 @@ import { GraphNode } from '@/types/graph';
 import { GraphLink } from '@/types/graph';
 import { logger } from '@/utils/logger';
 
+/**
+ * Represents data for node removal operations
+ */
+interface NodeRemovalData {
+  id: string;
+}
+
+/**
+ * Represents data for edge removal operations
+ */
+interface EdgeRemovalData {
+  source: string;
+  target: string;
+}
+
+/**
+ * Union type for all possible operation data types
+ */
+type OperationData = GraphNode | GraphLink | NodeRemovalData | EdgeRemovalData;
+
 export interface GraphDelta {
   operation: 'initial' | 'update' | 'refresh';
   nodes_added: GraphNode[];
@@ -29,7 +49,7 @@ interface UpdateOperation {
   id: string;
   type: 'add' | 'update' | 'remove';
   entityType: 'node' | 'edge';
-  data: any;
+  data: OperationData;
   sequence: number;
   timestamp: number;
   priority: number; // Higher priority updates processed first
@@ -279,7 +299,7 @@ export class IncrementalUpdatePipeline {
   private calculatePriority(
     type: 'add' | 'update' | 'remove',
     entityType: 'node' | 'edge',
-    data: any
+    data: OperationData
   ): number {
     if (this.config.priorityMode === 'fifo') {
       return 0; // All same priority
@@ -297,14 +317,16 @@ export class IncrementalUpdatePipeline {
     
     // Smart priority based on data
     if (this.config.priorityMode === 'smart') {
-      // High-degree nodes get higher priority
-      if (data.degree_centrality && data.degree_centrality > 0.5) {
+      // High-degree nodes get higher priority (only GraphNode has this property)
+      if ('degree_centrality' in data && typeof data.degree_centrality === 'number' && data.degree_centrality > 0.5) {
         priority += 20;
       }
       
-      // Recent updates get higher priority
-      const age = Date.now() - (data.timestamp || 0);
-      if (age < 1000) priority += 10; // Less than 1 second old
+      // Recent updates get higher priority (only GraphNode has created_at_timestamp)
+      if ('created_at_timestamp' in data && typeof data.created_at_timestamp === 'number') {
+        const age = Date.now() - data.created_at_timestamp;
+        if (age < 1000) priority += 10; // Less than 1 second old
+      }
     }
     
     return priority;
@@ -369,26 +391,28 @@ export class IncrementalUpdatePipeline {
         if (op.entityType === 'node') {
           switch (op.type) {
             case 'add':
-              delta.nodes_added.push(op.data);
+              delta.nodes_added.push(op.data as GraphNode);
               break;
             case 'update':
-              delta.nodes_updated.push(op.data);
+              delta.nodes_updated.push(op.data as GraphNode);
               break;
             case 'remove':
-              delta.nodes_removed.push(op.data.id);
+              delta.nodes_removed.push((op.data as NodeRemovalData).id);
               break;
           }
         } else if (op.entityType === 'edge') {
           switch (op.type) {
             case 'add':
-              delta.edges_added.push(op.data);
+              delta.edges_added.push(op.data as GraphLink);
               break;
             case 'update':
-              delta.edges_updated.push(op.data);
+              delta.edges_updated.push(op.data as GraphLink);
               break;
-            case 'remove':
-              delta.edges_removed.push([op.data.source, op.data.target]);
+            case 'remove': {
+              const edgeData = op.data as EdgeRemovalData;
+              delta.edges_removed.push([edgeData.source, edgeData.target]);
               break;
+            }
           }
         }
       }
