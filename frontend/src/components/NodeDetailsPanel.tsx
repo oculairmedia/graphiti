@@ -121,10 +121,10 @@ const NodeDetailsPanelComponent: React.FC<NodeDetailsPanelProps> = ({
   // Use centrality hook with fallback - pass node centrality directly if available
   // Check both root level and properties for centrality values
   const nodeCentrality = {
-    degree_centrality: (node as any).degree_centrality || node.properties?.degree_centrality,
-    betweenness_centrality: (node as any).betweenness_centrality || node.properties?.betweenness_centrality,
-    pagerank_centrality: (node as any).pagerank_centrality || node.properties?.pagerank_centrality,
-    eigenvector_centrality: (node as any).eigenvector_centrality || node.properties?.eigenvector_centrality,
+    degree_centrality: node.degree_centrality ?? node.properties?.degree_centrality,
+    betweenness_centrality: node.betweenness_centrality ?? node.properties?.betweenness_centrality,
+    pagerank_centrality: node.pagerank_centrality ?? node.properties?.pagerank_centrality,
+    eigenvector_centrality: node.eigenvector_centrality ?? node.properties?.eigenvector_centrality,
   };
   
   const { centrality, isLoading: centralityLoading, source } = useNodeCentralityWithFallback(

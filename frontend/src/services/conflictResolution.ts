@@ -13,7 +13,7 @@ export interface DeltaOperation {
   type: 'add' | 'update' | 'remove';
   target: 'node' | 'edge';
   targetId: string;
-  data?: any;
+  data?: Record<string, unknown>;
   path?: string[]; // For partial updates
   vector?: VectorClock; // For ordering operations
 }
@@ -411,18 +411,25 @@ export class ConflictResolver {
     return true; // One path is prefix of the other
   }
 
-  private deepMerge(target: any, source: any): any {
-    if (!target || typeof target !== 'object') return source;
-    if (!source || typeof source !== 'object') return source;
+  private deepMerge(
+    target: Record<string, unknown> | undefined,
+    source: Record<string, unknown> | undefined
+  ): Record<string, unknown> {
+    if (!target || typeof target !== 'object') return source ?? {};
+    if (!source || typeof source !== 'object') return source ?? {};
 
-    const result = { ...target };
+    const result: Record<string, unknown> = { ...target };
 
     for (const key in source) {
       if (Object.prototype.hasOwnProperty.call(source, key)) {
-        if (typeof source[key] === 'object' && !Array.isArray(source[key])) {
-          result[key] = this.deepMerge(result[key], source[key]);
+        const sourceValue = source[key];
+        if (typeof sourceValue === 'object' && sourceValue !== null && !Array.isArray(sourceValue)) {
+          result[key] = this.deepMerge(
+            result[key] as Record<string, unknown> | undefined,
+            sourceValue as Record<string, unknown>
+          );
         } else {
-          result[key] = source[key];
+          result[key] = sourceValue;
         }
       }
     }

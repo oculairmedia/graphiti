@@ -46,7 +46,7 @@ export interface VisualEffect {
   delay?: number;
   easing?: EasingType;
   repeat?: number | 'infinite';
-  params?: Record<string, any>;
+  params?: Record<string, unknown>;
   onComplete?: () => void;
 }
 
@@ -76,6 +76,29 @@ export interface TransitionConfig {
   easing: EasingType;
   stagger?: number;
   cascade?: boolean;
+}
+
+/**
+ * Resolved node style (after function evaluation)
+ */
+export interface ResolvedNodeStyle {
+  fill?: string;
+  stroke?: string;
+  strokeWidth?: number;
+  opacity?: number;
+  radius?: number;
+  shape?: 'circle' | 'square' | 'diamond' | 'hexagon';
+}
+
+/**
+ * Resolved link style (after function evaluation)
+ */
+export interface ResolvedLinkStyle {
+  stroke?: string;
+  strokeWidth?: number;
+  opacity?: number;
+  dashArray?: string;
+  arrowSize?: number;
 }
 
 /**
@@ -228,7 +251,7 @@ export function useGraphVisualEffects(
   /**
    * Log debug message
    */
-  const log = useCallback((message: string, ...args: any[]) => {
+  const log = useCallback((message: string, ...args: unknown[]) => {
     if (debug) {
       console.debug(`[useGraphVisualEffects] ${message}`, ...args);
     }
@@ -472,52 +495,72 @@ export function useGraphVisualEffects(
   /**
    * Get node style
    */
-  const getNodeStyle = useCallback((node: GraphNode): any => {
-    const baseStyle = { ...visualStyle.nodes };
+  const getNodeStyle = useCallback((node: GraphNode): ResolvedNodeStyle => {
+    const nodeStyle = visualStyle.nodes;
+    const resolvedStyle: ResolvedNodeStyle = {
+      strokeWidth: nodeStyle?.strokeWidth,
+      opacity: nodeStyle?.opacity,
+      shape: nodeStyle?.shape,
+    };
     
     // Apply function-based styles
-    if (typeof baseStyle.fill === 'function') {
-      baseStyle.fill = baseStyle.fill(node);
+    if (typeof nodeStyle?.fill === 'function') {
+      resolvedStyle.fill = nodeStyle.fill(node);
+    } else {
+      resolvedStyle.fill = nodeStyle?.fill;
     }
-    if (typeof baseStyle.stroke === 'function') {
-      baseStyle.stroke = baseStyle.stroke(node);
+    if (typeof nodeStyle?.stroke === 'function') {
+      resolvedStyle.stroke = nodeStyle.stroke(node);
+    } else {
+      resolvedStyle.stroke = nodeStyle?.stroke;
     }
-    if (typeof baseStyle.radius === 'function') {
-      baseStyle.radius = baseStyle.radius(node);
+    if (typeof nodeStyle?.radius === 'function') {
+      resolvedStyle.radius = nodeStyle.radius(node);
+    } else {
+      resolvedStyle.radius = nodeStyle?.radius;
     }
     
     // Apply highlight
     if (highlightedNodes.has(node.id)) {
-      baseStyle.stroke = '#ff0000';
-      baseStyle.strokeWidth = (baseStyle.strokeWidth || 1) * 2;
-      baseStyle.opacity = 1;
+      resolvedStyle.stroke = '#ff0000';
+      resolvedStyle.strokeWidth = (resolvedStyle.strokeWidth || 1) * 2;
+      resolvedStyle.opacity = 1;
     }
     
-    return baseStyle;
+    return resolvedStyle;
   }, [visualStyle.nodes, highlightedNodes]);
 
   /**
    * Get link style
    */
-  const getLinkStyle = useCallback((link: GraphLink): any => {
-    const baseStyle = { ...visualStyle.links };
+  const getLinkStyle = useCallback((link: GraphLink): ResolvedLinkStyle => {
+    const linkStyle = visualStyle.links;
+    const resolvedStyle: ResolvedLinkStyle = {
+      opacity: linkStyle?.opacity,
+      dashArray: linkStyle?.dashArray,
+      arrowSize: linkStyle?.arrowSize,
+    };
     
     // Apply function-based styles
-    if (typeof baseStyle.stroke === 'function') {
-      baseStyle.stroke = baseStyle.stroke(link);
+    if (typeof linkStyle?.stroke === 'function') {
+      resolvedStyle.stroke = linkStyle.stroke(link);
+    } else {
+      resolvedStyle.stroke = linkStyle?.stroke;
     }
-    if (typeof baseStyle.strokeWidth === 'function') {
-      baseStyle.strokeWidth = baseStyle.strokeWidth(link);
+    if (typeof linkStyle?.strokeWidth === 'function') {
+      resolvedStyle.strokeWidth = linkStyle.strokeWidth(link);
+    } else {
+      resolvedStyle.strokeWidth = linkStyle?.strokeWidth;
     }
     
     // Apply highlight
     if (highlightedLinks.has(`${link.source}-${link.target}`)) {
-      baseStyle.stroke = '#ff0000';
-      baseStyle.strokeWidth = (baseStyle.strokeWidth || 1) * 2;
-      baseStyle.opacity = 1;
+      resolvedStyle.stroke = '#ff0000';
+      resolvedStyle.strokeWidth = (resolvedStyle.strokeWidth || 1) * 2;
+      resolvedStyle.opacity = 1;
     }
     
-    return baseStyle;
+    return resolvedStyle;
   }, [visualStyle.links, highlightedLinks]);
 
   /**

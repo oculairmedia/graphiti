@@ -3,7 +3,7 @@
 interface QueuedMessage {
   id: string;
   type: string;
-  data: any;
+  data: Record<string, unknown>;
   timestamp: number;
   retryCount: number;
   priority: number;
@@ -12,6 +12,18 @@ interface QueuedMessage {
     version?: string;
     dependencies?: string[];
   };
+}
+
+interface SyncConflict {
+  type: string;
+  message: QueuedMessage;
+  reason: string;
+}
+
+interface PartialSyncError extends Error {
+  partialSuccess: boolean;
+  successful: string[];
+  failed: string[];
 }
 
 interface SyncState {
@@ -203,7 +215,7 @@ export class OfflineQueueManager {
 
   constructor(
     private onSync: (messages: QueuedMessage[]) => Promise<void>,
-    private onConflict?: (conflict: any) => void
+    private onConflict?: (conflict: SyncConflict) => void
   ) {
     this.storage = new OfflineStorage();
   }
@@ -358,8 +370,9 @@ export class OfflineQueueManager {
       }
     } catch (error) {
       // Handle partial failures
-      if ((error as any).partialSuccess) {
-        const { successful, failed } = (error as any);
+      const partialError = error as PartialSyncError;
+      if (partialError.partialSuccess) {
+        const { successful, failed } = partialError;
         
         for (const id of successful) {
           successfulIds.push(id);

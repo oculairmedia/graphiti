@@ -1,7 +1,7 @@
 import * as arrow from 'apache-arrow';
 import { loadDuckDB } from './duckdb-lazy-loader';
 import type * as duckdb from '@duckdb/duckdb-wasm';
-import { graphCache } from './graph-cache';
+import { graphCache, type CacheDataItem } from './graph-cache';
 import { GraphNode, GraphLink } from '../types/graph';
 
 export interface DuckDBConfig {
@@ -135,9 +135,10 @@ export class DuckDBService {
         
         if (isValidCache) {
           console.log('[DuckDB] Using cached data');
+          // Cast to number[] since we verified format is 'arrow' above
           return { 
-            nodes: new Uint8Array(cached.nodes).buffer,
-            edges: new Uint8Array(cached.edges).buffer
+            nodes: new Uint8Array(cached.nodes as number[]).buffer,
+            edges: new Uint8Array(cached.edges as number[]).buffer
           };
         }
       }
@@ -345,10 +346,11 @@ export class DuckDBService {
           console.log('[DuckDB] Loading from cache...');
           
           // Convert cached data back to Arrow tables and insert
-          const nodesTable = arrow.tableFromIPC(new Uint8Array(cached.nodes));
+          // Cast to number[] since we verified format is 'arrow' above
+          const nodesTable = arrow.tableFromIPC(new Uint8Array(cached.nodes as number[]));
           await this.conn.insertArrowTable(nodesTable, { name: 'nodes' });
           
-          const edgesTable = arrow.tableFromIPC(new Uint8Array(cached.edges));
+          const edgesTable = arrow.tableFromIPC(new Uint8Array(cached.edges as number[]));
           await this.conn.insertArrowTable(edgesTable, { name: 'edges' });
           
           // Also create Cosmograph-specific views/tables that map to our data

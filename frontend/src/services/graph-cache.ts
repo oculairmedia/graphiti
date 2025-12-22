@@ -1,12 +1,15 @@
 // IndexedDB caching for graph data
 import { openDB, DBSchema, IDBPDatabase } from 'idb';
 
+// Cache stores either Arrow byte arrays (number[]) or JSON objects (Record<string, unknown>[])
+export type CacheDataItem = number | Record<string, unknown>;
+
 interface GraphCacheDB extends DBSchema {
   graphData: {
     key: string;
     value: {
-      nodes: any[];
-      edges: any[];
+      nodes: CacheDataItem[];
+      edges: CacheDataItem[];
       timestamp: number;
       version: string;
       // Add metadata for proper validation
@@ -107,7 +110,7 @@ class GraphCache {
     }
   }
 
-  async setCachedData(nodes: any[], edges: any[], key: string = 'default', metadata?: { nodeCount?: number; edgeCount?: number; format?: 'arrow' | 'json' }) {
+  async setCachedData(nodes: CacheDataItem[], edges: CacheDataItem[], key: string = 'default', metadata?: { nodeCount?: number; edgeCount?: number; format?: 'arrow' | 'json' }) {
     if (!this.db) await this.initialize();
     if (!this.db) return;
 

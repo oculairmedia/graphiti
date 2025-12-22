@@ -8,9 +8,10 @@
  * during pan/zoom operations.
  */
 
-import { useMemo, useRef, useEffect } from 'react';
+import { useMemo, useRef } from 'react';
 import { hexToRgba } from '../utils/NodeColorManager';
 import { generateNodeTypeColor } from '../utils/NodeColorManager';
+import type { TransformedGraphNode, TransformedGraphLink } from '../types/graph';
 
 interface LinkColorConfig {
   linkColorScheme: string;
@@ -26,8 +27,8 @@ interface LinkColorConfig {
 }
 
 interface CosmographData {
-  nodes: any[];
-  links: any[];
+  nodes: TransformedGraphNode[];
+  links: TransformedGraphLink[];
 }
 
 interface UsePrecomputedLinkColorsProps {
@@ -41,7 +42,7 @@ interface PrecomputedLinkColorsResult {
   /** Pre-computed color array - one color string per link */
   linkColors: string[];
   /** Fast lookup function that just returns pre-computed color */
-  linkColorByFn: (edgeType: any, linkIndex: number) => string;
+  linkColorByFn: (edgeType: string | undefined, linkIndex: number) => string;
   /** Force recompute (e.g., when highlighting changes) */
   recompute: () => void;
   /** Whether colors are ready */
@@ -240,7 +241,7 @@ export function usePrecomputedLinkColors({
     const colors = linkColorsRef.current;
     const fallback = config.linkColor || '#9CA3AF';
     
-    return (_edgeType: any, linkIndex: number): string => {
+    return (_edgeType: string | undefined, linkIndex: number): string => {
       // Simple array lookup - O(1)
       return colors[linkIndex] ?? fallback;
     };

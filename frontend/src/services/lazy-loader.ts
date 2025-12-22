@@ -8,10 +8,34 @@ export interface LazyLoadConfig {
   maxConcurrentLoads: number;
 }
 
+export interface Viewport {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  zoom: number;
+}
+
+interface LoadedChunkData {
+  nodeIds: string[];
+  viewport?: Viewport;
+}
+
+interface NodeDetails {
+  id: string;
+  name?: string;
+  [key: string]: unknown;
+}
+
+interface DuckDBConnection {
+  insertArrowTable(table: arrow.Table, options: { name: string }): Promise<void>;
+  query(sql: string, params?: unknown[]): Promise<unknown>;
+}
+
 export class LazyLoader {
   private config: LazyLoadConfig;
   private loadingChunks = new Set<string>();
-  private loadedChunks = new Map<string, any>();
+  private loadedChunks = new Map<string, LoadedChunkData>();
   private pendingLoads: Promise<void>[] = [];
 
   constructor(config: Partial<LazyLoadConfig> = {}) {
@@ -26,7 +50,7 @@ export class LazyLoader {
 
   async loadInitialChunk(
     rustServerUrl: string,
-    conn: any
+    conn: DuckDBConnection
   ): Promise<{ nodes: number; edges: number }> {
     console.log('[LazyLoader] Loading initial chunk...');
     
@@ -81,9 +105,9 @@ export class LazyLoader {
   }
 
   async loadChunkByViewport(
-    viewport: { x: number; y: number; width: number; height: number; zoom: number },
+    viewport: Viewport,
     rustServerUrl: string,
-    conn: any
+    conn: DuckDBConnection
   ): Promise<boolean> {
     // Calculate chunk ID based on viewport
     const chunkId = this.getChunkId(viewport);
@@ -149,7 +173,7 @@ export class LazyLoader {
     return false;
   }
 
-  private getChunkId(viewport: { x: number; y: number; width: number; height: number; zoom: number }): string {
+  private getChunkId(viewport: Viewport): string {
     // Create a unique ID based on viewport grid position
     const gridSize = 1000; // Grid cell size
     const gridX = Math.floor(viewport.x / gridSize);
@@ -158,7 +182,7 @@ export class LazyLoader {
     return `${gridX}_${gridY}_${zoomLevel}`;
   }
 
-  async loadNodeDetails(nodeIds: string[], rustServerUrl: string): Promise<any[]> {
+  async loadNodeDetails(nodeIds: string[], rustServerUrl: string): Promise<NodeDetails[]> {
     const response = await fetch(
       `${rustServerUrl}/api/nodes/details`,
       {
