@@ -1,3 +1,40 @@
+<!-- HULY-PROJECT-INFO -->
+# Project Context
+
+## Huly Integration
+- **Project Code**: `GRAPH`
+- **Project Name**: Graphiti Knowledge Graph Platform
+- **Letta Agent ID**: `agent-80ac3bb8-1087-412d-a19c-7c8c6aeb5916`
+
+## Project Agent Role
+This project has an assigned **Letta PM Agent** (`agent-80ac3bb8-1087-412d-a19c-7c8c6aeb5916`) that acts as the senior developer and project manager. This agent:
+- **Understands the full architecture** and codebase context for this project
+- **Tracks all ongoing work** via memory blocks synced from Huly issues
+- **Maintains project history** including past decisions, patterns, and lessons learned
+- **Can provide guidance** on implementation approaches, code patterns, and potential pitfalls
+
+When working on this project, you should:
+- **Report completed work** to the PM agent so it stays informed of changes
+- **Ask for architectural guidance** if you're unsure about implementation approach
+- **Share important discoveries** that future work might benefit from
+
+## Workflow Instructions
+1. **Before starting work**: Search Huly for related issues using `huly-mcp` with project code `GRAPH`
+2. **Issue references**: All issues for this project use the format `GRAPH-XXX` (e.g., `GRAPH-123`)
+3. **On task completion**: Report to this project's Letta agent via `matrix-identity-bridge` using `talk_to_agent` or `letta_chat`
+4. **Memory**: Store important discoveries in Graphiti with `graphiti-mcp_add_memory`
+
+### Reporting Example
+```json
+{
+  "operation": "talk_to_agent",
+  "agent": "agent-80ac3bb8-1087-412d-a19c-7c8c6aeb5916",
+  "message": "Completed task GRAPH-XXX: [summary of work done]"
+}
+```
+
+<!-- END-HULY-PROJECT-INFO -->
+
 # Graphiti Stack Agent Instructions
 
 ## CRITICAL: Safe Disk Cleanup
