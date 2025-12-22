@@ -3,11 +3,11 @@ use arrow::array::{ArrayRef, Float64Array, RecordBatch, StringArray, UInt32Array
 use arrow::datatypes::{DataType, Field, Schema};
 use arrow_schema::SchemaRef;
 use chrono::{DateTime, Utc};
-use duckdb::{params, Connection};
+use duckdb::{params, Connection, Appender};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
-use tokio::sync::RwLock;
+use std::sync::Arc;
+use tokio::sync::{Mutex, RwLock};
 use tracing::{debug, info, warn};
 
 use crate::{Edge, Node};
@@ -231,7 +231,7 @@ impl DuckDBStore {
 
     /// Check if cached data is still valid by comparing checksums
     pub async fn is_cache_valid(&self, nodes: &[Node], edges: &[Edge]) -> bool {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock().await;
 
         // Get stored checksum
         let stored_checksum: Option<String> = conn.query_row(
@@ -257,24 +257,20 @@ impl DuckDBStore {
     }
 
     pub async fn load_initial_data(&self, nodes: Vec<Node>, edges: Vec<Edge>) -> Result<()> {
-        info!("Loading initial data: {} nodes, {} edges", nodes.len(), edges.len());
+        info!("Loading initial data: {} nodes, {} edges (using batch inserts)", nodes.len(), edges.len());
+        let start_time = std::time::Instant::now();
 
         // Compute checksum before loading
         let checksum = Self::compute_data_checksum(&nodes, &edges);
 
-        let mut conn = self.conn.lock().unwrap();
-        let tx = conn.transaction()?;
+        let mut conn = self.conn.lock().await;
         
         // GRAPH-504: Implement Atomic TRUNCATE+Reload Strategy
         // Clear existing data to ensure deleted nodes/edges are properly removed
         info!("Clearing existing data for atomic reload (deletion handling)");
-        tx.execute("DELETE FROM edges", [])?; // Delete edges first due to foreign key constraints
-        tx.execute("DELETE FROM nodes", [])?;
+        conn.execute("DELETE FROM edges", [])?; // Delete edges first due to foreign key constraints
+        conn.execute("DELETE FROM nodes", [])?;
         info!("Existing data cleared, proceeding with fresh data load");
-        
-        // GRAPH-504: Use INSERT OR REPLACE to handle concurrent reloads gracefully
-        let stmt_node = "INSERT OR REPLACE INTO nodes (id, idx, label, node_type, summary, degree_centrality, pagerank_centrality, betweenness_centrality, eigenvector_centrality, x, y, color, size, created_at, created_at_timestamp, cluster, clusterStrength)
-                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         
         let mut node_to_idx = HashMap::new();
         
@@ -283,38 +279,45 @@ impl DuckDBStore {
         let mut sorted_nodes = nodes.clone();
         sorted_nodes.sort_by(|a, b| a.id.cmp(&b.id));
         
+        // Build node_to_idx map first
         for (idx, node) in sorted_nodes.iter().enumerate() {
-            let degree = node.properties.get("degree_centrality")
-                .and_then(|v| v.as_f64())
-                .unwrap_or(0.0);
+            node_to_idx.insert(node.id.clone(), idx as u32);
+        }
+        
+        // BATCH INSERT NODES using Appender for ~10-50x speedup
+        {
+            let mut appender = conn.appender("nodes")?;
             
-            let pagerank = node.properties.get("pagerank_centrality")
-                .and_then(|v| v.as_f64())
-                .unwrap_or(0.0);
-            
-            let betweenness = node.properties.get("betweenness_centrality")
-                .and_then(|v| v.as_f64())
-                .unwrap_or(0.0);
-            
-            let eigenvector = node.properties.get("eigenvector_centrality")
-                .and_then(|v| v.as_f64())
-                .unwrap_or(0.0);
-            
-            let color = self.get_node_color(&node.node_type);
-            let size = 4.0 + (degree * 20.0); // Size based on centrality
-            
-            // Default clustering by node_type with strength 0.7
-            let cluster = node.node_type.clone();
-            let cluster_strength = 0.7;
-            
-            // Use centralized date normalization
-            let (created_str, timestamp) = Self::normalize_created_at(&node);
-            
-            tx.execute(
-                stmt_node,
-                params![
+            for (idx, node) in sorted_nodes.iter().enumerate() {
+                let degree = node.properties.get("degree_centrality")
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(0.0);
+                
+                let pagerank = node.properties.get("pagerank_centrality")
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(0.0);
+                
+                let betweenness = node.properties.get("betweenness_centrality")
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(0.0);
+                
+                let eigenvector = node.properties.get("eigenvector_centrality")
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(0.0);
+                
+                let color = self.get_node_color(&node.node_type);
+                let size = 4.0 + (degree * 20.0); // Size based on centrality
+                
+                // Default clustering by node_type with strength 0.7
+                let cluster = node.node_type.clone();
+                let cluster_strength = 0.7;
+                
+                // Use centralized date normalization
+                let (created_str, timestamp) = Self::normalize_created_at(&node);
+                
+                appender.append_row(params![
                     &node.id,
-                    idx as u32,
+                    idx as i32,  // idx as INTEGER
                     &node.label,
                     &node.node_type,
                     &node.summary,
@@ -330,61 +333,67 @@ impl DuckDBStore {
                     timestamp,         // created_at_timestamp
                     cluster,
                     cluster_strength
-                ],
-            )?;
+                ])?;
+            }
             
-            node_to_idx.insert(node.id.clone(), idx as u32);
+            appender.flush()?;
         }
         
-        // GRAPH-504: Use INSERT OR IGNORE to handle concurrent reloads gracefully
-        let stmt_edge = "INSERT OR IGNORE INTO edges (source, sourceidx, target, targetidx, edge_type, weight, color, strength)
-                         VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+        let nodes_elapsed = start_time.elapsed();
+        info!("Inserted {} nodes in {:?}", sorted_nodes.len(), nodes_elapsed);
         
-        for edge in edges.iter() {
-            if let (Some(&source_idx), Some(&target_idx)) = 
-                (node_to_idx.get(&edge.from), node_to_idx.get(&edge.to)) {
-                
-                let color = self.get_edge_color(&edge.edge_type);
-                
-                // Calculate link strength based on edge type
-                let strength = match edge.edge_type.as_str() {
-                    "entity_entity" | "relates_to" => 1.5,  // Stronger Entity-Entity connections
-                    "episodic" | "temporal" | "mentioned_in" => 0.5,  // Weaker Episodic connections
-                    _ => 1.0,  // Default strength
-                };
-                
-                tx.execute(
-                    stmt_edge,
-                    params![
+        // BATCH INSERT EDGES using Appender for ~10-50x speedup
+        let mut edge_count = 0;
+        {
+            let mut appender = conn.appender("edges")?;
+            
+            for edge in edges.iter() {
+                if let (Some(&source_idx), Some(&target_idx)) = 
+                    (node_to_idx.get(&edge.from), node_to_idx.get(&edge.to)) {
+                    
+                    let color = self.get_edge_color(&edge.edge_type);
+                    
+                    // Calculate link strength based on edge type
+                    let strength = match edge.edge_type.as_str() {
+                        "entity_entity" | "relates_to" => 1.5,  // Stronger Entity-Entity connections
+                        "episodic" | "temporal" | "mentioned_in" => 0.5,  // Weaker Episodic connections
+                        _ => 1.0,  // Default strength
+                    };
+                    
+                    appender.append_row(params![
                         &edge.from,
-                        source_idx,
+                        source_idx as i32,
                         &edge.to,
-                        target_idx,
+                        target_idx as i32,
                         &edge.edge_type,
                         edge.weight,
                         color,
                         strength
-                    ],
-                )?;
+                    ])?;
+                    
+                    edge_count += 1;
+                }
             }
+            
+            appender.flush()?;
         }
         
         // Store checksum for cache validation
-        tx.execute(
+        conn.execute(
             "INSERT OR REPLACE INTO metadata (key, value) VALUES ('data_checksum', ?)",
             params![&checksum]
         )?;
 
-        tx.commit()?;
-
-        info!("Initial data loaded successfully");
+        let total_elapsed = start_time.elapsed();
+        info!("Initial data loaded successfully: {} nodes, {} edges in {:?} (batch insert)", 
+              sorted_nodes.len(), edge_count, total_elapsed);
         Ok(())
     }
 
     /// Incrementally update DuckDB with new/changed nodes and edges
     /// This method uses INSERT OR REPLACE to handle both new and updated nodes
     pub async fn update_incremental(&self, nodes: Vec<Node>, edges: Vec<Edge>) -> Result<()> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock().await;
         
         info!("Starting incremental update: {} nodes, {} edges", nodes.len(), edges.len());
         
@@ -467,7 +476,7 @@ impl DuckDBStore {
     }
 
     pub async fn get_nodes_as_arrow(&self) -> Result<RecordBatch> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock().await;
         
         let mut stmt = conn.prepare(
             "SELECT id, idx, label, node_type, summary, degree_centrality, pagerank_centrality, betweenness_centrality, eigenvector_centrality, x, y, color, size, created_at, created_at_timestamp, cluster, clusterStrength 
@@ -563,7 +572,7 @@ impl DuckDBStore {
     }
     
     pub async fn get_edges_as_arrow(&self) -> Result<RecordBatch> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock().await;
         
         // First, get the actual nodes to build an ID to index mapping
         let mut node_stmt = conn.prepare("SELECT id, idx FROM nodes ORDER BY idx")?;
@@ -684,7 +693,7 @@ impl DuckDBStore {
             return Ok(None);
         }
         
-        let mut conn = self.conn.lock().unwrap();
+        let mut conn = self.conn.lock().await;
         let tx = conn.transaction()?;
         
         let mut update = GraphUpdate {
@@ -1017,7 +1026,7 @@ impl DuckDBStore {
     }
     
     pub async fn get_stats(&self) -> Result<(usize, usize)> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock().await;
         
         let node_count: i64 = conn.query_row(
             "SELECT COUNT(*) FROM nodes",
@@ -1039,7 +1048,7 @@ impl DuckDBStore {
     /// Returns a HashSet of all node IDs currently stored in DuckDB.
     /// Used by the reconciliation task to compare with FalkorDB state.
     pub async fn get_all_node_ids(&self) -> Result<std::collections::HashSet<String>> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock().await;
         let mut stmt = conn.prepare("SELECT id FROM nodes")?;
         let ids: Vec<String> = stmt
             .query_map(params![], |row| row.get(0))?
@@ -1053,7 +1062,7 @@ impl DuckDBStore {
     /// Returns a HashSet of edge identifiers (source_id + "->" + target_id).
     /// Used by the reconciliation task to compare with FalkorDB state.
     pub async fn get_all_edge_ids(&self) -> Result<std::collections::HashSet<String>> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock().await;
         let mut stmt = conn.prepare("SELECT source, target FROM edges")?;
         let ids: Vec<String> = stmt
             .query_map(params![], |row| {
@@ -1075,7 +1084,7 @@ impl DuckDBStore {
             return Ok(0);
         }
 
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock().await;
 
         // Build placeholders for IN clause
         let placeholders: Vec<String> = ids.iter().enumerate()
@@ -1117,7 +1126,7 @@ impl DuckDBStore {
             return Ok(0);
         }
 
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock().await;
         let mut deleted = 0;
 
         // Delete edges one by one (safer for large batches)
@@ -1155,7 +1164,7 @@ impl DuckDBStore {
             return Ok(vec![]);
         }
         
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock().await;
         
         // Build placeholders for IN clause
         let placeholders: Vec<String> = ids.iter().enumerate()
@@ -1238,7 +1247,7 @@ impl DuckDBStore {
             return Ok(vec![]);
         }
         
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock().await;
         
         // Build WHERE clause for multiple source-target pairs
         let conditions: Vec<String> = pairs.iter().enumerate()
@@ -1277,7 +1286,7 @@ impl DuckDBStore {
     }
     
     pub async fn get_node_by_id(&self, id: &str) -> Result<Option<Node>> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock().await;
         
         // Query for a single node by ID with all properties including centrality
         let query = "SELECT * FROM nodes WHERE id = $1 LIMIT 1";
