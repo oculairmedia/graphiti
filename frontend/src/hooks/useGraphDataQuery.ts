@@ -33,8 +33,48 @@ interface TransformedData {
   links: GraphLink[];
 }
 
+// Interface for node data from DuckDB with centrality metrics
+interface DuckDBNodeRow {
+  id: string;
+  idx?: number;
+  label?: string;
+  node_type?: string;
+  summary?: string;
+  size?: number;
+  color?: string;
+  degree_centrality?: number;
+  pagerank_centrality?: number;
+  pagerank?: number;
+  betweenness_centrality?: number;
+  eigenvector_centrality?: number;
+  created_at?: string;
+  created_at_timestamp?: number;
+  x?: number;
+  y?: number;
+  [key: string]: unknown;
+}
+
+// Interface for edge data from DuckDB
+interface DuckDBEdgeRow {
+  source: string;
+  target: string;
+  sourceidx?: number;
+  targetidx?: number;
+  edge_type?: string;
+  weight?: number;
+  strength?: number;
+  created_at?: string;
+  updated_at?: string;
+  [key: string]: unknown;
+}
+
+// Interface for size mapping config
+interface SizeConfig {
+  sizeMapping?: string;
+}
+
 // Compute node size based on the selected sizing strategy
-function computeSizeFromStrategy(node: any, config: any): number {
+function computeSizeFromStrategy(node: DuckDBNodeRow, config: SizeConfig): number {
   // Return normalized value (0-1 range) - renderer will handle scaling
   switch (config.sizeMapping) {
     case 'degree':
@@ -150,7 +190,7 @@ export function useGraphDataQuery() {
 
         // Transform to GraphNode format - PRESERVE idx field for proper indexing
         // Optimized: Direct property access (DuckDB WASM returns proper objects)
-        const nodes: GraphNode[] = nodesArray.map((n: any, arrayIndex) => {
+        const nodes: GraphNode[] = nodesArray.map((n: DuckDBNodeRow, arrayIndex) => {
           // Normalize temporal fields - ensure both exist
           let created_at = n.created_at;
           let created_at_timestamp = n.created_at_timestamp;
@@ -211,7 +251,7 @@ export function useGraphDataQuery() {
         });
 
         // Transform to GraphLink format with indices
-        const edges: GraphLink[] = edgesArray.map((e: any) => {
+        const edges: GraphLink[] = edgesArray.map((e: DuckDBEdgeRow) => {
           const edgeType = e.edge_type || '';
 
           // Calculate link strength based on edge type and config
@@ -326,7 +366,7 @@ export function useGraphDataQuery() {
     refreshDuckDBData();
   }, [refreshDuckDBData, queryClient]);
 
-  const handleRealtimeNotification = useCallback((notification: any) => {
+  const handleRealtimeNotification = useCallback((notification: unknown) => {
     logger.log('[useGraphDataQuery] Received notification:', notification);
   }, []);
 

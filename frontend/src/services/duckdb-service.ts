@@ -2,9 +2,23 @@ import * as arrow from 'apache-arrow';
 import { loadDuckDB } from './duckdb-lazy-loader';
 import type * as duckdb from '@duckdb/duckdb-wasm';
 import { graphCache } from './graph-cache';
+import { GraphNode, GraphLink } from '../types/graph';
 
 export interface DuckDBConfig {
   rustServerUrl: string;
+}
+
+// Update operation for graph changes
+interface GraphUpdate {
+  operation: 'add_nodes' | 'add_edges' | 'update_nodes' | 'delete_nodes' | 'delete_edges';
+  nodes?: GraphNode[];
+  edges?: GraphLink[];
+}
+
+// Row type from DuckDB queries
+interface DuckDBRow {
+  toJSON?: () => Record<string, unknown>;
+  [key: string]: unknown;
 }
 
 export class DuckDBService {
@@ -493,7 +507,7 @@ export class DuckDBService {
     }
   }
 
-  async applyUpdate(update: any): Promise<void> {
+  async applyUpdate(update: GraphUpdate): Promise<void> {
     if (!this.conn) throw new Error('DuckDB connection not initialized');
 
     const { operation, nodes, edges } = update;
@@ -639,7 +653,7 @@ export class DuckDBService {
     }
   }
 
-  async getNodesForUI(limit?: number): Promise<any[]> {
+  async getNodesForUI(limit?: number): Promise<DuckDBRow[]> {
     if (!this.conn) throw new Error('DuckDB connection not initialized');
     
     try {
@@ -654,7 +668,7 @@ export class DuckDBService {
     }
   }
   
-  async getEdgesForUI(nodeIds?: string[]): Promise<any[]> {
+  async getEdgesForUI(nodeIds?: string[]): Promise<DuckDBRow[]> {
     if (!this.conn) throw new Error('DuckDB connection not initialized');
     
     try {
@@ -671,7 +685,7 @@ export class DuckDBService {
     }
   }
   
-  async searchNodes(searchTerm: string, limit: number = 100): Promise<any[]> {
+  async searchNodes(searchTerm: string, limit: number = 100): Promise<DuckDBRow[]> {
     if (!this.conn) throw new Error('DuckDB connection not initialized');
     
     try {
@@ -723,7 +737,7 @@ export class DuckDBService {
   /**
    * Stream query results for progressive loading
    */
-  async streamQuery(query: string, onChunk: (chunk: any[]) => void, batchSize = 1000): Promise<void> {
+  async streamQuery(query: string, onChunk: (chunk: DuckDBRow[]) => void, batchSize = 1000): Promise<void> {
     if (!this.db || !this.conn) {
       throw new Error('Database not initialized');
     }
@@ -745,13 +759,13 @@ export class DuckDBService {
       
       while (processedRows < totalRows) {
         const endRow = Math.min(processedRows + batchSize, totalRows);
-        const batch: any[] = [];
+        const batch: DuckDBRow[] = [];
         
         // Extract batch of rows
         for (let i = processedRows; i < endRow; i++) {
-          const row = result.get(i);
+          const row = result.get(i) as DuckDBRow | null;
           if (row) {
-            batch.push(row.toJSON ? row.toJSON() : row);
+            batch.push(row.toJSON ? row.toJSON() as DuckDBRow : row);
           }
         }
         

@@ -5,9 +5,27 @@
 
 import { GraphNode, GraphLink } from '@/types/graph';
 
+export interface BatchFlushData {
+  addNodes: GraphNode[];
+  addEdges: GraphLink[];
+  removeNodes: string[];
+  removeEdges: string[];
+}
+
+export interface UpdateAttemptData {
+  operation?: string;
+  nodes?: GraphNode[] | string[];
+  edges?: GraphLink[] | string[];
+  nodeIds?: string[];
+  edgeIds?: string[];
+  timestamp?: number;
+  type?: string;
+  data?: UpdateAttemptData;
+}
+
 export interface UpdateAttempt {
   operation: string;
-  data: any;
+  data: UpdateAttemptData;
   error: Error;
   attemptNumber: number;
   timestamp: number;
@@ -110,11 +128,11 @@ export class UpdateBatcher {
   
   private flushTimer?: NodeJS.Timeout;
   private batchDelay: number;
-  private onFlush: (batch: any) => Promise<void>;
+  private onFlush: (batch: BatchFlushData) => Promise<void>;
   
   constructor(
     batchDelay = 100,
-    onFlush: (batch: any) => Promise<void> = async () => {}
+    onFlush: (batch: BatchFlushData) => Promise<void> = async () => {}
   ) {
     this.batchDelay = batchDelay;
     this.onFlush = onFlush;
@@ -288,12 +306,22 @@ export class BatchStrategy implements FallbackStrategy {
     console.log(`[BatchStrategy] Batching ${attempt.operation} for combined update`);
     
     switch (attempt.operation) {
-      case 'addNodes':
-        this.batcher.addNodes(attempt.data.nodes || []);
+      case 'addNodes': {
+        // Filter to only GraphNode objects (not strings)
+        const nodes = (attempt.data.nodes || []).filter(
+          (n): n is GraphNode => typeof n === 'object' && n !== null
+        );
+        this.batcher.addNodes(nodes);
         return true;
-      case 'addEdges':
-        this.batcher.addEdges(attempt.data.edges || []);
+      }
+      case 'addEdges': {
+        // Filter to only GraphLink objects (not strings)
+        const edges = (attempt.data.edges || []).filter(
+          (e): e is GraphLink => typeof e === 'object' && e !== null
+        );
+        this.batcher.addEdges(edges);
         return true;
+      }
       case 'removeNodes':
         this.batcher.removeNodes(attempt.data.nodeIds || []);
         return true;
@@ -443,7 +471,7 @@ export class FallbackOrchestrator {
     return false;
   }
   
-  private async handleBatchFlush(batch: any): Promise<void> {
+  private async handleBatchFlush(batch: BatchFlushData): Promise<void> {
     // This would be connected to the actual update handler
     console.log('[FallbackOrchestrator] Flushing batch:', {
       nodes: batch.addNodes.length,

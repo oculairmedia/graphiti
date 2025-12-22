@@ -1,5 +1,6 @@
 import { DuckDBService } from './duckdb-service';
 import { logger } from '../utils/logger';
+import { GraphNode, GraphLink } from '../types/graph';
 
 interface CacheEntry<T> {
   data: T;
@@ -15,7 +16,7 @@ interface CacheOptions {
 }
 
 export class GraphCacheService {
-  private cache = new Map<string, CacheEntry<any>>();
+  private cache = new Map<string, CacheEntry<unknown>>();
   private duckDBService: DuckDBService | null = null;
   private options: Required<CacheOptions>;
   private versions = new Map<string, string>();
@@ -46,7 +47,7 @@ export class GraphCacheService {
     const cached = this.cache.get(key);
     if (cached && !this.isExpired(cached)) {
       logger.log(`[GraphCache] Cache hit for ${key}`);
-      return cached.data;
+      return cached.data as T;
     }
     
     // If no fetcher provided, return null
@@ -66,7 +67,7 @@ export class GraphCacheService {
       // Return stale data if available
       if (cached) {
         logger.log(`[GraphCache] Returning stale data for ${key}`);
-        return cached.data;
+        return cached.data as T;
       }
       throw error;
     }
@@ -130,8 +131,8 @@ export class GraphCacheService {
   // Apply delta update from WebSocket
   async applyDeltaUpdate(delta: {
     operation: 'add' | 'update' | 'delete';
-    nodes?: any[];
-    edges?: any[];
+    nodes?: Partial<GraphNode>[];
+    edges?: Partial<GraphLink>[];
     version?: string;
   }): Promise<void> {
     logger.log(`[GraphCache] Applying delta update: ${delta.operation}`);
@@ -161,11 +162,21 @@ export class GraphCacheService {
     
     // Apply update to DuckDB if connected
     if (this.duckDBService) {
+      // Map delta operation to DuckDB operation format
+      const duckDBOperation = delta.operation === 'add' ? 'add_nodes' : 
+                              delta.operation === 'update' ? 'update_nodes' : 
+                              'delete_nodes';
+      // Filter nodes to only include those with required 'id' field, then cast
+      const validNodes = delta.nodes?.filter((n): n is GraphNode => 
+        n.id !== undefined
+      );
+      const validEdges = delta.edges?.filter((e): e is GraphLink => 
+        e.id !== undefined
+      );
       await this.duckDBService.applyUpdate({
-        operation: delta.operation,
-        nodes: delta.nodes,
-        edges: delta.edges,
-        timestamp: Date.now()
+        operation: duckDBOperation as 'add_nodes' | 'add_edges' | 'update_nodes' | 'delete_nodes' | 'delete_edges',
+        nodes: validNodes,
+        edges: validEdges
       });
     }
     
@@ -202,7 +213,7 @@ export class GraphCacheService {
   }
   
   // Private methods
-  private isExpired(entry: CacheEntry<any>): boolean {
+  private isExpired(entry: CacheEntry<unknown>): boolean {
     return Date.now() - entry.timestamp > this.options.ttl;
   }
   
@@ -260,7 +271,7 @@ export class GraphCacheService {
     return `v${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   }
   
-  private generateETag(data: any): string {
+  private generateETag(data: unknown): string {
     const str = JSON.stringify(data);
     let hash = 0;
     for (let i = 0; i < str.length; i++) {

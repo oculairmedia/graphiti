@@ -52,7 +52,7 @@ export async function inspectDuckDBSchema() {
     const pointsResult = await duckdb.query("DESCRIBE cosmograph_points");
     const pointColumns = pointsResult.toArray();
     console.log('Columns:');
-    pointColumns.forEach((col: any, idx: number) => {
+    pointColumns.forEach((col: Record<string, unknown>, idx: number) => {
       console.log(`  ${idx + 1}. ${col.column_name} (${col.column_type})`);
     });
     console.log(`Total columns: ${pointColumns.length}`);
@@ -62,7 +62,7 @@ export async function inspectDuckDBSchema() {
     const linksResult = await duckdb.query("DESCRIBE cosmograph_links");
     const linkColumns = linksResult.toArray();
     console.log('Columns:');
-    linkColumns.forEach((col: any, idx: number) => {
+    linkColumns.forEach((col: Record<string, unknown>, idx: number) => {
       console.log(`  ${idx + 1}. ${col.column_name} (${col.column_type})`);
     });
     console.log(`Total columns: ${linkColumns.length}`);
@@ -101,7 +101,7 @@ export async function inspectDuckDBSchema() {
 /**
  * Compare what we're sending vs what DuckDB expects
  */
-export function compareSchemaWithData(sampleLink: any) {
+export function compareSchemaWithData(sampleLink: Record<string, unknown>) {
   console.log('=== LINK DATA ANALYSIS ===');
   console.log('Fields we are sending:', Object.keys(sampleLink));
   console.log('Field count:', Object.keys(sampleLink).length);
@@ -135,6 +135,10 @@ export function compareSchemaWithData(sampleLink: any) {
 
 // Make them available globally for browser console
 if (typeof window !== 'undefined') {
-  (window as any).inspectDuckDBSchema = inspectDuckDBSchema;
-  (window as any).compareSchemaWithData = compareSchemaWithData;
+  const windowWithDebug = window as unknown as { 
+    inspectDuckDBSchema: typeof inspectDuckDBSchema;
+    compareSchemaWithData: typeof compareSchemaWithData;
+  };
+  windowWithDebug.inspectDuckDBSchema = inspectDuckDBSchema;
+  windowWithDebug.compareSchemaWithData = compareSchemaWithData;
 }

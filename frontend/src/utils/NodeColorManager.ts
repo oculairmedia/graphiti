@@ -39,7 +39,6 @@ export interface NodeMetrics {
   eigenvector_centrality?: number;
   cluster?: string | number;
   created_at_timestamp?: number;
-  [key: string]: any;
 }
 
 interface ColorTransition {
@@ -648,9 +647,9 @@ export class NodeColorManager {
   /**
    * Create a color function for Cosmograph
    */
-  createCosmographColorFunction(): (node: any) => string {
-    return (node: any) => {
-      return this.getNodeColor(node as NodeMetrics);
+  createCosmographColorFunction(): (node: NodeMetrics) => string {
+    return (node: NodeMetrics) => {
+      return this.getNodeColor(node);
     };
   }
 }

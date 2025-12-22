@@ -35,9 +35,9 @@ export function calculateTemporalLayout(
         timestamp = Date.now();
       }
     }
-    // Try properties (with type assertion for dynamic properties)
-    else if ((node.properties as any)?.created || (node.properties as any)?.date) {
-      const dateStr = String((node.properties as any).created || (node.properties as any).date);
+    // Try properties - NodeProperties includes created and date fields
+    else if (node.properties?.created || node.properties?.date) {
+      const dateStr = String(node.properties.created || node.properties.date);
       const date = new Date(dateStr);
       timestamp = date.getTime();
       if (isNaN(timestamp)) {

@@ -38,7 +38,11 @@ export function isSchemaDebuggingEnabled(): boolean {
   return false;
 }
 
-export async function inspectCosmographSchema(cosmographRef: any) {
+// Use a generic ref type that accepts any object with a current property
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type CosmographRefLike = { current?: any };
+
+export async function inspectCosmographSchema(cosmographRef: CosmographRefLike) {
   if (!isSchemaDebuggingEnabled()) {
     return;
   }
@@ -125,12 +129,17 @@ export function attachSchemaDebugger() {
   }
   
   if (typeof window !== 'undefined') {
-    (window as any).debugCosmographSchema = inspectCosmographSchema;
-    (window as any).enableSchemaDebug = () => {
+    const windowWithDebug = window as unknown as {
+      debugCosmographSchema: typeof inspectCosmographSchema;
+      enableSchemaDebug: () => void;
+      disableSchemaDebug: () => void;
+    };
+    windowWithDebug.debugCosmographSchema = inspectCosmographSchema;
+    windowWithDebug.enableSchemaDebug = () => {
       localStorage.setItem('debug_cosmograph_schema', 'true');
       console.log('[Schema Debug] Enabled. Refresh the page to see debug output.');
     };
-    (window as any).disableSchemaDebug = () => {
+    windowWithDebug.disableSchemaDebug = () => {
       localStorage.removeItem('debug_cosmograph_schema');
       console.log('[Schema Debug] Disabled. Refresh the page to hide debug output.');
     };
