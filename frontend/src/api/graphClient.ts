@@ -13,6 +13,24 @@ import {
   QueueStatus,
 } from './types';
 
+// API response types for centrality endpoints
+interface CentralityAllResponse {
+  scores?: Record<string, {
+    degree?: number;
+    betweenness?: number;
+    pagerank?: number;
+    eigenvector?: number;
+  }>;
+  metric?: string;
+  nodes_processed?: number;
+}
+
+interface CentralityCalculationResponse {
+  scores: Record<string, number>;
+  metric: string;
+  nodes_processed: number;
+}
+
 export class GraphClient {
   private baseUrl = '/api';
   private readonly DEFAULT_TIMEOUT = 30000; // 30 seconds
@@ -129,7 +147,7 @@ export class GraphClient {
   // Centrality endpoints
   async getNodeCentrality(nodeId: string): Promise<CentralityMetrics> {
     // For now, calculate centrality for a single node by calling the all endpoint
-    const response = await this.fetchWithError<any>(`${this.baseUrl}/centrality/all`, {
+    const response = await this.fetchWithError<CentralityAllResponse>(`${this.baseUrl}/centrality/all`, {
       method: 'POST',
       body: JSON.stringify({ 
         store_results: false 
@@ -152,7 +170,7 @@ export class GraphClient {
 
   async getBulkCentrality(nodeIds: string[]): Promise<BulkCentralityResponse> {
     // Calculate centrality for all nodes and filter results
-    const response = await this.fetchWithError<any>(`${this.baseUrl}/centrality/all`, {
+    const response = await this.fetchWithError<CentralityAllResponse>(`${this.baseUrl}/centrality/all`, {
       method: 'POST',
       body: JSON.stringify({ 
         store_results: false 
@@ -184,8 +202,8 @@ export class GraphClient {
     damping_factor?: number;
     iterations?: number;
     store_results?: boolean;
-  } = {}): Promise<any> {
-    return this.fetchWithError<any>(`${this.baseUrl}/centrality/pagerank`, {
+  } = {}): Promise<CentralityCalculationResponse> {
+    return this.fetchWithError<CentralityCalculationResponse>(`${this.baseUrl}/centrality/pagerank`, {
       method: 'POST',
       body: JSON.stringify({
         damping_factor: options.damping_factor || 0.85,
@@ -198,8 +216,8 @@ export class GraphClient {
   async calculateDegreeCentrality(options: {
     direction?: 'in' | 'out' | 'both';
     store_results?: boolean;
-  } = {}): Promise<any> {
-    return this.fetchWithError<any>(`${this.baseUrl}/centrality/degree`, {
+  } = {}): Promise<CentralityCalculationResponse> {
+    return this.fetchWithError<CentralityCalculationResponse>(`${this.baseUrl}/centrality/degree`, {
       method: 'POST',
       body: JSON.stringify({
         direction: options.direction || 'both',
@@ -211,8 +229,8 @@ export class GraphClient {
   async calculateBetweennessCentrality(options: {
     sample_size?: number;
     store_results?: boolean;
-  } = {}): Promise<any> {
-    return this.fetchWithError<any>(`${this.baseUrl}/centrality/betweenness`, {
+  } = {}): Promise<CentralityCalculationResponse> {
+    return this.fetchWithError<CentralityCalculationResponse>(`${this.baseUrl}/centrality/betweenness`, {
       method: 'POST',
       body: JSON.stringify({
         sample_size: options.sample_size,
@@ -223,9 +241,9 @@ export class GraphClient {
   
   async calculateEigenvectorCentrality(options: {
     store_results?: boolean;
-  } = {}): Promise<any> {
+  } = {}): Promise<CentralityCalculationResponse> {
     // Eigenvector centrality is calculated via the "all" endpoint
-    const result = await this.fetchWithError<any>(`${this.baseUrl}/centrality/all`, {
+    const result = await this.fetchWithError<CentralityAllResponse>(`${this.baseUrl}/centrality/all`, {
       method: 'POST',
       body: JSON.stringify({
         store_results: options.store_results || false,
@@ -238,9 +256,8 @@ export class GraphClient {
     
     if (result.scores) {
       for (const [nodeId, scores] of Object.entries(result.scores)) {
-        const nodeScores = scores as Record<string, number>;
-        if (nodeScores.eigenvector !== undefined) {
-          eigenvectorScores[nodeId] = nodeScores.eigenvector;
+        if (scores.eigenvector !== undefined) {
+          eigenvectorScores[nodeId] = scores.eigenvector;
           totalNodes++;
         }
       }
@@ -255,8 +272,8 @@ export class GraphClient {
 
   async calculateAllCentralities(options: {
     store_results?: boolean;
-  } = {}): Promise<any> {
-    return this.fetchWithError<any>(`${this.baseUrl}/centrality/all`, {
+  } = {}): Promise<CentralityAllResponse> {
+    return this.fetchWithError<CentralityAllResponse>(`${this.baseUrl}/centrality/all`, {
       method: 'POST',
       body: JSON.stringify({
         store_results: options.store_results || false,

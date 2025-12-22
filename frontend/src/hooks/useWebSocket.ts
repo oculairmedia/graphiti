@@ -8,12 +8,14 @@ export interface NodeAccessEvent {
   query?: string;
 }
 
+import { GraphNode, GraphLink } from '../types/graph';
+
 export interface GraphUpdateEvent {
   type: 'graph:update';
   data: {
     operation: 'add_nodes' | 'add_edges' | 'update_nodes' | 'delete_nodes' | 'delete_edges';
-    nodes?: any[];
-    edges?: any[];
+    nodes?: GraphNode[];
+    edges?: GraphLink[];
     timestamp: number;
   };
 }
@@ -22,8 +24,8 @@ export interface DeltaUpdateEvent {
   type: 'graph:delta';
   data: {
     operation: 'add' | 'update' | 'delete';
-    nodes?: Partial<any>[];
-    edges?: Partial<any>[];
+    nodes?: Partial<GraphNode>[];
+    edges?: Partial<GraphLink>[];
     timestamp: number;
     version?: string;
     batch_id?: string;
@@ -41,8 +43,9 @@ export interface CacheInvalidateEvent {
 
 export interface WebSocketMessage {
   type: string;
-  data?: any;
-  [key: string]: any;
+  data?: unknown;
+  batch_id?: string;
+  [key: string]: unknown;
 }
 
 export type WebSocketEvent = NodeAccessEvent | GraphUpdateEvent | DeltaUpdateEvent | CacheInvalidateEvent;
@@ -159,7 +162,7 @@ export const useWebSocket = ({
               data.type === 'cache:invalidate') {
             
             // Check if this is part of a batch
-            if ((data as any).batch_id) {
+            if (data.batch_id) {
               // Add to batch queue
               batchQueueRef.current.push(data as WebSocketEvent);
               

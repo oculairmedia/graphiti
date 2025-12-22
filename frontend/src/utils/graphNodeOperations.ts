@@ -223,11 +223,19 @@ export function groupNodesByProperty(nodes: GraphNode[], property: string): Map<
   return groups;
 }
 
+// Minimal link interface for degree calculations
+interface MinimalLink {
+  source?: string | number;
+  target?: string | number;
+  from?: string | number;
+  to?: string | number;
+}
+
 /**
  * Calculate node degree (number of connections)
  * Note: This requires link information, so it's a utility that needs both nodes and links
  */
-export function calculateNodeDegrees(nodes: GraphNode[], links: any[]): Map<string, number> {
+export function calculateNodeDegrees(nodes: GraphNode[], links: MinimalLink[]): Map<string, number> {
   const degrees = new Map<string, number>();
   
   // Initialize all nodes with 0 degree
@@ -248,7 +256,7 @@ export function calculateNodeDegrees(nodes: GraphNode[], links: any[]): Map<stri
 /**
  * Find isolated nodes (nodes with no connections)
  */
-export function findIsolatedNodes(nodes: GraphNode[], links: any[]): GraphNode[] {
+export function findIsolatedNodes(nodes: GraphNode[], links: MinimalLink[]): GraphNode[] {
   const connectedNodes = new Set<string>();
   
   links.forEach(link => {
@@ -259,25 +267,32 @@ export function findIsolatedNodes(nodes: GraphNode[], links: any[]): GraphNode[]
   return nodes.filter(node => !connectedNodes.has(node.id));
 }
 
+// Unknown node type for validation
+interface UnknownNode {
+  id?: unknown;
+  [key: string]: unknown;
+}
+
 /**
- * Validate node data
+ * Type guard to check if a value is a valid GraphNode
  */
-export function validateNode(node: any): boolean {
+export function validateNode(node: unknown): node is GraphNode {
+  if (!node || typeof node !== 'object') return false;
+  const n = node as UnknownNode;
   return !!(
-    node &&
-    node.id &&
-    node.id !== 'undefined' &&
-    node.id !== 'null' &&
-    typeof node.id === 'string'
+    n.id &&
+    n.id !== 'undefined' &&
+    n.id !== 'null' &&
+    typeof n.id === 'string'
   );
 }
 
 /**
  * Batch validate nodes
  */
-export function validateNodes(nodes: any[]): { valid: any[], invalid: any[] } {
-  const valid: any[] = [];
-  const invalid: any[] = [];
+export function validateNodes(nodes: unknown[]): { valid: GraphNode[], invalid: unknown[] } {
+  const valid: GraphNode[] = [];
+  const invalid: unknown[] = [];
   
   nodes.forEach(node => {
     if (validateNode(node)) {

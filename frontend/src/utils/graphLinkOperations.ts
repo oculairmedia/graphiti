@@ -333,15 +333,25 @@ export function createAdjacencyList(links: GraphLink[]): Map<string, Set<string>
   return adjacencyList;
 }
 
+// Unknown link type for validation
+interface UnknownLink {
+  source?: unknown;
+  target?: unknown;
+  from?: unknown;
+  to?: unknown;
+  [key: string]: unknown;
+}
+
 /**
- * Validate link data
+ * Type guard to check if a value is a valid GraphLink
  */
-export function validateLink(link: any): boolean {
-  const source = link?.source || link?.from;
-  const target = link?.target || link?.to;
+export function validateLink(link: unknown): link is GraphLink {
+  if (!link || typeof link !== 'object') return false;
+  const l = link as UnknownLink;
+  const source = l.source || l.from;
+  const target = l.target || l.to;
   
   return !!(
-    link &&
     source &&
     target &&
     source !== 'undefined' &&
@@ -356,9 +366,9 @@ export function validateLink(link: any): boolean {
 /**
  * Batch validate links
  */
-export function validateLinks(links: any[]): { valid: any[], invalid: any[] } {
-  const valid: any[] = [];
-  const invalid: any[] = [];
+export function validateLinks(links: unknown[]): { valid: GraphLink[], invalid: unknown[] } {
+  const valid: GraphLink[] = [];
+  const invalid: unknown[] = [];
   
   links.forEach(link => {
     if (validateLink(link)) {

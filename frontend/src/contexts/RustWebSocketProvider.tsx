@@ -6,20 +6,70 @@ const log = isDev ? console.log.bind(console) : () => {};
 const logWarn = isDev ? console.warn.bind(console) : () => {};
 const logError = console.error.bind(console); // Always log errors
 
+// Import shared types
+import { GraphNode, GraphLink } from '../types/graph';
+
+// DeltaUpdate uses the common GraphNode and GraphLink types
+// to ensure compatibility with consumers
 interface DeltaUpdate {
   type: 'graph:delta' | 'graph:update';
   data: {
     operation: 'add' | 'update' | 'delete';
-    nodes?: any[];
-    edges?: any[];
+    nodes?: GraphNode[];
+    edges?: GraphLink[];
     timestamp: number;
   };
+}
+
+// WebSocket message payload
+interface WebSocketMessage {
+  type: string;
+  [key: string]: unknown;
+}
+
+// Raw message types from Rust server
+interface RawGraphDeltaMessage {
+  type: 'graph:delta';
+  data: {
+    nodes_added?: GraphNode[];
+    edges_added?: GraphLink[];
+    nodes_removed?: GraphNode[];
+    edges_removed?: GraphLink[];
+    timestamp?: number;
+  };
+}
+
+interface RawGraphUpdateMessage {
+  type: 'graph:update';
+  data: {
+    nodes?: GraphNode[];
+    edges?: GraphLink[];
+    timestamp?: number;
+  };
+}
+
+type RawServerMessage = RawGraphDeltaMessage | RawGraphUpdateMessage | { type: string; [key: string]: unknown };
+
+// Debug info stored on window
+interface RustWebSocketDebug {
+  isConnected: boolean;
+  url?: string;
+  readyState?: number;
+  reconnectCount?: number;
+  lastError?: { error: unknown; timestamp: string; url: string };
+  lastClose?: { code: number; reason: string; wasClean: boolean; timestamp: string };
+}
+
+declare global {
+  interface Window {
+    rustWebSocket?: RustWebSocketDebug;
+  }
 }
 
 interface RustWebSocketContextType {
   isConnected: boolean;
   subscribe: (callback: (update: DeltaUpdate) => void) => () => void;
-  sendMessage: (message: any) => void;
+  sendMessage: (message: WebSocketMessage) => void;
 }
 
 const RustWebSocketContext = createContext<RustWebSocketContextType | null>(null);
@@ -101,7 +151,7 @@ export function RustWebSocketProvider({ children }: { children: React.ReactNode 
         
         // Make connection status available globally for debugging
         if (typeof window !== 'undefined') {
-          (window as any).rustWebSocket = {
+          window.rustWebSocket = {
             isConnected: true,
             url: rustWsUrl,
             readyState: ws.readyState,
@@ -140,7 +190,7 @@ export function RustWebSocketProvider({ children }: { children: React.ReactNode 
 
       ws.onmessage = (event) => {
         try {
-          const message = JSON.parse(event.data);
+          const message = JSON.parse(event.data) as RawServerMessage;
           // Handle subscription confirmation
           if (message.type === 'subscribed:deltas') {
             log('[RustWebSocketProvider] Delta subscription confirmed');
@@ -154,11 +204,12 @@ export function RustWebSocketProvider({ children }: { children: React.ReactNode 
           // Handle both graph:delta and graph:update message types
           else if (message.type === 'graph:delta' || message.type === 'graph:update') {
             // Handle GraphDelta format from Rust server
-            if (message.type === 'graph:delta' && message.data) {
-              const data = message.data;
+            if (message.type === 'graph:delta') {
+              const deltaMsg = message as RawGraphDeltaMessage;
+              const data = deltaMsg.data;
               
               // Send added nodes/edges - THIS IS THE IMPORTANT ONE FOR REAL-TIME
-              if ((data.nodes_added?.length > 0) || (data.edges_added?.length > 0)) {
+              if ((data.nodes_added?.length ?? 0) > 0 || (data.edges_added?.length ?? 0) > 0) {
                 const addMessage: DeltaUpdate = {
                   type: 'graph:delta' as const,
                   data: {
@@ -175,7 +226,7 @@ export function RustWebSocketProvider({ children }: { children: React.ReactNode 
               // We only care about new nodes/edges being added
               
               // Send removed nodes/edges
-              if ((data.nodes_removed?.length > 0) || (data.edges_removed?.length > 0)) {
+              if ((data.nodes_removed?.length ?? 0) > 0 || (data.edges_removed?.length ?? 0) > 0) {
                 const deleteMessage: DeltaUpdate = {
                   type: 'graph:delta' as const,
                   data: {
@@ -189,14 +240,15 @@ export function RustWebSocketProvider({ children }: { children: React.ReactNode 
               }
             }
             // Handle GraphUpdate format (fallback)
-            else if (message.type === 'graph:update' && message.data) {
-              const deltaMessage = {
+            else if (message.type === 'graph:update') {
+              const updateMsg = message as RawGraphUpdateMessage;
+              const deltaMessage: DeltaUpdate = {
                 type: 'graph:delta' as const,
                 data: {
                   operation: 'update' as const,
-                  nodes: message.data.nodes || [],
-                  edges: message.data.edges || [],
-                  timestamp: message.data.timestamp || Date.now()
+                  nodes: updateMsg.data.nodes || [],
+                  edges: updateMsg.data.edges || [],
+                  timestamp: updateMsg.data.timestamp || Date.now()
                 }
               };
               subscribersRef.current.forEach(callback => callback(deltaMessage));
@@ -213,8 +265,8 @@ export function RustWebSocketProvider({ children }: { children: React.ReactNode 
         
         // Update global debug info
         if (typeof window !== 'undefined') {
-          (window as any).rustWebSocket = {
-            ...((window as any).rustWebSocket || {}),
+          window.rustWebSocket = {
+            ...(window.rustWebSocket || { isConnected: false }),
             lastError: { error, timestamp: new Date().toISOString(), url: rustWsUrl },
             isConnected: false
           };
@@ -229,8 +281,8 @@ export function RustWebSocketProvider({ children }: { children: React.ReactNode 
         
         // Update global debug info
         if (typeof window !== 'undefined') {
-          (window as any).rustWebSocket = {
-            ...((window as any).rustWebSocket || {}),
+          window.rustWebSocket = {
+            ...(window.rustWebSocket || { isConnected: false }),
             isConnected: false,
             lastClose: { 
               code: event.code, 
@@ -311,7 +363,7 @@ export function RustWebSocketProvider({ children }: { children: React.ReactNode 
     };
   }, []);
 
-  const sendMessage = useCallback((message: any) => {
+  const sendMessage = useCallback((message: WebSocketMessage) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify(message));
     } else {

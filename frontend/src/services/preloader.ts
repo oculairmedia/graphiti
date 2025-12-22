@@ -3,16 +3,39 @@
  * This reduces perceived load time by parallelizing network requests with JS parsing
  */
 
+// Config type for graph visualization settings
+interface PreloadConfig {
+  defaultConfig?: boolean;
+  [key: string]: unknown;
+}
+
 interface PreloadedData {
   nodes: ArrayBuffer | null;
   edges: ArrayBuffer | null;
-  config: any | null;
+  config: PreloadConfig | null;
   timestamp: number;
 }
 
+// Extend Window interface for preload cache
+interface PreloadCache {
+  nodes?: ArrayBuffer;
+  edges?: ArrayBuffer;
+  nodesPromise?: Promise<ArrayBuffer>;
+  edgesPromise?: Promise<ArrayBuffer>;
+}
+
+declare global {
+  interface Window {
+    __PRELOAD_CACHE__?: PreloadCache;
+  }
+}
+
+// Union type for all preloadable data
+type PreloadableData = ArrayBuffer | PreloadConfig | string;
+
 class PreloaderService {
   private static instance: PreloaderService;
-  private preloadPromises: Map<string, Promise<any>> = new Map();
+  private preloadPromises: Map<string, Promise<PreloadableData>> = new Map();
   private preloadedData: PreloadedData = {
     nodes: null,
     edges: null,
@@ -50,8 +73,8 @@ class PreloaderService {
    */
   startPreloading(): void {
     // Check if data was already preloaded in HTML
-    if ((window as any).__PRELOAD_CACHE__) {
-      const cache = (window as any).__PRELOAD_CACHE__;
+    if (window.__PRELOAD_CACHE__) {
+      const cache = window.__PRELOAD_CACHE__;
       
       // If we have cached data, use it directly
       if (cache.nodes) {
@@ -132,7 +155,7 @@ class PreloaderService {
     key: string,
     url: string,
     responseType: 'arrayBuffer' | 'json' | 'text'
-  ): Promise<any> {
+  ): Promise<ArrayBuffer | PreloadConfig | string> {
     try {
       // Add cache-busting timestamp
       const cacheBuster = url.includes('?') ? `&t=${Date.now()}` : `?t=${Date.now()}`;
@@ -147,20 +170,20 @@ class PreloaderService {
         },
         cache: 'no-cache',
         // Use high priority for critical resources
-        priority: 'high' as any
+        priority: 'high' as RequestInit['priority']
       });
       
       if (!response.ok) {
         throw new Error(`Failed to fetch ${key}: ${response.statusText}`);
       }
       
-      let data: any;
+      let data: ArrayBuffer | PreloadConfig | string;
       switch (responseType) {
         case 'arrayBuffer':
           data = await response.arrayBuffer();
           break;
         case 'json':
-          data = await response.json();
+          data = await response.json() as PreloadConfig;
           break;
         case 'text':
           data = await response.text();
@@ -168,9 +191,11 @@ class PreloaderService {
       }
       
       // Store in preloaded data
-      if (key === 'nodes' || key === 'edges') {
-        (this.preloadedData as any)[key] = data;
-      } else if (key === 'config') {
+      if (key === 'nodes' && data instanceof ArrayBuffer) {
+        this.preloadedData.nodes = data;
+      } else if (key === 'edges' && data instanceof ArrayBuffer) {
+        this.preloadedData.edges = data;
+      } else if (key === 'config' && typeof data === 'object' && !(data instanceof ArrayBuffer)) {
         this.preloadedData.config = data;
       }
       
@@ -187,7 +212,7 @@ class PreloaderService {
   /**
    * Get preloaded data (returns promise that resolves when data is ready)
    */
-  async getPreloadedData(key: 'nodes' | 'edges' | 'config'): Promise<any> {
+  async getPreloadedData(key: 'nodes' | 'edges' | 'config'): Promise<PreloadableData | null> {
     const promise = this.preloadPromises.get(key);
     if (promise) {
       try {
@@ -205,16 +230,18 @@ class PreloaderService {
    */
   async getAllPreloadedData(): Promise<PreloadedData> {
     try {
-      const [nodes, edges, config] = await Promise.all([
+      const [nodesData, edgesData, configData] = await Promise.all([
         this.getPreloadedData('nodes'),
         this.getPreloadedData('edges'),
         this.getPreloadedData('config')
       ]);
       
       return {
-        nodes,
-        edges,
-        config,
+        nodes: nodesData instanceof ArrayBuffer ? nodesData : null,
+        edges: edgesData instanceof ArrayBuffer ? edgesData : null,
+        config: configData && typeof configData === 'object' && !(configData instanceof ArrayBuffer) 
+          ? configData as PreloadConfig 
+          : null,
         timestamp: this.preloadedData.timestamp
       };
     } catch (error) {

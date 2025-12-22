@@ -45,15 +45,18 @@ export function throttle<T extends (...args: unknown[]) => unknown>(
   };
 }
 
+// Queue item type
+interface QueueItem<T = unknown> {
+  request: () => Promise<T>;
+  priority: number;
+  timestamp: number;
+  resolve: (value: T) => void;
+  reject: (error: unknown) => void;
+}
+
 // Request queue with priority and deduplication
 export class RequestQueue {
-  private queue: Map<string, {
-    request: () => Promise<any>,
-    priority: number,
-    timestamp: number,
-    resolve: (value: any) => void,
-    reject: (error: any) => void
-  }> = new Map();
+  private queue: Map<string, QueueItem> = new Map();
   
   private processing = false;
   private maxConcurrent: number;
@@ -80,7 +83,7 @@ export class RequestQueue {
         const originalResolve = existing.resolve;
         existing.resolve = (value) => {
           originalResolve(value);
-          resolve(value);
+          resolve(value as T);
         };
       });
     }
@@ -107,7 +110,7 @@ export class RequestQueue {
     
     while (this.queue.size > 0 && this.activeRequests < this.maxConcurrent) {
       // Get highest priority item
-      let nextItem: any = null;
+      let nextItem: QueueItem | null = null;
       let nextKey: string = '';
       
       for (const [key, item] of this.queue) {
@@ -149,13 +152,16 @@ export class RequestQueue {
   }
 }
 
+// Batch item type
+interface BatchItem<T, R> {
+  item: T;
+  resolve: (value: R) => void;
+  reject: (error: unknown) => void;
+}
+
 // Batch requests for efficiency
 export class BatchProcessor<T, R> {
-  private batch: Map<string, {
-    item: T,
-    resolve: (value: R) => void,
-    reject: (error: any) => void
-  }> = new Map();
+  private batch: Map<string, BatchItem<T, R>> = new Map();
   
   private timer: NodeJS.Timeout | null = null;
   private batchSize: number;
@@ -208,7 +214,7 @@ export class BatchProcessor<T, R> {
         if (result !== undefined) {
           resolve(result);
         } else {
-          resolve(null as any);
+          resolve(null as unknown as R);
         }
       }
     } catch (error) {
@@ -329,7 +335,7 @@ export class MemoryCache<T> {
     }
   }
   
-  private estimateSize(data: any): number {
+  private estimateSize(data: T): number {
     // Rough estimation
     return JSON.stringify(data).length * 2; // 2 bytes per character
   }
