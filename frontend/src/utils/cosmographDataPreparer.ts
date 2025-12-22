@@ -21,7 +21,7 @@ export interface DataPrepConfig {
 }
 
 // Compute node size based on the selected sizing strategy (copied from useGraphDataQuery)
-export function computeSizeFromStrategy(node: any, config: DataPrepConfig): number {
+export function computeSizeFromStrategy(node: GraphNode, config: DataPrepConfig): number {
   // Return normalized value (0-1 range) - renderer will handle scaling
   switch (config.sizeMapping) {
     case 'degree':
@@ -49,7 +49,7 @@ export function computeSizeFromStrategy(node: any, config: DataPrepConfig): numb
 /**
  * Sanitize a value to ensure it's a primitive type
  */
-function sanitizeValue(value: any): any {
+function sanitizeValue(value: unknown): string | number | boolean | null {
   // Handle null/undefined
   if (value === null || value === undefined) {
     return null;
@@ -72,9 +72,10 @@ function sanitizeValue(value: any): any {
   // Handle objects - convert to string representation
   if (typeof value === 'object') {
     // Try to extract a meaningful value
-    if (value.id) return String(value.id);
-    if (value.name) return String(value.name);
-    if (value.label) return String(value.label);
+    const obj = value as Record<string, unknown>;
+    if (obj.id) return String(obj.id);
+    if (obj.name) return String(obj.name);
+    if (obj.label) return String(obj.label);
     // Otherwise return type name
     return Object.prototype.toString.call(value);
   }
@@ -86,7 +87,12 @@ function sanitizeValue(value: any): any {
   }
   
   // Return primitive values as-is
-  return value;
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return value;
+  }
+  
+  // Fallback for other types
+  return String(value);
 }
 
 /**

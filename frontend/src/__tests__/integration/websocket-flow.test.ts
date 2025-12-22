@@ -455,7 +455,7 @@ describe('WebSocket Integration Flow', () => {
           { id: 'n2', name: 'Node 2', node_type: 'test' }
         ],
         added_edges: [
-          { source: 'n1', target: 'n2', name: 'Edge 1' }
+          { from: 'n1', to: 'n2', source: 'n1', target: 'n2', edge_type: 'Edge 1' }
         ],
         updated_nodes: [],
         updated_edges: [],
@@ -706,9 +706,11 @@ describe('WebSocket Integration Flow', () => {
           node_type: 'test'
         })),
         added_edges: Array.from({ length: 2000 }, (_, i) => ({
+          from: `n${i % 1000}`,
+          to: `n${(i + 1) % 1000}`,
           source: `n${i % 1000}`,
           target: `n${(i + 1) % 1000}`,
-          name: `Edge ${i}`
+          edge_type: `Edge ${i}`
         })),
         updated_nodes: [],
         updated_edges: [],

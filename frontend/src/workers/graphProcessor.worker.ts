@@ -5,21 +5,42 @@
 
 import * as arrow from 'apache-arrow';
 
+// Worker-specific node type (simplified for worker context)
+interface WorkerNode {
+  id: string;
+  label?: string;
+  name?: string;
+  node_type?: string;
+  summary?: string;
+  created_at?: string;
+  properties?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+interface NodeFilters {
+  nodeTypes?: string[];
+  minDegree?: number;
+  maxDegree?: number;
+  startDate?: string;
+  endDate?: string;
+  search?: string;
+}
+
 interface WorkerMessage {
   type: 'PROCESS_ARROW' | 'FILTER_NODES' | 'CALCULATE_LAYOUT' | 'BUILD_SPATIAL_INDEX' | 'TRANSFORM_DATA';
-  payload: any;
+  payload: unknown;
   id: string;
 }
 
 interface WorkerResponse {
   type: string;
-  result?: any;
+  result?: unknown;
   error?: string;
   id: string;
 }
 
 // Node filtering logic
-function filterNodes(nodes: any[], filters: any): any[] {
+function filterNodes(nodes: WorkerNode[], filters: NodeFilters): WorkerNode[] {
   return nodes.filter(node => {
     // Type filter
     if (filters.nodeTypes?.length > 0 && !filters.nodeTypes.includes(node.node_type)) {
@@ -28,14 +49,15 @@ function filterNodes(nodes: any[], filters: any): any[] {
 
     // Degree filter
     if (filters.minDegree !== undefined || filters.maxDegree !== undefined) {
-      const degree = node.properties?.degree_centrality || 0;
+      const degree = Number(node.properties?.degree_centrality || 0);
       if (filters.minDegree !== undefined && degree < filters.minDegree) return false;
       if (filters.maxDegree !== undefined && degree > filters.maxDegree) return false;
     }
 
     // Date range filter
     if (filters.startDate || filters.endDate) {
-      const nodeDate = new Date(node.created_at || node.properties?.created || 0);
+      const dateValue = node.created_at || String(node.properties?.created || 0);
+      const nodeDate = new Date(dateValue);
       if (filters.startDate && nodeDate < new Date(filters.startDate)) return false;
       if (filters.endDate && nodeDate > new Date(filters.endDate)) return false;
     }
@@ -54,11 +76,32 @@ function filterNodes(nodes: any[], filters: any): any[] {
   });
 }
 
+// Arrow row type
+interface ArrowRow {
+  id?: string;
+  label?: string;
+  name?: string;
+  node_type?: string;
+  type?: string;
+  degree_centrality?: number;
+  degree?: number;
+  pagerank?: number;
+  betweenness?: number;
+  created_at?: string;
+  source?: string;
+  from?: string;
+  target?: string;
+  to?: string;
+  edge_type?: string;
+  weight?: number;
+  [key: string]: unknown;
+}
+
 // Process Arrow format data
-function processArrowData(buffer: ArrayBuffer): { nodes: any[], edges: any[] } {
+function processArrowData(buffer: ArrayBuffer): { nodes: WorkerNode[], edges: Record<string, unknown>[] } {
   try {
     const table = arrow.tableFromIPC(new Uint8Array(buffer));
-    const data = table.toArray();
+    const data = table.toArray() as ArrowRow[];
     
     // Determine if this is nodes or edges based on schema
     const schema = table.schema;
@@ -67,7 +110,7 @@ function processArrowData(buffer: ArrayBuffer): { nodes: any[], edges: any[] } {
     if (hasNodeFields) {
       // Process as nodes
       return {
-        nodes: data.map((row: any) => ({
+        nodes: data.map((row: ArrowRow) => ({
           id: row.id,
           label: row.label || row.name || row.id,
           node_type: row.node_type || row.type || 'Unknown',
@@ -85,7 +128,7 @@ function processArrowData(buffer: ArrayBuffer): { nodes: any[], edges: any[] } {
       // Process as edges
       return {
         nodes: [],
-        edges: data.map((row: any) => ({
+        edges: data.map((row: ArrowRow) => ({
           source: row.source || row.from,
           target: row.target || row.to,
           edge_type: row.edge_type || row.type || 'RELATED',
@@ -100,8 +143,21 @@ function processArrowData(buffer: ArrayBuffer): { nodes: any[], edges: any[] } {
   }
 }
 
+interface LayoutOptions {
+  iterations?: number;
+  repulsion?: number;
+  attraction?: number;
+}
+
+interface EdgeLike {
+  source?: string;
+  from?: string;
+  target?: string;
+  to?: string;
+}
+
 // Calculate force-directed layout (simplified)
-function calculateLayout(nodes: any[], edges: any[], options: any = {}): Map<string, { x: number, y: number }> {
+function calculateLayout(nodes: WorkerNode[], edges: EdgeLike[], options: LayoutOptions = {}): Map<string, { x: number, y: number }> {
   const positions = new Map<string, { x: number, y: number }>();
   
   // Initialize random positions
@@ -193,8 +249,14 @@ function calculateLayout(nodes: any[], edges: any[], options: any = {}): Map<str
   return positions;
 }
 
+interface SpatialIndex {
+  bounds: { minX: number; maxX: number; minY: number; maxY: number };
+  nodes: Array<WorkerNode & { position?: { x: number; y: number } }>;
+  depth: number;
+}
+
 // Build spatial index (simplified quadtree)
-function buildSpatialIndex(nodes: any[], positions: Map<string, { x: number, y: number }>): any {
+function buildSpatialIndex(nodes: WorkerNode[], positions: Map<string, { x: number, y: number }>): SpatialIndex {
   // Calculate bounds
   let minX = Infinity, maxX = -Infinity;
   let minY = Infinity, maxY = -Infinity;
@@ -222,26 +284,45 @@ function buildSpatialIndex(nodes: any[], positions: Map<string, { x: number, y: 
   return quadtree;
 }
 
+interface TransformOptions {
+  includeStats?: boolean;
+}
+
+interface TransformInput {
+  nodes: WorkerNode[];
+  edges: EdgeLike[];
+}
+
+interface TransformOutput {
+  nodes: WorkerNode[];
+  edges: Array<EdgeLike & { sourceIndex?: number; targetIndex?: number }>;
+  stats: { nodeCount: number; edgeCount: number; density: number };
+}
+
 // Transform data for visualization
-function transformData(data: any, options: any = {}): any {
+function transformData(data: TransformInput, options: TransformOptions = {}): TransformOutput {
   const { nodes, edges } = data;
   
   // Add indices for fast lookup
-  const nodeIndex = new Map(nodes.map((n: any, i: number) => [n.id, i]));
+  const nodeIndex = new Map(nodes.map((n: WorkerNode, i: number) => [n.id, i]));
   
   // Transform edges to use indices
-  const transformedEdges = edges.map((e: any) => ({
+  const transformedEdges = edges.map((e: EdgeLike) => ({
     ...e,
     sourceIndex: nodeIndex.get(e.source),
     targetIndex: nodeIndex.get(e.target)
   }));
 
   // Calculate statistics
+  const nodeCount = nodes.length;
+  const edgeCount = edges.length;
+  const maxPossibleEdges = nodeCount * (nodeCount - 1);
+  const density = maxPossibleEdges > 0 ? edgeCount / maxPossibleEdges : 0;
+  
   const stats = {
-    nodeCount: nodes.length,
-    edgeCount: edges.length,
-    nodeTypes: new Set(nodes.map((n: any) => n.node_type)).size,
-    avgDegree: edges.length > 0 ? (edges.length * 2) / nodes.length : 0
+    nodeCount,
+    edgeCount,
+    density
   };
 
   return {
@@ -251,39 +332,75 @@ function transformData(data: any, options: any = {}): any {
   };
 }
 
+// Payload types for type-safe message handling
+interface ProcessArrowPayload {
+  buffer: ArrayBuffer;
+}
+
+interface FilterNodesPayload {
+  nodes: WorkerNode[];
+  filters: NodeFilters;
+}
+
+interface CalculateLayoutPayload {
+  nodes: WorkerNode[];
+  edges: EdgeLike[];
+  options?: LayoutOptions;
+}
+
+interface BuildSpatialIndexPayload {
+  nodes: WorkerNode[];
+  positions: Record<string, { x: number; y: number }>;
+}
+
+interface TransformDataPayload {
+  data: TransformInput;
+  options?: TransformOptions;
+}
+
 // Message handler
 self.addEventListener('message', async (event: MessageEvent<WorkerMessage>) => {
   const { type, payload, id } = event.data;
   
   try {
-    let result: any;
+    let result: unknown;
     
     switch (type) {
-      case 'PROCESS_ARROW':
-        result = processArrowData(payload.buffer);
+      case 'PROCESS_ARROW': {
+        const typedPayload = payload as ProcessArrowPayload;
+        result = processArrowData(typedPayload.buffer);
         break;
+      }
         
-      case 'FILTER_NODES':
-        result = filterNodes(payload.nodes, payload.filters);
+      case 'FILTER_NODES': {
+        const typedPayload = payload as FilterNodesPayload;
+        result = filterNodes(typedPayload.nodes, typedPayload.filters);
         break;
+      }
         
-      case 'CALCULATE_LAYOUT':
-        result = calculateLayout(payload.nodes, payload.edges, payload.options);
+      case 'CALCULATE_LAYOUT': {
+        const typedPayload = payload as CalculateLayoutPayload;
+        const layoutResult = calculateLayout(typedPayload.nodes, typedPayload.edges, typedPayload.options);
         // Convert Map to plain object for serialization
-        const layoutObj: any = {};
-        result.forEach((pos: any, nodeId: string) => {
+        const layoutObj: Record<string, { x: number; y: number }> = {};
+        layoutResult.forEach((pos, nodeId) => {
           layoutObj[nodeId] = pos;
         });
         result = layoutObj;
         break;
+      }
         
-      case 'BUILD_SPATIAL_INDEX':
-        result = buildSpatialIndex(payload.nodes, new Map(Object.entries(payload.positions)));
+      case 'BUILD_SPATIAL_INDEX': {
+        const typedPayload = payload as BuildSpatialIndexPayload;
+        result = buildSpatialIndex(typedPayload.nodes, new Map(Object.entries(typedPayload.positions)));
         break;
+      }
         
-      case 'TRANSFORM_DATA':
-        result = transformData(payload.data, payload.options);
+      case 'TRANSFORM_DATA': {
+        const typedPayload = payload as TransformDataPayload;
+        result = transformData(typedPayload.data, typedPayload.options);
         break;
+      }
         
       default:
         throw new Error(`Unknown message type: ${type}`);

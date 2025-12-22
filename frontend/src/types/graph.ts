@@ -59,6 +59,7 @@ export interface GraphNode {
   // Top-level centrality metrics (hoisted from properties for clustering access)
   degree_centrality?: number;
   pagerank?: number;
+  pagerank_centrality?: number;  // Alternative naming used by some APIs
   betweenness_centrality?: number;
   eigenvector_centrality?: number;
   

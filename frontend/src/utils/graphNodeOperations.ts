@@ -3,7 +3,7 @@
  * Pure functions for node manipulation and transformation
  */
 
-import { GraphNode } from '../types/graph';
+import { GraphNode, TransformedGraphNode } from '../types/graph';
 
 /**
  * Transform raw nodes into Cosmograph-compatible format
@@ -30,7 +30,7 @@ export function transformNodeForCosmograph(node: GraphNode, arrayIndex: number) 
 /**
  * Batch transform nodes for Cosmograph
  */
-export function transformNodesForCosmograph(nodes: GraphNode[]): any[] {
+export function transformNodesForCosmograph(nodes: GraphNode[]): TransformedGraphNode[] {
   if (!nodes || nodes.length === 0) return [];
   
   return nodes.map((node, index) => transformNodeForCosmograph(node, index));
@@ -39,14 +39,14 @@ export function transformNodesForCosmograph(nodes: GraphNode[]): any[] {
 /**
  * Filter out invalid nodes
  */
-export function filterValidNodes(nodes: any[]): any[] {
+export function filterValidNodes<T extends { id?: string }>(nodes: T[]): T[] {
   return nodes.filter(node => node.id && node.id !== 'undefined');
 }
 
 /**
  * Create node index map for quick lookup
  */
-export function createNodeIndexMap(nodes: any[]): Map<string, number> {
+export function createNodeIndexMap<T extends { id: string }>(nodes: T[]): Map<string, number> {
   const map = new Map<string, number>();
   nodes.forEach((node, index) => {
     map.set(String(node.id), index);
@@ -205,11 +205,15 @@ export function findNodesInTimeRange(nodes: GraphNode[], startTime: number, endT
 /**
  * Group nodes by property
  */
-export function groupNodesByProperty(nodes: GraphNode[], property: string): Map<any, GraphNode[]> {
-  const groups = new Map<any, GraphNode[]>();
+export function groupNodesByProperty(nodes: GraphNode[], property: string): Map<string | number, GraphNode[]> {
+  const groups = new Map<string | number, GraphNode[]>();
   
   nodes.forEach(node => {
-    const value = (node as any)[property] || node.properties?.[property] || 'Unknown';
+    // Access property from node directly or from properties sub-object
+    const nodeAny = node as unknown as Record<string, unknown>;
+    const rawValue = nodeAny[property] ?? node.properties?.[property] ?? 'Unknown';
+    // Convert to string or number for map key
+    const value: string | number = typeof rawValue === 'number' ? rawValue : String(rawValue);
     if (!groups.has(value)) {
       groups.set(value, []);
     }

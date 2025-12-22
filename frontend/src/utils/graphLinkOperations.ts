@@ -3,7 +3,7 @@
  * Pure functions for link manipulation and transformation
  */
 
-import { GraphLink } from '../types/graph';
+import { GraphLink, TransformedGraphLink } from '../types/graph';
 
 /**
  * Transform raw link for Cosmograph
@@ -27,7 +27,7 @@ export function transformLinkForCosmograph(link: GraphLink, nodeIndexMap: Map<st
 /**
  * Batch transform links for Cosmograph
  */
-export function transformLinksForCosmograph(links: GraphLink[], nodeIndexMap: Map<string, number>): any[] {
+export function transformLinksForCosmograph(links: GraphLink[], nodeIndexMap: Map<string, number>): TransformedGraphLink[] {
   if (!links || links.length === 0) return [];
   
   return links.map(link => transformLinkForCosmograph(link, nodeIndexMap))
@@ -37,7 +37,7 @@ export function transformLinksForCosmograph(links: GraphLink[], nodeIndexMap: Ma
 /**
  * Filter out invalid links (missing nodes)
  */
-export function filterValidLinks(links: any[], nodeIds: Set<string>): any[] {
+export function filterValidLinks<T extends { source?: string; from?: string; target?: string; to?: string }>(links: T[], nodeIds: Set<string>): T[] {
   return links.filter(link => {
     const source = String(link.source || link.from);
     const target = String(link.target || link.to);
@@ -290,11 +290,14 @@ export function findLinksInTimeRange(links: GraphLink[], startTime: number, endT
 /**
  * Group links by property
  */
-export function groupLinksByProperty(links: GraphLink[], property: string): Map<any, GraphLink[]> {
-  const groups = new Map<any, GraphLink[]>();
+export function groupLinksByProperty(links: GraphLink[], property: string): Map<string | number, GraphLink[]> {
+  const groups = new Map<string | number, GraphLink[]>();
   
   links.forEach(link => {
-    const value = (link as any)[property] || 'Unknown';
+    // Access property dynamically - GraphLink has index signature so this is safe
+    const rawValue = link[property] ?? 'Unknown';
+    // Convert to string or number for map key
+    const value: string | number = typeof rawValue === 'number' ? rawValue : String(rawValue);
     if (!groups.has(value)) {
       groups.set(value, []);
     }
