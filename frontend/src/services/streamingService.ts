@@ -26,6 +26,12 @@ interface StreamOptions {
   onError?: (error: Error) => void;
 }
 
+// DuckDB connection interface for streaming
+// Note: DuckDB WASM connection type varies by version
+interface DuckDBStreamingConnection {
+  stream(query: string): AsyncIterable<Record<string, unknown>>;
+}
+
 export class StreamingService {
   private abortController: AbortController | null = null;
   private reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
@@ -236,7 +242,7 @@ export class StreamingService {
    * Process DuckDB query results as stream
    */
   async streamDuckDBQuery(
-    connection: any,
+    connection: DuckDBStreamingConnection,
     query: string,
     options: StreamOptions = {}
   ): Promise<void> {
@@ -246,7 +252,7 @@ export class StreamingService {
       // Execute streaming query
       const stream = await connection.stream(query);
       const batchSize = 1000;
-      let batch: any[] = [];
+      let batch: Record<string, unknown>[] = [];
       let totalProcessed = 0;
       
       for await (const row of stream) {
@@ -373,26 +379,33 @@ export class StreamingService {
       );
       
       if (hasNodeFields) {
-        // Process as nodes
+      // Process as nodes
         return {
-          nodes: rows.map((row: any) => ({
-            id: row.id,
-            label: row.label || row.name || row.id,
-            node_type: row.node_type || 'Unknown',
-            properties: row
-          })),
+          nodes: rows.map((row) => {
+            const r = row as Record<string, unknown>;
+            return {
+              id: String(r.id || ''),
+              label: String(r.label || r.name || r.id || ''),
+              name: String(r.name || r.label || r.id || ''),
+              node_type: String(r.node_type || 'Unknown'),
+              properties: r
+            };
+          }),
           edges: []
         };
       } else {
         // Process as edges
         return {
           nodes: [],
-          edges: rows.map((row: any) => ({
-            source: row.source || row.from,
-            target: row.target || row.to,
-            edge_type: row.edge_type || 'RELATED',
-            weight: row.weight || 1
-          }))
+          edges: rows.map((row) => {
+            const r = row as Record<string, unknown>;
+            return {
+              source: String(r.source || r.from || ''),
+              target: String(r.target || r.to || ''),
+              edge_type: String(r.edge_type || 'RELATED'),
+              weight: Number(r.weight) || 1
+            };
+          })
         };
       }
     } catch (error) {
@@ -414,11 +427,11 @@ export class StreamingService {
     return records;
   }
 
-  private transformArrowRecord(data: Uint8Array): StreamChunk | null {
-    return this.processArrowChunk(data) as any;
+  private async transformArrowRecord(data: Uint8Array): Promise<StreamChunk | null> {
+    return this.processArrowChunk(data);
   }
 
-  private processDuckDBBatch(batch: any[]): StreamChunk {
+  private processDuckDBBatch(batch: Record<string, unknown>[]): StreamChunk {
     // Determine if batch contains nodes or edges
     if (batch.length === 0) {
       return { nodes: [], edges: [] };
@@ -430,9 +443,10 @@ export class StreamingService {
     if (hasNodeFields) {
       return {
         nodes: batch.map(row => ({
-          id: row.id,
-          label: row.label || row.name || row.id,
-          node_type: row.node_type || 'Unknown',
+          id: String(row.id || ''),
+          label: String(row.label || row.name || row.id || ''),
+          name: String(row.name || row.label || row.id || ''),
+          node_type: String(row.node_type || 'Unknown'),
           properties: row
         })),
         edges: []
@@ -441,10 +455,10 @@ export class StreamingService {
       return {
         nodes: [],
         edges: batch.map(row => ({
-          source: row.source || row.from,
-          target: row.target || row.to,
-          edge_type: row.edge_type || 'RELATED',
-          weight: row.weight || 1
+          source: String(row.source || row.from || ''),
+          target: String(row.target || row.to || ''),
+          edge_type: String(row.edge_type || 'RELATED'),
+          weight: Number(row.weight) || 1
         }))
       };
     }

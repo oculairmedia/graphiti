@@ -1,11 +1,10 @@
 import { useMemo, useRef, useEffect } from 'react';
 import { NodeColorManager, getGlobalColorManager, generateNodeTypeColor } from '../utils/NodeColorManager';
 import { hexToRgba, interpolateColor } from '../utils/NodeColorManager';
+import { TransformedGraphNode, TransformedGraphLink } from '../types/graph';
+import { GraphConfig } from '../contexts/configTypes';
 
 import { usePrecomputedLinkColors } from './usePrecomputedLinkColors';
-
-// GraphConfig type - we'll use any for now since it's dynamically typed
-type GraphConfig = any;
 
 // PERFORMANCE FIX: Module-level constant to avoid array recreation on each render
 const COMMUNITY_COLORS = [
@@ -16,8 +15,8 @@ const COMMUNITY_COLORS = [
 ] as const;
 
 interface CosmographData {
-  nodes: any[];
-  links: any[];
+  nodes: TransformedGraphNode[];
+  links: TransformedGraphLink[];
 }
 
 interface VisualizationConfig {
@@ -29,8 +28,8 @@ interface VisualizationConfig {
     colorMap: Record<string, string>;
     colorFn?: (value: number | string) => string;
   };
-  linkWidthByFn?: (edgeType: any, linkIndex: number) => number;
-  linkColorByFn?: (edgeType: any, linkIndex: number) => string;
+  linkWidthByFn?: (edgeType: string, linkIndex: number) => number;
+  linkColorByFn?: (edgeType: string, linkIndex: number) => string;
 }
 
 interface UseCosmographVisualizationProps {
@@ -116,8 +115,12 @@ export function useCosmographVisualization({
   }, [config.sizeMapping, config.minNodeSize, config.maxNodeSize, config.sizeMultiplier]);
   
   // === NODE COLOR CONFIGURATION ===
+  // Cast colorScheme to the expected type for NodeColorManager
+  type ColorScheme = 'by-type' | 'by-centrality' | 'by-pagerank' | 'by-degree' | 'by-betweenness' | 'by-eigenvector' | 'by-community' | 'by-temporal' | 'custom';
+  const colorScheme = (config.colorScheme || 'by-type') as ColorScheme;
+  
   const colorManagerRef = useRef<NodeColorManager>(getGlobalColorManager({
-    scheme: config.colorScheme || 'by-type',
+    scheme: colorScheme,
     gradientHighColor: config.gradientHighColor,
     gradientLowColor: config.gradientLowColor,
     nodeTypeColors: config.nodeTypeColors,
@@ -126,13 +129,13 @@ export function useCosmographVisualization({
   
   useEffect(() => {
     colorManagerRef.current.updateConfig({
-      scheme: config.colorScheme || 'by-type',
+      scheme: colorScheme,
       gradientHighColor: config.gradientHighColor,
       gradientLowColor: config.gradientLowColor,
       nodeTypeColors: config.nodeTypeColors,
       normalizeMetrics: true
     });
-  }, [config.colorScheme, config.gradientHighColor, config.gradientLowColor, config.nodeTypeColors]);
+  }, [colorScheme, config.gradientHighColor, config.gradientLowColor, config.nodeTypeColors]);
   
   useEffect(() => {
     if (cosmographData?.nodes) {
@@ -236,7 +239,7 @@ export function useCosmographVisualization({
     const minWidth = config.linkWidthMin ?? 0.1;
     const maxWidth = config.linkWidthMax ?? 5;
     
-    return (edgeType: any, linkIndex: number) => {
+    return (_edgeType: string, linkIndex: number) => {
       if (!cosmographData?.links || !cosmographData?.nodes) return minWidth;
       const link = cosmographData.links[linkIndex];
       if (!link) return minWidth;
@@ -314,7 +317,7 @@ export function useCosmographVisualization({
     // Note: We always provide a function now to support edge highlighting
     // The function will short-circuit to baseColor for non-highlighted edges
     
-    return (edgeType: any, linkIndex: number) => {
+    return (edgeType: string, linkIndex: number) => {
       if (!cosmographData?.links || !cosmographData?.nodes) return config.linkColor || '#9CA3AF';
       const link = cosmographData.links[linkIndex];
       if (!link) return config.linkColor || '#9CA3AF';
@@ -449,8 +452,8 @@ export function useCosmographVisualization({
       linkOpacityMax: config.linkOpacityMax,
       nodeTypeColors: config.nodeTypeColors,
       nodeAccessHighlightColor: config.nodeAccessHighlightColor,
-      highlightedEdgeColor: config.highlightedEdgeColor,
-      partialHighlightedEdgeColor: config.partialHighlightedEdgeColor,
+      highlightedEdgeColor: config.highlightedEdgeColor as string | undefined,
+      partialHighlightedEdgeColor: config.partialHighlightedEdgeColor as string | undefined,
     },
     highlightedNodes: highlightedNodesRef.current,
     glowingNodes: glowingNodesRef.current
