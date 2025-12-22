@@ -37,7 +37,8 @@ export function preloadDuckDB(): void {
   // Use requestIdleCallback if available, otherwise setTimeout
   const schedulePreload = (callback: () => void) => {
     if ('requestIdleCallback' in window) {
-      (window as any).requestIdleCallback(callback, { timeout: 2000 });
+      const windowWithIdle = window as unknown as { requestIdleCallback: (cb: () => void, opts: { timeout: number }) => void };
+      windowWithIdle.requestIdleCallback(callback, { timeout: 2000 });
     } else {
       setTimeout(callback, 100);
     }

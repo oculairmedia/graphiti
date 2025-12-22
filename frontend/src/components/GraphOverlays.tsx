@@ -112,10 +112,17 @@ const GraphOverlaysComponent: React.FC<GraphOverlaysProps> = ({
   );
 };
 
+// Chrome's non-standard memory API type
+interface PerformanceMemory {
+  usedJSHeapSize: number;
+  totalJSHeapSize: number;
+  jsHeapSizeLimit: number;
+}
+
 // Helper function to get memory usage if available
 function getMemoryUsage(): string {
   if ('memory' in performance) {
-    const memory = (performance as any).memory;
+    const memory = (performance as unknown as { memory: PerformanceMemory }).memory;
     const used = memory.usedJSHeapSize / 1048576; // Convert to MB
     const total = memory.jsHeapSizeLimit / 1048576;
     const percentage = ((used / total) * 100).toFixed(1);

@@ -8,7 +8,8 @@ import { useCallback, useRef } from 'react';
  * @param delay - Debounce delay in milliseconds
  * @returns Debounced version of the callback
  */
-export function useDebouncedCallback<T extends (...args: any[]) => any>(
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function useDebouncedCallback<T extends (...args: unknown[]) => unknown>(
   callback: T,
   delay: number
 ): (...args: Parameters<T>) => void {

@@ -18,7 +18,8 @@ import { CentralityStatsProvider } from '../contexts/CentralityStatsContext';
 
 // Lazy load heavy components
 const GraphTimeline = React.lazy(() => import('./GraphTimeline').then(m => ({ default: m.GraphTimeline })));
-type GraphTimelineHandle = any; // Type will be resolved at runtime
+// Import the handle type from GraphTimeline
+import type { GraphTimelineHandle } from './GraphTimeline';
 import { useGraphDataQuery } from '../hooks/useGraphDataQuery';
 import { GraphNode } from '../types/graph';
 import { GraphLink } from '../types/graph';

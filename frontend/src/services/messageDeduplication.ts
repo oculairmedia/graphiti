@@ -5,7 +5,7 @@ export interface OrderedMessage {
   sequenceNumber: number;
   timestamp: number;
   type: string;
-  data: any;
+  data: Record<string, unknown>;
   hash: string;
   sourceId: string;
   acknowledgementRequired?: boolean;

@@ -8,9 +8,12 @@
 import { useCallback } from 'react';
 import { GraphNode } from '../types/graph';
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type CosmographRefType = React.RefObject<any>;
+
 interface EventHandlersConfig {
   nodes: GraphNode[];
-  cosmographRef: React.RefObject<any>;
+  cosmographRef: CosmographRefType;
   onNodeClick: (node: GraphNode) => void;
   onNodeSelect: (nodeId: string) => void;
   onClearSelection?: () => void;

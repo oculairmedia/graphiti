@@ -6,13 +6,15 @@ import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { useGraphZoom } from '../hooks/useGraphZoom';
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type CosmographRefType = React.RefObject<any>;
 
 interface GraphTimelineProps {
   onTimeRangeChange?: (range: [Date, Date] | [number, number] | undefined) => void;
   className?: string;
   isVisible?: boolean;
   onVisibilityChange?: (visible: boolean) => void;
-  cosmographRef?: React.RefObject<any>;
+  cosmographRef?: CosmographRefType;
   selectedCount?: number;
   onClearSelection?: () => void;
   onScreenshot?: () => void;
@@ -482,9 +484,25 @@ export const GraphTimeline = forwardRef<GraphTimelineHandle, GraphTimelineProps>
 
 GraphTimeline.displayName = 'GraphTimeline';
 
+// Props type for memoized timeline
+interface MemoizedTimelineProps {
+  animationSpeed?: number;
+  isExpanded?: boolean;
+  accessor?: string;
+  useLinksData?: boolean;
+  highlightSelectedData?: boolean;
+  showAnimationControls?: boolean;
+  barCount?: number;
+  barRadius?: number;
+  barPadding?: number;
+  axisTickHeight?: number;
+  barTopMargin?: number;
+  [key: string]: unknown;
+}
+
 // Memoized CosmographTimeline wrapper to prevent re-renders on data updates
 const MemoizedTimeline = memo(
-  forwardRef<CosmographTimelineRef, any>((props, ref) => {
+  forwardRef<CosmographTimelineRef, MemoizedTimelineProps>((props, ref) => {
     return <CosmographTimeline {...props} ref={ref} />;
   }),
   (prevProps, nextProps) => {

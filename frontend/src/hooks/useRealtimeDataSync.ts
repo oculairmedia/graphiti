@@ -6,7 +6,7 @@ interface RealtimeDataSyncOptions {
   enabled?: boolean;
   debounceMs?: number;
   onDataUpdate?: () => void;
-  onNotification?: (notification: any) => void;
+  onNotification?: (notification: unknown) => void;
 }
 
 /**

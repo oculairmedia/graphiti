@@ -23,6 +23,7 @@ interface TransformConfig {
   clusterStrength?: number;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 interface CosmographData {
   nodes: any[];
   links: any[];

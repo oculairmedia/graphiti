@@ -54,6 +54,7 @@ export interface IncrementalUpdateMetrics {
  * Hook for managing incremental Cosmograph updates
  */
 export function useCosmographIncrementalUpdates(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   cosmographRef: React.RefObject<any>,
   currentNodes: GraphNode[],
   currentEdges: GraphLink[],
@@ -109,7 +110,7 @@ export function useCosmographIncrementalUpdates(
   });
 
   // Logging helper
-  const log = useCallback((message: string, ...args: any[]) => {
+  const log = useCallback((message: string, ...args: unknown[]) => {
     if (debug) {
       console.log(`[useCosmographIncrementalUpdates] ${message}`, ...args);
     }
@@ -145,7 +146,7 @@ export function useCosmographIncrementalUpdates(
       const result = await dataPreparerRef.current.prepareInitialData(currentNodes, currentEdges);
       // Update the local node index from the preparer's data
       if (result?.data?.nodes) {
-        result.data.nodes.forEach((node: any) => {
+        result.data.nodes.forEach((node: { id: string; index: number }) => {
           nodeIdToIndexRef.current.set(node.id, node.index);
         });
       }

@@ -155,8 +155,8 @@ export const ControlPanel: React.FC<ControlPanelProps> = React.memo(({
     let graphNode = nodes.find(n => n.id === node.uuid);
     
     if (!graphNode) {
-      // Try matching against uuid field if it exists
-      graphNode = nodes.find(n => (n as any).uuid === node.uuid);
+      // Try matching against uuid field if it exists (some nodes have uuid in properties)
+      graphNode = nodes.find(n => (n.properties as Record<string, unknown>)?.uuid === node.uuid);
     }
     
     if (!graphNode) {

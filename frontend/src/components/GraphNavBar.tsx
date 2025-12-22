@@ -7,7 +7,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { GraphSearch } from './GraphSearch';
-import { GraphNode } from '../types/graph';
+import { GraphNode, GraphLink } from '../types/graph';
 import { WebSocketStatus } from './WebSocketStatus';
 
 // GRAPH-93: Zustand stores for global state
@@ -16,7 +16,7 @@ import { useUIStore, useGraphStore, useSelectionStore } from '../stores';
 interface GraphNavBarProps {
   // Graph data (still needs to be passed - not global)
   nodes?: GraphNode[];
-  links?: any[];
+  links?: GraphLink[];
   
   // Callbacks that need parent context
   onZoomIn?: () => void;

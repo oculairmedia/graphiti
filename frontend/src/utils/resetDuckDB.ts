@@ -54,5 +54,5 @@ export async function resetDuckDBStorage() {
 
 // Make it available globally
 if (typeof window !== 'undefined') {
-  (window as any).resetDuckDBStorage = resetDuckDBStorage;
+  (window as unknown as { resetDuckDBStorage: typeof resetDuckDBStorage }).resetDuckDBStorage = resetDuckDBStorage;
 }

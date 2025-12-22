@@ -65,7 +65,8 @@ export const GraphSearch: React.FC<GraphSearchProps> = React.memo(({
       const lowercaseValue = value.toLowerCase();
       
       // Try to use Cosmograph's exact value search for better performance
-      // Cast to any since these methods are dynamically available on the Cosmograph instance
+      // Cast needed since these methods are dynamically available on the Cosmograph instance
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const cosmoRef = cosmographRef?.current as any;
       if (cosmoRef && typeof cosmoRef.getPointIndicesByExactValues === 'function') {
         try {
@@ -192,7 +193,8 @@ export const GraphSearch: React.FC<GraphSearchProps> = React.memo(({
     }
     
     // Focus and select the node in Cosmograph if available
-    // Cast to any since these methods are dynamically available on the Cosmograph instance
+    // Cast needed since these methods are dynamically available on the Cosmograph instance
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const cosmoRef = cosmographRef?.current as any;
     if (cosmoRef) {
       try {
