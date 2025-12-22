@@ -343,13 +343,25 @@ impl DuckDBStore {
         info!("Inserted {} nodes in {:?}", sorted_nodes.len(), nodes_elapsed);
         
         // BATCH INSERT EDGES using Appender for ~10-50x speedup
+        // First deduplicate edges by (source, target, edge_type) since FalkorDB allows duplicates
+        // but DuckDB PRIMARY KEY doesn't
+        let mut seen_edges: std::collections::HashSet<(String, String, String)> = std::collections::HashSet::new();
         let mut edge_count = 0;
+        let mut duplicate_count = 0;
         {
             let mut appender = conn.appender("edges")?;
             
             for edge in edges.iter() {
                 if let (Some(&source_idx), Some(&target_idx)) = 
                     (node_to_idx.get(&edge.from), node_to_idx.get(&edge.to)) {
+                    
+                    // Deduplicate by (source, target, edge_type)
+                    let edge_key = (edge.from.clone(), edge.to.clone(), edge.edge_type.clone());
+                    if seen_edges.contains(&edge_key) {
+                        duplicate_count += 1;
+                        continue;
+                    }
+                    seen_edges.insert(edge_key);
                     
                     let color = self.get_edge_color(&edge.edge_type);
                     
@@ -376,6 +388,10 @@ impl DuckDBStore {
             }
             
             appender.flush()?;
+        }
+        
+        if duplicate_count > 0 {
+            warn!("Skipped {} duplicate edges during DuckDB insert", duplicate_count);
         }
         
         // Store checksum for cache validation
