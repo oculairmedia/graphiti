@@ -23,10 +23,15 @@ interface TransformConfig {
   clusterStrength?: number;
 }
 
+// Using indexed access type to allow any node/link shape for Cosmograph
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
+type CosmographNodeType = any;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type CosmographLinkType = any;
+
 interface CosmographData {
-  nodes: any[];
-  links: any[];
+  nodes: CosmographNodeType[];
+  links: CosmographLinkType[];
 }
 
 /**
