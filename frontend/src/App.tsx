@@ -42,31 +42,110 @@ const queryClient = new QueryClient({
 });
 
 // Version key for schema changes - bump this when Cosmograph schema changes
-const SCHEMA_VERSION = 'v2';
+// v4: Fixed 16-column schema for cosmograph_points table
+const SCHEMA_VERSION = 'v4';
 const SCHEMA_VERSION_KEY = 'graphiti_cosmograph_schema_version';
+
+// Synchronous IndexedDB cleanup - runs before React renders
+(function clearStaleDuckDB() {
+  const storedVersion = localStorage.getItem(SCHEMA_VERSION_KEY);
+  const needsClear = storedVersion !== SCHEMA_VERSION;
+  
+  if (needsClear) {
+    console.log(`[App] Schema version changed (${storedVersion} -> ${SCHEMA_VERSION}), clearing DuckDB storage...`);
+    
+    // Clear all potential DuckDB/Cosmograph database names
+    // DuckDB-WASM uses various naming patterns for OPFS and IndexedDB
+    const dbPatterns = [
+      'cosmograph',
+      'duckdb',
+      'cosmograph_points',
+      'cosmograph_links',
+      '/cosmograph',
+      '/duckdb',
+      'duckdb-wasm',
+      '/duckdb-wasm',
+      'duckdb-wasm-opfs',
+      '/duckdb-wasm-opfs',
+      'opfs-duckdb',
+      '/opfs-duckdb'
+    ];
+    
+    let deletedCount = 0;
+    dbPatterns.forEach(name => {
+      try {
+        const req = indexedDB.deleteDatabase(name);
+        req.onsuccess = () => {
+          deletedCount++;
+          console.log(`[App] Deleted database: ${name}`);
+        };
+        req.onerror = () => {
+          // Ignore errors for non-existent databases
+        };
+      } catch (e) {
+        // Ignore errors
+      }
+    });
+    
+    // Also enumerate and delete any matching databases
+    if (typeof indexedDB.databases === 'function') {
+      indexedDB.databases().then(databases => {
+        databases.forEach(db => {
+          if (db.name) {
+            const name = db.name.toLowerCase();
+            const shouldDelete = 
+              name.includes('duckdb') || 
+              name.includes('cosmograph') || 
+              name.includes('opfs') ||
+              name.includes('wasm');
+            if (shouldDelete) {
+              console.log(`[App] Deleting enumerated database: ${db.name}`);
+              indexedDB.deleteDatabase(db.name);
+              deletedCount++;
+            }
+          }
+        });
+      }).catch(() => {});
+    }
+    
+    // Try to clear OPFS storage as well (used by DuckDB-WASM in some browsers)
+    if ('storage' in navigator && 'getDirectory' in (navigator.storage as unknown as { getDirectory?: () => Promise<FileSystemDirectoryHandle> })) {
+      (navigator.storage as unknown as { getDirectory: () => Promise<FileSystemDirectoryHandle> }).getDirectory().then(async (root: FileSystemDirectoryHandle) => {
+        try {
+          // Try to delete DuckDB OPFS directory
+          await root.removeEntry('duckdb', { recursive: true });
+          console.log('[App] Deleted OPFS duckdb directory');
+        } catch (e) {
+          // Directory might not exist, that's fine
+        }
+        try {
+          await root.removeEntry('.duckdb', { recursive: true });
+          console.log('[App] Deleted OPFS .duckdb directory');
+        } catch (e) {
+          // Directory might not exist
+        }
+      }).catch(() => {
+        // OPFS not available or permission denied
+      });
+    }
+    
+    // Update version AFTER initiating deletions
+    localStorage.setItem(SCHEMA_VERSION_KEY, SCHEMA_VERSION);
+    
+    // Force page reload to ensure clean state (only if we had a previous version)
+    if (storedVersion !== null) {
+      console.log('[App] Reloading page to ensure clean DuckDB state...');
+      // Small delay to allow deletion requests to be initiated
+      setTimeout(() => {
+        window.location.reload();
+      }, 100);
+    }
+  }
+})();
 
 const App = () => {
   // Preload resources for better performance
   React.useEffect(() => {
-    // Clear stale DuckDB data if schema version changed
-    const storedVersion = localStorage.getItem(SCHEMA_VERSION_KEY);
-    if (storedVersion !== SCHEMA_VERSION) {
-      console.log(`[App] Schema version changed (${storedVersion} -> ${SCHEMA_VERSION}), clearing DuckDB storage...`);
-      // Clear IndexedDB databases related to DuckDB/Cosmograph
-      indexedDB.databases().then(databases => {
-        databases.forEach(db => {
-          if (db.name && (db.name.includes('duckdb') || db.name.includes('cosmograph'))) {
-            console.log(`[App] Deleting stale database: ${db.name}`);
-            indexedDB.deleteDatabase(db.name);
-          }
-        });
-        localStorage.setItem(SCHEMA_VERSION_KEY, SCHEMA_VERSION);
-      }).catch(err => {
-        console.warn('[App] Could not enumerate IndexedDB databases:', err);
-        // Still set the version to avoid repeated attempts
-        localStorage.setItem(SCHEMA_VERSION_KEY, SCHEMA_VERSION);
-      });
-    }
     
     // PERFORMANCE: Don't clear cache on startup - let it persist for faster loads
     // Cache will be invalidated automatically via TTL or WebSocket updates

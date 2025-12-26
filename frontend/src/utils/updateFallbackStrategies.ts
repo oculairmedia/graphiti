@@ -356,72 +356,118 @@ export class SkipStrategy implements FallbackStrategy {
 
 /**
  * Strategy 5: Clear DuckDB and retry for table conflicts
+ * This handles schema mismatches between Cosmograph's internal DuckDB tables and our data
  */
 export class DuckDBRecoveryStrategy implements FallbackStrategy {
   name = 'clear-duckdb-retry';
   priority = 5;
-  maxRetries = 1;
+  maxRetries = 2;
   retryDelay = 500;
   
   private attemptHandler?: (attempt: UpdateAttempt) => Promise<boolean>;
-  private clearAttempted = false;
+  private clearAttempts = 0;
+  private readonly MAX_CLEAR_ATTEMPTS = 2;
   
   constructor(handler?: (attempt: UpdateAttempt) => Promise<boolean>) {
     this.attemptHandler = handler;
   }
   
   canHandle(attempt: UpdateAttempt): boolean {
-    // Handle DuckDB-related errors
+    // Handle DuckDB-related errors (schema mismatches, table conflicts)
     const errorMessage = attempt.error.message.toLowerCase();
-    return !this.clearAttempted && (
+    const isDuckDBError = 
       errorMessage.includes('already exists') ||
       errorMessage.includes('does not exist') ||
       errorMessage.includes('duckdb') ||
       errorMessage.includes('cosmograph_points') ||
+      errorMessage.includes('cosmograph_links') ||
       errorMessage.includes('t_cosmograph') ||
       errorMessage.includes('columns but') ||
       errorMessage.includes('values were supplied') ||
-      errorMessage.includes('binder error')
-    );
+      errorMessage.includes('binder error') ||
+      errorMessage.includes('table with name');
+    
+    return isDuckDBError && this.clearAttempts < this.MAX_CLEAR_ATTEMPTS;
   }
   
   async execute(attempt: UpdateAttempt): Promise<boolean> {
-    console.log(`[DuckDBRecoveryStrategy] Clearing DuckDB storage and retrying ${attempt.operation}`);
-    this.clearAttempted = true;
+    this.clearAttempts++;
+    console.log(`[DuckDBRecoveryStrategy] Clearing DuckDB storage (attempt ${this.clearAttempts}/${this.MAX_CLEAR_ATTEMPTS}) for ${attempt.operation}`);
+    console.log(`[DuckDBRecoveryStrategy] Original error: ${attempt.error.message}`);
     
     try {
       // Clear IndexedDB databases related to DuckDB/Cosmograph
-      const databases = await indexedDB.databases();
-      for (const db of databases) {
-        if (db.name && (db.name.includes('duckdb') || db.name.includes('cosmograph'))) {
-          console.log(`[DuckDBRecoveryStrategy] Deleting database: ${db.name}`);
-          await new Promise<void>((resolve, reject) => {
-            const request = indexedDB.deleteDatabase(db.name!);
-            request.onsuccess = () => resolve();
-            request.onerror = () => reject(request.error);
-            request.onblocked = () => {
-              console.warn(`[DuckDBRecoveryStrategy] Database ${db.name} is blocked, continuing anyway`);
-              resolve();
-            };
-          });
+      if (typeof indexedDB.databases === 'function') {
+        const databases = await indexedDB.databases();
+        const deletionPromises: Promise<void>[] = [];
+        
+        for (const db of databases) {
+          if (db.name) {
+            const name = db.name.toLowerCase();
+            const shouldDelete = 
+              name.includes('duckdb') || 
+              name.includes('cosmograph') ||
+              name.includes('opfs') ||
+              name.includes('wasm');
+            
+            if (shouldDelete) {
+              console.log(`[DuckDBRecoveryStrategy] Deleting database: ${db.name}`);
+              deletionPromises.push(new Promise<void>((resolve) => {
+                const request = indexedDB.deleteDatabase(db.name!);
+                request.onsuccess = () => {
+                  console.log(`[DuckDBRecoveryStrategy] Successfully deleted: ${db.name}`);
+                  resolve();
+                };
+                request.onerror = () => {
+                  console.warn(`[DuckDBRecoveryStrategy] Failed to delete: ${db.name}`);
+                  resolve(); // Continue anyway
+                };
+                request.onblocked = () => {
+                  console.warn(`[DuckDBRecoveryStrategy] Database ${db.name} is blocked`);
+                  resolve(); // Continue anyway
+                };
+              }));
+            }
+          }
         }
+        
+        // Wait for all deletions
+        await Promise.all(deletionPromises);
       }
       
-      // Wait a bit for cleanup to complete
+      // Wait for cleanup to complete
       await new Promise(resolve => setTimeout(resolve, this.retryDelay));
       
       // Retry the operation
       if (this.attemptHandler) {
         const result = await this.attemptHandler({
           ...attempt,
-          attemptNumber: 1 // Reset attempt number for fresh start
+          attemptNumber: 1, // Reset attempt number for fresh start
+          error: new Error('Retrying after DuckDB clear') // Clear the old error
         });
         
         if (result) {
           console.log(`[DuckDBRecoveryStrategy] Retry successful after clearing DuckDB`);
-          this.clearAttempted = false; // Reset for future errors
+          this.clearAttempts = 0; // Reset for future errors
         }
         return result;
+      }
+      
+      // If no handler provided and we've tried twice, trigger page reload
+      if (this.clearAttempts >= this.MAX_CLEAR_ATTEMPTS) {
+        console.warn('[DuckDBRecoveryStrategy] Max clear attempts reached, triggering schema version bump and reload');
+        // Force schema version update to trigger full clear on next load
+        const SCHEMA_VERSION_KEY = 'graphiti_cosmograph_schema_version';
+        const currentVersion = localStorage.getItem(SCHEMA_VERSION_KEY) || 'v0';
+        const newVersion = currentVersion + '_fixed';
+        localStorage.setItem(SCHEMA_VERSION_KEY, newVersion);
+        
+        // Delay slightly then reload
+        setTimeout(() => {
+          window.location.reload();
+        }, 100);
+        
+        return true; // Return true to prevent further fallback strategies
       }
       
       return false;
@@ -432,7 +478,7 @@ export class DuckDBRecoveryStrategy implements FallbackStrategy {
   }
   
   reset(): void {
-    this.clearAttempted = false;
+    this.clearAttempts = 0;
   }
 }
 
