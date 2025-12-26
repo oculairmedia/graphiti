@@ -120,6 +120,7 @@ services:
       - CENTRALITY_SERVICE_URL=${RUST_CENTRALITY_URL:-http://graphiti-centrality-rs:3003}
       - DUCKDB_PATH=${DUCKDB_PATH:-/app/data/graph.duckdb}
       - DUCKDB_MEMORY_LIMIT=${DUCKDB_MEMORY_LIMIT:-2g}
+      - RECONCILIATION_ENABLED=false
     networks:
       - graphiti_network
     depends_on:
