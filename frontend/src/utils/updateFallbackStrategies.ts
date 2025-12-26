@@ -378,7 +378,10 @@ export class DuckDBRecoveryStrategy implements FallbackStrategy {
       errorMessage.includes('does not exist') ||
       errorMessage.includes('duckdb') ||
       errorMessage.includes('cosmograph_points') ||
-      errorMessage.includes('t_cosmograph')
+      errorMessage.includes('t_cosmograph') ||
+      errorMessage.includes('columns but') ||
+      errorMessage.includes('values were supplied') ||
+      errorMessage.includes('binder error')
     );
   }
   
@@ -640,7 +643,10 @@ export class ErrorClassifier {
     if (errorMessage.includes('already exists') || 
         errorMessage.includes('does not exist') ||
         errorMessage.includes('duckdb') ||
-        errorMessage.includes('cosmograph_points')) {
+        errorMessage.includes('cosmograph_points') ||
+        errorMessage.includes('columns but') ||
+        errorMessage.includes('values were supplied') ||
+        errorMessage.includes('binder error')) {
       return {
         severity: 'medium',
         recoverable: true,

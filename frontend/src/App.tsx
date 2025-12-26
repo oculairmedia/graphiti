@@ -41,9 +41,33 @@ const queryClient = new QueryClient({
   },
 });
 
+// Version key for schema changes - bump this when Cosmograph schema changes
+const SCHEMA_VERSION = 'v2';
+const SCHEMA_VERSION_KEY = 'graphiti_cosmograph_schema_version';
+
 const App = () => {
   // Preload resources for better performance
   React.useEffect(() => {
+    // Clear stale DuckDB data if schema version changed
+    const storedVersion = localStorage.getItem(SCHEMA_VERSION_KEY);
+    if (storedVersion !== SCHEMA_VERSION) {
+      console.log(`[App] Schema version changed (${storedVersion} -> ${SCHEMA_VERSION}), clearing DuckDB storage...`);
+      // Clear IndexedDB databases related to DuckDB/Cosmograph
+      indexedDB.databases().then(databases => {
+        databases.forEach(db => {
+          if (db.name && (db.name.includes('duckdb') || db.name.includes('cosmograph'))) {
+            console.log(`[App] Deleting stale database: ${db.name}`);
+            indexedDB.deleteDatabase(db.name);
+          }
+        });
+        localStorage.setItem(SCHEMA_VERSION_KEY, SCHEMA_VERSION);
+      }).catch(err => {
+        console.warn('[App] Could not enumerate IndexedDB databases:', err);
+        // Still set the version to avoid repeated attempts
+        localStorage.setItem(SCHEMA_VERSION_KEY, SCHEMA_VERSION);
+      });
+    }
+    
     // PERFORMANCE: Don't clear cache on startup - let it persist for faster loads
     // Cache will be invalidated automatically via TTL or WebSocket updates
     
