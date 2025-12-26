@@ -103,7 +103,9 @@ def get_vector_cosine_func_query(vec1, vec2, db_type: str = 'neo4j') -> str:
         # UNWIND parameters (edge.*, node.*) from Python lists also NEED wrapping
         def should_wrap_in_vecf32(vec_param: str) -> bool:
             # Graph properties (n.*, e.*, r.*, etc.) are already stored as Vectorf32 - DON'T wrap
-            if '.' in vec_param and not vec_param.startswith(('edge.', 'node.', 'entity.', 'relationship.', 'item.')):
+            if '.' in vec_param and not vec_param.startswith(
+                ('edge.', 'node.', 'entity.', 'relationship.', 'item.')
+            ):
                 return False
             # Query parameters ($*) - Now converted to Vectorf32 in Python before passing to query
             if vec_param.startswith('$'):
@@ -113,7 +115,7 @@ def get_vector_cosine_func_query(vec1, vec2, db_type: str = 'neo4j') -> str:
                 return False  # Changed: We now convert in Python before passing to query
             # Default: don't wrap (conservative approach)
             return False
-        
+
         falkor_vec1 = f'vecf32({vec1})' if should_wrap_in_vecf32(vec1) else vec1
         falkor_vec2 = f'vecf32({vec2})' if should_wrap_in_vecf32(vec2) else vec2
         return f'(2 - vec.cosineDistance({falkor_vec1}, {falkor_vec2}))/2'
@@ -139,8 +141,10 @@ def get_entity_node_save_bulk_query(nodes, db_type: str = 'neo4j') -> str | Any:
                     (
                         f"""
                     UNWIND $nodes AS node
-                    MERGE (n:Entity {{uuid: node.uuid, name: node.name, group_id: node.group_id}})
-                    SET n.summary = node.summary,
+                    MERGE (n:Entity {{uuid: node.uuid}})
+                    SET n.name = node.name,
+                        n.group_id = node.group_id,
+                        n.summary = node.summary,
                         n.created_at = node.created_at
                     SET n:{label}
                     WITH n, node
@@ -154,7 +158,6 @@ def get_entity_node_save_bulk_query(nodes, db_type: str = 'neo4j') -> str | Any:
         return queries
     else:
         return ENTITY_NODE_SAVE_BULK
-
 
 
 def get_entity_edge_save_bulk_query(db_type: str = 'neo4j') -> str:
