@@ -113,6 +113,9 @@ class QueueProxy:
         Returns:
             True if successfully queued, False otherwise
         """
+        # Maximum content size to prevent bloat from tool_result messages
+        MAX_CONTENT_SIZE = 8000  # ~8KB - larger messages are truncated
+
         # Create task in the format expected by the worker (IngestionTask)
         # IMPORTANT: Ensure every queued episode has a stable UUID for idempotency.
         # If the caller doesn't provide one, generate it at enqueue time so retries
@@ -125,8 +128,24 @@ class QueueProxy:
             if message.name
             else f'{message.role_type}_message_{datetime.utcnow().strftime("%Y%m%d_%H%M%S")}'
         )
-        # Use source_description or a default
+
+        # Build source_description with role info (instead of putting it in content)
+        # This prevents the LLM from extracting garbage entities like "agentassistant"
         source_desc = message.source_description if message.source_description else 'api_ingestion'
+        if message.role:
+            source_desc = f'{message.role} ({message.role_type}): {source_desc}'
+
+        # Truncate large content to prevent storage bloat
+        content = message.content
+        if len(content) > MAX_CONTENT_SIZE:
+            original_size = len(content)
+            content = (
+                content[:MAX_CONTENT_SIZE]
+                + f'\n\n[... truncated {original_size - MAX_CONTENT_SIZE} chars ...]'
+            )
+            logger.warning(
+                f'Truncated large message content from {original_size} to {len(content)} chars for uuid={episode_uuid}'
+            )
 
         task = {
             'id': f'msg-{episode_uuid}',
@@ -134,7 +153,7 @@ class QueueProxy:
             'payload': {
                 'uuid': episode_uuid,
                 'name': episode_name,
-                'content': f'{message.role or ""}({message.role_type}): {message.content}',
+                'content': content,  # Raw content only, no role prefix (may be truncated)
                 'timestamp': message.timestamp.isoformat() if message.timestamp else None,
                 'source_description': source_desc,
                 'group_id': group_id,  # Add group_id to payload for worker access

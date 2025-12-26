@@ -265,59 +265,75 @@ async def add_messages(
     graphiti: ZepGraphitiDep,
 ) -> Result:
     settings = get_settings()
-    
+
     # If queue is enabled, try to send to queue first
     if settings.use_queue_for_ingestion:
-        logger.info("Queue-based ingestion enabled, sending messages to queue")
-        
+        logger.info('Queue-based ingestion enabled, sending messages to queue')
+
         # Check if queue is healthy
         if await queue_proxy.is_healthy():
             # Send all messages to queue
             queued_count = 0
             failed_count = 0
-            
+
             for message in request.messages:
                 if await queue_proxy.send_message_to_queue(message, request.group_id):
                     queued_count += 1
-                    logger.info(f"Message {message.uuid} queued successfully")
+                    logger.info(f'Message {message.uuid} queued successfully')
                 else:
                     failed_count += 1
-                    logger.error(f"Failed to queue message {message.uuid}")
-            
+                    logger.error(f'Failed to queue message {message.uuid}')
+
             # If all messages were queued successfully
             if failed_count == 0:
-                logger.info(f"Successfully queued {queued_count} messages for ingestion")
+                logger.info(f'Successfully queued {queued_count} messages for ingestion')
                 return Result(
-                    message=f"Queued {queued_count} messages for processing",
-                    success=True
+                    message=f'Queued {queued_count} messages for processing', success=True
                 )
-            
+
             # If some failed and fallback is enabled
             if settings.queue_fallback_to_direct:
-                logger.warning(f"Failed to queue {failed_count} messages, falling back to direct processing")
+                logger.warning(
+                    f'Failed to queue {failed_count} messages, falling back to direct processing'
+                )
                 # Continue to direct processing below
             else:
                 # Return partial success
                 return Result(
-                    message=f"Queued {queued_count} messages, {failed_count} failed",
-                    success=False
+                    message=f'Queued {queued_count} messages, {failed_count} failed', success=False
                 )
         else:
-            logger.warning("Queue service is not healthy")
+            logger.warning('Queue service is not healthy')
             if not settings.queue_fallback_to_direct:
-                return Result(
-                    message="Queue service unavailable",
-                    success=False
-                )
-            logger.info("Falling back to direct processing")
-    
+                return Result(message='Queue service unavailable', success=False)
+            logger.info('Falling back to direct processing')
+
     # Direct processing (original implementation)
+    # Maximum content size to prevent bloat from tool_result messages
+    MAX_CONTENT_SIZE = 8000  # ~8KB - larger messages are truncated
+
     async def add_messages_task(m: Message) -> None:
         print(
             f'=== TASK DEBUG: Processing message - group_id={request.group_id}, name={m.name} ===',
             flush=True,
         )
         print(f'TASK DEBUG: Message content: {m.content[:100]}...', flush=True)
+
+        # Truncate large content to prevent storage bloat
+        content = m.content
+        if len(content) > MAX_CONTENT_SIZE:
+            original_size = len(content)
+            content = (
+                content[:MAX_CONTENT_SIZE]
+                + f'\n\n[... truncated {original_size - MAX_CONTENT_SIZE} chars ...]'
+            )
+            print(
+                f'TASK DEBUG: Content truncated from {original_size} to {len(content)} chars',
+                flush=True,
+            )
+            logger.warning(
+                f'Truncated large message content from {original_size} to {len(content)} chars for uuid={m.uuid}'
+            )
 
         try:
             print(f'EPISODE_DEBUG: About to call add_episode for uuid={m.uuid}', flush=True)
@@ -327,14 +343,21 @@ async def add_messages(
                 flush=True,
             )
 
+            # Note: We pass just m.content without role prefixes to avoid
+            # the LLM extracting garbage entities like "agentassistant" or "unknown_user".
+            # Role information is preserved in source_description for context.
+            source_desc = m.source_description or ''
+            if m.role:
+                source_desc = f'{m.role} ({m.role_type}): {source_desc}'
+
             result = await graphiti.add_episode(
                 uuid=m.uuid,
                 group_id=request.group_id,
                 name=m.name,
-                episode_body=f'{m.role or ""}({m.role_type}): {m.content}',
+                episode_body=content,  # Raw content only, no role prefix (may be truncated)
                 reference_time=m.timestamp,
                 source=EpisodeType.message,
-                source_description=m.source_description,
+                source_description=source_desc,
             )
 
             print(
@@ -378,23 +401,26 @@ async def add_messages(
 
             # Invalidate cache after successful data operation
             await invalidate_cache()
-            
+
             # Emit webhook for data ingestion
             if result and (result.nodes or result.edges):
                 from graph_service.webhooks import webhook_service
+
                 await webhook_service.emit_data_ingestion(
-                    operation="add_episode",
+                    operation='add_episode',
                     nodes=result.nodes if result.nodes else [],
                     edges=result.edges if result.edges else [],
                     episode=result.episode if result.episode else None,
                     group_id=request.group_id,
                     metadata={
-                        "message_uuid": m.uuid,
-                        "message_name": m.name,
-                        "source": m.source_description
-                    }
+                        'message_uuid': m.uuid,
+                        'message_name': m.name,
+                        'source': m.source_description,
+                    },
                 )
-                logger.info(f"Data ingestion webhook sent for episode {result.episode.uuid if result and result.episode else 'None'}")
+                logger.info(
+                    f'Data ingestion webhook sent for episode {result.episode.uuid if result and result.episode else "None"}'
+                )
 
             # Trigger centrality calculation for new data
             await trigger_centrality_calculation(request.group_id)
@@ -436,23 +462,21 @@ async def add_entity_node(
     )
     # Invalidate cache after successful data operation
     await invalidate_cache()
-    
+
     # Emit webhook for entity node creation
     if node:
         from graph_service.webhooks import webhook_service
+
         await webhook_service.emit_data_ingestion(
-            operation="add_entity",
+            operation='add_entity',
             nodes=[node],
             edges=[],
             episode=None,
             group_id=request.group_id,
-            metadata={
-                "entity_uuid": request.uuid,
-                "entity_name": request.name
-            }
+            metadata={'entity_uuid': request.uuid, 'entity_name': request.name},
         )
-        logger.info(f"Data ingestion webhook sent for entity node {node.uuid}")
-    
+        logger.info(f'Data ingestion webhook sent for entity node {node.uuid}')
+
     # Trigger centrality calculation for new node
     await trigger_centrality_calculation(request.group_id)
     return node
