@@ -17,13 +17,28 @@ from graphiti_core.nodes import EntityNode
 from graphiti_core.edges import EntityEdge, EpisodicEdge
 from graphiti_core.search.search_config import SearchConfig, SearchResults
 
+# Mapping from Python enum values to Rust-expected values
+PYTHON_TO_RUST_SEARCH_METHOD = {
+    'cosine_similarity': 'similarity',
+    'bm25': 'fulltext',
+    'breadth_first_search': 'bfs',
+}
+
+PYTHON_TO_RUST_RERANKER = {
+    'reciprocal_rank_fusion': 'rrf',
+    'node_distance': 'node_distance',
+    'episode_mentions': 'episode_mentions',
+    'mmr': 'mmr',
+    'cross_encoder': 'cross_encoder',
+}
+
 
 class RustSearchClient:
     """Client for interacting with the Rust search service."""
 
     def __init__(
         self,
-        base_url: str = "http://localhost:3004",
+        base_url: str = 'http://localhost:3004',
         timeout: int = 30,
     ):
         """
@@ -33,7 +48,7 @@ class RustSearchClient:
             base_url: Base URL of the Rust search service
             timeout: Request timeout in seconds
         """
-        self.base_url = base_url.rstrip("/")
+        self.base_url = base_url.rstrip('/')
         self.timeout = aiohttp.ClientTimeout(total=timeout)
         self._session: Optional[aiohttp.ClientSession] = None
 
@@ -61,7 +76,7 @@ class RustSearchClient:
         Returns:
             Health status information
         """
-        async with self.session.get(f"{self.base_url}/health") as response:
+        async with self.session.get(f'{self.base_url}/health') as response:
             response.raise_for_status()
             return await response.json()
 
@@ -91,7 +106,10 @@ class RustSearchClient:
         # Build request payload
         # Ensure filters has all required fields for Rust API
         search_filters = filters or {}
-        if not all(key in search_filters for key in ['node_types', 'edge_types', 'group_ids', 'created_after', 'created_before']):
+        if not all(
+            key in search_filters
+            for key in ['node_types', 'edge_types', 'group_ids', 'created_after', 'created_before']
+        ):
             search_filters = {
                 'node_types': search_filters.get('node_types', None),
                 'edge_types': search_filters.get('edge_types', None),
@@ -99,27 +117,34 @@ class RustSearchClient:
                 'created_after': search_filters.get('created_after', None),
                 'created_before': search_filters.get('created_before', None),
             }
-        
+
         payload = {
-            "query": query,
-            "config": self._serialize_config(config),
-            "filters": search_filters,
+            'query': query,
+            'config': self._serialize_config(config),
+            'filters': search_filters,
         }
 
         if center_node_uuid:
-            payload["center_node_uuid"] = str(center_node_uuid)
+            payload['center_node_uuid'] = str(center_node_uuid)
 
         if bfs_origin_node_uuids:
-            payload["bfs_origin_node_uuids"] = [
-                str(uuid) for uuid in bfs_origin_node_uuids
-            ]
+            payload['bfs_origin_node_uuids'] = [str(uuid) for uuid in bfs_origin_node_uuids]
 
         if query_vector:
-            payload["query_vector"] = query_vector
+            payload['query_vector'] = query_vector
+
+        # Debug: Log the payload being sent
+        import json as json_module
+        import logging as logging_module
+
+        _logger = logging_module.getLogger(__name__)
+        _logger.info(
+            f'DEBUG Rust search payload: {json_module.dumps(payload, indent=2, default=str)[:2000]}'
+        )
 
         # Make request
         async with self.session.post(
-            f"{self.base_url}/search",
+            f'{self.base_url}/search',
             json=payload,
         ) as response:
             response.raise_for_status()
@@ -148,20 +173,20 @@ class RustSearchClient:
             List of matching edges
         """
         payload = {
-            "query": query,
-            "config": config,
-            "filters": filters,
-            "query_vector": query_vector,
+            'query': query,
+            'config': config,
+            'filters': filters,
+            'query_vector': query_vector,
         }
 
         async with self.session.post(
-            f"{self.base_url}/search/edges",
+            f'{self.base_url}/search/edges',
             json=payload,
         ) as response:
             response.raise_for_status()
             data = await response.json()
 
-        return [self._parse_edge(edge) for edge in data["edges"]]
+        return [self._parse_edge(edge) for edge in data['edges']]
 
     async def search_nodes(
         self,
@@ -183,70 +208,84 @@ class RustSearchClient:
             List of matching nodes
         """
         payload = {
-            "query": query,
-            "config": config,
-            "filters": filters,
-            "query_vector": query_vector,
+            'query': query,
+            'config': config,
+            'filters': filters,
+            'query_vector': query_vector,
         }
 
         async with self.session.post(
-            f"{self.base_url}/search/nodes",
+            f'{self.base_url}/search/nodes',
             json=payload,
         ) as response:
             response.raise_for_status()
             data = await response.json()
 
-        return [self._parse_node(node) for node in data["nodes"]]
+        return [self._parse_node(node) for node in data['nodes']]
 
     def _serialize_config(self, config: SearchConfig) -> Dict[str, Any]:
         """Convert SearchConfig to JSON-serializable dict."""
+
+        def convert_search_method(method_value: str) -> str:
+            """Convert Python search method enum value to Rust-expected value."""
+            return PYTHON_TO_RUST_SEARCH_METHOD.get(method_value, method_value)
+
+        def convert_reranker(reranker_value: str) -> str:
+            """Convert Python reranker enum value to Rust-expected value."""
+            return PYTHON_TO_RUST_RERANKER.get(reranker_value, reranker_value)
+
         return {
-            "edge_config": (
+            'edge_config': (
                 {
-                    "search_methods": [m.value for m in config.edge_config.search_methods],
-                    "reranker": config.edge_config.reranker.value,
-                    "bfs_max_depth": config.edge_config.bfs_max_depth,
-                    "sim_min_score": config.edge_config.sim_min_score,
-                    "mmr_lambda": config.edge_config.mmr_lambda,
+                    'search_methods': [
+                        convert_search_method(m.value) for m in config.edge_config.search_methods
+                    ],
+                    'reranker': convert_reranker(config.edge_config.reranker.value),
+                    'bfs_max_depth': config.edge_config.bfs_max_depth,
+                    'sim_min_score': config.edge_config.sim_min_score,
+                    'mmr_lambda': config.edge_config.mmr_lambda,
                 }
                 if config.edge_config
                 else None
             ),
-            "node_config": (
+            'node_config': (
                 {
-                    "search_methods": [m.value for m in config.node_config.search_methods],
-                    "reranker": config.node_config.reranker.value,
-                    "bfs_max_depth": config.node_config.bfs_max_depth,
-                    "sim_min_score": config.node_config.sim_min_score,
-                    "mmr_lambda": config.node_config.mmr_lambda,
+                    'search_methods': [
+                        convert_search_method(m.value) for m in config.node_config.search_methods
+                    ],
+                    'reranker': convert_reranker(config.node_config.reranker.value),
+                    'bfs_max_depth': config.node_config.bfs_max_depth,
+                    'sim_min_score': config.node_config.sim_min_score,
+                    'mmr_lambda': config.node_config.mmr_lambda,
+                    'centrality_boost_factor': 1.0,  # Required by Rust service
                 }
                 if config.node_config
                 else None
             ),
-            "episode_config": (
-                {"reranker": config.episode_config.reranker.value}
+            'episode_config': (
+                {'reranker': convert_reranker(config.episode_config.reranker.value)}
                 if config.episode_config
                 else None
             ),
-            "community_config": (
+            'community_config': (
                 {
-                    "reranker": config.community_config.reranker.value,
-                    "sim_min_score": config.community_config.sim_min_score,
-                    "mmr_lambda": config.community_config.mmr_lambda,
+                    'reranker': convert_reranker(config.community_config.reranker.value),
+                    'sim_min_score': config.community_config.sim_min_score,
+                    'mmr_lambda': config.community_config.mmr_lambda,
                 }
                 if config.community_config
                 else None
             ),
-            "limit": config.limit,
-            "reranker_min_score": config.reranker_min_score,
+            'limit': config.limit,
+            'reranker_min_score': config.reranker_min_score,
         }
 
     def _parse_search_results(self, data: Dict[str, Any]) -> SearchResults:
         """Parse JSON response into SearchResults."""
-        edges = [self._parse_edge(e) for e in data.get("edges", [])]
-        nodes = [self._parse_node(n) for n in data.get("nodes", [])]
-        episodes = [self._parse_episode(e) for e in data.get("episodes", [])]
-        communities = data.get("communities", [])  # TODO: Parse communities
+        edges = [self._parse_edge(e) for e in data.get('edges', [])]
+        nodes = [self._parse_node(n) for n in data.get('nodes', [])]
+        episodes = [self._parse_episode(e) for e in data.get('episodes', [])]
+        communities = data.get('communities', [])  # TODO: Parse communities
 
         return SearchResults(
             edges=edges,
@@ -258,35 +297,35 @@ class RustSearchClient:
     def _parse_edge(self, data: Dict[str, Any]) -> EntityEdge:
         """Parse edge data from JSON."""
         return EntityEdge(
-            uuid=data["uuid"],
-            source_node_uuid=data["source_node_uuid"],
-            target_node_uuid=data["target_node_uuid"],
-            fact=data["fact"],
-            created_at=data["created_at"],
-            episodes=data.get("episodes", []),
-            group_id=data.get("group_id"),
+            uuid=data['uuid'],
+            source_node_uuid=data['source_node_uuid'],
+            target_node_uuid=data['target_node_uuid'],
+            fact=data['fact'],
+            created_at=data['created_at'],
+            episodes=data.get('episodes', []),
+            group_id=data.get('group_id'),
         )
 
     def _parse_node(self, data: Dict[str, Any]) -> EntityNode:
         """Parse node data from JSON."""
         return EntityNode(
-            uuid=data["uuid"],
-            name=data["name"],
-            label=data["node_type"],
-            summary=data.get("summary"),
-            created_at=data["created_at"],
-            group_id=data.get("group_id"),
+            uuid=data['uuid'],
+            name=data['name'],
+            label=data['node_type'],
+            summary=data.get('summary'),
+            created_at=data['created_at'],
+            group_id=data.get('group_id'),
         )
 
     def _parse_episode(self, data: Dict[str, Any]) -> EpisodicEdge:
         """Parse episode data from JSON."""
         return EpisodicEdge(
-            uuid=data["uuid"],
-            source_node_uuid=data.get("source_node_uuid"),
-            target_node_uuid=data.get("target_node_uuid"),
-            content=data["content"],
-            created_at=data["created_at"],
-            group_id=data.get("group_id"),
+            uuid=data['uuid'],
+            source_node_uuid=data.get('source_node_uuid'),
+            target_node_uuid=data.get('target_node_uuid'),
+            content=data['content'],
+            created_at=data['created_at'],
+            group_id=data.get('group_id'),
         )
 
 
@@ -294,7 +333,7 @@ class RustSearchClient:
 async def rust_search(
     query: str,
     config: SearchConfig,
-    base_url: str = "http://localhost:3004",
+    base_url: str = 'http://localhost:3004',
     **kwargs,
 ) -> SearchResults:
     """
