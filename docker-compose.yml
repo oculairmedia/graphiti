@@ -286,6 +286,7 @@ services:
       - ./server/graph_service/zep_graphiti.py:/app/server/graph_service/zep_graphiti.py:ro
       - ./server/graph_service/queue_proxy.py:/app/server/graph_service/queue_proxy.py:ro
       - ./server/graph_service/routers/search_proxy.py:/app/server/graph_service/routers/search_proxy.py:ro
+      - ./graphiti_core/search/rust_client.py:/app/graphiti_core/search/rust_client.py:ro
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY:-sk-dummy}
       - NEO4J_URI=${NEO4J_URI:-bolt://neo4j:7687}
