@@ -446,9 +446,16 @@ impl FalkorDBLoader {
                 for (idx, edge) in chunk.iter().enumerate() {
                     let edge = *edge;
                     let props = self.build_edge_properties_map(edge);
+                    // Extract uuid from properties for MERGE pattern
+                    let edge_uuid = edge.properties.get("uuid")
+                        .and_then(|v| match v {
+                            crate::models::node::PropertyValue::String(s) => Some(s.as_str()),
+                            _ => None,
+                        })
+                        .unwrap_or("");
                     let item = format!(
-                        "{{source: \"{}\", target: \"{}\", props: {}}}",
-                        edge.source_uuid, edge.target_uuid, props
+                        "{{source: \"{}\", target: \"{}\", edge_uuid: \"{}\", props: {}}}",
+                        edge.source_uuid, edge.target_uuid, edge_uuid, props
                     );
 
                     if idx < chunk.len() - 1 {
@@ -461,8 +468,10 @@ impl FalkorDBLoader {
                 query_lines.push("] AS item".to_string());
                 query_lines.push("MATCH (source {uuid: item.source})".to_string());
                 query_lines.push("MATCH (target {uuid: item.target})".to_string());
+                // Include uuid in MERGE pattern to prevent duplicate edges in FalkorDB
+                // FalkorDB requires identifying properties in MERGE pattern for relationships
                 query_lines.push(format!(
-                    "MERGE (source)-[r:{}]->(target)",
+                    "MERGE (source)-[r:{} {{uuid: item.edge_uuid}}]->(target)",
                     Self::escape_identifier(&rel_type)
                 ));
                 query_lines.push("SET r += item.props".to_string());
