@@ -355,7 +355,86 @@ export class SkipStrategy implements FallbackStrategy {
 }
 
 /**
- * Strategy 5: Request full reload as last resort
+ * Strategy 5: Clear DuckDB and retry for table conflicts
+ */
+export class DuckDBRecoveryStrategy implements FallbackStrategy {
+  name = 'clear-duckdb-retry';
+  priority = 5;
+  maxRetries = 1;
+  retryDelay = 500;
+  
+  private attemptHandler?: (attempt: UpdateAttempt) => Promise<boolean>;
+  private clearAttempted = false;
+  
+  constructor(handler?: (attempt: UpdateAttempt) => Promise<boolean>) {
+    this.attemptHandler = handler;
+  }
+  
+  canHandle(attempt: UpdateAttempt): boolean {
+    // Handle DuckDB-related errors
+    const errorMessage = attempt.error.message.toLowerCase();
+    return !this.clearAttempted && (
+      errorMessage.includes('already exists') ||
+      errorMessage.includes('does not exist') ||
+      errorMessage.includes('duckdb') ||
+      errorMessage.includes('cosmograph_points') ||
+      errorMessage.includes('t_cosmograph')
+    );
+  }
+  
+  async execute(attempt: UpdateAttempt): Promise<boolean> {
+    console.log(`[DuckDBRecoveryStrategy] Clearing DuckDB storage and retrying ${attempt.operation}`);
+    this.clearAttempted = true;
+    
+    try {
+      // Clear IndexedDB databases related to DuckDB/Cosmograph
+      const databases = await indexedDB.databases();
+      for (const db of databases) {
+        if (db.name && (db.name.includes('duckdb') || db.name.includes('cosmograph'))) {
+          console.log(`[DuckDBRecoveryStrategy] Deleting database: ${db.name}`);
+          await new Promise<void>((resolve, reject) => {
+            const request = indexedDB.deleteDatabase(db.name!);
+            request.onsuccess = () => resolve();
+            request.onerror = () => reject(request.error);
+            request.onblocked = () => {
+              console.warn(`[DuckDBRecoveryStrategy] Database ${db.name} is blocked, continuing anyway`);
+              resolve();
+            };
+          });
+        }
+      }
+      
+      // Wait a bit for cleanup to complete
+      await new Promise(resolve => setTimeout(resolve, this.retryDelay));
+      
+      // Retry the operation
+      if (this.attemptHandler) {
+        const result = await this.attemptHandler({
+          ...attempt,
+          attemptNumber: 1 // Reset attempt number for fresh start
+        });
+        
+        if (result) {
+          console.log(`[DuckDBRecoveryStrategy] Retry successful after clearing DuckDB`);
+          this.clearAttempted = false; // Reset for future errors
+        }
+        return result;
+      }
+      
+      return false;
+    } catch (error) {
+      console.error('[DuckDBRecoveryStrategy] Failed to clear DuckDB:', error);
+      return false;
+    }
+  }
+  
+  reset(): void {
+    this.clearAttempted = false;
+  }
+}
+
+/**
+ * Strategy 6: Request full reload as last resort
  */
 export class FullReloadStrategy implements FallbackStrategy {
   name = 'full-reload';
@@ -430,6 +509,9 @@ export class FallbackOrchestrator {
     
     // Always add skip strategy for non-critical updates
     this.addStrategy(new SkipStrategy());
+    
+    // Always add DuckDB recovery strategy for table conflicts
+    this.addStrategy(new DuckDBRecoveryStrategy());
     
     if (this.config.enableFullReload) {
       this.addStrategy(new FullReloadStrategy());
@@ -551,6 +633,18 @@ export class ErrorClassifier {
         severity: 'low',
         recoverable: false,
         suggestedStrategy: 'skip-non-critical'
+      };
+    }
+    
+    // DuckDB table errors - recoverable by clearing storage and retrying
+    if (errorMessage.includes('already exists') || 
+        errorMessage.includes('does not exist') ||
+        errorMessage.includes('duckdb') ||
+        errorMessage.includes('cosmograph_points')) {
+      return {
+        severity: 'medium',
+        recoverable: true,
+        suggestedStrategy: 'clear-duckdb-retry'
       };
     }
     
