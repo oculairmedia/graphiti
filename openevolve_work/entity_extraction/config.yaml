@@ -14,11 +14,13 @@ evaluator:
 llm:
   api_base: https://api.z.ai/api/coding/paas/v4
   api_key: ${CHUTES_API_KEY}
+  # Use standard model for reliable output format
   model: GLM-4.5
   timeout: 300
   retries: 5
   retry_delay: 30
   models:
+  # Standard model - reliable structured output
   - name: GLM-4.5
     weight: 1.0
     timeout: 300

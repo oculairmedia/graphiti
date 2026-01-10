@@ -45,11 +45,15 @@ class EvolutionConfig:
     migration_interval: int = 20
 
     # LLM configuration - using Z.AI GLM models
+    # Model selection strategy:
+    # - GLM-4.5: Standard model for reliable structured output
+    # - glm-4.6/4.7: Reasoning models for complex analysis (output to reasoning_content)
+    # Note: glm-4.5-air also outputs to reasoning_content, so we use GLM-4.5 for simplicity
     llm_api_base: str = 'https://api.z.ai/api/coding/paas/v4'
-    llm_model: str = 'GLM-4.5'
+    llm_model: str = 'GLM-4.5'  # Standard model - reliable output format
     llm_temperature: float = 0.7
     llm_models: list[dict[str, Any]] = field(default_factory=lambda: [
-        {'name': 'GLM-4.5', 'weight': 1.0},  # Only GLM-4.5 available on coding endpoint
+        {'name': 'GLM-4.5', 'weight': 1.0},  # Standard model - reliable for structured output
     ])
 
     # Feature dimensions for MAP-Elites (use built-in OpenEvolve features)
