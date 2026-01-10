@@ -1,0 +1,87 @@
+{
+  "description": "Training examples for entity extraction evaluation",
+  "examples": [
+    {
+      "inputs": {
+        "current_message": "John Smith joined Acme Corporation as CTO last week.",
+        "entity_types": "[{\"id\": 1, \"name\": \"Person\"}, {\"id\": 2, \"name\": \"Organization\"}]",
+        "previous_messages": "[]"
+      },
+      "expected_output": {
+        "extracted_entities": {
+          "extracted_entities": [
+            {"name": "John Smith", "entity_type_id": 1},
+            {"name": "Acme Corporation", "entity_type_id": 2}
+          ]
+        }
+      }
+    },
+    {
+      "inputs": {
+        "current_message": "Alice works at Google in San Francisco. She met Bob at Microsoft.",
+        "entity_types": "[{\"id\": 1, \"name\": \"Person\"}, {\"id\": 2, \"name\": \"Organization\"}, {\"id\": 3, \"name\": \"Location\"}]",
+        "previous_messages": "[]"
+      },
+      "expected_output": {
+        "extracted_entities": {
+          "extracted_entities": [
+            {"name": "Alice", "entity_type_id": 1},
+            {"name": "Google", "entity_type_id": 2},
+            {"name": "San Francisco", "entity_type_id": 3},
+            {"name": "Bob", "entity_type_id": 1},
+            {"name": "Microsoft", "entity_type_id": 2}
+          ]
+        }
+      }
+    },
+    {
+      "inputs": {
+        "current_message": "The Tesla Model 3 was launched by Elon Musk in Fremont, California.",
+        "entity_types": "[{\"id\": 1, \"name\": \"Person\"}, {\"id\": 2, \"name\": \"Organization\"}, {\"id\": 3, \"name\": \"Location\"}, {\"id\": 4, \"name\": \"Product\"}]",
+        "previous_messages": "[]"
+      },
+      "expected_output": {
+        "extracted_entities": {
+          "extracted_entities": [
+            {"name": "Tesla Model 3", "entity_type_id": 4},
+            {"name": "Elon Musk", "entity_type_id": 1},
+            {"name": "Fremont", "entity_type_id": 3},
+            {"name": "California", "entity_type_id": 3}
+          ]
+        }
+      }
+    },
+    {
+      "inputs": {
+        "current_message": "Dr. Sarah Chen published a paper on quantum computing at MIT.",
+        "entity_types": "[{\"id\": 1, \"name\": \"Person\"}, {\"id\": 2, \"name\": \"Organization\"}, {\"id\": 3, \"name\": \"Topic\"}]",
+        "previous_messages": "[]"
+      },
+      "expected_output": {
+        "extracted_entities": {
+          "extracted_entities": [
+            {"name": "Dr. Sarah Chen", "entity_type_id": 1},
+            {"name": "quantum computing", "entity_type_id": 3},
+            {"name": "MIT", "entity_type_id": 2}
+          ]
+        }
+      }
+    },
+    {
+      "inputs": {
+        "current_message": "Amazon announced they will acquire Whole Foods for $13.7 billion.",
+        "entity_types": "[{\"id\": 1, \"name\": \"Organization\"}, {\"id\": 2, \"name\": \"Money\"}]",
+        "previous_messages": "[]"
+      },
+      "expected_output": {
+        "extracted_entities": {
+          "extracted_entities": [
+            {"name": "Amazon", "entity_type_id": 1},
+            {"name": "Whole Foods", "entity_type_id": 1},
+            {"name": "$13.7 billion", "entity_type_id": 2}
+          ]
+        }
+      }
+    }
+  ]
+}

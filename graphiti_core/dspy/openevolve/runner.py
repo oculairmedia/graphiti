@@ -54,16 +54,19 @@ class EvolutionConfig:
         {'name': 'GLM-4-Plus', 'weight': 0.2},
     ])
 
-    # Feature dimensions for MAP-Elites
+    # Feature dimensions for MAP-Elites (use built-in OpenEvolve features)
     feature_dimensions: list[str] = field(default_factory=lambda: [
-        'extraction_quality',
-        'token_efficiency',
-        'latency',
+        'score',
+        'complexity',
+        'diversity',
     ])
+
+    # API key for Z.AI (read from env)
+    llm_api_key: str = field(default_factory=lambda: __import__('os').environ.get('CHUTES_API_KEY', ''))
 
     # Evaluation settings
     enable_artifacts: bool = True
-    cascade_evaluation: bool = True
+    cascade_evaluation: bool = False  # Disabled - we use direct evaluation
     use_llm_feedback: bool = True
 
     # Prompt configuration
@@ -80,6 +83,7 @@ class EvolutionConfig:
             'random_seed': self.random_seed,
             'llm': {
                 'api_base': self.llm_api_base,
+                'api_key': self.llm_api_key,
                 'model': self.llm_model,
                 'temperature': self.llm_temperature,
                 'models': self.llm_models,
@@ -455,10 +459,12 @@ Focus on clarity, precision, and robustness to edge cases.'''
                 config=str(config_path),
             )
 
-            result.best_program_path = str(evolution_result.best_path)
+            # Extract results from OpenEvolve's EvolutionResult
+            result.best_program_path = str(evolution_result.output_dir / 'best' / 'best_program.py')
             result.best_score = evolution_result.best_score
-            result.iterations_completed = evolution_result.iterations
+            result.iterations_completed = self.config.max_iterations
             result.all_metrics = evolution_result.metrics
+            result.success = True
 
         except Exception as e:
             result.success = False
