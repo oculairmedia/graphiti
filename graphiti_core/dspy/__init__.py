@@ -39,6 +39,19 @@ from graphiti_core.dspy.optimization import (
     node_resolution_metric,
     summary_metric,
 )
+from graphiti_core.dspy.response_logger import (
+    ResponseLogger,
+    ResponseLoggerConfig,
+    StageLogEntry,
+    get_response_logger,
+    configure_response_logger,
+)
+from graphiti_core.dspy.hot_reload import (
+    HotReloader,
+    HotReloadConfig,
+    get_hot_reloader,
+    configure_hot_reload,
+)
 
 __all__ = [
     # Config
@@ -72,4 +85,15 @@ __all__ = [
     'edge_extraction_metric',
     'node_resolution_metric',
     'summary_metric',
+    # Response Logging
+    'ResponseLogger',
+    'ResponseLoggerConfig',
+    'StageLogEntry',
+    'get_response_logger',
+    'configure_response_logger',
+    # Hot Reload
+    'HotReloader',
+    'HotReloadConfig',
+    'get_hot_reloader',
+    'configure_hot_reload',
 ]
