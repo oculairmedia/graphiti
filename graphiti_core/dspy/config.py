@@ -23,6 +23,12 @@ logger = logging.getLogger(__name__)
 # Z.AI GLM endpoints
 ZAI_API_BASE = 'https://api.z.ai/api/paas/v4'
 
+
+def _get_cache_enabled_default() -> bool:
+    """Get default DSPy cache enabled value from environment."""
+    env_value = os.environ.get('DSPY_ENABLE_CACHE', 'true').lower()
+    return env_value in ('true', '1', 'yes', 'on')
+
 # Model pools with concurrency limits
 # Complex models - for extraction, deduplication, reasoning
 COMPLEX_MODELS = [
@@ -133,6 +139,7 @@ def configure_lm(
     temperature: float = 0.1,
     max_tokens: int = 20000,
     use_multi_model: bool = True,
+    cache: bool | None = None,
 ) -> None:
     """
     Configure DSPy language models for Graphiti.
@@ -143,6 +150,7 @@ def configure_lm(
         temperature: Sampling temperature.
         max_tokens: Maximum tokens per response.
         use_multi_model: Enable multi-model load balancing (default True).
+        cache: Enable response caching. Defaults to DSPY_ENABLE_CACHE env var (true).
     """
     global _config, _complex_pool, _simple_pool
 
@@ -160,6 +168,10 @@ def configure_lm(
         temperature=temperature,
     )
 
+    # Resolve cache setting
+    if cache is None:
+        cache = _get_cache_enabled_default()
+
     # Create model pools
     def create_lm(model_name: str) -> dspy.LM:
         return dspy.LM(
@@ -168,6 +180,7 @@ def configure_lm(
             api_key=resolved_api_key,
             temperature=temperature,
             max_tokens=max_tokens,
+            cache=cache,  # Enable/disable response caching
         )
 
     if use_multi_model:
@@ -194,6 +207,7 @@ def configure_lm(
     dspy.configure(lm=_complex_pool.models[0].lm)
 
     logger.info('DSPy configured with model pools:')
+    logger.info(f'  Response caching: {"ENABLED" if cache else "DISABLED"}')
     logger.info(f'  Complex pool (capacity {_complex_pool.total_capacity()}):')
     for m in _complex_pool.models:
         logger.info(f'    - {m.name} (limit: {m.concurrency_limit})')
