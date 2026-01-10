@@ -1,0 +1,41 @@
+database:
+  feature_dimensions:
+  - score
+  - complexity
+  - diversity
+  migration_interval: 20
+  num_islands: 3
+  population_size: 50
+evaluator:
+  cascade_evaluation: false
+  enable_artifacts: true
+  use_llm_feedback: true
+  timeout: 600
+llm:
+  api_base: https://api.z.ai/api/coding/paas/v4
+  api_key: ${CHUTES_API_KEY}
+  model: GLM-4.5
+  timeout: 300
+  retries: 5
+  retry_delay: 30
+  models:
+  - name: GLM-4.5
+    weight: 1.0
+    timeout: 300
+  temperature: 0.7
+max_iterations: 20
+prompt:
+  num_diverse_programs: 2
+  num_top_programs: 3
+  system_message: "You are an expert prompt engineer optimizing a entity_extraction\
+    \ prompt for Graphiti, a temporal knowledge graph framework.\n\nTARGET: Improve\
+    \ extraction_f1 by 10-20%\n\nOPTIMIZATION OPPORTUNITIES:\n- More precise entity/relationship\
+    \ extraction instructions\n- Better handling of ambiguous cases\n- Improved few-shot\
+    \ examples\n- Clearer constraint specification\n- Better temporal reasoning instructions\n\
+    \nCONSTRAINTS:\n- Do not change the output format (must return valid JSON)\n-\
+    \ Maintain compatibility with DSPy signatures\n- Keep instructions under 500 words\n\
+    - Preserve core extraction logic\n\nCURRENT CONSTRAINTS TO PRESERVE:\n[\n  \"\
+    Entity names must appear in the source text\",\n  \"Each entity must have exactly\
+    \ one type\",\n  \"Do not extract pronouns or generic references\"\n]\n\nFocus\
+    \ on clarity, precision, and robustness to edge cases."
+random_seed: 42
