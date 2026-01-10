@@ -564,11 +564,18 @@ services:
     image: ghcr.io/oculairmedia/graphiti-worker:main
     restart: unless-stopped
     command:
-      - python
-      - -u
-      - worker/worker_service.py
+      - /bin/bash
+      - -c
+      - |
+        pip install --quiet dspy-ai 2>/dev/null
+        python -u worker/worker_service.py
     volumes:
       - ./scripts:/scripts:ro
+      - ./graphiti_core/llm_client/chutes_client.py:/app/graphiti_core/llm_client/chutes_client.py:ro
+      # DSPy pipeline integration
+      - ./graphiti_core/dspy:/app/graphiti_core/dspy:ro
+      - ./graphiti_core/graphiti.py:/app/graphiti_core/graphiti.py:ro
+      - ./worker/worker_service.py:/app/worker/worker_service.py:ro
     environment:
       - QUEUE_URL=http://graphiti-queued:8080
       - NEO4J_URI=${NEO4J_URI:-bolt://neo4j:7687}
@@ -628,6 +635,8 @@ services:
       - ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL:-http://192.168.50.90:8082}
       - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-3-5-haiku-latest}
       - ANTHROPIC_SMALL_MODEL=${ANTHROPIC_SMALL_MODEL:-claude-3-5-haiku-latest}
+      # DSPy Pipeline
+      - USE_DSPY=${USE_DSPY:-false}
     networks:
       - graphiti_network
     depends_on:

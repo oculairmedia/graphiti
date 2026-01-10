@@ -76,6 +76,11 @@ class WorkerService:
         # This supports OpenAI, Ollama, and Cerebras based on environment variables
         from graphiti_core.client_factory import GraphitiClientFactory
 
+        # Check if DSPy pipeline is enabled
+        use_dspy = os.getenv('USE_DSPY', 'false').lower() == 'true'
+        if use_dspy:
+            logger.info('DSPy pipeline ENABLED - using DSPy for LLM extraction')
+
         # Determine which LLM provider is being used
         if os.getenv('USE_CEREBRAS', 'false').lower() == 'true':
             logger.info('Using Cerebras for LLM')
@@ -120,6 +125,7 @@ class WorkerService:
             llm_client=llm_client,
             embedder=embedder,
             graph_driver=falkor_driver,
+            use_dspy=use_dspy,
         )
 
         # Initialize worker pool

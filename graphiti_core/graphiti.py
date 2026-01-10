@@ -90,11 +90,24 @@ from graphiti_core.utils.maintenance.graph_data_operations import (
     retrieve_episodes,
 )
 from graphiti_core.utils.maintenance.node_operations import (
+    create_entity_node_embeddings,
     extract_attributes_from_nodes,
     extract_nodes,
     resolve_extracted_nodes,
 )
 from graphiti_core.utils.ontology_utils.entity_types_utils import validate_entity_types
+
+# DSPy pipeline imports (lazy loaded when use_dspy=True)
+_dspy_pipeline = None
+
+def _get_dspy_pipeline(group_id: str = 'default'):
+    """Lazy-load DSPy pipeline to avoid import overhead when not used."""
+    global _dspy_pipeline
+    if _dspy_pipeline is None or _dspy_pipeline.group_id != group_id:
+        from graphiti_core.dspy import DSPyIngestionPipeline, configure_lm
+        configure_lm()
+        _dspy_pipeline = DSPyIngestionPipeline(group_id=group_id, generate_summaries=False)
+    return _dspy_pipeline
 
 logger = logging.getLogger(__name__)
 
@@ -120,6 +133,7 @@ class Graphiti:
         graph_driver: GraphDriver | None = None,
         max_coroutines: int | None = None,
         enable_cross_graph_deduplication: bool = True,
+        use_dspy: bool = False,
     ):
         """
         Initialize a Graphiti instance.
@@ -200,6 +214,10 @@ class Graphiti:
 
         self.store_raw_episode_content = store_raw_episode_content
         self.enable_cross_graph_deduplication = enable_cross_graph_deduplication
+        self.use_dspy = use_dspy
+
+        if use_dspy:
+            logger.info('DSPy pipeline enabled - will use DSPy for LLM extraction')
 
         self.clients = GraphitiClients(
             driver=self.driver,
@@ -786,20 +804,36 @@ class Graphiti:
             # Extract attributes with graceful degradation
             # If attribute extraction fails, we still want to save nodes/edges
             try:
-                (resolved_edges, invalidated_edges), hydrated_nodes = await semaphore_gather(
-                    resolve_extracted_edges(
-                        self.clients,
-                        edges,
-                        episode,
-                        nodes,
-                        edge_types or {},
-                        edge_type_map or edge_type_map_default,
-                    ),
-                    extract_attributes_from_nodes(
-                        self.clients, nodes, episode, previous_episodes, entity_types
-                    ),
-                    max_coroutines=self.max_coroutines,
-                )
+                # Choose attribute extraction method based on DSPy flag
+                if self.use_dspy:
+                    logger.info(f'Episode {episode.uuid}: Extracting attributes [DSPy]')
+                    (resolved_edges, invalidated_edges), hydrated_nodes = await semaphore_gather(
+                        resolve_extracted_edges(
+                            self.clients,
+                            edges,
+                            episode,
+                            nodes,
+                            edge_types or {},
+                            edge_type_map or edge_type_map_default,
+                        ),
+                        self._extract_attributes_dspy(nodes, episode, previous_episodes),
+                        max_coroutines=self.max_coroutines,
+                    )
+                else:
+                    (resolved_edges, invalidated_edges), hydrated_nodes = await semaphore_gather(
+                        resolve_extracted_edges(
+                            self.clients,
+                            edges,
+                            episode,
+                            nodes,
+                            edge_types or {},
+                            edge_type_map or edge_type_map_default,
+                        ),
+                        extract_attributes_from_nodes(
+                            self.clients, nodes, episode, previous_episodes, entity_types
+                        ),
+                        max_coroutines=self.max_coroutines,
+                    )
             except Exception as attr_error:
                 logger.warning(
                     f'Attribute extraction failed: {attr_error}. '
@@ -908,11 +942,73 @@ class Graphiti:
         state.nodes_extract_attempts += 1
         logger.info(
             f'Episode {episode.uuid}: Extracting nodes (attempt {state.nodes_extract_attempts})'
+            f'{" [DSPy]" if self.use_dspy else ""}'
         )
+
+        if self.use_dspy:
+            return await self._extract_nodes_dspy(episode, previous_episodes, entity_types)
 
         return await extract_nodes(
             self.clients, episode, previous_episodes, entity_types, excluded_entity_types
         )
+
+    async def _extract_nodes_dspy(
+        self,
+        episode: EpisodicNode,
+        previous_episodes: list[EpisodicNode],
+        entity_types: dict[str, BaseModel] | None,
+    ) -> list[EntityNode]:
+        """Extract nodes using DSPy pipeline."""
+        import asyncio
+        from graphiti_core.utils.datetime_utils import utc_now
+
+        pipeline = _get_dspy_pipeline(episode.group_id)
+
+        # Convert entity_types to DSPy format if provided
+        dspy_entity_types = None
+        if entity_types:
+            dspy_entity_types = [
+                {'id': i, 'name': name, 'description': f'{name} entity type'}
+                for i, name in enumerate(entity_types.keys())
+            ]
+
+        # Format previous episodes for DSPy
+        prev_messages = [
+            {'content': ep.content} for ep in previous_episodes if ep.content
+        ]
+
+        # Run DSPy extraction (sync, so wrap in executor)
+        def run_extraction():
+            return pipeline.node_extractor(
+                current_message=episode.content,
+                entity_types=dspy_entity_types or pipeline.entity_types,
+                previous_messages=prev_messages,
+                custom_instructions='',
+            )
+
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(None, run_extraction)
+
+        # Convert DSPy output to EntityNode objects (matching extract_nodes output)
+        now = utc_now()
+        extracted = []
+        for entity in result.extracted_entities:
+            entity_type = (
+                pipeline.entity_types[entity.entity_type_id]['name']
+                if entity.entity_type_id < len(pipeline.entity_types)
+                else 'Entity'
+            )
+            node = EntityNode(
+                name=entity.name,
+                group_id=episode.group_id,
+                labels=[entity_type],
+                created_at=now,
+                summary='',
+            )
+            extracted.append(node)
+
+        logger.info(f'DSPy extracted {len(extracted)} entities from episode {episode.uuid}')
+        return extracted
 
     @retry_with_backoff(max_retries=3, base_delay=2.0)
     async def _resolve_nodes_with_retry(
@@ -954,7 +1050,13 @@ class Graphiti:
         state.edges_extract_attempts += 1
         logger.info(
             f'Episode {episode.uuid}: Extracting edges (attempt {state.edges_extract_attempts})'
+            f'{" [DSPy]" if self.use_dspy else ""}'
         )
+
+        if self.use_dspy:
+            return await self._extract_edges_dspy(
+                episode, extracted_nodes, previous_episodes, edge_types
+            )
 
         edge_type_map_default = (
             {('Entity', 'Entity'): list(edge_types.keys())}
@@ -971,6 +1073,124 @@ class Graphiti:
             group_id,
             edge_types,
         )
+
+    async def _extract_edges_dspy(
+        self,
+        episode: EpisodicNode,
+        extracted_nodes: list[EntityNode],
+        previous_episodes: list[EpisodicNode],
+        edge_types: dict[str, BaseModel] | None,
+    ) -> list[EntityEdge]:
+        """Extract edges using DSPy pipeline."""
+        import asyncio
+        from graphiti_core.utils.datetime_utils import utc_now
+
+        if len(extracted_nodes) < 2:
+            return []
+
+        pipeline = _get_dspy_pipeline(episode.group_id)
+        now = utc_now()
+
+        # Format entities for DSPy (extracted_nodes are EntityNode objects)
+        entities = [
+            {'id': i, 'name': node.name, 'type': node.labels[0] if node.labels else 'Entity'}
+            for i, node in enumerate(extracted_nodes)
+        ]
+
+        # Format previous episodes
+        prev_messages = [
+            {'content': ep.content} for ep in previous_episodes if ep.content
+        ]
+
+        # Convert edge_types if provided
+        dspy_edge_types = []
+        if edge_types:
+            dspy_edge_types = [
+                {'name': name, 'description': f'{name} relationship'}
+                for name in edge_types.keys()
+            ]
+
+        # Run DSPy extraction
+        def run_extraction():
+            return pipeline.edge_extractor(
+                current_message=episode.content,
+                entities=entities,
+                reference_time=episode.valid_at.isoformat() if episode.valid_at else '',
+                previous_messages=prev_messages,
+                edge_types=dspy_edge_types,
+                custom_instructions='',
+            )
+
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(None, run_extraction)
+
+        # Convert DSPy output to EntityEdge objects (matching extract_edges output)
+        extracted_edges = []
+        for edge in result.edges:
+            source_idx = edge.source_entity_id
+            target_idx = edge.target_entity_id
+
+            if source_idx < len(extracted_nodes) and target_idx < len(extracted_nodes):
+                entity_edge = EntityEdge(
+                    source_node_uuid=extracted_nodes[source_idx].uuid,
+                    target_node_uuid=extracted_nodes[target_idx].uuid,
+                    name=edge.relation_type,
+                    fact=edge.fact,
+                    group_id=episode.group_id,
+                    created_at=now,
+                    episodes=[episode.uuid],
+                    valid_at=episode.valid_at,
+                    invalid_at=None,
+                )
+                extracted_edges.append(entity_edge)
+
+        logger.info(f'DSPy extracted {len(extracted_edges)} edges from episode {episode.uuid}')
+        return extracted_edges
+
+    async def _extract_attributes_dspy(
+        self,
+        nodes: list[EntityNode],
+        episode: EpisodicNode,
+        previous_episodes: list[EpisodicNode],
+    ) -> list[EntityNode]:
+        """Extract attributes (summaries) using DSPy pipeline."""
+        import asyncio
+
+        if not nodes:
+            return nodes
+
+        pipeline = _get_dspy_pipeline(episode.group_id)
+
+        # Format previous episodes
+        prev_messages = [
+            {'content': ep.content} for ep in previous_episodes if ep.content
+        ]
+
+        # Generate summaries for each node
+        def run_summaries():
+            updated = []
+            for node in nodes:
+                try:
+                    result = pipeline.summary_generator(
+                        current_message=episode.content,
+                        entity_name=node.name,
+                        previous_messages=prev_messages,
+                        existing_summary=node.summary or '',
+                    )
+                    node.summary = result.summary
+                except Exception as e:
+                    logger.warning(f'DSPy summary failed for {node.name}: {e}')
+                updated.append(node)
+            return updated
+
+        loop = asyncio.get_event_loop()
+        updated_nodes = await loop.run_in_executor(None, run_summaries)
+
+        # Generate embeddings for the nodes
+        await create_entity_node_embeddings(self.embedder, updated_nodes)
+
+        logger.info(f'DSPy generated summaries for {len(updated_nodes)} nodes')
+        return updated_nodes
 
     ##### EXPERIMENTAL #####
     async def add_episode_bulk(

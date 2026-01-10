@@ -1,0 +1,146 @@
+{
+  "pipeline": "dspy",
+  "timestamp": "2026-01-09T23:09:26.814537+00:00",
+  "episodes": [
+    {
+      "id": "ep_001",
+      "content": "Sarah started a new project called DataFlow using Python and PostgreSQL.",
+      "entities": [
+        {
+          "name": "Sarah",
+          "type": "Person",
+          "is_new": true
+        },
+        {
+          "name": "DataFlow",
+          "type": "Product",
+          "is_new": true
+        },
+        {
+          "name": "Python",
+          "type": "Product",
+          "is_new": true
+        },
+        {
+          "name": "PostgreSQL",
+          "type": "Product",
+          "is_new": true
+        }
+      ],
+      "edges": [
+        {
+          "source": "Sarah",
+          "relation": "STARTED_PROJECT",
+          "target": "DataFlow"
+        },
+        {
+          "source": "DataFlow",
+          "relation": "USES",
+          "target": "Python"
+        },
+        {
+          "source": "DataFlow",
+          "relation": "USES",
+          "target": "PostgreSQL"
+        }
+      ],
+      "time_ms": 4421.396,
+      "timing_breakdown": {
+        "extraction_ms": 171.453,
+        "resolution_ms": 0.009000000000000001,
+        "edge_ms": 4249.897
+      },
+      "success": true
+    },
+    {
+      "id": "ep_002",
+      "content": "Mike joined the DataFlow team. Sarah promoted him to lead developer.",
+      "entities": [
+        {
+          "name": "Mike",
+          "type": "Person",
+          "is_new": true
+        },
+        {
+          "name": "Sarah",
+          "type": "Person",
+          "is_new": false
+        },
+        {
+          "name": "DataFlow",
+          "type": "Product",
+          "is_new": false
+        }
+      ],
+      "edges": [
+        {
+          "source": "Mike",
+          "relation": "JOINED_TEAM",
+          "target": "DataFlow"
+        },
+        {
+          "source": "Sarah",
+          "relation": "PROMOTED_TO",
+          "target": "Mike"
+        }
+      ],
+      "time_ms": 53881.662,
+      "timing_breakdown": {
+        "extraction_ms": 29090.103,
+        "resolution_ms": 22061.42,
+        "edge_ms": 2730.0789999999997
+      },
+      "success": true
+    },
+    {
+      "id": "ep_003",
+      "content": "Dr. Chen from the AI division will help with machine learning components for DataFlow.",
+      "entities": [
+        {
+          "name": "Dr. Chen",
+          "type": "Person",
+          "is_new": true
+        },
+        {
+          "name": "AI division",
+          "type": "Organization",
+          "is_new": true
+        },
+        {
+          "name": "machine learning",
+          "type": "Concept",
+          "is_new": true
+        },
+        {
+          "name": "DataFlow",
+          "type": "Product",
+          "is_new": false
+        }
+      ],
+      "edges": [
+        {
+          "source": "Dr. Chen",
+          "relation": "ASSOCIATED_WITH",
+          "target": "AI division"
+        },
+        {
+          "source": "Dr. Chen",
+          "relation": "CONTRIBUTES_TO",
+          "target": "DataFlow"
+        },
+        {
+          "source": "machine learning",
+          "relation": "PART_OF",
+          "target": "DataFlow"
+        }
+      ],
+      "time_ms": 52804.369,
+      "timing_breakdown": {
+        "extraction_ms": 27479.828,
+        "resolution_ms": 21631.06,
+        "edge_ms": 3693.441
+      },
+      "success": true
+    }
+  ]
+}

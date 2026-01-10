@@ -1,0 +1,33 @@
+{
+  "pipeline": "legacy",
+  "timestamp": "2026-01-09T22:52:40.892824+00:00",
+  "episodes": [
+    {
+      "id": "ep_001",
+      "content": "Sarah started a new project called DataFlow using Python and PostgreSQL.",
+      "entities": [],
+      "edges": [],
+      "time_ms": 66115.053,
+      "success": false,
+      "error": "1 validation error for ExtractedEntities\n  Invalid JSON: expected value at line 1 column 1 [type=json_invalid, input_value='```json\\n{\\n  \"entities\"...: 0\\n    }\\n  ]\\n}\\n```', input_type=str]\n    For further information visit https://errors.pydantic.dev/2.11/v/json_invalid"
+    },
+    {
+      "id": "ep_002",
+      "content": "Mike joined the DataFlow team. Sarah promoted him to lead developer.",
+      "entities": [],
+      "edges": [],
+      "time_ms": 92434.72,
+      "success": false,
+      "error": "1 validation error for ExtractedEntities\n  Invalid JSON: expected value at line 1 column 1 [type=json_invalid, input_value='```json\\n{\\n  \"entities\"...: 0\\n    }\\n  ]\\n}\\n```', input_type=str]\n    For further information visit https://errors.pydantic.dev/2.11/v/json_invalid"
+    },
+    {
+      "id": "ep_003",
+      "content": "Dr. Chen from the AI division will help with machine learning components for DataFlow.",
+      "entities": [],
+      "edges": [],
+      "time_ms": 81756.446,
+      "success": false,
+      "error": "1 validation error for ExtractedEntities\n  Invalid JSON: expected value at line 1 column 1 [type=json_invalid, input_value='```json\\n{\\n  \"entities\"...: 0\\n    }\\n  ]\\n}\\n```', input_type=str]\n    For further information visit https://errors.pydantic.dev/2.11/v/json_invalid"
+    }
+  ]
+}
