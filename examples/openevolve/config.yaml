@@ -1,0 +1,82 @@
+# OpenEvolve Configuration for Graphiti DSPy Pipeline
+# See: https://github.com/algorithmicsuperintelligence/openevolve
+
+max_iterations: 100
+random_seed: 42
+
+# LLM Configuration
+# Using Z.AI GLM models
+llm:
+  api_base: "https://api.z.ai/api/paas/v4"
+  model: "GLM-4.5"
+  temperature: 0.7
+
+  # Multiple models for ensemble evolution
+  models:
+    - name: "GLM-4.5"
+      weight: 0.5  # Primary model
+    - name: "GLM-4-32B-0414-128K"
+      weight: 0.3  # High capacity
+    - name: "GLM-4-Plus"
+      weight: 0.2  # Faster for simple mutations
+
+  # Alternative configurations:
+  # GLM models via Z.AI
+  # model: "glm-4.5"
+  #
+  # Gemini (requires API key)
+  # api_base: "https://generativelanguage.googleapis.com/v1beta/openai/"
+  # model: "gemini-2.5-flash"
+
+# MAP-Elites Database Configuration
+database:
+  population_size: 100      # Number of solutions to maintain
+  num_islands: 3            # Parallel evolution populations
+  migration_interval: 25    # Exchange solutions every N iterations
+
+  # Feature dimensions for quality-diversity
+  # OpenEvolve maintains diverse solutions across these dimensions
+  feature_dimensions:
+    - "extraction_quality"   # Primary metric (F1 score)
+    - "token_efficiency"     # Tokens used per extraction
+    - "latency"              # Inference time
+
+# Evaluator Configuration
+evaluator:
+  enable_artifacts: true     # Pass errors back to LLM for learning
+  cascade_evaluation: true   # Multi-stage testing (fast then thorough)
+  use_llm_feedback: true     # LLM analyzes failed attempts
+  timeout_seconds: 30        # Max time per evaluation
+
+# Prompt Generation
+prompt:
+  num_top_programs: 3        # Best solutions to show LLM
+  num_diverse_programs: 2    # Diverse solutions for inspiration
+
+  # System message for entity extraction evolution
+  system_message: |
+    You are an expert prompt engineer optimizing extraction prompts for
+    Graphiti, a temporal knowledge graph framework.
+
+    TARGET: Improve entity extraction F1 score by 10-20%
+
+    OPTIMIZATION OPPORTUNITIES:
+    - More precise entity type definitions
+    - Better handling of entity name variations
+    - Improved temporal reference extraction
+    - Clearer disambiguation instructions
+    - More informative few-shot examples
+
+    CONSTRAINTS:
+    ❌ Do not change the output JSON schema
+    ❌ Do not remove required fields
+    ❌ Keep instructions under 500 words
+    ✅ Optimize for precision and recall
+    ✅ Improve edge case handling
+    ✅ Add useful examples
+
+# Output Configuration
+output:
+  checkpoint_interval: 10    # Save state every N iterations
+  visualization: true        # Enable web visualization
+  export_format: "json"      # Export results as JSON
