@@ -22,7 +22,6 @@ from difflib import SequenceMatcher
 from time import time
 from typing import Any
 from uuid import uuid4, uuid5, NAMESPACE_DNS
-import hashlib
 
 import pydantic
 from pydantic import BaseModel, Field
@@ -45,6 +44,7 @@ from graphiti_core.search.search_config_recipes import NODE_HYBRID_SEARCH_RRF
 from graphiti_core.search.search_filters import SearchFilters
 from graphiti_core.utils.datetime_utils import utc_now
 from graphiti_core.utils.prompt_compression import get_prompt_compressor
+from graphiti_core.cache import get_entity_cache
 from graphiti_core.utils.prompt_utils import (
     enforce_max_prompt_tokens,
     rerank_and_budget_episodes,
@@ -1183,6 +1183,7 @@ async def extract_attributes_from_nodes(
     episode: EpisodicNode | None = None,
     previous_episodes: list[EpisodicNode] | None = None,
     entity_types: dict[str, BaseModel] | None = None,
+    group_id: str | None = None,
 ) -> list[EntityNode]:
     llm_client = clients.llm_client
     embedder = clients.embedder
@@ -1191,6 +1192,9 @@ async def extract_attributes_from_nodes(
         logger.info('Skipping entity attribute extraction (ENABLE_ATTRIBUTE_EXTRACTION != true)')
         await create_entity_node_embeddings(embedder, nodes)
         return nodes
+
+    # Use episode's group_id if not explicitly provided
+    effective_group_id = group_id or (episode.group_id if episode else None) or 'default'
 
     updated_nodes: list[EntityNode] = await semaphore_gather(
         *[
@@ -1202,6 +1206,7 @@ async def extract_attributes_from_nodes(
                 entity_types.get(next((item for item in node.labels if item != 'Entity'), ''))
                 if entity_types is not None
                 else None,
+                group_id=effective_group_id,
             )
             for node in nodes
         ]
@@ -1218,11 +1223,21 @@ async def extract_attributes_from_node(
     episode: EpisodicNode | None = None,
     previous_episodes: list[EpisodicNode] | None = None,
     entity_type: BaseModel | None = None,
+    group_id: str = 'default',
 ) -> EntityNode:
     # Debug logging: Track input state
     logger.debug(f'🔍 extract_attributes_from_node - Input node: {node.name}')
     logger.debug(f'   Original summary length: {len(node.summary)}')
     logger.debug(f'   LLM client type: {type(llm_client).__name__}')
+
+    # Check entity summary cache first (only for basic summaries, not custom entity types)
+    entity_cache = get_entity_cache()
+    if entity_type is None:
+        cached_summary = entity_cache.get_cached_summary(node.name, group_id)
+        if cached_summary:
+            logger.debug(f'🎯 Cache hit for entity "{node.name}" - using cached summary')
+            node.summary = cached_summary
+            return node
 
     node_context: dict[str, Any] = {
         'name': node.name,
@@ -1294,6 +1309,10 @@ async def extract_attributes_from_node(
         del node_attributes['summary']
 
     node.attributes.update(node_attributes)
+
+    # Cache the new summary for future use
+    if node.summary and node.summary != original_summary:
+        entity_cache.cache_summary(node.name, group_id, node.summary)
 
     # Debug logging: Track final state
     logger.debug(f'🔍 Summary update result:')
