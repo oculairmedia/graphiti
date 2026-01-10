@@ -17,6 +17,7 @@ limitations under the License.
 import hashlib
 import json
 import logging
+import os
 import typing
 from abc import ABC, abstractmethod
 
@@ -31,6 +32,13 @@ from .errors import RateLimitError
 
 DEFAULT_TEMPERATURE = 0
 DEFAULT_CACHE_DIR = './llm_cache'
+
+
+def _get_cache_enabled_default() -> bool:
+    """Get default cache enabled value from environment."""
+    env_value = os.environ.get('GRAPHITI_ENABLE_LLM_CACHE', 'true').lower()
+    return env_value in ('true', '1', 'yes', 'on')
+
 
 MULTILINGUAL_EXTRACTION_RESPONSES = (
     '\n\nAny extracted information should be returned in the same language as it was written in.'
@@ -49,7 +57,7 @@ def is_server_or_retry_error(exception):
 
 
 class LLMClient(ABC):
-    def __init__(self, config: LLMConfig | None, cache: bool = False):
+    def __init__(self, config: LLMConfig | None, cache: bool | None = None):
         if config is None:
             config = LLMConfig()
 
@@ -58,12 +66,17 @@ class LLMClient(ABC):
         self.small_model = config.small_model
         self.temperature = config.temperature
         self.max_tokens = config.max_tokens
+
+        # Enable caching by default (controlled by GRAPHITI_ENABLE_LLM_CACHE env var)
+        if cache is None:
+            cache = _get_cache_enabled_default()
         self.cache_enabled = cache
         self.cache_dir = None
 
         # Only create the cache directory if caching is enabled
         if self.cache_enabled:
             self.cache_dir = Cache(DEFAULT_CACHE_DIR)
+            logger.info(f'LLM response caching enabled (cache_dir={DEFAULT_CACHE_DIR})')
 
     def _clean_input(self, input: str) -> str:
         """Clean input string of invalid unicode and control characters.
