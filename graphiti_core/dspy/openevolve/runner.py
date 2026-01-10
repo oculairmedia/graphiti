@@ -45,13 +45,11 @@ class EvolutionConfig:
     migration_interval: int = 20
 
     # LLM configuration - using Z.AI GLM models
-    llm_api_base: str = 'https://api.z.ai/api/paas/v4'
+    llm_api_base: str = 'https://api.z.ai/api/coding/paas/v4'
     llm_model: str = 'GLM-4.5'
     llm_temperature: float = 0.7
     llm_models: list[dict[str, Any]] = field(default_factory=lambda: [
-        {'name': 'GLM-4.5', 'weight': 0.5},
-        {'name': 'GLM-4-32B-0414-128K', 'weight': 0.3},
-        {'name': 'GLM-4-Plus', 'weight': 0.2},
+        {'name': 'GLM-4.5', 'weight': 1.0},  # Only GLM-4.5 available on coding endpoint
     ])
 
     # Feature dimensions for MAP-Elites (use built-in OpenEvolve features)
@@ -460,10 +458,13 @@ Focus on clarity, precision, and robustness to edge cases.'''
             )
 
             # Extract results from OpenEvolve's EvolutionResult
-            result.best_program_path = str(evolution_result.output_dir / 'best' / 'best_program.py')
-            result.best_score = evolution_result.best_score
+            if evolution_result.output_dir:
+                result.best_program_path = str(Path(evolution_result.output_dir) / 'best' / 'best_program.py')
+            else:
+                result.best_program_path = ''
+            result.best_score = evolution_result.best_score or 0.0
             result.iterations_completed = self.config.max_iterations
-            result.all_metrics = evolution_result.metrics
+            result.all_metrics = evolution_result.metrics or {}
             result.success = True
 
         except Exception as e:

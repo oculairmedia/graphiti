@@ -131,8 +131,18 @@ class EntityExtractionEvaluator(BaseEvaluator):
                 )
 
             # Import here to avoid circular imports
+            import dspy
+            from graphiti_core.dspy.config import configure_lm
             from graphiti_core.dspy.modules import NodeExtractor
             from graphiti_core.dspy.signatures import ExtractedEntities
+
+            # Configure DSPy LLM only if not already configured (thread-safe)
+            try:
+                if dspy.settings.lm is None:
+                    configure_lm()
+            except Exception:
+                # Already configured in another thread - use existing config
+                pass
 
             # Create extractor with evolved instruction
             extractor = NodeExtractor()
@@ -145,7 +155,7 @@ class EntityExtractionEvaluator(BaseEvaluator):
             total_entities = 0
             successful_runs = 0
 
-            for example in self._test_examples[:20]:  # Limit to 20 for speed
+            for example in self._test_examples[:10]:  # Limit to 10 for speed (was 20)
                 try:
                     inputs = example.get('inputs', {})
                     expected = example.get('expected_output', {})

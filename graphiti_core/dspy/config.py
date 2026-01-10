@@ -21,7 +21,7 @@ warnings.filterwarnings('ignore', category=UserWarning, module='pydantic.main')
 logger = logging.getLogger(__name__)
 
 # Z.AI GLM endpoints
-ZAI_API_BASE = 'https://api.z.ai/api/paas/v4'
+ZAI_API_BASE = 'https://api.z.ai/api/coding/paas/v4'
 
 
 def _get_cache_enabled_default() -> bool:
@@ -30,18 +30,14 @@ def _get_cache_enabled_default() -> bool:
     return env_value in ('true', '1', 'yes', 'on')
 
 # Model pools with concurrency limits
-# Complex models - for extraction, deduplication, reasoning
+# Using single model to avoid rate limiting
 COMPLEX_MODELS = [
-    ('GLM-4.5', 10),
-    ('GLM-4-32B-0414-128K', 15),
-    ('GLM-4.7', 5),
+    ('GLM-4.5', 5),  # Reduced concurrency
 ]
 
 # Simple models - for summaries, high-volume tasks
 SIMPLE_MODELS = [
-    ('GLM-4-Plus', 20),
-    ('GLM-4.5-Air', 5),
-    ('GLM-4.5-AirX', 5),
+    ('GLM-4.5', 5),  # Same model, reduced concurrency
 ]
 
 
