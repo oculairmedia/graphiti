@@ -44,7 +44,10 @@ def safe_json_dumps(obj: Any) -> str:
 
 
 # Configuration via environment variables
-MAX_PROMPT_TOKENS = int(os.getenv('MAX_PROMPT_TOKENS', '24000'))  # Safe default below 27K
+# MAX_PROMPT_TOKENS: Maximum tokens per prompt (lower for slow providers like Z.AI)
+# - Default: 6000 (conservative for rate-limited providers)
+# - Set higher (24000) for fast providers with generous rate limits
+MAX_PROMPT_TOKENS = int(os.getenv('MAX_PROMPT_TOKENS', '6000'))
 MAX_EPISODE_CONTENT_CHARS = int(os.getenv('MAX_EPISODE_CONTENT_CHARS', '2000'))
 MAX_PREVIOUS_EPISODES = int(os.getenv('MAX_PREVIOUS_EPISODES', '3'))
 STRIP_ANSI_CODES = os.getenv('STRIP_ANSI_CODES', 'true').lower() == 'true'

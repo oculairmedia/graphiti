@@ -576,6 +576,10 @@ services:
       - ./graphiti_core/dspy:/app/graphiti_core/dspy:ro
       - ./graphiti_core/graphiti.py:/app/graphiti_core/graphiti.py:ro
       - ./worker/worker_service.py:/app/worker/worker_service.py:ro
+      # Token compression and prompt utilities
+      - ./graphiti_core/utils:/app/graphiti_core/utils:ro
+      - ./graphiti_core/search:/app/graphiti_core/search:ro
+      - ./graphiti_core/prompts:/app/graphiti_core/prompts:ro
     environment:
       - QUEUE_URL=http://graphiti-queued:8080
       - NEO4J_URI=${NEO4J_URI:-bolt://neo4j:7687}

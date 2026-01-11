@@ -126,6 +126,9 @@ def node(context: dict[str, Any]) -> list[Message]:
 
 
 def nodes(context: dict[str, Any]) -> list[Message]:
+    # Apply defensive prompt clipping (matches the single-node version)
+    context = enforce_max_prompt_tokens(context)
+
     existing_nodes_block = _existing_entities_block(context)
     return [
         Message(
