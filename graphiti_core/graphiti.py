@@ -100,14 +100,17 @@ from graphiti_core.utils.ontology_utils.entity_types_utils import validate_entit
 # DSPy pipeline imports (lazy loaded when use_dspy=True)
 _dspy_pipeline = None
 
+
 def _get_dspy_pipeline(group_id: str = 'default'):
     """Lazy-load DSPy pipeline to avoid import overhead when not used."""
     global _dspy_pipeline
     if _dspy_pipeline is None or _dspy_pipeline.group_id != group_id:
         from graphiti_core.dspy import DSPyIngestionPipeline, configure_lm
+
         configure_lm()
         _dspy_pipeline = DSPyIngestionPipeline(group_id=group_id, generate_summaries=False)
     return _dspy_pipeline
+
 
 logger = logging.getLogger(__name__)
 
@@ -688,6 +691,16 @@ class Graphiti:
             start = time()
             now = utc_now()
 
+            visibility = None
+            visibility_enabled = False
+            try:
+                from graphiti_core.utils.temporal_visibility import TemporalVisibilityClient
+
+                visibility = TemporalVisibilityClient.get()
+                visibility_enabled = visibility.enabled()
+            except Exception as e:
+                logger.debug('Temporal visibility client unavailable: %s', e)
+
             # if group_id is None, use the default group id by the provider
             group_id = group_id or get_default_group_id(self.driver.provider)
             validate_entity_types(entity_types)
@@ -730,6 +743,11 @@ class Graphiti:
                 f'Created EpisodicNode with group_id: {episode.group_id} (uuid: {episode.uuid})'
             )
 
+            if visibility_enabled and visibility is not None:
+                import asyncio
+
+                asyncio.create_task(visibility.ensure_workflow_started(episode.uuid, group_id))
+
             # Get or create resilient ingestion state
             state = ingestion_cache.get_or_create_state(episode.uuid, group_id)
 
@@ -747,25 +765,130 @@ class Graphiti:
 
             # Stage 1: Extract nodes (with retry)
             if not state.nodes_extracted:
-                extracted_nodes = await self._extract_nodes_with_retry(
-                    episode, previous_episodes, entity_types, excluded_entity_types, state
-                )
+                stage_started_at = time()
+                if visibility_enabled and visibility is not None:
+                    import asyncio
+
+                    asyncio.create_task(
+                        visibility.stage_started(
+                            episode.uuid,
+                            group_id,
+                            'extract_nodes',
+                            {'cached': False},
+                        )
+                    )
+
+                try:
+                    extracted_nodes = await self._extract_nodes_with_retry(
+                        episode, previous_episodes, entity_types, excluded_entity_types, state
+                    )
+                except Exception as e:
+                    if visibility_enabled and visibility is not None:
+                        import asyncio
+
+                        asyncio.create_task(
+                            visibility.ingestion_failed(
+                                episode.uuid,
+                                group_id,
+                                'extract_nodes',
+                                str(e),
+                                e.__class__.__name__,
+                            )
+                        )
+                    raise
+
                 state.mark_nodes_extracted(extracted_nodes)
+
+                if visibility_enabled and visibility is not None:
+                    import asyncio
+
+                    asyncio.create_task(
+                        visibility.stage_completed(
+                            episode.uuid,
+                            group_id,
+                            'extract_nodes',
+                            {
+                                'cached': False,
+                                'duration_ms': int((time() - stage_started_at) * 1000),
+                                'node_count': len(extracted_nodes),
+                            },
+                        )
+                    )
             else:
                 logger.info(
                     f'Episode {episode.uuid}: Using cached extracted nodes ({len(state.extracted_nodes)} nodes)'
                 )
                 extracted_nodes = state.extracted_nodes
+                if visibility_enabled and visibility is not None:
+                    import asyncio
+
+                    asyncio.create_task(
+                        visibility.stage_completed(
+                            episode.uuid,
+                            group_id,
+                            'extract_nodes',
+                            {
+                                'cached': True,
+                                'node_count': len(extracted_nodes),
+                            },
+                        )
+                    )
 
             # Stage 2: Resolve nodes (with retry)
             if not state.nodes_resolved:
-                nodes, uuid_map, node_duplicates = await self._resolve_nodes_with_retry(
-                    extracted_nodes, episode, previous_episodes, entity_types, state
-                )
+                stage_started_at = time()
+                if visibility_enabled and visibility is not None:
+                    import asyncio
+
+                    asyncio.create_task(
+                        visibility.stage_started(
+                            episode.uuid,
+                            group_id,
+                            'resolve_nodes',
+                            {'cached': False},
+                        )
+                    )
+
+                try:
+                    nodes, uuid_map, node_duplicates = await self._resolve_nodes_with_retry(
+                        extracted_nodes, episode, previous_episodes, entity_types, state
+                    )
+                except Exception as e:
+                    if visibility_enabled and visibility is not None:
+                        import asyncio
+
+                        asyncio.create_task(
+                            visibility.ingestion_failed(
+                                episode.uuid,
+                                group_id,
+                                'resolve_nodes',
+                                str(e),
+                                e.__class__.__name__,
+                            )
+                        )
+                    raise
+
                 state.mark_nodes_resolved(nodes)
-                # Cache additional resolution data
                 state.uuid_map = uuid_map
                 state.node_duplicates = node_duplicates
+
+                if visibility_enabled and visibility is not None:
+                    import asyncio
+
+                    asyncio.create_task(
+                        visibility.stage_completed(
+                            episode.uuid,
+                            group_id,
+                            'resolve_nodes',
+                            {
+                                'cached': False,
+                                'duration_ms': int((time() - stage_started_at) * 1000),
+                                'node_count': len(nodes),
+                                'uuid_map_size': len(uuid_map),
+                                'duplicate_count': len(node_duplicates),
+                            },
+                        )
+                    )
             else:
                 logger.info(
                     f'Episode {episode.uuid}: Using cached resolved nodes ({len(state.resolved_nodes)} nodes)'
@@ -773,24 +896,99 @@ class Graphiti:
                 nodes = state.resolved_nodes
                 uuid_map = state.uuid_map or {}
                 node_duplicates = state.node_duplicates or []
+                if visibility_enabled and visibility is not None:
+                    import asyncio
+
+                    asyncio.create_task(
+                        visibility.stage_completed(
+                            episode.uuid,
+                            group_id,
+                            'resolve_nodes',
+                            {
+                                'cached': True,
+                                'node_count': len(nodes),
+                                'uuid_map_size': len(uuid_map),
+                                'duplicate_count': len(node_duplicates),
+                            },
+                        )
+                    )
 
             # Stage 3: Extract edges (with retry)
             if not state.edges_extracted:
-                extracted_edges = await self._extract_edges_with_retry(
-                    episode,
-                    extracted_nodes,
-                    previous_episodes,
-                    edge_type_map,
-                    group_id,
-                    edge_types,
-                    state,
-                )
+                stage_started_at = time()
+                if visibility_enabled and visibility is not None:
+                    import asyncio
+
+                    asyncio.create_task(
+                        visibility.stage_started(
+                            episode.uuid,
+                            group_id,
+                            'extract_edges',
+                            {'cached': False},
+                        )
+                    )
+
+                try:
+                    extracted_edges = await self._extract_edges_with_retry(
+                        episode,
+                        extracted_nodes,
+                        previous_episodes,
+                        edge_type_map,
+                        group_id,
+                        edge_types,
+                        state,
+                    )
+                except Exception as e:
+                    if visibility_enabled and visibility is not None:
+                        import asyncio
+
+                        asyncio.create_task(
+                            visibility.ingestion_failed(
+                                episode.uuid,
+                                group_id,
+                                'extract_edges',
+                                str(e),
+                                e.__class__.__name__,
+                            )
+                        )
+                    raise
+
                 state.mark_edges_extracted(extracted_edges)
+
+                if visibility_enabled and visibility is not None:
+                    import asyncio
+
+                    asyncio.create_task(
+                        visibility.stage_completed(
+                            episode.uuid,
+                            group_id,
+                            'extract_edges',
+                            {
+                                'cached': False,
+                                'duration_ms': int((time() - stage_started_at) * 1000),
+                                'edge_count': len(extracted_edges),
+                            },
+                        )
+                    )
             else:
                 logger.info(
                     f'Episode {episode.uuid}: Using cached extracted edges ({len(state.extracted_edges)} edges)'
                 )
                 extracted_edges = state.extracted_edges
+                if visibility_enabled and visibility is not None:
+                    import asyncio
+
+                    asyncio.create_task(
+                        visibility.stage_completed(
+                            episode.uuid,
+                            group_id,
+                            'extract_edges',
+                            {
+                                'cached': True,
+                                'edge_count': len(extracted_edges),
+                            },
+                        )
+                    )
 
             # Continue with edge processing (non-LLM operations, less likely to fail)
             edge_type_map_default = (
@@ -803,8 +1001,21 @@ class Graphiti:
 
             # Extract attributes with graceful degradation
             # If attribute extraction fails, we still want to save nodes/edges
+            resolution_started_at = time()
+            resolution_attr_error: str | None = None
+            if visibility_enabled and visibility is not None:
+                import asyncio
+
+                asyncio.create_task(
+                    visibility.stage_started(
+                        episode.uuid,
+                        group_id,
+                        'resolve_edges',
+                        {'use_dspy': self.use_dspy},
+                    )
+                )
+
             try:
-                # Choose attribute extraction method based on DSPy flag
                 if self.use_dspy:
                     logger.info(f'Episode {episode.uuid}: Extracting attributes [DSPy]')
                     (resolved_edges, invalidated_edges), hydrated_nodes = await semaphore_gather(
@@ -835,11 +1046,11 @@ class Graphiti:
                         max_coroutines=self.max_coroutines,
                     )
             except Exception as attr_error:
+                resolution_attr_error = str(attr_error)
                 logger.warning(
                     f'Attribute extraction failed: {attr_error}. '
                     f'Continuing with nodes without enriched attributes.'
                 )
-                # Still resolve edges, but skip attribute enrichment
                 (resolved_edges, invalidated_edges) = await resolve_extracted_edges(
                     self.clients,
                     edges,
@@ -848,8 +1059,24 @@ class Graphiti:
                     edge_types or {},
                     edge_type_map or edge_type_map_default,
                 )
-                # Use nodes as-is without attribute enrichment
                 hydrated_nodes = nodes
+
+            if visibility_enabled and visibility is not None:
+                import asyncio
+
+                asyncio.create_task(
+                    visibility.stage_completed(
+                        episode.uuid,
+                        group_id,
+                        'resolve_edges',
+                        {
+                            'duration_ms': int((time() - resolution_started_at) * 1000),
+                            'resolved_edge_count': len(resolved_edges),
+                            'invalidated_edge_count': len(invalidated_edges),
+                            'attribute_extraction_error': resolution_attr_error,
+                        },
+                    )
+                )
 
             duplicate_of_edges, merge_operations, duplicate_nodes_to_save = (
                 build_duplicate_of_edges(episode, now, node_duplicates)
@@ -863,47 +1090,91 @@ class Graphiti:
 
             # Save to database
             if not state.episode_created:
-                if not self.store_raw_episode_content:
-                    episode.content = ''
+                persist_started_at = time()
+                if visibility_enabled and visibility is not None:
+                    import asyncio
 
-                # Combine all nodes to be saved (hydrated nodes + duplicate nodes)
-                all_nodes_to_save = hydrated_nodes + duplicate_nodes_to_save
-
-                await add_nodes_and_edges_bulk(
-                    self.driver,
-                    [episode],
-                    episodic_edges,
-                    all_nodes_to_save,
-                    entity_edges,
-                    self.embedder,
-                )
-
-                # Execute merge operations after nodes and edges are saved
-                # Feature flag: GRAPHITI_ENABLE_AUTO_MERGE (default: false for safety)
-                auto_merge_enabled = (
-                    os.getenv('GRAPHITI_ENABLE_AUTO_MERGE', 'false').lower() == 'true'
-                )
-
-                if merge_operations and auto_merge_enabled:
-                    from graphiti_core.utils.maintenance.edge_operations import (
-                        execute_merge_operations,
+                    asyncio.create_task(
+                        visibility.stage_started(
+                            episode.uuid,
+                            group_id,
+                            'persist',
+                            {},
+                        )
                     )
 
-                    logger.info(
-                        f'Auto-merge enabled: executing {len(merge_operations)} merge operations'
-                    )
-                    await execute_merge_operations(
+                try:
+                    if not self.store_raw_episode_content:
+                        episode.content = ''
+
+                    all_nodes_to_save = hydrated_nodes + duplicate_nodes_to_save
+
+                    await add_nodes_and_edges_bulk(
                         self.driver,
-                        merge_operations,
-                        allow_cross_graph_merge=self.enable_cross_graph_deduplication,
-                    )
-                elif merge_operations and not auto_merge_enabled:
-                    logger.info(
-                        f'Auto-merge disabled: skipping {len(merge_operations)} merge operations (set GRAPHITI_ENABLE_AUTO_MERGE=true to enable)'
+                        [episode],
+                        episodic_edges,
+                        all_nodes_to_save,
+                        entity_edges,
+                        self.embedder,
                     )
 
-                state.mark_completed()
-                logger.info(f'Episode {episode.uuid}: Successfully saved to database')
+                    auto_merge_enabled = (
+                        os.getenv('GRAPHITI_ENABLE_AUTO_MERGE', 'false').lower() == 'true'
+                    )
+
+                    if merge_operations and auto_merge_enabled:
+                        from graphiti_core.utils.maintenance.edge_operations import (
+                            execute_merge_operations,
+                        )
+
+                        logger.info(
+                            f'Auto-merge enabled: executing {len(merge_operations)} merge operations'
+                        )
+                        await execute_merge_operations(
+                            self.driver,
+                            merge_operations,
+                            allow_cross_graph_merge=self.enable_cross_graph_deduplication,
+                        )
+                    elif merge_operations and not auto_merge_enabled:
+                        logger.info(
+                            f'Auto-merge disabled: skipping {len(merge_operations)} merge operations (set GRAPHITI_ENABLE_AUTO_MERGE=true to enable)'
+                        )
+
+                    state.mark_completed()
+                    logger.info(f'Episode {episode.uuid}: Successfully saved to database')
+
+                    if visibility_enabled and visibility is not None:
+                        import asyncio
+
+                        asyncio.create_task(
+                            visibility.stage_completed(
+                                episode.uuid,
+                                group_id,
+                                'persist',
+                                {
+                                    'duration_ms': int((time() - persist_started_at) * 1000),
+                                    'node_count': len(all_nodes_to_save),
+                                    'entity_edge_count': len(entity_edges),
+                                    'episodic_edge_count': len(episodic_edges),
+                                    'merge_operation_count': len(merge_operations),
+                                },
+                            )
+                        )
+
+                except Exception as e:
+                    if visibility_enabled and visibility is not None:
+                        import asyncio
+
+                        asyncio.create_task(
+                            visibility.ingestion_failed(
+                                episode.uuid,
+                                group_id,
+                                'persist',
+                                str(e),
+                                e.__class__.__name__,
+                            )
+                        )
+                    raise
 
             # Update communities if requested
             if update_communities:
@@ -921,12 +1192,41 @@ class Graphiti:
             end = time()
             logger.info(f'Completed resilient add_episode in {(end - start) * 1000} ms')
 
+            if visibility_enabled and visibility is not None:
+                import asyncio
+
+                asyncio.create_task(
+                    visibility.ingestion_completed(
+                        episode.uuid,
+                        group_id,
+                        {
+                            'duration_ms': int((end - start) * 1000),
+                            'node_count': len(nodes),
+                            'entity_edge_count': len(entity_edges),
+                        },
+                    )
+                )
+
             return AddEpisodeResults(episode=episode, nodes=nodes, edges=entity_edges)
 
         except Exception as e:
             logger.error(
                 f'Resilient ingestion failed for episode {episode.uuid if "episode" in locals() else "unknown"}: {e}'
             )
+
+            if visibility_enabled and visibility is not None and 'episode' in locals():
+                import asyncio
+
+                asyncio.create_task(
+                    visibility.ingestion_failed(
+                        episode.uuid,
+                        group_id,
+                        'add_episode_resilient',
+                        str(e),
+                        e.__class__.__name__,
+                    )
+                )
+
             raise e
 
     @retry_with_backoff(max_retries=3, base_delay=2.0)
@@ -973,9 +1273,7 @@ class Graphiti:
             ]
 
         # Format previous episodes for DSPy
-        prev_messages = [
-            {'content': ep.content} for ep in previous_episodes if ep.content
-        ]
+        prev_messages = [{'content': ep.content} for ep in previous_episodes if ep.content]
 
         # Run DSPy extraction (sync, so wrap in executor)
         def run_extraction():
@@ -1098,16 +1396,13 @@ class Graphiti:
         ]
 
         # Format previous episodes
-        prev_messages = [
-            {'content': ep.content} for ep in previous_episodes if ep.content
-        ]
+        prev_messages = [{'content': ep.content} for ep in previous_episodes if ep.content]
 
         # Convert edge_types if provided
         dspy_edge_types = []
         if edge_types:
             dspy_edge_types = [
-                {'name': name, 'description': f'{name} relationship'}
-                for name in edge_types.keys()
+                {'name': name, 'description': f'{name} relationship'} for name in edge_types.keys()
             ]
 
         # Run DSPy extraction
@@ -1162,9 +1457,7 @@ class Graphiti:
         pipeline = _get_dspy_pipeline(episode.group_id)
 
         # Format previous episodes
-        prev_messages = [
-            {'content': ep.content} for ep in previous_episodes if ep.content
-        ]
+        prev_messages = [{'content': ep.content} for ep in previous_episodes if ep.content]
 
         # Generate summaries for each node
         def run_summaries():

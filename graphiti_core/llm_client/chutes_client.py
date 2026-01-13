@@ -28,6 +28,7 @@ from openai.types.chat import ChatCompletionMessageParam
 from pydantic import BaseModel, Field, ValidationError, field_validator
 from pydantic_core import from_json
 
+from ..dspy.config import ZAITokenTracker
 from ..prompts.models import Message
 from ..utils.prompt_compression import get_prompt_compressor
 from .client import MULTILINGUAL_EXTRACTION_RESPONSES, LLMClient
@@ -67,6 +68,9 @@ class ChutesClient(LLMClient):
 
     # Class-level constants
     MAX_RETRIES: ClassVar[int] = 2
+    BASE_RETRY_DELAY: ClassVar[float] = 5.0  # Start with 5 second delay for slow API
+    MAX_RETRY_DELAY: ClassVar[float] = 60.0  # Cap at 60 seconds
+    # Token budget tracking is handled by ZAITokenTracker (shared with DSPy)
 
     def __init__(
         self, config: LLMConfig | None = None, cache: bool = False, client: typing.Any = None
@@ -140,17 +144,25 @@ class ChutesClient(LLMClient):
                         ]:
                             data_fields[key] = value
 
-                    # Pattern 2: Data nested in properties with 'value' field
+                    # Pattern 2: Data nested in properties
                     # Example: {"properties": {"summary": {"value": "actual text"}}}
+                    # Or GLM pattern: {"properties": {"summary": "actual text"}}
                     if 'properties' in result and isinstance(result['properties'], dict):
                         for prop_key, prop_value in result['properties'].items():
-                            if isinstance(prop_value, dict):
+                            # GLM pattern: value is directly a string (not a schema dict)
+                            if isinstance(prop_value, str):
+                                data_fields[prop_key] = prop_value
+                            elif isinstance(prop_value, dict):
                                 # Check for 'value' field within property definition
                                 if 'value' in prop_value:
                                     data_fields[prop_key] = prop_value['value']
                                 # Also check if the property has actual data as default
                                 elif prop_key not in data_fields and 'default' in prop_value:
                                     data_fields[prop_key] = prop_value['default']
+                                # Skip if it's just a schema definition (has 'type' but no actual data)
+                                elif 'type' in prop_value and 'description' in prop_value:
+                                    # This is a schema definition, not actual data - skip
+                                    pass
 
                     if data_fields:
                         logger.info(
@@ -184,6 +196,54 @@ class ChutesClient(LLMClient):
                 return result
         except Exception:
             logger.debug('Partial JSON parsing failed, trying cleanup strategies')
+
+        # Strategy 3.5: GLM "analysis then JSON" pattern - find LAST valid JSON in response
+        # GLM often outputs analysis/thinking before the JSON, so look from the end
+        try:
+            # Find all positions where a JSON object might start
+            brace_positions = [i for i, c in enumerate(content) if c == '{']
+
+            # Try from the last position backwards (GLM puts JSON at the end)
+            for pos in reversed(brace_positions):
+                # Count braces to find matching closing brace
+                depth = 0
+                in_string = False
+                escape_next = False
+                end_pos = pos
+
+                for i, c in enumerate(content[pos:], pos):
+                    if escape_next:
+                        escape_next = False
+                        continue
+                    if c == '\\' and in_string:
+                        escape_next = True
+                        continue
+                    if c == '"' and not escape_next:
+                        in_string = not in_string
+                        continue
+                    if in_string:
+                        continue
+                    if c == '{':
+                        depth += 1
+                    elif c == '}':
+                        depth -= 1
+                        if depth == 0:
+                            end_pos = i + 1
+                            break
+
+                if depth == 0 and end_pos > pos:
+                    candidate = content[pos:end_pos]
+                    try:
+                        result = json.loads(candidate)
+                        if isinstance(result, dict) and len(result) > 0:
+                            logger.info(
+                                f'Successfully extracted JSON from GLM analysis+JSON response (pos {pos})'
+                            )
+                            return result
+                    except json.JSONDecodeError:
+                        continue
+        except Exception as e:
+            logger.debug(f'GLM analysis+JSON extraction failed: {e}')
 
         # Strategy 4: Extract JSON from verbose/explanatory text (GLM-4.5-FP8 reasoning)
         try:
@@ -375,28 +435,25 @@ class ChutesClient(LLMClient):
             elif m.role == 'system':
                 openai_messages.append({'role': 'system', 'content': m.content})
         try:
-            logger.debug(f'Making request to Chutes AI with model: {self.model or DEFAULT_MODEL}')
-
-            # Configure response format based on whether response_model is provided
-            if response_model is not None:
-                # Use structured outputs with JSON schema for better reliability
-                response_format = {
-                    'type': 'json_schema',
-                    'json_schema': {
-                        'name': 'response',
-                        'strict': False,  # Allow flexibility for GLM-4.5-FP8
-                        'schema': response_model.model_json_schema(),
-                    },
-                }
-                logger.debug(f'Using structured output with schema: {response_model.__name__}')
+            # Select model based on model_size parameter
+            if model_size == ModelSize.small and self.config.small_model:
+                selected_model = self.config.small_model
             else:
-                # Fallback to basic JSON object format
-                response_format = {'type': 'json_object'}
-                logger.debug('Using basic JSON object format')
+                selected_model = self.model or DEFAULT_MODEL
+
+            logger.info(f'🔀 Chutes AI request: model={selected_model}, size={model_size.value}')
+
+            ZAITokenTracker.wait_for_budget_sync()
+            logger.info('Budget check passed, making HTTP request...')
+
+            # GLM-4.5 returns empty content with json_schema format - use json_object instead
+            response_format = {'type': 'json_object'}
+            if response_model is not None:
+                logger.debug(f'Using json_object format for schema: {response_model.__name__}')
 
             # Make the API request
             response = await self.client.chat.completions.create(
-                model=self.model or DEFAULT_MODEL,
+                model=selected_model,
                 messages=openai_messages,
                 temperature=self.temperature,
                 max_tokens=self.max_tokens,
@@ -406,6 +463,19 @@ class ChutesClient(LLMClient):
             if not response.choices or not response.choices[0].message:
                 logger.warning('Received malformed response structure from Chutes AI')
                 raise ValueError('Malformed response structure from Chutes AI')
+
+            # Record token usage for budget tracking (uses shared ZAITokenTracker)
+            if response.usage and response.usage.total_tokens:
+                total_tokens = response.usage.total_tokens
+                ZAITokenTracker.record_usage(total_tokens, source=f'Chutes:{selected_model}')
+            else:
+                # Z.AI may not return usage info - estimate from request/response
+                input_chars = sum(len(str(m.get('content', ''))) for m in openai_messages)
+                output_chars = len(response.choices[0].message.content or '')
+                estimated_tokens = (input_chars + output_chars) // 4
+                ZAITokenTracker.record_usage(
+                    estimated_tokens, source=f'Chutes:{selected_model}(est)'
+                )
 
             # GLM-4.5-FP8 sometimes puts response in reasoning_content instead of content
             message = response.choices[0].message
@@ -488,11 +558,29 @@ class ChutesClient(LLMClient):
         # Add multilingual extraction instructions
         messages[0].content += MULTILINGUAL_EXTRACTION_RESPONSES
 
+        # Add GLM-specific strict JSON instructions to SYSTEM message
+        messages[0].content += (
+            '\n\nCRITICAL OUTPUT RULES:'
+            '\n- You MUST output ONLY valid JSON, nothing else.'
+            '\n- NO explanations, NO analysis, NO thinking, NO commentary.'
+            '\n- Your entire response must be a single JSON object starting with { and ending with }.'
+            '\n- Any text before or after the JSON will cause a system error.'
+        )
+
+        # Reinforce in user message with stronger phrasing
+        messages[-1].content += (
+            '\n\n⚠️ STRICT REQUIREMENT: Output ONLY the raw JSON object. '
+            'Do NOT write any analysis, explanation, or text before the JSON. '
+            'Start your response IMMEDIATELY with { - any other text will cause failure.'
+        )
+
         # Debug logging: Track summary generation calls
-        is_summary_call = any(
-            'summary' in msg.content.lower() and 'extract' in msg.content.lower()
-            for msg in messages
-            if hasattr(msg, 'content')
+        # Use response_model type to accurately detect summary calls
+        # (previous content-based detection had false positives with dedupe prompts)
+        is_summary_call = (
+            response_model is not None
+            and hasattr(response_model, 'model_fields')
+            and 'summary' in response_model.model_fields
         )
         if is_summary_call:
             logger.debug(f'🔍 ChutesClient: Summary generation call detected')
@@ -565,12 +653,22 @@ class ChutesClient(LLMClient):
                 ):
                     logger.error(f'Non-retryable error (would waste API requests): {e}')
                     raise
-                # Other ValueError types can be retried
+                # Other ValueError types can be retried with backoff
                 last_error = e
                 if retry_count >= self.MAX_RETRIES:
                     logger.error(f'Max retries ({self.MAX_RETRIES}) exceeded. Last error: {e}')
                     raise
                 retry_count += 1
+
+                # Add delay before retry to be API-friendly
+                import random
+
+                delay = min(self.BASE_RETRY_DELAY * (2 ** (retry_count - 1)), self.MAX_RETRY_DELAY)
+                delay += random.uniform(-delay * 0.2, delay * 0.2)
+                logger.warning(
+                    f'ValueError retry {retry_count}/{self.MAX_RETRIES}, waiting {delay:.1f}s...'
+                )
+                await asyncio.sleep(delay)
             except Exception as e:
                 last_error = e
 
@@ -580,6 +678,20 @@ class ChutesClient(LLMClient):
                     raise
 
                 retry_count += 1
+
+                # Calculate exponential backoff delay to be API-friendly
+                import random
+
+                delay = min(self.BASE_RETRY_DELAY * (2 ** (retry_count - 1)), self.MAX_RETRY_DELAY)
+                # Add jitter (±20%) to prevent thundering herd
+                delay += random.uniform(-delay * 0.2, delay * 0.2)
+
+                logger.warning(
+                    f'Retrying after error (attempt {retry_count}/{self.MAX_RETRIES}): {e}. '
+                    f'Waiting {delay:.1f}s before retry...'
+                )
+
+                await asyncio.sleep(delay)
 
                 # Construct a detailed error message for the LLM
                 error_context = (
@@ -592,9 +704,6 @@ class ChutesClient(LLMClient):
 
                 error_message = Message(role='user', content=error_context)
                 messages.append(error_message)
-                logger.warning(
-                    f'Retrying after application error (attempt {retry_count}/{self.MAX_RETRIES}): {e}'
-                )
 
         # If we somehow get here, raise the last error
         raise last_error or Exception('Max retries exceeded with no specific error')

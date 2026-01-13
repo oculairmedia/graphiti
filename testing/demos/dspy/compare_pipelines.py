@@ -92,7 +92,7 @@ async def run_legacy_pipeline(episodes: list[dict]) -> dict:
     # Use environment config for LLM
     llm_config = LLMConfig(
         api_key=os.environ.get('CHUTES_API_KEY'),
-        base_url=os.environ.get('CHUTES_BASE_URL', 'https://api.z.ai/api/paas/v4'),
+        base_url=os.environ.get('CHUTES_BASE_URL', 'https://api.z.ai/api/coding/paas/v4'),
         model=os.environ.get('CHUTES_MODEL', 'glm-4-plus'),
     )
     llm_client = OpenAIClient(config=llm_config)

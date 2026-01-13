@@ -26,6 +26,12 @@ from graphiti_core.dspy.openevolve.prompts import (
 from graphiti_core.dspy.openevolve.runner import (
     OpenEvolveRunner,
     EvolutionConfig,
+    EvolutionResult,
+    CheckpointManager,
+    SignalHandler,
+    ProviderConfig,
+    MultiProviderManager,
+    create_default_providers,
     run_prompt_evolution,
 )
 
@@ -43,5 +49,13 @@ __all__ = [
     # Runner
     'OpenEvolveRunner',
     'EvolutionConfig',
+    'EvolutionResult',
     'run_prompt_evolution',
+    # Checkpointing
+    'CheckpointManager',
+    'SignalHandler',
+    # Multi-provider
+    'ProviderConfig',
+    'MultiProviderManager',
+    'create_default_providers',
 ]

@@ -17,10 +17,10 @@ limitations under the License.
 import json
 from typing import Any, Protocol, TypedDict
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field
 
-from .models import Message, PromptFunction, PromptVersion
 from ..utils.prompt_utils import enforce_max_prompt_tokens
+from .models import Message, PromptFunction, PromptVersion
 
 
 class ExtractedEntity(BaseModel):
@@ -88,7 +88,7 @@ def extract_message(context: dict[str, Any]) -> list[Message]:
     context = enforce_max_prompt_tokens(context)
 
     sys_prompt = """You are an AI assistant that extracts entity nodes from conversational messages.
-    Your primary task is to extract and classify the speaker and other significant entities mentioned in the conversation."""
+    Your primary task is to extract unique named entities with high precision, strict span fidelity, and atomic granularity."""
 
     # Import safe serializer for datetime handling
     from graphiti_core.utils.prompt_utils import safe_json_dumps
@@ -109,34 +109,35 @@ def extract_message(context: dict[str, Any]) -> list[Message]:
 Instructions:
 
 You are given a conversation context and a CURRENT MESSAGE. Your task is to extract **entity nodes** mentioned **explicitly or implicitly** in the CURRENT MESSAGE.
-Pronoun references such as he/she/they or this/that/those should be disambiguated to the names of the 
-reference entities.
+Pronoun references such as he/she/they or this/that/those should be disambiguated to the names of the reference entities.
+
+### Core Extraction Rules:
 
 1. **Speaker Extraction**: Always extract the speaker (the part before the colon `:` in each dialogue line) as the first entity node.
    - If the speaker is mentioned again in the message, treat both mentions as a **single entity**.
 
-2. **Entity Identification**:
-   - Extract all significant entities, concepts, or actors that are **explicitly or implicitly** mentioned in the CURRENT MESSAGE.
-   - **Exclude** entities mentioned only in the PREVIOUS MESSAGES (they are for context only).
+2. **Span Integrity**: The entity name must be a verbatim substring from the text.
+   - **Clean Boundaries**: Exclude leading/trailing punctuation (commas, periods, quotes) and possessive markers (e.g., extract "Apple" from "Apple's").
+   - **Full Names**: Include formal titles (e.g., "Dr. Elena Garcia") and specific versions (e.g., "Python 3.11").
 
 3. **Entity Classification**:
    - Use the descriptions in ENTITY TYPES to classify each extracted entity.
-   - Assign the appropriate `entity_type_id` for each one.
+   - Assign exactly one `entity_type_id` per entity.
 
-4. **Required Entity Names**:
+4. **Atomic Decomposition**:
+   - Break down nested references. For "the London office," extract "London" (Location).
+   - For "Google's BERT model," extract "Google" (Organization) and "BERT" (Product/Concept) separately.
+
+5. **Required Entity Names**:
    - **CRITICAL**: Every entity MUST have a clear, specific, non-empty name.
    - Do NOT extract entities that cannot be given a meaningful name.
    - Generic terms like "container", "service", "system" without specific identifiers should be avoided.
-   - If you cannot determine a specific name for an entity, skip it entirely.
 
-5. **Exclusions**:
+6. **Exclusions**:
    - Do NOT extract entities representing relationships or actions.
    - Do NOT extract dates, times, or other temporal information—these will be handled separately.
-   - Do NOT extract entities with vague, generic, or empty names.
-
-6. **Formatting**:
-   - Be **explicit and unambiguous** in naming entities (e.g., use full names when available).
-   - Names must be specific identifiers, not generic categories.
+   - Do NOT extract pronouns, generic nouns (e.g., "the project"), or transient states.
+   - **Exclude** entities mentioned only in the PREVIOUS MESSAGES (they are for context only).
 
 {context['custom_prompt']}
 """
@@ -147,8 +148,8 @@ reference entities.
 
 
 def extract_json(context: dict[str, Any]) -> list[Message]:
-    sys_prompt = """You are an AI assistant that extracts entity nodes from JSON. 
-    Your primary task is to extract and classify relevant entities from JSON files"""
+    sys_prompt = """You are an AI assistant that extracts entity nodes from JSON.
+    Your primary task is to extract and classify relevant entities from JSON files with high precision, strict span fidelity, and atomic granularity."""
 
     user_prompt = f"""
 <SOURCE DESCRIPTION>:
@@ -168,10 +169,17 @@ For each entity extracted, also determine its entity type based on the provided 
 Indicate the classified entity type by providing its entity_type_id.
 
 Guidelines:
-1. Always try to extract an entities that the JSON represents. This will often be something like a "name" or "user field
-2. Do NOT extract any properties that contain dates
-3. **CRITICAL**: Every entity MUST have a clear, specific, non-empty name. Do NOT extract entities that cannot be given a meaningful name.
-4. If you cannot determine a specific name for an entity, skip it entirely rather than using generic terms.
+1. Always try to extract entities that the JSON represents. This will often be something like a "name" or "user" field.
+2. **Span Integrity**: The entity name must be a verbatim substring from the JSON values.
+   - **Clean Boundaries**: Exclude leading/trailing punctuation (commas, periods, quotes) and possessive markers (e.g., extract "Apple" from "Apple's").
+   - **Full Names**: Include formal titles (e.g., "Dr. Elena Garcia") and specific versions (e.g., "Python 3.11").
+3. **Atomic Decomposition**:
+   - Break down nested references. For "the London office," extract "London" (Location).
+   - For "Google's BERT model," extract "Google" (Organization) and "BERT" (Product/Concept) separately.
+4. Do NOT extract any properties that contain dates or temporal information.
+5. **CRITICAL**: Every entity MUST have a clear, specific, non-empty name. Do NOT extract entities that cannot be given a meaningful name.
+6. If you cannot determine a specific name for an entity, skip it entirely rather than using generic terms.
+7. **Exclusions**: Do NOT extract pronouns, generic nouns (e.g., "the project"), or transient states.
 """
     return [
         Message(role='system', content=sys_prompt),
@@ -180,8 +188,8 @@ Guidelines:
 
 
 def extract_text(context: dict[str, Any]) -> list[Message]:
-    sys_prompt = """You are an AI assistant that extracts entity nodes from text. 
-    Your primary task is to extract and classify the speaker and other significant entities mentioned in the provided text."""
+    sys_prompt = """You are an AI assistant that extracts entity nodes from text.
+    Your primary task is to extract and classify significant entities with high precision, strict span fidelity, and atomic granularity."""
 
     user_prompt = f"""
 <TEXT>
@@ -198,12 +206,19 @@ Indicate the classified entity type by providing its entity_type_id.
 {context['custom_prompt']}
 
 Guidelines:
-1. Extract significant entities, concepts, or actors mentioned in the conversation.
-2. Avoid creating nodes for relationships or actions.
-3. Avoid creating nodes for temporal information like dates, times or years (these will be added to edges later).
-4. Be as explicit as possible in your node names, using full names and avoiding abbreviations.
-5. **CRITICAL**: Every entity MUST have a clear, specific, non-empty name. Do NOT extract entities that cannot be given a meaningful name.
-6. If you cannot determine a specific name for an entity, skip it entirely rather than using generic terms.
+1. Extract significant entities, concepts, or actors mentioned in the text.
+2. **Span Integrity**: The entity name must be a verbatim substring from the text.
+   - **Clean Boundaries**: Exclude leading/trailing punctuation (commas, periods, quotes) and possessive markers (e.g., extract "Apple" from "Apple's").
+   - **Full Names**: Include formal titles (e.g., "Dr. Elena Garcia") and specific versions (e.g., "Python 3.11").
+3. **Atomic Decomposition**:
+   - Break down nested references. For "the London office," extract "London" (Location).
+   - For "Google's BERT model," extract "Google" (Organization) and "BERT" (Product/Concept) separately.
+4. Avoid creating nodes for relationships or actions.
+5. Avoid creating nodes for temporal information like dates, times or years (these will be added to edges later).
+6. Be as explicit as possible in your node names, using full names and avoiding abbreviations.
+7. **CRITICAL**: Every entity MUST have a clear, specific, non-empty name. Do NOT extract entities that cannot be given a meaningful name.
+8. If you cannot determine a specific name for an entity, skip it entirely rather than using generic terms.
+9. **Exclusions**: Do NOT extract pronouns, generic nouns (e.g., "the project"), or transient states.
 """
     return [
         Message(role='system', content=sys_prompt),

@@ -82,6 +82,340 @@
           ]
         }
       }
+    },
+    {
+      "inputs": {
+        "current_message": "The United Nations Security Council met in New York to discuss the situation in Ukraine.",
+        "entity_types": "[{\"id\": 1, \"name\": \"Organization\"}, {\"id\": 2, \"name\": \"Location\"}]",
+        "previous_messages": "[]"
+      },
+      "expected_output": {
+        "extracted_entities": {
+          "extracted_entities": [
+            {"name": "United Nations Security Council", "entity_type_id": 1},
+            {"name": "New York", "entity_type_id": 2},
+            {"name": "Ukraine", "entity_type_id": 2}
+          ]
+        }
+      }
+    },
+    {
+      "inputs": {
+        "current_message": "Mark Zuckerberg announced that Meta will invest $10 billion in the metaverse initiative.",
+        "entity_types": "[{\"id\": 1, \"name\": \"Person\"}, {\"id\": 2, \"name\": \"Organization\"}, {\"id\": 3, \"name\": \"Money\"}, {\"id\": 4, \"name\": \"Concept\"}]",
+        "previous_messages": "[]"
+      },
+      "expected_output": {
+        "extracted_entities": {
+          "extracted_entities": [
+            {"name": "Mark Zuckerberg", "entity_type_id": 1},
+            {"name": "Meta", "entity_type_id": 2},
+            {"name": "$10 billion", "entity_type_id": 3},
+            {"name": "metaverse", "entity_type_id": 4}
+          ]
+        }
+      }
+    },
+    {
+      "inputs": {
+        "current_message": "The iPhone 15 Pro Max features the A17 Pro chip designed by Apple in Cupertino.",
+        "entity_types": "[{\"id\": 1, \"name\": \"Product\"}, {\"id\": 2, \"name\": \"Technology\"}, {\"id\": 3, \"name\": \"Organization\"}, {\"id\": 4, \"name\": \"Location\"}]",
+        "previous_messages": "[]"
+      },
+      "expected_output": {
+        "extracted_entities": {
+          "extracted_entities": [
+            {"name": "iPhone 15 Pro Max", "entity_type_id": 1},
+            {"name": "A17 Pro chip", "entity_type_id": 2},
+            {"name": "Apple", "entity_type_id": 3},
+            {"name": "Cupertino", "entity_type_id": 4}
+          ]
+        }
+      }
+    },
+    {
+      "inputs": {
+        "current_message": "Professor James Wilson from Harvard Medical School discovered a new treatment for Alzheimer's disease.",
+        "entity_types": "[{\"id\": 1, \"name\": \"Person\"}, {\"id\": 2, \"name\": \"Organization\"}, {\"id\": 3, \"name\": \"Disease\"}]",
+        "previous_messages": "[]"
+      },
+      "expected_output": {
+        "extracted_entities": {
+          "extracted_entities": [
+            {"name": "Professor James Wilson", "entity_type_id": 1},
+            {"name": "Harvard Medical School", "entity_type_id": 2},
+            {"name": "Alzheimer's disease", "entity_type_id": 3}
+          ]
+        }
+      }
+    },
+    {
+      "inputs": {
+        "current_message": "SpaceX launched the Falcon 9 rocket from Cape Canaveral carrying Starlink satellites.",
+        "entity_types": "[{\"id\": 1, \"name\": \"Organization\"}, {\"id\": 2, \"name\": \"Product\"}, {\"id\": 3, \"name\": \"Location\"}]",
+        "previous_messages": "[]"
+      },
+      "expected_output": {
+        "extracted_entities": {
+          "extracted_entities": [
+            {"name": "SpaceX", "entity_type_id": 1},
+            {"name": "Falcon 9", "entity_type_id": 2},
+            {"name": "Cape Canaveral", "entity_type_id": 3},
+            {"name": "Starlink satellites", "entity_type_id": 2}
+          ]
+        }
+      }
+    },
+    {
+      "inputs": {
+        "current_message": "The Federal Reserve raised interest rates by 0.25% in response to inflation concerns.",
+        "entity_types": "[{\"id\": 1, \"name\": \"Organization\"}, {\"id\": 2, \"name\": \"Metric\"}, {\"id\": 3, \"name\": \"Concept\"}]",
+        "previous_messages": "[]"
+      },
+      "expected_output": {
+        "extracted_entities": {
+          "extracted_entities": [
+            {"name": "Federal Reserve", "entity_type_id": 1},
+            {"name": "0.25%", "entity_type_id": 2},
+            {"name": "inflation", "entity_type_id": 3}
+          ]
+        }
+      }
+    },
+    {
+      "inputs": {
+        "current_message": "Netflix partnered with Microsoft to launch an ad-supported subscription tier priced at $6.99 per month.",
+        "entity_types": "[{\"id\": 1, \"name\": \"Organization\"}, {\"id\": 2, \"name\": \"Product\"}, {\"id\": 3, \"name\": \"Money\"}]",
+        "previous_messages": "[]"
+      },
+      "expected_output": {
+        "extracted_entities": {
+          "extracted_entities": [
+            {"name": "Netflix", "entity_type_id": 1},
+            {"name": "Microsoft", "entity_type_id": 1},
+            {"name": "ad-supported subscription tier", "entity_type_id": 2},
+            {"name": "$6.99 per month", "entity_type_id": 3}
+          ]
+        }
+      }
+    },
+    {
+      "inputs": {
+        "current_message": "OpenAI released GPT-4 which outperforms previous models on the bar exam and medical licensing tests.",
+        "entity_types": "[{\"id\": 1, \"name\": \"Organization\"}, {\"id\": 2, \"name\": \"Product\"}, {\"id\": 3, \"name\": \"Benchmark\"}]",
+        "previous_messages": "[]"
+      },
+      "expected_output": {
+        "extracted_entities": {
+          "extracted_entities": [
+            {"name": "OpenAI", "entity_type_id": 1},
+            {"name": "GPT-4", "entity_type_id": 2},
+            {"name": "bar exam", "entity_type_id": 3},
+            {"name": "medical licensing tests", "entity_type_id": 3}
+          ]
+        }
+      }
+    },
+    {
+      "inputs": {
+        "current_message": "BMW and Mercedes-Benz are competing in the electric vehicle market with the iX and EQS models.",
+        "entity_types": "[{\"id\": 1, \"name\": \"Organization\"}, {\"id\": 2, \"name\": \"Product\"}, {\"id\": 3, \"name\": \"Industry\"}]",
+        "previous_messages": "[]"
+      },
+      "expected_output": {
+        "extracted_entities": {
+          "extracted_entities": [
+            {"name": "BMW", "entity_type_id": 1},
+            {"name": "Mercedes-Benz", "entity_type_id": 1},
+            {"name": "electric vehicle market", "entity_type_id": 3},
+            {"name": "iX", "entity_type_id": 2},
+            {"name": "EQS", "entity_type_id": 2}
+          ]
+        }
+      }
+    },
+    {
+      "inputs": {
+        "current_message": "The World Health Organization declared COVID-19 a global pandemic in March 2020.",
+        "entity_types": "[{\"id\": 1, \"name\": \"Organization\"}, {\"id\": 2, \"name\": \"Disease\"}, {\"id\": 3, \"name\": \"Event\"}, {\"id\": 4, \"name\": \"Date\"}]",
+        "previous_messages": "[]"
+      },
+      "expected_output": {
+        "extracted_entities": {
+          "extracted_entities": [
+            {"name": "World Health Organization", "entity_type_id": 1},
+            {"name": "COVID-19", "entity_type_id": 2},
+            {"name": "global pandemic", "entity_type_id": 3},
+            {"name": "March 2020", "entity_type_id": 4}
+          ]
+        }
+      }
+    },
+    {
+      "inputs": {
+        "current_message": "Sundar Pichai, CEO of Alphabet, announced layoffs affecting 12,000 employees at Google.",
+        "entity_types": "[{\"id\": 1, \"name\": \"Person\"}, {\"id\": 2, \"name\": \"Organization\"}, {\"id\": 3, \"name\": \"Role\"}, {\"id\": 4, \"name\": \"Metric\"}]",
+        "previous_messages": "[]"
+      },
+      "expected_output": {
+        "extracted_entities": {
+          "extracted_entities": [
+            {"name": "Sundar Pichai", "entity_type_id": 1},
+            {"name": "CEO", "entity_type_id": 3},
+            {"name": "Alphabet", "entity_type_id": 2},
+            {"name": "12,000 employees", "entity_type_id": 4},
+            {"name": "Google", "entity_type_id": 2}
+          ]
+        }
+      }
+    },
+    {
+      "inputs": {
+        "current_message": "The European Central Bank and Bank of Japan discussed monetary policy coordination in Frankfurt.",
+        "entity_types": "[{\"id\": 1, \"name\": \"Organization\"}, {\"id\": 2, \"name\": \"Concept\"}, {\"id\": 3, \"name\": \"Location\"}]",
+        "previous_messages": "[]"
+      },
+      "expected_output": {
+        "extracted_entities": {
+          "extracted_entities": [
+            {"name": "European Central Bank", "entity_type_id": 1},
+            {"name": "Bank of Japan", "entity_type_id": 1},
+            {"name": "monetary policy coordination", "entity_type_id": 2},
+            {"name": "Frankfurt", "entity_type_id": 3}
+          ]
+        }
+      }
+    },
+    {
+      "inputs": {
+        "current_message": "NVIDIA's H100 GPU is used by Amazon Web Services, Google Cloud, and Microsoft Azure for AI workloads.",
+        "entity_types": "[{\"id\": 1, \"name\": \"Organization\"}, {\"id\": 2, \"name\": \"Product\"}, {\"id\": 3, \"name\": \"Technology\"}]",
+        "previous_messages": "[]"
+      },
+      "expected_output": {
+        "extracted_entities": {
+          "extracted_entities": [
+            {"name": "NVIDIA", "entity_type_id": 1},
+            {"name": "H100 GPU", "entity_type_id": 2},
+            {"name": "Amazon Web Services", "entity_type_id": 1},
+            {"name": "Google Cloud", "entity_type_id": 1},
+            {"name": "Microsoft Azure", "entity_type_id": 1},
+            {"name": "AI", "entity_type_id": 3}
+          ]
+        }
+      }
+    },
+    {
+      "inputs": {
+        "current_message": "Warren Buffett's Berkshire Hathaway increased its stake in Apple to $150 billion.",
+        "entity_types": "[{\"id\": 1, \"name\": \"Person\"}, {\"id\": 2, \"name\": \"Organization\"}, {\"id\": 3, \"name\": \"Money\"}]",
+        "previous_messages": "[]"
+      },
+      "expected_output": {
+        "extracted_entities": {
+          "extracted_entities": [
+            {"name": "Warren Buffett", "entity_type_id": 1},
+            {"name": "Berkshire Hathaway", "entity_type_id": 2},
+            {"name": "Apple", "entity_type_id": 2},
+            {"name": "$150 billion", "entity_type_id": 3}
+          ]
+        }
+      }
+    },
+    {
+      "inputs": {
+        "current_message": "The Mars Perseverance rover collected samples from Jezero Crater for NASA's sample return mission.",
+        "entity_types": "[{\"id\": 1, \"name\": \"Product\"}, {\"id\": 2, \"name\": \"Location\"}, {\"id\": 3, \"name\": \"Organization\"}, {\"id\": 4, \"name\": \"Mission\"}]",
+        "previous_messages": "[]"
+      },
+      "expected_output": {
+        "extracted_entities": {
+          "extracted_entities": [
+            {"name": "Mars Perseverance rover", "entity_type_id": 1},
+            {"name": "Jezero Crater", "entity_type_id": 2},
+            {"name": "NASA", "entity_type_id": 3},
+            {"name": "sample return mission", "entity_type_id": 4}
+          ]
+        }
+      }
+    },
+    {
+      "inputs": {
+        "current_message": "She mentioned that the company plans to expand next year.",
+        "entity_types": "[{\"id\": 1, \"name\": \"Person\"}, {\"id\": 2, \"name\": \"Organization\"}]",
+        "previous_messages": "[]"
+      },
+      "expected_output": {
+        "extracted_entities": {
+          "extracted_entities": []
+        }
+      }
+    },
+    {
+      "inputs": {
+        "current_message": "The meeting was productive and everyone agreed on the proposal.",
+        "entity_types": "[{\"id\": 1, \"name\": \"Person\"}, {\"id\": 2, \"name\": \"Organization\"}, {\"id\": 3, \"name\": \"Event\"}]",
+        "previous_messages": "[]"
+      },
+      "expected_output": {
+        "extracted_entities": {
+          "extracted_entities": []
+        }
+      }
+    },
+    {
+      "inputs": {
+        "current_message": "Tim Cook (Apple CEO) and Satya Nadella (Microsoft CEO) both spoke at the World Economic Forum in Davos, Switzerland.",
+        "entity_types": "[{\"id\": 1, \"name\": \"Person\"}, {\"id\": 2, \"name\": \"Organization\"}, {\"id\": 3, \"name\": \"Role\"}, {\"id\": 4, \"name\": \"Event\"}, {\"id\": 5, \"name\": \"Location\"}]",
+        "previous_messages": "[]"
+      },
+      "expected_output": {
+        "extracted_entities": {
+          "extracted_entities": [
+            {"name": "Tim Cook", "entity_type_id": 1},
+            {"name": "Apple", "entity_type_id": 2},
+            {"name": "CEO", "entity_type_id": 3},
+            {"name": "Satya Nadella", "entity_type_id": 1},
+            {"name": "Microsoft", "entity_type_id": 2},
+            {"name": "World Economic Forum", "entity_type_id": 4},
+            {"name": "Davos", "entity_type_id": 5},
+            {"name": "Switzerland", "entity_type_id": 5}
+          ]
+        }
+      }
+    },
+    {
+      "inputs": {
+        "current_message": "J.P. Morgan Chase & Co. reported Q4 earnings of $3.04 per share, beating analyst estimates.",
+        "entity_types": "[{\"id\": 1, \"name\": \"Organization\"}, {\"id\": 2, \"name\": \"Metric\"}, {\"id\": 3, \"name\": \"TimePeriod\"}]",
+        "previous_messages": "[]"
+      },
+      "expected_output": {
+        "extracted_entities": {
+          "extracted_entities": [
+            {"name": "J.P. Morgan Chase & Co.", "entity_type_id": 1},
+            {"name": "Q4", "entity_type_id": 3},
+            {"name": "$3.04 per share", "entity_type_id": 2}
+          ]
+        }
+      }
+    },
+    {
+      "inputs": {
+        "current_message": "The U.S. Department of Justice filed an antitrust lawsuit against Google's parent company Alphabet Inc.",
+        "entity_types": "[{\"id\": 1, \"name\": \"Organization\"}, {\"id\": 2, \"name\": \"LegalAction\"}]",
+        "previous_messages": "[]"
+      },
+      "expected_output": {
+        "extracted_entities": {
+          "extracted_entities": [
+            {"name": "U.S. Department of Justice", "entity_type_id": 1},
+            {"name": "antitrust lawsuit", "entity_type_id": 2},
+            {"name": "Google", "entity_type_id": 1},
+            {"name": "Alphabet Inc.", "entity_type_id": 1}
+          ]
+        }
+      }
     }
   ]
 }
