@@ -5,8 +5,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/graphiti-context-with-feedback.py",
-            "timeout": 5
+            "command": "CLAUDE_HOOK_EVENT=UserPromptSubmit $CLAUDE_PROJECT_DIR/.claude/hooks/graphiti-session-summary.py",
+            "timeout": 1
           }
         ]
       }
@@ -16,55 +16,20 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/wrapper.sh",
-            "timeout": 5
-          },
-          {
-            "type": "command",
-            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/graphiti-feedback-evaluator.py",
-            "timeout": 3
-          }
-        ]
-      }
-    ],
-    "PreToolUse": [
-      {
-        "matcher": "*",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/test-pretool.py",
-            "timeout": 1
-          },
-          {
-            "type": "command",
-            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/log-tools.sh"
-          },
-          {
-            "type": "command",
-            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/graphiti-tool-ingest.py",
-            "timeout": 2
+            "command": "CLAUDE_HOOK_EVENT=Stop $CLAUDE_PROJECT_DIR/.claude/hooks/graphiti-session-summary.py",
+            "timeout": 10
           }
         ]
       }
     ],
     "PostToolUse": [
       {
-        "matcher": "*",
+        "matcher": "Write|Edit|Read|Bash",
         "hooks": [
           {
             "type": "command",
-            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/log-tools.sh"
-          },
-          {
-            "type": "command",
-            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/graphiti-tool-ingest.py",
-            "timeout": 2
-          },
-          {
-            "type": "command",
-            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/graphiti-posttool-context.py",
-            "timeout": 3
+            "command": "CLAUDE_HOOK_EVENT=PostToolUse $CLAUDE_PROJECT_DIR/.claude/hooks/graphiti-session-summary.py",
+            "timeout": 1
           }
         ]
       }
