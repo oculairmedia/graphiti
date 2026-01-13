@@ -116,8 +116,7 @@ docker system prune -a --volumes
 ```
 
 ### Protected Volumes (NEVER manually delete):
-- `graphiti_falkordb_data` - FalkorDB graph data
-- `graphiti_neo4j_data` - Neo4j source of truth
+- `graphiti_falkordb_data` - FalkorDB graph data (PRIMARY DATA STORE)
 - `graphiti_visualizer_duckdb` - Visualizer cache
 - `graphiti_queued_data` - Queue service data
 
@@ -125,47 +124,31 @@ docker system prune -a --volumes
 
 ## CRITICAL: Data Persistence Rules
 
-### ✅ FalkorDB NOW HAS PERSISTENCE (Updated Dec 2025)
+### ✅ FalkorDB is the Primary Data Store (Updated Jan 2026)
 
 **FalkorDB** (`falkordb` service):
-- **DATA IS NOW PERSISTED** via RDB snapshots to `falkordb_data` volume
-- Restarts will reload from RDB in **~2 minutes** (vs 2-3 hour sync)
+- **PRIMARY AND ONLY DATA STORE** - all data persists via RDB snapshots
+- Restarts reload from RDB in **~2 minutes**
 - RDB snapshots occur every 5 minutes (if changes) or every 1 minute (if 100+ changes)
-- Memory limit increased to 16GB to handle RDB reload overhead
+- Memory limit: 16GB to handle RDB reload overhead
 - Runtime `maxmemory` is 8GB (reload can temporarily use more)
 - Check data status: `redis-cli -h localhost -p 6379 GRAPH.QUERY graphiti_migration "MATCH ()-[r]->() RETURN count(r)" --csv`
-- Target: 121,139 edges (from Neo4j)
+- **Current size (Jan 2026)**: ~66K nodes, ~224K edges
+- Historical note: Started with 48K nodes, 121K edges (Dec 2025 from original Neo4j migration)
 
-**Neo4j** (`neo4j` service):
-- Data IS persisted via Docker volumes
-- Safe to restart, but avoid during active operations
-- Source of truth for disaster recovery
+### Deprecated Services (No Longer Used)
+- **Neo4j** - Was previously source of truth, now deprecated
+- **graphiti-sync-rs** - Was Neo4j → FalkorDB sync service, no longer needed
 
-**Sync Service** (`graphiti-sync-rs`):
-- Runs Neo4j → FalkorDB sync on cold boot or disaster recovery
-- Only needed if FalkorDB data is lost/corrupted
-- Full sync takes 2-3 hours for 121K edges
-- With persistence enabled, full sync should rarely be needed
+## Service Architecture (Simplified Jan 2026)
 
-## Service Dependencies and Startup Order
-
-### Critical Dependency Chain
+### Current Stack
 ```
-neo4j (persisted) → falkordb (in-memory) → graphiti-sync-rs → graphiti-init → graph-visualizer-rust
+falkordb (persisted) → graph-visualizer-rust → frontend/nginx
+                    → graph (API) → graphiti-worker
 ```
 
-**How It Works:**
-1. **graphiti-init** (alpine container) runs `cold-boot-init.sh` script
-2. Script waits for Neo4j → FalkorDB sync to **complete 100%** (both nodes AND edges)
-3. Script verifies sync is stable (3 consecutive checks with no changes)
-4. Only then does graphiti-init exit successfully
-5. **graph-visualizer-rust** depends on `graphiti-init` completing successfully
-6. This ensures visualizer NEVER starts with incomplete data
-
-**NEVER run `docker-compose up -d <service>` if that service has depends_on chains!**
-- This will recreate ALL dependent services
-- For FalkorDB, this means **LOSING ALL SYNCED DATA**
-- Example: `docker-compose up -d graph-visualizer-rust` will restart falkordb, neo4j, sync-rs, and graphiti-init
+**FalkorDB is now standalone** - no sync dependencies, no init containers needed for data.
 
 ### Safe Commands
 
@@ -187,7 +170,7 @@ docker-compose logs -f <service-name>  # Follow logs
 docker-compose restart frontend
 docker restart graphiti-frontend-1
 
-# API server - persists to Neo4j
+# API server - persists to FalkorDB
 docker-compose restart graph
 docker restart graphiti-graph-1
 ```
@@ -214,26 +197,17 @@ docker restart graphiti-graph-visualizer-rust-1
 docker-compose restart graph-visualizer-rust
 ```
 
-## Sync Progress Monitoring
+## Graph Data Monitoring
 
-### Check FalkorDB Edge Count
+### Check FalkorDB Counts
 ```bash
+# Edge count
 redis-cli -h localhost -p 6379 GRAPH.QUERY graphiti_migration "MATCH ()-[r]->() RETURN count(r) as edge_count" --csv
+# Node count
+redis-cli -h localhost -p 6379 GRAPH.QUERY graphiti_migration "MATCH (n) RETURN count(n) as node_count" --csv
 ```
-Target: 121,139 edges
-
-### Check Neo4j Edge Count (source)
-```bash
-docker exec graphiti-neo4j-1 cypher-shell -u neo4j -p graphiti123 "MATCH ()-[r]->() RETURN count(r) as edge_count"
-```
-
-### Check Sync Service Logs
-```bash
-docker-compose logs --tail=30 graphiti-sync-rs
-```
-
-### Check If Sync Is Complete
-Sync is complete when FalkorDB edge count == Neo4j edge count (121,139)
+Current (Jan 2026): ~66K nodes, ~224K edges
+Historical baseline (Dec 2025): 48K nodes, 121K edges
 
 ## Service-Specific Notes
 
@@ -246,20 +220,15 @@ Sync is complete when FalkorDB edge count == Neo4j edge count (121,139)
 - **Restart safely**: `docker restart graphiti-graph-visualizer-rust-1`
 - **Healthcheck**: 1 hour start_period + 100 retries (15s interval) = up to 85 minutes to become healthy
 - **Initial load time**: Loads ALL edges from FalkorDB into memory on startup - scales with graph size
-- **Why healthcheck is long**: After sync completes, visualizer must load 121K+ edges and build DuckDB cache before becoming healthy
+- **Why healthcheck is long**: After sync completes, visualizer must load ALL edges (currently 224K+) and build DuckDB cache before becoming healthy
 
 ### FalkorDB (Port 6379)
 - **Database name**: `graphiti_migration`
 - **Protocol**: Redis-compatible
 - **Indexes**: UUID indexes exist on all node/edge types (RANGE indexes)
-- **Memory**: In-memory only, no RDB persistence enabled
-- **Performance**: Queries slow down as graph grows (115K+ edges)
-
-### Neo4j (Ports 7474, 7687)
-- **Auth**: `neo4j / graphiti123`
-- **Database**: `neo4j` (default)
-- **Persistence**: Enabled via Docker volume `neo4j_data`
-- **Browser**: http://localhost:7474
+- **Persistence**: RDB snapshots to `falkordb_data` volume
+- **Memory**: 16GB limit, 8GB runtime maxmemory
+- **Performance**: Queries scale with graph size (currently 224K+ edges)
 
 ### Frontend (Port 8085)
 - React + TypeScript + Vite
@@ -277,19 +246,18 @@ Sync is complete when FalkorDB edge count == Neo4j edge count (121,139)
 ### Python API (Port 8003)
 - Used for data ingestion only
 - Does NOT serve visualization data
-- Safe to restart (persists to Neo4j)
+- Safe to restart (persists to FalkorDB)
 
 ## Common Workflows
 
-### 1. After FalkorDB Restart (DATA LOSS SCENARIO)
+### 1. After FalkorDB Restart
 ```bash
-# Check if data was lost
+# Check data loaded correctly (should match expected counts)
 redis-cli -h localhost -p 6379 GRAPH.QUERY graphiti_migration "MATCH ()-[r]->() RETURN count(r)" --csv
 
-# If count is 0 or very low, sync was lost
-# Must wait 2-3 hours for re-sync
-# Monitor with:
-watch -n 30 'redis-cli -h localhost -p 6379 GRAPH.QUERY graphiti_migration "MATCH ()-[r]->() RETURN count(r) as edge_count" --csv'
+# Data reloads from RDB in ~2 minutes
+# If count is 0, check FalkorDB logs for RDB load errors
+docker-compose logs --tail=50 falkordb
 ```
 
 ### 2. Checking Visualizer Status
@@ -326,48 +294,6 @@ Key variables from docker-compose.yml:
 - `NEO4J_USER=neo4j`
 - `NEO4J_PASSWORD=graphiti123`
 
-## Performance Characteristics
-
-### Sync Performance Degrades Over Time
-- **First 50K edges**: ~500 edges/minute
-- **50K-100K edges**: ~300 edges/minute  
-- **100K-120K edges**: ~100 edges/minute (slow due to index updates)
-- **Final 1K edges**: ~50 edges/minute
-
-This is **NORMAL** - index update overhead increases as graph grows.
-
-### Why Sync Slows Down (Even With Indexes)
-1. Index update overhead (RELATES_TO index has 30K+ documents)
-2. Memory fragmentation after hours of writes
-3. Lock contention between 8 parallel workers
-4. Complex relationship properties (RELATES_TO has 8 indexed fields)
-
-**DO NOT INTERRUPT - Let it finish naturally**
-
-## Docker Compose Gotchas
-
-### Dependency Chain Issue
-The visualizer has this in docker-compose.yml (lines 108-110):
-```yaml
-depends_on:
-  graphiti-init:
-    condition: service_completed_successfully
-```
-
-This means running `docker-compose up -d graph-visualizer-rust` will:
-1. Recreate `graphiti-init`
-2. Recreate all `graphiti-init` dependencies (falkordb, neo4j, sync service)
-3. **LOSE ALL FALKORDB DATA**
-
-### Safe Alternative
-```bash
-# Instead of docker-compose up -d, use:
-docker start graphiti-graph-visualizer-rust-1
-
-# Or restart:
-docker restart graphiti-graph-visualizer-rust-1
-```
-
 ## Troubleshooting
 
 ### Nginx/Frontend Not Starting After Stack Restart
@@ -386,35 +312,123 @@ docker start graphiti-nginx-1 graphiti-frontend-1
 ```
 
 ### Visualizer Shows Incomplete Data
-**Symptom**: Frontend shows 690 edges instead of 121K
+**Symptom**: Frontend shows far fewer edges than expected
 
 **Causes**:
-1. FalkorDB sync incomplete (check edge count)
+1. FalkorDB RDB not fully loaded yet (wait ~2 minutes after restart)
 2. DuckDB cache stale (delete and let it rebuild)
-3. Visualizer started before sync completed
+3. Visualizer started before FalkorDB finished loading
 
 **Fix**:
-1. Verify sync complete: `redis-cli -h localhost -p 6379 GRAPH.QUERY graphiti_migration "MATCH ()-[r]->() RETURN count(r)" --csv`
-2. If sync incomplete, wait for completion
-3. If sync complete, restart visualizer: `docker restart graphiti-graph-visualizer-rust-1`
-
-### Sync Service Stuck
-**Symptom**: Edge count not increasing
-
-**Check**:
-```bash
-docker-compose logs --tail=50 graphiti-sync-rs
-```
-
-If no new log entries for 5+ minutes, sync may be hung. Check FalkorDB:
-```bash
-docker-compose logs falkordb | tail -50
-```
+1. Verify data loaded: `redis-cli -h localhost -p 6379 GRAPH.QUERY graphiti_migration "MATCH ()-[r]->() RETURN count(r)" --csv`
+2. If count is correct, restart visualizer: `docker restart graphiti-graph-visualizer-rust-1`
 
 ### FalkorDB OOM (Out of Memory)
-**Symptom**: Sync crashes, FalkorDB container restarts
+**Symptom**: FalkorDB container restarts, queries fail
 
-**Fix**: FalkorDB memory limit is 4GB in docker-compose. With 121K edges and 48K nodes, this should be sufficient. If OOM occurs, increase memory limit or reduce batch size in sync service.
+**Fix**: FalkorDB memory limit is 16GB in docker-compose. With 224K+ edges and 66K+ nodes, this should be sufficient. If OOM occurs, increase memory limit in docker-compose.yml.
+
+## Temporal Integration
+
+Graphiti supports two modes of Temporal integration:
+
+### 1. Temporal Visibility (Observability Only)
+
+**Status**: Production-ready. Signal-based visibility for the existing ingestion pipeline.
+
+When enabled, the existing `add_episode_resilient()` pipeline emits signals to a Temporal workflow for observability. The existing pipeline remains authoritative—Temporal just watches.
+
+**Environment Variables:**
+```bash
+TEMPORAL_VISIBILITY_ENABLED=true
+TEMPORAL_VISIBILITY_ADDRESS=192.168.50.90:7233
+TEMPORAL_VISIBILITY_NAMESPACE=graphiti
+TEMPORAL_VISIBILITY_TASK_QUEUE=graphiti-visibility
+TEMPORAL_VISIBILITY_RPC_TIMEOUT_SECONDS=0.5
+```
+
+**Enable:**
+```bash
+docker compose --profile temporal up -d graphiti-temporal-visibility-worker
+docker restart graphiti-graphiti-worker-1
+```
+
+### 2. Temporal Ingestion (Full Workflow)
+
+**Status**: Production-ready (Jan 2026). Each ingestion stage runs as a Temporal Activity with full retry/visibility.
+
+When enabled, the queue worker routes ALL episode ingestion through Temporal instead of calling `add_episode_resilient()` directly. Each stage (extract_nodes, resolve_nodes, extract_edges, resolve_edges_and_persist) is a separate Temporal Activity.
+
+**Environment Variables:**
+```bash
+TEMPORAL_INGESTION_ENABLED=true
+TEMPORAL_VISIBILITY_ADDRESS=192.168.50.90:7233
+TEMPORAL_VISIBILITY_NAMESPACE=graphiti
+TEMPORAL_INGESTION_TASK_QUEUE=graphiti-ingestion
+TEMPORAL_INGESTION_WORKFLOW_PREFIX=ingest-episode-
+
+# Rate Limiting (prevents LLM API flooding under load)
+TEMPORAL_MAX_CONCURRENT_WORKFLOW_TASKS=10   # Max workflows polling concurrently
+TEMPORAL_MAX_CONCURRENT_ACTIVITIES=5         # Max activities running concurrently (key limit)
+TEMPORAL_MAX_CONCURRENT_LOCAL_ACTIVITIES=5   # Max local activities
+TEMPORAL_RATE_LIMIT_POST_LLM_DELAY=0.0       # Seconds to wait after LLM-heavy activities
+TEMPORAL_RATE_LIMIT_INTER_ACTIVITY_DELAY=0.0 # Seconds between any activities
+
+# Workflow Timeout (increase if large backlogs cause timeouts)
+TEMPORAL_INGESTION_WORKFLOW_TIMEOUT_HOURS=8  # Default 8 hours per workflow
+```
+
+**Rate Limiting Strategy:**
+- `TEMPORAL_MAX_CONCURRENT_ACTIVITIES=5` is the primary knob - limits how many LLM calls run in parallel
+- For rate-limited APIs (429 errors), set `TEMPORAL_MAX_CONCURRENT_ACTIVITIES=1` or `2`
+- `TEMPORAL_RATE_LIMIT_POST_LLM_DELAY=2.0` adds 2-second delay after each LLM activity
+
+**Enable:**
+```bash
+docker compose --profile temporal up -d graphiti-temporal-ingestion-worker
+# Ensure TEMPORAL_INGESTION_ENABLED=true in .env, then:
+docker compose up -d graphiti-worker
+```
+
+**Workflow ID Format:** `ingest-episode-<episode_uuid>`
+
+**Activities:**
+- `extract_nodes` - Entity extraction via DSPy/LLM
+- `resolve_nodes` - Node deduplication and resolution
+- `extract_edges` - Relationship extraction
+- `resolve_edges_and_persist` - Edge resolution and FalkorDB persistence
+
+### Architecture
+
+```
+Mode 1: Visibility Only (TEMPORAL_VISIBILITY_ENABLED=true)
+─────────────────────────────────────────────────────────
+Queue → graphiti-worker → add_episode_resilient() → FalkorDB
+                              │
+                              └─ signals ──▶ Temporal (visibility only)
+
+Mode 2: Full Temporal (TEMPORAL_INGESTION_ENABLED=true)  
+──────────────────────────────────────────────────────
+Queue → graphiti-worker → Temporal Workflow → Activities → FalkorDB
+                              │
+                              └─ Full observability, retries, history
+```
+
+### Verify Temporal Workflows
+
+- **Web UI**: http://192.168.50.90:8080 (namespace: `graphiti`)
+- **Worker logs**: `docker logs -f graphiti-graphiti-temporal-ingestion-worker-1`
+
+### Troubleshooting
+
+- **DSPy async error**: Fixed in Jan 2026. The `configure_lm()` function is now idempotent and handles async context safely.
+- **Rate limits**: LLM rate limits may cause activity retries—this is expected. Temporal will retry with backoff.
+- **Worker not routing to Temporal**: Ensure `TEMPORAL_INGESTION_ENABLED=true` is set AND the worker container was recreated (not just restarted).
+- Set appropriate timeouts (startToCloseTimeout, scheduleToCloseTimeout)
+
+Full implementation guide will be added to this file once infrastructure is complete (graphiti-37d).
+
+---
 
 ## File Locations
 
@@ -422,11 +436,11 @@ docker-compose logs falkordb | tail -50
 - `/opt/stacks/graphiti/docker-compose.yml` - Main orchestration
 - `/opt/stacks/graphiti/.env` - Environment variables
 - `/opt/stacks/graphiti/graph-visualizer-rust/src/main.rs` - Visualizer code (batch size line 399)
+- `/opt/stacks/graphiti/temporal/` - Temporal workflows (when implemented)
 
 ### Data Volumes
-- `neo4j_data` - Neo4j persisted data (SAFE)
+- `falkordb_data` - FalkorDB RDB snapshots (PRIMARY DATA - NEVER DELETE)
 - `visualizer_duckdb` - DuckDB cache (safe to delete, will rebuild)
-- FalkorDB has NO volume - data is in-memory only
 
 ## Before Any Docker Command
 
@@ -444,9 +458,8 @@ docker-compose logs falkordb | tail -50
    - If yes → **STOP and ask user permission**
 
 3. **Understand the impact:**
-   - Restarting FalkorDB = **2-3 hours lost**
-   - Restarting graphiti-init = **restarts FalkorDB too**
-   - Restarting graph-visualizer-rust with compose = **restarts entire chain**
+   - Restarting FalkorDB = ~2 minutes reload from RDB (data is safe)
+   - Use `docker restart` for individual containers to avoid dependency chain issues
 
 **SAFE PATTERN:**
 ```bash

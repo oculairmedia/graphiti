@@ -368,6 +368,53 @@ See [Dry-Run Benchmarking Guide](docs/DRY_RUN_BENCHMARKING_GUIDE.md) for complet
   - Database name defaults to `default_db` (hardcoded in FalkorDriver)
   - Override by passing `database` parameter to driver constructor
 
+## Common Pitfalls and Troubleshooting
+
+### Z.AI API Endpoint (CRITICAL)
+
+**The Z.AI API endpoint MUST include `/coding/` in the path:**
+
+- **CORRECT**: `https://api.z.ai/api/coding/paas/v4`
+- **WRONG**: `https://api.z.ai/api/paas/v4`
+
+Using the wrong endpoint causes cryptic errors like:
+- `"Insufficient balance or no resource package. Please recharge."`
+- `RateLimitError: OpenAIException - Error code: 429`
+
+**How to verify the endpoint:**
+```bash
+# Check container environment
+docker exec graphiti-graphiti-worker-1 env | grep CHUTES_BASE_URL
+
+# Should show: CHUTES_BASE_URL=https://api.z.ai/api/coding/paas/v4
+```
+
+**How to fix if wrong:**
+1. Verify `.env` has the correct URL: `CHUTES_BASE_URL=https://api.z.ai/api/coding/paas/v4`
+2. **IMPORTANT**: `docker-compose restart` is NOT enough - containers must be **recreated**:
+   ```bash
+   docker-compose up -d graph graphiti-worker
+   ```
+3. Verify the fix took effect by checking the container env again
+
+### Docker Environment Variable Changes
+
+When modifying `.env` values that affect Docker containers:
+
+- **`docker-compose restart`** - Does NOT reload `.env` values
+- **`docker-compose up -d <service>`** - Recreates containers and loads new `.env` values
+
+Always use `docker-compose up -d` when changing environment variables.
+
+### OpenAI Proxy Streaming Requirement
+
+The OpenAI proxy at `http://192.168.50.90:8082/v1` requires `stream: true` for all chat completion requests. Non-streaming requests will fail with:
+```
+ChatGPT request failed: 400: {'detail': 'Stream must be set to true'}
+```
+
+This affects any code using the proxy endpoint. Ensure your LLM client is configured for streaming mode.
+
 ## Development Guidelines
 
 ### Code Style
