@@ -4,6 +4,8 @@ import asyncio
 import logging
 import os
 from dataclasses import dataclass
+
+from graphiti_core.utils.temporal_visibility.config import TemporalStageQueueConfig
 from datetime import timedelta
 from typing import Any, Callable, Awaitable
 
@@ -22,11 +24,12 @@ class TemporalIngestionConfig:
     @classmethod
     def from_env(cls) -> 'TemporalIngestionConfig':
         enabled = os.getenv('TEMPORAL_INGESTION_ENABLED', 'false').lower() == 'true'
+        stage_queues = TemporalStageQueueConfig.from_env()
         return cls(
             enabled=enabled,
             address=os.getenv('TEMPORAL_VISIBILITY_ADDRESS', '192.168.50.90:7233'),
             namespace=os.getenv('TEMPORAL_VISIBILITY_NAMESPACE', 'graphiti'),
-            task_queue=os.getenv('TEMPORAL_INGESTION_TASK_QUEUE', 'graphiti-ingestion'),
+            task_queue=stage_queues.workflow_queue,
             workflow_id_prefix=os.getenv('TEMPORAL_INGESTION_WORKFLOW_PREFIX', 'ingest-episode-'),
             workflow_timeout_hours=int(os.getenv('TEMPORAL_INGESTION_WORKFLOW_TIMEOUT_HOURS', '8')),
         )

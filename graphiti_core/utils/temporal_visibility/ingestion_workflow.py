@@ -17,6 +17,7 @@ with workflow.unsafe.imports_passed_through():
         PersistOutput,
         IngestionResult,
     )
+    from graphiti_core.utils.temporal_visibility.config import TemporalStageQueueConfig
 
 
 @dataclass
@@ -42,6 +43,7 @@ class IngestEpisodeWorkflow:
     async def run(self, input: IngestEpisodeInput) -> IngestionResult:
         start_ns = workflow.time_ns()
         stages: dict[str, dict[str, Any]] = {}
+        stage_queues = TemporalStageQueueConfig.from_env()
 
         extract_nodes_output: dict = await workflow.execute_activity(
             'extract_nodes',
@@ -58,6 +60,7 @@ class IngestEpisodeWorkflow:
                 input.previous_episode_uuids,
             ],
             start_to_close_timeout=timedelta(minutes=10),
+            task_queue=stage_queues.extract_queue,
             retry_policy=common.RetryPolicy(
                 initial_interval=timedelta(seconds=2),
                 backoff_coefficient=2.0,
@@ -84,6 +87,7 @@ class IngestEpisodeWorkflow:
                 input.previous_episode_uuids,
             ],
             start_to_close_timeout=timedelta(minutes=10),
+            task_queue=stage_queues.resolve_queue,
             retry_policy=common.RetryPolicy(
                 initial_interval=timedelta(seconds=2),
                 backoff_coefficient=2.0,
@@ -112,6 +116,7 @@ class IngestEpisodeWorkflow:
                 input.previous_episode_uuids,
             ],
             start_to_close_timeout=timedelta(minutes=10),
+            task_queue=stage_queues.edge_queue,
             retry_policy=common.RetryPolicy(
                 initial_interval=timedelta(seconds=2),
                 backoff_coefficient=2.0,
@@ -143,6 +148,7 @@ class IngestEpisodeWorkflow:
                 input.store_raw_content,
             ],
             start_to_close_timeout=timedelta(minutes=15),
+            task_queue=stage_queues.persist_queue,
             retry_policy=common.RetryPolicy(
                 initial_interval=timedelta(seconds=2),
                 backoff_coefficient=2.0,
