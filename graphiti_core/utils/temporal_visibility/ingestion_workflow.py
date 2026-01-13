@@ -19,6 +19,13 @@ with workflow.unsafe.imports_passed_through():
     )
     from graphiti_core.utils.temporal_visibility.config import TemporalStageQueueConfig
 
+# Resolve queue config at module load time (outside workflow sandbox)
+# This is safe because:
+# 1. Queue names are constant for worker lifetime
+# 2. Workers are started with specific queue assignments
+# 3. Config only changes on worker restart
+_STAGE_QUEUES = TemporalStageQueueConfig.from_env()
+
 
 @dataclass
 class IngestEpisodeInput:
@@ -43,7 +50,6 @@ class IngestEpisodeWorkflow:
     async def run(self, input: IngestEpisodeInput) -> IngestionResult:
         start_ns = workflow.time_ns()
         stages: dict[str, dict[str, Any]] = {}
-        stage_queues = TemporalStageQueueConfig.from_env()
 
         extract_nodes_output: dict = await workflow.execute_activity(
             'extract_nodes',
@@ -60,7 +66,7 @@ class IngestEpisodeWorkflow:
                 input.previous_episode_uuids,
             ],
             start_to_close_timeout=timedelta(minutes=10),
-            task_queue=stage_queues.extract_queue,
+            task_queue=_STAGE_QUEUES.extract_queue,
             retry_policy=common.RetryPolicy(
                 initial_interval=timedelta(seconds=2),
                 backoff_coefficient=2.0,
@@ -87,7 +93,7 @@ class IngestEpisodeWorkflow:
                 input.previous_episode_uuids,
             ],
             start_to_close_timeout=timedelta(minutes=10),
-            task_queue=stage_queues.resolve_queue,
+            task_queue=_STAGE_QUEUES.resolve_queue,
             retry_policy=common.RetryPolicy(
                 initial_interval=timedelta(seconds=2),
                 backoff_coefficient=2.0,
@@ -116,7 +122,7 @@ class IngestEpisodeWorkflow:
                 input.previous_episode_uuids,
             ],
             start_to_close_timeout=timedelta(minutes=10),
-            task_queue=stage_queues.edge_queue,
+            task_queue=_STAGE_QUEUES.edge_queue,
             retry_policy=common.RetryPolicy(
                 initial_interval=timedelta(seconds=2),
                 backoff_coefficient=2.0,
@@ -148,7 +154,7 @@ class IngestEpisodeWorkflow:
                 input.store_raw_content,
             ],
             start_to_close_timeout=timedelta(minutes=15),
-            task_queue=stage_queues.persist_queue,
+            task_queue=_STAGE_QUEUES.persist_queue,
             retry_policy=common.RetryPolicy(
                 initial_interval=timedelta(seconds=2),
                 backoff_coefficient=2.0,
