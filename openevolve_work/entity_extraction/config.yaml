@@ -1,4 +1,6 @@
+checkpoint_interval: 1
 database:
+  db_path: openevolve_work/entity_extraction/output/database
   feature_dimensions:
   - score
   - complexity
@@ -10,22 +12,37 @@ evaluator:
   cascade_evaluation: false
   enable_artifacts: true
   use_llm_feedback: true
-  timeout: 600
 llm:
-  api_base: https://api.z.ai/api/coding/paas/v4
-  api_key: ${CHUTES_API_KEY}
-  # Use standard model for reliable output format
-  model: GLM-4.5
-  timeout: 300
-  retries: 5
-  retry_delay: 30
+  api_base: http://192.168.50.90:8082/v1
+  api_key: dummy
+  model: gpt5
   models:
-  # Standard model - reliable structured output
-  - name: GLM-4.5
+  - api_base: http://192.168.50.90:8082/v1
+    api_key: dummy
+    name: gpt5
     weight: 1.0
-    timeout: 300
+  - api_base: http://192.168.50.90:8082/v1
+    api_key: dummy
+    name: gpt51
+    weight: 0.8
+  - api_base: http://192.168.50.90:8082/v1
+    api_key: dummy
+    name: gpt5codex
+    weight: 0.6
+  - api_base: http://192.168.50.90:8089/v1
+    api_key: dummy
+    name: gpt-gemini-2.5-flash
+    weight: 1.0
+  - api_base: http://192.168.50.90:8089/v1
+    api_key: dummy
+    name: gpt-gemini-2.5-pro
+    weight: 0.8
+  - api_base: http://192.168.50.90:8089/v1
+    api_key: dummy
+    name: gpt-gemini-3-flash-preview
+    weight: 0.9
   temperature: 0.7
-max_iterations: 20
+max_iterations: 10
 prompt:
   num_diverse_programs: 2
   num_top_programs: 3

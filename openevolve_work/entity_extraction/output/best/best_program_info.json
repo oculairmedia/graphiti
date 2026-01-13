@@ -1,0 +1,28 @@
+{
+  "id": "6c7a35e1-c38d-4866-8bf2-c3f1574c7dd4",
+  "generation": 3,
+  "iteration": 1,
+  "timestamp": 1768070999.9765468,
+  "parent_id": "6a13c1a7-09cd-4cbc-9f04-7e65f5c04925",
+  "metrics": {
+    "metrics": {
+      "score": 0.9444444444444444,
+      "extraction_f1": 0.9444444444444444,
+      "precision": 0.9444444444444444,
+      "recall": 0.9444444444444444,
+      "token_efficiency": 1.0,
+      "latency_ms": 19877.275043063695,
+      "successful_runs": 9.0
+    },
+    "artifacts": {
+      "evolved_code": "\"\"\"\nEvolved prompt template: entity_extraction\nGenerated: 2026-01-10T17:05:41.389642+00:00\n\nThis file is evolved by OpenEvolve. The EXTRACTION_INSTRUCTION variable\ncontains the optimized prompt that will be injected into DSPy modules.\n\"\"\"\n\n# The main instruction to be evolved\n# OpenEvolve will modify this to improve extraction quality\nENTITY_EXTRACTION_INSTRUCTION = \"\"\"\nExtract unique named entities with high precision, strict span fidelity, and atomic granularity.\n\n### Core Extraction Rules:\n1.",
+      "example_error": "1 validation error for ExtractedEntities\n  Input should be a valid dictionary or instance of ExtractedEntities [type=model_type, input_value=[{'name': 'Professor Jame...\", 'entity_type_id': 3}], input_type=list]\n    For further information visit https://errors.pydantic.dev/2.11/v/model_type"
+    },
+    "llm_readability": 0.09647058823529411,
+    "llm_maintainability": 0.09356862745098038,
+    "llm_efficiency": 0.09866666666666667,
+    "llm_average": 0.09623529411764706
+  },
+  "language": "unknown",
+  "saved_at": 1768071901.3193755
+}

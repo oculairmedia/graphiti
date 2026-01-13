@@ -1,0 +1,52 @@
+# Current Program Information
+- Current performance metrics: {metrics}
+- Areas identified for improvement: {improvement_areas}
+
+{artifacts}
+
+# Program Evolution History
+{evolution_history}
+
+# Current Program
+```{language}
+{current_program}
+```
+
+# Task
+Suggest improvements to the program that will lead to better performance on the specified metrics.
+
+## MANDATORY OUTPUT FORMAT
+
+You MUST use the SEARCH/REPLACE diff format. This is not optional.
+Your response will be automatically parsed - if you don't use this format, your changes will be REJECTED.
+
+Format (use this EXACTLY):
+<<<<<<< SEARCH
+[paste the EXACT code from the program above that you want to change]
+=======
+[your improved replacement code]
+>>>>>>> REPLACE
+
+## Example of CORRECT format:
+<<<<<<< SEARCH
+ENTITY_EXTRACTION_INSTRUCTION = """
+You are an information extraction system.
+=======
+ENTITY_EXTRACTION_INSTRUCTION = """
+You are a precise named entity extraction system.
+>>>>>>> REPLACE
+
+## Rules:
+1. The SEARCH section must contain code that EXISTS VERBATIM in the current program
+2. Copy the code exactly - including whitespace and indentation
+3. You may include multiple SEARCH/REPLACE blocks for multiple changes
+4. Do NOT include explanatory text inside the diff blocks
+5. Explain your reasoning OUTSIDE the diff blocks
+
+## DO NOT:
+- Skip the diff format
+- Use markdown code blocks for the whole file
+- Describe changes without providing the diff
+- Modify code that doesn't exist in the program
+
+Now suggest improvements using the SEARCH/REPLACE format:

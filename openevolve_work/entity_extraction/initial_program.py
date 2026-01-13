@@ -1,6 +1,6 @@
 """
 Evolved prompt template: entity_extraction
-Generated: 2026-01-10T15:45:20.719857+00:00
+Generated: 2026-01-10T18:45:21.755917+00:00
 
 This file is evolved by OpenEvolve. The EXTRACTION_INSTRUCTION variable
 contains the optimized prompt that will be injected into DSPy modules.
