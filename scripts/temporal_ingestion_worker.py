@@ -6,6 +6,11 @@ import os
 import signal
 from typing import Callable, Awaitable
 
+from graphiti_core.utils.temporal_visibility.config import (
+    TemporalStageQueueConfig,
+    TemporalStageConcurrencyConfig,
+)
+
 
 def _configure_logging() -> None:
     log_level_str = os.getenv('LOG_LEVEL', 'INFO').upper()
@@ -56,11 +61,12 @@ async def main() -> None:
 
     temporal_address = os.getenv('TEMPORAL_VISIBILITY_ADDRESS', '192.168.50.90:7233')
     temporal_namespace = os.getenv('TEMPORAL_VISIBILITY_NAMESPACE', 'graphiti')
-    task_queue = os.getenv('TEMPORAL_INGESTION_TASK_QUEUE', 'graphiti-ingestion')
+    worker_mode = os.getenv('WORKER_MODE', 'all').lower()
+    stage_queues = TemporalStageQueueConfig.from_env()
+    stage_concurrency = TemporalStageConcurrencyConfig.from_env()
 
     # Concurrency limits - prevents overwhelming LLM APIs
     max_concurrent_workflow_tasks = int(os.getenv('TEMPORAL_MAX_CONCURRENT_WORKFLOW_TASKS', '10'))
-    max_concurrent_activities = int(os.getenv('TEMPORAL_MAX_CONCURRENT_ACTIVITIES', '5'))
     max_concurrent_local_activities = int(
         os.getenv('TEMPORAL_MAX_CONCURRENT_LOCAL_ACTIVITIES', '5')
     )
@@ -84,8 +90,53 @@ async def main() -> None:
     Client = temporalio_client.Client
     Worker = temporalio_worker.Worker
 
+    client = await Client.connect(temporal_address, namespace=temporal_namespace)
+
+    # Load rate limiting config from environment
+    rate_limit_config = RateLimitConfig.from_env()
+    activities_instance = IngestionActivities(_create_graphiti, rate_limit_config)
+
+    if worker_mode == 'workflow':
+        task_queue = stage_queues.workflow_queue
+        workflows = [IngestEpisodeWorkflow]
+        activities = []
+        max_concurrent_activities = stage_concurrency.legacy_max_activities
+    elif worker_mode == 'extract':
+        task_queue = stage_queues.extract_queue
+        workflows = []
+        activities = [activities_instance.extract_nodes]
+        max_concurrent_activities = stage_concurrency.extract_max_activities
+    elif worker_mode == 'resolve':
+        task_queue = stage_queues.resolve_queue
+        workflows = []
+        activities = [activities_instance.resolve_nodes]
+        max_concurrent_activities = stage_concurrency.resolve_max_activities
+    elif worker_mode == 'edge':
+        task_queue = stage_queues.edge_queue
+        workflows = []
+        activities = [activities_instance.extract_edges]
+        max_concurrent_activities = stage_concurrency.edge_max_activities
+    elif worker_mode == 'persist':
+        task_queue = stage_queues.persist_queue
+        workflows = []
+        activities = [activities_instance.resolve_edges_and_persist]
+        max_concurrent_activities = stage_concurrency.persist_max_activities
+    elif worker_mode in ('legacy', 'all'):
+        task_queue = stage_queues.legacy_queue
+        workflows = [IngestEpisodeWorkflow]
+        activities = [
+            activities_instance.extract_nodes,
+            activities_instance.resolve_nodes,
+            activities_instance.extract_edges,
+            activities_instance.resolve_edges_and_persist,
+        ]
+        max_concurrent_activities = stage_concurrency.legacy_max_activities
+    else:
+        raise ValueError(f'Unknown WORKER_MODE: {worker_mode}')
+
     logger.info(
-        'Starting Temporal ingestion worker (address=%s namespace=%s task_queue=%s)',
+        'Starting Temporal ingestion worker (mode=%s address=%s namespace=%s task_queue=%s)',
+        worker_mode,
         temporal_address,
         temporal_namespace,
         task_queue,
@@ -96,23 +147,13 @@ async def main() -> None:
         max_concurrent_activities,
         max_concurrent_local_activities,
     )
-
-    client = await Client.connect(temporal_address, namespace=temporal_namespace)
-
-    # Load rate limiting config from environment
-    rate_limit_config = RateLimitConfig.from_env()
-    activities_instance = IngestionActivities(_create_graphiti, rate_limit_config)
+    logger.info('Staged queues enabled: %s', stage_queues.staged_enabled)
 
     worker = Worker(
         client,
         task_queue=task_queue,
-        workflows=[IngestEpisodeWorkflow],
-        activities=[
-            activities_instance.extract_nodes,
-            activities_instance.resolve_nodes,
-            activities_instance.extract_edges,
-            activities_instance.resolve_edges_and_persist,
-        ],
+        workflows=workflows,
+        activities=activities,
         max_concurrent_workflow_tasks=max_concurrent_workflow_tasks,
         max_concurrent_activities=max_concurrent_activities,
         max_concurrent_local_activities=max_concurrent_local_activities,
