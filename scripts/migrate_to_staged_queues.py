@@ -163,6 +163,8 @@ async def migrate_workflows(limit: int, dry_run: bool, force: bool) -> None:
                 async for wf in client.list_workflows(query=fallback_query):
                     if not wf.id.startswith('ingest-episode-'):
                         continue
+                    if wf.task_queue != config.legacy_task_queue:
+                        continue
                     workflow_ids.append(wf.id)
                     if len(workflow_ids) >= limit:
                         break
