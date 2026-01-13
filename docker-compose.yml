@@ -717,6 +717,7 @@ services:
       - ./graphiti_core:/app/graphiti_core:ro
     environment:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - WORKER_MODE=${WORKER_MODE:-legacy}
       - TEMPORAL_VISIBILITY_ADDRESS=${TEMPORAL_VISIBILITY_ADDRESS:-192.168.50.90:7233}
       - TEMPORAL_VISIBILITY_NAMESPACE=${TEMPORAL_VISIBILITY_NAMESPACE:-graphiti}
       - TEMPORAL_INGESTION_TASK_QUEUE=${TEMPORAL_INGESTION_TASK_QUEUE:-graphiti-ingestion}
@@ -754,6 +755,312 @@ services:
       falkordb:
         condition: service_healthy
     profiles: ["temporal"]
+  graphiti-temporal-ingestion-workflow-worker:
+    image: ghcr.io/oculairmedia/graphiti-worker:main
+    restart: unless-stopped
+    command:
+      - /bin/bash
+      - -c
+      - |
+        pip install --quiet temporalio dspy-ai 2>/dev/null
+        python -u /scripts/temporal_ingestion_worker.py
+    volumes:
+      - ./scripts:/scripts:ro
+      - ./graphiti_core:/app/graphiti_core:ro
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - WORKER_MODE=workflow
+      - TEMPORAL_VISIBILITY_ADDRESS=${TEMPORAL_VISIBILITY_ADDRESS:-192.168.50.90:7233}
+      - TEMPORAL_VISIBILITY_NAMESPACE=${TEMPORAL_VISIBILITY_NAMESPACE:-graphiti}
+      - TEMPORAL_INGESTION_WORKFLOW_TASK_QUEUE=${TEMPORAL_INGESTION_WORKFLOW_TASK_QUEUE:-graphiti-ingestion-workflow}
+      - TEMPORAL_MAX_CONCURRENT_WORKFLOW_TASKS=${TEMPORAL_MAX_CONCURRENT_WORKFLOW_TASKS:-10}
+      - TEMPORAL_MAX_CONCURRENT_ACTIVITIES=${TEMPORAL_MAX_CONCURRENT_ACTIVITIES:-5}
+      - TEMPORAL_MAX_CONCURRENT_LOCAL_ACTIVITIES=${TEMPORAL_MAX_CONCURRENT_LOCAL_ACTIVITIES:-5}
+      - TEMPORAL_INGESTION_WORKFLOW_TIMEOUT_HOURS=${TEMPORAL_INGESTION_WORKFLOW_TIMEOUT_HOURS:-8}
+      - FALKORDB_HOST=${FALKORDB_HOST:-falkordb}
+      - FALKORDB_PORT=${FALKORDB_PORT:-6379}
+      - FALKORDB_DATABASE=${FALKORDB_DATABASE:-graphiti_migration}
+      - USE_DSPY=${USE_DSPY:-false}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-sk-dummy}
+      - USE_OLLAMA=${USE_OLLAMA:-true}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://192.168.50.90:8082/v1}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-haiku-4-5}
+      - OLLAMA_EMBEDDING_MODEL=${OLLAMA_EMBEDDING_MODEL:-dengcao/Qwen3-Embedding-4B:Q4_K_M}
+      - EMBEDDING_DIMENSION=${EMBEDDING_DIMENSION:-2560}
+      - USE_OLLAMA_EMBEDDINGS=${USE_OLLAMA_EMBEDDINGS:-true}
+      - USE_DEDICATED_EMBEDDING_ENDPOINT=${USE_DEDICATED_EMBEDDING_ENDPOINT:-true}
+      - OLLAMA_EMBEDDING_BASE_URL=${OLLAMA_EMBEDDING_BASE_URL:-http://192.168.50.80:11434/v1}
+      - OLLAMA_EMBEDDING_API_KEY=${OLLAMA_EMBEDDING_API_KEY:-ollama}
+      - USE_CHUTES=${USE_CHUTES:-false}
+      - CHUTES_API_KEY=${CHUTES_API_KEY:-}
+      - CHUTES_BASE_URL=${CHUTES_BASE_URL:-https://api.z.ai/api/coding/paas/v4}
+      - CHUTES_MODEL=${CHUTES_MODEL:-glm-4.5}
+      - CHUTES_SMALL_MODEL=${CHUTES_SMALL_MODEL:-glm-4.5-air}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - graphiti_network
+    depends_on:
+      falkordb:
+        condition: service_healthy
+    profiles: ["temporal-staged"]
+
+  graphiti-temporal-ingestion-extract-worker:
+    image: ghcr.io/oculairmedia/graphiti-worker:main
+    restart: unless-stopped
+    command:
+      - /bin/bash
+      - -c
+      - |
+        pip install --quiet temporalio dspy-ai 2>/dev/null
+        python -u /scripts/temporal_ingestion_worker.py
+    volumes:
+      - ./scripts:/scripts:ro
+      - ./graphiti_core:/app/graphiti_core:ro
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - WORKER_MODE=extract
+      - TEMPORAL_VISIBILITY_ADDRESS=${TEMPORAL_VISIBILITY_ADDRESS:-192.168.50.90:7233}
+      - TEMPORAL_VISIBILITY_NAMESPACE=${TEMPORAL_VISIBILITY_NAMESPACE:-graphiti}
+      - TEMPORAL_INGESTION_EXTRACT_TASK_QUEUE=${TEMPORAL_INGESTION_EXTRACT_TASK_QUEUE:-graphiti-ingestion-extract}
+      - TEMPORAL_EXTRACT_MAX_CONCURRENT_ACTIVITIES=${TEMPORAL_EXTRACT_MAX_CONCURRENT_ACTIVITIES:-3}
+      - TEMPORAL_MAX_CONCURRENT_WORKFLOW_TASKS=${TEMPORAL_MAX_CONCURRENT_WORKFLOW_TASKS:-10}
+      - TEMPORAL_MAX_CONCURRENT_LOCAL_ACTIVITIES=${TEMPORAL_MAX_CONCURRENT_LOCAL_ACTIVITIES:-5}
+      - TEMPORAL_RATE_LIMIT_INTER_ACTIVITY_DELAY=${TEMPORAL_RATE_LIMIT_INTER_ACTIVITY_DELAY:-0.0}
+      - TEMPORAL_RATE_LIMIT_POST_LLM_DELAY=${TEMPORAL_RATE_LIMIT_POST_LLM_DELAY:-0.0}
+      - FALKORDB_HOST=${FALKORDB_HOST:-falkordb}
+      - FALKORDB_PORT=${FALKORDB_PORT:-6379}
+      - FALKORDB_DATABASE=${FALKORDB_DATABASE:-graphiti_migration}
+      - USE_DSPY=${USE_DSPY:-false}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-sk-dummy}
+      - USE_OLLAMA=${USE_OLLAMA:-true}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://192.168.50.90:8082/v1}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-haiku-4-5}
+      - OLLAMA_EMBEDDING_MODEL=${OLLAMA_EMBEDDING_MODEL:-dengcao/Qwen3-Embedding-4B:Q4_K_M}
+      - EMBEDDING_DIMENSION=${EMBEDDING_DIMENSION:-2560}
+      - USE_OLLAMA_EMBEDDINGS=${USE_OLLAMA_EMBEDDINGS:-true}
+      - USE_DEDICATED_EMBEDDING_ENDPOINT=${USE_DEDICATED_EMBEDDING_ENDPOINT:-true}
+      - OLLAMA_EMBEDDING_BASE_URL=${OLLAMA_EMBEDDING_BASE_URL:-http://192.168.50.80:11434/v1}
+      - OLLAMA_EMBEDDING_API_KEY=${OLLAMA_EMBEDDING_API_KEY:-ollama}
+      - USE_CHUTES=${USE_CHUTES:-false}
+      - CHUTES_API_KEY=${CHUTES_API_KEY:-}
+      - CHUTES_BASE_URL=${CHUTES_BASE_URL:-https://api.z.ai/api/coding/paas/v4}
+      - CHUTES_MODEL=${CHUTES_MODEL:-glm-4.5}
+      - CHUTES_SMALL_MODEL=${CHUTES_SMALL_MODEL:-glm-4.5-air}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - graphiti_network
+    depends_on:
+      falkordb:
+        condition: service_healthy
+    profiles: ["temporal-staged"]
+
+  graphiti-temporal-ingestion-resolve-worker:
+    image: ghcr.io/oculairmedia/graphiti-worker:main
+    restart: unless-stopped
+    command:
+      - /bin/bash
+      - -c
+      - |
+        pip install --quiet temporalio dspy-ai 2>/dev/null
+        python -u /scripts/temporal_ingestion_worker.py
+    volumes:
+      - ./scripts:/scripts:ro
+      - ./graphiti_core:/app/graphiti_core:ro
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - WORKER_MODE=resolve
+      - TEMPORAL_VISIBILITY_ADDRESS=${TEMPORAL_VISIBILITY_ADDRESS:-192.168.50.90:7233}
+      - TEMPORAL_VISIBILITY_NAMESPACE=${TEMPORAL_VISIBILITY_NAMESPACE:-graphiti}
+      - TEMPORAL_INGESTION_RESOLVE_TASK_QUEUE=${TEMPORAL_INGESTION_RESOLVE_TASK_QUEUE:-graphiti-ingestion-resolve}
+      - TEMPORAL_RESOLVE_MAX_CONCURRENT_ACTIVITIES=${TEMPORAL_RESOLVE_MAX_CONCURRENT_ACTIVITIES:-3}
+      - TEMPORAL_MAX_CONCURRENT_WORKFLOW_TASKS=${TEMPORAL_MAX_CONCURRENT_WORKFLOW_TASKS:-10}
+      - TEMPORAL_MAX_CONCURRENT_LOCAL_ACTIVITIES=${TEMPORAL_MAX_CONCURRENT_LOCAL_ACTIVITIES:-5}
+      - TEMPORAL_RATE_LIMIT_INTER_ACTIVITY_DELAY=${TEMPORAL_RATE_LIMIT_INTER_ACTIVITY_DELAY:-0.0}
+      - TEMPORAL_RATE_LIMIT_POST_LLM_DELAY=${TEMPORAL_RATE_LIMIT_POST_LLM_DELAY:-0.0}
+      - FALKORDB_HOST=${FALKORDB_HOST:-falkordb}
+      - FALKORDB_PORT=${FALKORDB_PORT:-6379}
+      - FALKORDB_DATABASE=${FALKORDB_DATABASE:-graphiti_migration}
+      - USE_DSPY=${USE_DSPY:-false}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-sk-dummy}
+      - USE_OLLAMA=${USE_OLLAMA:-true}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://192.168.50.90:8082/v1}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-haiku-4-5}
+      - OLLAMA_EMBEDDING_MODEL=${OLLAMA_EMBEDDING_MODEL:-dengcao/Qwen3-Embedding-4B:Q4_K_M}
+      - EMBEDDING_DIMENSION=${EMBEDDING_DIMENSION:-2560}
+      - USE_OLLAMA_EMBEDDINGS=${USE_OLLAMA_EMBEDDINGS:-true}
+      - USE_DEDICATED_EMBEDDING_ENDPOINT=${USE_DEDICATED_EMBEDDING_ENDPOINT:-true}
+      - OLLAMA_EMBEDDING_BASE_URL=${OLLAMA_EMBEDDING_BASE_URL:-http://192.168.50.80:11434/v1}
+      - OLLAMA_EMBEDDING_API_KEY=${OLLAMA_EMBEDDING_API_KEY:-ollama}
+      - USE_CHUTES=${USE_CHUTES:-false}
+      - CHUTES_API_KEY=${CHUTES_API_KEY:-}
+      - CHUTES_BASE_URL=${CHUTES_BASE_URL:-https://api.z.ai/api/coding/paas/v4}
+      - CHUTES_MODEL=${CHUTES_MODEL:-glm-4.5}
+      - CHUTES_SMALL_MODEL=${CHUTES_SMALL_MODEL:-glm-4.5-air}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - graphiti_network
+    depends_on:
+      falkordb:
+        condition: service_healthy
+    profiles: ["temporal-staged"]
+
+  graphiti-temporal-ingestion-edge-worker:
+    image: ghcr.io/oculairmedia/graphiti-worker:main
+    restart: unless-stopped
+    command:
+      - /bin/bash
+      - -c
+      - |
+        pip install --quiet temporalio dspy-ai 2>/dev/null
+        python -u /scripts/temporal_ingestion_worker.py
+    volumes:
+      - ./scripts:/scripts:ro
+      - ./graphiti_core:/app/graphiti_core:ro
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - WORKER_MODE=edge
+      - TEMPORAL_VISIBILITY_ADDRESS=${TEMPORAL_VISIBILITY_ADDRESS:-192.168.50.90:7233}
+      - TEMPORAL_VISIBILITY_NAMESPACE=${TEMPORAL_VISIBILITY_NAMESPACE:-graphiti}
+      - TEMPORAL_INGESTION_EDGE_TASK_QUEUE=${TEMPORAL_INGESTION_EDGE_TASK_QUEUE:-graphiti-ingestion-edge}
+      - TEMPORAL_EDGE_MAX_CONCURRENT_ACTIVITIES=${TEMPORAL_EDGE_MAX_CONCURRENT_ACTIVITIES:-2}
+      - TEMPORAL_MAX_CONCURRENT_WORKFLOW_TASKS=${TEMPORAL_MAX_CONCURRENT_WORKFLOW_TASKS:-10}
+      - TEMPORAL_MAX_CONCURRENT_LOCAL_ACTIVITIES=${TEMPORAL_MAX_CONCURRENT_LOCAL_ACTIVITIES:-5}
+      - TEMPORAL_RATE_LIMIT_INTER_ACTIVITY_DELAY=${TEMPORAL_RATE_LIMIT_INTER_ACTIVITY_DELAY:-0.0}
+      - TEMPORAL_RATE_LIMIT_POST_LLM_DELAY=${TEMPORAL_RATE_LIMIT_POST_LLM_DELAY:-0.0}
+      - FALKORDB_HOST=${FALKORDB_HOST:-falkordb}
+      - FALKORDB_PORT=${FALKORDB_PORT:-6379}
+      - FALKORDB_DATABASE=${FALKORDB_DATABASE:-graphiti_migration}
+      - USE_DSPY=${USE_DSPY:-false}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-sk-dummy}
+      - USE_OLLAMA=${USE_OLLAMA:-true}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://192.168.50.90:8082/v1}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-haiku-4-5}
+      - OLLAMA_EMBEDDING_MODEL=${OLLAMA_EMBEDDING_MODEL:-dengcao/Qwen3-Embedding-4B:Q4_K_M}
+      - EMBEDDING_DIMENSION=${EMBEDDING_DIMENSION:-2560}
+      - USE_OLLAMA_EMBEDDINGS=${USE_OLLAMA_EMBEDDINGS:-true}
+      - USE_DEDICATED_EMBEDDING_ENDPOINT=${USE_DEDICATED_EMBEDDING_ENDPOINT:-true}
+      - OLLAMA_EMBEDDING_BASE_URL=${OLLAMA_EMBEDDING_BASE_URL:-http://192.168.50.80:11434/v1}
+      - OLLAMA_EMBEDDING_API_KEY=${OLLAMA_EMBEDDING_API_KEY:-ollama}
+      - USE_CHUTES=${USE_CHUTES:-false}
+      - CHUTES_API_KEY=${CHUTES_API_KEY:-}
+      - CHUTES_BASE_URL=${CHUTES_BASE_URL:-https://api.z.ai/api/coding/paas/v4}
+      - CHUTES_MODEL=${CHUTES_MODEL:-glm-4.5}
+      - CHUTES_SMALL_MODEL=${CHUTES_SMALL_MODEL:-glm-4.5-air}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - graphiti_network
+    depends_on:
+      falkordb:
+        condition: service_healthy
+    profiles: ["temporal-staged"]
+
+  graphiti-temporal-ingestion-persist-worker:
+    image: ghcr.io/oculairmedia/graphiti-worker:main
+    restart: unless-stopped
+    command:
+      - /bin/bash
+      - -c
+      - |
+        pip install --quiet temporalio dspy-ai 2>/dev/null
+        python -u /scripts/temporal_ingestion_worker.py
+    volumes:
+      - ./scripts:/scripts:ro
+      - ./graphiti_core:/app/graphiti_core:ro
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - WORKER_MODE=persist
+      - TEMPORAL_VISIBILITY_ADDRESS=${TEMPORAL_VISIBILITY_ADDRESS:-192.168.50.90:7233}
+      - TEMPORAL_VISIBILITY_NAMESPACE=${TEMPORAL_VISIBILITY_NAMESPACE:-graphiti}
+      - TEMPORAL_INGESTION_PERSIST_TASK_QUEUE=${TEMPORAL_INGESTION_PERSIST_TASK_QUEUE:-graphiti-ingestion-persist}
+      - TEMPORAL_PERSIST_MAX_CONCURRENT_ACTIVITIES=${TEMPORAL_PERSIST_MAX_CONCURRENT_ACTIVITIES:-5}
+      - TEMPORAL_MAX_CONCURRENT_WORKFLOW_TASKS=${TEMPORAL_MAX_CONCURRENT_WORKFLOW_TASKS:-10}
+      - TEMPORAL_MAX_CONCURRENT_LOCAL_ACTIVITIES=${TEMPORAL_MAX_CONCURRENT_LOCAL_ACTIVITIES:-5}
+      - TEMPORAL_RATE_LIMIT_INTER_ACTIVITY_DELAY=${TEMPORAL_RATE_LIMIT_INTER_ACTIVITY_DELAY:-0.0}
+      - TEMPORAL_RATE_LIMIT_POST_LLM_DELAY=${TEMPORAL_RATE_LIMIT_POST_LLM_DELAY:-0.0}
+      - FALKORDB_HOST=${FALKORDB_HOST:-falkordb}
+      - FALKORDB_PORT=${FALKORDB_PORT:-6379}
+      - FALKORDB_DATABASE=${FALKORDB_DATABASE:-graphiti_migration}
+      - USE_DSPY=${USE_DSPY:-false}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-sk-dummy}
+      - USE_OLLAMA=${USE_OLLAMA:-true}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://192.168.50.90:8082/v1}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-haiku-4-5}
+      - OLLAMA_EMBEDDING_MODEL=${OLLAMA_EMBEDDING_MODEL:-dengcao/Qwen3-Embedding-4B:Q4_K_M}
+      - EMBEDDING_DIMENSION=${EMBEDDING_DIMENSION:-2560}
+      - USE_OLLAMA_EMBEDDINGS=${USE_OLLAMA_EMBEDDINGS:-true}
+      - USE_DEDICATED_EMBEDDING_ENDPOINT=${USE_DEDICATED_EMBEDDING_ENDPOINT:-true}
+      - OLLAMA_EMBEDDING_BASE_URL=${OLLAMA_EMBEDDING_BASE_URL:-http://192.168.50.80:11434/v1}
+      - OLLAMA_EMBEDDING_API_KEY=${OLLAMA_EMBEDDING_API_KEY:-ollama}
+      - USE_CHUTES=${USE_CHUTES:-false}
+      - CHUTES_API_KEY=${CHUTES_API_KEY:-}
+      - CHUTES_BASE_URL=${CHUTES_BASE_URL:-https://api.z.ai/api/coding/paas/v4}
+      - CHUTES_MODEL=${CHUTES_MODEL:-glm-4.5}
+      - CHUTES_SMALL_MODEL=${CHUTES_SMALL_MODEL:-glm-4.5-air}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - graphiti_network
+    depends_on:
+      falkordb:
+        condition: service_healthy
+    profiles: ["temporal-staged"]
+
+  graphiti-temporal-ingestion-legacy-worker:
+    image: ghcr.io/oculairmedia/graphiti-worker:main
+    restart: unless-stopped
+    command:
+      - /bin/bash
+      - -c
+      - |
+        pip install --quiet temporalio dspy-ai 2>/dev/null
+        python -u /scripts/temporal_ingestion_worker.py
+    volumes:
+      - ./scripts:/scripts:ro
+      - ./graphiti_core:/app/graphiti_core:ro
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - WORKER_MODE=legacy
+      - TEMPORAL_VISIBILITY_ADDRESS=${TEMPORAL_VISIBILITY_ADDRESS:-192.168.50.90:7233}
+      - TEMPORAL_VISIBILITY_NAMESPACE=${TEMPORAL_VISIBILITY_NAMESPACE:-graphiti}
+      - TEMPORAL_INGESTION_TASK_QUEUE=${TEMPORAL_INGESTION_TASK_QUEUE:-graphiti-ingestion}
+      - TEMPORAL_MAX_CONCURRENT_WORKFLOW_TASKS=${TEMPORAL_MAX_CONCURRENT_WORKFLOW_TASKS:-10}
+      - TEMPORAL_MAX_CONCURRENT_ACTIVITIES=${TEMPORAL_MAX_CONCURRENT_ACTIVITIES:-5}
+      - TEMPORAL_MAX_CONCURRENT_LOCAL_ACTIVITIES=${TEMPORAL_MAX_CONCURRENT_LOCAL_ACTIVITIES:-5}
+      - TEMPORAL_RATE_LIMIT_INTER_ACTIVITY_DELAY=${TEMPORAL_RATE_LIMIT_INTER_ACTIVITY_DELAY:-0.0}
+      - TEMPORAL_RATE_LIMIT_POST_LLM_DELAY=${TEMPORAL_RATE_LIMIT_POST_LLM_DELAY:-0.0}
+      - TEMPORAL_INGESTION_WORKFLOW_TIMEOUT_HOURS=${TEMPORAL_INGESTION_WORKFLOW_TIMEOUT_HOURS:-8}
+      - FALKORDB_HOST=${FALKORDB_HOST:-falkordb}
+      - FALKORDB_PORT=${FALKORDB_PORT:-6379}
+      - FALKORDB_DATABASE=${FALKORDB_DATABASE:-graphiti_migration}
+      - USE_DSPY=${USE_DSPY:-false}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-sk-dummy}
+      - USE_OLLAMA=${USE_OLLAMA:-true}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://192.168.50.90:8082/v1}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-haiku-4-5}
+      - OLLAMA_EMBEDDING_MODEL=${OLLAMA_EMBEDDING_MODEL:-dengcao/Qwen3-Embedding-4B:Q4_K_M}
+      - EMBEDDING_DIMENSION=${EMBEDDING_DIMENSION:-2560}
+      - USE_OLLAMA_EMBEDDINGS=${USE_OLLAMA_EMBEDDINGS:-true}
+      - USE_DEDICATED_EMBEDDING_ENDPOINT=${USE_DEDICATED_EMBEDDING_ENDPOINT:-true}
+      - OLLAMA_EMBEDDING_BASE_URL=${OLLAMA_EMBEDDING_BASE_URL:-http://192.168.50.80:11434/v1}
+      - OLLAMA_EMBEDDING_API_KEY=${OLLAMA_EMBEDDING_API_KEY:-ollama}
+      - USE_CHUTES=${USE_CHUTES:-false}
+      - CHUTES_API_KEY=${CHUTES_API_KEY:-}
+      - CHUTES_BASE_URL=${CHUTES_BASE_URL:-https://api.z.ai/api/coding/paas/v4}
+      - CHUTES_MODEL=${CHUTES_MODEL:-glm-4.5}
+      - CHUTES_SMALL_MODEL=${CHUTES_SMALL_MODEL:-glm-4.5-air}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - graphiti_network
+    depends_on:
+      falkordb:
+        condition: service_healthy
+    profiles: ["temporal-staged"]
+
   # =============================================================================
   # Reverse Proxy and Load Balancing
   # =============================================================================

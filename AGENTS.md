@@ -364,30 +364,72 @@ When enabled, the queue worker routes ALL episode ingestion through Temporal ins
 TEMPORAL_INGESTION_ENABLED=true
 TEMPORAL_VISIBILITY_ADDRESS=192.168.50.90:7233
 TEMPORAL_VISIBILITY_NAMESPACE=graphiti
-TEMPORAL_INGESTION_TASK_QUEUE=graphiti-ingestion
 TEMPORAL_INGESTION_WORKFLOW_PREFIX=ingest-episode-
+
+# Legacy single-queue mode (default if staged queues are NOT enabled)
+TEMPORAL_INGESTION_TASK_QUEUE=graphiti-ingestion
+
+# Staged queue mode (enable by setting ANY of these vars)
+TEMPORAL_INGESTION_WORKFLOW_TASK_QUEUE=graphiti-ingestion-workflow
+TEMPORAL_INGESTION_EXTRACT_TASK_QUEUE=graphiti-ingestion-extract
+TEMPORAL_INGESTION_RESOLVE_TASK_QUEUE=graphiti-ingestion-resolve
+TEMPORAL_INGESTION_EDGE_TASK_QUEUE=graphiti-ingestion-edge
+TEMPORAL_INGESTION_PERSIST_TASK_QUEUE=graphiti-ingestion-persist
 
 # Rate Limiting (prevents LLM API flooding under load)
 TEMPORAL_MAX_CONCURRENT_WORKFLOW_TASKS=10   # Max workflows polling concurrently
-TEMPORAL_MAX_CONCURRENT_ACTIVITIES=5         # Max activities running concurrently (key limit)
-TEMPORAL_MAX_CONCURRENT_LOCAL_ACTIVITIES=5   # Max local activities
-TEMPORAL_RATE_LIMIT_POST_LLM_DELAY=0.0       # Seconds to wait after LLM-heavy activities
+TEMPORAL_MAX_CONCURRENT_LOCAL_ACTIVITIES=5  # Max local activities
+TEMPORAL_RATE_LIMIT_POST_LLM_DELAY=0.0      # Seconds to wait after LLM-heavy activities
 TEMPORAL_RATE_LIMIT_INTER_ACTIVITY_DELAY=0.0 # Seconds between any activities
+
+# Legacy (single queue) activity limit
+TEMPORAL_MAX_CONCURRENT_ACTIVITIES=5        # Max activities running concurrently (legacy)
+
+# Staged per-activity concurrency limits
+TEMPORAL_EXTRACT_MAX_CONCURRENT_ACTIVITIES=3
+TEMPORAL_RESOLVE_MAX_CONCURRENT_ACTIVITIES=3
+TEMPORAL_EDGE_MAX_CONCURRENT_ACTIVITIES=2
+TEMPORAL_PERSIST_MAX_CONCURRENT_ACTIVITIES=5
 
 # Workflow Timeout (increase if large backlogs cause timeouts)
 TEMPORAL_INGESTION_WORKFLOW_TIMEOUT_HOURS=8  # Default 8 hours per workflow
 ```
 
 **Rate Limiting Strategy:**
-- `TEMPORAL_MAX_CONCURRENT_ACTIVITIES=5` is the primary knob - limits how many LLM calls run in parallel
-- For rate-limited APIs (429 errors), set `TEMPORAL_MAX_CONCURRENT_ACTIVITIES=1` or `2`
+- `TEMPORAL_MAX_CONCURRENT_ACTIVITIES=5` is the primary knob in legacy mode
+- In staged mode, tune `TEMPORAL_EXTRACT/RESOLVE/EDGE/PERSIST_MAX_CONCURRENT_ACTIVITIES`
+- For rate-limited APIs (429 errors), drop extract/resolve/edge to 1-2
 - `TEMPORAL_RATE_LIMIT_POST_LLM_DELAY=2.0` adds 2-second delay after each LLM activity
 
-**Enable:**
+**Enable (Legacy Single Queue):**
 ```bash
 docker compose --profile temporal up -d graphiti-temporal-ingestion-worker
 # Ensure TEMPORAL_INGESTION_ENABLED=true in .env, then:
 docker compose up -d graphiti-worker
+```
+
+**Enable (Staged Queues + One Worker Per Stage):**
+```bash
+# During migration (keep legacy worker to drain old workflows)
+docker compose --profile temporal --profile temporal-staged up -d
+
+# After migration completes (legacy drained)
+docker compose --profile temporal-staged up -d
+
+# Ensure TEMPORAL_INGESTION_ENABLED=true in .env, then:
+docker compose up -d graphiti-worker
+```
+
+**Migration (Staged Queues):**
+- Strategy A (safe): run both `temporal` and `temporal-staged` profiles until legacy queue drains, then stop legacy worker.
+- Strategy B (fast): cancel + requeue old workflows using `scripts/migrate_to_staged_queues.py`.
+
+```bash
+# Dry run migration (no changes)
+python3 scripts/migrate_to_staged_queues.py --dry-run --limit 10
+
+# Migrate first 100 workflows
+python3 scripts/migrate_to_staged_queues.py --limit 100 --force
 ```
 
 **Workflow ID Format:** `ingest-episode-<episode_uuid>`
