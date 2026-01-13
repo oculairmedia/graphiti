@@ -144,11 +144,32 @@ async def migrate_workflows(limit: int, dry_run: bool, force: bool) -> None:
     client = await Client.connect(config.address, namespace=config.namespace)
 
     query = f"TaskQueue = '{config.legacy_task_queue}' AND ExecutionStatus = 'Running'"
+    fallback_queries = [
+        "ExecutionStatus = 'Running'",
+        None,
+    ]
     workflow_ids: list[str] = []
-    async for wf in client.list_workflows(query=query):
-        workflow_ids.append(wf.id)
-        if len(workflow_ids) >= limit:
-            break
+    try:
+        async for wf in client.list_workflows(query=query):
+            if not wf.id.startswith('ingest-episode-'):
+                continue
+            workflow_ids.append(wf.id)
+            if len(workflow_ids) >= limit:
+                break
+    except Exception as exc:
+        logger.warning('Query with TaskQueue filter failed (%s). Falling back.', exc)
+        for fallback_query in fallback_queries:
+            try:
+                async for wf in client.list_workflows(query=fallback_query):
+                    if not wf.id.startswith('ingest-episode-'):
+                        continue
+                    workflow_ids.append(wf.id)
+                    if len(workflow_ids) >= limit:
+                        break
+                if workflow_ids:
+                    break
+            except Exception as fallback_exc:
+                logger.warning('Fallback query failed (%s).', fallback_exc)
 
     logger.info('Found %d workflows on legacy queue', len(workflow_ids))
 
