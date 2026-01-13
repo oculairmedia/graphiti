@@ -27,6 +27,10 @@ from graphiti_core.ingestion.queue_client import (
     TaskPriority,
     QueueMetrics,
 )
+from graphiti_core.utils.temporal_visibility.client import (
+    TemporalIngestionClient,
+    TemporalIngestionConfig,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -246,6 +250,9 @@ class IngestionWorker:
         self.episode_count = 0
         self.dedup_interval = int(os.getenv('DEDUP_EPISODE_INTERVAL', '10'))
         self._post_success_jobs: list[Coroutine[Any, Any, None]] = []
+        # Temporal ingestion client (lazy-initialized)
+        self._temporal_ingestion_config = TemporalIngestionConfig.from_env()
+        self._temporal_ingestion_client: Optional[TemporalIngestionClient] = None
 
     async def start(self):
         """Start the worker processing loop"""
@@ -296,6 +303,15 @@ class IngestionWorker:
     def _clear_post_success_jobs(self) -> None:
         """Drop queued post-success jobs without executing them."""
         self._post_success_jobs.clear()
+
+    def _get_temporal_ingestion_client(self) -> Optional[TemporalIngestionClient]:
+        if not self._temporal_ingestion_config.enabled:
+            return None
+        if self._temporal_ingestion_client is None:
+            self._temporal_ingestion_client = TemporalIngestionClient(
+                self._temporal_ingestion_config
+            )
+        return self._temporal_ingestion_client
 
     async def _process_loop(self):
         """Main processing loop"""
@@ -466,6 +482,23 @@ class IngestionWorker:
                     logger.info(f'Skipping already-ingested episode {episode_uuid}')
                     return
 
+            temporal_client = self._get_temporal_ingestion_client()
+            if temporal_client is not None:
+                await self._process_episode_via_temporal(
+                    temporal_client=temporal_client,
+                    episode_uuid=episode_uuid or str(time.time()),
+                    group_id=effective_group_id,
+                    name=payload.get('name') or '',
+                    episode_body=payload.get('content') or '',
+                    source='message',
+                    source_description=payload.get('source_description') or '',
+                    reference_time=timestamp.isoformat()
+                    if timestamp
+                    else datetime.utcnow().isoformat(),
+                )
+                logger.info(f'Processed episode {episode_uuid} via Temporal workflow')
+                return
+
             add_episode_kwargs = {
                 'group_id': effective_group_id,
                 'name': payload.get('name'),
@@ -526,13 +559,32 @@ class IngestionWorker:
             else:
                 raise
 
+    async def _process_episode_via_temporal(
+        self,
+        temporal_client: TemporalIngestionClient,
+        episode_uuid: str,
+        group_id: str,
+        name: str,
+        episode_body: str,
+        source: str,
+        source_description: str,
+        reference_time: str,
+    ) -> None:
+        workflow_id = await temporal_client.start_ingestion(
+            episode_uuid=episode_uuid,
+            group_id=group_id,
+            name=name,
+            episode_body=episode_body,
+            source=source,
+            source_description=source_description,
+            reference_time=reference_time,
+        )
+        if workflow_id is None:
+            raise TransientError('Failed to start Temporal ingestion workflow')
+        logger.info(f'Started Temporal ingestion workflow {workflow_id} for episode {episode_uuid}')
+
     async def _update_centrality_async(self, node_uuids: List[str]):
-        """
-        Update centrality for nodes asynchronously.
-        This runs in the background and doesn't block task processing.
-        """
         try:
-            # Add a small delay to ensure nodes are saved to database
             await asyncio.sleep(0.5)
             await self.centrality_client.update_nodes_centrality(node_uuids)
         except Exception as e:

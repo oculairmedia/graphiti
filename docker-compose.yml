@@ -568,6 +568,9 @@ services:
       - -c
       - |
         pip install --quiet dspy-ai 2>/dev/null
+        if [ "${TEMPORAL_VISIBILITY_ENABLED:-false}" = "true" ] || [ "${TEMPORAL_INGESTION_ENABLED:-false}" = "true" ]; then
+          pip install --quiet temporalio 2>/dev/null
+        fi
         python -u worker/worker_service.py
     volumes:
       - ./scripts:/scripts:ro
@@ -580,6 +583,7 @@ services:
       - ./graphiti_core/utils:/app/graphiti_core/utils:ro
       - ./graphiti_core/search:/app/graphiti_core/search:ro
       - ./graphiti_core/prompts:/app/graphiti_core/prompts:ro
+      - ./graphiti_core/ingestion:/app/graphiti_core/ingestion:ro
     environment:
       - QUEUE_URL=http://graphiti-queued:8080
       - NEO4J_URI=${NEO4J_URI:-bolt://neo4j:7687}
@@ -641,6 +645,17 @@ services:
       - ANTHROPIC_SMALL_MODEL=${ANTHROPIC_SMALL_MODEL:-claude-3-5-haiku-latest}
       # DSPy Pipeline
       - USE_DSPY=${USE_DSPY:-false}
+      - TEMPORAL_VISIBILITY_ENABLED=${TEMPORAL_VISIBILITY_ENABLED:-true}
+      - TEMPORAL_VISIBILITY_ADDRESS=${TEMPORAL_VISIBILITY_ADDRESS:-192.168.50.90:7233}
+      - TEMPORAL_VISIBILITY_NAMESPACE=${TEMPORAL_VISIBILITY_NAMESPACE:-graphiti}
+      - TEMPORAL_VISIBILITY_TASK_QUEUE=${TEMPORAL_VISIBILITY_TASK_QUEUE:-graphiti-visibility}
+      - TEMPORAL_VISIBILITY_RPC_TIMEOUT_SECONDS=${TEMPORAL_VISIBILITY_RPC_TIMEOUT_SECONDS:-0.5}
+      - TEMPORAL_INGESTION_ENABLED=${TEMPORAL_INGESTION_ENABLED:-false}
+      - TEMPORAL_INGESTION_TASK_QUEUE=${TEMPORAL_INGESTION_TASK_QUEUE:-graphiti-ingestion}
+      - TEMPORAL_INGESTION_WORKFLOW_PREFIX=${TEMPORAL_INGESTION_WORKFLOW_PREFIX:-ingest-episode-}
+      - TEMPORAL_INGESTION_WORKFLOW_TIMEOUT_HOURS=${TEMPORAL_INGESTION_WORKFLOW_TIMEOUT_HOURS:-8}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       - graphiti_network
     depends_on:
@@ -666,6 +681,79 @@ services:
       - homepage.name=Worker
       - homepage.icon=si-worker
       - homepage.description=Ingestion queue worker
+  graphiti-temporal-visibility-worker:
+    image: ghcr.io/oculairmedia/graphiti-worker:main
+    restart: unless-stopped
+    command:
+      - /bin/bash
+      - -c
+      - |
+        pip install --quiet temporalio 2>/dev/null
+        python -u /scripts/temporal_visibility_worker.py
+    volumes:
+      - ./scripts:/scripts:ro
+      - ./graphiti_core:/app/graphiti_core:ro
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - TEMPORAL_VISIBILITY_ADDRESS=${TEMPORAL_VISIBILITY_ADDRESS:-192.168.50.90:7233}
+      - TEMPORAL_VISIBILITY_NAMESPACE=${TEMPORAL_VISIBILITY_NAMESPACE:-graphiti}
+      - TEMPORAL_VISIBILITY_TASK_QUEUE=${TEMPORAL_VISIBILITY_TASK_QUEUE:-graphiti-visibility}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - graphiti_network
+    profiles: ["temporal"]
+  graphiti-temporal-ingestion-worker:
+    image: ghcr.io/oculairmedia/graphiti-worker:main
+    restart: unless-stopped
+    command:
+      - /bin/bash
+      - -c
+      - |
+        pip install --quiet temporalio dspy-ai 2>/dev/null
+        python -u /scripts/temporal_ingestion_worker.py
+    volumes:
+      - ./scripts:/scripts:ro
+      - ./graphiti_core:/app/graphiti_core:ro
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - TEMPORAL_VISIBILITY_ADDRESS=${TEMPORAL_VISIBILITY_ADDRESS:-192.168.50.90:7233}
+      - TEMPORAL_VISIBILITY_NAMESPACE=${TEMPORAL_VISIBILITY_NAMESPACE:-graphiti}
+      - TEMPORAL_INGESTION_TASK_QUEUE=${TEMPORAL_INGESTION_TASK_QUEUE:-graphiti-ingestion}
+      # Rate limiting - prevents overwhelming LLM APIs under load
+      - TEMPORAL_MAX_CONCURRENT_WORKFLOW_TASKS=${TEMPORAL_MAX_CONCURRENT_WORKFLOW_TASKS:-10}
+      - TEMPORAL_MAX_CONCURRENT_ACTIVITIES=${TEMPORAL_MAX_CONCURRENT_ACTIVITIES:-5}
+      - TEMPORAL_MAX_CONCURRENT_LOCAL_ACTIVITIES=${TEMPORAL_MAX_CONCURRENT_LOCAL_ACTIVITIES:-5}
+      - TEMPORAL_RATE_LIMIT_INTER_ACTIVITY_DELAY=${TEMPORAL_RATE_LIMIT_INTER_ACTIVITY_DELAY:-0.0}
+      - TEMPORAL_RATE_LIMIT_POST_LLM_DELAY=${TEMPORAL_RATE_LIMIT_POST_LLM_DELAY:-0.0}
+      - TEMPORAL_INGESTION_WORKFLOW_TIMEOUT_HOURS=${TEMPORAL_INGESTION_WORKFLOW_TIMEOUT_HOURS:-8}
+      - FALKORDB_HOST=${FALKORDB_HOST:-falkordb}
+      - FALKORDB_PORT=${FALKORDB_PORT:-6379}
+      - FALKORDB_DATABASE=${FALKORDB_DATABASE:-graphiti_migration}
+      - USE_DSPY=${USE_DSPY:-false}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-sk-dummy}
+      - USE_OLLAMA=${USE_OLLAMA:-true}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://192.168.50.90:8082/v1}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-haiku-4-5}
+      - OLLAMA_EMBEDDING_MODEL=${OLLAMA_EMBEDDING_MODEL:-dengcao/Qwen3-Embedding-4B:Q4_K_M}
+      - EMBEDDING_DIMENSION=${EMBEDDING_DIMENSION:-2560}
+      - USE_OLLAMA_EMBEDDINGS=${USE_OLLAMA_EMBEDDINGS:-true}
+      - USE_DEDICATED_EMBEDDING_ENDPOINT=${USE_DEDICATED_EMBEDDING_ENDPOINT:-true}
+      - OLLAMA_EMBEDDING_BASE_URL=${OLLAMA_EMBEDDING_BASE_URL:-http://192.168.50.80:11434/v1}
+      - OLLAMA_EMBEDDING_API_KEY=${OLLAMA_EMBEDDING_API_KEY:-ollama}
+      - USE_CHUTES=${USE_CHUTES:-false}
+      - CHUTES_API_KEY=${CHUTES_API_KEY:-}
+      - CHUTES_BASE_URL=${CHUTES_BASE_URL:-https://api.z.ai/api/coding/paas/v4}
+      - CHUTES_MODEL=${CHUTES_MODEL:-glm-4.5}
+      - CHUTES_SMALL_MODEL=${CHUTES_SMALL_MODEL:-glm-4.5-air}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - graphiti_network
+    depends_on:
+      falkordb:
+        condition: service_healthy
+    profiles: ["temporal"]
   # =============================================================================
   # Reverse Proxy and Load Balancing
   # =============================================================================
