@@ -17,7 +17,8 @@ limitations under the License.
 import json
 from typing import Any, Protocol, TypedDict
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+
 
 from ..utils.prompt_utils import enforce_max_prompt_tokens
 from .models import Message, PromptFunction, PromptVersion
@@ -45,6 +46,13 @@ class ExtractedEntity(BaseModel):
 
 class ExtractedEntities(BaseModel):
     extracted_entities: list[ExtractedEntity] = Field(..., description='List of extracted entities')
+
+    @model_validator(mode='before')
+    @classmethod
+    def wrap_bare_list(cls, data: Any) -> Any:
+        if isinstance(data, list):
+            return {'extracted_entities': data}
+        return data
 
 
 class MissedEntities(BaseModel):
