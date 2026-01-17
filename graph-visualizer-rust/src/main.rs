@@ -861,9 +861,9 @@ async fn main() -> anyhow::Result<()> {
                             if let Ok(_) = store_clone.load_initial_data(graph_data.nodes.clone(), graph_data.edges.clone()).await {
                                 info!("DuckDB loaded successfully with initial data");
                                 
-                                // Get the latest created_at timestamp from the loaded data
+                                // Get the latest timestamp from the loaded data (prefer updated_at, fall back to created_at)
                                 let latest_timestamp = graph_data.nodes.iter()
-                                    .filter_map(|n| n.properties.get("created_at"))
+                                    .filter_map(|n| n.properties.get("updated_at").or(n.properties.get("created_at")))
                                     .filter_map(|v| v.as_str())
                                     .max()
                                     .map(|s| s.to_string());
@@ -923,8 +923,9 @@ async fn main() -> anyhow::Result<()> {
                                         new_node_count, new_edge_count);
                                     
                                     // Update timestamp to latest from new data
+                                    // GRAPH-142: Use updated_at (set by incremental fetch query) instead of created_at
                                     let latest_timestamp = graph_data.nodes.iter()
-                                        .filter_map(|n| n.properties.get("created_at"))
+                                        .filter_map(|n| n.properties.get("updated_at").or(n.properties.get("created_at")))
                                         .filter_map(|v| v.as_str())
                                         .max()
                                         .map(|s| s.to_string())
