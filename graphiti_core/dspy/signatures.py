@@ -113,14 +113,32 @@ class EntityExtractionSignature(dspy.Signature):
 
 
 class EdgeExtractionSignature(dspy.Signature):
-    """Extract factual relationships between entities.
+    """Extract ALL factual relationships between entities from text.
 
-    Given entities and context, identify all factual relationships between them
-    with temporal information when available.
+    You are an expert fact extractor. Given entities and context, identify every factual
+    relationship between them. Be thorough - extract all relationships, not just obvious ones.
+
+    EXTRACTION RULES:
+    1. Extract ALL facts where both subject and object are in the entities list
+    2. Each fact must involve two DISTINCT entities (not self-referential)
+    3. Use SCREAMING_SNAKE_CASE for relation_type (e.g., WORKS_AT, CREATED, USES, DEPENDS_ON)
+    4. The fact field should quote or closely paraphrase the source text
+    5. Do not emit duplicate or semantically redundant facts
+    6. Look for: actions, ownership, membership, creation, usage, dependencies, locations, etc.
+
+    COMMON RELATION TYPES (not exhaustive - use any appropriate type):
+    - WORKS_AT, WORKS_ON, CREATED, MODIFIED, USES, DEPENDS_ON
+    - MEMBER_OF, PART_OF, LOCATED_IN, OWNS, MANAGES
+    - RELATED_TO, REFERENCES, CALLS, IMPLEMENTS, EXTENDS
+
+    DATETIME RULES:
+    - Use ISO 8601 with Z suffix (e.g., 2025-04-30T00:00:00Z)
+    - Set valid_at to reference_time for present-tense facts
+    - Leave timestamps null if no time is stated or implied
     """
 
     previous_messages: str = dspy.InputField(desc='Previous messages for context (JSON array)')
-    current_message: str = dspy.InputField(desc='The current message to extract facts from')
+    current_message: str = dspy.InputField(desc='The current message to extract ALL facts from')
     entities: str = dspy.InputField(
         desc='Entities extracted from the message (JSON array with id, name, type)'
     )
@@ -128,14 +146,15 @@ class EdgeExtractionSignature(dspy.Signature):
         desc='Reference timestamp for resolving relative time expressions (ISO 8601)'
     )
     edge_types: str = dspy.InputField(
-        desc='Available edge/fact types with descriptions (JSON)', default=''
+        desc='Suggested edge types (JSON) - extract these AND any other relationships found',
+        default='',
     )
     custom_instructions: str = dspy.InputField(
         desc='Optional custom extraction instructions', default=''
     )
 
     extracted_edges: ExtractedEdges = dspy.OutputField(
-        desc='Extracted edges/relationships between entities'
+        desc='ALL extracted edges/relationships between entities - be thorough'
     )
 
 
