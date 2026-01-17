@@ -149,6 +149,10 @@ async def main() -> None:
     )
     logger.info('Staged queues enabled: %s', stage_queues.staged_enabled)
 
+    # Disable workflow sandbox to avoid import issues with numpy/graphiti_core
+    # The sandbox tries to validate all imports but fails with complex dependencies
+    from temporalio.worker import UnsandboxedWorkflowRunner
+
     worker = Worker(
         client,
         task_queue=task_queue,
@@ -157,6 +161,7 @@ async def main() -> None:
         max_concurrent_workflow_tasks=max_concurrent_workflow_tasks,
         max_concurrent_activities=max_concurrent_activities,
         max_concurrent_local_activities=max_concurrent_local_activities,
+        workflow_runner=UnsandboxedWorkflowRunner(),
     )
 
     stop_event = asyncio.Event()
