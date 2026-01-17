@@ -92,23 +92,41 @@ class Summary(BaseModel):
 
 
 class EntityExtractionSignature(dspy.Signature):
-    """Extract entities from conversational text or documents.
+    """Extract ALL significant entities from text with high precision.
 
-    Given a current message and optional previous context, identify and classify
-    all significant entities mentioned explicitly or implicitly.
+    You are an expert entity extractor. Identify and classify every significant entity
+    mentioned explicitly or implicitly in the current message.
+
+    EXTRACTION RULES:
+    1. Extract the speaker (before the colon) as the first entity if present
+    2. Entity names must be verbatim substrings from the text (clean boundaries)
+    3. Use full names including titles (e.g., "Dr. Elena Garcia", "Python 3.11")
+    4. Break down nested references: "Google's BERT" -> extract "Google" AND "BERT" separately
+    5. Classify each entity using exactly one entity_type_id from the provided types
+
+    WHAT TO EXTRACT:
+    - Named people, organizations, products, locations, concepts
+    - Technical terms: services, tools, files, projects, APIs, libraries
+    - Specific identifiers: versions, paths, configuration names
+
+    WHAT TO EXCLUDE:
+    - Relationships or actions (these become edges)
+    - Dates, times, temporal information (handled separately)
+    - Pronouns, generic nouns ("the project", "the system")
+    - Entities only in previous messages (context only)
     """
 
     previous_messages: str = dspy.InputField(desc='Previous messages for context (JSON array)')
-    current_message: str = dspy.InputField(desc='The current message to extract entities from')
+    current_message: str = dspy.InputField(desc='The current message to extract ALL entities from')
     entity_types: str = dspy.InputField(
-        desc='Available entity types with their IDs and descriptions (JSON)'
+        desc='Entity types with IDs and descriptions - classify each entity with one type_id'
     )
     custom_instructions: str = dspy.InputField(
         desc='Optional custom extraction instructions', default=''
     )
 
     extracted_entities: ExtractedEntities = dspy.OutputField(
-        desc='Extracted entities with their names and type IDs'
+        desc='ALL extracted entities with names and type IDs - be thorough'
     )
 
 
@@ -161,29 +179,69 @@ class EdgeExtractionSignature(dspy.Signature):
 class NodeDeduplicationSignature(dspy.Signature):
     """Determine if extracted entities are duplicates of existing entities.
 
-    Compare new entities against existing ones to identify duplicates,
-    considering semantic equivalence and real-world identity.
+    You are an expert at entity resolution. Compare each NEW entity against EXISTING entities
+    to identify duplicates, considering semantic equivalence and real-world identity.
+
+    IMPORTANT ID RULES:
+    1. Entity "id" values are zero-based integers - return them exactly as given
+    2. Candidate "idx" values are also zero-based - use the provided values
+    3. Do NOT renumber or convert to 1-based indexing
+
+    DUPLICATE DETECTION RULES:
+    1. Entities are duplicates ONLY if they refer to the SAME real-world object or concept
+    2. Semantic equivalence: if a descriptive label clearly refers to a named entity, treat as duplicate
+       Example: "the knowledge graph system" and "Graphiti" are duplicates if context confirms they're the same
+    3. Use context from previous messages to resolve ambiguous references
+
+    DO NOT MARK AS DUPLICATES:
+    - Related but distinct entities (e.g., "Python" vs "Python 3.11" if both are mentioned separately)
+    - Similar names referring to different instances (e.g., two different "John Smith" people)
+    - Parent/child relationships (e.g., "Google" and "Google Cloud" are separate entities)
+
+    OUTPUT REQUIREMENTS:
+    For each entity, return:
+    - id: the exact integer id from the input (zero-based)
+    - duplicate_idx: index of the FIRST matching existing entity, or -1 if none
+    - duplicates: list of ALL matching existing entity indices (empty if none)
+    - name: the most complete/descriptive name (from new entity, existing, or combined)
     """
 
     previous_messages: str = dspy.InputField(desc='Previous messages for context (JSON array)')
     current_message: str = dspy.InputField(desc='The current message entities were extracted from')
     extracted_entities: str = dspy.InputField(
-        desc='Newly extracted entities to deduplicate (JSON array)'
+        desc='Newly extracted entities to deduplicate (JSON array with id, name, entity_type)'
     )
     existing_entities: str = dspy.InputField(
-        desc='Existing entities to compare against (JSON array with candidate idx)'
+        desc='Existing entities to compare against (JSON array with candidate idx, name, entity_type)'
     )
 
     entity_resolutions: NodeResolutions = dspy.OutputField(
-        desc='Resolution results indicating duplicates for each entity'
+        desc='Resolution for EACH extracted entity with duplicate information'
     )
 
 
 class SummaryGenerationSignature(dspy.Signature):
-    """Generate a summary for an entity based on available context.
+    """Generate or update an entity summary based on new context.
 
-    Create a concise summary (under 250 words) capturing the important
-    information about an entity from the provided messages.
+    You are an expert at synthesizing information about entities. Create a concise,
+    informative summary (under 250 words) that captures the most important facts.
+
+    SUMMARY RULES:
+    1. If existing_summary is provided, UPDATE it by integrating new information
+    2. Preserve important facts from the existing summary - don't lose information
+    3. Resolve contradictions: newer information takes precedence over older
+    4. Focus on factual, verifiable information from the messages
+
+    CONTENT GUIDELINES:
+    - Include: roles, relationships, key actions, attributes, affiliations
+    - Exclude: speculation, opinions, ephemeral details
+    - Use third person ("X is..." not "You are...")
+    - Be specific: prefer "CEO of Acme Corp since 2020" over "a business leader"
+
+    STYLE:
+    - Concise, professional prose
+    - No bullet points or lists
+    - Under 250 words
     """
 
     previous_messages: str = dspy.InputField(desc='Previous messages for context (JSON array)')
