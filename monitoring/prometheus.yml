@@ -7,7 +7,7 @@ global:
 
 # GRAPH-114: Alert rules for reconciliation and event sourcing
 rule_files:
-  - 'alerts/*.yml'
+  - '/etc/prometheus/alerts/*.yml'
 
 scrape_configs:
   # Prometheus self-monitoring

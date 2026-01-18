@@ -1,0 +1,95 @@
+# Graph Health Alert Rules
+# Detect issues with graph connectivity and ingestion quality
+groups:
+  - name: graphiti-graph-health
+    rules:
+      # Alert when edge/node ratio drops too low (poor connectivity)
+      - alert: LowGraphConnectivity
+        expr: graphiti_visualizer_edges_total / graphiti_visualizer_nodes_total < 2.0
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Graph connectivity is degraded"
+          description: "Edge/node ratio is {{ $value | printf \"%.2f\" }} (expected > 2.0). This indicates orphan nodes accumulating. Run maintenance cleanup."
+
+      # Alert when edge/node ratio drops critically low
+      - alert: CriticalGraphConnectivity
+        expr: graphiti_visualizer_edges_total / graphiti_visualizer_nodes_total < 1.5
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Graph connectivity is critically low"
+          description: "Edge/node ratio is {{ $value | printf \"%.2f\" }} (critical threshold 1.5). Many orphan nodes exist. Investigate ingestion pipeline immediately."
+
+      # Alert when node growth outpaces edge growth (orphans being created)
+      - alert: OrphanNodeAccumulation
+        expr: |
+          (rate(graphiti_visualizer_nodes_total[1h]) > 0) 
+          and 
+          (rate(graphiti_visualizer_edges_total[1h]) / rate(graphiti_visualizer_nodes_total[1h]) < 1.5)
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Orphan nodes are accumulating"
+          description: "New nodes are being created faster than edges. Edge/node creation ratio is {{ $value | printf \"%.2f\" }}. Check DSPy edge extraction quality."
+
+      # Alert when no new edges are being created despite new nodes
+      - alert: EdgeExtractionStalled
+        expr: |
+          (rate(graphiti_visualizer_nodes_total[30m]) > 0.1)
+          and 
+          (rate(graphiti_visualizer_edges_total[30m]) == 0)
+        for: 30m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Edge extraction appears stalled"
+          description: "Nodes are being created but no new edges in 30 minutes. Edge extraction may be failing."
+
+      # Alert when graph stops growing entirely (ingestion issue)
+      - alert: GraphGrowthStalled
+        expr: |
+          (increase(graphiti_visualizer_nodes_total[2h]) == 0)
+          and 
+          (increase(graphiti_visualizer_edges_total[2h]) == 0)
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Graph growth has stalled"
+          description: "No new nodes or edges in 2 hours. Check if ingestion pipeline is running."
+
+  - name: graphiti-falkordb-health
+    rules:
+      # Alert on high FalkorDB memory usage
+      - alert: FalkorDBHighMemory
+        expr: redis_memory_used_bytes{job="falkordb"} / redis_memory_max_bytes{job="falkordb"} > 0.85
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "FalkorDB memory usage is high"
+          description: "FalkorDB is using {{ $value | humanizePercentage }} of max memory. Consider increasing memory limit or running maintenance."
+
+      # Alert on FalkorDB memory critical
+      - alert: FalkorDBCriticalMemory
+        expr: redis_memory_used_bytes{job="falkordb"} / redis_memory_max_bytes{job="falkordb"} > 0.95
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "FalkorDB memory is critically high"
+          description: "FalkorDB is using {{ $value | humanizePercentage }} of max memory. OOM may occur. Take immediate action."
+
+      # Alert when FalkorDB is down
+      - alert: FalkorDBDown
+        expr: up{job="falkordb"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "FalkorDB is down"
+          description: "Cannot reach FalkorDB. Graph database is unavailable."
