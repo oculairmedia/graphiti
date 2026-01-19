@@ -529,19 +529,35 @@ class IngestionActivities:
             else {('Entity', 'Entity'): []}
         )
 
-        (resolved_edges, invalidated_edges), hydrated_nodes = await semaphore_gather(
-            resolve_extracted_edges(
-                graphiti.clients,
-                edges,
-                episode,
-                nodes,
-                edge_types or {},
-                edge_type_map or edge_type_map_default,
-            ),
-            extract_attributes_from_nodes(
-                graphiti.clients, nodes, episode, previous_episodes, None
-            ),
-        )
+        # Use DSPy for attribute extraction (summaries) if enabled
+        # This matches the behavior in graphiti.py add_episode_resilient
+        if graphiti.use_dspy:
+            logger.info(f'Episode {episode.uuid}: Extracting attributes [DSPy]')
+            (resolved_edges, invalidated_edges), hydrated_nodes = await semaphore_gather(
+                resolve_extracted_edges(
+                    graphiti.clients,
+                    edges,
+                    episode,
+                    nodes,
+                    edge_types or {},
+                    edge_type_map or edge_type_map_default,
+                ),
+                graphiti._extract_attributes_dspy(nodes, episode, previous_episodes),
+            )
+        else:
+            (resolved_edges, invalidated_edges), hydrated_nodes = await semaphore_gather(
+                resolve_extracted_edges(
+                    graphiti.clients,
+                    edges,
+                    episode,
+                    nodes,
+                    edge_types or {},
+                    edge_type_map or edge_type_map_default,
+                ),
+                extract_attributes_from_nodes(
+                    graphiti.clients, nodes, episode, previous_episodes, None
+                ),
+            )
 
         nodes_to_use = hydrated_nodes if hydrated_nodes else nodes
 
