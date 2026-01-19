@@ -75,6 +75,7 @@ DEFAULT_ENTITY_TYPES = [
 @dataclass
 class TokenUsage:
     """Token usage metrics for optimization."""
+
     prompt_tokens: int = 0
     completion_tokens: int = 0
     total_tokens: int = 0
@@ -125,6 +126,7 @@ class TokenUsage:
 @dataclass
 class PipelineResult:
     """Result from a single episode ingestion."""
+
     episode_id: str
     episode_content: str
     timestamp: str
@@ -177,6 +179,7 @@ class PipelineResult:
 @dataclass
 class GraphState:
     """In-memory graph state for DSPy pipeline."""
+
     entities: list[dict[str, Any]] = field(default_factory=list)
     edges: list[dict[str, Any]] = field(default_factory=list)
     entity_index: dict[str, int] = field(default_factory=dict)  # name -> idx
@@ -252,10 +255,12 @@ class DSPyIngestionPipeline:
         except RuntimeError:
             configure_lm()
 
-        # Initialize modules
-        self.node_extractor = NodeExtractor()
+        from graphiti_core.dspy.modules import is_stateful_learning_enabled
+
+        enable_stateful = is_stateful_learning_enabled()
+        self.node_extractor = NodeExtractor(enable_stateful=enable_stateful)
         self.edge_extractor = EdgeExtractor()
-        self.node_resolver = NodeResolver()
+        self.node_resolver = NodeResolver(enable_stateful=enable_stateful)
         self.summary_generator = SummaryGenerator()
 
         # Configuration
@@ -316,7 +321,7 @@ class DSPyIngestionPipeline:
 
         try:
             # Get previous episodes for context
-            previous = self.episode_history[-self.max_history:] if self.episode_history else []
+            previous = self.episode_history[-self.max_history :] if self.episode_history else []
 
             # Step 1: Extract entities
             step_start = datetime.now(timezone.utc)
@@ -362,7 +367,9 @@ class DSPyIngestionPipeline:
                 {
                     'id': i,
                     'name': e.name,
-                    'type': self.entity_types[e.entity_type_id]['name'] if e.entity_type_id < len(self.entity_types) else 'Unknown',
+                    'type': self.entity_types[e.entity_type_id]['name']
+                    if e.entity_type_id < len(self.entity_types)
+                    else 'Unknown',
                     'type_id': e.entity_type_id,
                 }
                 for i, e in enumerate(extracted.extracted_entities)
@@ -417,43 +424,57 @@ class DSPyIngestionPipeline:
                         # Duplicate - use existing entity
                         existing = self.graph.get_entity(res.duplicate_idx)
                         if existing:
-                            resolved.append({
-                                'name': existing['name'],
-                                'type': existing.get('type', 'Unknown'),
-                                'idx': existing['idx'],
-                                'is_new': False,
-                                'merged_from': res.name,
-                                'group_id': self.group_id,
-                            })
+                            resolved.append(
+                                {
+                                    'name': existing['name'],
+                                    'type': existing.get('type', 'Unknown'),
+                                    'idx': existing['idx'],
+                                    'is_new': False,
+                                    'merged_from': res.name,
+                                    'group_id': self.group_id,
+                                }
+                            )
                     else:
                         # New entity
-                        entity_data = extracted_entities[res.id] if res.id < len(extracted_entities) else {'name': res.name, 'type': 'Unknown'}
-                        idx = self.graph.add_entity({
-                            'name': res.name,
-                            'type': entity_data.get('type', 'Unknown'),
-                        })
-                        resolved.append({
-                            'name': res.name,
-                            'type': entity_data.get('type', 'Unknown'),
-                            'idx': idx,
-                            'is_new': True,
-                            'group_id': self.group_id,
-                        })
+                        entity_data = (
+                            extracted_entities[res.id]
+                            if res.id < len(extracted_entities)
+                            else {'name': res.name, 'type': 'Unknown'}
+                        )
+                        idx = self.graph.add_entity(
+                            {
+                                'name': res.name,
+                                'type': entity_data.get('type', 'Unknown'),
+                            }
+                        )
+                        resolved.append(
+                            {
+                                'name': res.name,
+                                'type': entity_data.get('type', 'Unknown'),
+                                'idx': idx,
+                                'is_new': True,
+                                'group_id': self.group_id,
+                            }
+                        )
                 result.resolved_entities = resolved
             else:
                 # No existing entities - all are new
                 for entity in extracted_entities:
-                    idx = self.graph.add_entity({
-                        'name': entity['name'],
-                        'type': entity['type'],
-                    })
-                    result.resolved_entities.append({
-                        'name': entity['name'],
-                        'type': entity['type'],
-                        'idx': idx,
-                        'is_new': True,
-                        'group_id': self.group_id,
-                    })
+                    idx = self.graph.add_entity(
+                        {
+                            'name': entity['name'],
+                            'type': entity['type'],
+                        }
+                    )
+                    result.resolved_entities.append(
+                        {
+                            'name': entity['name'],
+                            'type': entity['type'],
+                            'idx': idx,
+                            'is_new': True,
+                            'group_id': self.group_id,
+                        }
+                    )
 
             result.resolution_time_ms = self._time_ms(step_start)
 
@@ -512,8 +533,12 @@ class DSPyIngestionPipeline:
                 if edges and hasattr(edges, 'edges'):
                     for edge in edges.edges:
                         edge_dict = {
-                            'source': result.resolved_entities[edge.source_entity_id]['name'] if edge.source_entity_id < len(result.resolved_entities) else f'?{edge.source_entity_id}',
-                            'target': result.resolved_entities[edge.target_entity_id]['name'] if edge.target_entity_id < len(result.resolved_entities) else f'?{edge.target_entity_id}',
+                            'source': result.resolved_entities[edge.source_entity_id]['name']
+                            if edge.source_entity_id < len(result.resolved_entities)
+                            else f'?{edge.source_entity_id}',
+                            'target': result.resolved_entities[edge.target_entity_id]['name']
+                            if edge.target_entity_id < len(result.resolved_entities)
+                            else f'?{edge.target_entity_id}',
                             'relation_type': edge.relation_type,
                             'fact': edge.fact,
                             'valid_at': edge.valid_at,
@@ -595,7 +620,9 @@ class DSPyIngestionPipeline:
                 total_tokens=result.token_usage.total_tokens,
                 entity_count=len(result.resolved_entities),
                 edge_count=len(result.extracted_edges),
-                new_entity_count=len([e for e in result.resolved_entities if e.get('is_new', False)]),
+                new_entity_count=len(
+                    [e for e in result.resolved_entities if e.get('is_new', False)]
+                ),
                 success=result.success,
                 errors=result.errors,
             )

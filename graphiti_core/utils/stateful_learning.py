@@ -9,12 +9,40 @@ This replaces the agentic-learning SDK which requires an older letta-client vers
 
 import logging
 import os
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from contextlib import contextmanager
-from typing import Any, Generator
+from functools import wraps
+from typing import Any, Callable, Generator, TypeVar
 
 from letta_client import Letta
 
 logger = logging.getLogger(__name__)
+
+LETTA_TIMEOUT_SECONDS = float(os.getenv('LETTA_TIMEOUT_SECONDS', '5.0'))
+
+T = TypeVar('T')
+
+
+def with_timeout(timeout_seconds: float = LETTA_TIMEOUT_SECONDS) -> Callable:
+    """Decorator to add timeout to synchronous functions."""
+
+    def decorator(func: Callable[..., T]) -> Callable[..., T | None]:
+        @wraps(func)
+        def wrapper(*args, **kwargs) -> T | None:
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(func, *args, **kwargs)
+                try:
+                    return future.result(timeout=timeout_seconds)
+                except FuturesTimeoutError:
+                    logger.warning(f'{func.__name__} timed out after {timeout_seconds}s')
+                    return None
+                except Exception as e:
+                    logger.warning(f'{func.__name__} failed: {e}')
+                    return None
+
+        return wrapper
+
+    return decorator
 
 
 class StatefulLearningClient:
@@ -29,14 +57,34 @@ class StatefulLearningClient:
         self,
         base_url: str | None = None,
         api_key: str | None = None,
+        timeout: float | None = None,
     ):
         self.base_url = base_url or os.getenv('LETTA_BASE_URL', 'http://localhost:8283')
         self.api_key = api_key or os.getenv('LETTA_API_KEY')
+        self.timeout = timeout or LETTA_TIMEOUT_SECONDS
+        self._healthy = False
 
         self._client = Letta(
             base_url=self.base_url,
             api_key=self.api_key,
         )
+        self._check_health()
+
+    def _check_health(self) -> bool:
+        """Check if Letta is reachable."""
+        try:
+            self._client.agents.list()
+            self._healthy = True
+            logger.info(f'Letta connection healthy: {self.base_url}')
+            return True
+        except Exception as e:
+            self._healthy = False
+            logger.warning(f'Letta unreachable at {self.base_url}: {e}')
+            return False
+
+    @property
+    def is_healthy(self) -> bool:
+        return self._healthy
 
     def get_agent_by_name(self, name: str) -> Any | None:
         """Find an agent by name."""

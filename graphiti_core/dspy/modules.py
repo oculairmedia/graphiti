@@ -29,10 +29,23 @@ logger = logging.getLogger(__name__)
 
 _stateful_client = None
 _stateful_agent_id = None
+_stateful_enabled: bool | None = None
+
+
+def is_stateful_learning_enabled() -> bool:
+    """Check if stateful learning is enabled via env var."""
+    global _stateful_enabled
+    if _stateful_enabled is None:
+        _stateful_enabled = os.getenv('ENABLE_STATEFUL_LEARNING', 'true').lower() == 'true'
+    return _stateful_enabled
 
 
 def _get_stateful_client():
     global _stateful_client, _stateful_agent_id
+
+    if not is_stateful_learning_enabled():
+        return None, None
+
     if _stateful_client is not None:
         return _stateful_client, _stateful_agent_id
 
