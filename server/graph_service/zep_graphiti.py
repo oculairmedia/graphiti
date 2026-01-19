@@ -59,6 +59,7 @@ class ZepGraphiti(Graphiti):
         llm_client: LLMClient | None = None,
         embedder: EmbedderClient | None = None,
         use_falkordb: bool = False,
+        use_dspy: bool = False,
     ):
         # Create appropriate driver based on URI or use_falkordb flag
         if use_falkordb or uri.startswith('redis://'):
@@ -89,7 +90,9 @@ class ZepGraphiti(Graphiti):
             graph_driver=driver,
             llm_client=llm_client,
             embedder=embedder,
+            use_dspy=use_dspy,
         )
+        logger.info(f'ZepGraphiti initialized with use_dspy={use_dspy}')
 
     async def save_entity_node(
         self, name: str, uuid: str, group_id: str, summary: str = ''
@@ -182,6 +185,7 @@ async def get_graphiti(settings: ZepEnvDep) -> Any:  # Returns generator
     llm_client = create_llm_client(settings)
     embedder = create_embedder_client(settings)
 
+    use_dspy = os.getenv('USE_DSPY', 'false').lower() == 'true'
     client = ZepGraphiti(
         uri=settings.database_uri,
         user=settings.database_user,
@@ -189,6 +193,7 @@ async def get_graphiti(settings: ZepEnvDep) -> Any:  # Returns generator
         llm_client=llm_client,
         embedder=embedder,
         use_falkordb=settings.use_falkordb or bool(settings.falkordb_uri or settings.falkordb_host),
+        use_dspy=use_dspy,
     )
 
     logger.info(
@@ -211,6 +216,7 @@ async def initialize_graphiti(settings: ZepEnvDep) -> None:
     llm_client = create_llm_client(settings)
     embedder = create_embedder_client(settings)
 
+    use_dspy = os.getenv('USE_DSPY', 'false').lower() == 'true'
     client = ZepGraphiti(
         uri=settings.database_uri,
         user=settings.database_user,
@@ -218,6 +224,7 @@ async def initialize_graphiti(settings: ZepEnvDep) -> None:
         llm_client=llm_client,
         embedder=embedder,
         use_falkordb=settings.use_falkordb or bool(settings.falkordb_uri or settings.falkordb_host),
+        use_dspy=use_dspy,
     )
     await client.build_indices_and_constraints()
 

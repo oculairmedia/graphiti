@@ -1321,7 +1321,11 @@ class Graphiti:
         state.nodes_resolve_attempts += 1
         logger.info(
             f'Episode {episode.uuid}: Resolving nodes (attempt {state.nodes_resolve_attempts})'
+            f'{" [DSPy]" if self.use_dspy else ""}'
         )
+
+        if self.use_dspy:
+            return await self._resolve_nodes_dspy(extracted_nodes, episode, previous_episodes)
 
         return await resolve_extracted_nodes(
             self.clients,
@@ -1332,6 +1336,139 @@ class Graphiti:
             existing_nodes_override=None,
             enable_cross_graph_deduplication=self.enable_cross_graph_deduplication,
         )
+
+    async def _resolve_nodes_dspy(
+        self,
+        extracted_nodes: list[EntityNode],
+        episode: EpisodicNode,
+        previous_episodes: list[EpisodicNode],
+    ) -> tuple[list[EntityNode], dict[str, str], list[EntityNode]]:
+        """Resolve nodes using DSPy NodeResolver."""
+        import asyncio
+        from graphiti_core.utils.datetime_utils import utc_now
+
+        pipeline = _get_dspy_pipeline(episode.group_id)
+
+        # Format extracted entities for DSPy
+        extracted_entities = [
+            {'id': i, 'name': node.name, 'entity_type': node.labels[0] if node.labels else 'Entity'}
+            for i, node in enumerate(extracted_nodes)
+        ]
+
+        # Get existing entities from database for comparison
+        existing_entities = await self._get_existing_entities_for_resolution(
+            episode.group_id, extracted_nodes
+        )
+
+        # Format previous episodes for DSPy
+        prev_messages = [{'content': ep.content} for ep in previous_episodes if ep.content]
+
+        # If no existing entities, all extracted nodes are new
+        if not existing_entities:
+            logger.info(
+                f'DSPy resolution: No existing entities, all {len(extracted_nodes)} are new'
+            )
+            uuid_map = {node.uuid: node.uuid for node in extracted_nodes}
+            return extracted_nodes, uuid_map, []
+
+        # Run DSPy resolution (sync, so wrap in executor)
+        def run_resolution():
+            return pipeline.node_resolver(
+                current_message=episode.content,
+                extracted_entities=extracted_entities,
+                existing_entities=existing_entities,
+                previous_messages=prev_messages,
+            )
+
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(None, run_resolution)
+
+        # Convert DSPy output to legacy format
+        resolved_nodes: list[EntityNode] = []
+        uuid_map: dict[str, str] = {}
+        node_duplicates: list[EntityNode] = []
+
+        for resolution in result.entity_resolutions:
+            original_node = (
+                extracted_nodes[resolution.id] if resolution.id < len(extracted_nodes) else None
+            )
+            if not original_node:
+                continue
+
+            if resolution.duplicate_idx >= 0 and resolution.duplicate_idx < len(existing_entities):
+                # Found duplicate - use existing entity
+                existing = existing_entities[resolution.duplicate_idx]
+                existing_node = EntityNode(
+                    uuid=existing.get('uuid', original_node.uuid),
+                    name=existing.get('name', resolution.name),
+                    group_id=episode.group_id,
+                    labels=original_node.labels,
+                    created_at=original_node.created_at,
+                    summary=existing.get('summary', ''),
+                )
+                resolved_nodes.append(existing_node)
+                uuid_map[original_node.uuid] = existing_node.uuid
+                node_duplicates.append(original_node)
+                logger.debug(
+                    f"DSPy resolved '{original_node.name}' as duplicate of '{existing_node.name}'"
+                )
+            else:
+                # New entity - keep original
+                resolved_nodes.append(original_node)
+                uuid_map[original_node.uuid] = original_node.uuid
+
+        logger.info(
+            f'DSPy resolved {len(extracted_nodes)} nodes: '
+            f'{len(resolved_nodes)} resolved, {len(node_duplicates)} duplicates'
+        )
+        return resolved_nodes, uuid_map, node_duplicates
+
+    async def _get_existing_entities_for_resolution(
+        self,
+        group_id: str,
+        extracted_nodes: list[EntityNode],
+    ) -> list[dict[str, Any]]:
+        """Get existing entities from database for DSPy resolution comparison."""
+        if not extracted_nodes:
+            return []
+
+        # Query existing entities with similar names
+        names = [node.name for node in extracted_nodes]
+
+        if self.enable_cross_graph_deduplication:
+            query = """
+            MATCH (n:Entity)
+            WHERE n.name IN $names
+            RETURN n.uuid AS uuid, n.name AS name, n.summary AS summary, 
+                   labels(n) AS labels, n.group_id AS group_id
+            ORDER BY n.created_at
+            """
+            records, _, _ = await self.driver.execute_query(query, names=names)
+        else:
+            query = """
+            MATCH (n:Entity)
+            WHERE n.name IN $names AND n.group_id = $group_id
+            RETURN n.uuid AS uuid, n.name AS name, n.summary AS summary,
+                   labels(n) AS labels, n.group_id AS group_id
+            ORDER BY n.created_at
+            """
+            records, _, _ = await self.driver.execute_query(query, names=names, group_id=group_id)
+
+        existing = []
+        for i, record in enumerate(records):
+            existing.append(
+                {
+                    'idx': i,
+                    'uuid': record.get('uuid'),
+                    'name': record.get('name'),
+                    'summary': record.get('summary', ''),
+                    'entity_type': record.get('labels', ['Entity'])[0]
+                    if record.get('labels')
+                    else 'Entity',
+                }
+            )
+
+        return existing
 
     @retry_with_backoff(max_retries=3, base_delay=2.0)
     async def _extract_edges_with_retry(
