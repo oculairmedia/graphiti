@@ -354,6 +354,7 @@ services:
       - ENABLE_AGGRESSIVE_DEDUP=${ENABLE_AGGRESSIVE_DEDUP:-true}
       - DEDUP_NORMALIZE_NAMES=${DEDUP_NORMALIZE_NAMES:-true}
       - DEDUP_EPISODE_INTERVAL=${DEDUP_EPISODE_INTERVAL:-10}
+      - USE_DSPY=${USE_DSPY:-false}
     networks:
       - graphiti_network
     depends_on:
@@ -771,12 +772,16 @@ services:
       - |
         pip install --quiet temporalio dspy-ai 2>/dev/null
         python -u /scripts/temporal_ingestion_worker.py
+    ports:
+      - "9190:9190"
     volumes:
       - ./scripts:/scripts:ro
       - ./graphiti_core:/app/graphiti_core:ro
     environment:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - WORKER_MODE=workflow
+      - TEMPORAL_METRICS_ENABLED=${TEMPORAL_METRICS_ENABLED:-true}
+      - TEMPORAL_METRICS_PORT=9190
       - TEMPORAL_VISIBILITY_ADDRESS=${TEMPORAL_VISIBILITY_ADDRESS:-192.168.50.90:7233}
       - TEMPORAL_VISIBILITY_NAMESPACE=${TEMPORAL_VISIBILITY_NAMESPACE:-graphiti}
       - TEMPORAL_INGESTION_WORKFLOW_TASK_QUEUE=${TEMPORAL_INGESTION_WORKFLOW_TASK_QUEUE:-graphiti-ingestion-workflow}
@@ -822,12 +827,16 @@ services:
       - |
         pip install --quiet temporalio dspy-ai 2>/dev/null
         python -u /scripts/temporal_ingestion_worker.py
+    ports:
+      - "9191:9191"
     volumes:
       - ./scripts:/scripts:ro
       - ./graphiti_core:/app/graphiti_core:ro
     environment:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - WORKER_MODE=extract
+      - TEMPORAL_METRICS_ENABLED=${TEMPORAL_METRICS_ENABLED:-true}
+      - TEMPORAL_METRICS_PORT=9191
       - TEMPORAL_VISIBILITY_ADDRESS=${TEMPORAL_VISIBILITY_ADDRESS:-192.168.50.90:7233}
       - TEMPORAL_VISIBILITY_NAMESPACE=${TEMPORAL_VISIBILITY_NAMESPACE:-graphiti}
       - TEMPORAL_INGESTION_EXTRACT_TASK_QUEUE=${TEMPORAL_INGESTION_EXTRACT_TASK_QUEUE:-graphiti-ingestion-extract}
@@ -874,12 +883,16 @@ services:
       - |
         pip install --quiet temporalio dspy-ai 2>/dev/null
         python -u /scripts/temporal_ingestion_worker.py
+    ports:
+      - "9192:9192"
     volumes:
       - ./scripts:/scripts:ro
       - ./graphiti_core:/app/graphiti_core:ro
     environment:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - WORKER_MODE=resolve
+      - TEMPORAL_METRICS_ENABLED=${TEMPORAL_METRICS_ENABLED:-true}
+      - TEMPORAL_METRICS_PORT=9192
       - TEMPORAL_VISIBILITY_ADDRESS=${TEMPORAL_VISIBILITY_ADDRESS:-192.168.50.90:7233}
       - TEMPORAL_VISIBILITY_NAMESPACE=${TEMPORAL_VISIBILITY_NAMESPACE:-graphiti}
       - TEMPORAL_INGESTION_RESOLVE_TASK_QUEUE=${TEMPORAL_INGESTION_RESOLVE_TASK_QUEUE:-graphiti-ingestion-resolve}
@@ -926,12 +939,16 @@ services:
       - |
         pip install --quiet temporalio dspy-ai 2>/dev/null
         python -u /scripts/temporal_ingestion_worker.py
+    ports:
+      - "9193:9193"
     volumes:
       - ./scripts:/scripts:ro
       - ./graphiti_core:/app/graphiti_core:ro
     environment:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - WORKER_MODE=edge
+      - TEMPORAL_METRICS_ENABLED=${TEMPORAL_METRICS_ENABLED:-true}
+      - TEMPORAL_METRICS_PORT=9193
       - TEMPORAL_VISIBILITY_ADDRESS=${TEMPORAL_VISIBILITY_ADDRESS:-192.168.50.90:7233}
       - TEMPORAL_VISIBILITY_NAMESPACE=${TEMPORAL_VISIBILITY_NAMESPACE:-graphiti}
       - TEMPORAL_INGESTION_EDGE_TASK_QUEUE=${TEMPORAL_INGESTION_EDGE_TASK_QUEUE:-graphiti-ingestion-edge}
@@ -978,12 +995,16 @@ services:
       - |
         pip install --quiet temporalio dspy-ai 2>/dev/null
         python -u /scripts/temporal_ingestion_worker.py
+    ports:
+      - "9194:9194"
     volumes:
       - ./scripts:/scripts:ro
       - ./graphiti_core:/app/graphiti_core:ro
     environment:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - WORKER_MODE=persist
+      - TEMPORAL_METRICS_ENABLED=${TEMPORAL_METRICS_ENABLED:-true}
+      - TEMPORAL_METRICS_PORT=9194
       - TEMPORAL_VISIBILITY_ADDRESS=${TEMPORAL_VISIBILITY_ADDRESS:-192.168.50.90:7233}
       - TEMPORAL_VISIBILITY_NAMESPACE=${TEMPORAL_VISIBILITY_NAMESPACE:-graphiti}
       - TEMPORAL_INGESTION_PERSIST_TASK_QUEUE=${TEMPORAL_INGESTION_PERSIST_TASK_QUEUE:-graphiti-ingestion-persist}
@@ -1073,6 +1094,39 @@ services:
       falkordb:
         condition: service_healthy
     profiles: ["temporal-staged"]
+
+  graphiti-temporal-monitoring-worker:
+    image: ghcr.io/oculairmedia/graphiti-worker:main
+    restart: unless-stopped
+    command:
+      - /bin/bash
+      - -c
+      - |
+        pip install --quiet temporalio 2>/dev/null
+        python -u /scripts/temporal_monitoring_worker.py
+    ports:
+      - "9195:9195"
+    volumes:
+      - ./scripts:/scripts:ro
+      - ./graphiti_core:/app/graphiti_core:ro
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - TEMPORAL_VISIBILITY_ADDRESS=${TEMPORAL_VISIBILITY_ADDRESS:-192.168.50.90:7233}
+      - TEMPORAL_VISIBILITY_NAMESPACE=${TEMPORAL_VISIBILITY_NAMESPACE:-graphiti}
+      - TEMPORAL_MONITORING_TASK_QUEUE=${TEMPORAL_MONITORING_TASK_QUEUE:-graphiti-monitoring}
+      - TEMPORAL_METRICS_ENABLED=${TEMPORAL_METRICS_ENABLED:-true}
+      - TEMPORAL_METRICS_PORT=9195
+      - FALKORDB_HOST=${FALKORDB_HOST:-falkordb}
+      - FALKORDB_PORT=${FALKORDB_PORT:-6379}
+      - FALKORDB_DATABASE=${FALKORDB_DATABASE:-graphiti_migration}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - graphiti_network
+    depends_on:
+      falkordb:
+        condition: service_healthy
+    profiles: ["temporal-monitoring"]
 
   # =============================================================================
   # Reverse Proxy and Load Balancing
