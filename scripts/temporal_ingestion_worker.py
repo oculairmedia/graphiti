@@ -4,12 +4,42 @@ import asyncio
 import logging
 import os
 import signal
-from typing import Callable, Awaitable
+from typing import Callable, Awaitable, Optional
 
 from graphiti_core.utils.temporal_visibility.config import (
     TemporalStageQueueConfig,
     TemporalStageConcurrencyConfig,
 )
+
+
+def _configure_prometheus_runtime(port: int) -> Optional['Runtime']:
+    """Configure Temporal runtime with Prometheus metrics exporter.
+
+    Args:
+        port: Port to expose Prometheus metrics on
+
+    Returns:
+        Configured Runtime with Prometheus telemetry, or None if disabled
+    """
+    logger = logging.getLogger(__name__)
+
+    metrics_enabled = os.getenv('TEMPORAL_METRICS_ENABLED', 'true').lower() == 'true'
+    if not metrics_enabled:
+        logger.info('Temporal Prometheus metrics DISABLED')
+        return None
+
+    try:
+        from temporalio.runtime import PrometheusConfig, TelemetryConfig, Runtime
+
+        prometheus_config = PrometheusConfig(bind_address=f'0.0.0.0:{port}')
+        telemetry_config = TelemetryConfig(metrics=prometheus_config)
+        runtime = Runtime(telemetry=telemetry_config)
+
+        logger.info('Temporal Prometheus metrics enabled on port %d', port)
+        return runtime
+    except Exception as e:
+        logger.warning('Failed to configure Prometheus metrics: %s', e)
+        return None
 
 
 def _configure_logging() -> None:
@@ -65,6 +95,24 @@ async def main() -> None:
     stage_queues = TemporalStageQueueConfig.from_env()
     stage_concurrency = TemporalStageConcurrencyConfig.from_env()
 
+    # Prometheus metrics port - different port per worker mode to avoid conflicts
+    # Using 919x range to avoid conflicts with Kafka (9092) and Prometheus (9090)
+    metrics_port_map = {
+        'workflow': 9190,
+        'extract': 9191,
+        'resolve': 9192,
+        'edge': 9193,
+        'persist': 9194,
+        'legacy': 9195,
+        'all': 9195,
+    }
+    metrics_port = int(
+        os.getenv('TEMPORAL_METRICS_PORT', str(metrics_port_map.get(worker_mode, 9090)))
+    )
+
+    # Configure Prometheus runtime (must be done before Client.connect)
+    runtime = _configure_prometheus_runtime(metrics_port)
+
     # Concurrency limits - prevents overwhelming LLM APIs
     max_concurrent_workflow_tasks = int(os.getenv('TEMPORAL_MAX_CONCURRENT_WORKFLOW_TASKS', '10'))
     max_concurrent_local_activities = int(
@@ -90,7 +138,12 @@ async def main() -> None:
     Client = temporalio_client.Client
     Worker = temporalio_worker.Worker
 
-    client = await Client.connect(temporal_address, namespace=temporal_namespace)
+    # Connect with custom runtime if metrics are enabled
+    connect_kwargs = {'namespace': temporal_namespace}
+    if runtime:
+        connect_kwargs['runtime'] = runtime
+
+    client = await Client.connect(temporal_address, **connect_kwargs)
 
     # Load rate limiting config from environment
     rate_limit_config = RateLimitConfig.from_env()
