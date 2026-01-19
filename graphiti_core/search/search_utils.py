@@ -60,6 +60,13 @@ DEFAULT_MMR_LAMBDA = 0.5
 MAX_SEARCH_DEPTH = 3
 MAX_QUERY_LENGTH = 128
 
+LEGACY_VECTORF32_ERROR = 'Type mismatch: expected Null or Vectorf32 but was List'
+
+
+def is_legacy_embedding_error(driver: GraphDriver, error: Exception) -> bool:
+    """Check if error is due to legacy List embeddings in FalkorDB that need backfill."""
+    return driver.provider == 'falkordb' and LEGACY_VECTORF32_ERROR in str(error)
+
 
 def _clean_fulltext_tokens(query: str) -> str:
     tokens = query.split()
@@ -278,17 +285,26 @@ async def edge_similarity_search(
         LIMIT $limit
         """
     )
-    records, header, _ = await driver.execute_query(
-        query,
-        params=query_params,
-        search_vector=search_vector,
-        source_uuid=source_node_uuid,
-        target_uuid=target_node_uuid,
-        group_ids=group_ids,
-        limit=limit,
-        min_score=min_score,
-        routing_='r',
-    )
+    try:
+        records, header, _ = await driver.execute_query(
+            query,
+            params=query_params,
+            search_vector=search_vector,
+            source_uuid=source_node_uuid,
+            target_uuid=target_node_uuid,
+            group_ids=group_ids,
+            limit=limit,
+            min_score=min_score,
+            routing_='r',
+        )
+    except Exception as e:
+        if is_legacy_embedding_error(driver, e):
+            logger.warning(
+                'Skipping edge_similarity_search due to legacy list embeddings; '
+                'run embedding backfill to convert edges to Vectorf32'
+            )
+            return []
+        raise
 
     edges = [get_entity_edge_from_record(record) for record in records]
 
@@ -448,15 +464,24 @@ async def node_similarity_search(
             """
     )
 
-    records, header, _ = await driver.execute_query(
-        query,
-        params=query_params,
-        search_vector=search_vector,
-        group_ids=group_ids,
-        limit=limit,
-        min_score=min_score,
-        routing_='r',
-    )
+    try:
+        records, header, _ = await driver.execute_query(
+            query,
+            params=query_params,
+            search_vector=search_vector,
+            group_ids=group_ids,
+            limit=limit,
+            min_score=min_score,
+            routing_='r',
+        )
+    except Exception as e:
+        if is_legacy_embedding_error(driver, e):
+            logger.warning(
+                'Skipping node_similarity_search due to legacy list embeddings; '
+                'run embedding backfill to convert nodes to Vectorf32'
+            )
+            return []
+        raise
 
     nodes = [get_entity_node_from_record(record) for record in records]
 
@@ -623,14 +648,23 @@ async def community_similarity_search(
         """
     )
 
-    records, _, _ = await driver.execute_query(
-        query,
-        search_vector=search_vector,
-        group_ids=group_ids,
-        limit=limit,
-        min_score=min_score,
-        routing_='r',
-    )
+    try:
+        records, _, _ = await driver.execute_query(
+            query,
+            search_vector=search_vector,
+            group_ids=group_ids,
+            limit=limit,
+            min_score=min_score,
+            routing_='r',
+        )
+    except Exception as e:
+        if is_legacy_embedding_error(driver, e):
+            logger.warning(
+                'Skipping community_similarity_search due to legacy list embeddings; '
+                'run embedding backfill to convert communities to Vectorf32'
+            )
+            return []
+        raise
     communities = [get_community_node_from_record(record) for record in records]
 
     return communities
@@ -852,14 +886,23 @@ async def get_relevant_edges(
         """
     )
 
-    results, _, _ = await driver.execute_query(
-        query,
-        params=query_params,
-        edges=[edge.model_dump() for edge in edges],
-        limit=limit,
-        min_score=min_score,
-        routing_='r',
-    )
+    try:
+        results, _, _ = await driver.execute_query(
+            query,
+            params=query_params,
+            edges=[edge.model_dump() for edge in edges],
+            limit=limit,
+            min_score=min_score,
+            routing_='r',
+        )
+    except Exception as e:
+        if is_legacy_embedding_error(driver, e):
+            logger.warning(
+                'Skipping get_relevant_edges batch due to legacy list embeddings; '
+                'run embedding backfill to convert edges to Vectorf32'
+            )
+            return [[] for _ in edges]
+        raise
 
     relevant_edges_dict: dict[str, list[EntityEdge]] = {
         result['search_edge_uuid']: [
@@ -959,13 +1002,10 @@ async def get_edge_invalidation_candidates_single(
     try:
         results, _, _ = await driver.execute_query(query, params=query_params, routing_='r')
     except Exception as e:
-        error_message = str(e)
-        if (
-            driver.provider == 'falkordb'
-            and 'Type mismatch: expected Null or Vectorf32 but was List' in error_message
-        ):
+        if is_legacy_embedding_error(driver, e):
             logger.warning(
-                'Skipping edge %s during invalidation due to legacy list embedding; run embedding backfill to convert existing edges to Vectorf32',
+                'Skipping edge %s during invalidation due to legacy list embedding; '
+                'run embedding backfill to convert edges to Vectorf32',
                 edge.uuid,
             )
             return []
