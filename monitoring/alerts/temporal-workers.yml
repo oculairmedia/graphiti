@@ -1,0 +1,76 @@
+groups:
+  - name: graphiti-temporal-workers
+    rules:
+      - alert: TemporalWorkerDown
+        expr: up{job="temporal-workers"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Temporal worker {{ $labels.instance }} is down"
+          description: "Temporal ingestion worker has been unreachable for 2 minutes. Check container status."
+
+      - alert: TemporalActivityHighLatency
+        expr: |
+          (rate(temporal_activity_execution_latency_sum{job="temporal-workers"}[5m]) 
+           / rate(temporal_activity_execution_latency_count{job="temporal-workers"}[5m])) > 30
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Temporal activity latency is high on {{ $labels.worker_stage }}"
+          description: "Average activity execution time is {{ $value | printf \"%.1f\" }} seconds. LLM or database may be slow."
+
+      - alert: TemporalActivityCriticalLatency
+        expr: |
+          (rate(temporal_activity_execution_latency_sum{job="temporal-workers"}[5m]) 
+           / rate(temporal_activity_execution_latency_count{job="temporal-workers"}[5m])) > 60
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Temporal activity latency is critical on {{ $labels.worker_stage }}"
+          description: "Average activity execution time is {{ $value | printf \"%.1f\" }} seconds. Investigate immediately."
+
+      - alert: TemporalQueueBacklog
+        expr: |
+          (rate(temporal_activity_schedule_to_start_latency_sum{job="temporal-workers"}[5m])
+           / rate(temporal_activity_schedule_to_start_latency_count{job="temporal-workers"}[5m])) > 10
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Temporal queue backlog on {{ $labels.worker_stage }}"
+          description: "Activities waiting {{ $value | printf \"%.1f\" }} seconds before starting. Consider adding more workers."
+
+      - alert: TemporalNoPollers
+        expr: temporal_num_pollers{job="temporal-workers", poller_type="activity_task"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "No activity pollers on {{ $labels.worker_stage }}"
+          description: "Worker has no active pollers. It cannot process activities."
+
+      - alert: TemporalPersistWorkerIdle
+        expr: |
+          rate(temporal_activity_task_received{job="temporal-workers", worker_stage="persist"}[30m]) == 0
+          and
+          rate(temporal_activity_task_received{job="temporal-workers", worker_stage="extract"}[30m]) > 0
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Persist worker not receiving tasks"
+          description: "Extract worker is active but persist worker received no tasks in 30 minutes. Check edge extraction."
+
+  - name: graphiti-monitoring-worker
+    rules:
+      - alert: MonitoringWorkerDown
+        expr: up{job="temporal-monitoring"} == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Graph health monitoring worker is down"
+          description: "The Temporal monitoring worker is not responding. Graph health checks may be failing."

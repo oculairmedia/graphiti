@@ -49,3 +49,25 @@ scrape_configs:
     static_configs:
       - targets: ['graph:8000']
     metrics_path: '/metrics'
+
+  # Temporal Ingestion Workers
+  - job_name: 'temporal-workers'
+    static_configs:
+      - targets:
+        - 'graphiti-temporal-ingestion-workflow-worker:9190'
+        - 'graphiti-temporal-ingestion-extract-worker:9191'
+        - 'graphiti-temporal-ingestion-resolve-worker:9192'
+        - 'graphiti-temporal-ingestion-edge-worker:9193'
+        - 'graphiti-temporal-ingestion-persist-worker:9194'
+    metrics_path: '/metrics'
+    relabel_configs:
+      - source_labels: [__address__]
+        regex: 'graphiti-temporal-ingestion-(.+)-worker:.+'
+        target_label: 'worker_stage'
+        replacement: '${1}'
+
+  # Temporal Monitoring Worker
+  - job_name: 'temporal-monitoring'
+    static_configs:
+      - targets: ['graphiti-temporal-monitoring-worker:9195']
+    metrics_path: '/metrics'
