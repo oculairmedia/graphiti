@@ -30,9 +30,9 @@ COPY ./worker ./worker
 COPY ./maintenance_dedupe_entities.py ./
 COPY ./maintenance_extract_entities.py ./
 
-# Install graphiti-core in development mode with FalkorDB support (uses source directly)
+# Install graphiti-core in development mode with FalkorDB, DSPy support (uses source directly)
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install --system -e .[falkordb,anthropic]
+    uv pip install --system -e .[falkordb,anthropic,dspy]
 
 # Install server dependencies and ensure it uses our development graphiti-core
 WORKDIR /app/server
@@ -40,7 +40,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --no-dev
 # Install our development graphiti-core into server venv to override PyPI version
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install --python .venv/bin/python -e /app[falkordb,cerebras,anthropic]
+    uv pip install --python .venv/bin/python -e /app[falkordb,cerebras,anthropic,dspy]
 # Ensure falkordb, cerebras, and anthropic are available in server venv
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python .venv/bin/python falkordb>=1.1.2 cerebras-cloud-sdk>=1.46.0 anthropic>=0.49.0
