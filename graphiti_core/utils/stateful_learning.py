@@ -317,6 +317,60 @@ This is a unique entity in the knowledge graph.
             logger.warning(f'Failed to get resolution hints: {e}')
             return ''
 
+    def store_edge_memory(
+        self,
+        agent_id: str,
+        source_entity: str,
+        target_entity: str,
+        relation_type: str,
+        fact: str,
+    ) -> bool:
+        """Store an edge extraction in agent's archival memory for relation consistency."""
+        try:
+            memory_text = f"""Edge pattern:
+Entities: "{source_entity}" -> "{target_entity}"
+Relation type: {relation_type}
+Fact: {fact[:200]}
+"""
+            self._client.agents.passages.create(
+                agent_id=agent_id,
+                text=memory_text,
+            )
+            return True
+        except Exception as e:
+            logger.warning(f'Failed to store edge memory: {e}')
+            return False
+
+    def get_edge_hints(
+        self,
+        agent_id: str,
+        entity_names: list[str],
+    ) -> str:
+        """Get hints for edge extraction based on previous patterns."""
+        try:
+            if not entity_names:
+                return ''
+
+            query = f'Edge pattern relation {" ".join(entity_names[:5])}'
+            memories = self.get_memory_context(agent_id, query, limit=5)
+
+            if not memories:
+                return ''
+
+            edge_memories = [m for m in memories if 'edge pattern' in m.lower()]
+
+            if not edge_memories:
+                return ''
+
+            hints = 'Previous edge patterns:\n'
+            for i, memory in enumerate(edge_memories, 1):
+                hints += f'{i}. {memory[:200]}...\n' if len(memory) > 200 else f'{i}. {memory}\n'
+
+            return hints
+        except Exception as e:
+            logger.warning(f'Failed to get edge hints: {e}')
+            return ''
+
 
 @contextmanager
 def stateful_extraction(

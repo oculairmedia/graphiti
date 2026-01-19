@@ -303,6 +303,8 @@ class EdgeExtractor(dspy.Module):
     Uses Predict wrapped in Refine for automatic retry with feedback
     when extraction fails (returns 0 edges). ChainOfThought available
     as opt-in for complex cases requiring explicit reasoning.
+
+    Supports stateful learning via Letta to maintain relation type consistency.
     """
 
     def __init__(
@@ -311,19 +313,12 @@ class EdgeExtractor(dspy.Module):
         use_refine: bool = True,
         max_retries: int = 3,
         use_demos: bool = True,
+        enable_stateful: bool = True,
     ):
-        """
-        Initialize EdgeExtractor.
-
-        Args:
-            use_cot: Use ChainOfThought for explicit reasoning (adds ~30s latency).
-            use_refine: Use dspy.Refine to auto-retry on empty extraction.
-            max_retries: Maximum retry attempts for Refine (default 3).
-            use_demos: Include few-shot examples to guide extraction.
-        """
         super().__init__()
         self.use_refine = use_refine
         self.use_demos = use_demos
+        self.enable_stateful = enable_stateful
 
         if use_cot:
             base_predictor = dspy.ChainOfThought(EdgeExtractionSignature)
@@ -346,6 +341,36 @@ class EdgeExtractor(dspy.Module):
         else:
             self.predictor = base_predictor
 
+    def _get_edge_hints(self, entity_names: list[str]) -> str:
+        if not self.enable_stateful:
+            return ''
+        client, agent_id = _get_stateful_client()
+        if client is None or agent_id is None:
+            return ''
+        try:
+            return client.get_edge_hints(agent_id, entity_names)
+        except Exception as e:
+            logger.warning(f'Failed to get edge hints: {e}')
+            return ''
+
+    def _store_edges(self, edges: list[Any]) -> None:
+        if not self.enable_stateful:
+            return
+        client, agent_id = _get_stateful_client()
+        if client is None or agent_id is None:
+            return
+        try:
+            for edge in edges[:5]:
+                client.store_edge_memory(
+                    agent_id,
+                    edge.get('source_entity_name', ''),
+                    edge.get('target_entity_name', ''),
+                    edge.get('relation_type', ''),
+                    edge.get('fact', ''),
+                )
+        except Exception as e:
+            logger.warning(f'Failed to store edges: {e}')
+
     def forward(
         self,
         current_message: str,
@@ -355,21 +380,9 @@ class EdgeExtractor(dspy.Module):
         edge_types: list[dict[str, Any]] | None = None,
         custom_instructions: str = '',
     ) -> ExtractedEdges:
-        """
-        Extract edges/relationships from text.
+        entity_names = [e.get('name', '') for e in entities]
+        edge_patterns = self._get_edge_hints(entity_names)
 
-        Args:
-            current_message: The text to extract relationships from.
-            entities: Extracted entities with id, name, type.
-            reference_time: ISO 8601 timestamp for resolving relative times.
-            previous_messages: Previous context messages.
-            edge_types: Available edge type definitions.
-            custom_instructions: Additional extraction instructions.
-
-        Returns:
-            ExtractedEdges with list of extracted relationships.
-        """
-        # Use complex model for edge extraction - more reliable
         with with_lm('complex'):
             result = self.predictor(
                 previous_messages=json.dumps(previous_messages or [], indent=2),
@@ -378,17 +391,24 @@ class EdgeExtractor(dspy.Module):
                 reference_time=reference_time,
                 edge_types=json.dumps(edge_types or [], indent=2),
                 custom_instructions=custom_instructions,
+                edge_patterns=edge_patterns,
             )
 
-        # Extract the structured output
         extracted = result.extracted_edges
         if isinstance(extracted, ExtractedEdges):
-            return extracted
+            parsed = extracted
         elif isinstance(extracted, dict):
-            return ExtractedEdges(**extracted)
+            parsed = ExtractedEdges(**extracted)
         else:
             logger.warning(f'Unexpected edge extraction result type: {type(extracted)}')
             return ExtractedEdges(edges=[])
+
+        if parsed.edges:
+            self._store_edges(
+                [e.model_dump() if hasattr(e, 'model_dump') else e for e in parsed.edges]
+            )
+
+        return parsed
 
 
 class NodeResolver(dspy.Module):

@@ -259,7 +259,7 @@ class DSPyIngestionPipeline:
 
         enable_stateful = is_stateful_learning_enabled()
         self.node_extractor = NodeExtractor(enable_stateful=enable_stateful)
-        self.edge_extractor = EdgeExtractor()
+        self.edge_extractor = EdgeExtractor(enable_stateful=enable_stateful)
         self.node_resolver = NodeResolver(enable_stateful=enable_stateful)
         self.summary_generator = SummaryGenerator()
 

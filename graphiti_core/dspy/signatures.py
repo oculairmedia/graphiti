@@ -175,6 +175,10 @@ class EdgeExtractionSignature(dspy.Signature):
     custom_instructions: str = dspy.InputField(
         desc='Optional custom extraction instructions', default=''
     )
+    edge_patterns: str = dspy.InputField(
+        desc='Previous edge patterns for consistency (may be empty)',
+        default='',
+    )
 
     extracted_edges: ExtractedEdges = dspy.OutputField(
         desc='ALL extracted edges/relationships between entities - be thorough'
