@@ -1184,7 +1184,15 @@ async def extract_attributes_from_nodes(
     previous_episodes: list[EpisodicNode] | None = None,
     entity_types: dict[str, BaseModel] | None = None,
     group_id: str | None = None,
+    force_update: bool = True,
 ) -> list[EntityNode]:
+    """
+    Extract/update attributes (including summaries) for entity nodes.
+
+    Args:
+        force_update: If True (default), bypass cache and always call LLM to update
+            summaries with new episode context. Set to False for read-only operations.
+    """
     llm_client = clients.llm_client
     embedder = clients.embedder
 
@@ -1193,7 +1201,6 @@ async def extract_attributes_from_nodes(
         await create_entity_node_embeddings(embedder, nodes)
         return nodes
 
-    # Use episode's group_id if not explicitly provided
     effective_group_id = group_id or (episode.group_id if episode else None) or 'default'
 
     updated_nodes: list[EntityNode] = await semaphore_gather(
@@ -1207,6 +1214,7 @@ async def extract_attributes_from_nodes(
                 if entity_types is not None
                 else None,
                 group_id=effective_group_id,
+                force_update=force_update,
             )
             for node in nodes
         ]
@@ -1224,15 +1232,14 @@ async def extract_attributes_from_node(
     previous_episodes: list[EpisodicNode] | None = None,
     entity_type: BaseModel | None = None,
     group_id: str = 'default',
+    force_update: bool = False,
 ) -> EntityNode:
-    # Debug logging: Track input state
     logger.debug(f'🔍 extract_attributes_from_node - Input node: {node.name}')
     logger.debug(f'   Original summary length: {len(node.summary)}')
     logger.debug(f'   LLM client type: {type(llm_client).__name__}')
 
-    # Check entity summary cache first (only for basic summaries, not custom entity types)
     entity_cache = get_entity_cache()
-    if entity_type is None:
+    if not force_update and entity_type is None:
         cached_summary = entity_cache.get_cached_summary(node.name, group_id)
         if cached_summary:
             logger.debug(f'🎯 Cache hit for entity "{node.name}" - using cached summary')

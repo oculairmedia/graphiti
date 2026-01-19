@@ -441,6 +441,8 @@ class IngestionActivities:
             build_episodic_edges,
             build_duplicate_of_edges,
         )
+        from graphiti_core.utils.maintenance.node_operations import extract_attributes_from_nodes
+        from graphiti_core.helpers import semaphore_gather
         from datetime import datetime as dt
 
         start = time()
@@ -476,6 +478,19 @@ class IngestionActivities:
                 source=episode_source,
             )
 
+        existing_uuids = [v for k, v in uuid_map.items() if k != v]
+        existing_summaries: dict[str, str] = {}
+        if existing_uuids:
+            records, _, _ = await graphiti.driver.execute_query(
+                """
+                MATCH (n:Entity)
+                WHERE n.uuid IN $uuids
+                RETURN n.uuid AS uuid, n.summary AS summary
+                """,
+                uuids=existing_uuids,
+            )
+            existing_summaries = {r['uuid']: r['summary'] or '' for r in records}
+
         nodes = [
             EntityNode(
                 uuid=d.get('uuid', ''),
@@ -483,7 +498,10 @@ class IngestionActivities:
                 group_id=group_id,
                 labels=d.get('labels', ['Entity']),
                 created_at=now,
-                summary=d.get('summary', ''),
+                summary=existing_summaries.get(
+                    uuid_map.get(d.get('uuid', ''), ''), d.get('summary', '')
+                )
+                or '',
             )
             for d in extracted_node_dicts
         ]
@@ -511,14 +529,21 @@ class IngestionActivities:
             else {('Entity', 'Entity'): []}
         )
 
-        (resolved_edges, invalidated_edges) = await resolve_extracted_edges(
-            graphiti.clients,
-            edges,
-            episode,
-            nodes,
-            edge_types or {},
-            edge_type_map or edge_type_map_default,
+        (resolved_edges, invalidated_edges), hydrated_nodes = await semaphore_gather(
+            resolve_extracted_edges(
+                graphiti.clients,
+                edges,
+                episode,
+                nodes,
+                edge_types or {},
+                edge_type_map or edge_type_map_default,
+            ),
+            extract_attributes_from_nodes(
+                graphiti.clients, nodes, episode, previous_episodes, None
+            ),
         )
+
+        nodes_to_use = hydrated_nodes if hydrated_nodes else nodes
 
         duplicate_of_edges, merge_operations, duplicate_nodes_to_save = build_duplicate_of_edges(
             episode, now, node_duplicates_tuples
@@ -526,11 +551,11 @@ class IngestionActivities:
 
         entity_edges = resolved_edges + invalidated_edges + duplicate_of_edges
         episodic_edges = build_episodic_edges(
-            nodes, episode.uuid, now, episode_group_id=episode.group_id
+            nodes_to_use, episode.uuid, now, episode_group_id=episode.group_id
         )
         episode.entity_edges = [edge.uuid for edge in entity_edges]
 
-        all_nodes_to_save = nodes + duplicate_nodes_to_save
+        all_nodes_to_save = nodes_to_use + duplicate_nodes_to_save
 
         await add_nodes_and_edges_bulk(
             graphiti.driver,
