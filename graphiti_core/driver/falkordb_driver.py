@@ -94,67 +94,42 @@ def _preprocess_vectors_in_params(params: dict[str, Any]) -> dict[str, Any]:
 
 
 def _wrap_vector_params_in_query(query: str, params: dict[str, Any]) -> str:
-    """Wrap any $key in the query with vecf32($key) when the param is a vector-like list.
+    """Wrap vector parameters with vecf32() in Cypher queries.
 
-    This fixes FalkorDB type mismatch errors where Python lists need to be converted
-    to VectorF32 types for vector operations.
+    Handles both:
+    1. Top-level params ($embedding) - wrapped as vecf32($embedding)
+    2. UNWIND params (edge.fact_embedding) - wrapped as vecf32(edge.fact_embedding)
 
-    Also handles nested vector parameters in UNWIND operations (e.g., edge.fact_embedding).
+    This is necessary because FalkorDB's Python client doesn't have a VectorF32 class
+    for pre-converting vectors in Python. All vector conversion must happen in Cypher.
     """
-    # Handle top-level vector parameters (existing functionality)
+    import re
+
     for key, val in params.items():
         if _is_vector_list(val):
             needle = f'${key}'
             wrapped = f'vecf32({needle})'
-            # Skip if already wrapped to avoid double-wrapping
-            if wrapped in query:
-                continue
-            # Replace bare $key with vecf32($key)
-            query = query.replace(needle, wrapped)
+            if wrapped not in query:
+                query = query.replace(needle, wrapped)
 
-    # Handle nested vector parameters in UNWIND operations
-    # Look for patterns like: edge.fact_embedding, node.name_embedding, etc.
-    # These need vecf32() wrapping when used in vector operations
-    def _wrap_unwind_vectors(query_text: str) -> str:
-        import re
+    unwind_patterns = [
+        r'\b(edge\.(?:fact_)?embedding)\b',
+        r'\b(node\.(?:name_|summary_)?embedding)\b',
+        r'\b(entity\.(?:name_|summary_)?embedding)\b',
+        r'\b(item\.(?:name_|summary_)?embedding)\b',
+    ]
 
-        # Pattern to match UNWIND parameter vectors in vector operations
-        # Matches: edge.fact_embedding, node.name_embedding, etc. when used in vec.cosineDistance
-        unwind_vector_patterns = [
-            r'\b(edge\.(?:fact_)?embedding)\b',
-            r'\b(node\.(?:name_|summary_)?embedding)\b',
-            r'\b(entity\.(?:name_|summary_)?embedding)\b',
-            r'\b(item\.(?:name_|summary_)?embedding)\b',
-        ]
-
-        for pattern in unwind_vector_patterns:
-            # Find all matches of the pattern
-            matches = re.finditer(pattern, query_text)
-            replacements = []
-
-            for match in matches:
-                original = match.group(1)
-                start, end = match.span(1)
-
-                # Check if this vector is used in a vector operation (vec.cosineDistance)
-                # Look ahead and behind to see if it's in a vector context
-                context_start = max(0, start - 50)
-                context_end = min(len(query_text), end + 50)
-                context = query_text[context_start:context_end]
-
-                # If it's in a vector operation context and not already wrapped
-                if (
-                    'vec.cosineDistance' in context or 'vector.similarity' in context
-                ) and f'vecf32({original})' not in context:
-                    replacements.append((start, end, f'vecf32({original})'))
-
-            # Apply replacements in reverse order to maintain indices
-            for start, end, replacement in reversed(replacements):
-                query_text = query_text[:start] + replacement + query_text[end:]
-
-        return query_text
-
-    query = _wrap_unwind_vectors(query)
+    for pattern in unwind_patterns:
+        for match in re.finditer(pattern, query):
+            original = match.group(1)
+            start, end = match.span(1)
+            context_start = max(0, start - 50)
+            context_end = min(len(query), end + 50)
+            context = query[context_start:context_end]
+            if (
+                'vec.cosineDistance' in context or 'vector.similarity' in context
+            ) and f'vecf32({original})' not in context:
+                query = query[:start] + f'vecf32({original})' + query[end:]
 
     return query
 
@@ -205,9 +180,9 @@ class FalkorDriverSession(GraphDriverSession):
         return await func(self, *args, **kwargs)
 
     async def run(self, query: str | list, **kwargs: Any) -> Any:
-        # FalkorDB does not support argument for Label Set, so it's converted into an array of queries
         if isinstance(query, list):
             results = []
+            errors = []
             for cypher, params in query:
                 params = convert_datetimes_to_strings(params)
                 params = _preprocess_vectors_in_params(params)
@@ -218,7 +193,6 @@ class FalkorDriverSession(GraphDriverSession):
                 )
                 try:
                     result = await self.graph.query(wrapped_cypher, params)  # type: ignore[reportUnknownArgumentType]
-                    # Convert result to list of dicts
                     if result and hasattr(result, 'header') and hasattr(result, 'result_set'):
                         header = [h[1] for h in result.header]
                         for row in result.result_set:
@@ -226,14 +200,21 @@ class FalkorDriverSession(GraphDriverSession):
                             for i, field_name in enumerate(header):
                                 record[field_name] = row[i] if i < len(row) else None
                             results.append(record)
-                except Exception:
-                    logger.error(
-                        'Falkor RUN(list) query failed:\n%s\nparams=%s',
-                        wrapped_cypher[:2000],
-                        summary,
-                        exc_info=True,
-                    )
-                    raise
+                except Exception as e:
+                    error_msg = str(e).lower()
+                    if 'constraint violation' in error_msg:
+                        logger.debug('Constraint violation (continuing): %s', str(e)[:200])
+                        errors.append(e)
+                    else:
+                        logger.error(
+                            'Falkor RUN(list) query failed:\n%s\nparams=%s',
+                            wrapped_cypher[:2000],
+                            summary,
+                            exc_info=True,
+                        )
+                        raise
+            if errors and len(errors) == len(query):
+                raise errors[0]
             return results
         else:
             params = _flatten_params(dict(kwargs))

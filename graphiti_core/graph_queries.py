@@ -141,15 +141,14 @@ def get_entity_node_save_bulk_query(nodes, db_type: str = 'neo4j') -> str | Any:
                     (
                         f"""
                     UNWIND $nodes AS node
-                    MERGE (n:Entity {{uuid: node.uuid}})
-                    SET n.name = node.name,
-                        n.group_id = node.group_id,
-                        n.summary = node.summary,
-                        n.created_at = node.created_at
+                    MERGE (n:Entity {{uuid: node.uuid, name: node.name, group_id: node.group_id}})
+                    ON CREATE SET n.summary = node.summary,
+                                  n.created_at = node.created_at
+                    ON MATCH SET n.summary = node.summary
                     SET n:{label}
                     WITH n, node
                     WHERE node.name_embedding IS NOT NULL
-                    SET n.name_embedding = vecf32(node.name_embedding)
+                    SET n.name_embedding = node.name_embedding
                     RETURN n.uuid AS uuid
                 """,
                         {'nodes': [node]},
@@ -174,7 +173,7 @@ def get_entity_edge_save_bulk_query(db_type: str = 'neo4j') -> str:
             r.expired_at = edge.expired_at,
             r.valid_at = edge.valid_at,
             r.invalid_at = edge.invalid_at,
-            r.fact_embedding = vecf32(edge.fact_embedding)
+            r.fact_embedding = edge.fact_embedding
         WITH r, edge
         RETURN edge.uuid AS uuid"""
     else:
