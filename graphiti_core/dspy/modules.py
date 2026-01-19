@@ -384,11 +384,47 @@ class NodeResolver(dspy.Module):
 
     Uses ChainOfThought for semantic comparison and duplicate detection
     with the complex GLM model (GLM-4.7).
+
+    Supports stateful learning via Letta to remember past resolution decisions.
     """
 
-    def __init__(self):
+    def __init__(self, enable_stateful: bool = True):
         super().__init__()
         self.predictor = dspy.ChainOfThought(NodeDeduplicationSignature)
+        self.enable_stateful = enable_stateful
+
+    def _get_resolution_hints(self, entity_names: list[str]) -> str:
+        """Get resolution hints from Letta memory."""
+        if not self.enable_stateful:
+            return ''
+        client, agent_id = _get_stateful_client()
+        if client is None or agent_id is None:
+            return ''
+        try:
+            return client.get_resolution_hints(agent_id, entity_names)
+        except Exception as e:
+            logger.warning(f'Failed to get resolution hints: {e}')
+            return ''
+
+    def _store_resolution(
+        self,
+        entity_name: str,
+        resolved_to: str,
+        is_duplicate: bool,
+        context: str = '',
+    ) -> None:
+        """Store a resolution decision to Letta memory."""
+        if not self.enable_stateful:
+            return
+        client, agent_id = _get_stateful_client()
+        if client is None or agent_id is None:
+            return
+        try:
+            client.store_resolution_memory(
+                agent_id, entity_name, resolved_to, is_duplicate, context
+            )
+        except Exception as e:
+            logger.warning(f'Failed to store resolution: {e}')
 
     def forward(
         self,
@@ -409,23 +445,41 @@ class NodeResolver(dspy.Module):
         Returns:
             NodeResolutions with duplicate information for each entity.
         """
+        entity_names = [e.get('name', '') for e in extracted_entities]
+        resolution_history = self._get_resolution_hints(entity_names)
+
         with with_lm('complex'):
             result = self.predictor(
                 previous_messages=json.dumps(previous_messages or [], indent=2),
                 current_message=current_message,
                 extracted_entities=json.dumps(extracted_entities, indent=2),
                 existing_entities=json.dumps(existing_entities, indent=2),
+                resolution_history=resolution_history,
             )
 
-        # Extract the structured output
         resolutions = result.entity_resolutions
         if isinstance(resolutions, NodeResolutions):
-            return resolutions
+            parsed_resolutions = resolutions
         elif isinstance(resolutions, dict):
-            return NodeResolutions(**resolutions)
+            parsed_resolutions = NodeResolutions(**resolutions)
         else:
             logger.warning(f'Unexpected resolution result type: {type(resolutions)}')
             return NodeResolutions(entity_resolutions=[])
+
+        for resolution in parsed_resolutions.entity_resolutions:
+            entity_name = resolution.name
+            is_duplicate = resolution.duplicate_idx >= 0
+
+            if is_duplicate and existing_entities:
+                resolved_to = existing_entities[resolution.duplicate_idx].get('name', 'unknown')
+                self._store_resolution(
+                    entity_name=entity_name,
+                    resolved_to=resolved_to,
+                    is_duplicate=True,
+                    context=f'Resolved in context: {current_message[:100]}...',
+                )
+
+        return parsed_resolutions
 
 
 class SummaryGenerator(dspy.Module):

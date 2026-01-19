@@ -219,6 +219,10 @@ class NodeDeduplicationSignature(dspy.Signature):
     existing_entities: str = dspy.InputField(
         desc='Existing entities to compare against (JSON array with candidate idx, name, entity_type)'
     )
+    resolution_history: str = dspy.InputField(
+        desc='Previous resolution decisions for context (may be empty)',
+        default='',
+    )
 
     entity_resolutions: NodeResolutions = dspy.OutputField(
         desc='Resolution for EACH extracted entity with duplicate information'

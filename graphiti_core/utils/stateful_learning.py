@@ -172,6 +172,103 @@ Entity count: {len(extracted_entities)}
             logger.warning(f'Failed to get extraction hints: {e}')
             return ''
 
+    def store_resolution_memory(
+        self,
+        agent_id: str,
+        entity_name: str,
+        resolved_to: str,
+        is_duplicate: bool,
+        context: str = '',
+    ) -> bool:
+        """
+        Store a resolution decision in agent's archival memory.
+
+        This allows the agent to "remember" deduplication decisions,
+        improving consistency in future resolutions.
+
+        Args:
+            agent_id: The agent's ID
+            entity_name: The entity being resolved
+            resolved_to: The entity it was resolved to (or itself if not duplicate)
+            is_duplicate: Whether it was marked as a duplicate
+            context: Optional context about why the decision was made
+
+        Returns:
+            True if stored successfully
+        """
+        try:
+            if is_duplicate:
+                memory_text = f"""Resolution decision:
+Entity "{entity_name}" was identified as DUPLICATE of "{resolved_to}".
+{f'Context: {context}' if context else ''}
+These entities refer to the same real-world object/concept.
+"""
+            else:
+                memory_text = f"""Resolution decision:
+Entity "{entity_name}" was identified as DISTINCT (not a duplicate).
+{f'Context: {context}' if context else ''}
+This is a unique entity in the knowledge graph.
+"""
+
+            # Store as passage in agent's memory
+            self._client.agents.passages.create(
+                agent_id=agent_id,
+                text=memory_text,
+            )
+
+            return True
+        except Exception as e:
+            logger.warning(f'Failed to store resolution memory: {e}')
+            return False
+
+    def get_resolution_hints(
+        self,
+        agent_id: str,
+        entity_names: list[str],
+    ) -> str:
+        """
+        Get hints for resolution based on previous deduplication decisions.
+
+        Searches the agent's memory for past decisions involving
+        the given entity names.
+
+        Args:
+            agent_id: The agent's ID
+            entity_names: Names of entities being resolved
+
+        Returns:
+            String with resolution hints to include in prompt
+        """
+        try:
+            if not entity_names:
+                return ''
+
+            # Search for resolution decisions involving these entities
+            query = f'Resolution decision entity {" ".join(entity_names[:5])}'
+            memories = self.get_memory_context(agent_id, query, limit=5)
+
+            if not memories:
+                return ''
+
+            # Filter to only resolution-related memories
+            resolution_memories = [
+                m
+                for m in memories
+                if 'resolution decision' in m.lower() or 'duplicate' in m.lower()
+            ]
+
+            if not resolution_memories:
+                return ''
+
+            hints = 'Previous resolution decisions:\n'
+            for i, memory in enumerate(resolution_memories, 1):
+                hints += f'{i}. {memory[:200]}...\n' if len(memory) > 200 else f'{i}. {memory}\n'
+
+            return hints
+        except Exception as e:
+            logger.warning(f'Failed to get resolution hints: {e}')
+            return ''
+
 
 @contextmanager
 def stateful_extraction(
