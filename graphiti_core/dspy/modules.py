@@ -7,6 +7,7 @@ using ChainOfThought for complex reasoning and TypedPredictor for structured out
 
 import json
 import logging
+import os
 from typing import Any
 
 import dspy
@@ -26,6 +27,30 @@ from .signatures import (
 
 logger = logging.getLogger(__name__)
 
+_stateful_client = None
+_stateful_agent_id = None
+
+
+def _get_stateful_client():
+    global _stateful_client, _stateful_agent_id
+    if _stateful_client is not None:
+        return _stateful_client, _stateful_agent_id
+
+    agent_id = os.getenv('LETTA_GRAPHITI_AGENT_ID')
+    if not agent_id:
+        return None, None
+
+    try:
+        from graphiti_core.utils.stateful_learning import StatefulLearningClient
+
+        _stateful_client = StatefulLearningClient()
+        _stateful_agent_id = agent_id
+        logger.info(f'Stateful learning enabled with agent: {agent_id[:16]}...')
+        return _stateful_client, _stateful_agent_id
+    except Exception as e:
+        logger.warning(f'Failed to initialize stateful learning: {e}')
+        return None, None
+
 
 class NodeExtractor(dspy.Module):
     """
@@ -35,9 +60,33 @@ class NodeExtractor(dspy.Module):
     with the complex GLM model (GLM-4.7).
     """
 
-    def __init__(self):
+    def __init__(self, enable_stateful: bool = True):
         super().__init__()
         self.predictor = dspy.ChainOfThought(EntityExtractionSignature)
+        self.enable_stateful = enable_stateful
+
+    def _get_extraction_hints(self, current_message: str) -> str:
+        if not self.enable_stateful:
+            return ''
+        client, agent_id = _get_stateful_client()
+        if client is None or agent_id is None:
+            return ''
+        try:
+            return client.get_extraction_hints(agent_id, current_message)
+        except Exception as e:
+            logger.debug(f'Failed to get extraction hints: {e}')
+            return ''
+
+    def _store_extraction(self, episode_content: str, entities: list[dict]) -> None:
+        if not self.enable_stateful:
+            return
+        client, agent_id = _get_stateful_client()
+        if client is None or agent_id is None:
+            return
+        try:
+            client.store_extraction_memory(agent_id, episode_content, entities)
+        except Exception as e:
+            logger.debug(f'Failed to store extraction memory: {e}')
 
     def forward(
         self,
@@ -46,32 +95,26 @@ class NodeExtractor(dspy.Module):
         previous_messages: list[dict[str, Any]] | None = None,
         custom_instructions: str = '',
     ) -> ExtractedEntities:
-        """
-        Extract entities from text.
+        previous_extractions = self._get_extraction_hints(current_message)
 
-        Args:
-            current_message: The text to extract entities from.
-            entity_types: List of entity type definitions with id, name, description.
-            previous_messages: Previous context messages.
-            custom_instructions: Additional extraction instructions.
-
-        Returns:
-            ExtractedEntities with list of extracted entities.
-        """
         with with_lm('complex'):
             result = self.predictor(
                 previous_messages=json.dumps(previous_messages or [], indent=2),
                 current_message=current_message,
                 entity_types=json.dumps(entity_types, indent=2),
+                previous_extractions=previous_extractions,
                 custom_instructions=custom_instructions,
             )
 
-        # Extract the structured output
         extracted = result.extracted_entities
         if isinstance(extracted, ExtractedEntities):
+            entities_dicts = [e.model_dump() for e in extracted.extracted_entities]
+            self._store_extraction(current_message, entities_dicts)
             return extracted
         elif isinstance(extracted, dict):
-            return ExtractedEntities(**extracted)
+            result_obj = ExtractedEntities(**extracted)
+            self._store_extraction(current_message, extracted.get('extracted_entities', []))
+            return result_obj
         else:
             logger.warning(f'Unexpected extraction result type: {type(extracted)}')
             return ExtractedEntities(extracted_entities=[])

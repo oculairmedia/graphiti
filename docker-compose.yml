@@ -825,7 +825,7 @@ services:
       - /bin/bash
       - -c
       - |
-        pip install --quiet temporalio dspy-ai 2>/dev/null
+        pip install --quiet temporalio dspy-ai letta-client 2>/dev/null
         python -u /scripts/temporal_ingestion_worker.py
     ports:
       - "9191:9191"
@@ -865,6 +865,8 @@ services:
       - CHUTES_MODEL=${CHUTES_MODEL:-glm-4.5}
       - CHUTES_SMALL_MODEL=${CHUTES_SMALL_MODEL:-glm-4.5-air}
       - ZAI_TOKENS_PER_HOUR=${ZAI_TOKENS_PER_HOUR:-1000000}
+      - LETTA_BASE_URL=${LETTA_BASE_URL:-http://192.168.50.90:8283}
+      - LETTA_GRAPHITI_AGENT_ID=${LETTA_GRAPHITI_AGENT_ID:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:

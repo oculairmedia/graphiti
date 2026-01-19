@@ -103,6 +103,7 @@ class EntityExtractionSignature(dspy.Signature):
     3. Use full names including titles (e.g., "Dr. Elena Garcia", "Python 3.11")
     4. Break down nested references: "Google's BERT" -> extract "Google" AND "BERT" separately
     5. Classify each entity using exactly one entity_type_id from the provided types
+    6. Use consistent naming from previous_extractions when referring to the same entity
 
     WHAT TO EXTRACT:
     - Named people, organizations, products, locations, concepts
@@ -120,6 +121,10 @@ class EntityExtractionSignature(dspy.Signature):
     current_message: str = dspy.InputField(desc='The current message to extract ALL entities from')
     entity_types: str = dspy.InputField(
         desc='Entity types with IDs and descriptions - classify each entity with one type_id'
+    )
+    previous_extractions: str = dspy.InputField(
+        desc='Entity names from recent extractions for naming consistency (use same names for same entities)',
+        default='',
     )
     custom_instructions: str = dspy.InputField(
         desc='Optional custom extraction instructions', default=''
