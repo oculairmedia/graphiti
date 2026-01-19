@@ -443,6 +443,14 @@ class Graphiti:
         """
         Process an episode and update the graph.
 
+        .. deprecated::
+            This method is deprecated and will be removed in a future release.
+            Use :meth:`add_episode_resilient` instead, which provides:
+            - Granular retry logic for each extraction stage
+            - State caching to resume from failures
+            - Temporal workflow integration for observability
+            - DSPy support for optimized extraction
+
         This method extracts information from the episode, creates nodes and edges,
         and updates the graph database accordingly.
 
@@ -476,7 +484,7 @@ class Graphiti:
 
         Returns
         -------
-        None
+        AddEpisodeResults
 
         Notes
         -----
@@ -494,7 +502,33 @@ class Graphiti:
             async def add_episode_endpoint(episode_data: EpisodeData):
                 background_tasks.add_task(graphiti.add_episode, **episode_data.dict())
                 return {"message": "Episode processing started"}
+
+        Migration
+        ---------
+        Replace calls to ``add_episode()`` with ``add_episode_resilient()``:
+
+        .. code-block:: python
+
+            # Before (deprecated)
+            result = await graphiti.add_episode(
+                name="...", episode_body="...", ...
+            )
+
+            # After (recommended)
+            result = await graphiti.add_episode_resilient(
+                name="...", episode_body="...", ...
+            )
         """
+        import warnings
+
+        warnings.warn(
+            'add_episode() is deprecated and will be removed in a future release. '
+            'Use add_episode_resilient() instead for better retry handling, '
+            'state caching, and Temporal integration.',
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
         try:
             start = time()
             now = utc_now()

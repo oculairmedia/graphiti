@@ -350,7 +350,7 @@ async def add_messages(
             if m.role:
                 source_desc = f'{m.role} ({m.role_type}): {source_desc}'
 
-            result = await graphiti.add_episode(
+            result = await graphiti.add_episode_resilient(
                 uuid=m.uuid,
                 group_id=request.group_id,
                 name=m.name,
