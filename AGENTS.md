@@ -404,6 +404,98 @@ Once sufficient data is collected:
 3. GRAPH-273: A/B testing framework
 4. GRAPH-274: Quality metrics dashboard
 
+## Prompt Storage (graphiti_prompts)
+
+**Status**: Production-ready (Jan 2026). Versioned prompt storage for DSPy optimization with hot-swapping support.
+
+### Architecture
+
+Prompts are stored in a separate FalkorDB graph (`graphiti_prompts`) to isolate optimization data from the main knowledge graph (`graphiti_migration`). This enables:
+- Hot-swapping prompts without restart
+- A/B testing of candidate prompts
+- Full version history with metrics
+
+### Schema (PromptVersion nodes)
+
+```
+(:PromptVersion {
+  id: string,           // UUID
+  task: string,         // 'entity_extraction', 'edge_extraction', 'node_resolution', 'summary_generation'
+  version: int,         // Incrementing version number
+  status: string,       // 'live', 'candidate', 'archived', 'failed'
+  docstring: string,    // The signature docstring/instructions
+  demos: string,        // JSON array of few-shot examples
+  accuracy: float,      // Evaluation accuracy (post-optimization)
+  latency_ms: float,    // Average latency
+  token_count: int,     // Average token usage
+  created_at: datetime,
+  promoted_at: datetime,
+  archived_at: datetime,
+  parent_version: int,  // Version this was optimized from
+  training_examples: int
+})
+```
+
+### Initialize Schema
+
+```bash
+# Create schema with indexes (safe to run multiple times)
+python3 scripts/init_prompt_storage.py
+
+# Create schema AND seed initial prompts from current signatures
+python3 scripts/init_prompt_storage.py --seed
+```
+
+### Query Prompts
+
+```bash
+# List all prompts
+redis-cli -p 6379 GRAPH.QUERY graphiti_prompts "MATCH (p:PromptVersion) RETURN p.task, p.version, p.status ORDER BY p.task" --csv
+
+# Get live prompt for a task
+redis-cli -p 6379 GRAPH.QUERY graphiti_prompts "MATCH (p:PromptVersion {task: 'entity_extraction', status: 'live'}) RETURN p.docstring" --csv
+```
+
+### Python API (PromptRegistry)
+
+```python
+from graphiti_core.prompts.registry import PromptRegistry, PromptTask, get_prompt_registry
+
+# Get singleton registry
+registry = get_prompt_registry()
+
+# Get live prompt (cached, 60s TTL)
+prompt = await registry.get_live_prompt(PromptTask.ENTITY_EXTRACTION)
+print(prompt.docstring)
+print(prompt.demos)  # Few-shot examples
+
+# Force refresh from database
+prompt = await registry.get_live_prompt(PromptTask.ENTITY_EXTRACTION, force_refresh=True)
+
+# Create optimized candidate
+candidate = await registry.create_candidate(
+    task=PromptTask.ENTITY_EXTRACTION,
+    docstring="New optimized instructions...",
+    demos=[{"input": "...", "output": "..."}],
+    parent_version=1,
+    training_examples=150
+)
+
+# Update metrics after evaluation
+await registry.update_metrics(candidate.id, accuracy=0.92, latency_ms=450)
+
+# Promote to live (archives previous live version)
+await registry.promote_candidate(candidate.id)
+```
+
+### Status Transitions
+
+```
+candidate → live (via promote_candidate)
+live → archived (automatic when new prompt promoted)
+candidate → failed (if evaluation fails)
+```
+
 ## Temporal Integration
 
 Graphiti supports two modes of Temporal integration:
