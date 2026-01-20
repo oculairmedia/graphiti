@@ -40,9 +40,11 @@ logger = logging.getLogger(__name__)
 # Training Data Structures
 # =============================================================================
 
+
 @dataclass
 class TrainingExample:
     """A single training example for optimization."""
+
     inputs: dict[str, Any]
     expected_output: dict[str, Any]
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -59,17 +61,20 @@ class TrainingExample:
 @dataclass
 class TrainingDataset:
     """Collection of training examples for a specific task."""
+
     task_name: str
     examples: list[TrainingExample] = field(default_factory=list)
     created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
     def add_example(self, inputs: dict, expected_output: dict, metadata: dict | None = None):
         """Add a training example."""
-        self.examples.append(TrainingExample(
-            inputs=inputs,
-            expected_output=expected_output,
-            metadata=metadata or {},
-        ))
+        self.examples.append(
+            TrainingExample(
+                inputs=inputs,
+                expected_output=expected_output,
+                metadata=metadata or {},
+            )
+        )
 
     def to_dspy_examples(self) -> list[dspy.Example]:
         """Convert all examples to DSPy format."""
@@ -124,6 +129,7 @@ class TrainingDataset:
 # Training Data Collection
 # =============================================================================
 
+
 class TrainingDataCollector:
     """
     Collect training data from successful pipeline runs.
@@ -136,11 +142,23 @@ class TrainingDataCollector:
         self.save_dir = Path(save_dir)
         self.save_dir.mkdir(parents=True, exist_ok=True)
 
-        # Datasets for each task
-        self.entity_extraction = TrainingDataset('entity_extraction')
-        self.edge_extraction = TrainingDataset('edge_extraction')
-        self.node_resolution = TrainingDataset('node_resolution')
-        self.summary_generation = TrainingDataset('summary_generation')
+        # Load existing datasets or create new ones
+        self.entity_extraction = self._load_or_create('entity_extraction')
+        self.edge_extraction = self._load_or_create('edge_extraction')
+        self.node_resolution = self._load_or_create('node_resolution')
+        self.summary_generation = self._load_or_create('summary_generation')
+
+    def _load_or_create(self, task_name: str) -> TrainingDataset:
+        """Load existing dataset from disk or create new empty one."""
+        path = self.save_dir / f'{task_name}.json'
+        if path.exists():
+            try:
+                dataset = TrainingDataset.load(path)
+                logger.info(f'Loaded {len(dataset.examples)} existing {task_name} examples')
+                return dataset
+            except Exception as e:
+                logger.warning(f'Failed to load {task_name} dataset: {e}, creating new')
+        return TrainingDataset(task_name)
 
     def record_entity_extraction(
         self,
@@ -248,6 +266,7 @@ class TrainingDataCollector:
 # Evaluation Metrics
 # =============================================================================
 
+
 def entity_extraction_metric(example: dspy.Example, prediction: Any, trace=None) -> float:
     """
     Evaluate entity extraction quality.
@@ -294,6 +313,7 @@ def edge_extraction_metric(example: dspy.Example, prediction: Any, trace=None) -
     Scores based on matching (source, relation_type, target) triples.
     """
     try:
+
         def normalize_edge(e):
             if isinstance(e, dict):
                 return (
@@ -342,8 +362,7 @@ def node_resolution_metric(example: dspy.Example, prediction: Any, trace=None) -
         expected = example.entity_resolutions
         if isinstance(expected, dict):
             expected_map = {
-                r['id']: r['duplicate_idx']
-                for r in expected.get('entity_resolutions', [])
+                r['id']: r['duplicate_idx'] for r in expected.get('entity_resolutions', [])
             }
         else:
             expected_map = {}
@@ -353,8 +372,7 @@ def node_resolution_metric(example: dspy.Example, prediction: Any, trace=None) -
             predicted_map = {r.id: r.duplicate_idx for r in predicted.entity_resolutions}
         elif isinstance(predicted, dict):
             predicted_map = {
-                r['id']: r['duplicate_idx']
-                for r in predicted.get('entity_resolutions', [])
+                r['id']: r['duplicate_idx'] for r in predicted.get('entity_resolutions', [])
             }
         else:
             predicted_map = {}
@@ -403,6 +421,7 @@ def summary_metric(example: dspy.Example, prediction: Any, trace=None) -> float:
 # =============================================================================
 # MIPROv2 Optimizer
 # =============================================================================
+
 
 class DSPyOptimizer:
     """

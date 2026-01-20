@@ -275,6 +275,7 @@ class NodeExtractor(dspy.Module):
     ) -> None:
         collector = _get_training_collector()
         if collector is None:
+            logger.debug('Training collector is None, skipping entity extraction recording')
             return
         try:
             collector.record_entity_extraction(
@@ -283,9 +284,12 @@ class NodeExtractor(dspy.Module):
                 result=result,
                 previous_messages=previous_messages,
             )
+            logger.info(
+                f'Recorded entity extraction training example ({len(result.extracted_entities)} entities)'
+            )
             _maybe_save_training_data()
         except Exception as e:
-            logger.debug(f'Failed to record entity extraction training example: {e}')
+            logger.warning(f'Failed to record entity extraction training example: {e}')
 
     def forward(
         self,
