@@ -8,19 +8,26 @@ from uuid import uuid4
 
 import pytest
 
-from graphiti_core.driver.neo4j_driver import Neo4jDriver
+from graphiti_core.driver.driver import GraphDriver
 from graphiti_core.edges import EntityEdge
 from graphiti_core.nodes import EntityNode
 
 
 @pytest.fixture
-def neo4j_driver():
-    """Create a mock Neo4j driver for testing."""
-    driver = MagicMock(spec=Neo4jDriver)
+def mock_driver():
+    """Create a mock graph driver for testing."""
+    driver = MagicMock(spec=GraphDriver)
     driver.execute_query = AsyncMock()
     driver.fetch_nodes = AsyncMock()
     driver.fetch_edges = AsyncMock()
     return driver
+
+
+# Alias for backward compatibility
+@pytest.fixture
+def neo4j_driver(mock_driver):
+    """Alias for mock_driver - deprecated, use mock_driver instead."""
+    return mock_driver
 
 
 @pytest.fixture

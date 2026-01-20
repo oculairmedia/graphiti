@@ -14,7 +14,7 @@ from uuid import uuid4
 
 import pytest
 
-from graphiti_core.driver.neo4j_driver import Neo4jDriver
+from graphiti_core.driver.driver import GraphDriver
 from graphiti_core.utils.maintenance.centrality_operations import (
     calculate_all_centralities,
     calculate_betweenness_centrality,
@@ -62,8 +62,8 @@ class TestCentralityOperations:
 
     @pytest.fixture
     def mock_driver(self):
-        """Create a mock Neo4j driver."""
-        driver = MagicMock(spec=Neo4jDriver)
+        """Create a mock graph driver."""
+        driver = MagicMock(spec=GraphDriver)
         driver.execute_query = AsyncMock()
         return driver
 
@@ -263,18 +263,18 @@ class TestCentralityOperations:
 
 
 class TestCentralityIntegration:
-    """Integration tests that require a real Neo4j connection."""
+    """Integration tests that require a real graph database connection."""
 
     @pytest.mark.integration
     @pytest.mark.asyncio
-    async def test_pagerank_with_real_graph(self, neo4j_driver):
+    async def test_pagerank_with_real_graph(self, graph_driver):
         """Test PageRank on a real graph structure."""
-        # This test would require a real Neo4j instance
+        # This test would require a real graph database instance
         # Skip if not in integration test mode
-        pytest.skip('Requires Neo4j instance')
+        pytest.skip('Requires graph database instance')
 
     @pytest.mark.integration
     @pytest.mark.asyncio
-    async def test_centrality_persistence(self, neo4j_driver):
+    async def test_centrality_persistence(self, graph_driver):
         """Test that centrality scores are properly persisted."""
-        pytest.skip('Requires Neo4j instance')
+        pytest.skip('Requires graph database instance')
