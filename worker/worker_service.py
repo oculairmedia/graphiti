@@ -121,7 +121,6 @@ class WorkerService:
         )
 
         self.graphiti = ZepGraphiti(
-            uri=None,  # Not needed when using graph_driver
             llm_client=llm_client,
             embedder=embedder,
             graph_driver=falkor_driver,
