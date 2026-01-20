@@ -260,8 +260,6 @@ services:
         condition: service_healthy
       graphiti-centrality-rs:
         condition: service_healthy
-      graphiti-queued:
-        condition: service_healthy
     healthcheck:
       test:
         - CMD

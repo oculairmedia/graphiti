@@ -224,9 +224,8 @@ class IngestionActivities:
         previous_episode_uuids: list[str] | None,
     ) -> ResolveNodesOutput:
         from time import time
-        from graphiti_core.nodes import EpisodicNode, EpisodeType
+        from graphiti_core.nodes import EpisodicNode, EntityNode, EpisodeType
         from graphiti_core.utils.datetime_utils import utc_now, ensure_utc
-        from graphiti_core.utils.maintenance.node_operations import resolve_extracted_nodes
         from datetime import datetime as dt
 
         start = time()
@@ -261,8 +260,6 @@ class IngestionActivities:
                 source=episode_source,
             )
 
-        from graphiti_core.nodes import EntityNode
-
         now = utc_now()
         extracted_nodes = [
             EntityNode(
@@ -276,27 +273,35 @@ class IngestionActivities:
             for d in extracted_node_dicts
         ]
 
-        nodes, uuid_map, node_duplicates = await resolve_extracted_nodes(
-            graphiti.clients,
-            extracted_nodes,
-            episode,
-            previous_episodes,
-            entity_types,
-            existing_nodes_override=None,
-            enable_cross_graph_deduplication=graphiti.enable_cross_graph_deduplication,
-        )
+        if graphiti.use_dspy:
+            nodes, uuid_map, dspy_duplicates = await graphiti._resolve_nodes_dspy(
+                extracted_nodes, episode, previous_episodes
+            )
+            duplicate_uuids = [n.uuid for n in dspy_duplicates]
+        else:
+            from graphiti_core.utils.maintenance.node_operations import resolve_extracted_nodes
+
+            nodes, uuid_map, legacy_duplicates = await resolve_extracted_nodes(
+                graphiti.clients,
+                extracted_nodes,
+                episode,
+                previous_episodes,
+                entity_types,
+                existing_nodes_override=None,
+                enable_cross_graph_deduplication=graphiti.enable_cross_graph_deduplication,
+            )
+            duplicate_uuids = [dup[0].uuid for dup in legacy_duplicates]
 
         duration_ms = int((time() - start) * 1000)
         logger.info(f'Activity resolve_nodes completed: {len(nodes)} nodes in {duration_ms}ms')
 
-        # Apply rate limiting (this activity uses LLM for deduplication)
         await self._apply_rate_limit(is_llm_activity=True)
 
         return ResolveNodesOutput(
             episode_uuid=episode_uuid,
             resolved_node_uuids=[n.uuid for n in nodes],
             uuid_map=uuid_map,
-            duplicate_node_uuids=[n[0].uuid for n in node_duplicates],
+            duplicate_node_uuids=duplicate_uuids,
             duration_ms=duration_ms,
         )
 

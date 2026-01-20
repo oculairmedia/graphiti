@@ -5,6 +5,7 @@ These modules wrap the signatures with appropriate DSPy predictors,
 using ChainOfThought for complex reasoning and TypedPredictor for structured output.
 """
 
+import atexit
 import json
 import logging
 import os
@@ -36,7 +37,8 @@ _stateful_enabled: bool | None = None
 _training_collector = None
 _training_collection_enabled: bool | None = None
 _training_example_count = 0
-_TRAINING_SAVE_INTERVAL = 100
+# Save every example to avoid data loss (previously 100, but data was lost between saves)
+_TRAINING_SAVE_INTERVAL = 1
 
 # Optimization trigger globals
 _optimization_trigger = None
@@ -100,6 +102,21 @@ def _maybe_save_training_data() -> None:
                 logger.warning(f'Failed to save training data: {e}')
 
     _schedule_optimization_check()
+
+
+def _save_training_data_on_exit():
+    """Save training data when the process exits."""
+    global _training_collector
+    if _training_collector is not None:
+        try:
+            _training_collector.save_all()
+            stats = _training_collector.get_stats()
+            logger.info(f'Saved training data on exit: {stats}')
+        except Exception as e:
+            logger.warning(f'Failed to save training data on exit: {e}')
+
+
+atexit.register(_save_training_data_on_exit)
 
 
 def is_optimization_trigger_enabled() -> bool:
@@ -744,9 +761,12 @@ class NodeResolver(dspy.Module):
                 result=result,
                 previous_messages=previous_messages,
             )
+            logger.info(
+                f'Recorded node resolution training example ({len(result.entity_resolutions)} entities)'
+            )
             _maybe_save_training_data()
         except Exception as e:
-            logger.debug(f'Failed to record node resolution training example: {e}')
+            logger.warning(f'Failed to record node resolution training example: {e}')
 
     def forward(
         self,
