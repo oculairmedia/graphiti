@@ -621,7 +621,7 @@ configure_optimization_trigger(trigger)
 
 **Workflow ID Format:** `dspy-optimization-<uuid>`
 
-**Monitor in Temporal UI:** http://192.168.50.90:8080 (namespace: `graphiti`)
+**Monitor in Temporal UI:** http://192.168.50.90:8084 (namespace: `graphiti`)
 
 ### Next Steps
 
