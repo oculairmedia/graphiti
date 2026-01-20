@@ -36,7 +36,11 @@ _stateful_enabled: bool | None = None
 _training_collector = None
 _training_collection_enabled: bool | None = None
 _training_example_count = 0
-_TRAINING_SAVE_INTERVAL = 100  # Save every N examples
+_TRAINING_SAVE_INTERVAL = 100
+
+# Optimization trigger globals
+_optimization_trigger = None
+_optimization_trigger_enabled: bool | None = None
 
 
 def is_stateful_learning_enabled() -> bool:
@@ -94,6 +98,71 @@ def _maybe_save_training_data() -> None:
                 _training_example_count = 0
             except Exception as e:
                 logger.warning(f'Failed to save training data: {e}')
+
+    _schedule_optimization_check()
+
+
+def is_optimization_trigger_enabled() -> bool:
+    global _optimization_trigger_enabled
+    if _optimization_trigger_enabled is None:
+        _optimization_trigger_enabled = (
+            os.getenv('DSPY_OPTIMIZATION_ENABLED', 'true').lower() == 'true'
+        )
+    return _optimization_trigger_enabled
+
+
+def _get_optimization_trigger():
+    global _optimization_trigger
+
+    if not is_optimization_trigger_enabled():
+        return None
+
+    if _optimization_trigger is not None:
+        return _optimization_trigger
+
+    try:
+        from .trigger import OptimizationTrigger
+
+        _optimization_trigger = OptimizationTrigger()
+        logger.info('Optimization trigger initialized')
+        return _optimization_trigger
+    except Exception as e:
+        logger.warning(f'Failed to initialize optimization trigger: {e}')
+        return None
+
+
+async def _maybe_check_optimization_trigger() -> None:
+    trigger = _get_optimization_trigger()
+    if trigger is None:
+        return
+
+    try:
+        should_trigger = await trigger.increment()
+        if should_trigger:
+            await trigger.trigger_optimization()
+    except Exception as e:
+        logger.warning(f'Optimization trigger check failed: {e}')
+
+
+def _schedule_optimization_check() -> None:
+    """
+    Schedule the async optimization trigger check.
+    Works from both sync and async contexts.
+    """
+    trigger = _get_optimization_trigger()
+    if trigger is None:
+        return
+
+    try:
+        import asyncio
+
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(_maybe_check_optimization_trigger())
+        except RuntimeError:
+            pass
+    except Exception as e:
+        logger.debug(f'Could not schedule optimization check: {e}')
 
 
 def save_training_data() -> dict[str, int] | None:

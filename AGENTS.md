@@ -496,6 +496,92 @@ live → archived (automatic when new prompt promoted)
 candidate → failed (if evaluation fails)
 ```
 
+## Optimization Trigger
+
+**Status**: Production-ready (Jan 2026). Automatic trigger for MIPROv2 optimization based on ingestion count.
+
+### Overview
+
+The optimization trigger tracks how many episodes have been ingested and automatically triggers MIPROv2 prompt optimization when:
+1. Ingestion count reaches the configured threshold (default: 100)
+2. Sufficient training examples exist (default: 50 per task)
+
+The counter is persisted in FalkorDB's `graphiti_prompts` graph as an `IngestionCounter` node, surviving container restarts.
+
+### Environment Variables
+
+```bash
+DSPY_OPTIMIZATION_ENABLED=true           # Enable/disable auto-optimization (default: true)
+DSPY_OPTIMIZATION_THRESHOLD=100          # Trigger after N ingestions (default: 100)
+DSPY_OPTIMIZATION_MIN_EXAMPLES=50        # Minimum training examples per task (default: 50)
+```
+
+### Schema (IngestionCounter node)
+
+```
+(:IngestionCounter {
+  id: string,              // 'ingestion_counter'
+  count: int,              // Current ingestion count
+  last_reset: datetime,    // When counter was last reset
+  last_optimization: datetime  // When optimization was last triggered
+})
+```
+
+### Query Counter Status
+
+```bash
+# Check current count
+redis-cli -p 6379 GRAPH.QUERY graphiti_prompts "MATCH (c:IngestionCounter) RETURN c.count, c.last_reset, c.last_optimization" --csv
+```
+
+### Python API
+
+```python
+from graphiti_core.dspy import (
+    OptimizationTrigger,
+    TriggerConfig,
+    get_optimization_trigger,
+    configure_optimization_trigger,
+)
+
+# Get singleton trigger
+trigger = get_optimization_trigger()
+
+# Check status
+status = await trigger.get_status()
+print(f"Count: {status['count']}/{status['threshold']}")
+
+# Manual increment (usually done automatically by DSPy modules)
+should_optimize = await trigger.increment()
+if should_optimize:
+    await trigger.trigger_optimization()
+
+# Custom trigger with callback
+async def my_optimization_job():
+    print("Starting MIPROv2 optimization...")
+    # Launch Temporal workflow here
+
+custom_trigger = OptimizationTrigger(
+    config=TriggerConfig(threshold=50, min_training_examples=25),
+    on_trigger=my_optimization_job,
+)
+configure_optimization_trigger(custom_trigger)
+```
+
+### Integration Flow
+
+1. **During ingestion**: After each successful DSPy extraction, `_schedule_optimization_check()` is called
+2. **Counter increment**: The ingestion counter in FalkorDB is atomically incremented
+3. **Threshold check**: If count >= threshold AND sufficient training data exists:
+   - Counter is reset to 0
+   - `on_trigger` callback is invoked (launches MIPROv2 job)
+4. **No callback**: If no callback is configured, a warning is logged but counter still resets
+
+### Next Steps
+
+- **graphiti-qs0w**: Implement the actual MIPROv2 optimization job as a Temporal workflow
+- **graphiti-p07m**: Add A/B evaluation framework for optimized prompt candidates
+
 ## Temporal Integration
 
 Graphiti supports two modes of Temporal integration:
