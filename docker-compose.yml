@@ -186,11 +186,19 @@ services:
     restart: unless-stopped
     ports:
       - ${API_PORT:-8003}:8000
+    command:
+      - /bin/bash
+      - -c
+      - |
+        pip install --quiet --target=/app/server/.venv/lib/python3.12/site-packages temporalio 2>/dev/null || true
+        exec /app/start.sh
     volumes:
       - ./server/graph_service/zep_graphiti.py:/app/server/graph_service/zep_graphiti.py:ro
       - ./server/graph_service/queue_proxy.py:/app/server/graph_service/queue_proxy.py:ro
       - ./server/graph_service/routers/search_proxy.py:/app/server/graph_service/routers/search_proxy.py:ro
+      - ./server/graph_service/routers/ingest.py:/app/server/graph_service/routers/ingest.py:ro
       - ./graphiti_core/search/rust_client.py:/app/graphiti_core/search/rust_client.py:ro
+      - ./graphiti_core/utils/temporal_visibility:/app/graphiti_core/utils/temporal_visibility:ro
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY:-sk-dummy}
       - FALKORDB_HOST=${FALKORDB_HOST:-falkordb}
@@ -239,8 +247,10 @@ services:
       - ENABLE_DEBUG_LOGGING=${ENABLE_DEBUG_LOGGING:-false}
       - ENABLE_CACHE_INVALIDATION=${ENABLE_CACHE_INVALIDATION:-true}
       - GRAPHITI_DATA_WEBHOOK_URLS=${GRAPHITI_DATA_WEBHOOK_URLS:-http://graph-visualizer-rust:3000/api/webhooks/data-ingestion}
-      - USE_QUEUE_FOR_INGESTION=${USE_QUEUE_FOR_INGESTION:-true}
-      - QUEUE_URL=http://graphiti-queued:8080
+      - TEMPORAL_INGESTION_ENABLED=${TEMPORAL_INGESTION_ENABLED:-true}
+      - TEMPORAL_VISIBILITY_ADDRESS=${TEMPORAL_VISIBILITY_ADDRESS:-192.168.50.90:7233}
+      - TEMPORAL_VISIBILITY_NAMESPACE=${TEMPORAL_VISIBILITY_NAMESPACE:-graphiti}
+      - TEMPORAL_INGESTION_WORKFLOW_TASK_QUEUE=${TEMPORAL_INGESTION_WORKFLOW_TASK_QUEUE:-graphiti-ingestion-workflow}
       - RESILIENT_INGESTION_ENABLED=${RESILIENT_INGESTION_ENABLED:-true}
       - RESILIENT_RETRY_MAX_ATTEMPTS=${RESILIENT_RETRY_MAX_ATTEMPTS:-3}
       - RESILIENT_RETRY_BASE_DELAY=${RESILIENT_RETRY_BASE_DELAY:-2.0}
