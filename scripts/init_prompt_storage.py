@@ -27,19 +27,25 @@ logger = logging.getLogger(__name__)
 # Schema constants
 PROMPT_DATABASE = 'graphiti_prompts'
 PROMPT_TASKS = ['entity_extraction', 'edge_extraction', 'node_resolution', 'summary_generation']
+TRAINING_TASKS = ['entity_extraction', 'edge_extraction', 'node_resolution', 'summary_generation']
 
 
 async def create_schema(client) -> None:
-    """Create the PromptVersion schema with indexes."""
+    """Create the PromptVersion and TrainingExample schemas with indexes."""
     graph = client.select_graph(PROMPT_DATABASE)
 
     # FalkorDB uses RANGE indexes with different syntax than Neo4j
     # Format: CREATE INDEX FOR (n:Label) ON (n.property)
     schema_queries = [
+        # PromptVersion indexes
         'CREATE INDEX FOR (p:PromptVersion) ON (p.task)',
         'CREATE INDEX FOR (p:PromptVersion) ON (p.status)',
         'CREATE INDEX FOR (p:PromptVersion) ON (p.version)',
         'CREATE INDEX FOR (p:PromptVersion) ON (p.id)',
+        # TrainingExample indexes (for MIPROv2 optimization data)
+        'CREATE INDEX FOR (t:TrainingExample) ON (t.id)',
+        'CREATE INDEX FOR (t:TrainingExample) ON (t.task)',
+        'CREATE INDEX FOR (t:TrainingExample) ON (t.created_at)',
     ]
 
     for query in schema_queries:
@@ -158,18 +164,22 @@ async def verify_schema(client) -> bool:
     """Verify the schema was created correctly."""
     graph = client.select_graph(PROMPT_DATABASE)
 
-    # Check for any PromptVersion nodes
     result = await graph.query('MATCH (p:PromptVersion) RETURN count(p) as count')
-    count = result.result_set[0][0] if result.result_set else 0
+    prompt_count = result.result_set[0][0] if result.result_set else 0
 
-    # Check indexes exist
+    result = await graph.query('MATCH (t:TrainingExample) RETURN count(t) as count')
+    training_count = result.result_set[0][0] if result.result_set else 0
+
     try:
         index_result = await graph.query('CALL db.indexes()')
-        index_count = len(index_result.result_set) if result.result_set else 0
+        index_count = len(index_result.result_set) if index_result.result_set else 0
     except Exception:
         index_count = 'unknown'
 
-    logger.info(f'Schema verification: {count} PromptVersion nodes, {index_count} indexes')
+    logger.info(
+        f'Schema verification: {prompt_count} PromptVersion nodes, '
+        f'{training_count} TrainingExample nodes, {index_count} indexes'
+    )
     return True
 
 

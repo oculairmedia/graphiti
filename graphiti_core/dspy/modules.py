@@ -5,7 +5,6 @@ These modules wrap the signatures with appropriate DSPy predictors,
 using ChainOfThought for complex reasoning and TypedPredictor for structured output.
 """
 
-import atexit
 import json
 import logging
 import os
@@ -34,11 +33,8 @@ _stateful_agent_id = None
 _stateful_enabled: bool | None = None
 
 # Training data collection globals
-_training_collector = None
 _training_collection_enabled: bool | None = None
-_training_example_count = 0
-# Save every example to avoid data loss (previously 100, but data was lost between saves)
-_TRAINING_SAVE_INTERVAL = 1
+_use_falkordb_storage: bool | None = None
 
 # Optimization trigger globals
 _optimization_trigger = None
@@ -63,60 +59,38 @@ def is_training_collection_enabled() -> bool:
     return _training_collection_enabled
 
 
-def _get_training_collector():
-    """Get or create the singleton training data collector."""
-    global _training_collector
+def _use_falkordb_training_storage() -> bool:
+    """Check if FalkorDB storage should be used (default: true when collection enabled)."""
+    global _use_falkordb_storage
+    if _use_falkordb_storage is None:
+        _use_falkordb_storage = os.getenv('DSPY_USE_FALKORDB_STORAGE', 'true').lower() == 'true'
+    return _use_falkordb_storage
 
+
+def _schedule_training_record(
+    task: str,
+    inputs: dict[str, Any],
+    output: dict[str, Any],
+    metadata: dict[str, Any] | None = None,
+) -> None:
+    """Schedule async training data recording from sync context."""
     if not is_training_collection_enabled():
-        return None
+        return
 
-    if _training_collector is not None:
-        return _training_collector
+    if not _use_falkordb_training_storage():
+        return
 
     try:
-        from .optimization import TrainingDataCollector
+        import asyncio
+        from .training_storage import record_training_example
 
-        save_dir = os.getenv('DSPY_TRAINING_DATA_DIR', '/data/training_data')
-        _training_collector = TrainingDataCollector(save_dir=save_dir)
-        logger.info(f'Training data collection enabled, saving to: {save_dir}')
-        return _training_collector
-    except Exception as e:
-        logger.warning(f'Failed to initialize training data collector: {e}')
-        return None
-
-
-def _maybe_save_training_data() -> None:
-    """Save training data periodically based on example count."""
-    global _training_example_count
-    _training_example_count += 1
-
-    if _training_example_count >= _TRAINING_SAVE_INTERVAL:
-        collector = _get_training_collector()
-        if collector:
-            try:
-                collector.save_all()
-                stats = collector.get_stats()
-                logger.info(f'Saved training data: {stats}')
-                _training_example_count = 0
-            except Exception as e:
-                logger.warning(f'Failed to save training data: {e}')
-
-    _schedule_optimization_check()
-
-
-def _save_training_data_on_exit():
-    """Save training data when the process exits."""
-    global _training_collector
-    if _training_collector is not None:
         try:
-            _training_collector.save_all()
-            stats = _training_collector.get_stats()
-            logger.info(f'Saved training data on exit: {stats}')
-        except Exception as e:
-            logger.warning(f'Failed to save training data on exit: {e}')
-
-
-atexit.register(_save_training_data_on_exit)
+            loop = asyncio.get_running_loop()
+            loop.create_task(record_training_example(task, inputs, output, metadata))
+        except RuntimeError:
+            asyncio.run(record_training_example(task, inputs, output, metadata))
+    except Exception as e:
+        logger.debug(f'Failed to schedule training record: {e}')
 
 
 def is_optimization_trigger_enabled() -> bool:
@@ -186,29 +160,47 @@ def save_training_data() -> dict[str, int] | None:
     """
     Explicitly save all collected training data.
 
-    Call this on shutdown or when you want to persist immediately.
-    Returns stats dict or None if collection is disabled.
+    With FalkorDB storage, data is saved immediately on record.
+    This function now just returns current stats.
     """
-    collector = _get_training_collector()
-    if collector is None:
+    if not is_training_collection_enabled():
         return None
 
+    import asyncio
+
     try:
-        collector.save_all()
-        stats = collector.get_stats()
-        logger.info(f'Saved training data on demand: {stats}')
-        return stats
+        from .training_storage import get_training_stats as _get_stats
+
+        try:
+            loop = asyncio.get_running_loop()
+            future = asyncio.ensure_future(_get_stats())
+            return asyncio.get_event_loop().run_until_complete(future)
+        except RuntimeError:
+            return asyncio.run(_get_stats())
     except Exception as e:
-        logger.warning(f'Failed to save training data: {e}')
+        logger.warning(f'Failed to get training stats: {e}')
         return None
 
 
 def get_training_stats() -> dict[str, int] | None:
-    """Get current training data collection stats without saving."""
-    collector = _get_training_collector()
-    if collector is None:
+    """Get current training data collection stats."""
+    if not is_training_collection_enabled():
         return None
-    return collector.get_stats()
+
+    import asyncio
+
+    try:
+        from .training_storage import get_training_stats as _get_stats
+
+        try:
+            loop = asyncio.get_running_loop()
+            future = asyncio.ensure_future(_get_stats())
+            return asyncio.get_event_loop().run_until_complete(future)
+        except RuntimeError:
+            return asyncio.run(_get_stats())
+    except Exception as e:
+        logger.warning(f'Failed to get training stats: {e}')
+        return None
 
 
 def _get_stateful_client():
@@ -290,23 +282,22 @@ class NodeExtractor(dspy.Module):
         previous_messages: list[dict] | None,
         result: ExtractedEntities,
     ) -> None:
-        collector = _get_training_collector()
-        if collector is None:
-            logger.debug('Training collector is None, skipping entity extraction recording')
+        if not is_training_collection_enabled():
             return
-        try:
-            collector.record_entity_extraction(
-                current_message=current_message,
-                entity_types=entity_types,
-                result=result,
-                previous_messages=previous_messages,
-            )
-            logger.info(
-                f'Recorded entity extraction training example ({len(result.extracted_entities)} entities)'
-            )
-            _maybe_save_training_data()
-        except Exception as e:
-            logger.warning(f'Failed to record entity extraction training example: {e}')
+
+        inputs = {
+            'current_message': current_message,
+            'entity_types': json.dumps(entity_types),
+            'previous_messages': json.dumps(previous_messages or []),
+            'custom_instructions': '',
+        }
+        output = {'extracted_entities': result.model_dump()}
+
+        _schedule_training_record('entity_extraction', inputs, output)
+        logger.info(
+            f'Recorded entity extraction training example ({len(result.extracted_entities)} entities)'
+        )
+        _schedule_optimization_check()
 
     def forward(
         self,
@@ -622,20 +613,21 @@ class EdgeExtractor(dspy.Module):
         previous_messages: list[dict] | None,
         result: ExtractedEdges,
     ) -> None:
-        collector = _get_training_collector()
-        if collector is None:
+        if not is_training_collection_enabled():
             return
-        try:
-            collector.record_edge_extraction(
-                current_message=current_message,
-                entities=entities,
-                reference_time=reference_time,
-                result=result,
-                previous_messages=previous_messages,
-            )
-            _maybe_save_training_data()
-        except Exception as e:
-            logger.debug(f'Failed to record edge extraction training example: {e}')
+
+        inputs = {
+            'current_message': current_message,
+            'entities': json.dumps(entities),
+            'reference_time': reference_time,
+            'previous_messages': json.dumps(previous_messages or []),
+            'edge_types': '[]',
+            'custom_instructions': '',
+        }
+        output = {'extracted_edges': result.model_dump()}
+
+        _schedule_training_record('edge_extraction', inputs, output)
+        _schedule_optimization_check()
 
     def forward(
         self,
@@ -750,23 +742,22 @@ class NodeResolver(dspy.Module):
         previous_messages: list[dict] | None,
         result: NodeResolutions,
     ) -> None:
-        collector = _get_training_collector()
-        if collector is None:
+        if not is_training_collection_enabled():
             return
-        try:
-            collector.record_node_resolution(
-                current_message=current_message,
-                extracted_entities=extracted_entities,
-                existing_entities=existing_entities,
-                result=result,
-                previous_messages=previous_messages,
-            )
-            logger.info(
-                f'Recorded node resolution training example ({len(result.entity_resolutions)} entities)'
-            )
-            _maybe_save_training_data()
-        except Exception as e:
-            logger.warning(f'Failed to record node resolution training example: {e}')
+
+        inputs = {
+            'current_message': current_message,
+            'extracted_entities': json.dumps(extracted_entities),
+            'existing_entities': json.dumps(existing_entities),
+            'previous_messages': json.dumps(previous_messages or []),
+        }
+        output = {'entity_resolutions': result.model_dump()}
+
+        _schedule_training_record('node_resolution', inputs, output)
+        logger.info(
+            f'Recorded node resolution training example ({len(result.entity_resolutions)} entities)'
+        )
+        _schedule_optimization_check()
 
     def forward(
         self,
@@ -866,20 +857,19 @@ class SummaryGenerator(dspy.Module):
         existing_summary: str,
         result: Summary,
     ) -> None:
-        collector = _get_training_collector()
-        if collector is None:
+        if not is_training_collection_enabled():
             return
-        try:
-            collector.record_summary_generation(
-                current_message=current_message,
-                entity_name=entity_name,
-                result=result,
-                previous_messages=previous_messages,
-                existing_summary=existing_summary,
-            )
-            _maybe_save_training_data()
-        except Exception as e:
-            logger.debug(f'Failed to record summary generation training example: {e}')
+
+        inputs = {
+            'current_message': current_message,
+            'entity_name': entity_name,
+            'previous_messages': json.dumps(previous_messages or []),
+            'existing_summary': existing_summary,
+        }
+        output = {'summary': result.model_dump()}
+
+        _schedule_training_record('summary_generation', inputs, output)
+        _schedule_optimization_check()
 
     def forward(
         self,
