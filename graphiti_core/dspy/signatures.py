@@ -5,12 +5,21 @@ These signatures define the input/output contracts for each pipeline stage,
 reusing existing Pydantic models where possible for consistency.
 """
 
-from typing import Any
+from __future__ import annotations
+
+import logging
+import os
+from typing import Any, TYPE_CHECKING
 
 from pydantic import BaseModel, Field, model_validator
 import dspy
 
 from graphiti_core.prompts.extract_nodes import ExtractedEntity, ExtractedEntities
+
+if TYPE_CHECKING:
+    from graphiti_core.prompts.registry import PromptRegistry, PromptTask
+
+logger = logging.getLogger(__name__)
 
 
 # ============================================================================
@@ -263,3 +272,132 @@ class SummaryGenerationSignature(dspy.Signature):
     existing_summary: str = dspy.InputField(desc='Existing summary to update (if any)', default='')
 
     summary: Summary = dspy.OutputField(desc='Updated summary for the entity (under 250 words)')
+
+
+DEFAULT_DOCSTRINGS: dict[str, str] = {
+    'entity_extraction': EntityExtractionSignature.__doc__ or '',
+    'edge_extraction': EdgeExtractionSignature.__doc__ or '',
+    'node_resolution': NodeDeduplicationSignature.__doc__ or '',
+    'summary_generation': SummaryGenerationSignature.__doc__ or '',
+}
+
+SIGNATURE_BASE_CLASSES: dict[str, type[dspy.Signature]] = {
+    'entity_extraction': EntityExtractionSignature,
+    'edge_extraction': EdgeExtractionSignature,
+    'node_resolution': NodeDeduplicationSignature,
+    'summary_generation': SummaryGenerationSignature,
+}
+
+
+def _is_dynamic_prompts_enabled() -> bool:
+    return os.getenv('DSPY_DYNAMIC_PROMPTS', 'true').lower() == 'true'
+
+
+class SignatureFactory:
+    """
+    Factory for creating DSPy signatures with dynamic docstrings from PromptRegistry.
+
+    Falls back to hardcoded signatures if:
+    - DSPY_DYNAMIC_PROMPTS=false
+    - PromptRegistry unavailable or errors
+    - No live prompt exists for the task
+    """
+
+    _cached_signatures: dict[str, tuple[type[dspy.Signature], int | None]] = {}
+    _registry: PromptRegistry | None = None
+
+    @classmethod
+    def set_registry(cls, registry: PromptRegistry) -> None:
+        cls._registry = registry
+        cls._cached_signatures.clear()
+
+    @classmethod
+    async def get_signature(
+        cls,
+        task: str,
+        force_refresh: bool = False,
+    ) -> tuple[type[dspy.Signature], int | None]:
+        """
+        Get a signature class for the given task, with dynamic docstring if available.
+
+        Returns:
+            Tuple of (signature_class, prompt_version) where prompt_version is None
+            if using fallback hardcoded signature.
+        """
+        if not _is_dynamic_prompts_enabled():
+            base_class = SIGNATURE_BASE_CLASSES.get(task)
+            if base_class:
+                return base_class, None
+            raise ValueError(f'Unknown task: {task}')
+
+        if not force_refresh and task in cls._cached_signatures:
+            return cls._cached_signatures[task]
+
+        signature_class, version = await cls._create_dynamic_signature(task)
+        cls._cached_signatures[task] = (signature_class, version)
+        return signature_class, version
+
+    @classmethod
+    async def _create_dynamic_signature(
+        cls,
+        task: str,
+    ) -> tuple[type[dspy.Signature], int | None]:
+        """Create a signature with dynamic docstring from registry."""
+        base_class = SIGNATURE_BASE_CLASSES.get(task)
+        if not base_class:
+            raise ValueError(f'Unknown task: {task}')
+
+        try:
+            if cls._registry is None:
+                from graphiti_core.prompts.registry import get_prompt_registry, PromptTask
+
+                cls._registry = get_prompt_registry()
+
+            from graphiti_core.prompts.registry import PromptTask
+
+            prompt_task = PromptTask(task)
+            prompt = await cls._registry.get_live_prompt(prompt_task)
+
+            if prompt is None:
+                logger.debug(f'No live prompt for {task}, using fallback')
+                return base_class, None
+
+            if not prompt.docstring or prompt.docstring == DEFAULT_DOCSTRINGS.get(task):
+                return base_class, prompt.version
+
+            dynamic_class = cls._build_signature_class(base_class, prompt.docstring, task)
+            logger.debug(f'Created dynamic signature for {task} v{prompt.version}')
+            return dynamic_class, prompt.version
+
+        except Exception as e:
+            logger.warning(f'Failed to load dynamic prompt for {task}: {e}')
+            return base_class, None
+
+    @classmethod
+    def _build_signature_class(
+        cls,
+        base_class: type[dspy.Signature],
+        docstring: str,
+        task: str,
+    ) -> type[dspy.Signature]:
+        """Build a new signature class with custom docstring, preserving fields."""
+        class_name = f'Dynamic{base_class.__name__}'
+
+        new_class = type(class_name, (base_class,), {'__doc__': docstring})
+
+        return new_class
+
+    @classmethod
+    def get_signature_sync(cls, task: str) -> type[dspy.Signature]:
+        """
+        Synchronous fallback - always returns base signature.
+        Use get_signature() for dynamic loading.
+        """
+        base_class = SIGNATURE_BASE_CLASSES.get(task)
+        if base_class:
+            return base_class
+        raise ValueError(f'Unknown task: {task}')
+
+    @classmethod
+    def invalidate_cache(cls) -> None:
+        cls._cached_signatures.clear()

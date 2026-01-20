@@ -23,6 +23,7 @@ from .signatures import (
     Edge,
     NodeResolutions,
     Summary,
+    SignatureFactory,
 )
 
 logger = logging.getLogger(__name__)
@@ -157,10 +158,21 @@ class NodeExtractor(dspy.Module):
     with the complex GLM model (GLM-4.7).
     """
 
-    def __init__(self, enable_stateful: bool = True):
+    def __init__(self, enable_stateful: bool = True, signature_class: type | None = None):
         super().__init__()
-        self.predictor = dspy.ChainOfThought(EntityExtractionSignature)
+        sig = signature_class or EntityExtractionSignature
+        self.predictor = dspy.ChainOfThought(sig)
         self.enable_stateful = enable_stateful
+        self._prompt_version: int | None = None
+
+    @classmethod
+    async def create(cls, enable_stateful: bool = True) -> 'NodeExtractor':
+        sig, version = await SignatureFactory.get_signature('entity_extraction')
+        instance = cls(enable_stateful=enable_stateful, signature_class=sig)
+        instance._prompt_version = version
+        if version:
+            logger.info(f'NodeExtractor using dynamic prompt v{version}')
+        return instance
 
     def _get_extraction_hints(self, current_message: str) -> str:
         if not self.enable_stateful:
@@ -213,6 +225,9 @@ class NodeExtractor(dspy.Module):
         previous_messages: list[dict[str, Any]] | None = None,
         custom_instructions: str = '',
     ) -> ExtractedEntities:
+        if self._prompt_version:
+            logger.debug(f'NodeExtractor.forward using prompt v{self._prompt_version}')
+
         previous_extractions = self._get_extraction_hints(current_message)
 
         with with_lm('complex'):
@@ -425,16 +440,20 @@ class EdgeExtractor(dspy.Module):
         max_retries: int = 3,
         use_demos: bool = True,
         enable_stateful: bool = True,
+        signature_class: type | None = None,
     ):
         super().__init__()
         self.use_refine = use_refine
         self.use_demos = use_demos
         self.enable_stateful = enable_stateful
+        self._prompt_version: int | None = None
+
+        sig = signature_class or EdgeExtractionSignature
 
         if use_cot:
-            base_predictor = dspy.ChainOfThought(EdgeExtractionSignature)
+            base_predictor = dspy.ChainOfThought(sig)
         else:
-            base_predictor = dspy.Predict(EdgeExtractionSignature)
+            base_predictor = dspy.Predict(sig)
 
         if use_demos and hasattr(base_predictor, 'demos'):
             base_predictor.demos = EDGE_EXTRACTION_DEMOS  # type: ignore[attr-defined]
@@ -451,6 +470,29 @@ class EdgeExtractor(dspy.Module):
             logger.info(f'EdgeExtractor initialized with Refine (max_retries={max_retries})')
         else:
             self.predictor = base_predictor
+
+    @classmethod
+    async def create(
+        cls,
+        use_cot: bool = False,
+        use_refine: bool = True,
+        max_retries: int = 3,
+        use_demos: bool = True,
+        enable_stateful: bool = True,
+    ) -> 'EdgeExtractor':
+        sig, version = await SignatureFactory.get_signature('edge_extraction')
+        instance = cls(
+            use_cot=use_cot,
+            use_refine=use_refine,
+            max_retries=max_retries,
+            use_demos=use_demos,
+            enable_stateful=enable_stateful,
+            signature_class=sig,
+        )
+        instance._prompt_version = version
+        if version:
+            logger.info(f'EdgeExtractor using dynamic prompt v{version}')
+        return instance
 
     def _get_edge_hints(self, entity_names: list[str]) -> str:
         if not self.enable_stateful:
@@ -514,6 +556,9 @@ class EdgeExtractor(dspy.Module):
         edge_types: list[dict[str, Any]] | None = None,
         custom_instructions: str = '',
     ) -> ExtractedEdges:
+        if self._prompt_version:
+            logger.debug(f'EdgeExtractor.forward using prompt v{self._prompt_version}')
+
         entity_names = [e.get('name', '') for e in entities]
         edge_patterns = self._get_edge_hints(entity_names)
 
@@ -558,10 +603,21 @@ class NodeResolver(dspy.Module):
     Supports stateful learning via Letta to remember past resolution decisions.
     """
 
-    def __init__(self, enable_stateful: bool = True):
+    def __init__(self, enable_stateful: bool = True, signature_class: type | None = None):
         super().__init__()
-        self.predictor = dspy.ChainOfThought(NodeDeduplicationSignature)
+        sig = signature_class or NodeDeduplicationSignature
+        self.predictor = dspy.ChainOfThought(sig)
         self.enable_stateful = enable_stateful
+        self._prompt_version: int | None = None
+
+    @classmethod
+    async def create(cls, enable_stateful: bool = True) -> 'NodeResolver':
+        sig, version = await SignatureFactory.get_signature('node_resolution')
+        instance = cls(enable_stateful=enable_stateful, signature_class=sig)
+        instance._prompt_version = version
+        if version:
+            logger.info(f'NodeResolver using dynamic prompt v{version}')
+        return instance
 
     def _get_resolution_hints(self, entity_names: list[str]) -> str:
         """Get resolution hints from Letta memory."""
@@ -638,6 +694,9 @@ class NodeResolver(dspy.Module):
         Returns:
             NodeResolutions with duplicate information for each entity.
         """
+        if self._prompt_version:
+            logger.debug(f'NodeResolver.forward using prompt v{self._prompt_version}')
+
         entity_names = [e.get('name', '') for e in extracted_entities]
         resolution_history = self._get_resolution_hints(entity_names)
 
@@ -691,9 +750,20 @@ class SummaryGenerator(dspy.Module):
     with the simple GLM model (GLM-4.5) for cost optimization.
     """
 
-    def __init__(self):
+    def __init__(self, signature_class: type | None = None):
         super().__init__()
-        self.predictor = dspy.Predict(SummaryGenerationSignature)
+        sig = signature_class or SummaryGenerationSignature
+        self.predictor = dspy.Predict(sig)
+        self._prompt_version: int | None = None
+
+    @classmethod
+    async def create(cls) -> 'SummaryGenerator':
+        sig, version = await SignatureFactory.get_signature('summary_generation')
+        instance = cls(signature_class=sig)
+        instance._prompt_version = version
+        if version:
+            logger.info(f'SummaryGenerator using dynamic prompt v{version}')
+        return instance
 
     def _record_training_example(
         self,
@@ -737,7 +807,9 @@ class SummaryGenerator(dspy.Module):
         Returns:
             Summary with updated entity summary.
         """
-        # Use simple model for summaries (high volume, lower complexity)
+        if self._prompt_version:
+            logger.debug(f'SummaryGenerator.forward using prompt v{self._prompt_version}')
+
         with with_lm('simple'):
             result = self.predictor(
                 previous_messages=json.dumps(previous_messages or [], indent=2),
