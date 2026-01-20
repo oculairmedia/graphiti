@@ -243,3 +243,82 @@ def get_optimization_trigger() -> OptimizationTrigger:
 def configure_optimization_trigger(trigger: OptimizationTrigger) -> None:
     global _default_trigger
     _default_trigger = trigger
+
+
+async def create_temporal_optimization_callback(
+    temporal_address: str | None = None,
+    temporal_namespace: str | None = None,
+    task_queue: str | None = None,
+) -> Callable[[], Awaitable[None]]:
+    """
+    Create a callback that starts the DSPy optimization Temporal workflow.
+
+    This is the standard callback for production use with the OptimizationTrigger.
+    """
+    address = temporal_address or os.getenv('TEMPORAL_VISIBILITY_ADDRESS', '192.168.50.90:7233')
+    namespace = temporal_namespace or os.getenv('TEMPORAL_VISIBILITY_NAMESPACE', 'graphiti')
+    queue = task_queue or os.getenv(
+        'TEMPORAL_OPTIMIZATION_TASK_QUEUE', 'graphiti-dspy-optimization'
+    )
+    training_data_dir = os.getenv('DSPY_TRAINING_DATA_DIR', '/data/training_data')
+
+    async def trigger_workflow():
+        try:
+            from temporalio.client import Client
+            import uuid
+
+            client = await Client.connect(address, namespace=namespace)
+
+            workflow_id = f'dspy-optimization-{uuid.uuid4()}'
+
+            await client.start_workflow(
+                'DSPyOptimizationWorkflow',
+                {
+                    'training_data_dir': training_data_dir,
+                    'min_examples_per_task': 50,
+                    'train_split': 0.8,
+                    'num_candidates': 7,
+                    'num_threads': 4,
+                    'tasks': [
+                        'entity_extraction',
+                        'edge_extraction',
+                        'node_resolution',
+                        'summary_generation',
+                    ],
+                },
+                id=workflow_id,
+                task_queue=queue,
+            )
+
+            logger.info(f'Started optimization workflow: {workflow_id}')
+        except Exception as e:
+            logger.error(f'Failed to start optimization workflow: {e}')
+            raise
+
+    return trigger_workflow
+
+
+def setup_default_trigger_with_temporal() -> OptimizationTrigger:
+    """
+    Configure the default optimization trigger with Temporal workflow callback.
+
+    Call this at startup if you want automatic Temporal workflow triggering.
+    Returns the configured trigger.
+    """
+    import asyncio
+
+    async def _setup():
+        callback = await create_temporal_optimization_callback()
+        trigger = OptimizationTrigger(
+            config=TriggerConfig.from_env(),
+            on_trigger=callback,
+        )
+        configure_optimization_trigger(trigger)
+        logger.info('Configured optimization trigger with Temporal workflow callback')
+        return trigger
+
+    try:
+        loop = asyncio.get_running_loop()
+        return loop.run_until_complete(_setup())
+    except RuntimeError:
+        return asyncio.run(_setup())

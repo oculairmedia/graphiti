@@ -577,9 +577,54 @@ configure_optimization_trigger(custom_trigger)
    - `on_trigger` callback is invoked (launches MIPROv2 job)
 4. **No callback**: If no callback is configured, a warning is logged but counter still resets
 
+### MIPROv2 Optimization Workflow
+
+**Status**: Production-ready (Jan 2026). Temporal workflow for running MIPROv2 optimization.
+
+The optimization workflow is triggered automatically when the ingestion counter reaches threshold. It:
+1. Loads training data for each task from `/data/training_data/`
+2. Splits into 80% train / 20% validation
+3. Runs MIPROv2 optimization for each task
+4. Stores optimized prompts as candidates in PromptRegistry
+
+**Enable:**
+```bash
+docker compose --profile temporal-optimization up -d graphiti-temporal-optimization-worker
+```
+
+**Environment Variables:**
+```bash
+TEMPORAL_OPTIMIZATION_TASK_QUEUE=graphiti-dspy-optimization  # Task queue name
+```
+
+**Python API (wiring trigger to workflow):**
+```python
+from graphiti_core.dspy import (
+    setup_default_trigger_with_temporal,
+    create_temporal_optimization_callback,
+    OptimizationTrigger,
+    TriggerConfig,
+    configure_optimization_trigger,
+)
+
+# Option 1: Auto-setup (recommended for workers)
+trigger = setup_default_trigger_with_temporal()
+
+# Option 2: Manual setup with custom config
+callback = await create_temporal_optimization_callback()
+trigger = OptimizationTrigger(
+    config=TriggerConfig(threshold=100, min_training_examples=50),
+    on_trigger=callback,
+)
+configure_optimization_trigger(trigger)
+```
+
+**Workflow ID Format:** `dspy-optimization-<uuid>`
+
+**Monitor in Temporal UI:** http://192.168.50.90:8080 (namespace: `graphiti`)
+
 ### Next Steps
 
-- **graphiti-qs0w**: Implement the actual MIPROv2 optimization job as a Temporal workflow
 - **graphiti-p07m**: Add A/B evaluation framework for optimized prompt candidates
 
 ## Temporal Integration

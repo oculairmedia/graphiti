@@ -57,6 +57,8 @@ from graphiti_core.dspy.trigger import (
     TriggerConfig,
     get_optimization_trigger,
     configure_optimization_trigger,
+    create_temporal_optimization_callback,
+    setup_default_trigger_with_temporal,
 )
 
 __all__ = [
@@ -107,4 +109,6 @@ __all__ = [
     'TriggerConfig',
     'get_optimization_trigger',
     'configure_optimization_trigger',
+    'create_temporal_optimization_callback',
+    'setup_default_trigger_with_temporal',
 ]

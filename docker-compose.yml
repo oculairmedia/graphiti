@@ -955,6 +955,58 @@ services:
         condition: service_healthy
     profiles: ["temporal-staged"]
 
+  # DSPy MIPROv2 Optimization Worker
+  # Runs optimization jobs triggered by the ingestion counter
+  graphiti-temporal-optimization-worker:
+    image: ghcr.io/oculairmedia/graphiti-worker:main
+    restart: unless-stopped
+    command:
+      - /bin/bash
+      - -c
+      - |
+        pip install --quiet temporalio dspy-ai 2>/dev/null
+        python -u /scripts/temporal_optimization_worker.py
+    volumes:
+      - ./scripts:/scripts:ro
+      - ./graphiti_core:/app/graphiti_core:ro
+      - dspy_training_data:/data/training_data
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - TEMPORAL_VISIBILITY_ADDRESS=${TEMPORAL_VISIBILITY_ADDRESS:-192.168.50.90:7233}
+      - TEMPORAL_VISIBILITY_NAMESPACE=${TEMPORAL_VISIBILITY_NAMESPACE:-graphiti}
+      - TEMPORAL_OPTIMIZATION_TASK_QUEUE=${TEMPORAL_OPTIMIZATION_TASK_QUEUE:-graphiti-dspy-optimization}
+      # Low concurrency - MIPROv2 is resource-intensive
+      - TEMPORAL_MAX_CONCURRENT_WORKFLOW_TASKS=2
+      - TEMPORAL_MAX_CONCURRENT_ACTIVITIES=2
+      - FALKORDB_HOST=${FALKORDB_HOST:-falkordb}
+      - FALKORDB_PORT=${FALKORDB_PORT:-6379}
+      - FALKORDB_DATABASE=${FALKORDB_DATABASE:-graphiti_migration}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-sk-dummy}
+      - USE_OLLAMA=${USE_OLLAMA:-true}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://192.168.50.90:8082/v1}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-haiku-4-5}
+      - OLLAMA_EMBEDDING_MODEL=${OLLAMA_EMBEDDING_MODEL:-dengcao/Qwen3-Embedding-4B:Q4_K_M}
+      - EMBEDDING_DIMENSION=${EMBEDDING_DIMENSION:-2560}
+      - USE_OLLAMA_EMBEDDINGS=${USE_OLLAMA_EMBEDDINGS:-true}
+      - USE_DEDICATED_EMBEDDING_ENDPOINT=${USE_DEDICATED_EMBEDDING_ENDPOINT:-true}
+      - OLLAMA_EMBEDDING_BASE_URL=${OLLAMA_EMBEDDING_BASE_URL:-http://192.168.50.80:11434/v1}
+      - OLLAMA_EMBEDDING_API_KEY=${OLLAMA_EMBEDDING_API_KEY:-ollama}
+      - USE_CHUTES=${USE_CHUTES:-false}
+      - CHUTES_API_KEY=${CHUTES_API_KEY:-}
+      - CHUTES_BASE_URL=${CHUTES_BASE_URL:-https://api.z.ai/api/coding/paas/v4}
+      - CHUTES_MODEL=${CHUTES_MODEL:-glm-4.5}
+      - CHUTES_SMALL_MODEL=${CHUTES_SMALL_MODEL:-glm-4.5-air}
+      - ZAI_TOKENS_PER_HOUR=${ZAI_TOKENS_PER_HOUR:-1000000}
+      - DSPY_TRAINING_DATA_DIR=${DSPY_TRAINING_DATA_DIR:-/data/training_data}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - graphiti_network
+    depends_on:
+      falkordb:
+        condition: service_healthy
+    profiles: ["temporal-optimization"]
+
   graphiti-temporal-monitoring-worker:
     image: ghcr.io/oculairmedia/graphiti-worker:main
     restart: unless-stopped
