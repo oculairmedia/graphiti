@@ -12,17 +12,10 @@ class Settings(BaseSettings):
     model_name: str | None = Field(None)
     embedding_model_name: str | None = Field(None)
 
-    # Database configuration - support both Neo4j and FalkorDB
-    neo4j_uri: str | None = Field(None)
-    neo4j_user: str | None = Field(None)
-    neo4j_password: str | None = Field(None)
-
+    # Database configuration - FalkorDB
     falkordb_uri: str | None = Field(None)
     falkordb_host: str | None = Field(None)
     falkordb_port: int | None = Field(None)
-
-    # Determine which database to use
-    use_falkordb: bool = Field(False)
 
     # Cache invalidation configuration
     rust_server_url: str = Field('http://graph-visualizer-rust:3000')
@@ -47,32 +40,23 @@ class Settings(BaseSettings):
     @property
     def database_uri(self) -> str:
         """Get the appropriate database URI based on configuration."""
-        if self.use_falkordb or self.falkordb_uri or self.falkordb_host:
-            if self.falkordb_uri:
-                return self.falkordb_uri
-            elif self.falkordb_host and self.falkordb_port:
-                return f'redis://{self.falkordb_host}:{self.falkordb_port}'
-            else:
-                # Default to Docker service name and internal port
-                return 'redis://falkordb:6379'
+        if self.falkordb_uri:
+            return self.falkordb_uri
+        elif self.falkordb_host and self.falkordb_port:
+            return f'redis://{self.falkordb_host}:{self.falkordb_port}'
         else:
-            return self.neo4j_uri or 'bolt://localhost:7687'
+            # Default to Docker service name and internal port
+            return 'redis://falkordb:6379'
 
     @property
     def database_user(self) -> str:
         """Get the appropriate database user."""
-        if self.use_falkordb or self.falkordb_uri or self.falkordb_host:
-            return ''  # FalkorDB doesn't use authentication by default
-        else:
-            return self.neo4j_user or 'neo4j'
+        return ''  # FalkorDB doesn't use authentication by default
 
     @property
     def database_password(self) -> str:
         """Get the appropriate database password."""
-        if self.use_falkordb or self.falkordb_uri or self.falkordb_host:
-            return ''  # FalkorDB doesn't use authentication by default
-        else:
-            return self.neo4j_password or 'password'
+        return ''  # FalkorDB doesn't use authentication by default
 
 
 @lru_cache

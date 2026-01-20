@@ -286,8 +286,6 @@ class Graphiti:
         elif 'groq' in class_name:
             return 'groq'
         # Database providers
-        elif 'neo4j' in class_name:
-            return 'neo4j'
         elif 'falkor' in class_name:
             return 'falkordb'
         # Embedder providers
