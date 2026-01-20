@@ -2,7 +2,7 @@
 Integration tests for centrality features in Graphiti.
 
 These tests verify that centrality analysis works correctly
-with the full Graphiti stack including Neo4j.
+with the full Graphiti stack including FalkorDB.
 """
 
 import asyncio
@@ -13,6 +13,7 @@ import pytest
 import pytest_asyncio
 
 from graphiti_core import Graphiti
+from graphiti_core.driver import FalkorDriver
 from graphiti_core.edges import EntityEdge
 from graphiti_core.nodes import EntityNode
 from graphiti_core.utils.maintenance.centrality_operations import (
@@ -25,16 +26,17 @@ from graphiti_core.utils.maintenance.centrality_operations import (
 
 @pytest.mark.integration
 class TestCentralityIntegration:
-    """Integration tests for centrality analysis with real Neo4j."""
+    """Integration tests for centrality analysis with real FalkorDB."""
 
     @pytest_asyncio.fixture
-    async def graphiti_instance(self, neo4j_config):
+    async def graphiti_instance(self, falkordb_config):
         """Create a real Graphiti instance for testing."""
-        graphiti = Graphiti(
-            neo4j_uri=neo4j_config['uri'],
-            neo4j_user=neo4j_config['user'],
-            neo4j_password=neo4j_config['password'],
+        driver = FalkorDriver(
+            host=falkordb_config['host'],
+            port=falkordb_config['port'],
+            database=falkordb_config['database'],
         )
+        graphiti = Graphiti(driver=driver)
 
         # Initialize the graph
         await graphiti.initialize()

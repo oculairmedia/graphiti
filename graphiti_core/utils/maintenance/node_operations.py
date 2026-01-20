@@ -1486,244 +1486,234 @@ async def merge_node_into(
         RETURN COUNT(new_edge) as transferred
         """
 
-        # FalkorDB doesn't support dynamic relationship types, so we need a different approach
-        if driver.provider == 'falkordb':
-            # Get all incoming edges first
-            get_incoming_query = """
-            MATCH (source)-[r]->(duplicate:Entity {uuid: $duplicate_uuid})
-            RETURN source.uuid as source_uuid, type(r) as rel_type, properties(r) as props
+        # Get all incoming edges first
+        get_incoming_query = """
+        MATCH (source)-[r]->(duplicate:Entity {uuid: $duplicate_uuid})
+        RETURN source.uuid as source_uuid, type(r) as rel_type, properties(r) as props
+        """
+        incoming_result, _, _ = await driver.execute_query(
+            get_incoming_query, duplicate_uuid=duplicate_uuid
+        )
+
+        # Transfer each edge individually
+        for edge in incoming_result:
+            source_uuid = edge['source_uuid']
+            rel_type = edge['rel_type']
+            props = dict(edge.get('props') or {})
+            edge_uuid = props.get('uuid') or str(uuid4())
+            props['uuid'] = edge_uuid
+            props['group_id'] = props.get('group_id') or canonical_group_id or duplicate_group_id
+            additional_props = dict(props)
+            additional_props.pop('uuid', None)
+            additional_props.pop('group_id', None)
+
+            # Check if edge already exists
+            check_query = f"""
+            MATCH (source:Entity {{uuid: $source_uuid}})-[r:{rel_type}]->(canonical:Entity {{uuid: $canonical_uuid}})
+            RETURN COUNT(r) as count
             """
-            incoming_result, _, _ = await driver.execute_query(
-                get_incoming_query, duplicate_uuid=duplicate_uuid
+            check_result, _, _ = await driver.execute_query(
+                check_query, source_uuid=source_uuid, canonical_uuid=canonical_uuid
             )
 
-            # Transfer each edge individually
-            for edge in incoming_result:
-                source_uuid = edge['source_uuid']
-                rel_type = edge['rel_type']
-                props = dict(edge.get('props') or {})
-                edge_uuid = props.get('uuid') or str(uuid4())
-                props['uuid'] = edge_uuid
-                props['group_id'] = (
-                    props.get('group_id') or canonical_group_id or duplicate_group_id
-                )
-                additional_props = dict(props)
-                additional_props.pop('uuid', None)
-                additional_props.pop('group_id', None)
-
-                # Check if edge already exists
-
-                check_query = f"""
-                MATCH (source:Entity {{uuid: $source_uuid}})-[r:{rel_type}]->(canonical:Entity {{uuid: $canonical_uuid}})
-                RETURN COUNT(r) as count
+            if check_result[0]['count'] == 0:
+                # Create new edge with uuid and group info set inline
+                create_query = f"""
+                MATCH (source:Entity {{uuid: $source_uuid}})
+                MATCH (canonical:Entity {{uuid: $canonical_uuid}})
+                CREATE (source)-[r:{rel_type} {{uuid: $edge_uuid, group_id: $group_id}}]->(canonical)
+                SET r += $additional_props
+                RETURN r
                 """
-                check_result, _, _ = await driver.execute_query(
-                    check_query, source_uuid=source_uuid, canonical_uuid=canonical_uuid
+                logger.info(
+                    'Creating new incoming edge %s -> %s of type %s with props: %s',
+                    source_uuid,
+                    canonical_uuid,
+                    rel_type,
+                    props,
+                )
+                await driver.execute_query(
+                    create_query,
+                    source_uuid=source_uuid,
+                    canonical_uuid=canonical_uuid,
+                    edge_uuid=edge_uuid,
+                    group_id=props['group_id'],
+                    additional_props=additional_props,
+                )
+                stats['edges_transferred'] += 1
+
+            else:
+                # Merge properties with existing edge
+                get_existing_query = f"""
+                MATCH (source:Entity {{uuid: $source_uuid}})-[r:{rel_type}]->(canonical:Entity {{uuid: $canonical_uuid}})
+                RETURN properties(r) as existing_props
+                """
+                existing_result, _, _ = await driver.execute_query(
+                    get_existing_query, source_uuid=source_uuid, canonical_uuid=canonical_uuid
                 )
 
-                if check_result[0]['count'] == 0:
-                    # Create new edge with uuid and group info set inline
-                    create_query = f"""
-                    MATCH (source:Entity {{uuid: $source_uuid}})
-                    MATCH (canonical:Entity {{uuid: $canonical_uuid}})
-                    CREATE (source)-[r:{rel_type} {{uuid: $edge_uuid, group_id: $group_id}}]->(canonical)
-                    SET r += $additional_props
+                if existing_result:
+                    existing_props = existing_result[0].get('existing_props', {})
+                    merged_props = merge_edge_properties(existing_props, props)
+
+                    # Update the existing edge with merged properties
+                    update_query = f"""
+                    MATCH (source:Entity {{uuid: $source_uuid}})-[r:{rel_type}]->(canonical:Entity {{uuid: $canonical_uuid}})
+                    SET r = $merged_props
                     RETURN r
                     """
                     logger.info(
-                        'Creating new incoming edge %s -> %s of type %s with props: %s',
+                        'Merging properties into existing incoming edge %s -> %s (%s): existing=%s incoming=%s merged=%s',
+                        source_uuid,
+                        canonical_uuid,
+                        rel_type,
+                        existing_props,
+                        props,
+                        merged_props,
+                    )
+                    await driver.execute_query(
+                        update_query,
+                        source_uuid=source_uuid,
+                        canonical_uuid=canonical_uuid,
+                        merged_props=merged_props,
+                    )
+                else:
+                    logger.warning(
+                        'Incoming edge %s -> %s of type %s reported existing but returned no properties; props=%s',
                         source_uuid,
                         canonical_uuid,
                         rel_type,
                         props,
                     )
-                    await driver.execute_query(
-                        create_query,
-                        source_uuid=source_uuid,
-                        canonical_uuid=canonical_uuid,
-                        edge_uuid=edge_uuid,
-                        group_id=props['group_id'],
-                        additional_props=additional_props,
-                    )
-                    stats['edges_transferred'] += 1
 
-                else:
-                    # Merge properties with existing edge
-                    get_existing_query = f"""
-                    MATCH (source:Entity {{uuid: $source_uuid}})-[r:{rel_type}]->(canonical:Entity {{uuid: $canonical_uuid}})
-                    RETURN properties(r) as existing_props
-                    """
-                    existing_result, _, _ = await driver.execute_query(
-                        get_existing_query, source_uuid=source_uuid, canonical_uuid=canonical_uuid
-                    )
+                stats['conflicts_resolved'] += 1
 
-                    if existing_result:
-                        existing_props = existing_result[0].get('existing_props', {})
-                        merged_props = merge_edge_properties(existing_props, props)
-
-                        # Update the existing edge with merged properties
-                        update_query = f"""
-                        MATCH (source:Entity {{uuid: $source_uuid}})-[r:{rel_type}]->(canonical:Entity {{uuid: $canonical_uuid}})
-                        SET r = $merged_props
-                        RETURN r
-                        """
-                        logger.info(
-                            'Merging properties into existing incoming edge %s -> %s (%s): existing=%s incoming=%s merged=%s',
-                            source_uuid,
-                            canonical_uuid,
-                            rel_type,
-                            existing_props,
-                            props,
-                            merged_props,
-                        )
-                        await driver.execute_query(
-                            update_query,
-                            source_uuid=source_uuid,
-                            canonical_uuid=canonical_uuid,
-                            merged_props=merged_props,
-                        )
-                    else:
-                        logger.warning(
-                            'Incoming edge %s -> %s of type %s reported existing but returned no properties; props=%s',
-                            source_uuid,
-                            canonical_uuid,
-                            rel_type,
-                            props,
-                        )
-
-                    stats['conflicts_resolved'] += 1
-
-            # Delete original incoming edges
-
-            delete_incoming_query = """
-            MATCH (source)-[r]->(duplicate:Entity {uuid: $duplicate_uuid})
-            WHERE source.uuid <> $canonical_uuid
-            DELETE r
-            """
-            await driver.execute_query(
-                delete_incoming_query, duplicate_uuid=duplicate_uuid, canonical_uuid=canonical_uuid
-            )
+        # Delete original incoming edges
+        delete_incoming_query = """
+        MATCH (source)-[r]->(duplicate:Entity {uuid: $duplicate_uuid})
+        WHERE source.uuid <> $canonical_uuid
+        DELETE r
+        """
+        await driver.execute_query(
+            delete_incoming_query, duplicate_uuid=duplicate_uuid, canonical_uuid=canonical_uuid
+        )
 
         # Step 2: Transfer all outgoing edges from duplicate to canonical
-        if driver.provider == 'falkordb':
-            # Get all outgoing edges
-            get_outgoing_query = """
-            MATCH (duplicate:Entity {uuid: $duplicate_uuid})-[r]->(target)
-            RETURN target.uuid as target_uuid, type(r) as rel_type, properties(r) as props
+        # Get all outgoing edges
+        get_outgoing_query = """
+        MATCH (duplicate:Entity {uuid: $duplicate_uuid})-[r]->(target)
+        RETURN target.uuid as target_uuid, type(r) as rel_type, properties(r) as props
+        """
+        outgoing_result, _, _ = await driver.execute_query(
+            get_outgoing_query, duplicate_uuid=duplicate_uuid
+        )
+
+        # Transfer each edge
+        for edge in outgoing_result:
+            target_uuid = edge['target_uuid']
+            rel_type = edge['rel_type']
+            props = dict(edge.get('props') or {})
+            edge_uuid = props.get('uuid') or str(uuid4())
+            props['uuid'] = edge_uuid
+            props['group_id'] = props.get('group_id') or canonical_group_id or duplicate_group_id
+            additional_props = dict(props)
+            additional_props.pop('uuid', None)
+            additional_props.pop('group_id', None)
+
+            # Skip self-references to canonical
+            if target_uuid == canonical_uuid:
+                continue
+
+            # Check if edge already exists
+            check_query = f"""
+            MATCH (canonical:Entity {{uuid: $canonical_uuid}})-[r:{rel_type}]->(target:Entity {{uuid: $target_uuid}})
+            RETURN COUNT(r) as count
             """
-            outgoing_result, _, _ = await driver.execute_query(
-                get_outgoing_query, duplicate_uuid=duplicate_uuid
+            check_result, _, _ = await driver.execute_query(
+                check_query, canonical_uuid=canonical_uuid, target_uuid=target_uuid
             )
 
-            # Transfer each edge
-            for edge in outgoing_result:
-                target_uuid = edge['target_uuid']
-                rel_type = edge['rel_type']
-                props = dict(edge.get('props') or {})
-                edge_uuid = props.get('uuid') or str(uuid4())
-                props['uuid'] = edge_uuid
-                props['group_id'] = (
-                    props.get('group_id') or canonical_group_id or duplicate_group_id
-                )
-                additional_props = dict(props)
-                additional_props.pop('uuid', None)
-                additional_props.pop('group_id', None)
-
-                # Skip self-references to canonical
-                if target_uuid == canonical_uuid:
-                    continue
-
-                # Check if edge already exists
-                check_query = f"""
-                MATCH (canonical:Entity {{uuid: $canonical_uuid}})-[r:{rel_type}]->(target:Entity {{uuid: $target_uuid}})
-                RETURN COUNT(r) as count
+            if check_result[0]['count'] == 0:
+                # Create new edge with uuid and group info set inline
+                create_query = f"""
+                MATCH (canonical:Entity {{uuid: $canonical_uuid}})
+                MATCH (target:Entity {{uuid: $target_uuid}})
+                CREATE (canonical)-[r:{rel_type} {{uuid: $edge_uuid, group_id: $group_id}}]->(target)
+                SET r += $additional_props
+                RETURN r
                 """
-                check_result, _, _ = await driver.execute_query(
-                    check_query, canonical_uuid=canonical_uuid, target_uuid=target_uuid
+                logger.info(
+                    'Creating new outgoing edge %s -> %s of type %s with props: %s',
+                    canonical_uuid,
+                    target_uuid,
+                    rel_type,
+                    props,
+                )
+                await driver.execute_query(
+                    create_query,
+                    canonical_uuid=canonical_uuid,
+                    target_uuid=target_uuid,
+                    edge_uuid=edge_uuid,
+                    group_id=props['group_id'],
+                    additional_props=additional_props,
+                )
+                stats['edges_transferred'] += 1
+
+            else:
+                # Merge properties with existing edge
+                get_existing_query = f"""
+                MATCH (canonical:Entity {{uuid: $canonical_uuid}})-[r:{rel_type}]->(target:Entity {{uuid: $target_uuid}})
+                RETURN properties(r) as existing_props
+                """
+                existing_result, _, _ = await driver.execute_query(
+                    get_existing_query, canonical_uuid=canonical_uuid, target_uuid=target_uuid
                 )
 
-                if check_result[0]['count'] == 0:
-                    # Create new edge with uuid and group info set inline
-                    create_query = f"""
-                    MATCH (canonical:Entity {{uuid: $canonical_uuid}})
-                    MATCH (target:Entity {{uuid: $target_uuid}})
-                    CREATE (canonical)-[r:{rel_type} {{uuid: $edge_uuid, group_id: $group_id}}]->(target)
-                    SET r += $additional_props
+                if existing_result:
+                    existing_props = existing_result[0].get('existing_props', {})
+                    merged_props = merge_edge_properties(existing_props, props)
+
+                    # Update the existing edge with merged properties
+                    update_query = f"""
+                    MATCH (canonical:Entity {{uuid: $canonical_uuid}})-[r:{rel_type}]->(target:Entity {{uuid: $target_uuid}})
+                    SET r = $merged_props
                     RETURN r
                     """
                     logger.info(
-                        'Creating new outgoing edge %s -> %s of type %s with props: %s',
+                        'Merging properties into existing outgoing edge %s -> %s (%s): existing=%s incoming=%s merged=%s',
+                        canonical_uuid,
+                        target_uuid,
+                        rel_type,
+                        existing_props,
+                        props,
+                        merged_props,
+                    )
+                    await driver.execute_query(
+                        update_query,
+                        canonical_uuid=canonical_uuid,
+                        target_uuid=target_uuid,
+                        merged_props=merged_props,
+                    )
+                else:
+                    logger.warning(
+                        'Outgoing edge %s -> %s of type %s reported existing but returned no properties; props=%s',
                         canonical_uuid,
                         target_uuid,
                         rel_type,
                         props,
                     )
-                    await driver.execute_query(
-                        create_query,
-                        canonical_uuid=canonical_uuid,
-                        target_uuid=target_uuid,
-                        edge_uuid=edge_uuid,
-                        group_id=props['group_id'],
-                        additional_props=additional_props,
-                    )
-                    stats['edges_transferred'] += 1
 
-                else:
-                    # Merge properties with existing edge
-                    get_existing_query = f"""
-                    MATCH (canonical:Entity {{uuid: $canonical_uuid}})-[r:{rel_type}]->(target:Entity {{uuid: $target_uuid}})
-                    RETURN properties(r) as existing_props
-                    """
-                    existing_result, _, _ = await driver.execute_query(
-                        get_existing_query, canonical_uuid=canonical_uuid, target_uuid=target_uuid
-                    )
+                stats['conflicts_resolved'] += 1
 
-                    if existing_result:
-                        existing_props = existing_result[0].get('existing_props', {})
-                        merged_props = merge_edge_properties(existing_props, props)
-
-                        # Update the existing edge with merged properties
-                        update_query = f"""
-                        MATCH (canonical:Entity {{uuid: $canonical_uuid}})-[r:{rel_type}]->(target:Entity {{uuid: $target_uuid}})
-                        SET r = $merged_props
-                        RETURN r
-                        """
-                        logger.info(
-                            'Merging properties into existing outgoing edge %s -> %s (%s): existing=%s incoming=%s merged=%s',
-                            canonical_uuid,
-                            target_uuid,
-                            rel_type,
-                            existing_props,
-                            props,
-                            merged_props,
-                        )
-                        await driver.execute_query(
-                            update_query,
-                            canonical_uuid=canonical_uuid,
-                            target_uuid=target_uuid,
-                            merged_props=merged_props,
-                        )
-                    else:
-                        logger.warning(
-                            'Outgoing edge %s -> %s of type %s reported existing but returned no properties; props=%s',
-                            canonical_uuid,
-                            target_uuid,
-                            rel_type,
-                            props,
-                        )
-
-                    stats['conflicts_resolved'] += 1
-
-            # Delete original outgoing edges
-
-            delete_outgoing_query = """
-            MATCH (duplicate:Entity {uuid: $duplicate_uuid})-[r]->(target)
-            WHERE target.uuid <> $canonical_uuid
-            DELETE r
-            """
-            await driver.execute_query(
-                delete_outgoing_query, duplicate_uuid=duplicate_uuid, canonical_uuid=canonical_uuid
-            )
+        # Delete original outgoing edges
+        delete_outgoing_query = """
+        MATCH (duplicate:Entity {uuid: $duplicate_uuid})-[r]->(target)
+        WHERE target.uuid <> $canonical_uuid
+        DELETE r
+        """
+        await driver.execute_query(
+            delete_outgoing_query, duplicate_uuid=duplicate_uuid, canonical_uuid=canonical_uuid
+        )
 
         # Step 2.5: Clean up ALL remaining non-audit edges from duplicate
         # This catches any edges between duplicate and canonical that weren't transferred

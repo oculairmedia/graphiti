@@ -9,42 +9,6 @@ services:
   # =============================================================================
   # Core Database Services
   # =============================================================================
-  # =============================================================================
-  # Neo4j - DISABLED (FalkorDB is now primary with RDB persistence)
-  # =============================================================================
-  # To re-enable: remove profiles line and run docker-compose up -d neo4j
-  neo4j:
-    image: neo4j:5.26.2
-    profiles: ["disabled"]  # Disabled - FalkorDB has persistence now
-    restart: unless-stopped
-    ports:
-      - 7474:7474 # HTTP
-      - ${NEO4J_PORT:-7687}:${NEO4J_PORT:-7687} # Bolt
-    volumes:
-      - neo4j_data:/data
-    environment:
-      - NEO4J_AUTH=${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-graphiti123}
-      - NEO4J_server_memory_heap_initial__size=${NEO4J_HEAP_INITIAL_SIZE:-6g}
-      - NEO4J_server_memory_heap_max__size=${NEO4J_HEAP_MAX_SIZE:-6g}
-      - NEO4J_server_memory_pagecache_size=${NEO4J_PAGECACHE_SIZE:-4g}
-      - NEO4J_server_jvm_additional=${NEO4J_JVM_ADDITIONAL:--XX:+ExitOnOutOfMemoryError}
-    mem_limit: 12g
-    networks:
-      - graphiti_network
-    healthcheck:
-      test:
-        - CMD-SHELL
-        - wget -qO- http://localhost:7474 || exit 1
-      interval: 1s
-      timeout: 10s
-      retries: 10
-      start_period: 3s
-    labels:
-      - homepage.group=Knowledge Management
-      - homepage.name=Neo4j
-      - homepage.icon=si-neo4j
-      - homepage.href=http://${HOMEPAGE_HOST:-192.168.50.90}:7474
-      - homepage.description=Primary graph database (persistent storage) - DISABLED
   falkordb:
     image: falkordb/falkordb:latest
     restart: unless-stopped
@@ -215,66 +179,6 @@ services:
       - homepage.href=http://${HOMEPAGE_HOST:-192.168.50.90}:${RUST_SEARCH_PORT:-3004}
       - homepage.description=High-performance graph search
   # =============================================================================
-  # Sync Service - DISABLED (FalkorDB has RDB persistence, no sync needed)
-  # =============================================================================
-  # To re-enable: remove profiles line and run docker-compose up -d graphiti-sync-rs
-  graphiti-sync-rs:
-    image: rust-sync-poc-rust-sync:latest
-    profiles: ["disabled"]  # Disabled - FalkorDB has persistence now
-    restart: unless-stopped
-    command:
-      - sync-loop
-      - falkor-to-neo4j
-    ports:
-      - ${SYNC_HEALTH_PORT:-18080}:8080
-      - ${SYNC_METRICS_PORT:-18081}:8081
-    volumes:
-      - sync_metadata:/data
-    environment:
-      - SYNC_DISASTER_AUTO_RECOVER=true
-      - FORCE_UNSAFE_SYNC=true
-      - SYNC_NEO4J_URI=bolt://neo4j:7687
-      - SYNC_NEO4J_USER=${NEO4J_USER:-neo4j}
-      - SYNC_NEO4J_PASSWORD=${NEO4J_PASSWORD:-graphiti123}
-      - SYNC_NEO4J_DATABASE=neo4j
-      - SYNC_FALKORDB_HOST=falkordb
-      - SYNC_FALKORDB_PORT=6379
-      - SYNC_FALKORDB_DATABASE=${FALKORDB_DATABASE:-graphiti_migration}
-      - SYNC_SYNC_BATCH_SIZE=${SYNC_BATCH_SIZE:-25}
-      - SYNC_PARALLEL_WORKERS=${SYNC_PARALLEL_WORKERS:-8}
-      - SYNC_HEALTH_PORT=8080
-      - SYNC_METRICS_PORT=8081
-      - SYNC_METADATA_DB_PATH=/data/sync_metadata.db
-      - SYNC_USE_METADATA_V2=true
-      - SYNC_MAX_CONSECUTIVE_FAILURES=10
-      - SYNC_CONFLICT_RESOLUTION=last_write_wins
-      - SYNC_TIME_THRESHOLD_MINUTES=60
-      - SYNC_COUNT_THRESHOLD_PERCENT=5.0
-      - SYNC_FALKOR_AUTORESTORE_THRESHOLD=0.80
-      - SYNC_BACKOFF_INITIAL_MS=1000
-      - SYNC_BACKOFF_MAX_MS=300000
-      - RUST_LOG=${RUST_LOG:-info}
-    networks:
-      - graphiti_network
-    depends_on:
-      neo4j:
-        condition: service_healthy
-      falkordb:
-        condition: service_healthy
-    # Healthcheck disabled - service runs without curl/wget in minimal container
-    # Health can be monitored via HTTP endpoint at localhost:18080/health
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-          cpus: "1.0"
-    labels:
-      - homepage.group=Knowledge Management
-      - homepage.name=Neo4j-FalkorDB Sync
-      - homepage.icon=si-rust
-      - homepage.href=http://${HOMEPAGE_HOST:-192.168.50.90}:${SYNC_HEALTH_PORT:-18080}
-      - homepage.description=Real-time Neo4j to FalkorDB synchronization - DISABLED
-  # =============================================================================
   # API and Processing Services
   # =============================================================================
   graph:
@@ -289,16 +193,10 @@ services:
       - ./graphiti_core/search/rust_client.py:/app/graphiti_core/search/rust_client.py:ro
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY:-sk-dummy}
-      - NEO4J_URI=${NEO4J_URI:-bolt://neo4j:7687}
-      - NEO4J_USER=${NEO4J_USER:-neo4j}
-      - NEO4J_PASSWORD=${NEO4J_PASSWORD:-graphiti123}
-      - NEO4J_DATABASE=${NEO4J_DATABASE:-neo4j}
-      - USE_NEO4J=${USE_NEO4J:-true}
       - FALKORDB_HOST=${FALKORDB_HOST:-falkordb}
       - FALKORDB_PORT=${FALKORDB_PORT:-6379}
       - FALKORDB_URI=${FALKORDB_URI:-redis://falkordb:6379}
       - FALKORDB_DATABASE=${FALKORDB_DATABASE:-graphiti_migration}
-      - USE_FALKORDB=${USE_FALKORDB:-false}
       - USE_DETERMINISTIC_UUIDS=${USE_DETERMINISTIC_UUIDS:-true}
       - PORT=8000
       - USE_CEREBRAS=${USE_CEREBRAS:-false}
@@ -390,8 +288,6 @@ services:
       - FALKORDB_PORT=${FALKORDB_PORT:-6379}
       - FALKORDB_URI=${FALKORDB_URI:-redis://falkordb:6379}
       - FALKORDB_DATABASE=${FALKORDB_DATABASE:-graphiti_migration}
-      - USE_FALKORDB=${USE_FALKORDB:-true}
-      - NEO4J_DATABASE=${NEO4J_DATABASE:-neo4j}
       - USE_CEREBRAS=${USE_CEREBRAS:-true}
       - CEREBRAS_API_KEY=${CEREBRAS_API_KEY}
       - CEREBRAS_MODEL=${CEREBRAS_MODEL:-qwen-3-coder-480b}
@@ -430,62 +326,9 @@ services:
       - homepage.href=http://${HOMEPAGE_HOST:-192.168.50.90}:${MCP_PORT:-3010}
       - homepage.description=Model Context Protocol server
   # =============================================================================
-  # Sync Service (FalkorDB -> Neo4j) - Rust Implementation - DISABLED
-  # =============================================================================
-  # DISABLED: Sync service not needed - Neo4j is primary source of truth
-  #
-  # sync-service:
-  #   image: graphiti-sync-rs:latest
-  #   restart: unless-stopped
-  #   ports:
-  #     - ${SYNC_HEALTH_PORT:-8082}:8080
-  #     - ${SYNC_METRICS_PORT:-8083}:8081
-  #   environment:
-  #     # Neo4j configuration
-  #     - SYNC_NEO4J_URI=${NEO4J_URI:-bolt://neo4j:7687}
-  #     - SYNC_NEO4J_USER=${NEO4J_USER:-neo4j}
-  #     - SYNC_NEO4J_PASSWORD=${NEO4J_PASSWORD:-graphiti123}
-  #     - SYNC_NEO4J_DATABASE=${NEO4J_DATABASE:-neo4j}
-  #     # FalkorDB configuration
-  #     - SYNC_FALKORDB_HOST=${FALKORDB_HOST:-falkordb}
-  #     - SYNC_FALKORDB_PORT=${FALKORDB_PORT:-6379}
-  #     - SYNC_FALKORDB_DATABASE=${FALKORDB_DATABASE:-graphiti_migration}
-  #     # Sync configuration
-  #     - SYNC_SYNC_INTERVAL_SECONDS=${SYNC_INTERVAL_SECONDS:-180}
-  #     - SYNC_SYNC_BATCH_SIZE=${SYNC_BATCH_SIZE:-500}
-  #     - SYNC_SYNC_PARALLEL_WORKERS=${SYNC_PARALLEL_WORKERS:-}
-  #     # Disaster recovery
-  #     - SYNC_DISASTER_AUTO_RECOVER=${SYNC_AUTO_RECOVERY:-true}
-  #     # Health and metrics
-  #     - SYNC_HEALTH_PORT=8080
-  #     - SYNC_METRICS_PORT=8081
-  #     # Logging
-  #     - LOG_LEVEL=${SYNC_LOG_LEVEL:-INFO}
-  #     - RUST_LOG=${RUST_LOG:-info}
-  #   networks:
-  #     - graphiti_network
-  #   depends_on:
-  #     neo4j:
-  #       condition: service_healthy
-  #     falkordb:
-  #       condition: service_healthy
-  #   deploy:
-  #     resources:
-  #       limits:
-  #         memory: 512M
-  #         cpus: "2.0"
-  #   command: ["sync-loop", "falkor-to-neo4j"]
-  #   labels:
-  #     - homepage.group=Knowledge Management
-  #     - homepage.name=Sync Service (Rust)
-  #     - homepage.icon=si-rust
-  #     - homepage.href=http://${HOMEPAGE_HOST:-192.168.50.90}:${SYNC_HEALTH_PORT:-8082}
-  #     - homepage.description=High-performance FalkorDB to Neo4j sync (Rust)
-  # =============================================================================
   # Cold Boot Initialization Service
   # =============================================================================
-  # Simplified: Just waits for FalkorDB to be healthy (RDB reload ~2min)
-  # No longer needs Neo4j or sync service
+  # Waits for FalkorDB to be healthy (RDB reload ~2min)
   graphiti-init:
     image: alpine:latest
     container_name: graphiti-init
@@ -588,15 +431,9 @@ services:
       - dspy_training_data:/data/training_data
     environment:
       - QUEUE_URL=http://graphiti-queued:8080
-      - NEO4J_URI=${NEO4J_URI:-bolt://neo4j:7687}
-      - NEO4J_USER=${NEO4J_USER:-neo4j}
-      - NEO4J_PASSWORD=${NEO4J_PASSWORD:-graphiti123}
-      - NEO4J_DATABASE=${NEO4J_DATABASE:-neo4j}
-      - USE_NEO4J=${USE_NEO4J:-true}
       - FALKORDB_HOST=${FALKORDB_HOST:-falkordb}
       - FALKORDB_PORT=${FALKORDB_PORT:-6379}
       - FALKORDB_DATABASE=${FALKORDB_DATABASE:-graphiti_migration}
-      - USE_FALKORDB=${USE_FALKORDB:-false}
       - USE_DETERMINISTIC_UUIDS=${USE_DETERMINISTIC_UUIDS:-true}
       # Deduplication tuning
       - DEDUP_NORMALIZE_NAMES=${DEDUP_NORMALIZE_NAMES:-true}
@@ -1283,10 +1120,6 @@ services:
 # Shared Volumes
 # =============================================================================
 volumes:
-  neo4j_data:
-    driver: local
-    labels:
-      - description=Neo4j persistent data
   falkordb_data:
     driver: local
     labels:

@@ -237,31 +237,32 @@ def populated_driver_with_relationships(populated_driver, test_group_id):
 
 
 @pytest.fixture
-def neo4j_config():
+def falkordb_config():
     """
-    Provide Neo4j connection configuration for integration tests.
+    Provide FalkorDB connection configuration for integration tests.
 
     Uses environment variables or defaults suitable for local development.
     Integration tests using this fixture should be marked with @pytest.mark.integration.
 
     Environment variables:
-        - NEO4J_URI: Neo4j connection URI (default: bolt://localhost:7687)
-        - NEO4J_USER: Neo4j username (default: neo4j)
-        - NEO4J_PASSWORD: Neo4j password (default: graphiti123)
+        - FALKORDB_HOST: FalkorDB host (default: localhost)
+        - FALKORDB_PORT: FalkorDB port (default: 6379)
+        - FALKORDB_DATABASE: FalkorDB database name (default: graphiti_test)
 
     Usage:
         @pytest.mark.integration
-        async def test_with_neo4j(neo4j_config):
-            graphiti = Graphiti(
-                neo4j_uri=neo4j_config['uri'],
-                neo4j_user=neo4j_config['user'],
-                neo4j_password=neo4j_config['password'],
+        async def test_with_falkordb(falkordb_config):
+            driver = FalkorDriver(
+                host=falkordb_config['host'],
+                port=falkordb_config['port'],
+                database=falkordb_config['database'],
             )
+            graphiti = Graphiti(driver=driver)
     """
     return {
-        'uri': os.environ.get('NEO4J_URI', 'bolt://localhost:7687'),
-        'user': os.environ.get('NEO4J_USER', 'neo4j'),
-        'password': os.environ.get('NEO4J_PASSWORD', 'graphiti123'),
+        'host': os.environ.get('FALKORDB_HOST', 'localhost'),
+        'port': int(os.environ.get('FALKORDB_PORT', '6379')),
+        'database': os.environ.get('FALKORDB_DATABASE', 'graphiti_test'),
     }
 
 

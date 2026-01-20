@@ -32,35 +32,16 @@ logger = logging.getLogger(__name__)
 
 async def build_indices_and_constraints(driver: GraphDriver, delete_existing: bool = False):
     if delete_existing:
-        if driver.provider == 'falkordb':
-            # FalkorDB uses different syntax for showing/dropping indexes
-            await driver.delete_all_indexes()
-        else:
-            # Neo4j syntax
-            records, _, _ = await driver.execute_query(
-                """
-            SHOW INDEXES YIELD name
-            """,
-            )
-            index_names = [record['name'] for record in records]
-            await semaphore_gather(
-                *[
-                    driver.execute_query(
-                        """DROP INDEX $name""",
-                        name=name,
-                    )
-                    for name in index_names
-                ]
-            )
-    range_indices: list[LiteralString] = get_range_indices(driver.provider)
+        await driver.delete_all_indexes()
 
-    fulltext_indices: list[LiteralString] = get_fulltext_indices(driver.provider)
-    
-    constraint_queries: list[LiteralString] = get_all_constraints(driver.provider)
+    range_indices: list[LiteralString] = get_range_indices()
+
+    fulltext_indices: list[LiteralString] = get_fulltext_indices()
+
+    constraint_queries: list[LiteralString] = get_all_constraints()
 
     all_queries: list[LiteralString] = range_indices + fulltext_indices
 
-    # Execute indices and fulltext queries first
     await semaphore_gather(
         *[
             driver.execute_query(
@@ -69,36 +50,19 @@ async def build_indices_and_constraints(driver: GraphDriver, delete_existing: bo
             for query in all_queries
         ]
     )
-    
-    # For FalkorDB, constraints need special handling with graph key substitution
-    if driver.provider == 'falkordb' and constraint_queries:
-        # Get the graph database name for constraint commands
+
+    if constraint_queries:
         graph_key = getattr(driver, '_database', 'default_db')
-        
+
         for query in constraint_queries:
             try:
                 if '{graph_key}' in query:
-                    # Replace placeholder with actual graph key for FalkorDB commands
                     command = query.format(graph_key=graph_key)
-                    # Execute the GRAPH.CONSTRAINT command directly
                     await driver.client.execute_command(*command.split())
                 else:
-                    # Fallback to regular query execution
                     await driver.execute_query(query)
             except Exception as e:
-                # Log constraint creation failures but don't stop the process
-                # Some constraints may already exist, which is expected
-                logger.info(f"Constraint creation result: {e}")
-    elif constraint_queries:
-        # For Neo4j, execute constraints normally
-        await semaphore_gather(
-            *[
-                driver.execute_query(
-                    query,
-                )
-                for query in constraint_queries
-            ]
-        )
+                logger.info(f'Constraint creation result: {e}')
 
 
 async def clear_data(driver: GraphDriver, group_ids: list[str] | None = None):

@@ -2,7 +2,7 @@
 
 This example demonstrates the basic functionality of Graphiti, including:
 
-1. Connecting to a Neo4j or FalkorDB database
+1. Connecting to a FalkorDB database
 2. Initializing Graphiti indices and constraints
 3. Adding episodes to the graph
 4. Searching the graph with semantic and keyword matching
@@ -13,11 +13,7 @@ This example demonstrates the basic functionality of Graphiti, including:
 
 - Python 3.9+  
 - OpenAI API key (set as `OPENAI_API_KEY` environment variable)  
-- **For Neo4j**:
-  - Neo4j Desktop installed and running  
-  - A local DBMS created and started in Neo4j Desktop  
-- **For FalkorDB**:
-  - FalkorDB server running (see [FalkorDB documentation](https://falkordb.com/docs/) for setup)
+- FalkorDB server running (see [FalkorDB documentation](https://falkordb.com/docs/) for setup)
 
 
 ## Setup Instructions
@@ -34,13 +30,9 @@ pip install graphiti-core
 # Required for LLM and embedding
 export OPENAI_API_KEY=your_openai_api_key
 
-# Optional Neo4j connection parameters (defaults shown)
-export NEO4J_URI=bolt://localhost:7687
-export NEO4J_USER=neo4j
-export NEO4J_PASSWORD=password
-
 # Optional FalkorDB connection parameters (defaults shown)
-export FALKORDB_URI=falkor://localhost:6379
+export FALKORDB_HOST=localhost
+export FALKORDB_PORT=6379
 
 # To use a different database, modify the driver constructor in the script
 ```
@@ -48,15 +40,12 @@ export FALKORDB_URI=falkor://localhost:6379
 3. Run the example:
 
 ```bash
-python quickstart_neo4j.py
-
-# For FalkorDB
 python quickstart_falkordb.py
 ```
 
 ## What This Example Demonstrates
 
-- **Graph Initialization**: Setting up the Graphiti indices and constraints in Neo4j or FalkorDB
+- **Graph Initialization**: Setting up the Graphiti indices and constraints in FalkorDB
 - **Adding Episodes**: Adding text content that will be analyzed and converted into knowledge graph nodes and edges
 - **Edge Search Functionality**: Performing hybrid searches that combine semantic similarity and BM25 retrieval to find relationships (edges)
 - **Graph-Aware Search**: Using the source node UUID from the top search result to rerank additional search results based on graph distance
@@ -75,19 +64,13 @@ After running this example, you can:
 
 ## Troubleshooting
 
-### "Graph not found: default_db" Error
+### Connection Issues
 
-If you encounter the error `Neo.ClientError.Database.DatabaseNotFound: Graph not found: default_db`, this occurs when the driver is trying to connect to a database that doesn't exist.
-
-**Solution:**
-The Neo4j driver defaults to using `neo4j` as the database name. If you need to use a different database, modify the driver constructor in the script:
+If you encounter connection errors, ensure FalkorDB is running and accessible at the configured host and port.
 
 ```python
-# In quickstart_neo4j.py, change:
-driver = Neo4jDriver(uri=neo4j_uri, user=neo4j_user, password=neo4j_password)
-
-# To specify a different database:
-driver = Neo4jDriver(uri=neo4j_uri, user=neo4j_user, password=neo4j_password, database="your_db_name")
+# To specify a different database name:
+driver = FalkorDriver(host="localhost", port=6379, database="my_custom_graph")
 ```
 
 ## Understanding the Output

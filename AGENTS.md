@@ -134,11 +134,7 @@ docker system prune -a --volumes
 - Runtime `maxmemory` is 8GB (reload can temporarily use more)
 - Check data status: `redis-cli -h localhost -p 6379 GRAPH.QUERY graphiti_migration "MATCH ()-[r]->() RETURN count(r)" --csv`
 - **Current size (Jan 2026)**: ~66K nodes, ~224K edges
-- Historical note: Started with 48K nodes, 121K edges (Dec 2025 from original Neo4j migration)
-
-### Deprecated Services (No Longer Used)
-- **Neo4j** - Was previously source of truth, now deprecated
-- **graphiti-sync-rs** - Was Neo4j → FalkorDB sync service, no longer needed
+- Historical note: Started with 48K nodes, 121K edges (Dec 2025)
 
 ## Service Architecture (Simplified Jan 2026)
 

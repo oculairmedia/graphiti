@@ -22,27 +22,14 @@ import pytest
 import pytest_asyncio
 
 from graphiti_core.driver.falkordb_driver import FalkorDriver
-from graphiti_core.driver.neo4j_driver import Neo4jDriver
 from graphiti_core.nodes import EntityNode
 from graphiti_core.utils.datetime_utils import utc_now
 from graphiti_core.utils.bulk_utils import add_nodes_and_edges_bulk
 from graphiti_core.embedder import EmbedderClient
 
 # Test configuration
-NEO4J_URI = os.getenv('NEO4J_URI', 'bolt://localhost:7687')
-NEO4J_USER = os.getenv('NEO4J_USER', 'neo4j')
-NEO4J_PASSWORD = os.getenv('NEO4J_PASSWORD', 'password')
-
 FALKORDB_HOST = os.getenv('FALKORDB_HOST', 'localhost')
 FALKORDB_PORT = int(os.getenv('FALKORDB_PORT', 6379))
-
-
-@pytest_asyncio.fixture
-async def neo4j_driver():
-    """Create a Neo4j driver for testing."""
-    driver = Neo4jDriver(uri=NEO4J_URI, user=NEO4J_USER, password=NEO4J_PASSWORD)
-    yield driver
-    await driver.close()
 
 
 @pytest_asyncio.fixture
@@ -56,13 +43,7 @@ async def falkordb_driver():
 @pytest_asyncio.fixture
 async def clean_graph(request):
     """Clean the test graph before each test."""
-    # Get the appropriate driver based on the test parameter
-    if request.param == 'falkordb_driver':
-        driver = FalkorDriver(
-            host=FALKORDB_HOST, port=FALKORDB_PORT, database='test_race_condition_db'
-        )
-    else:
-        driver = Neo4jDriver(uri=NEO4J_URI, user=NEO4J_USER, password=NEO4J_PASSWORD)
+    driver = FalkorDriver(host=FALKORDB_HOST, port=FALKORDB_PORT, database='test_race_condition_db')
 
     await driver.execute_query('MATCH (n) DETACH DELETE n')
     yield driver

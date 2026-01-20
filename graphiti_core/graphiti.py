@@ -28,7 +28,6 @@ from graphiti_core.client_factory import GraphitiClientFactory
 from graphiti_core.cross_encoder.client import CrossEncoderClient
 from graphiti_core.cross_encoder.openai_reranker_client import OpenAIRerankerClient
 from graphiti_core.driver.driver import GraphDriver
-from graphiti_core.driver.neo4j_driver import Neo4jDriver
 from graphiti_core.edges import EntityEdge, EpisodicEdge
 from graphiti_core.embedder import EmbedderClient, OpenAIEmbedder
 from graphiti_core.events import ChangeEventPublisher, set_event_publisher
@@ -126,9 +125,7 @@ class AddEpisodeResults(BaseModel):
 class Graphiti:
     def __init__(
         self,
-        uri: str | None = None,
-        user: str | None = None,
-        password: str | None = None,
+        driver: GraphDriver | None = None,
         llm_client: LLMClient | None = None,
         embedder: EmbedderClient | None = None,
         cross_encoder: CrossEncoderClient | None = None,
@@ -141,17 +138,11 @@ class Graphiti:
         """
         Initialize a Graphiti instance.
 
-        This constructor sets up a connection to the Neo4j database and initializes
-        the LLM client for natural language processing tasks.
-
         Parameters
         ----------
-        uri : str
-            The URI of the Neo4j database.
-        user : str
-            The username for authenticating with the Neo4j database.
-        password : str
-            The password for authenticating with the Neo4j database.
+        driver : GraphDriver
+            An instance of GraphDriver for database operations (e.g., FalkorDriver).
+            Either driver or graph_driver must be provided.
         llm_client : LLMClient | None, optional
             An instance of LLMClient for natural language processing tasks.
             If not provided, a default OpenAIClient will be initialized.
@@ -164,8 +155,7 @@ class Graphiti:
         store_raw_episode_content : bool, optional
             Whether to store the raw content of episodes. Defaults to True.
         graph_driver : GraphDriver | None, optional
-            An instance of GraphDriver for database operations.
-            If not provided, a default Neo4jDriver will be initialized.
+            Alias for driver parameter (deprecated, use driver instead).
         max_coroutines : int | None, optional
             The maximum number of concurrent operations allowed. Overrides SEMAPHORE_LIMIT set in the environment.
             If not set, the Graphiti default is used.
@@ -173,6 +163,8 @@ class Graphiti:
             Enable deduplication of entities across different group_ids.
             If True, entities with the same name in different groups can be merged.
             Default is False to maintain backward compatibility.
+        use_dspy : bool, optional
+            Whether to use DSPy for LLM extraction. Defaults to False.
 
         Returns
         -------
@@ -180,25 +172,16 @@ class Graphiti:
 
         Notes
         -----
-        This method establishes a connection to the Neo4j database using the provided
-        credentials. It also sets up the LLM client, either using the provided client
-        or by creating a default OpenAIClient.
-
-        The default database name is set to 'neo4j'. If a different database name
-        is required, it should be specified in the URI or set separately after
-        initialization.
-
+        FalkorDB is the only supported database backend.
         The OpenAI API key is expected to be set in the environment variables.
         Make sure to set the OPENAI_API_KEY environment variable before initializing
         Graphiti if you're using the default OpenAIClient.
         """
 
-        if graph_driver:
-            self.driver = graph_driver
-        else:
-            if uri is None:
-                raise ValueError('uri must be provided when graph_driver is None')
-            self.driver = Neo4jDriver(uri, user, password)
+        resolved_driver = driver or graph_driver
+        if resolved_driver is None:
+            raise ValueError('driver is required. Use FalkorDriver to create a driver instance.')
+        self.driver = resolved_driver
 
         self.store_raw_episode_content = store_raw_episode_content
         self.max_coroutines = max_coroutines
@@ -236,21 +219,13 @@ class Graphiti:
         self._capture_initialization_telemetry()
 
     def _init_event_publisher(self):
-        """
-        Initialize the event publisher for real-time change sync (GRAPH-106).
-
-        For FalkorDB, we can reuse the existing Redis connection.
-        For Neo4j, we need a separate Redis client (if configured).
-        """
+        """Initialize the event publisher for real-time change sync (GRAPH-106)."""
         redis_client = None
 
-        # Check if FalkorDB driver (which has a Redis client we can use)
         if hasattr(self.driver, 'client') and hasattr(self.driver.client, 'connection'):
-            # FalkorDB driver - use its Redis connection
             redis_client = self.driver.client.connection
             logger.info('Event publisher: using FalkorDB Redis connection')
         else:
-            # Neo4j or other driver - check for REDIS_URL environment variable
             redis_url = os.getenv('GRAPHITI_REDIS_URL')
             if redis_url:
                 try:
@@ -263,9 +238,7 @@ class Graphiti:
                 except Exception as e:
                     logger.warning(f'Event publisher: failed to connect to Redis: {e}')
             else:
-                logger.info(
-                    'Event publisher: no Redis connection available (set GRAPHITI_REDIS_URL for Neo4j)'
-                )
+                logger.info('Event publisher: no Redis connection available')
 
         # Create and set the publisher
         self.event_publisher = ChangeEventPublisher(redis_client)
@@ -324,70 +297,11 @@ class Graphiti:
             return 'unknown'
 
     async def close(self):
-        """
-        Close the connection to the Neo4j database.
-
-        This method safely closes the driver connection to the Neo4j database.
-        It should be called when the Graphiti instance is no longer needed or
-        when the application is shutting down.
-
-        Parameters
-        ----------
-        self
-
-        Returns
-        -------
-        None
-
-        Notes
-        -----
-        It's important to close the driver connection to release system resources
-        and ensure that all pending transactions are completed or rolled back.
-        This method should be called as part of a cleanup process, potentially
-        in a context manager or a shutdown hook.
-
-        Example:
-            graphiti = Graphiti(uri, user, password)
-            try:
-                # Use graphiti...
-            finally:
-                graphiti.close()
-        """
+        """Close the connection to the graph database."""
         await self.driver.close()
 
     async def build_indices_and_constraints(self, delete_existing: bool = False):
-        """
-        Build indices and constraints in the Neo4j database.
-
-        This method sets up the necessary indices and constraints in the Neo4j database
-        to optimize query performance and ensure data integrity for the knowledge graph.
-
-        Parameters
-        ----------
-        self
-        delete_existing : bool, optional
-            Whether to clear existing indices before creating new ones.
-
-
-        Returns
-        -------
-        None
-
-        Notes
-        -----
-        This method should typically be called once during the initial setup of the
-        knowledge graph or when updating the database schema. It uses the
-        `build_indices_and_constraints` function from the
-        `graphiti_core.utils.maintenance.graph_data_operations` module to perform
-        the actual database operations.
-
-        The specific indices and constraints created depend on the implementation
-        of the `build_indices_and_constraints` function. Refer to that function's
-        documentation for details on the exact database schema modifications.
-
-        Caution: Running this method on a large existing database may take some time
-        and could impact database performance during execution.
-        """
+        """Build indices and constraints in the graph database."""
         await build_indices_and_constraints(self.driver, delete_existing)
 
     async def retrieve_episodes(

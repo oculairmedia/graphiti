@@ -24,7 +24,6 @@ import pytest_asyncio
 pytestmark = pytest.mark.integration
 
 from graphiti_core.driver.falkordb_driver import FalkorDriver
-from graphiti_core.driver.neo4j_driver import Neo4jDriver
 from graphiti_core.edges import EntityEdge
 from graphiti_core.nodes import EntityNode, EpisodicNode
 from graphiti_core.utils.datetime_utils import utc_now
@@ -35,20 +34,8 @@ from graphiti_core.utils.maintenance.edge_operations import (
 from graphiti_core.utils.maintenance.node_operations import merge_node_into
 
 # Test configuration
-NEO4J_URI = os.getenv('NEO4J_URI', 'bolt://localhost:7687')
-NEO4J_USER = os.getenv('NEO4J_USER', 'neo4j')
-NEO4J_PASSWORD = os.getenv('NEO4J_PASSWORD', 'password')
-
 FALKORDB_HOST = os.getenv('FALKORDB_HOST', 'localhost')
 FALKORDB_PORT = int(os.getenv('FALKORDB_PORT', 6389))
-
-
-@pytest_asyncio.fixture
-async def neo4j_driver():
-    """Create a Neo4j driver for testing."""
-    driver = Neo4jDriver(uri=NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
-    yield driver
-    await driver.close()
 
 
 @pytest_asyncio.fixture

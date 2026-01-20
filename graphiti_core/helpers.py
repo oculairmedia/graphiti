@@ -23,7 +23,6 @@ from typing import Any
 
 import numpy as np
 from dotenv import load_dotenv
-from neo4j import time as neo4j_time
 from numpy._typing import NDArray
 from pydantic import BaseModel
 from typing_extensions import LiteralString
@@ -40,17 +39,19 @@ DEFAULT_PAGE_LIMIT = 20
 RUNTIME_QUERY: LiteralString = ''
 
 
-def parse_db_date(neo_date: neo4j_time.DateTime | str | None) -> datetime | None:
-    if neo_date is None:
+def parse_db_date(db_date: datetime | str | None) -> datetime | None:
+    if db_date is None:
         return None
 
-    if isinstance(neo_date, neo4j_time.DateTime):
-        return neo_date.to_native()
+    if isinstance(db_date, datetime):
+        if db_date.tzinfo is None:
+            from datetime import timezone
 
-    if isinstance(neo_date, str):
-        # Parse the ISO format string
-        parsed_dt = datetime.fromisoformat(neo_date)
-        # Ensure it has timezone information (assume UTC if naive)
+            return db_date.replace(tzinfo=timezone.utc)
+        return db_date
+
+    if isinstance(db_date, str):
+        parsed_dt = datetime.fromisoformat(db_date)
         if parsed_dt.tzinfo is None:
             from datetime import timezone
 
@@ -60,15 +61,12 @@ def parse_db_date(neo_date: neo4j_time.DateTime | str | None) -> datetime | None
     return None
 
 
-def get_default_group_id(db_type: str) -> str:
+def get_default_group_id(db_type: str = 'falkordb') -> str:
     """
-    This function differentiates the default group id based on the database type.
-    For most databases, the default group id is an empty string, while there are database types that require a specific default group id.
+    Return the default group id for FalkorDB.
+    FalkorDB requires a non-empty group_id.
     """
-    if db_type == 'falkordb':
-        return '_'
-    else:
-        return ''
+    return '_'
 
 
 def lucene_sanitize(query: str) -> str:

@@ -65,7 +65,7 @@ LEGACY_VECTORF32_ERROR = 'Type mismatch: expected Null or Vectorf32 but was List
 
 def is_legacy_embedding_error(driver: GraphDriver, error: Exception) -> bool:
     """Check if error is due to legacy List embeddings in FalkorDB that need backfill."""
-    return driver.provider == 'falkordb' and LEGACY_VECTORF32_ERROR in str(error)
+    return LEGACY_VECTORF32_ERROR in str(error)
 
 
 def _clean_fulltext_tokens(query: str) -> str:
@@ -188,7 +188,7 @@ async def edge_fulltext_search(
     filter_query, filter_params = edge_search_filter_query_constructor(search_filter)
 
     query = (
-        get_relationships_query('edge_name_and_fact', db_type=driver.provider)
+        get_relationships_query('edge_name_and_fact')
         + """
         YIELD relationship AS rel, score
         MATCH (n:Entity)-[r:RELATES_TO]->(m:Entity)
@@ -265,7 +265,7 @@ async def edge_similarity_search(
         + filter_query
         + """
         WITH DISTINCT r, """
-        + get_vector_cosine_func_query('r.fact_embedding', '$search_vector', driver.provider)
+        + get_vector_cosine_func_query('r.fact_embedding', '$search_vector')
         + """ AS score
         WHERE score > $min_score
         RETURN
@@ -378,31 +378,16 @@ async def node_fulltext_search(
         return []
     filter_query, filter_params = node_search_filter_query_constructor(search_filter)
 
-    base_query = get_nodes_query(driver.provider, 'node_name_and_summary', '$query')
+    base_query = get_nodes_query('node_name_and_summary', '$query')
 
-    if driver.provider == 'falkordb':
-        # FalkorDB requires YIELD to be part of the CALL statement
-        yield_clause = ' YIELD node AS n, score'
-        query = (
-            base_query
-            + yield_clause
-            + """
-            WITH n, score
-            LIMIT $limit
-            WHERE n:Entity AND n.group_id IN $group_ids
-        """
-        )
-    else:
-        # Neo4j adds YIELD separately
-        query = (
-            base_query
-            + """
-        YIELD node AS n, score
-            WITH n, score
-            LIMIT $limit
-            WHERE n:Entity AND n.group_id IN $group_ids
-        """
-        )
+    query = (
+        base_query
+        + """ YIELD node AS n, score
+        WITH n, score
+        LIMIT $limit
+        WHERE n:Entity AND n.group_id IN $group_ids
+    """
+    )
 
     query = (
         query
@@ -454,7 +439,7 @@ async def node_similarity_search(
         + filter_query
         + """
         WITH n, """
-        + get_vector_cosine_func_query('n.name_embedding', '$search_vector', driver.provider)
+        + get_vector_cosine_func_query('n.name_embedding', '$search_vector')
         + """ AS score
         WHERE score > $min_score"""
         + ENTITY_NODE_RETURN
@@ -539,7 +524,7 @@ async def episode_fulltext_search(
         return []
 
     query = (
-        get_nodes_query(driver.provider, 'episode_content', '$query')
+        get_nodes_query('episode_content', '$query')
         + """
         YIELD node AS episode, score
         MATCH (e:Episodic)
@@ -583,7 +568,7 @@ async def community_fulltext_search(
         return []
 
     query = (
-        get_nodes_query(driver.provider, 'community_name', '$query')
+        get_nodes_query('community_name', '$query')
         + """
         YIELD node AS comm, score
         RETURN
@@ -633,7 +618,7 @@ async def community_similarity_search(
         + group_filter_query
         + """
            WITH comm, """
-        + get_vector_cosine_func_query('comm.name_embedding', '$search_vector', driver.provider)
+        + get_vector_cosine_func_query('comm.name_embedding', '$search_vector')
         + """ AS score
            WHERE score > $min_score
            RETURN
@@ -771,12 +756,12 @@ async def get_relevant_nodes(
         + filter_query
         + """
         WITH node, n, """
-        + get_vector_cosine_func_query('n.name_embedding', 'node.name_embedding', driver.provider)
+        + get_vector_cosine_func_query('n.name_embedding', 'node.name_embedding')
         + """ AS score
         WHERE score > $min_score
         WITH node, collect(n)[..$limit] AS top_vector_nodes, collect(n.uuid) AS vector_node_uuids
         """
-        + get_nodes_query(driver.provider, 'node_name_and_summary', 'node.fulltext_query')
+        + get_nodes_query('node_name_and_summary', 'node.fulltext_query')
         + """
         YIELD node AS m
         WHERE m.group_id = $group_id
@@ -862,7 +847,7 @@ async def get_relevant_edges(
         + filter_query
         + """
         WITH e, edge, """
-        + get_vector_cosine_func_query('e.fact_embedding', 'edge.fact_embedding', driver.provider)
+        + get_vector_cosine_func_query('e.fact_embedding', 'edge.fact_embedding')
         + """ AS score
         WHERE score > $min_score
         WITH edge, e, score
@@ -965,7 +950,7 @@ async def get_edge_invalidation_candidates_single(
     filter_query, filter_params = edge_search_filter_query_constructor(search_filter)
     query_params.update(filter_params)
 
-    cosine_func = get_vector_cosine_func_query('e.fact_embedding', '$embedding', driver.provider)
+    cosine_func = get_vector_cosine_func_query('e.fact_embedding', '$embedding')
 
     query = (
         RUNTIME_QUERY
@@ -1071,8 +1056,7 @@ async def node_distance_reranker(
         center_uuid=center_node_uuid,
         routing_='r',
     )
-    if driver.provider == 'falkordb':
-        results = [dict(zip(header, row, strict=True)) for row in results]
+    results = [dict(zip(header, row, strict=True)) for row in results]
 
     for result in results:
         uuid = result['uuid']

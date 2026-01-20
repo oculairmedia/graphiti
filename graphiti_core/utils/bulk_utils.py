@@ -234,7 +234,7 @@ async def add_nodes_and_edges_bulk_tx(
             logger.info(f'  {key}: {value} (type: {type(value)})')
 
     await tx.run(EPISODIC_NODE_SAVE_BULK, episodes=episodes)
-    entity_node_save_bulk = get_entity_node_save_bulk_query(nodes, driver.provider)
+    entity_node_save_queries = get_entity_node_save_bulk_query(nodes)
     if nodes:
         sample_nodes = nodes[:3]
         logger.info(
@@ -246,7 +246,9 @@ async def add_nodes_and_edges_bulk_tx(
     # Try to save entity nodes, but handle constraint violations gracefully
     # This prevents orphaned episodic nodes when race conditions occur
     try:
-        await tx.run(entity_node_save_bulk, nodes=nodes)
+        # FalkorDB requires executing each node/label combination separately
+        for query, params in entity_node_save_queries:
+            await tx.run(query, **params)
     except Exception as e:
         error_msg = str(e).lower()
         if 'unique constraint violation' in error_msg or 'constraint violation' in error_msg:
@@ -318,7 +320,7 @@ async def add_nodes_and_edges_bulk_tx(
                         existing_target=ex_tgt,
                     )
 
-    entity_edge_save_bulk = get_entity_edge_save_bulk_query(driver.provider)
+    entity_edge_save_bulk = get_entity_edge_save_bulk_query()
     await tx.run(entity_edge_save_bulk, entity_edges=edges)
 
     # Publish change events for real-time sync (GRAPH-106)
