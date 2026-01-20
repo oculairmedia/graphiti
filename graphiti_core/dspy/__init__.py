@@ -31,13 +31,22 @@ from graphiti_core.dspy.comparison import (
     ComparisonMetrics,
 )
 from graphiti_core.dspy.optimization import (
-    TrainingDataCollector,
+    TrainingDataCollector,  # Deprecated: use training_storage instead
     TrainingDataset,
     DSPyOptimizer,
     entity_extraction_metric,
     edge_extraction_metric,
     node_resolution_metric,
     summary_metric,
+)
+from graphiti_core.dspy.training_storage import (
+    TrainingDataStorage,
+    StoredTrainingExample,
+    record_training_example,
+    get_training_examples,
+    sample_training_examples,
+    get_training_stats,
+    split_train_val,
 )
 from graphiti_core.dspy.response_logger import (
     ResponseLogger,
@@ -86,13 +95,21 @@ __all__ = [
     'ComparisonResult',
     'ComparisonMetrics',
     # Optimization
-    'TrainingDataCollector',
+    'TrainingDataCollector',  # Deprecated
     'TrainingDataset',
     'DSPyOptimizer',
     'entity_extraction_metric',
     'edge_extraction_metric',
     'node_resolution_metric',
     'summary_metric',
+    # Training Storage (FalkorDB-backed, replaces TrainingDataCollector)
+    'TrainingDataStorage',
+    'StoredTrainingExample',
+    'record_training_example',
+    'get_training_examples',
+    'sample_training_examples',
+    'get_training_stats',
+    'split_train_val',
     # Response Logging
     'ResponseLogger',
     'ResponseLoggerConfig',

@@ -441,7 +441,6 @@ services:
       - ./graphiti_core/search:/app/graphiti_core/search:ro
       - ./graphiti_core/prompts:/app/graphiti_core/prompts:ro
       - ./graphiti_core/ingestion:/app/graphiti_core/ingestion:ro
-      - dspy_training_data:/data/training_data
     environment:
       - QUEUE_URL=http://graphiti-queued:8080
       - FALKORDB_HOST=${FALKORDB_HOST:-falkordb}
@@ -683,7 +682,6 @@ services:
     volumes:
       - ./scripts:/scripts:ro
       - ./graphiti_core:/app/graphiti_core:ro
-      - dspy_training_data:/data/training_data
     environment:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - WORKER_MODE=extract
@@ -745,7 +743,6 @@ services:
     volumes:
       - ./scripts:/scripts:ro
       - ./graphiti_core:/app/graphiti_core:ro
-      - dspy_training_data:/data/training_data
     environment:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - WORKER_MODE=resolve
@@ -805,7 +802,6 @@ services:
     volumes:
       - ./scripts:/scripts:ro
       - ./graphiti_core:/app/graphiti_core:ro
-      - dspy_training_data:/data/training_data
     environment:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - WORKER_MODE=edge
@@ -865,7 +861,6 @@ services:
     volumes:
       - ./scripts:/scripts:ro
       - ./graphiti_core:/app/graphiti_core:ro
-      - dspy_training_data:/data/training_data
     environment:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - WORKER_MODE=persist
@@ -977,7 +972,6 @@ services:
     volumes:
       - ./scripts:/scripts:ro
       - ./graphiti_core:/app/graphiti_core:ro
-      - dspy_training_data:/data/training_data
     environment:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - TEMPORAL_VISIBILITY_ADDRESS=${TEMPORAL_VISIBILITY_ADDRESS:-192.168.50.90:7233}
@@ -1214,10 +1208,6 @@ volumes:
     driver: local
     labels:
       - description=Graph visualizer DuckDB persistent cache
-  dspy_training_data:
-    driver: local
-    labels:
-      - description=DSPy MIPROv2 training data for prompt optimization
   sync_metadata:
     driver: local
     labels:

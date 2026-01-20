@@ -330,79 +330,49 @@ docker start graphiti-nginx-1 graphiti-frontend-1
 
 ## DSPy Training Data Collection
 
-**Status**: Production-ready (Jan 2026). Passively collects successful DSPy extractions for future MIPROv2 optimization.
+**Status**: Production-ready (Jan 2026). Training data stored in FalkorDB `graphiti_prompts` graph.
 
-### Purpose
+### Storage
 
-Collects training examples from successful entity extraction, edge extraction, node resolution, and summary generation. This data will be used to run MIPROv2 prompt optimization once sufficient examples are collected (minimum 50 per task).
-
-### Environment Variables
-```bash
-DSPY_COLLECT_TRAINING_DATA=true          # Enable passive collection
-DSPY_TRAINING_DATA_DIR=/data/training_data  # Storage location (Docker volume)
-```
+Training data is stored as `TrainingExample` nodes in FalkorDB, enabling atomic concurrent writes from all Temporal workers without race conditions.
 
 ### Monitoring Collection Progress
 ```bash
-# Check if collection is enabled and view stats
-docker exec graphiti-graphiti-worker-1 python -c "
-from graphiti_core.dspy.modules import get_training_stats, is_training_collection_enabled
-print(f'Collection enabled: {is_training_collection_enabled()}')
-print(f'Stats: {get_training_stats()}')
-"
+# Check training data counts
+redis-cli -p 6379 GRAPH.QUERY graphiti_prompts "MATCH (t:TrainingExample) RETURN t.task, count(t) ORDER BY t.task" --csv
 
-# View files in the training data volume
-docker exec graphiti-graphiti-worker-1 ls -la /data/training_data/
-
-# Check example counts per task
-docker exec graphiti-graphiti-worker-1 python -c "
-import json, os
-for f in ['entity_extraction', 'edge_extraction', 'node_resolution', 'summary_generation']:
-    path = f'/data/training_data/{f}.json'
-    if os.path.exists(path):
-        with open(path) as fp:
-            data = json.load(fp)
-            print(f'{f}: {data[\"example_count\"]} examples')
+# Python API
+python3 -c "
+import asyncio
+from graphiti_core.dspy.training_storage import get_training_stats
+print(asyncio.run(get_training_stats()))
 "
 ```
 
-### Data Format
+### Python API
 
-Training data is stored as JSON files in the Docker volume `dspy_training_data`:
-- `entity_extraction.json` - Entity extraction examples
-- `edge_extraction.json` - Edge extraction examples  
-- `node_resolution.json` - Node deduplication examples
-- `summary_generation.json` - Summary generation examples
+```python
+from graphiti_core.dspy import (
+    record_training_example,
+    get_training_examples,
+    sample_training_examples,
+    split_train_val,
+    get_training_stats,
+)
 
-Each file contains:
-```json
-{
-  "task_name": "entity_extraction",
-  "created_at": "2026-01-20T00:00:00Z",
-  "example_count": 150,
-  "examples": [
-    {
-      "inputs": {"current_message": "...", "entity_types": "..."},
-      "expected_output": {"extracted_entities": {...}},
-      "metadata": {}
-    }
-  ]
-}
+# Record a training example (atomic)
+await record_training_example(
+    task='entity_extraction',
+    inputs={'current_message': '...', 'entity_types': '...'},
+    output={'extracted_entities': {...}},
+)
+
+# Retrieve examples for optimization
+examples = await get_training_examples(task='entity_extraction', limit=100)
+
+# Random sample for train/val split
+train, val = await split_train_val(task='entity_extraction', val_ratio=0.2)
 ```
-
-### Auto-Save Behavior
-
-- Saves automatically every 100 examples
-- Call `save_training_data()` explicitly for immediate save
-- Data persists in Docker volume across container restarts
-
-### Next Steps (MIPROv2 Pipeline)
-
-Once sufficient data is collected:
-1. GRAPH-271: CLI to run MIPROv2 optimization
-2. GRAPH-272: Load optimized modules at startup
-3. GRAPH-273: A/B testing framework
-4. GRAPH-274: Quality metrics dashboard
 
 ## Prompt Storage (graphiti_prompts)
 

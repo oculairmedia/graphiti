@@ -132,10 +132,21 @@ class TrainingDataset:
 
 class TrainingDataCollector:
     """
-    Collect training data from successful pipeline runs.
+    DEPRECATED: Use FalkorDB-backed storage instead.
 
-    This collector wraps pipeline modules and captures successful
-    input/output pairs for later optimization.
+    This JSON file-based collector has been superseded by
+    graphiti_core.dspy.training_storage.TrainingDataStorage which provides
+    atomic, concurrent-safe storage in FalkorDB.
+
+    This class remains for backwards compatibility but will be removed
+    in a future release.
+
+    For new code, use:
+        from graphiti_core.dspy.training_storage import (
+            record_training_example,
+            get_training_examples,
+            sample_training_examples,
+        )
     """
 
     def __init__(self, save_dir: str | Path = 'training_data'):
