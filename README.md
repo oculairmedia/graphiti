@@ -282,30 +282,9 @@ must be set.
 
 ### Database Configuration
 
-Database names are configured directly in the driver constructors:
-
-- **Neo4j**: Database name defaults to `neo4j` (hardcoded in Neo4jDriver)
-- **FalkorDB**: Database name defaults to `default_db` (hardcoded in FalkorDriver)
+Database names are configured directly in the driver constructors. FalkorDB database name defaults to `default_db`.
 
 As of v0.17.0, if you need to customize your database configuration, you can instantiate a database driver and pass it to the Graphiti constructor using the `graph_driver` parameter.
-
-#### Neo4j with Custom Database Name
-
-```python
-from graphiti_core import Graphiti
-from graphiti_core.driver.neo4j_driver import Neo4jDriver
-
-# Create a Neo4j driver with custom database name
-driver = Neo4jDriver(
-    uri="bolt://localhost:7687",
-    user="neo4j",
-    password="password",
-    database="my_custom_database"  # Custom database name
-)
-
-# Pass the driver to Graphiti
-graphiti = Graphiti(graph_driver=driver)
-```
 
 #### FalkorDB with Custom Database Name
 
@@ -325,14 +304,6 @@ driver = FalkorDriver(
 # Pass the driver to Graphiti
 graphiti = Graphiti(graph_driver=driver)
 ```
-
-
-### Performance Configuration
-
-`USE_PARALLEL_RUNTIME` is an optional boolean variable that can be set to true if you wish
-to enable Neo4j's parallel runtime feature for several of our search queries.
-Note that this feature is not supported for Neo4j Community edition or for smaller AuraDB instances,
-as such this feature is off by default.
 
 ## 📊 Dry-Run Benchmarking
 
