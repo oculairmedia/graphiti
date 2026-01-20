@@ -373,9 +373,12 @@ services:
   # =============================================================================
   # Queue and Worker Services
   # =============================================================================
+  # DEPRECATED: Legacy queue service - use Temporal ingestion instead
+  # To enable: docker compose --profile legacy-queue up -d graphiti-queued
   graphiti-queued:
     image: ghcr.io/oculairmedia/graphiti-queued:main
     restart: unless-stopped
+    profiles: ["legacy-queue"]
     ports:
       - ${QUEUE_PORT:-8093}:8080
     volumes:
@@ -400,13 +403,15 @@ services:
       start_period: 15s
     labels:
       - homepage.group=Knowledge Management
-      - homepage.name=Queue Service
+      - homepage.name=Queue Service (Legacy)
       - homepage.icon=si-queue
       - homepage.href=http://${HOMEPAGE_HOST:-192.168.50.90}:${QUEUE_PORT:-8093}
-      - homepage.description=Message queue for ingestion processing
+      - homepage.description=Legacy message queue - use Temporal instead
+  # DEPRECATED: Legacy queue worker - use Temporal staged workers instead
   graphiti-worker:
     image: ghcr.io/oculairmedia/graphiti-worker:main
     restart: unless-stopped
+    profiles: ["legacy-queue"]
     command:
       - /bin/bash
       - -c
@@ -510,24 +515,21 @@ services:
         condition: service_healthy
       falkordb:
         condition: service_healthy
-      graphiti-init:
-        condition: service_completed_successfully
     healthcheck:
       test:
         - CMD
         - python
         - -c
         - import sys; sys.exit(0)
-        # Basic process check
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 30s
     labels:
       - homepage.group=Knowledge Management
-      - homepage.name=Worker
+      - homepage.name=Worker (Legacy)
       - homepage.icon=si-worker
-      - homepage.description=Ingestion queue worker
+      - homepage.description=Legacy queue worker - use Temporal instead
   graphiti-temporal-visibility-worker:
     image: ghcr.io/oculairmedia/graphiti-worker:main
     restart: unless-stopped

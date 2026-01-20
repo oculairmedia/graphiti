@@ -118,7 +118,7 @@ docker system prune -a --volumes
 ### Protected Volumes (NEVER manually delete):
 - `graphiti_falkordb_data` - FalkorDB graph data (PRIMARY DATA STORE)
 - `graphiti_visualizer_duckdb` - Visualizer cache
-- `graphiti_queued_data` - Queue service data
+- `dspy_training_data` - DSPy MIPROv2 training data
 
 ---
 
@@ -138,11 +138,15 @@ docker system prune -a --volumes
 
 ## Service Architecture (Simplified Jan 2026)
 
-### Current Stack
+### Current Stack (Jan 2026 - Temporal-native)
 ```
 falkordb (persisted) → graph-visualizer-rust → frontend/nginx
-                    → graph (API) → graphiti-worker
+                    → graph (API) → Temporal Ingestion Workflows
+                                  → Staged Workers (extract/resolve/edge/persist)
 ```
+
+**Note**: Legacy queue system (graphiti-queued, graphiti-worker) deprecated in favor of Temporal.
+To enable legacy queue: `docker compose --profile legacy-queue up -d`
 
 **FalkorDB is now standalone** - no sync dependencies, no init containers needed for data.
 
@@ -512,20 +516,18 @@ python3 scripts/migrate_to_staged_queues.py --limit 100 --force
 - `extract_edges` - Relationship extraction
 - `resolve_edges_and_persist` - Edge resolution and FalkorDB persistence
 
-### Architecture
+### Architecture (Jan 2026 - Queue Deprecated)
 
 ```
-Mode 1: Visibility Only (TEMPORAL_VISIBILITY_ENABLED=true)
-─────────────────────────────────────────────────────────
-Queue → graphiti-worker → add_episode_resilient() → FalkorDB
-                              │
-                              └─ signals ──▶ Temporal (visibility only)
+Current: Direct Temporal (TEMPORAL_INGESTION_ENABLED=true)
+──────────────────────────────────────────────────────────
+API (/api/temporal/messages) → Temporal Workflow → Staged Workers → FalkorDB
+                                    │
+                                    └─ Full observability, retries, history
 
-Mode 2: Full Temporal (TEMPORAL_INGESTION_ENABLED=true)  
+Legacy (deprecated, use --profile legacy-queue):
 ──────────────────────────────────────────────────────
 Queue → graphiti-worker → Temporal Workflow → Activities → FalkorDB
-                              │
-                              └─ Full observability, retries, history
 ```
 
 ### Verify Temporal Workflows
