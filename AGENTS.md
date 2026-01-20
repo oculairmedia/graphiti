@@ -328,6 +328,82 @@ docker start graphiti-nginx-1 graphiti-frontend-1
 
 **Fix**: FalkorDB memory limit is 16GB in docker-compose. With 224K+ edges and 66K+ nodes, this should be sufficient. If OOM occurs, increase memory limit in docker-compose.yml.
 
+## DSPy Training Data Collection
+
+**Status**: Production-ready (Jan 2026). Passively collects successful DSPy extractions for future MIPROv2 optimization.
+
+### Purpose
+
+Collects training examples from successful entity extraction, edge extraction, node resolution, and summary generation. This data will be used to run MIPROv2 prompt optimization once sufficient examples are collected (minimum 50 per task).
+
+### Environment Variables
+```bash
+DSPY_COLLECT_TRAINING_DATA=true          # Enable passive collection
+DSPY_TRAINING_DATA_DIR=/data/training_data  # Storage location (Docker volume)
+```
+
+### Monitoring Collection Progress
+```bash
+# Check if collection is enabled and view stats
+docker exec graphiti-graphiti-worker-1 python -c "
+from graphiti_core.dspy.modules import get_training_stats, is_training_collection_enabled
+print(f'Collection enabled: {is_training_collection_enabled()}')
+print(f'Stats: {get_training_stats()}')
+"
+
+# View files in the training data volume
+docker exec graphiti-graphiti-worker-1 ls -la /data/training_data/
+
+# Check example counts per task
+docker exec graphiti-graphiti-worker-1 python -c "
+import json, os
+for f in ['entity_extraction', 'edge_extraction', 'node_resolution', 'summary_generation']:
+    path = f'/data/training_data/{f}.json'
+    if os.path.exists(path):
+        with open(path) as fp:
+            data = json.load(fp)
+            print(f'{f}: {data[\"example_count\"]} examples')
+"
+```
+
+### Data Format
+
+Training data is stored as JSON files in the Docker volume `dspy_training_data`:
+- `entity_extraction.json` - Entity extraction examples
+- `edge_extraction.json` - Edge extraction examples  
+- `node_resolution.json` - Node deduplication examples
+- `summary_generation.json` - Summary generation examples
+
+Each file contains:
+```json
+{
+  "task_name": "entity_extraction",
+  "created_at": "2026-01-20T00:00:00Z",
+  "example_count": 150,
+  "examples": [
+    {
+      "inputs": {"current_message": "...", "entity_types": "..."},
+      "expected_output": {"extracted_entities": {...}},
+      "metadata": {}
+    }
+  ]
+}
+```
+
+### Auto-Save Behavior
+
+- Saves automatically every 100 examples
+- Call `save_training_data()` explicitly for immediate save
+- Data persists in Docker volume across container restarts
+
+### Next Steps (MIPROv2 Pipeline)
+
+Once sufficient data is collected:
+1. GRAPH-271: CLI to run MIPROv2 optimization
+2. GRAPH-272: Load optimized modules at startup
+3. GRAPH-273: A/B testing framework
+4. GRAPH-274: Quality metrics dashboard
+
 ## Temporal Integration
 
 Graphiti supports two modes of Temporal integration:
