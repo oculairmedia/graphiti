@@ -666,6 +666,7 @@ services:
       - -c
       - |
         pip install --quiet temporalio dspy-ai letta-client 2>/dev/null
+        mkdir -p /data/training_data && chown worker:worker /data/training_data 2>/dev/null || true
         python -u /scripts/temporal_ingestion_worker.py
     ports:
       - "9191:9191"
@@ -727,6 +728,7 @@ services:
       - -c
       - |
         pip install --quiet temporalio dspy-ai 2>/dev/null
+        mkdir -p /data/training_data && chown worker:worker /data/training_data 2>/dev/null || true
         python -u /scripts/temporal_ingestion_worker.py
     ports:
       - "9192:9192"
@@ -786,6 +788,7 @@ services:
       - -c
       - |
         pip install --quiet temporalio dspy-ai 2>/dev/null
+        mkdir -p /data/training_data && chown worker:worker /data/training_data 2>/dev/null || true
         python -u /scripts/temporal_ingestion_worker.py
     ports:
       - "9193:9193"
@@ -845,6 +848,7 @@ services:
       - -c
       - |
         pip install --quiet temporalio dspy-ai 2>/dev/null
+        mkdir -p /data/training_data && chown worker:worker /data/training_data 2>/dev/null || true
         python -u /scripts/temporal_ingestion_worker.py
     ports:
       - "9194:9194"
