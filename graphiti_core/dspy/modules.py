@@ -31,6 +31,12 @@ _stateful_client = None
 _stateful_agent_id = None
 _stateful_enabled: bool | None = None
 
+# Training data collection globals
+_training_collector = None
+_training_collection_enabled: bool | None = None
+_training_example_count = 0
+_TRAINING_SAVE_INTERVAL = 100  # Save every N examples
+
 
 def is_stateful_learning_enabled() -> bool:
     """Check if stateful learning is enabled via env var."""
@@ -38,6 +44,84 @@ def is_stateful_learning_enabled() -> bool:
     if _stateful_enabled is None:
         _stateful_enabled = os.getenv('ENABLE_STATEFUL_LEARNING', 'true').lower() == 'true'
     return _stateful_enabled
+
+
+def is_training_collection_enabled() -> bool:
+    """Check if training data collection is enabled via env var."""
+    global _training_collection_enabled
+    if _training_collection_enabled is None:
+        _training_collection_enabled = (
+            os.getenv('DSPY_COLLECT_TRAINING_DATA', 'false').lower() == 'true'
+        )
+    return _training_collection_enabled
+
+
+def _get_training_collector():
+    """Get or create the singleton training data collector."""
+    global _training_collector
+
+    if not is_training_collection_enabled():
+        return None
+
+    if _training_collector is not None:
+        return _training_collector
+
+    try:
+        from .optimization import TrainingDataCollector
+
+        save_dir = os.getenv('DSPY_TRAINING_DATA_DIR', '/data/training_data')
+        _training_collector = TrainingDataCollector(save_dir=save_dir)
+        logger.info(f'Training data collection enabled, saving to: {save_dir}')
+        return _training_collector
+    except Exception as e:
+        logger.warning(f'Failed to initialize training data collector: {e}')
+        return None
+
+
+def _maybe_save_training_data() -> None:
+    """Save training data periodically based on example count."""
+    global _training_example_count
+    _training_example_count += 1
+
+    if _training_example_count >= _TRAINING_SAVE_INTERVAL:
+        collector = _get_training_collector()
+        if collector:
+            try:
+                collector.save_all()
+                stats = collector.get_stats()
+                logger.info(f'Saved training data: {stats}')
+                _training_example_count = 0
+            except Exception as e:
+                logger.warning(f'Failed to save training data: {e}')
+
+
+def save_training_data() -> dict[str, int] | None:
+    """
+    Explicitly save all collected training data.
+
+    Call this on shutdown or when you want to persist immediately.
+    Returns stats dict or None if collection is disabled.
+    """
+    collector = _get_training_collector()
+    if collector is None:
+        return None
+
+    try:
+        collector.save_all()
+        stats = collector.get_stats()
+        logger.info(f'Saved training data on demand: {stats}')
+        return stats
+    except Exception as e:
+        logger.warning(f'Failed to save training data: {e}')
+        return None
+
+
+def get_training_stats() -> dict[str, int] | None:
+    """Get current training data collection stats without saving."""
+    collector = _get_training_collector()
+    if collector is None:
+        return None
+    return collector.get_stats()
 
 
 def _get_stateful_client():
@@ -101,6 +185,27 @@ class NodeExtractor(dspy.Module):
         except Exception as e:
             logger.debug(f'Failed to store extraction memory: {e}')
 
+    def _record_training_example(
+        self,
+        current_message: str,
+        entity_types: list[dict],
+        previous_messages: list[dict] | None,
+        result: ExtractedEntities,
+    ) -> None:
+        collector = _get_training_collector()
+        if collector is None:
+            return
+        try:
+            collector.record_entity_extraction(
+                current_message=current_message,
+                entity_types=entity_types,
+                result=result,
+                previous_messages=previous_messages,
+            )
+            _maybe_save_training_data()
+        except Exception as e:
+            logger.debug(f'Failed to record entity extraction training example: {e}')
+
     def forward(
         self,
         current_message: str,
@@ -123,10 +228,16 @@ class NodeExtractor(dspy.Module):
         if isinstance(extracted, ExtractedEntities):
             entities_dicts = [e.model_dump() for e in extracted.extracted_entities]
             self._store_extraction(current_message, entities_dicts)
+            self._record_training_example(
+                current_message, entity_types, previous_messages, extracted
+            )
             return extracted
         elif isinstance(extracted, dict):
             result_obj = ExtractedEntities(**extracted)
             self._store_extraction(current_message, extracted.get('extracted_entities', []))
+            self._record_training_example(
+                current_message, entity_types, previous_messages, result_obj
+            )
             return result_obj
         else:
             logger.warning(f'Unexpected extraction result type: {type(extracted)}')
@@ -371,6 +482,29 @@ class EdgeExtractor(dspy.Module):
         except Exception as e:
             logger.warning(f'Failed to store edges: {e}')
 
+    def _record_training_example(
+        self,
+        current_message: str,
+        entities: list[dict],
+        reference_time: str,
+        previous_messages: list[dict] | None,
+        result: ExtractedEdges,
+    ) -> None:
+        collector = _get_training_collector()
+        if collector is None:
+            return
+        try:
+            collector.record_edge_extraction(
+                current_message=current_message,
+                entities=entities,
+                reference_time=reference_time,
+                result=result,
+                previous_messages=previous_messages,
+            )
+            _maybe_save_training_data()
+        except Exception as e:
+            logger.debug(f'Failed to record edge extraction training example: {e}')
+
     def forward(
         self,
         current_message: str,
@@ -406,6 +540,9 @@ class EdgeExtractor(dspy.Module):
         if parsed.edges:
             self._store_edges(
                 [e.model_dump() if hasattr(e, 'model_dump') else e for e in parsed.edges]
+            )
+            self._record_training_example(
+                current_message, entities, reference_time, previous_messages, parsed
             )
 
         return parsed
@@ -458,6 +595,29 @@ class NodeResolver(dspy.Module):
             )
         except Exception as e:
             logger.warning(f'Failed to store resolution: {e}')
+
+    def _record_training_example(
+        self,
+        current_message: str,
+        extracted_entities: list[dict],
+        existing_entities: list[dict],
+        previous_messages: list[dict] | None,
+        result: NodeResolutions,
+    ) -> None:
+        collector = _get_training_collector()
+        if collector is None:
+            return
+        try:
+            collector.record_node_resolution(
+                current_message=current_message,
+                extracted_entities=extracted_entities,
+                existing_entities=existing_entities,
+                result=result,
+                previous_messages=previous_messages,
+            )
+            _maybe_save_training_data()
+        except Exception as e:
+            logger.debug(f'Failed to record node resolution training example: {e}')
 
     def forward(
         self,
@@ -512,6 +672,14 @@ class NodeResolver(dspy.Module):
                     context=f'Resolved in context: {current_message[:100]}...',
                 )
 
+        self._record_training_example(
+            current_message,
+            extracted_entities,
+            existing_entities,
+            previous_messages,
+            parsed_resolutions,
+        )
+
         return parsed_resolutions
 
 
@@ -525,8 +693,30 @@ class SummaryGenerator(dspy.Module):
 
     def __init__(self):
         super().__init__()
-        # Use basic Predict for summaries - simpler task, lower cost model
         self.predictor = dspy.Predict(SummaryGenerationSignature)
+
+    def _record_training_example(
+        self,
+        current_message: str,
+        entity_name: str,
+        previous_messages: list[dict] | None,
+        existing_summary: str,
+        result: Summary,
+    ) -> None:
+        collector = _get_training_collector()
+        if collector is None:
+            return
+        try:
+            collector.record_summary_generation(
+                current_message=current_message,
+                entity_name=entity_name,
+                result=result,
+                previous_messages=previous_messages,
+                existing_summary=existing_summary,
+            )
+            _maybe_save_training_data()
+        except Exception as e:
+            logger.debug(f'Failed to record summary generation training example: {e}')
 
     def forward(
         self,
@@ -556,17 +746,23 @@ class SummaryGenerator(dspy.Module):
                 existing_summary=existing_summary,
             )
 
-        # Extract the structured output
         summary = result.summary
         if isinstance(summary, Summary):
-            return summary
+            parsed = summary
         elif isinstance(summary, dict):
-            return Summary(**summary)
+            parsed = Summary(**summary)
         elif isinstance(summary, str):
-            return Summary(summary=summary)
+            parsed = Summary(summary=summary)
         else:
             logger.warning(f'Unexpected summary result type: {type(summary)}')
             return Summary(summary='')
+
+        if parsed.summary:
+            self._record_training_example(
+                current_message, entity_name, previous_messages, existing_summary, parsed
+            )
+
+        return parsed
 
 
 # ============================================================================

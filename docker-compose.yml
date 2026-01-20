@@ -585,6 +585,7 @@ services:
       - ./graphiti_core/search:/app/graphiti_core/search:ro
       - ./graphiti_core/prompts:/app/graphiti_core/prompts:ro
       - ./graphiti_core/ingestion:/app/graphiti_core/ingestion:ro
+      - dspy_training_data:/data/training_data
     environment:
       - QUEUE_URL=http://graphiti-queued:8080
       - NEO4J_URI=${NEO4J_URI:-bolt://neo4j:7687}
@@ -647,6 +648,8 @@ services:
       # DSPy Pipeline
       - USE_DSPY=${USE_DSPY:-false}
       - ZAI_TOKENS_PER_HOUR=${ZAI_TOKENS_PER_HOUR:-1000000}
+      - DSPY_COLLECT_TRAINING_DATA=${DSPY_COLLECT_TRAINING_DATA:-false}
+      - DSPY_TRAINING_DATA_DIR=${DSPY_TRAINING_DATA_DIR:-/data/training_data}
       - TEMPORAL_VISIBILITY_ENABLED=${TEMPORAL_VISIBILITY_ENABLED:-true}
       - TEMPORAL_VISIBILITY_ADDRESS=${TEMPORAL_VISIBILITY_ADDRESS:-192.168.50.90:7233}
       - TEMPORAL_VISIBILITY_NAMESPACE=${TEMPORAL_VISIBILITY_NAMESPACE:-graphiti}
@@ -1300,6 +1303,10 @@ volumes:
     driver: local
     labels:
       - description=Graph visualizer DuckDB persistent cache
+  dspy_training_data:
+    driver: local
+    labels:
+      - description=DSPy MIPROv2 training data for prompt optimization
   sync_metadata:
     driver: local
     labels:
