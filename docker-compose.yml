@@ -672,6 +672,7 @@ services:
     volumes:
       - ./scripts:/scripts:ro
       - ./graphiti_core:/app/graphiti_core:ro
+      - dspy_training_data:/data/training_data
     environment:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - WORKER_MODE=extract
@@ -707,6 +708,8 @@ services:
       - ZAI_TOKENS_PER_HOUR=${ZAI_TOKENS_PER_HOUR:-1000000}
       - LETTA_BASE_URL=${LETTA_BASE_URL:-http://192.168.50.90:8283}
       - LETTA_GRAPHITI_AGENT_ID=${LETTA_GRAPHITI_AGENT_ID:-}
+      - DSPY_COLLECT_TRAINING_DATA=${DSPY_COLLECT_TRAINING_DATA:-false}
+      - DSPY_TRAINING_DATA_DIR=${DSPY_TRAINING_DATA_DIR:-/data/training_data}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
@@ -730,6 +733,7 @@ services:
     volumes:
       - ./scripts:/scripts:ro
       - ./graphiti_core:/app/graphiti_core:ro
+      - dspy_training_data:/data/training_data
     environment:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - WORKER_MODE=resolve
@@ -763,6 +767,8 @@ services:
       - CHUTES_MODEL=${CHUTES_MODEL:-glm-4.5}
       - CHUTES_SMALL_MODEL=${CHUTES_SMALL_MODEL:-glm-4.5-air}
       - ZAI_TOKENS_PER_HOUR=${ZAI_TOKENS_PER_HOUR:-1000000}
+      - DSPY_COLLECT_TRAINING_DATA=${DSPY_COLLECT_TRAINING_DATA:-false}
+      - DSPY_TRAINING_DATA_DIR=${DSPY_TRAINING_DATA_DIR:-/data/training_data}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
@@ -786,6 +792,7 @@ services:
     volumes:
       - ./scripts:/scripts:ro
       - ./graphiti_core:/app/graphiti_core:ro
+      - dspy_training_data:/data/training_data
     environment:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - WORKER_MODE=edge
@@ -819,6 +826,8 @@ services:
       - CHUTES_MODEL=${CHUTES_MODEL:-glm-4.5}
       - CHUTES_SMALL_MODEL=${CHUTES_SMALL_MODEL:-glm-4.5-air}
       - ZAI_TOKENS_PER_HOUR=${ZAI_TOKENS_PER_HOUR:-1000000}
+      - DSPY_COLLECT_TRAINING_DATA=${DSPY_COLLECT_TRAINING_DATA:-false}
+      - DSPY_TRAINING_DATA_DIR=${DSPY_TRAINING_DATA_DIR:-/data/training_data}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
@@ -842,6 +851,7 @@ services:
     volumes:
       - ./scripts:/scripts:ro
       - ./graphiti_core:/app/graphiti_core:ro
+      - dspy_training_data:/data/training_data
     environment:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - WORKER_MODE=persist
@@ -875,6 +885,8 @@ services:
       - CHUTES_MODEL=${CHUTES_MODEL:-glm-4.5}
       - CHUTES_SMALL_MODEL=${CHUTES_SMALL_MODEL:-glm-4.5-air}
       - ZAI_TOKENS_PER_HOUR=${ZAI_TOKENS_PER_HOUR:-1000000}
+      - DSPY_COLLECT_TRAINING_DATA=${DSPY_COLLECT_TRAINING_DATA:-false}
+      - DSPY_TRAINING_DATA_DIR=${DSPY_TRAINING_DATA_DIR:-/data/training_data}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
