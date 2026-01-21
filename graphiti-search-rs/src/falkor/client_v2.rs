@@ -795,4 +795,128 @@ impl FalkorClientV2 {
 
         parser_v2::parse_episodes_from_falkor_v2(result.data)
     }
+
+    #[instrument(skip(self, embedding))]
+    pub async fn hnsw_search_nodes_with_scores(
+        &mut self,
+        embedding: &[f32],
+        limit: usize,
+    ) -> Result<Vec<(String, f32)>> {
+        let embedding_str = embedding
+            .iter()
+            .map(|v| v.to_string())
+            .collect::<Vec<_>>()
+            .join(",");
+
+        let cypher = format!(
+            "CALL db.idx.vector.queryNodes('Entity', 'name_embedding', {}, vecf32([{}])) 
+             YIELD node, score
+             RETURN node.uuid AS uuid, score",
+            limit, embedding_str
+        );
+
+        let result = self.graph.query(&cypher).execute().await?;
+
+        let mut seeds = Vec::new();
+        for row in result.data {
+            if row.len() >= 2 {
+                let uuid = match &row[0] {
+                    FalkorValue::String(s) => s.clone(),
+                    _ => continue,
+                };
+                let score = match &row[1] {
+                    FalkorValue::F64(f) => *f as f32,
+                    FalkorValue::I64(i) => *i as f32,
+                    _ => continue,
+                };
+                seeds.push((uuid, score));
+            }
+        }
+
+        Ok(seeds)
+    }
+
+    #[instrument(skip(self))]
+    pub async fn get_node_neighbors(
+        &mut self,
+        node_uuids: &[String],
+    ) -> Result<Vec<(String, String)>> {
+        if node_uuids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let uuid_list = node_uuids
+            .iter()
+            .map(|u| format!("'{}'", u.replace('\'', "\\'")))
+            .collect::<Vec<_>>()
+            .join(",");
+
+        let cypher = format!(
+            "MATCH (n:Entity)-[r]-(neighbor:Entity)
+             WHERE n.uuid IN [{}]
+             RETURN n.uuid AS source, neighbor.uuid AS target",
+            uuid_list
+        );
+
+        let result = self.graph.query(&cypher).execute().await?;
+
+        let mut neighbors = Vec::new();
+        for row in result.data {
+            if row.len() >= 2 {
+                let source = match &row[0] {
+                    FalkorValue::String(s) => s.clone(),
+                    _ => continue,
+                };
+                let target = match &row[1] {
+                    FalkorValue::String(s) => s.clone(),
+                    _ => continue,
+                };
+                neighbors.push((source, target));
+            }
+        }
+
+        Ok(neighbors)
+    }
+
+    #[instrument(skip(self))]
+    pub async fn get_nodes_by_uuids(
+        &mut self,
+        uuids: &[String],
+        group_ids: Option<&[String]>,
+    ) -> Result<Vec<Node>> {
+        if uuids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let uuid_list = uuids
+            .iter()
+            .map(|u| format!("'{}'", u.replace('\'', "\\'")))
+            .collect::<Vec<_>>()
+            .join(",");
+
+        let group_filter = if let Some(groups) = group_ids {
+            if !groups.is_empty() {
+                let group_list = groups
+                    .iter()
+                    .map(|g| format!("'{}'", g.replace('\'', "\\'")))
+                    .collect::<Vec<_>>()
+                    .join(",");
+                format!(" AND n.group_id IN [{}]", group_list)
+            } else {
+                String::new()
+            }
+        } else {
+            String::new()
+        };
+
+        let cypher = format!(
+            "MATCH (n:Entity)
+             WHERE n.uuid IN [{}]{}
+             RETURN n",
+            uuid_list, group_filter
+        );
+
+        let result = self.graph.query(&cypher).execute().await?;
+        parser_v2::parse_nodes_from_falkor_v2(result.data)
+    }
 }

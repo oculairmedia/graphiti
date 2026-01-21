@@ -22,6 +22,7 @@ PYTHON_TO_RUST_SEARCH_METHOD = {
     'cosine_similarity': 'similarity',
     'bm25': 'fulltext',
     'breadth_first_search': 'bfs',
+    'hipporag': 'hipporag',
 }
 
 PYTHON_TO_RUST_RERANKER = {
@@ -257,7 +258,10 @@ class RustSearchClient:
                     'bfs_max_depth': config.node_config.bfs_max_depth,
                     'sim_min_score': config.node_config.sim_min_score,
                     'mmr_lambda': config.node_config.mmr_lambda,
-                    'centrality_boost_factor': 1.0,  # Required by Rust service
+                    'centrality_boost_factor': 1.0,
+                    'hipporag_max_hops': getattr(config.node_config, 'hipporag_max_hops', 2),
+                    'hipporag_decay': getattr(config.node_config, 'hipporag_decay', 0.85),
+                    'hipporag_seed_count': getattr(config.node_config, 'hipporag_seed_count', 10),
                 }
                 if config.node_config
                 else None

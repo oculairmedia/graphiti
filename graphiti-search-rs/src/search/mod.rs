@@ -1,6 +1,7 @@
 pub mod bfs;
 pub mod cache;
 pub mod fulltext;
+pub mod hipporag;
 pub mod reranking;
 pub mod similarity;
 
@@ -142,7 +143,10 @@ impl SearchEngine {
                     .await?
                 }
                 SearchMethod::Bfs => {
-                    // BFS requires origin nodes, skip if not provided
+                    vec![]
+                }
+                SearchMethod::Hipporag => {
+                    debug!("HippoRAG edge search not yet implemented, skipping");
                     vec![]
                 }
                 _ => vec![],
@@ -201,8 +205,23 @@ impl SearchEngine {
                     .await?
                 }
                 SearchMethod::Bfs => {
-                    // BFS requires origin nodes, skip if not provided
                     vec![]
+                }
+                SearchMethod::Hipporag if query_vector.is_some() => {
+                    let hipporag_config = hipporag::HippoRAGConfig {
+                        max_hops: config.hipporag_max_hops.unwrap_or(2),
+                        decay: config.hipporag_decay.unwrap_or(0.85),
+                        seed_count: config.hipporag_seed_count.unwrap_or(10),
+                        min_score: config.sim_min_score,
+                    };
+                    hipporag::search_nodes_hipporag(
+                        &mut falkor_conn,
+                        query_vector.unwrap(),
+                        &hipporag_config,
+                        filters,
+                        self.max_method_results,
+                    )
+                    .await?
                 }
                 _ => vec![],
             };

@@ -76,6 +76,15 @@ pub struct EdgeSearchConfig {
     pub bfs_max_depth: usize,
     pub sim_min_score: f32,
     pub mmr_lambda: f32,
+    /// HippoRAG: Maximum hops for spreading activation (default: 2)
+    #[serde(default)]
+    pub hipporag_max_hops: Option<usize>,
+    /// HippoRAG: Decay factor per hop (default: 0.85)
+    #[serde(default)]
+    pub hipporag_decay: Option<f32>,
+    /// HippoRAG: Number of seed nodes from HNSW (default: 10)
+    #[serde(default)]
+    pub hipporag_seed_count: Option<usize>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -86,6 +95,15 @@ pub struct NodeSearchConfig {
     pub sim_min_score: f32,
     pub mmr_lambda: f32,
     pub centrality_boost_factor: Option<f32>,
+    /// HippoRAG: Maximum hops for spreading activation (default: 2)
+    #[serde(default)]
+    pub hipporag_max_hops: Option<usize>,
+    /// HippoRAG: Decay factor per hop (default: 0.85)
+    #[serde(default)]
+    pub hipporag_decay: Option<f32>,
+    /// HippoRAG: Number of seed nodes from HNSW (default: 10)
+    #[serde(default)]
+    pub hipporag_seed_count: Option<usize>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -106,6 +124,7 @@ pub enum SearchMethod {
     Fulltext,
     Similarity,
     Bfs,
+    Hipporag,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

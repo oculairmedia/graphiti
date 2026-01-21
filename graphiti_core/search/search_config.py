@@ -36,12 +36,14 @@ class EdgeSearchMethod(Enum):
     cosine_similarity = 'cosine_similarity'
     bm25 = 'bm25'
     bfs = 'breadth_first_search'
+    hipporag = 'hipporag'
 
 
 class NodeSearchMethod(Enum):
     cosine_similarity = 'cosine_similarity'
     bm25 = 'bm25'
     bfs = 'breadth_first_search'
+    hipporag = 'hipporag'
 
 
 class EpisodeSearchMethod(Enum):
@@ -86,6 +88,9 @@ class EdgeSearchConfig(BaseModel):
     sim_min_score: float = Field(default=DEFAULT_MIN_SCORE)
     mmr_lambda: float = Field(default=DEFAULT_MMR_LAMBDA)
     bfs_max_depth: int = Field(default=MAX_SEARCH_DEPTH)
+    hipporag_max_hops: int = Field(default=2)
+    hipporag_decay: float = Field(default=0.85)
+    hipporag_seed_count: int = Field(default=10)
 
 
 class NodeSearchConfig(BaseModel):
@@ -94,6 +99,9 @@ class NodeSearchConfig(BaseModel):
     sim_min_score: float = Field(default=DEFAULT_MIN_SCORE)
     mmr_lambda: float = Field(default=DEFAULT_MMR_LAMBDA)
     bfs_max_depth: int = Field(default=MAX_SEARCH_DEPTH)
+    hipporag_max_hops: int = Field(default=2)
+    hipporag_decay: float = Field(default=0.85)
+    hipporag_seed_count: int = Field(default=10)
 
 
 class EpisodeSearchConfig(BaseModel):

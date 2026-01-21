@@ -46,10 +46,11 @@ class TestEdgeSearchMethod:
 
     def test_all_methods_defined(self):
         methods = list(EdgeSearchMethod)
-        assert len(methods) == 3
+        assert len(methods) == 4
         assert EdgeSearchMethod.cosine_similarity in methods
         assert EdgeSearchMethod.bm25 in methods
         assert EdgeSearchMethod.bfs in methods
+        assert EdgeSearchMethod.hipporag in methods
 
 
 class TestNodeSearchMethod:
