@@ -4,8 +4,10 @@
 //! search using the production graph. Uses FalkorDB's db.idx.vector.queryNodes
 //! procedure for fast approximate nearest neighbor search.
 
+#![allow(dead_code)]
+
 use anyhow::Result;
-use falkordb::{FalkorAsyncClient, FalkorClientBuilder, FalkorConnectionInfo, FalkorValue};
+use falkordb::{FalkorClientBuilder, FalkorConnectionInfo, FalkorValue};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
