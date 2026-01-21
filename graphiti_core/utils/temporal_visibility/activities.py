@@ -496,20 +496,27 @@ class IngestionActivities:
             )
             existing_summaries = {r['uuid']: r['summary'] or '' for r in records}
 
-        nodes = [
-            EntityNode(
-                uuid=d.get('uuid', ''),
-                name=d['name'],
-                group_id=group_id,
-                labels=d.get('labels', ['Entity']),
-                created_at=now,
-                summary=existing_summaries.get(
-                    uuid_map.get(d.get('uuid', ''), ''), d.get('summary', '')
+        # Build nodes with RESOLVED UUIDs from uuid_map
+        # This is critical: when an extracted node is resolved as a duplicate of an existing
+        # entity, we must use the EXISTING entity's UUID (from uuid_map), not the original
+        # extracted UUID. Otherwise, build_episodic_edges() will create MENTIONS edges
+        # pointing to non-existent UUIDs, and the EPISODIC_EDGE_SAVE_BULK MATCH will fail.
+        # Bug: graphiti-179a
+        nodes: list[EntityNode] = []
+        for d in extracted_node_dicts:
+            original_uuid: str = d.get('uuid') or ''
+            resolved_uuid: str = uuid_map.get(original_uuid, original_uuid)
+            summary_default: str = d.get('summary') or ''
+            nodes.append(
+                EntityNode(
+                    uuid=resolved_uuid,
+                    name=d['name'],
+                    group_id=group_id,
+                    labels=d.get('labels', ['Entity']),
+                    created_at=now,
+                    summary=existing_summaries.get(resolved_uuid, summary_default) or '',
                 )
-                or '',
             )
-            for d in extracted_node_dicts
-        ]
 
         node_duplicates_tuples: list[tuple] = []
 
