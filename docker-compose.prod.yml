@@ -27,7 +27,6 @@ services:
       - FALKORDB_HOST=falkordb
       - FALKORDB_PORT=6379
       - FALKORDB_URI=redis://falkordb:6379
-      - USE_FALKORDB=true
       - PORT=8000
       - USE_OLLAMA=${USE_OLLAMA:-true}
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://100.81.139.20:11434/v1}
