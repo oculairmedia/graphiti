@@ -1,5 +1,12 @@
 """
-Queue proxy for routing ingestion tasks to the queue service.
+DEPRECATED: Queue proxy for routing ingestion tasks to the queue service.
+
+This module is deprecated. Use Temporal ingestion instead:
+- Set TEMPORAL_INGESTION_ENABLED=true
+- Use POST /api/temporal/messages endpoint
+
+The queue-based system (graphiti-queued) has been superseded by Temporal
+workflows which provide better observability, retries, and state management.
 """
 
 import json

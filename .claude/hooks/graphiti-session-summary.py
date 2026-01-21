@@ -118,7 +118,7 @@ def send_summary(state):
 
     try:
         req = urllib.request.Request(
-            f"{GRAPHITI_API_URL}/messages",
+            f"{GRAPHITI_API_URL}/api/temporal/messages",
             data=json.dumps(payload).encode(),
             headers={"Content-Type": "application/json"},
             method="POST"

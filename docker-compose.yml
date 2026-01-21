@@ -442,7 +442,6 @@ services:
       - ./graphiti_core/prompts:/app/graphiti_core/prompts:ro
       - ./graphiti_core/ingestion:/app/graphiti_core/ingestion:ro
     environment:
-      - QUEUE_URL=http://graphiti-queued:8080
       - FALKORDB_HOST=${FALKORDB_HOST:-falkordb}
       - FALKORDB_PORT=${FALKORDB_PORT:-6379}
       - FALKORDB_DATABASE=${FALKORDB_DATABASE:-graphiti_migration}

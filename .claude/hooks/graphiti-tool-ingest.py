@@ -123,7 +123,7 @@ def ingest_tool_usage(tool_name, tool_input, tool_response=None, event_type="Pre
         
         # Send to Graphiti
         response = requests.post(
-            f"{GRAPHITI_API_URL}/messages",
+            f"{GRAPHITI_API_URL}/api/temporal/messages",
             json=payload,
             headers={"Content-Type": "application/json"},
             timeout=2  # Short timeout to not block

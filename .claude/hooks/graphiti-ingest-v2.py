@@ -162,7 +162,7 @@ def ingest_message(prompt, response):
     try:
         # Send to Graphiti API
         response = requests.post(
-            f"{GRAPHITI_API_URL}/messages",
+            f"{GRAPHITI_API_URL}/api/temporal/messages",
             json=payload,
             headers={"Content-Type": "application/json"},
             timeout=5

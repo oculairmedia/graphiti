@@ -491,12 +491,31 @@ class Graphiti:
             )
 
             # Extract entities as nodes
-
-            extracted_nodes = await extract_nodes(
-                self.clients, episode, previous_episodes, entity_types, excluded_entity_types
-            )
+            if self.use_dspy:
+                extracted_nodes = await self._extract_nodes_dspy(
+                    episode, previous_episodes, entity_types
+                )
+            else:
+                extracted_nodes = await extract_nodes(
+                    self.clients, episode, previous_episodes, entity_types, excluded_entity_types
+                )
 
             # Extract edges and resolve nodes
+            if self.use_dspy:
+                edges_coro = self._extract_edges_dspy(
+                    episode, extracted_nodes, previous_episodes, edge_types
+                )
+            else:
+                edges_coro = extract_edges(
+                    self.clients,
+                    episode,
+                    extracted_nodes,
+                    previous_episodes,
+                    edge_type_map or edge_type_map_default,
+                    group_id,
+                    edge_types,
+                )
+
             (nodes, uuid_map, node_duplicates), extracted_edges = await semaphore_gather(
                 resolve_extracted_nodes(
                     self.clients,
@@ -507,15 +526,7 @@ class Graphiti:
                     existing_nodes_override=None,
                     enable_cross_graph_deduplication=self.enable_cross_graph_deduplication,
                 ),
-                extract_edges(
-                    self.clients,
-                    episode,
-                    extracted_nodes,
-                    previous_episodes,
-                    edge_type_map or edge_type_map_default,
-                    group_id,
-                    edge_types,
-                ),
+                edges_coro,
                 max_coroutines=self.max_coroutines,
             )
 

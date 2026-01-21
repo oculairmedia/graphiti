@@ -13,7 +13,6 @@ from graphiti_core.utils.maintenance.graph_data_operations import clear_data
 from graph_service.config import get_settings
 from graph_service.dto import AddEntityNodeRequest, AddMessagesRequest, Message, Result
 from graph_service.zep_graphiti import ZepGraphitiDep
-from graph_service.queue_proxy import queue_proxy
 
 logger = logging.getLogger(__name__)
 
