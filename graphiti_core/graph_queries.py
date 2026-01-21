@@ -86,7 +86,7 @@ def get_entity_node_save_bulk_query(nodes) -> list[tuple[str, dict[str, Any]]]:
                 SET n:{label}
                 WITH n, node
                 WHERE node.name_embedding IS NOT NULL
-                SET n.name_embedding = node.name_embedding
+                SET n.name_embedding = vecf32(node.name_embedding)
                 RETURN n.uuid AS uuid
             """,
                     {'nodes': [node]},
@@ -108,6 +108,6 @@ def get_entity_edge_save_bulk_query() -> str:
         r.expired_at = edge.expired_at,
         r.valid_at = edge.valid_at,
         r.invalid_at = edge.invalid_at,
-        r.fact_embedding = edge.fact_embedding
+        r.fact_embedding = vecf32(edge.fact_embedding)
     WITH r, edge
     RETURN edge.uuid AS uuid"""
