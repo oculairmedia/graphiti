@@ -186,29 +186,6 @@ async def test_falkordb_operations():
         print('\n✓ Closed FalkorDB connection')
 
 
-async def compare_backends():
-    """Quick comparison between Neo4j and FalkorDB."""
-
-    print('\n=== Backend Comparison ===')
-    print('\nFalkorDB advantages:')
-    print('- Faster for read-heavy workloads (in-memory)')
-    print('- Lower memory footprint')
-    print('- Simpler deployment (Redis-based)')
-    print('- Built-in Redis data structures')
-
-    print('\nNeo4j advantages:')
-    print('- More mature ecosystem')
-    print('- Better tooling and visualization')
-    print('- ACID compliance')
-    print('- Larger community support')
-
-    print('\nBoth support:')
-    print('- Cypher query language')
-    print('- Property graphs')
-    print('- Indexing')
-    print("- Graphiti's full feature set")
-
-
 async def main():
     """Run the FalkorDB example."""
 
@@ -220,9 +197,6 @@ async def main():
 
     # Run tests
     await test_falkordb_operations()
-
-    # Show comparison
-    await compare_backends()
 
 
 if __name__ == '__main__':

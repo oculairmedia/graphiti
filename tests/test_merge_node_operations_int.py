@@ -124,7 +124,7 @@ async def setup_test_graph(request):
 @pytest.mark.asyncio
 @pytest.mark.parametrize('setup_test_graph', ['neo4j_driver'], indirect=True)
 async def test_merge_node_into_neo4j(setup_test_graph):
-    """Test merging duplicate node into canonical node with Neo4j."""
+    """Test merging duplicate node into canonical node."""
     driver, canonical_node, duplicate_node, related_nodes = setup_test_graph
 
     # Perform the merge

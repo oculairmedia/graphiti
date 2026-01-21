@@ -23,10 +23,10 @@ def mock_driver():
     return driver
 
 
-# Alias for backward compatibility
+# Alias for backward compatibility with old test code
 @pytest.fixture
-def neo4j_driver(mock_driver):
-    """Alias for mock_driver - deprecated, use mock_driver instead."""
+def graph_driver(mock_driver):
+    """Alias for mock_driver - use mock_driver directly when possible."""
     return mock_driver
 
 
@@ -183,12 +183,12 @@ def centrality_query_results(sample_graph_data, expected_centrality_scores):
 
 
 @pytest.fixture
-def mock_graphiti_instance(neo4j_driver):
+def mock_graphiti_instance(mock_driver):
     """Create a mock Graphiti instance with driver."""
     from unittest.mock import MagicMock
 
     graphiti = MagicMock()
-    graphiti.driver = neo4j_driver
+    graphiti.driver = mock_driver
     graphiti.llm_client = MagicMock()
     graphiti.embedder = MagicMock()
 
