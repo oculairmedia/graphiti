@@ -6,18 +6,20 @@ use tokio::time::timeout;
 async fn test_hipporag_search_integration() {
     use graphiti_search_rs::config::Config;
     use graphiti_search_rs::falkor::create_falkor_pool;
-    use graphiti_search_rs::search::hipporag::{search_nodes_hipporag, HippoRAGConfig};
     use graphiti_search_rs::models::SearchFilters;
+    use graphiti_search_rs::search::hipporag::{search_nodes_hipporag, HippoRAGConfig};
 
     // Set required env vars for Config::from_env()
     std::env::set_var("FALKORDB_HOST", "localhost");
     std::env::set_var("FALKORDB_PORT", "6379");
     std::env::set_var("GRAPH_NAME", "graphiti_migration");
     std::env::set_var("REDIS_URL", "redis://localhost:6379");
-    
+
     let config = Config::from_env().expect("Failed to load config");
 
-    let pool = create_falkor_pool(&config).await.expect("Failed to create pool");
+    let pool = create_falkor_pool(&config)
+        .await
+        .expect("Failed to create pool");
     let mut conn = pool.get().await.expect("Failed to get connection");
 
     // Create a dummy embedding (zeros will get low scores but should still work)
@@ -34,7 +36,7 @@ async fn test_hipporag_search_integration() {
 
     let result = timeout(
         Duration::from_secs(30),
-        search_nodes_hipporag(&mut conn, &embedding, &hipporag_config, &filters, 10)
+        search_nodes_hipporag(&mut conn, &embedding, &hipporag_config, &filters, 10),
     )
     .await
     .expect("Test timed out")
