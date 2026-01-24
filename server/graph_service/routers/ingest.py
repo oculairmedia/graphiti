@@ -527,6 +527,7 @@ async def add_entity_edge(
     If an edge with the same UUID exists, it will be updated.
     """
     from graphiti_core.edges import EntityEdge
+    from graphiti_core.utils.datetime_utils import utc_now
 
     # Create the edge
     edge = EntityEdge(
@@ -536,6 +537,7 @@ async def add_entity_edge(
         name=request.name,
         group_id=request.group_id,
         fact=request.fact or f'{request.name} relationship',
+        created_at=utc_now(),
     )
 
     # Generate embedding for the fact (enables semantic search on edges)
