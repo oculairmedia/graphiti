@@ -71,16 +71,15 @@ async def queue_messages(messages_request: AddMessagesRequest):
                     'group_id': messages_request.group_id,
                     'name': msg.name,
                     'content': msg.content,
-                    'timestamp': msg.created_at.isoformat()
-                    if msg.created_at
+                    'timestamp': msg.timestamp.isoformat()
+                    if msg.timestamp
                     else datetime.utcnow().isoformat(),
-                    'source_description': msg.source,
+                    'source_description': msg.source_description,
                 },
                 group_id=messages_request.group_id,
                 priority=TaskPriority.NORMAL,
                 visibility_timeout=0,  # Immediately available for processing
                 metadata={
-                    'user_id': msg.user_id,
                     'source': 'api',
                 },
             )

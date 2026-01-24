@@ -1,5 +1,5 @@
 from .common import Message, Result
-from .ingest import AddEntityNodeRequest, AddMessagesRequest
+from .ingest import AddEntityNodeRequest, AddEntityEdgeRequest, AddMessagesRequest
 from .nodes import NodeResponse, UpdateNodeSummaryRequest
 from .retrieve import (
     EdgesByNodeResponse,
@@ -18,6 +18,7 @@ __all__ = [
     'Message',
     'AddMessagesRequest',
     'AddEntityNodeRequest',
+    'AddEntityEdgeRequest',
     'SearchResults',
     'FactResult',
     'Result',

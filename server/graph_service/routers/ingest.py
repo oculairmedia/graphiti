@@ -11,7 +11,13 @@ from graphiti_core.nodes import EpisodeType
 from graphiti_core.utils.maintenance.graph_data_operations import clear_data
 
 from graph_service.config import get_settings
-from graph_service.dto import AddEntityNodeRequest, AddMessagesRequest, Message, Result
+from graph_service.dto import (
+    AddEntityNodeRequest,
+    AddEntityEdgeRequest,
+    AddMessagesRequest,
+    Message,
+    Result,
+)
 from graph_service.zep_graphiti import ZepGraphitiDep
 
 logger = logging.getLogger(__name__)
@@ -507,6 +513,63 @@ async def add_entity_node(
     # Trigger centrality calculation for new node
     await trigger_centrality_calculation(request.group_id)
     return node
+
+
+@router.post('/entity-edge', status_code=status.HTTP_201_CREATED)
+async def add_entity_edge(
+    request: AddEntityEdgeRequest,
+    graphiti: ZepGraphitiDep,
+) -> Any:
+    """
+    Create or update an entity edge (relationship) between two entity nodes.
+
+    Both source and target nodes must already exist.
+    If an edge with the same UUID exists, it will be updated.
+    """
+    from graphiti_core.edges import EntityEdge
+
+    # Create the edge
+    edge = EntityEdge(
+        uuid=request.uuid,
+        source_node_uuid=request.source_node_uuid,
+        target_node_uuid=request.target_node_uuid,
+        name=request.name,
+        group_id=request.group_id,
+        fact=request.fact or f'{request.name} relationship',
+    )
+
+    # Generate embedding for the fact (enables semantic search on edges)
+    if graphiti.embedder:
+        await edge.generate_embedding(graphiti.embedder)
+
+    # Save to graph
+    await edge.save(graphiti.driver)
+
+    # Invalidate cache after successful data operation
+    await invalidate_cache()
+
+    # Emit webhook for edge creation
+    from graph_service.webhooks import webhook_service
+
+    await webhook_service.emit_data_ingestion(
+        operation='add_edge',
+        nodes=[],
+        edges=[edge],
+        episode=None,
+        group_id=request.group_id,
+        metadata={
+            'edge_uuid': request.uuid,
+            'source_node_uuid': request.source_node_uuid,
+            'target_node_uuid': request.target_node_uuid,
+            'edge_name': request.name,
+        },
+    )
+    logger.info(f'Data ingestion webhook sent for entity edge {edge.uuid}')
+
+    # Trigger centrality calculation (new edges affect node importance)
+    await trigger_centrality_calculation(request.group_id)
+
+    return edge
 
 
 @router.delete('/entity-edge/{uuid}', status_code=status.HTTP_200_OK)
