@@ -526,8 +526,29 @@ async def add_entity_edge(
     Both source and target nodes must already exist.
     If an edge with the same UUID exists, it will be updated.
     """
+    from fastapi import HTTPException
     from graphiti_core.edges import EntityEdge
+    from graphiti_core.nodes import EntityNode
+    from graphiti_core.errors import NodeNotFoundError
     from graphiti_core.utils.datetime_utils import utc_now
+
+    # Validate that source and target nodes exist
+    missing_nodes = []
+    try:
+        await EntityNode.get_by_uuid(graphiti.driver, request.source_node_uuid)
+    except NodeNotFoundError:
+        missing_nodes.append(f'source_node_uuid: {request.source_node_uuid}')
+
+    try:
+        await EntityNode.get_by_uuid(graphiti.driver, request.target_node_uuid)
+    except NodeNotFoundError:
+        missing_nodes.append(f'target_node_uuid: {request.target_node_uuid}')
+
+    if missing_nodes:
+        raise HTTPException(
+            status_code=400,
+            detail=f'Cannot create edge: node(s) not found - {", ".join(missing_nodes)}. Create the nodes first using POST /entity-node.',
+        )
 
     # Create the edge
     edge = EntityEdge(
