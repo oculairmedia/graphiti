@@ -26,6 +26,14 @@ try:
     from graph_service.routers import ingest_temporal
 except ImportError:
     ingest_temporal = None
+try:
+    from graph_service.routers import utils as utils_router
+except ImportError:
+    utils_router = None
+try:
+    from graph_service.routers import tools as tools_router
+except ImportError:
+    tools_router = None
 from graph_service.zep_graphiti import initialize_graphiti
 from graph_service.websocket_manager import manager
 from graph_service.webhooks import webhook_service
@@ -105,6 +113,10 @@ app.include_router(nodes.router)
 app.include_router(metrics.router)  # Add metrics endpoints
 if relevance:
     app.include_router(relevance.router)  # Add relevance scoring endpoints
+if utils_router:
+    app.include_router(utils_router.router, prefix='/api')  # Utility endpoints for integrations
+if tools_router:
+    app.include_router(tools_router.router, prefix='/api')  # Maintenance tools for integrations
 
 
 @app.get('/healthcheck')

@@ -1886,3 +1886,85 @@ async def merge_node_into(
         stats['centrality_recalculated'] = False
 
     return stats
+
+
+async def prune_stale_files(
+    driver,
+    group_id: str,
+    active_files: list[str],
+    file_patterns: list[str] | None = None,
+) -> dict[str, Any]:
+    """
+    Mark file-like EntityNodes as invalid if they're not in the active files list.
+
+    This is used by integrations like VibeSync to clean up deleted files from
+    the knowledge graph without actually deleting the nodes (preserving history).
+
+    Args:
+        driver: Graph database driver
+        group_id: Group ID to scope the pruning operation
+        active_files: List of file paths that currently exist (these will NOT be invalidated)
+        file_patterns: Optional list of patterns to identify file nodes (default: common extensions)
+
+    Returns:
+        Dict with invalidated_count and invalidated_files list
+    """
+    if file_patterns is None:
+        file_patterns = [
+            '.py',
+            '.ts',
+            '.tsx',
+            '.js',
+            '.jsx',
+            '.rs',
+            '.go',
+            '.java',
+            '.cpp',
+            '.c',
+            '.h',
+            '.hpp',
+            '.cs',
+            '.rb',
+            '.php',
+            '.vue',
+            '.svelte',
+            '.md',
+            '.yaml',
+            '.yml',
+            '.json',
+            '.toml',
+            '.sql',
+        ]
+
+    pattern_conditions = ' OR '.join([f"n.name ENDS WITH '{ext}'" for ext in file_patterns])
+    pattern_conditions += " OR n.name CONTAINS '/'"
+
+    now = utc_now().isoformat()
+
+    query = f"""
+    MATCH (n:Entity)
+    WHERE n.group_id = $group_id
+      AND n.invalid_at IS NULL
+      AND ({pattern_conditions})
+      AND NOT n.name IN $active_files
+    SET n.invalid_at = $now
+    RETURN n.uuid AS uuid, n.name AS name
+    """
+
+    result, _, _ = await driver.execute_query(
+        query,
+        group_id=group_id,
+        active_files=active_files,
+        now=now,
+    )
+
+    invalidated = [{'uuid': r['uuid'], 'name': r['name']} for r in result]
+
+    logger.info(f'Pruned {len(invalidated)} stale file nodes in group {group_id}')
+
+    return {
+        'invalidated_count': len(invalidated),
+        'invalidated_files': invalidated,
+        'group_id': group_id,
+        'active_files_count': len(active_files),
+    }
