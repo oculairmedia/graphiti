@@ -67,15 +67,16 @@ class OpenAIRerankerClient(CrossEncoderClient):
                 ),
                 Message(
                     role='user',
-                    content=f"""
-                           Respond with "True" if PASSAGE is relevant to QUERY and "False" otherwise.
-                           <PASSAGE>
-                           {passage}
-                           </PASSAGE>
-                           <QUERY>
-                           {query}
-                           </QUERY>
-                           """,
+                    content=f"""Respond with "True" if PASSAGE is relevant to QUERY and "False" otherwise.
+<QUERY>
+{query}
+</QUERY>
+<PASSAGE>
+{passage}
+</PASSAGE>
+<QUERY_REMINDER>
+{query}
+</QUERY_REMINDER>""",
                 ),
             ]
             for passage in passages

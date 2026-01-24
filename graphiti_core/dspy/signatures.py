@@ -138,6 +138,10 @@ class EntityExtractionSignature(dspy.Signature):
     custom_instructions: str = dspy.InputField(
         desc='Optional custom extraction instructions', default=''
     )
+    task_reminder: str = dspy.InputField(
+        desc='REMINDER: Extract ALL entities from current_message using entity_types. Be thorough.',
+        default='Extract ALL significant entities with their type IDs. Include speakers, named entities, and technical terms.',
+    )
 
     extracted_entities: ExtractedEntities = dspy.OutputField(
         desc='ALL extracted entities with names and type IDs - be thorough'
@@ -188,6 +192,10 @@ class EdgeExtractionSignature(dspy.Signature):
         desc='Previous edge patterns for consistency (may be empty)',
         default='',
     )
+    task_reminder: str = dspy.InputField(
+        desc='REMINDER: Extract ALL relationships between entities. Be thorough.',
+        default='Extract ALL factual relationships between entities. Include actions, ownership, membership, dependencies. Use SCREAMING_SNAKE_CASE for relation_type.',
+    )
 
     extracted_edges: ExtractedEdges = dspy.OutputField(
         desc='ALL extracted edges/relationships between entities - be thorough'
@@ -236,6 +244,10 @@ class NodeDeduplicationSignature(dspy.Signature):
         desc='Previous resolution decisions for context (may be empty)',
         default='',
     )
+    task_reminder: str = dspy.InputField(
+        desc='REMINDER: Compare each extracted entity against existing entities for duplicates.',
+        default='For EACH extracted entity: set duplicate_idx to matching existing entity idx (or -1 if none). Use zero-based indexing. Choose best name.',
+    )
 
     entity_resolutions: NodeResolutions = dspy.OutputField(
         desc='Resolution for EACH extracted entity with duplicate information'
@@ -270,6 +282,10 @@ class SummaryGenerationSignature(dspy.Signature):
     current_message: str = dspy.InputField(desc='The current message containing entity information')
     entity_name: str = dspy.InputField(desc='Name of the entity to summarize')
     existing_summary: str = dspy.InputField(desc='Existing summary to update (if any)', default='')
+    task_reminder: str = dspy.InputField(
+        desc='REMINDER: Generate a concise summary for the entity.',
+        default='Create/update summary for entity_name using current_message. Under 250 words, third person, factual.',
+    )
 
     summary: Summary = dspy.OutputField(desc='Updated summary for the entity (under 250 words)')
 

@@ -270,7 +270,12 @@ async def edge_search(
             reranker_min_score,
         )
     elif config.reranker == EdgeReranker.cross_encoder:
-        fact_to_uuid_map = {edge.fact: edge.uuid for edge in list(edge_uuid_map.values())[:limit]}
+        # Token-Optimized Reranking: Prepend [EDGE:UUID] for "Hard Attention" anchoring
+        # This helps rerankers focus attention on specific passages (inspired by HashHop research)
+        fact_to_uuid_map = {
+            f'[EDGE:{edge.uuid[:8]}] {edge.fact}': edge.uuid
+            for edge in list(edge_uuid_map.values())[:limit]
+        }
         reranked_facts = await cross_encoder.rank(query, list(fact_to_uuid_map.keys()))
         reranked_uuids = [
             fact_to_uuid_map[fact] for fact, score in reranked_facts if score >= reranker_min_score
@@ -374,8 +379,10 @@ async def node_search(
             reranker_min_score,
         )
     elif config.reranker == NodeReranker.cross_encoder:
-        name_to_uuid_map = {node.name: node.uuid for node in list(node_uuid_map.values())}
-
+        name_to_uuid_map = {
+            f'[NODE:{node.uuid[:8]}] {node.name}': node.uuid
+            for node in list(node_uuid_map.values())
+        }
         reranked_node_names = await cross_encoder.rank(query, list(name_to_uuid_map.keys()))
         reranked_uuids = [
             name_to_uuid_map[name]
@@ -430,12 +437,13 @@ async def episode_search(
         reranked_uuids = rrf(search_result_uuids, min_score=reranker_min_score)
 
     elif config.reranker == EpisodeReranker.cross_encoder:
-        # use rrf as a preliminary reranker
         rrf_result_uuids = rrf(search_result_uuids, min_score=reranker_min_score)
         rrf_results = [episode_uuid_map[uuid] for uuid in rrf_result_uuids][:limit]
 
-        content_to_uuid_map = {episode.content: episode.uuid for episode in rrf_results}
-
+        content_to_uuid_map = {
+            f'[EPISODE:{episode.uuid[:8]}] {episode.content}': episode.uuid
+            for episode in rrf_results
+        }
         reranked_contents = await cross_encoder.rank(query, list(content_to_uuid_map.keys()))
         reranked_uuids = [
             content_to_uuid_map[content]
@@ -489,7 +497,11 @@ async def community_search(
             query_vector, search_result_uuids_and_vectors, config.mmr_lambda, reranker_min_score
         )
     elif config.reranker == CommunityReranker.cross_encoder:
-        name_to_uuid_map = {node.name: node.uuid for result in search_results for node in result}
+        name_to_uuid_map = {
+            f'[COMMUNITY:{node.uuid[:8]}] {node.name}': node.uuid
+            for result in search_results
+            for node in result
+        }
         reranked_nodes = await cross_encoder.rank(query, list(name_to_uuid_map.keys()))
         reranked_uuids = [
             name_to_uuid_map[name] for name, score in reranked_nodes if score >= reranker_min_score

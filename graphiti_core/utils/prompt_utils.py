@@ -35,10 +35,11 @@ def safe_json_dumps(obj: Any) -> str:
     Returns:
         JSON string
     """
+
     def datetime_handler(x):
         if isinstance(x, datetime):
             return x.isoformat()
-        raise TypeError(f"Object of type {type(x).__name__} is not JSON serializable")
+        raise TypeError(f'Object of type {type(x).__name__} is not JSON serializable')
 
     return json.dumps(obj, ensure_ascii=False, default=datetime_handler)
 
@@ -70,16 +71,17 @@ def estimate_tokens(text: str) -> int:
     # Try using tiktoken for accurate counting
     try:
         import tiktoken
-        encoding = tiktoken.get_encoding("cl100k_base")
+
+        encoding = tiktoken.get_encoding('cl100k_base')
         return len(encoding.encode(text))
     except ImportError:
         # Fallback: More conservative heuristic (3 chars per token instead of 4)
         # This accounts for underestimation issues we've observed
-        logger.debug("tiktoken not available, using conservative heuristic for token estimation")
+        logger.debug('tiktoken not available, using conservative heuristic for token estimation')
         return len(text) // 3
     except Exception as e:
         # If tiktoken fails for any reason, use conservative heuristic
-        logger.warning(f"tiktoken encoding failed: {e}, using conservative heuristic")
+        logger.warning(f'tiktoken encoding failed: {e}, using conservative heuristic')
         return len(text) // 3
 
 
@@ -168,10 +170,12 @@ async def rerank_and_budget_episodes(
         else:
             content = strip_ansi_codes(str(ep))
 
-        passages.append(content)
+        ep_uuid = getattr(ep, 'uuid', None) if hasattr(ep, 'uuid') else ep.get('uuid')
+        prefixed_content = f'[EPISODE:{ep_uuid[:8] if ep_uuid else "unknown"}] {content}'
+        passages.append(prefixed_content)
         episode_metadata.append(
             {
-                'uuid': getattr(ep, 'uuid', None) if hasattr(ep, 'uuid') else ep.get('uuid'),
+                'uuid': ep_uuid,
                 'timestamp': getattr(ep, 'valid_at', None)
                 if hasattr(ep, 'valid_at')
                 else ep.get('valid_at'),
@@ -183,10 +187,7 @@ async def rerank_and_budget_episodes(
     try:
         ranked_passages = await reranker.rank(query, passages)
         top_score = ranked_passages[0][1] if ranked_passages else 0.0
-        logger.info(
-            f'Reranker returned {len(ranked_passages)} results, '
-            f'top score: {top_score:.3f}'
-        )
+        logger.info(f'Reranker returned {len(ranked_passages)} results, top score: {top_score:.3f}')
     except Exception as e:
         logger.warning(f'Reranker failed: {e}. Falling back to FIFO.')
         return clip_previous_episodes(episodes, max_episodes=3)

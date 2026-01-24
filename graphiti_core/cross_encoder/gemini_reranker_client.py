@@ -79,7 +79,6 @@ class GeminiRerankerClient(CrossEncoderClient):
         if len(passages) <= 1:
             return [(passage, 1.0) for passage in passages]
 
-        # Generate scoring prompts for each passage
         scoring_prompts = []
         for passage in passages:
             prompt = f"""Rate how well this passage answers or relates to the query. Use a scale from 0 to 100.
@@ -87,6 +86,8 @@ class GeminiRerankerClient(CrossEncoderClient):
 Query: {query}
 
 Passage: {passage}
+
+Query (reminder): {query}
 
 Provide only a number between 0 and 100 (no explanation, just the number):"""
 
