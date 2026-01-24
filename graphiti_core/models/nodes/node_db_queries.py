@@ -30,7 +30,7 @@ EPISODIC_NODE_SAVE_BULK = """
 """
 
 ENTITY_NODE_SAVE = """
-        MERGE (n:Entity {uuid: $entity_data.uuid})
+        MERGE (n:Entity {uuid: $entity_data.uuid, name: $entity_data.name, group_id: $entity_data.group_id})
         ON CREATE SET n = $entity_data
         ON MATCH SET n += $entity_data, n.created_at = n.created_at
         FOREACH (_ IN CASE WHEN $entity_data.name_embedding IS NOT NULL THEN [1] ELSE [] END |
