@@ -28,7 +28,7 @@ COPY worker /app/worker
 
 # Install Python dependencies using uv
 RUN pip install --no-cache-dir uv && \
-    uv pip install --system -e ".[falkordb,cerebras,anthropic,worker]"
+    uv pip install --system -e ".[falkordb,cerebras,anthropic,worker,dspy]"
 
 # Install additional worker dependencies
 
