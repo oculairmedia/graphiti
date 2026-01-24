@@ -91,12 +91,22 @@ TIMESTAMP_PATTERN: re.Pattern[str] = re.compile(
     re.IGNORECASE,
 )
 
+# Anthropic tool IDs: toolu_01abc123... (20+ alphanumeric chars after prefix)
+TOOL_ID_PATTERN: re.Pattern[str] = re.compile(r'^toolu_[a-z0-9]{20,}$', re.IGNORECASE)
+
+# Pure numeric entities (never meaningful as entity names)
+PURE_NUMERIC_PATTERN: re.Pattern[str] = re.compile(r'^\d+$')
+
 
 def is_garbage_entity(name: str) -> bool:
     normalized = name.lower().strip()
     if normalized in ENTITY_NAME_BLOCKLIST:
         return True
     if TIMESTAMP_PATTERN.search(normalized):
+        return True
+    if TOOL_ID_PATTERN.match(normalized):
+        return True
+    if PURE_NUMERIC_PATTERN.match(normalized):
         return True
     return False
 

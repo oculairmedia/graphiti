@@ -7,6 +7,8 @@ import pytest
 from graphiti_core.utils.maintenance.node_operations import (
     ENTITY_NAME_BLOCKLIST,
     TIMESTAMP_PATTERN,
+    TOOL_ID_PATTERN,
+    PURE_NUMERIC_PATTERN,
     is_garbage_entity,
     normalize_entity_name,
 )
@@ -125,3 +127,52 @@ class TestBlocklistContents:
     def test_timestamp_pattern_compiled(self):
         assert TIMESTAMP_PATTERN is not None
         assert hasattr(TIMESTAMP_PATTERN, 'search')
+
+    def test_tool_id_pattern_compiled(self):
+        assert TOOL_ID_PATTERN is not None
+        assert hasattr(TOOL_ID_PATTERN, 'match')
+
+    def test_pure_numeric_pattern_compiled(self):
+        assert PURE_NUMERIC_PATTERN is not None
+        assert hasattr(PURE_NUMERIC_PATTERN, 'match')
+
+
+class TestToolIdFiltering:
+    def test_anthropic_tool_ids_filtered(self):
+        tool_ids = [
+            'toolu_01uiqduv15n8pfpeutwbxw5c',
+            'toolu_018hqbbvdqxl2rr569gjvxl1',
+            'toolu_016zpydkaunh7hneequpzn4n',
+            'toolu_019NRg7v99XB7co4vY2kZU6t',
+        ]
+        for tid in tool_ids:
+            assert is_garbage_entity(tid), f"Tool ID '{tid}' should be filtered"
+
+    def test_short_tool_ids_not_filtered(self):
+        short_ids = ['toolu_abc', 'toolu_12345']
+        for tid in short_ids:
+            assert not is_garbage_entity(tid), f"Short ID '{tid}' should NOT be filtered"
+
+    def test_similar_but_valid_not_filtered(self):
+        valid = ['tool_usage', 'toolu_concept', 'my_toolu_thing']
+        for entity in valid:
+            assert not is_garbage_entity(entity), f"Valid entity '{entity}' should NOT be filtered"
+
+
+class TestPureNumericFiltering:
+    def test_pure_numbers_filtered(self):
+        numbers = ['9877', '55', '123456', '0', '999999999']
+        for num in numbers:
+            assert is_garbage_entity(num), f"Pure number '{num}' should be filtered"
+
+    def test_numbers_with_context_not_filtered(self):
+        valid = ['Version 2025', 'Python 3.11', 'RFC 7231', '3.5 sonnet', 'GPT-4']
+        for entity in valid:
+            assert not is_garbage_entity(entity), (
+                f"Number with context '{entity}' should NOT be filtered"
+            )
+
+    def test_decimals_not_filtered(self):
+        decimals = ['3.14', '0.5', '100.0']
+        for dec in decimals:
+            assert not is_garbage_entity(dec), f"Decimal '{dec}' should NOT be filtered"
