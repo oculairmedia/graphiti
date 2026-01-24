@@ -33,7 +33,9 @@ ENTITY_NODE_SAVE = """
         MERGE (n:Entity {uuid: $entity_data.uuid})
         ON CREATE SET n = $entity_data
         ON MATCH SET n += $entity_data, n.created_at = n.created_at
-        SET n.name_embedding = vecf32($entity_data.name_embedding)
+        FOREACH (_ IN CASE WHEN $entity_data.name_embedding IS NOT NULL THEN [1] ELSE [] END |
+            SET n.name_embedding = vecf32($entity_data.name_embedding)
+        )
         RETURN n.uuid AS uuid"""
 
 ENTITY_NODE_SAVE_BULK = """
