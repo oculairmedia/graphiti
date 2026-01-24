@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from graphiti_core.utils.datetime_utils import utc_now
 from pydantic import BaseModel, Field, validator
@@ -12,7 +12,10 @@ class Result(BaseModel):
 
 class SuccessResponse(BaseModel):
     success: bool = True
-    message: str = "Operation completed successfully"
+    message: str = 'Operation completed successfully'
+
+
+FALLBACK_EPISODE_NAME = 'unnamed-episode'
 
 
 class Message(BaseModel):
@@ -31,6 +34,17 @@ class Message(BaseModel):
     source_description: str = Field(
         default='', description='The description of the source of the message'
     )
+
+    @validator('name', pre=True, always=True)
+    def ensure_name_not_empty(cls, value: str | None, values: dict[str, Any]) -> str:
+        normalized = (value or '').strip()
+        if normalized:
+            return normalized
+        content: str = values.get('content', '')
+        if content:
+            content_preview = content[:60].replace('\n', ' ').strip()
+            return content_preview or FALLBACK_EPISODE_NAME
+        return FALLBACK_EPISODE_NAME
 
     @validator('source_description', pre=True, always=True)
     def ensure_source_description(cls, value: str | None) -> str:

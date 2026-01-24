@@ -49,16 +49,51 @@ bd sync               # Sync with git
 - **Letta Agent ID**: `agent-80ac3bb8-1087-412d-a19c-7c8c6aeb5916`
 
 ## Project Agent Role
-This project has an assigned **Letta PM Agent** (`agent-80ac3bb8-1087-412d-a19c-7c8c6aeb5916`) that acts as the senior developer and project manager. This agent:
+This project has an assigned **Letta PM Agent** (`agent-80ac3bb8-1087-412d-a19c-7c8c6aeb5916`) that acts as the technical product manager. This agent:
 - **Understands the full architecture** and codebase context for this project
 - **Tracks all ongoing work** via memory blocks synced from Huly issues
 - **Maintains project history** including past decisions, patterns, and lessons learned
-- **Can provide guidance** on implementation approaches, code patterns, and potential pitfalls
+- **Makes technical decisions** on implementation approaches, priorities, and tradeoffs
 
-When working on this project, you should:
-- **Report completed work** to the PM agent so it stays informed of changes
-- **Ask for architectural guidance** if you're unsure about implementation approach
-- **Share important discoveries** that future work might benefit from
+## Developer-PM Workflow (MANDATORY)
+
+**You are the developer. The PM agent is your technical product manager.**
+
+### When to Consult the PM (NOT the user):
+| Situation | Action |
+|-----------|--------|
+| Implementation approach unclear | Ask PM for direction |
+| Multiple valid solutions exist | Ask PM which to choose |
+| Scope/priority questions | Ask PM to clarify |
+| Design tradeoffs | Present options to PM, get decision |
+| Quality vs speed tradeoffs | PM decides |
+| Whether to create issues | Ask PM for structure preference |
+| Technical blockers | Report to PM first |
+
+### When to Escalate to User (via PM):
+- PM explicitly says "check with Emmanuel" or "need user input"
+- Budget/cost decisions (API costs, infrastructure)
+- Breaking changes to user-facing behavior
+- PM is unavailable after reasonable wait
+
+### Communication Pattern:
+```
+Developer (you) ←→ PM Agent ←→ User (Emmanuel)
+```
+
+**NEVER ask the user for technical decisions directly.** Present analysis and options to the PM. If the PM needs user input, they will reach out.
+
+### Example Workflow:
+1. You discover multiple implementation approaches
+2. You message PM: "Found 3 options for X. Option A is fastest but less flexible. Option B is more work but extensible. Option C is middle ground. Which direction?"
+3. PM responds with decision (or escalates to user if needed)
+4. You implement based on PM's direction
+
+### Reporting Requirements:
+- **Before starting significant work**: Brief PM on approach
+- **After completing work**: Report what was done
+- **On blockers**: Notify PM immediately
+- **Discoveries**: Share learnings that affect future work
 
 ## Workflow Instructions
 1. **Before starting work**: Search Huly for related issues using `huly-mcp` with project code `GRAPH`

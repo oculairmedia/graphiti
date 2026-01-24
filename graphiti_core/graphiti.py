@@ -1244,10 +1244,17 @@ class Graphiti:
         loop = asyncio.get_event_loop()
         result = await loop.run_in_executor(None, run_extraction)
 
-        # Convert DSPy output to EntityNode objects (matching extract_nodes output)
+        from graphiti_core.utils.maintenance.node_operations import is_garbage_entity
+
         now = utc_now()
         extracted = []
+        filtered_count = 0
         for entity in result.extracted_entities:
+            if is_garbage_entity(entity.name):
+                logger.debug(f"DSPy filtering garbage entity: '{entity.name}'")
+                filtered_count += 1
+                continue
+
             entity_type = (
                 pipeline.entity_types[entity.entity_type_id]['name']
                 if entity.entity_type_id < len(pipeline.entity_types)
@@ -1262,7 +1269,10 @@ class Graphiti:
             )
             extracted.append(node)
 
-        logger.info(f'DSPy extracted {len(extracted)} entities from episode {episode.uuid}')
+        logger.info(
+            f'DSPy extracted {len(extracted)} entities from episode {episode.uuid}'
+            f'{f" (filtered {filtered_count} garbage)" if filtered_count else ""}'
+        )
         return extracted
 
     @retry_with_backoff(max_retries=3, base_delay=2.0)

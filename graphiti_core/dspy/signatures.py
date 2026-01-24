@@ -124,6 +124,10 @@ class EntityExtractionSignature(dspy.Signature):
     - Dates, times, temporal information (handled separately)
     - Pronouns, generic nouns ("the project", "the system")
     - Entities only in previous messages (context only)
+    - Tool/command names: bash, read, edit, write, grep, git, npm, docker, curl, etc.
+    - ISO timestamps or date strings: 2025-01-24, 18:30:00Z, 2025_01_24t183000
+    - Session/system metadata: "OpenCode session", "session started", "session ended"
+    - Generic operational terms: "the tool", "the command", "the script"
     """
 
     previous_messages: str = dspy.InputField(desc='Previous messages for context (JSON array)')

@@ -50,13 +50,66 @@ from graphiti_core.utils.prompt_utils import (
     rerank_and_budget_episodes,
 )
 
+ENTITY_NAME_BLOCKLIST: frozenset[str] = frozenset(
+    {
+        'bash',
+        'read',
+        'edit',
+        'write',
+        'grep',
+        'git',
+        'npm',
+        'docker',
+        'curl',
+        'todowrite',
+        'todoread',
+        'call_omo_agent',
+        'background_output',
+        'delegate_task',
+        'opencode session',
+        'opencode_session',
+        'session',
+        'session started',
+        'session ended',
+        'the tool',
+        'the command',
+        'the script',
+        'the system',
+        'the project',
+        'unknown',
+        'null',
+        'none',
+        'undefined',
+    }
+)
+
+TIMESTAMP_PATTERN: re.Pattern[str] = re.compile(
+    r'^\d{4}[-_]\d{2}[-_]\d{2}'
+    r'|T\d{2}:\d{2}:\d{2}'
+    r'|^\d{4}_\d{2}_\d{2}t'
+    r'|^\d{2}:\d{2}:\d{2}',
+    re.IGNORECASE,
+)
+
+
+def is_garbage_entity(name: str) -> bool:
+    normalized = name.lower().strip()
+    if normalized in ENTITY_NAME_BLOCKLIST:
+        return True
+    if TIMESTAMP_PATTERN.search(normalized):
+        return True
+    return False
+
 
 def normalize_entity_name(name: str) -> str:
     """
     Normalize entity name for consistent deduplication.
 
-    This ensures variations like "Claude", "claude", "CLAUDE" all map to the same entity.
-    Also handles common separators and typos.
+    File paths are preserved as-is (with backslash normalization) to enable
+    deterministic deduplication and easier graph queries.
+
+    Non-path entities are normalized: lowercase, separators to underscores,
+    special characters removed.
 
     Args:
         name: Original entity name
@@ -70,18 +123,18 @@ def normalize_entity_name(name: str) -> str:
     if not name or not name.strip():
         return name
 
-    # Convert to lowercase
-    normalized = name.lower()
-    # Replace common separators with underscore
+    stripped = name.strip()
+
+    if '/' in stripped or stripped.startswith('/opt/') or stripped.startswith('C:'):
+        return stripped.replace('\\', '/').rstrip('/')
+
+    normalized = stripped.lower()
     normalized = re.sub(r'[-.\s]+', '_', normalized)
-    # Remove special characters except underscores and alphanumeric
     normalized = re.sub(r'[^a-z0-9_]', '', normalized)
-    # Remove multiple consecutive underscores
     normalized = re.sub(r'_+', '_', normalized)
-    # Remove leading/trailing underscores
     normalized = normalized.strip('_')
 
-    return normalized or name  # Fallback to original if normalization results in empty string
+    return normalized or name
 
 
 def calculate_fuzzy_similarity(name1: str, name2: str) -> float:
@@ -407,11 +460,9 @@ async def extract_nodes(
             for entity in missing_entities:
                 custom_prompt += f'\n{entity},'
 
-    # Enhanced filtering and name validation
     filtered_extracted_entities = []
     for entity in extracted_entities:
-        # Multiple validation checks for entity names
-        if (
+        if not (
             entity.name
             and isinstance(entity.name, str)
             and entity.name.strip()
@@ -419,11 +470,16 @@ async def extract_nodes(
             and entity.name.strip() != 'null'
             and entity.name.strip() != 'None'
         ):
-            filtered_extracted_entities.append(entity)
-        else:
             logger.warning(
                 f"Skipping entity with invalid name: '{entity.name}' (type: {type(entity.name)})"
             )
+            continue
+
+        if is_garbage_entity(entity.name):
+            logger.debug(f"Filtering garbage entity: '{entity.name}'")
+            continue
+
+        filtered_extracted_entities.append(entity)
 
     end = time()
     logger.debug(f'Extracted new nodes: {filtered_extracted_entities} in {(end - start) * 1000} ms')
