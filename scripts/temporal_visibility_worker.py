@@ -32,6 +32,7 @@ async def main() -> None:
             'temporalio is not installed. Install with: pip install temporalio'
         ) from e
 
+    from temporalio.worker import UnsandboxedWorkflowRunner
     from graphiti_core.utils.temporal_visibility.workflow import EpisodeIngestionVisibilityWorkflow
 
     Client = temporalio_client.Client
@@ -51,6 +52,7 @@ async def main() -> None:
         task_queue=task_queue,
         workflows=[EpisodeIngestionVisibilityWorkflow],
         activities=[],
+        workflow_runner=UnsandboxedWorkflowRunner(),
     )
 
     stop_event = asyncio.Event()

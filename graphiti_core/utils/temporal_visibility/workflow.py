@@ -7,7 +7,7 @@ import importlib
 workflow = importlib.import_module('temporalio.workflow')
 
 
-@workflow.defn(name='EpisodeIngestionVisibilityWorkflow')
+@workflow.defn(name='EpisodeIngestionVisibilityWorkflow', sandboxed=False)
 class EpisodeIngestionVisibilityWorkflow:
     """A minimal workflow that only records ingestion stage events.
 
