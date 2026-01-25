@@ -363,6 +363,37 @@ docker start graphiti-nginx-1 graphiti-frontend-1
 
 **Fix**: FalkorDB memory limit is 16GB in docker-compose. With 224K+ edges and 66K+ nodes, this should be sufficient. If OOM occurs, increase memory limit in docker-compose.yml.
 
+### Vector Search Returns 0 Results / "expected Vectorf32 but was List" Error
+**Symptom**: Node or edge similarity search returns 0 results, logs show:
+```
+Type mismatch: expected Null or Vectorf32 but was List
+```
+
+**Cause**: Some embeddings were stored as Python Lists instead of FalkorDB's native Vectorf32 type. This happens when embeddings are ingested through code paths that don't properly convert to Vectorf32. Even one corrupted embedding breaks ALL vector queries because FalkorDB fails when it encounters the List-type embedding.
+
+**Diagnosis**:
+```bash
+# Run the validation script
+python3 /opt/stacks/graphiti/scripts/validate_embeddings.py
+```
+
+**Fix**:
+```bash
+# Remove corrupted embeddings (they can be re-embedded later)
+python3 /opt/stacks/graphiti/scripts/validate_embeddings.py --fix
+```
+
+**Prevention**: All embedding storage code MUST use `vecf32([...])` Cypher syntax, not raw Python lists. Example:
+```python
+# CORRECT - stores as Vectorf32
+query = f"SET n.embedding = vecf32([{','.join(str(v) for v in embedding)}])"
+
+# WRONG - stores as List (causes this bug)
+query = f"SET n.embedding = {embedding}"
+```
+
+**History**: Fixed Jan 2026. Found 28 corrupted node embeddings and 41 corrupted edge embeddings that had been ingested as Lists.
+
 ## DSPy Training Data Collection
 
 **Status**: Production-ready (Jan 2026). Training data stored in FalkorDB `graphiti_prompts` graph.

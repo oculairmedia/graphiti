@@ -13,6 +13,47 @@ use crate::config::Config;
 use crate::falkor::parser_v2;
 use crate::models::{Edge, Episode, Node};
 
+fn f32_to_cypher_float(v: f32) -> String {
+    if !v.is_finite() {
+        return "0.0".to_string();
+    }
+
+    // Avoid integer literals (e.g. 0) and scientific notation.
+    // FalkorDB's vecf32() expects floats.
+    let mut s = format!("{:.8}", v);
+    while s.contains('.') && s.ends_with('0') {
+        s.pop();
+    }
+    if s.ends_with('.') {
+        s.push('0');
+    }
+    if s == "-0.0" {
+        "0.0".to_string()
+    } else {
+        s
+    }
+}
+
+fn embedding_stats(embedding: &[f32]) -> (usize, usize, f64) {
+    let mut non_finite = 0usize;
+    let mut zeros = 0usize;
+    let mut sumsq = 0f64;
+
+    for &v in embedding {
+        if !v.is_finite() {
+            non_finite += 1;
+            continue;
+        }
+        if v == 0.0 {
+            zeros += 1;
+        }
+        let vf = v as f64;
+        sumsq += vf * vf;
+    }
+
+    (non_finite, zeros, sumsq.sqrt())
+}
+
 /// Parse edges from property columns (optimized to avoid embedding data transfer)
 /// Expected columns: source_uuid, source_name, edge_uuid, edge_fact, edge_created_at, edge_group_id, edge_weight, target_uuid, target_name
 fn parse_edges_from_properties(result: LazyResultSet<'_>) -> Result<Vec<Edge>> {
@@ -223,42 +264,66 @@ impl FalkorClientV2 {
         min_score: f32,
         group_ids: Option<&[String]>,
     ) -> Result<Vec<Node>> {
+        let (non_finite, zeros, l2_norm) = embedding_stats(embedding);
+        if non_finite > 0 {
+            tracing::warn!(
+                "Query embedding contains {} non-finite values; coercing to 0.0 for vecf32()",
+                non_finite
+            );
+        }
+        tracing::debug!(
+            "Query embedding stats: dim={}, zeros={}, non_finite={}, l2_norm={:.6}",
+            embedding.len(),
+            zeros,
+            non_finite,
+            l2_norm
+        );
+
         // Build the vector string inline for HNSW vector index query
         let embedding_str = embedding
             .iter()
-            .map(|v| v.to_string())
+            .map(|v| f32_to_cypher_float(*v))
             .collect::<Vec<_>>()
             .join(",");
 
         // Use FalkorDB's HNSW vector index procedure for fast ANN search
         // This uses the index created with:
         // CREATE VECTOR INDEX FOR (n:Entity) ON (n.name_embedding) OPTIONS {dimension: 2560, similarityFunction: 'cosine'}
+        //
+        // IMPORTANT: FalkorDB vector index returns COSINE DISTANCE (0 = identical, 2 = opposite)
+        // We convert to similarity: (2 - distance) / 2 so that 1 = identical, 0 = opposite
+        // This matches the brute-force fallback behavior and allows min_score filtering to work correctly
         let vector_query_cypher = format!(
             "CALL db.idx.vector.queryNodes('Entity', 'name_embedding', {}, vecf32([{}])) 
              YIELD node, score
-             WHERE score >= {}
+             WITH node, (2 - score) / 2 AS similarity
+             WHERE similarity >= {}
              RETURN node.uuid AS uuid_str",
             limit, embedding_str, min_score
         );
 
-        tracing::debug!("Using HNSW vector index for node similarity search");
+        tracing::info!(
+            "Executing HNSW node vector query with min_score={}",
+            min_score
+        );
 
         let mut node_uuids: Vec<String> = Vec::new();
 
         match self.graph.query(&vector_query_cypher).execute().await {
             Ok(result) => {
+                tracing::info!("HNSW node query returned {} rows", result.data.len());
                 for row in result.data {
                     if let Some(falkordb::FalkorValue::String(uuid)) = row.first() {
                         node_uuids.push(uuid.clone());
                     }
                 }
+                tracing::info!("Extracted {} node UUIDs", node_uuids.len());
             }
             Err(e) => {
                 tracing::warn!(
                     "HNSW vector index query failed for nodes, falling back to brute-force: {:?}",
                     e
                 );
-                // Fallback to brute-force if vector index not available
                 return self
                     .similarity_search_nodes_brute_force(embedding, limit, min_score, group_ids)
                     .await;
@@ -266,7 +331,39 @@ impl FalkorClientV2 {
         }
 
         if node_uuids.is_empty() {
-            return Ok(Vec::new());
+            // Minimal diagnostic: check whether FalkorDB returns any raw rows before similarity filtering.
+            // This helps distinguish an invalid query vector (no rows) from NaN/null similarity (filtered out).
+            let diag_cypher = format!(
+                "CALL db.idx.vector.queryNodes('Entity', 'name_embedding', {}, vecf32([{}])) \
+                 YIELD node, score \
+                 RETURN node.uuid AS uuid_str, score \
+                 LIMIT 3",
+                limit.min(3),
+                embedding_str
+            );
+            match self.graph.query(&diag_cypher).execute().await {
+                Ok(diag) => {
+                    tracing::warn!(
+                        "HNSW node query yielded 0 UUIDs after filtering; raw rows sample size={} (limit=3)",
+                        diag.data.len()
+                    );
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        "HNSW diagnostic query failed (nodes): {:?}; falling back to brute-force",
+                        e
+                    );
+                }
+            }
+        }
+
+        if node_uuids.is_empty() {
+            tracing::warn!(
+                "HNSW node similarity search returned no UUIDs; falling back to brute-force"
+            );
+            return self
+                .similarity_search_nodes_brute_force(embedding, limit, min_score, group_ids)
+                .await;
         }
 
         // Fetch full node data with optional group filter
@@ -311,9 +408,14 @@ impl FalkorClientV2 {
         min_score: f32,
         group_ids: Option<&[String]>,
     ) -> Result<Vec<Node>> {
+        tracing::info!(
+            "Using brute-force similarity search for nodes (limit: {}, min_score: {})",
+            limit,
+            min_score
+        );
         let embedding_str = embedding
             .iter()
-            .map(|v| v.to_string())
+            .map(|v| f32_to_cypher_float(*v))
             .collect::<Vec<_>>()
             .join(",");
 
@@ -335,16 +437,60 @@ impl FalkorClientV2 {
         let cypher = format!(
             "MATCH (n:Entity) 
              WHERE n.name_embedding IS NOT NULL{}
-             WITH n, (2 - vec.cosineDistance(n.name_embedding, vecf32([{}])))/2 AS score
+             WITH n.uuid AS uuid_str, (2 - vec.cosineDistance(n.name_embedding, vecf32([{}])))/2 AS score
              WHERE score >= {}
-             RETURN n, score 
+             RETURN uuid_str, score 
              ORDER BY score DESC 
              LIMIT {}",
             group_filter, embedding_str, min_score, limit
         );
 
-        let result = self.graph.query(&cypher).execute().await?;
-        parser_v2::parse_nodes_from_falkor_v2(result.data)
+        tracing::info!(
+            "NODE brute-force Cypher query (first 500 chars):\n{}",
+            &cypher.chars().take(500).collect::<String>()
+        );
+        tracing::info!("NODE query vector size: {} elements", embedding.len());
+
+        let mut node_uuids: Vec<String> = Vec::new();
+
+        match self.graph.query(&cypher).execute().await {
+            Ok(result) => {
+                for row in result.data {
+                    if row.len() >= 2 {
+                        if let Some(falkordb::FalkorValue::String(uuid)) = row.first() {
+                            node_uuids.push(uuid.clone());
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                tracing::warn!(
+                    "Brute-force node similarity query failed (returning empty result set): {:?}",
+                    e
+                );
+                return Ok(Vec::new());
+            }
+        }
+
+        if node_uuids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let uuid_list = node_uuids
+            .iter()
+            .map(|u| format!("'{}'", u))
+            .collect::<Vec<_>>()
+            .join(",");
+
+        let fetch_cypher = format!(
+            "MATCH (n:Entity)
+             WHERE n.uuid IN [{}]
+             RETURN n",
+            uuid_list
+        );
+
+        let fetch_result = self.graph.query(&fetch_cypher).execute().await?;
+        parser_v2::parse_nodes_from_falkor_v2(fetch_result.data)
     }
 
     #[instrument(skip(self))]
@@ -530,7 +676,7 @@ impl FalkorClientV2 {
         // Build the vector string inline for HNSW vector index query
         let embedding_str = embedding
             .iter()
-            .map(|v| v.to_string())
+            .map(|v| f32_to_cypher_float(*v))
             .collect::<Vec<_>>()
             .join(",");
 
@@ -538,13 +684,15 @@ impl FalkorClientV2 {
         // This uses the index created with:
         // CREATE VECTOR INDEX FOR ()-[r:RELATES_TO]->() ON (r.fact_embedding) OPTIONS {dimension: 2560, similarityFunction: 'cosine'}
         //
-        // The index returns results ordered by similarity (closest first)
-        // Score is cosine similarity (0-1 range)
+        // IMPORTANT: FalkorDB vector index returns COSINE DISTANCE (0 = identical, 2 = opposite)
+        // We convert to similarity: (2 - distance) / 2 so that 1 = identical, 0 = opposite
+        // This matches the brute-force fallback behavior and allows min_score filtering to work correctly
         let vector_query_cypher = format!(
             "CALL db.idx.vector.queryRelationships('RELATES_TO', 'fact_embedding', {}, vecf32([{}])) 
              YIELD relationship, score
-             WHERE score >= {}
-             RETURN relationship.uuid AS uuid_str, score",
+             WITH relationship, (2 - score) / 2 AS similarity
+             WHERE similarity >= {}
+             RETURN relationship.uuid AS uuid_str, similarity",
             limit, embedding_str, min_score
         );
 
@@ -678,7 +826,7 @@ impl FalkorClientV2 {
 
         let embedding_str = embedding
             .iter()
-            .map(|v| v.to_string())
+            .map(|v| f32_to_cypher_float(*v))
             .collect::<Vec<_>>()
             .join(",");
 
@@ -709,6 +857,13 @@ impl FalkorClientV2 {
              LIMIT {}",
             group_filter, embedding_str, min_score, limit
         );
+
+        // Log the complete query for debugging
+        tracing::info!(
+            "EDGE brute-force Cypher query (first 500 chars):\n{}",
+            &cypher.chars().take(500).collect::<String>()
+        );
+        tracing::info!("EDGE query vector size: {} elements", embedding.len());
 
         let mut edge_uuids: Vec<String> = Vec::new();
 

@@ -1295,7 +1295,7 @@ async def get_entity_neighbors(
             search_payload = {
                 'query': entity_name,
                 'group_ids': effective_group_ids,
-                'max_nodes': 1,
+                'max_nodes': 10,  # Fetch multiple results to find exact matches
                 'config': {
                     'reranker': 'rrf',
                     'search_methods': ['fulltext', 'similarity'],
@@ -1316,7 +1316,14 @@ async def get_entity_neighbors(
                     connected_entities=[],
                 )
 
-            best_match = nodes[0]
+            # Prioritize exact name match over semantic/fulltext ranking
+            # This prevents "falkordb/falkordb:latest" from ranking higher than "FalkorDB"
+            entity_name_lower = entity_name.lower()
+            exact_match = next(
+                (n for n in nodes if n.get('name', '').lower() == entity_name_lower),
+                None,
+            )
+            best_match = exact_match if exact_match else nodes[0]
             center_node_uuid = best_match.get('uuid')
             center_entity_info = {
                 'uuid': center_node_uuid,
