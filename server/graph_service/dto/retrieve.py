@@ -68,6 +68,22 @@ class SearchConfig(BaseModel):
     hipporag_seed_count: Optional[int] = Field(
         default=10, description='Number of HNSW seed nodes for HippoRAG'
     )
+    bfs_beam_width: Optional[int] = Field(default=50, description='Top candidates per hop for BFS')
+    bfs_per_hop_limit: Optional[int] = Field(
+        default=100, description='Max neighbors per node expansion for BFS'
+    )
+    bfs_max_expansions: Optional[int] = Field(
+        default=500, description='Total node expansions before stop for BFS'
+    )
+    bfs_max_visited: Optional[int] = Field(
+        default=1000, description='Hard cap on visited set for BFS'
+    )
+    bfs_hub_degree_threshold: Optional[int] = Field(
+        default=200, description='Nodes above this degree get limited expansion for BFS'
+    )
+    bfs_min_score_cutoff: Optional[float] = Field(
+        default=0.1, description='Stop expanding below this score for BFS'
+    )
 
 
 class SearchQuery(BaseModel):

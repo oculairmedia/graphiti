@@ -7,22 +7,42 @@ use uuid::Uuid;
 
 use crate::models::{Edge, Episode, Node};
 
-/// Parse nodes from FalkorDB LazyResultSet
 pub fn parse_nodes_from_falkor_v2(result: LazyResultSet<'_>) -> Result<Vec<Node>> {
     let mut nodes = Vec::new();
+    let mut row_count = 0;
 
-    // Iterate over the lazy result set
     for row in result {
-        // Each row can contain one or more values
+        row_count += 1;
         for value in row {
-            if let FalkorValue::Node(falkor_node) = value {
-                if let Some(node) = parse_single_node_v2(&falkor_node)? {
-                    nodes.push(node);
+            match &value {
+                FalkorValue::Node(falkor_node) => {
+                    if let Some(node) = parse_single_node_v2(falkor_node)? {
+                        nodes.push(node);
+                    }
+                }
+                FalkorValue::Unparseable(raw) => {
+                    tracing::warn!(
+                        "Row {}: Unparseable value (first 500 chars): {}",
+                        row_count,
+                        &raw.chars().take(500).collect::<String>()
+                    );
+                }
+                other => {
+                    tracing::debug!(
+                        "Row {}: Skipping non-node value type: {:?}",
+                        row_count,
+                        std::mem::discriminant(other)
+                    );
                 }
             }
         }
     }
 
+    tracing::debug!(
+        "parse_nodes_from_falkor_v2: processed {} rows, parsed {} nodes",
+        row_count,
+        nodes.len()
+    );
     Ok(nodes)
 }
 

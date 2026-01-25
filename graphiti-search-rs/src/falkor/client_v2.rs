@@ -1074,4 +1074,57 @@ impl FalkorClientV2 {
         let result = self.graph.query(&cypher).execute().await?;
         parser_v2::parse_nodes_from_falkor_v2(result.data)
     }
+
+    #[instrument(skip(self))]
+    pub async fn get_edges_between_nodes(
+        &mut self,
+        node_uuids: &[String],
+        group_ids: Option<&[String]>,
+    ) -> Result<Vec<Edge>> {
+        if node_uuids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let uuid_list = node_uuids
+            .iter()
+            .map(|u| format!("'{}'", u.replace('\'', "\\'")))
+            .collect::<Vec<_>>()
+            .join(",");
+
+        let group_filter = if let Some(gids) = group_ids {
+            if !gids.is_empty() {
+                let group_list = gids
+                    .iter()
+                    .map(|g| format!("'{}'", g.replace('\'', "\\'")))
+                    .collect::<Vec<_>>()
+                    .join(",");
+                format!(" AND r.group_id IN [{}]", group_list)
+            } else {
+                String::new()
+            }
+        } else {
+            String::new()
+        };
+
+        let cypher = format!(
+            "MATCH (source:Entity)-[r:RELATES_TO]->(target:Entity)
+             WHERE source.uuid IN [{}] AND target.uuid IN [{}]{}
+             RETURN r",
+            uuid_list, uuid_list, group_filter
+        );
+
+        let result = self.graph.query(&cypher).execute().await?;
+        parser_v2::parse_edges_from_falkor_v2(result.data)
+    }
+
+    #[instrument(skip(self))]
+    pub async fn get_random_nodes(&mut self, limit: usize) -> Result<Vec<Node>> {
+        let cypher = format!("MATCH (n:Entity) RETURN n LIMIT {}", limit);
+        tracing::debug!("get_random_nodes query: {}", cypher);
+        let result = self.graph.query(&cypher).execute().await?;
+        tracing::debug!("get_random_nodes result columns: {:?}", result.header);
+        let nodes = parser_v2::parse_nodes_from_falkor_v2(result.data)?;
+        tracing::debug!("get_random_nodes parsed {} nodes", nodes.len());
+        Ok(nodes)
+    }
 }

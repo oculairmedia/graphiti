@@ -4,6 +4,40 @@ use serde::{Deserialize, Serialize};
 use std::env;
 use tracing::{debug, warn};
 
+pub fn l2_normalize_embedding(embedding: &mut [f32]) -> Option<f32> {
+    let mut sumsq = 0f64;
+    let mut non_finite = 0usize;
+
+    for &v in embedding.iter() {
+        if !v.is_finite() {
+            non_finite += 1;
+            continue;
+        }
+        let vf = v as f64;
+        sumsq += vf * vf;
+    }
+
+    if non_finite > 0 {
+        warn!(
+            "Embedding contains {} non-finite values; leaving them unnormalized",
+            non_finite
+        );
+    }
+
+    let norm = sumsq.sqrt() as f32;
+    if !norm.is_finite() || norm <= 0.0 {
+        return None;
+    }
+
+    for v in embedding.iter_mut() {
+        if v.is_finite() {
+            *v /= norm;
+        }
+    }
+
+    Some(norm)
+}
+
 #[derive(Debug, Serialize)]
 struct EmbeddingRequest {
     input: String,

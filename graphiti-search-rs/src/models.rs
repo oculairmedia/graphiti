@@ -85,6 +85,24 @@ pub struct EdgeSearchConfig {
     /// HippoRAG: Number of seed nodes from HNSW (default: 10)
     #[serde(default)]
     pub hipporag_seed_count: Option<usize>,
+    /// BFS: Top candidates per hop (default: 50)
+    #[serde(default)]
+    pub bfs_beam_width: Option<usize>,
+    /// BFS: Max neighbors per node expansion (default: 100)
+    #[serde(default)]
+    pub bfs_per_hop_limit: Option<usize>,
+    /// BFS: Total node expansions before stop (default: 500)
+    #[serde(default)]
+    pub bfs_max_expansions: Option<usize>,
+    /// BFS: Hard cap on visited set (default: 1000)
+    #[serde(default)]
+    pub bfs_max_visited: Option<usize>,
+    /// BFS: Nodes above this degree get limited expansion (default: 200)
+    #[serde(default)]
+    pub bfs_hub_degree_threshold: Option<usize>,
+    /// BFS: Stop expanding below this score (default: 0.1)
+    #[serde(default)]
+    pub bfs_min_score_cutoff: Option<f32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -104,6 +122,24 @@ pub struct NodeSearchConfig {
     /// HippoRAG: Number of seed nodes from HNSW (default: 10)
     #[serde(default)]
     pub hipporag_seed_count: Option<usize>,
+    /// BFS: Top candidates per hop (default: 50)
+    #[serde(default)]
+    pub bfs_beam_width: Option<usize>,
+    /// BFS: Max neighbors per node expansion (default: 100)
+    #[serde(default)]
+    pub bfs_per_hop_limit: Option<usize>,
+    /// BFS: Total node expansions before stop (default: 500)
+    #[serde(default)]
+    pub bfs_max_expansions: Option<usize>,
+    /// BFS: Hard cap on visited set (default: 1000)
+    #[serde(default)]
+    pub bfs_max_visited: Option<usize>,
+    /// BFS: Nodes above this degree get limited expansion (default: 200)
+    #[serde(default)]
+    pub bfs_hub_degree_threshold: Option<usize>,
+    /// BFS: Stop expanding below this score (default: 0.1)
+    #[serde(default)]
+    pub bfs_min_score_cutoff: Option<f32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

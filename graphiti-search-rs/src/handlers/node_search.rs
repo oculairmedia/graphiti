@@ -54,6 +54,22 @@ pub async fn node_search_handler(
         }
     }
 
+    // Normalize query embedding for cosine similarity search.
+    // Stored embeddings are typically unit-normalized; normalizing the query improves ANN search behavior.
+    if request
+        .config
+        .search_methods
+        .iter()
+        .any(|m| matches!(m, crate::models::SearchMethod::Similarity))
+    {
+        if let Some(embedding) = request.query_vector.as_mut() {
+            match crate::embeddings::l2_normalize_embedding(embedding) {
+                Some(norm) => info!("Normalized query embedding (l2_norm={:.6})", norm),
+                None => info!("Skipping query embedding normalization (zero or non-finite norm)"),
+            }
+        }
+    }
+
     // Create search engine with pools
     let reranker_client = if state.config.reranker_enabled {
         match crate::reranker::RerankerClient::new(
