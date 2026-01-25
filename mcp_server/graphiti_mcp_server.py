@@ -56,6 +56,54 @@ except ImportError:
 # Increase if you have high rate limits.
 SEMAPHORE_LIMIT = int(os.getenv('SEMAPHORE_LIMIT', 10))
 
+# BFS search feature flag - opt-in until production latency validated
+# Set ENABLE_BFS_SEARCH=true to enable BFS as an additional search method
+ENABLE_BFS_SEARCH = os.getenv('ENABLE_BFS_SEARCH', 'false').lower() == 'true'
+
+# BFS configuration defaults (can be overridden via environment)
+BFS_CONFIG = {
+    'bfs_max_depth': int(os.getenv('BFS_MAX_DEPTH', 2)),
+    'bfs_beam_width': int(os.getenv('BFS_BEAM_WIDTH', 50)),
+    'bfs_max_expansions': int(os.getenv('BFS_MAX_EXPANSIONS', 500)),
+    'bfs_max_visited': int(os.getenv('BFS_MAX_VISITED', 1000)),
+    'bfs_hub_degree_threshold': int(os.getenv('BFS_HUB_DEGREE_THRESHOLD', 200)),
+    'bfs_min_score_cutoff': float(os.getenv('BFS_MIN_SCORE_CUTOFF', 0.1)),
+}
+
+
+def get_search_methods() -> list[str]:
+    """Get the list of search methods based on feature flags."""
+    methods = ['fulltext', 'similarity', 'hipporag']
+    if ENABLE_BFS_SEARCH:
+        methods.append('bfs')
+    return methods
+
+
+def get_search_config(similarity_threshold: float = 0.3) -> dict:
+    """Build search config with optional BFS parameters.
+
+    Args:
+        similarity_threshold: Minimum similarity score for semantic matches
+
+    Returns:
+        Search config dict with all enabled search methods and parameters
+    """
+    config = {
+        'reranker': 'rrf',
+        'search_methods': get_search_methods(),
+        'similarity_threshold': similarity_threshold,
+        # HippoRAG spreading activation parameters
+        'hipporag_max_hops': 2,
+        'hipporag_decay': 0.85,
+        'hipporag_seed_count': 10,
+    }
+
+    # Add BFS parameters if BFS is enabled
+    if ENABLE_BFS_SEARCH:
+        config.update(BFS_CONFIG)
+
+    return config
+
 
 class Requirement(BaseModel):
     """A Requirement represents a specific need, feature, or functionality that a product or service must fulfill.
@@ -537,6 +585,12 @@ async def initialize_graphiti():
         logger.info(f'Using group_id: {config.group_id}')
         logger.info(f'Using FastAPI endpoint: {config.api.base_url}')
 
+        # Log BFS feature flag status
+        if ENABLE_BFS_SEARCH:
+            logger.info(f'BFS search ENABLED with config: {BFS_CONFIG}')
+        else:
+            logger.info('BFS search DISABLED (set ENABLE_BFS_SEARCH=true to enable)')
+
         # Initialize resource system
         resource_manager = ResourceManager(http_client, config)
 
@@ -832,19 +886,11 @@ async def search_memory_nodes(
                 enhanced_query = query
 
         # Prepare request payload for Python proxy with graph-aware search
+        # Uses HippoRAG + traditional methods, with optional BFS if ENABLE_BFS_SEARCH=true
         payload = {
             'query': enhanced_query,
             'max_nodes': max_nodes,
-            'config': {
-                'reranker': 'rrf',
-                # Use HippoRAG spreading activation + traditional methods for better recall
-                'search_methods': ['fulltext', 'similarity', 'hipporag'],
-                'similarity_threshold': 0.3,
-                # HippoRAG spreading activation parameters
-                'hipporag_max_hops': 2,
-                'hipporag_decay': 0.85,
-                'hipporag_seed_count': 10,
-            },
+            'config': get_search_config(similarity_threshold=0.3),
         }
 
         # Add optional parameters if provided
@@ -936,20 +982,12 @@ async def search_memory_facts(
                 enhanced_query = query
 
         # Prepare request payload for Python proxy with graph-aware search
+        # Uses HippoRAG + traditional methods, with optional BFS if ENABLE_BFS_SEARCH=true
         payload = {
             'query': enhanced_query,
             'group_ids': effective_group_ids,
             'max_facts': max_facts,
-            'config': {
-                'reranker': 'rrf',
-                # Use HippoRAG spreading activation + traditional methods for better recall
-                'search_methods': ['fulltext', 'similarity', 'hipporag'],
-                'similarity_threshold': 0.25,
-                # HippoRAG spreading activation parameters
-                'hipporag_max_hops': 2,
-                'hipporag_decay': 0.85,
-                'hipporag_seed_count': 10,
-            },
+            'config': get_search_config(similarity_threshold=0.25),
         }
 
         if center_node_uuid:
@@ -1174,21 +1212,15 @@ async def search_recent_context(
             f'/episodes/{group_id_str}', params={'last_n': last_n_episodes}
         )
 
+        # Build search configs with optional BFS if ENABLE_BFS_SEARCH=true
+        facts_config = get_search_config(similarity_threshold=0.25)
+        facts_config['mmr_lambda'] = 0.6  # Add diversity for facts
+
         facts_payload = {
             'query': query,
             'group_ids': effective_group_ids,
             'max_facts': max_facts,
-            'config': {
-                'reranker': 'rrf',
-                # Use HippoRAG spreading activation for graph-aware retrieval
-                'search_methods': ['fulltext', 'similarity', 'hipporag'],
-                'mmr_lambda': 0.6,
-                'similarity_threshold': 0.25,
-                # HippoRAG spreading activation parameters
-                'hipporag_max_hops': 2,
-                'hipporag_decay': 0.85,
-                'hipporag_seed_count': 10,
-            },
+            'config': facts_config,
         }
         facts_task = http_client.post('/search', json=facts_payload)
 
@@ -1196,16 +1228,7 @@ async def search_recent_context(
             'query': query,
             'group_ids': effective_group_ids,
             'max_nodes': max_entities,
-            'config': {
-                'reranker': 'rrf',
-                # Use HippoRAG spreading activation for graph-aware retrieval
-                'search_methods': ['fulltext', 'similarity', 'hipporag'],
-                'similarity_threshold': 0.3,
-                # HippoRAG spreading activation parameters
-                'hipporag_max_hops': 2,
-                'hipporag_decay': 0.85,
-                'hipporag_seed_count': 10,
-            },
+            'config': get_search_config(similarity_threshold=0.3),
         }
         nodes_task = http_client.post('/search/nodes', json=nodes_payload)
 
@@ -1323,20 +1346,12 @@ async def get_entity_neighbors(
             # This allows finding entities across the entire knowledge graph
             effective_group_ids = [group_id] if group_id else []
 
+            # Use graph-aware search with optional BFS if ENABLE_BFS_SEARCH=true
             search_payload = {
                 'query': entity_name,
                 'group_ids': effective_group_ids,
                 'max_nodes': 10,  # Fetch multiple results to find exact matches
-                'config': {
-                    'reranker': 'rrf',
-                    # Use HippoRAG spreading activation for better entity discovery
-                    'search_methods': ['fulltext', 'similarity', 'hipporag'],
-                    'similarity_threshold': 0.4,
-                    # HippoRAG spreading activation parameters
-                    'hipporag_max_hops': 2,
-                    'hipporag_decay': 0.85,
-                    'hipporag_seed_count': 10,
-                },
+                'config': get_search_config(similarity_threshold=0.4),
             }
             search_response = await http_client.post('/search/nodes', json=search_payload)
             search_response.raise_for_status()
