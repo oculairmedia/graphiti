@@ -321,6 +321,14 @@ services:
       - MCP_SERVER_PORT=3010
       - MCP_TRANSPORT=http
       - GRAPH_API_URL=http://graph:8000
+      # BFS Search (graph traversal) - opt-in feature flag
+      - ENABLE_BFS_SEARCH=${ENABLE_BFS_SEARCH:-false}
+      - BFS_MAX_DEPTH=${BFS_MAX_DEPTH:-2}
+      - BFS_BEAM_WIDTH=${BFS_BEAM_WIDTH:-50}
+      - BFS_MAX_EXPANSIONS=${BFS_MAX_EXPANSIONS:-500}
+      - BFS_MAX_VISITED=${BFS_MAX_VISITED:-1000}
+      - BFS_HUB_DEGREE_THRESHOLD=${BFS_HUB_DEGREE_THRESHOLD:-200}
+      - BFS_MIN_SCORE_CUTOFF=${BFS_MIN_SCORE_CUTOFF:-0.1}
     networks:
       - graphiti_network
     depends_on:
