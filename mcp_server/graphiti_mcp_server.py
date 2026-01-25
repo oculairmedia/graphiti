@@ -236,6 +236,26 @@ class SuccessResponse(BaseModel):
     message: str
 
 
+class RecentContextResponse(BaseModel):
+    """Response for recent context search - combines episodes, facts, and entities."""
+
+    message: str
+    episodes: list[dict[str, Any]]
+    facts: list[dict[str, Any]]
+    entities: list[NodeResult]
+    summary: str
+
+
+class EntityNeighborsResponse(BaseModel):
+    """Response for entity neighbors - shows directly connected nodes and edges."""
+
+    message: str
+    center_entity: dict[str, Any]
+    outgoing_edges: list[dict[str, Any]]
+    incoming_edges: list[dict[str, Any]]
+    connected_entities: list[dict[str, Any]]
+
+
 # Type definitions for API responses (legacy - will be replaced by Pydantic models)
 class ErrorResponse(TypedDict):
     error: str
@@ -1086,6 +1106,301 @@ async def get_episodes(
         error_msg = str(e)
         logger.error(f'Error getting episodes: {error_msg}')
         raise McpError(ErrorCode.INTERNAL_ERROR, f'Error getting episodes: {error_msg}')
+
+
+@mcp.tool()
+async def search_recent_context(
+    query: str = Field(..., description='The search query to find relevant recent context'),
+    group_id: str | None = Field(
+        None,
+        description='Group ID to search within. If not provided, uses the default group_id.',
+    ),
+    last_n_episodes: int = Field(
+        5, description='Number of recent episodes to retrieve (default: 5)'
+    ),
+    max_facts: int = Field(
+        10, description='Maximum number of related facts to return (default: 10)'
+    ),
+    max_entities: int = Field(
+        5, description='Maximum number of related entities to return (default: 5)'
+    ),
+) -> RecentContextResponse:
+    """Search for recent context combining episodes, facts, and entities in a single call.
+
+    This is the recommended tool for agent memory recall - it provides conversation continuity
+    by retrieving recent episodes along with semantically related facts and entities.
+    Use this when you need to understand "what did we discuss recently about X?"
+
+    Args:
+        query: The search query to find relevant context
+        group_id: Group ID to search within. If not provided, uses the default group_id.
+        last_n_episodes: Number of recent episodes to retrieve
+        max_facts: Maximum number of related facts to return
+        max_entities: Maximum number of related entities to return
+    """
+    global http_client
+
+    if http_client is None:
+        raise McpError(ErrorCode.INTERNAL_ERROR, 'HTTP client not initialized')
+
+    try:
+        effective_group_id = group_id if group_id is not None else config.group_id
+        group_id_str = str(effective_group_id) if effective_group_id is not None else 'default'
+        effective_group_ids = [group_id_str]
+
+        import asyncio
+
+        episodes_task = http_client.get(
+            f'/episodes/{group_id_str}', params={'last_n': last_n_episodes}
+        )
+
+        facts_payload = {
+            'query': query,
+            'group_ids': effective_group_ids,
+            'max_facts': max_facts,
+            'config': {
+                'reranker': 'rrf',
+                'search_methods': ['fulltext', 'similarity'],
+                'mmr_lambda': 0.6,
+                'similarity_threshold': 0.25,
+            },
+        }
+        facts_task = http_client.post('/search', json=facts_payload)
+
+        nodes_payload = {
+            'query': query,
+            'group_ids': effective_group_ids,
+            'max_nodes': max_entities,
+            'config': {
+                'reranker': 'rrf',
+                'search_methods': ['fulltext', 'similarity'],
+                'similarity_threshold': 0.3,
+            },
+        }
+        nodes_task = http_client.post('/search/nodes', json=nodes_payload)
+
+        episodes_response, facts_response, nodes_response = await asyncio.gather(
+            episodes_task, facts_task, nodes_task, return_exceptions=True
+        )
+
+        episodes = []
+        if not isinstance(episodes_response, Exception) and episodes_response.status_code == 200:
+            result = episodes_response.json()
+            for ep in result.get('episodes', []):
+                episodes.append(
+                    {
+                        'uuid': ep.get('uuid', ''),
+                        'name': ep.get('name', ''),
+                        'summary': (ep.get('summary', '') or ep.get('content', ''))[:150],
+                        'created_at': ep.get('created_at', ''),
+                    }
+                )
+
+        facts = []
+        if not isinstance(facts_response, Exception) and facts_response.status_code == 200:
+            result = facts_response.json()
+            for fact in result.get('facts', []) or result.get('edges', []):
+                facts.append(
+                    {
+                        'fact': fact.get('fact', ''),
+                        'uuid': fact.get('uuid', ''),
+                    }
+                )
+
+        entities = []
+        if not isinstance(nodes_response, Exception) and nodes_response.status_code == 200:
+            result = nodes_response.json()
+            for node in result.get('nodes', []):
+                entities.append(
+                    NodeResult(
+                        uuid=node.get('uuid', ''),
+                        name=node.get('name', ''),
+                        summary=(node.get('summary', '') or '')[:100],
+                        labels=node.get('labels', [])[:2],
+                        group_id='',
+                        created_at='',
+                        attributes={},
+                    )
+                )
+
+        summary_parts = []
+        if episodes:
+            summary_parts.append(f'{len(episodes)} recent episodes')
+        if facts:
+            summary_parts.append(f'{len(facts)} related facts')
+        if entities:
+            summary_parts.append(f'{len(entities)} related entities')
+        summary = f'Found {", ".join(summary_parts)}' if summary_parts else 'No context found'
+
+        return RecentContextResponse(
+            message='Recent context retrieved successfully',
+            episodes=episodes,
+            facts=facts,
+            entities=entities,
+            summary=summary,
+        )
+
+    except Exception as e:
+        error_msg = str(e)
+        logger.error(f'Error searching recent context: {error_msg}')
+        raise McpError(ErrorCode.INTERNAL_ERROR, f'Error searching recent context: {error_msg}')
+
+
+@mcp.tool()
+async def get_entity_neighbors(
+    entity_uuid: str | None = Field(
+        None, description='UUID of the entity to explore. Provide either uuid or name.'
+    ),
+    entity_name: str | None = Field(
+        None, description='Name of the entity to explore. Will search for the best match.'
+    ),
+    group_id: str | None = Field(
+        None,
+        description='Group ID to search within (only used when searching by name).',
+    ),
+    max_neighbors: int = Field(
+        10, description='Maximum number of connected entities to return (default: 10)'
+    ),
+) -> EntityNeighborsResponse:
+    """Get directly connected entities and relationships for a given entity (1-hop graph exploration).
+
+    This tool is useful for understanding "what is related to X?" by showing all entities
+    directly connected to the specified entity along with their relationships.
+    You can provide either the entity UUID (if known) or search by name.
+
+    Args:
+        entity_uuid: UUID of the entity to explore. Provide either uuid or name.
+        entity_name: Name of the entity to explore. Will search for the best match.
+        group_id: Group ID to search within (only used when searching by name).
+        max_neighbors: Maximum number of connected entities to return.
+    """
+    global http_client
+
+    if http_client is None:
+        raise McpError(ErrorCode.INTERNAL_ERROR, 'HTTP client not initialized')
+
+    if not entity_uuid and not entity_name:
+        raise McpError(
+            ErrorCode.INVALID_PARAMS, 'Either entity_uuid or entity_name must be provided'
+        )
+
+    try:
+        center_node_uuid = entity_uuid
+        center_entity_info: dict[str, Any] = {}
+
+        if not center_node_uuid and entity_name:
+            effective_group_id = group_id if group_id is not None else config.group_id
+            effective_group_ids = [effective_group_id] if effective_group_id else []
+
+            search_payload = {
+                'query': entity_name,
+                'group_ids': effective_group_ids,
+                'max_nodes': 1,
+                'config': {
+                    'reranker': 'rrf',
+                    'search_methods': ['fulltext', 'similarity'],
+                    'similarity_threshold': 0.4,
+                },
+            }
+            search_response = await http_client.post('/search/nodes', json=search_payload)
+            search_response.raise_for_status()
+            search_result = search_response.json()
+
+            nodes = search_result.get('nodes', [])
+            if not nodes:
+                return EntityNeighborsResponse(
+                    message=f"No entity found matching '{entity_name}'",
+                    center_entity={},
+                    outgoing_edges=[],
+                    incoming_edges=[],
+                    connected_entities=[],
+                )
+
+            best_match = nodes[0]
+            center_node_uuid = best_match.get('uuid')
+            center_entity_info = {
+                'uuid': center_node_uuid,
+                'name': best_match.get('name', ''),
+                'summary': best_match.get('summary', ''),
+                'labels': best_match.get('labels', []),
+            }
+
+        if not center_node_uuid:
+            raise McpError(ErrorCode.INVALID_PARAMS, 'Could not determine entity UUID')
+
+        edges_response = await http_client.get(f'/edges/by-node/{center_node_uuid}')
+        edges_response.raise_for_status()
+        edges_result = edges_response.json()
+
+        outgoing_edges = []
+        for edge in edges_result.get('source_edges', [])[:max_neighbors]:
+            outgoing_edges.append(
+                {
+                    'uuid': edge.get('uuid', ''),
+                    'fact': edge.get('fact', ''),
+                    'target_uuid': edge.get('target_node_uuid', ''),
+                    'target_name': edge.get('target_node_name', ''),
+                }
+            )
+
+        incoming_edges = []
+        for edge in edges_result.get('target_edges', [])[:max_neighbors]:
+            incoming_edges.append(
+                {
+                    'uuid': edge.get('uuid', ''),
+                    'fact': edge.get('fact', ''),
+                    'source_uuid': edge.get('source_node_uuid', ''),
+                    'source_name': edge.get('source_node_name', ''),
+                }
+            )
+
+        connected_entities_map: dict[str, dict[str, Any]] = {}
+
+        for edge in edges_result.get('edges', []):
+            source_uuid = edge.get('source_node_uuid', '')
+            if source_uuid and source_uuid != center_node_uuid:
+                if source_uuid not in connected_entities_map:
+                    connected_entities_map[source_uuid] = {
+                        'uuid': source_uuid,
+                        'name': edge.get('source_node_name', ''),
+                        'relationship': 'connected',
+                    }
+
+            target_uuid = edge.get('target_node_uuid', '')
+            if target_uuid and target_uuid != center_node_uuid:
+                if target_uuid not in connected_entities_map:
+                    connected_entities_map[target_uuid] = {
+                        'uuid': target_uuid,
+                        'name': edge.get('target_node_name', ''),
+                        'relationship': 'connected',
+                    }
+
+        connected_entities = list(connected_entities_map.values())[:max_neighbors]
+
+        if not center_entity_info:
+            center_entity_info = {
+                'uuid': center_node_uuid,
+                'name': 'Unknown',
+                'summary': '',
+                'labels': [],
+            }
+
+        return EntityNeighborsResponse(
+            message=f'Found {len(outgoing_edges)} outgoing and {len(incoming_edges)} incoming connections',
+            center_entity=center_entity_info,
+            outgoing_edges=outgoing_edges,
+            incoming_edges=incoming_edges,
+            connected_entities=connected_entities,
+        )
+
+    except httpx.HTTPStatusError as e:
+        error_msg = f'HTTP error {e.response.status_code}: {e.response.text}'
+        logger.error(f'Error getting entity neighbors: {error_msg}')
+        raise McpError(ErrorCode.INTERNAL_ERROR, f'Error getting entity neighbors: {error_msg}')
+    except Exception as e:
+        error_msg = str(e)
+        logger.error(f'Error getting entity neighbors: {error_msg}')
+        raise McpError(ErrorCode.INTERNAL_ERROR, f'Error getting entity neighbors: {error_msg}')
 
 
 @mcp.resource(uri='graphiti://status')

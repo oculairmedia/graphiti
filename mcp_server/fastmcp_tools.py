@@ -7,9 +7,20 @@ Enhanced tools using FastMCP decorator patterns with proper Pydantic validation
 import httpx
 import logging
 from typing import Any
-from mcp import McpError, ErrorCode
+from mcp import McpError
 from pydantic import BaseModel, Field
 from datetime import datetime, timezone
+
+try:
+    from mcp.types import ErrorCode
+except ImportError:
+    from enum import Enum
+
+    class ErrorCode(Enum):
+        INTERNAL_ERROR = -32603
+        INVALID_PARAMS = -32602
+        REQUEST_TIMEOUT = -32000
+
 
 # Initialize logger
 logger = logging.getLogger(__name__)

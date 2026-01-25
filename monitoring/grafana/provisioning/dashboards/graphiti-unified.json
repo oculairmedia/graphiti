@@ -1,0 +1,217 @@
+{
+  "title": "Graphiti Operations",
+  "uid": "graphiti-unified",
+  "tags": ["graphiti", "operations", "unified"],
+  "timezone": "browser",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "30s",
+  "time": {"from": "now-6h", "to": "now"},
+  "annotations": {"list": []},
+  "templating": {"list": []},
+  "panels": [
+    {
+      "id": 100,
+      "title": "Health & Status",
+      "type": "row",
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 0},
+      "collapsed": false
+    },
+    {
+      "id": 1,
+      "title": "Total Nodes",
+      "type": "stat",
+      "gridPos": {"h": 3, "w": 4, "x": 0, "y": 1},
+      "targets": [{"expr": "graphiti_visualizer_nodes_total", "legendFormat": "Nodes", "refId": "A"}],
+      "options": {"graphMode": "area", "colorMode": "value", "reduceOptions": {"calcs": ["lastNotNull"]}},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}]}, "unit": "short"}}
+    },
+    {
+      "id": 2,
+      "title": "Total Edges",
+      "type": "stat",
+      "gridPos": {"h": 3, "w": 4, "x": 4, "y": 1},
+      "targets": [{"expr": "graphiti_visualizer_edges_total", "legendFormat": "Edges", "refId": "A"}],
+      "options": {"graphMode": "area", "colorMode": "value", "reduceOptions": {"calcs": ["lastNotNull"]}},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}]}, "unit": "short"}}
+    },
+    {
+      "id": 3,
+      "title": "Edge/Node Ratio",
+      "description": "Healthy: 2-5. Below 2 = poor connectivity",
+      "type": "stat",
+      "gridPos": {"h": 3, "w": 4, "x": 8, "y": 1},
+      "targets": [{"expr": "graphiti_visualizer_edges_total / graphiti_visualizer_nodes_total", "legendFormat": "Ratio", "refId": "A"}],
+      "options": {"graphMode": "area", "colorMode": "background", "reduceOptions": {"calcs": ["lastNotNull"]}},
+      "fieldConfig": {"defaults": {"decimals": 2, "color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "yellow", "value": 1.5}, {"color": "green", "value": 2.5}]}}}
+    },
+    {
+      "id": 4,
+      "title": "Visualizer",
+      "description": "0=init, 1=nodes, 2=edges, 3=indexing, 4=ready",
+      "type": "stat",
+      "gridPos": {"h": 3, "w": 3, "x": 12, "y": 1},
+      "targets": [{"expr": "graphiti_visualizer_loading_state", "legendFormat": "State", "refId": "A"}],
+      "options": {"graphMode": "none", "colorMode": "background", "reduceOptions": {"calcs": ["lastNotNull"]}},
+      "fieldConfig": {"defaults": {"mappings": [{"type": "value", "options": {"0": {"text": "INIT", "color": "blue"}}}, {"type": "value", "options": {"1": {"text": "NODES", "color": "yellow"}}}, {"type": "value", "options": {"2": {"text": "EDGES", "color": "yellow"}}}, {"type": "value", "options": {"3": {"text": "INDEX", "color": "orange"}}}, {"type": "value", "options": {"4": {"text": "READY", "color": "green"}}}, {"type": "value", "options": {"-1": {"text": "ERROR", "color": "red"}}}]}}
+    },
+    {
+      "id": 5,
+      "title": "Stream",
+      "type": "stat",
+      "gridPos": {"h": 3, "w": 3, "x": 15, "y": 1},
+      "targets": [{"expr": "graphiti_stream_consumer_healthy", "legendFormat": "Healthy", "refId": "A"}],
+      "options": {"graphMode": "none", "colorMode": "background", "reduceOptions": {"calcs": ["lastNotNull"]}},
+      "fieldConfig": {"defaults": {"mappings": [{"type": "value", "options": {"1": {"text": "UP", "color": "green"}}}, {"type": "value", "options": {"0": {"text": "DOWN", "color": "red"}}}]}}
+    },
+    {
+      "id": 6,
+      "title": "Eps/min",
+      "type": "stat",
+      "gridPos": {"h": 3, "w": 3, "x": 18, "y": 1},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "rate(temporal_workflow_completed{workflow_type=\"IngestEpisodeWorkflow\"}[5m]) * 60", "legendFormat": "rate", "refId": "A"}],
+      "options": {"graphMode": "area", "colorMode": "value", "reduceOptions": {"calcs": ["lastNotNull"]}},
+      "fieldConfig": {"defaults": {"unit": "opm", "color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "yellow", "value": 0.1}, {"color": "green", "value": 0.5}]}}}
+    },
+    {
+      "id": 7,
+      "title": "Recon Runs",
+      "type": "stat",
+      "gridPos": {"h": 3, "w": 3, "x": 21, "y": 1},
+      "targets": [{"expr": "graphiti_reconciliation_runs_total", "legendFormat": "Runs", "refId": "A"}],
+      "options": {"graphMode": "area", "colorMode": "value", "reduceOptions": {"calcs": ["lastNotNull"]}},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}]}}}
+    },
+
+    {
+      "id": 200,
+      "title": "Graph Growth",
+      "type": "row",
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 4},
+      "collapsed": false
+    },
+    {
+      "id": 11,
+      "title": "Nodes & Edges Over Time",
+      "type": "timeseries",
+      "gridPos": {"h": 7, "w": 12, "x": 0, "y": 5},
+      "targets": [
+        {"expr": "graphiti_visualizer_nodes_total", "legendFormat": "Nodes", "refId": "A"},
+        {"expr": "graphiti_visualizer_edges_total", "legendFormat": "Edges", "refId": "B"}
+      ],
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}, "tooltip": {"mode": "multi"}},
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"lineWidth": 2, "fillOpacity": 10}, "unit": "short"}}
+    },
+    {
+      "id": 12,
+      "title": "Edge/Node Ratio Trend",
+      "description": "Drops below 2.0 indicate orphan accumulation",
+      "type": "timeseries",
+      "gridPos": {"h": 7, "w": 12, "x": 12, "y": 5},
+      "targets": [{"expr": "graphiti_visualizer_edges_total / graphiti_visualizer_nodes_total", "legendFormat": "Edges per Node", "refId": "A"}],
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}},
+      "fieldConfig": {"defaults": {"decimals": 2, "color": {"mode": "thresholds"}, "custom": {"lineWidth": 2, "fillOpacity": 20, "thresholdsStyle": {"mode": "line+area"}}, "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "yellow", "value": 1.5}, {"color": "green", "value": 2.5}]}}}
+    },
+
+    {
+      "id": 300,
+      "title": "Ingestion Pipeline",
+      "type": "row",
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 12},
+      "collapsed": false
+    },
+    {
+      "id": 21,
+      "title": "Episode Ingestion Rate",
+      "type": "timeseries",
+      "gridPos": {"h": 7, "w": 12, "x": 0, "y": 13},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "rate(temporal_workflow_completed{workflow_type=\"IngestEpisodeWorkflow\"}[5m]) * 60", "legendFormat": "Completed (5m)", "refId": "A"},
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "rate(temporal_workflow_completed{workflow_type=\"IngestEpisodeWorkflow\"}[1m]) * 60", "legendFormat": "Completed (1m)", "refId": "B"}
+      ],
+      "options": {"legend": {"calcs": ["mean", "max", "lastNotNull"], "displayMode": "table", "placement": "right"}},
+      "fieldConfig": {"defaults": {"unit": "opm", "color": {"mode": "palette-classic"}, "custom": {"lineWidth": 2, "fillOpacity": 20, "lineInterpolation": "smooth"}}}
+    },
+    {
+      "id": 22,
+      "title": "Activity Latency (p95)",
+      "type": "timeseries",
+      "gridPos": {"h": 7, "w": 12, "x": 12, "y": 13},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [
+        {"datasource": {"type": "prometheus", "uid": "prometheus"}, "expr": "histogram_quantile(0.95, rate(temporal_activity_execution_latency_bucket{job=\"temporal-workers\"}[5m]))", "legendFormat": "{{worker_stage}} p95", "refId": "A"}
+      ],
+      "options": {"legend": {"calcs": ["mean", "max"], "displayMode": "table", "placement": "right"}},
+      "fieldConfig": {"defaults": {"unit": "s", "color": {"mode": "palette-classic"}, "custom": {"lineWidth": 1, "fillOpacity": 10}}}
+    },
+
+    {
+      "id": 400,
+      "title": "Reconciliation & Sync",
+      "type": "row",
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 20},
+      "collapsed": false
+    },
+    {
+      "id": 31,
+      "title": "Reconciliation Activity",
+      "type": "timeseries",
+      "gridPos": {"h": 7, "w": 12, "x": 0, "y": 21},
+      "targets": [
+        {"expr": "rate(graphiti_reconciliation_nodes_found_new[5m]) * 60", "legendFormat": "New Nodes/min", "refId": "A"},
+        {"expr": "rate(graphiti_reconciliation_edges_found_new[5m]) * 60", "legendFormat": "New Edges/min", "refId": "B"},
+        {"expr": "rate(graphiti_reconciliation_nodes_removed_total[5m]) * 60", "legendFormat": "Removed Nodes/min", "refId": "C"},
+        {"expr": "rate(graphiti_reconciliation_edges_removed_total[5m]) * 60", "legendFormat": "Removed Edges/min", "refId": "D"}
+      ],
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}},
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"lineWidth": 2, "fillOpacity": 10}}}
+    },
+    {
+      "id": 32,
+      "title": "Delta Tracker",
+      "type": "timeseries",
+      "gridPos": {"h": 7, "w": 12, "x": 12, "y": 21},
+      "targets": [
+        {"expr": "graphiti_delta_tracker_nodes_tracked", "legendFormat": "Nodes Tracked", "refId": "A"},
+        {"expr": "graphiti_delta_tracker_edges_tracked", "legendFormat": "Edges Tracked", "refId": "B"},
+        {"expr": "rate(graphiti_delta_tracker_updates_total[5m]) * 60", "legendFormat": "Updates/min", "refId": "C"}
+      ],
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}},
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"lineWidth": 2, "fillOpacity": 10}}}
+    },
+
+    {
+      "id": 500,
+      "title": "FalkorDB",
+      "type": "row",
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 28},
+      "collapsed": false
+    },
+    {
+      "id": 41,
+      "title": "FalkorDB Memory",
+      "type": "timeseries",
+      "gridPos": {"h": 6, "w": 12, "x": 0, "y": 29},
+      "targets": [
+        {"expr": "redis_memory_used_bytes{job=\"falkordb\"}", "legendFormat": "Used", "refId": "A"},
+        {"expr": "redis_memory_max_bytes{job=\"falkordb\"}", "legendFormat": "Max", "refId": "B"}
+      ],
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}},
+      "fieldConfig": {"defaults": {"unit": "bytes", "color": {"mode": "palette-classic"}, "custom": {"lineWidth": 2, "fillOpacity": 10}}}
+    },
+    {
+      "id": 42,
+      "title": "FalkorDB Operations",
+      "type": "timeseries",
+      "gridPos": {"h": 6, "w": 12, "x": 12, "y": 29},
+      "targets": [
+        {"expr": "rate(redis_commands_processed_total{job=\"falkordb\"}[5m])", "legendFormat": "Commands/sec", "refId": "A"},
+        {"expr": "redis_connected_clients{job=\"falkordb\"}", "legendFormat": "Clients", "refId": "B"}
+      ],
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}},
+      "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"lineWidth": 2, "fillOpacity": 10}}}
+    }
+  ]
+}
