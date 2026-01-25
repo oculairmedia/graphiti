@@ -831,10 +831,20 @@ async def search_memory_nodes(
                 logging.warning(f'Query enhancement failed, using original query: {e}')
                 enhanced_query = query
 
-        # Prepare request payload for Python proxy
+        # Prepare request payload for Python proxy with graph-aware search
         payload = {
             'query': enhanced_query,
             'max_nodes': max_nodes,
+            'config': {
+                'reranker': 'rrf',
+                # Use HippoRAG spreading activation + traditional methods for better recall
+                'search_methods': ['fulltext', 'similarity', 'hipporag'],
+                'similarity_threshold': 0.3,
+                # HippoRAG spreading activation parameters
+                'hipporag_max_hops': 2,
+                'hipporag_decay': 0.85,
+                'hipporag_seed_count': 10,
+            },
         }
 
         # Add optional parameters if provided
@@ -925,11 +935,21 @@ async def search_memory_facts(
                 logging.warning(f'Query enhancement failed, using original query: {e}')
                 enhanced_query = query
 
-        # Prepare request payload for Python proxy
+        # Prepare request payload for Python proxy with graph-aware search
         payload = {
             'query': enhanced_query,
             'group_ids': effective_group_ids,
             'max_facts': max_facts,
+            'config': {
+                'reranker': 'rrf',
+                # Use HippoRAG spreading activation + traditional methods for better recall
+                'search_methods': ['fulltext', 'similarity', 'hipporag'],
+                'similarity_threshold': 0.25,
+                # HippoRAG spreading activation parameters
+                'hipporag_max_hops': 2,
+                'hipporag_decay': 0.85,
+                'hipporag_seed_count': 10,
+            },
         }
 
         if center_node_uuid:
@@ -1160,9 +1180,14 @@ async def search_recent_context(
             'max_facts': max_facts,
             'config': {
                 'reranker': 'rrf',
-                'search_methods': ['fulltext', 'similarity'],
+                # Use HippoRAG spreading activation for graph-aware retrieval
+                'search_methods': ['fulltext', 'similarity', 'hipporag'],
                 'mmr_lambda': 0.6,
                 'similarity_threshold': 0.25,
+                # HippoRAG spreading activation parameters
+                'hipporag_max_hops': 2,
+                'hipporag_decay': 0.85,
+                'hipporag_seed_count': 10,
             },
         }
         facts_task = http_client.post('/search', json=facts_payload)
@@ -1173,8 +1198,13 @@ async def search_recent_context(
             'max_nodes': max_entities,
             'config': {
                 'reranker': 'rrf',
-                'search_methods': ['fulltext', 'similarity'],
+                # Use HippoRAG spreading activation for graph-aware retrieval
+                'search_methods': ['fulltext', 'similarity', 'hipporag'],
                 'similarity_threshold': 0.3,
+                # HippoRAG spreading activation parameters
+                'hipporag_max_hops': 2,
+                'hipporag_decay': 0.85,
+                'hipporag_seed_count': 10,
             },
         }
         nodes_task = http_client.post('/search/nodes', json=nodes_payload)
@@ -1299,8 +1329,13 @@ async def get_entity_neighbors(
                 'max_nodes': 10,  # Fetch multiple results to find exact matches
                 'config': {
                     'reranker': 'rrf',
-                    'search_methods': ['fulltext', 'similarity'],
+                    # Use HippoRAG spreading activation for better entity discovery
+                    'search_methods': ['fulltext', 'similarity', 'hipporag'],
                     'similarity_threshold': 0.4,
+                    # HippoRAG spreading activation parameters
+                    'hipporag_max_hops': 2,
+                    'hipporag_decay': 0.85,
+                    'hipporag_seed_count': 10,
                 },
             }
             search_response = await http_client.post('/search/nodes', json=search_payload)
