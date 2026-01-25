@@ -1289,8 +1289,9 @@ async def get_entity_neighbors(
         center_entity_info: dict[str, Any] = {}
 
         if not center_node_uuid and entity_name:
-            effective_group_id = group_id if group_id is not None else config.group_id
-            effective_group_ids = [effective_group_id] if effective_group_id else []
+            # Only filter by group if explicitly provided - otherwise search all groups
+            # This allows finding entities across the entire knowledge graph
+            effective_group_ids = [group_id] if group_id else []
 
             search_payload = {
                 'query': entity_name,
