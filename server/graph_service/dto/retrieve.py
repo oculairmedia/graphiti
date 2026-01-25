@@ -13,6 +13,7 @@ class SearchMethod(str, Enum):
     fulltext = 'fulltext'
     similarity = 'similarity'
     bfs = 'bfs'
+    hipporag = 'hipporag'  # Spreading activation through graph
 
 
 class NodeReranker(str, Enum):
@@ -57,6 +58,15 @@ class SearchConfig(BaseModel):
     )
     bfs_max_depth: Optional[int] = Field(
         default=2, description='Maximum depth for breadth-first search traversal'
+    )
+    hipporag_max_hops: Optional[int] = Field(
+        default=2, description='Maximum hops for HippoRAG spreading activation'
+    )
+    hipporag_decay: Optional[float] = Field(
+        default=0.85, description='Score decay factor per hop in HippoRAG'
+    )
+    hipporag_seed_count: Optional[int] = Field(
+        default=10, description='Number of HNSW seed nodes for HippoRAG'
     )
 
 

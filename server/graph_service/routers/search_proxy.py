@@ -314,6 +314,9 @@ async def search_proxy(query: SearchQuery) -> SearchResults:
                     'sim_min_score': config.similarity_threshold,
                     'mmr_lambda': config.mmr_lambda,
                     'centrality_boost_factor': config.centrality_boost_factor,
+                    'hipporag_max_hops': config.hipporag_max_hops,
+                    'hipporag_decay': config.hipporag_decay,
+                    'hipporag_seed_count': config.hipporag_seed_count,
                 },
                 'node_config': {
                     'search_methods': [method.value for method in config.search_methods],
@@ -322,6 +325,9 @@ async def search_proxy(query: SearchQuery) -> SearchResults:
                     'sim_min_score': config.similarity_threshold,
                     'mmr_lambda': config.mmr_lambda,
                     'centrality_boost_factor': config.centrality_boost_factor,
+                    'hipporag_max_hops': config.hipporag_max_hops,
+                    'hipporag_decay': config.hipporag_decay,
+                    'hipporag_seed_count': config.hipporag_seed_count,
                 },
             },
             'filters': {},
@@ -483,9 +489,12 @@ async def search_nodes(query: NodeSearchQuery) -> NodeSearchResults:
                     'sim_min_score': config.similarity_threshold,
                     'mmr_lambda': config.mmr_lambda,
                     'centrality_boost_factor': config.centrality_boost_factor,
+                    'hipporag_max_hops': config.hipporag_max_hops,
+                    'hipporag_decay': config.hipporag_decay,
+                    'hipporag_seed_count': config.hipporag_seed_count,
                 },
                 'edge_config': {
-                    'search_methods': [],  # Disable edge search for node-only queries
+                    'search_methods': [],
                     'reranker': 'rrf',
                     'bfs_max_depth': 1,
                     'sim_min_score': 0.3,
