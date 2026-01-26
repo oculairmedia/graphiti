@@ -6,6 +6,7 @@ WORKDIR /app
 FROM chef AS planner
 COPY Cargo.toml Cargo.lock ./
 COPY src ./src
+COPY benches ./benches
 RUN cargo chef prepare --recipe-path recipe.json
 
 # Build stage - cook dependencies first
@@ -18,6 +19,7 @@ RUN cargo chef cook --release --recipe-path recipe.json
 # Copy source code and build application
 COPY Cargo.toml Cargo.lock ./
 COPY src ./src
+COPY benches ./benches
 RUN cargo build --release
 
 # Runtime stage - minimal image

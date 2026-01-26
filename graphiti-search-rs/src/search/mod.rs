@@ -60,6 +60,7 @@ impl SearchEngine {
                     edge_config,
                     &request.filters,
                     request.query_vector.as_deref(),
+                    request.config.limit,
                 )
                 .await?;
         }
@@ -72,6 +73,7 @@ impl SearchEngine {
                     node_config,
                     &request.filters,
                     request.query_vector.as_deref(),
+                    request.config.limit,
                 )
                 .await?;
         }
@@ -113,6 +115,7 @@ impl SearchEngine {
         config: &EdgeSearchConfig,
         filters: &SearchFilters,
         query_vector: Option<&[f32]>,
+        limit: usize,
     ) -> SearchResult<Vec<Edge>> {
         // Direct execution without cache
         let mut falkor_conn = self.falkor_pool.get().await.map_err(|e| {
@@ -171,6 +174,7 @@ impl SearchEngine {
             query_vector,
             config.mmr_lambda,
             self.reranker_client.as_ref(),
+            limit,
         )
         .await?;
 
@@ -183,6 +187,7 @@ impl SearchEngine {
         config: &NodeSearchConfig,
         filters: &SearchFilters,
         query_vector: Option<&[f32]>,
+        limit: usize,
     ) -> SearchResult<Vec<Node>> {
         // Direct execution without cache
         let mut falkor_conn = self.falkor_pool.get().await.map_err(|e| {
@@ -254,6 +259,7 @@ impl SearchEngine {
             config.mmr_lambda,
             config.centrality_boost_factor.unwrap_or(1.0),
             self.reranker_client.as_ref(),
+            limit,
         )
         .await?;
 

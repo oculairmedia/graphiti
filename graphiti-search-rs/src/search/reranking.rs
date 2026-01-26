@@ -185,11 +185,12 @@ pub async fn rerank_edges(
     query_vector: Option<&[f32]>,
     mmr_lambda: f32,
     reranker_client: Option<&RerankerClient>,
+    limit: usize,
 ) -> SearchResult<Vec<Edge>> {
     match reranker {
         EdgeReranker::Rrf => {
             let scored = reciprocal_rank_fusion(method_results, 60.0, |edge| edge.uuid.to_string());
-            Ok(apply_scores_to_edges(scored))
+            Ok(apply_scores_to_edges(scored).into_iter().take(limit).collect())
         }
         EdgeReranker::Mmr => {
             let all_edges: Vec<Edge> = method_results.into_iter().flatten().collect();
@@ -198,7 +199,7 @@ pub async fn rerank_edges(
                 query_vector,
                 |_edge| None, // Edges typically don't have embeddings
                 mmr_lambda,
-                100,
+                limit,
             );
             Ok(apply_scores_to_edges(scored))
         }
@@ -213,7 +214,7 @@ pub async fn rerank_edges(
                     .flat_map(|list| list.iter().cloned())
                     .collect();
                 let documents: Vec<String> = all_edges.iter().map(|e| e.fact.clone()).collect();
-                let top_k = Some(documents.len().min(100));
+                let top_k = Some(documents.len().min(limit));
 
                 tracing::info!(
                     "CrossEncoder reranking {} edges for query: {}",
@@ -225,8 +226,11 @@ pub async fn rerank_edges(
                     Ok(ranked) => {
                         tracing::info!("CrossEncoder returned {} ranked results", ranked.len());
                         let mut seen = HashSet::new();
-                        let mut result = Vec::with_capacity(ranked.len());
+                        let mut result = Vec::with_capacity(ranked.len().min(limit));
                         for (idx, score) in ranked {
+                            if result.len() >= limit {
+                                break;
+                            }
                             if let Some(mut edge) = all_edges.get(idx).cloned() {
                                 if seen.insert(edge.uuid) {
                                     edge.score = Some(score);
@@ -241,7 +245,7 @@ pub async fn rerank_edges(
                         let scored = reciprocal_rank_fusion(method_results, 60.0, |edge| {
                             edge.uuid.to_string()
                         });
-                        Ok(apply_scores_to_edges(scored))
+                        Ok(apply_scores_to_edges(scored).into_iter().take(limit).collect())
                     }
                 }
             } else {
@@ -250,7 +254,7 @@ pub async fn rerank_edges(
                 );
                 let scored =
                     reciprocal_rank_fusion(method_results, 60.0, |edge| edge.uuid.to_string());
-                Ok(apply_scores_to_edges(scored))
+                Ok(apply_scores_to_edges(scored).into_iter().take(limit).collect())
             }
         }
         EdgeReranker::NodeDistance => {
@@ -259,6 +263,7 @@ pub async fn rerank_edges(
             let len = all_edges.len();
             Ok(all_edges
                 .into_iter()
+                .take(limit)
                 .enumerate()
                 .map(|(i, mut edge)| {
                     edge.score = Some(1.0 - (i as f32 / len.max(1) as f32));
@@ -277,6 +282,7 @@ pub async fn rerank_edges(
                 .max(1);
             Ok(all_edges
                 .into_iter()
+                .take(limit)
                 .map(|mut edge| {
                     edge.score = Some(edge.episodes.len() as f32 / max_episodes as f32);
                     edge
@@ -306,11 +312,12 @@ pub async fn rerank_nodes(
     mmr_lambda: f32,
     centrality_boost_factor: f32,
     reranker_client: Option<&RerankerClient>,
+    limit: usize,
 ) -> SearchResult<Vec<Node>> {
     match reranker {
         NodeReranker::Rrf => {
             let scored = reciprocal_rank_fusion(method_results, 60.0, |node| node.uuid.to_string());
-            Ok(apply_scores_to_nodes(scored))
+            Ok(apply_scores_to_nodes(scored).into_iter().take(limit).collect())
         }
         NodeReranker::Mmr => {
             let all_nodes: Vec<Node> = method_results.into_iter().flatten().collect();
@@ -319,7 +326,7 @@ pub async fn rerank_nodes(
                 query_vector,
                 |node| node.embedding.as_deref(),
                 mmr_lambda,
-                100,
+                limit,
             );
             Ok(apply_scores_to_nodes(scored))
         }
@@ -337,13 +344,16 @@ pub async fn rerank_nodes(
                     .iter()
                     .map(|n| n.summary.clone().unwrap_or_else(|| n.name.clone()))
                     .collect();
-                let top_k = Some(documents.len().min(100));
+                let top_k = Some(documents.len().min(limit));
 
                 match client.rerank(query, documents, top_k).await {
                     Ok(ranked) => {
                         let mut seen = HashSet::new();
-                        let mut result = Vec::with_capacity(ranked.len());
+                        let mut result = Vec::with_capacity(ranked.len().min(limit));
                         for (idx, score) in ranked {
+                            if result.len() >= limit {
+                                break;
+                            }
                             if let Some(mut node) = all_nodes.get(idx).cloned() {
                                 if seen.insert(node.uuid) {
                                     node.score = Some(score);
@@ -358,13 +368,13 @@ pub async fn rerank_nodes(
                         let scored = reciprocal_rank_fusion(method_results, 60.0, |node| {
                             node.uuid.to_string()
                         });
-                        Ok(apply_scores_to_nodes(scored))
+                        Ok(apply_scores_to_nodes(scored).into_iter().take(limit).collect())
                     }
                 }
             } else {
                 let scored =
                     reciprocal_rank_fusion(method_results, 60.0, |node| node.uuid.to_string());
-                Ok(apply_scores_to_nodes(scored))
+                Ok(apply_scores_to_nodes(scored).into_iter().take(limit).collect())
             }
         }
         NodeReranker::CentralityBoosted => {
@@ -375,7 +385,7 @@ pub async fn rerank_nodes(
                 |node| node.embedding.as_deref(),
                 |node| node.centrality,
                 centrality_boost_factor,
-                100,
+                limit,
             );
             Ok(apply_scores_to_nodes(scored))
         }
@@ -385,6 +395,7 @@ pub async fn rerank_nodes(
             let len = all_nodes.len();
             Ok(all_nodes
                 .into_iter()
+                .take(limit)
                 .enumerate()
                 .map(|(i, mut node)| {
                     node.score = Some(1.0 - (i as f32 / len.max(1) as f32));
@@ -515,6 +526,7 @@ mod tests {
             None,
             0.5,
             None,
+            100,
         )
         .await
         .unwrap();
@@ -542,6 +554,7 @@ mod tests {
             0.5,
             0.0,
             None,
+            100,
         )
         .await
         .unwrap();
@@ -579,6 +592,7 @@ mod tests {
             0.5,
             0.0,
             Some(&client),
+            100,
         )
         .await
         .unwrap();

@@ -14,6 +14,13 @@ pub struct EdgeSearchRequest {
     pub config: EdgeSearchConfig,
     pub filters: Option<SearchFilters>,
     pub query_vector: Option<Vec<f32>>,
+    /// Maximum number of results to return (defaults to 100)
+    #[serde(default = "default_limit")]
+    pub limit: usize,
+}
+
+fn default_limit() -> usize {
+    100
 }
 
 #[derive(Debug, Serialize)]
@@ -100,6 +107,7 @@ pub async fn edge_search_handler(
             &request.config,
             &request.filters.unwrap_or_default(),
             request.query_vector.as_deref(),
+            request.limit,
         )
         .await?;
 

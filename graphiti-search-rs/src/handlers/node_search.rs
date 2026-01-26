@@ -14,6 +14,12 @@ pub struct NodeSearchRequest {
     pub config: NodeSearchConfig,
     pub filters: Option<SearchFilters>,
     pub query_vector: Option<Vec<f32>>,
+    #[serde(default = "default_limit")]
+    pub limit: usize,
+}
+
+fn default_limit() -> usize {
+    100
 }
 
 #[derive(Debug, Serialize)]
@@ -100,6 +106,7 @@ pub async fn node_search_handler(
             &request.config,
             &request.filters.unwrap_or_default(),
             request.query_vector.as_deref(),
+            request.limit,
         )
         .await?;
 
