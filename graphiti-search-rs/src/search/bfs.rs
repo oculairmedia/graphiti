@@ -22,7 +22,7 @@ impl Eq for ScoredNode {}
 
 impl PartialOrd for ScoredNode {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.score.partial_cmp(&other.score)
+        Some(self.cmp(other))
     }
 }
 
@@ -150,7 +150,7 @@ pub async fn search_nodes_bfs(
         }
 
         let neighbors_result = conn
-            .get_node_neighbors(&[current.uuid.clone()])
+            .get_node_neighbors(std::slice::from_ref(&current.uuid))
             .await
             .map_err(|e| crate::error::SearchError::Database(e.to_string()))?;
 

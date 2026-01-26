@@ -312,6 +312,7 @@ fn apply_scores_to_nodes(scored: Vec<(Node, f32)>) -> Vec<Node> {
         .collect()
 }
 
+#[allow(clippy::too_many_arguments)]
 #[instrument(skip(method_results, query_vector, reranker_client))]
 pub async fn rerank_nodes(
     method_results: Vec<Vec<Node>>,
