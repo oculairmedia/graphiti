@@ -1,9 +1,9 @@
 use crate::error::SearchResult;
 use crate::falkor::FalkorConnection;
-use crate::models::{Edge, Node, NodeSearchConfig, EdgeSearchConfig};
-use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
+use crate::models::{Edge, EdgeSearchConfig, Node, NodeSearchConfig};
 use std::cmp::Ordering;
-use tracing::{instrument, debug};
+use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
+use tracing::{debug, instrument};
 
 #[derive(Debug, Clone)]
 struct ScoredNode {
@@ -131,7 +131,10 @@ pub async fn search_nodes_bfs(
         }
 
         if current.score < config.min_score_cutoff {
-            debug!("BFS: Score {} below cutoff {}", current.score, config.min_score_cutoff);
+            debug!(
+                "BFS: Score {} below cutoff {}",
+                current.score, config.min_score_cutoff
+            );
             continue;
         }
 
@@ -139,11 +142,16 @@ pub async fn search_nodes_bfs(
         expansions += 1;
 
         if expansions >= config.max_expansions {
-            debug!("BFS: Reached max_expansions limit ({})", config.max_expansions);
+            debug!(
+                "BFS: Reached max_expansions limit ({})",
+                config.max_expansions
+            );
             break;
         }
 
-        let neighbors_result = conn.get_node_neighbors(&[current.uuid.clone()]).await
+        let neighbors_result = conn
+            .get_node_neighbors(&[current.uuid.clone()])
+            .await
             .map_err(|e| crate::error::SearchError::Database(e.to_string()))?;
 
         let mut neighbor_uuids: Vec<String> = neighbors_result
@@ -154,8 +162,12 @@ pub async fn search_nodes_bfs(
             .collect();
 
         if neighbor_uuids.len() > config.hub_degree_threshold {
-            debug!("BFS: Hub node {} has {} neighbors, limiting to {}", 
-                current.uuid, neighbor_uuids.len(), config.per_hop_limit);
+            debug!(
+                "BFS: Hub node {} has {} neighbors, limiting to {}",
+                current.uuid,
+                neighbor_uuids.len(),
+                config.per_hop_limit
+            );
             neighbor_uuids.truncate(config.per_hop_limit);
         } else {
             neighbor_uuids.truncate(config.per_hop_limit);
@@ -171,7 +183,7 @@ pub async fn search_nodes_bfs(
             }
 
             let neighbor_score = current.score * decay_factor;
-            
+
             let existing_score = best_scores.get(&neighbor_uuid).copied().unwrap_or(0.0);
             if neighbor_score > existing_score {
                 best_scores.insert(neighbor_uuid.clone(), neighbor_score);
@@ -191,14 +203,20 @@ pub async fn search_nodes_bfs(
         }
     }
 
-    debug!("BFS: Visited {} nodes, performed {} expansions", visited.len(), expansions);
+    debug!(
+        "BFS: Visited {} nodes, performed {} expansions",
+        visited.len(),
+        expansions
+    );
 
     let uuids: Vec<String> = visited.into_iter().collect();
     if uuids.is_empty() {
         return Ok(Vec::new());
     }
 
-    let mut nodes = conn.get_nodes_by_uuids(&uuids, group_ids).await
+    let mut nodes = conn
+        .get_nodes_by_uuids(&uuids, group_ids)
+        .await
         .map_err(|e| crate::error::SearchError::Database(e.to_string()))?;
 
     for node in &mut nodes {
@@ -234,13 +252,18 @@ pub async fn search_edges_bfs(
     }
 
     let seed_nodes_vec: Vec<String> = seed_node_uuids.into_iter().collect();
-    let nodes = conn.get_nodes_by_uuids(&seed_nodes_vec, group_ids).await
+    let nodes = conn
+        .get_nodes_by_uuids(&seed_nodes_vec, group_ids)
+        .await
         .map_err(|e| crate::error::SearchError::Database(e.to_string()))?;
 
-    let nodes_with_score: Vec<Node> = nodes.into_iter().map(|mut n| {
-        n.score = Some(1.0);
-        n
-    }).collect();
+    let nodes_with_score: Vec<Node> = nodes
+        .into_iter()
+        .map(|mut n| {
+            n.score = Some(1.0);
+            n
+        })
+        .collect();
 
     let expanded_nodes = search_nodes_bfs(conn, nodes_with_score, config, group_ids).await?;
 
@@ -248,22 +271,30 @@ pub async fn search_edges_bfs(
         return Ok(Vec::new());
     }
 
-    let node_uuids: Vec<String> = expanded_nodes.iter()
-        .map(|n| n.uuid.to_string())
-        .collect();
+    let node_uuids: Vec<String> = expanded_nodes.iter().map(|n| n.uuid.to_string()).collect();
 
-    let node_scores: HashMap<String, f32> = expanded_nodes.iter()
+    let node_scores: HashMap<String, f32> = expanded_nodes
+        .iter()
         .map(|n| (n.uuid.to_string(), n.score.unwrap_or(0.0)))
         .collect();
 
     let edges = get_edges_between_nodes(conn, &node_uuids, group_ids).await?;
 
-    let mut scored_edges: Vec<Edge> = edges.into_iter().map(|mut edge| {
-        let source_score = node_scores.get(&edge.source_node_uuid.to_string()).copied().unwrap_or(0.0);
-        let target_score = node_scores.get(&edge.target_node_uuid.to_string()).copied().unwrap_or(0.0);
-        edge.score = Some((source_score + target_score) / 2.0);
-        edge
-    }).collect();
+    let mut scored_edges: Vec<Edge> = edges
+        .into_iter()
+        .map(|mut edge| {
+            let source_score = node_scores
+                .get(&edge.source_node_uuid.to_string())
+                .copied()
+                .unwrap_or(0.0);
+            let target_score = node_scores
+                .get(&edge.target_node_uuid.to_string())
+                .copied()
+                .unwrap_or(0.0);
+            edge.score = Some((source_score + target_score) / 2.0);
+            edge
+        })
+        .collect();
 
     scored_edges.sort_by(|a, b| {
         let score_a = a.score.unwrap_or(0.0);
@@ -279,7 +310,8 @@ async fn get_edges_between_nodes(
     node_uuids: &[String],
     group_ids: Option<&[String]>,
 ) -> SearchResult<Vec<Edge>> {
-    conn.get_edges_between_nodes(node_uuids, group_ids).await
+    conn.get_edges_between_nodes(node_uuids, group_ids)
+        .await
         .map_err(|e| crate::error::SearchError::Database(e.to_string()))
 }
 
@@ -409,4 +441,3 @@ mod tests {
         assert!(nodes.contains("E"));
     }
 }
-

@@ -190,7 +190,10 @@ pub async fn rerank_edges(
     match reranker {
         EdgeReranker::Rrf => {
             let scored = reciprocal_rank_fusion(method_results, 60.0, |edge| edge.uuid.to_string());
-            Ok(apply_scores_to_edges(scored).into_iter().take(limit).collect())
+            Ok(apply_scores_to_edges(scored)
+                .into_iter()
+                .take(limit)
+                .collect())
         }
         EdgeReranker::Mmr => {
             let all_edges: Vec<Edge> = method_results.into_iter().flatten().collect();
@@ -245,7 +248,10 @@ pub async fn rerank_edges(
                         let scored = reciprocal_rank_fusion(method_results, 60.0, |edge| {
                             edge.uuid.to_string()
                         });
-                        Ok(apply_scores_to_edges(scored).into_iter().take(limit).collect())
+                        Ok(apply_scores_to_edges(scored)
+                            .into_iter()
+                            .take(limit)
+                            .collect())
                     }
                 }
             } else {
@@ -254,7 +260,10 @@ pub async fn rerank_edges(
                 );
                 let scored =
                     reciprocal_rank_fusion(method_results, 60.0, |edge| edge.uuid.to_string());
-                Ok(apply_scores_to_edges(scored).into_iter().take(limit).collect())
+                Ok(apply_scores_to_edges(scored)
+                    .into_iter()
+                    .take(limit)
+                    .collect())
             }
         }
         EdgeReranker::NodeDistance => {
@@ -317,7 +326,10 @@ pub async fn rerank_nodes(
     match reranker {
         NodeReranker::Rrf => {
             let scored = reciprocal_rank_fusion(method_results, 60.0, |node| node.uuid.to_string());
-            Ok(apply_scores_to_nodes(scored).into_iter().take(limit).collect())
+            Ok(apply_scores_to_nodes(scored)
+                .into_iter()
+                .take(limit)
+                .collect())
         }
         NodeReranker::Mmr => {
             let all_nodes: Vec<Node> = method_results.into_iter().flatten().collect();
@@ -368,13 +380,19 @@ pub async fn rerank_nodes(
                         let scored = reciprocal_rank_fusion(method_results, 60.0, |node| {
                             node.uuid.to_string()
                         });
-                        Ok(apply_scores_to_nodes(scored).into_iter().take(limit).collect())
+                        Ok(apply_scores_to_nodes(scored)
+                            .into_iter()
+                            .take(limit)
+                            .collect())
                     }
                 }
             } else {
                 let scored =
                     reciprocal_rank_fusion(method_results, 60.0, |node| node.uuid.to_string());
-                Ok(apply_scores_to_nodes(scored).into_iter().take(limit).collect())
+                Ok(apply_scores_to_nodes(scored)
+                    .into_iter()
+                    .take(limit)
+                    .collect())
             }
         }
         NodeReranker::CentralityBoosted => {

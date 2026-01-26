@@ -151,9 +151,14 @@ impl SearchEngine {
                     } else {
                         let seed_edges = method_results.iter().flatten().cloned().collect();
                         let bfs_config = bfs::BfsConfig::from(config);
-                        bfs::search_edges_bfs(&mut falkor_conn, seed_edges, &bfs_config, filters.group_ids.as_deref())
-                            .await
-                            .unwrap_or_default()
+                        bfs::search_edges_bfs(
+                            &mut falkor_conn,
+                            seed_edges,
+                            &bfs_config,
+                            filters.group_ids.as_deref(),
+                        )
+                        .await
+                        .unwrap_or_default()
                     }
                 }
                 SearchMethod::Hipporag => {
@@ -223,9 +228,14 @@ impl SearchEngine {
                     } else {
                         let seed_nodes = method_results.iter().flatten().cloned().collect();
                         let bfs_config = bfs::BfsConfig::from(config);
-                        bfs::search_nodes_bfs(&mut falkor_conn, seed_nodes, &bfs_config, filters.group_ids.as_deref())
-                            .await
-                            .unwrap_or_default()
+                        bfs::search_nodes_bfs(
+                            &mut falkor_conn,
+                            seed_nodes,
+                            &bfs_config,
+                            filters.group_ids.as_deref(),
+                        )
+                        .await
+                        .unwrap_or_default()
                     }
                 }
                 SearchMethod::Hipporag if query_vector.is_some() => {

@@ -89,12 +89,19 @@ async fn test_bfs_basic_traversal() {
     println!("\nBFS returned {} nodes in {:?}", result.len(), elapsed);
 
     // Verify we got results (BFS should expand from seeds)
-    assert!(!result.is_empty(), "BFS should return at least the seed nodes");
-    
+    assert!(
+        !result.is_empty(),
+        "BFS should return at least the seed nodes"
+    );
+
     // Verify scores are assigned
     for node in &result {
         assert!(node.score.is_some(), "All BFS results should have scores");
-        println!("  - {} (score: {:.4})", node.name, node.score.unwrap_or(0.0));
+        println!(
+            "  - {} (score: {:.4})",
+            node.name,
+            node.score.unwrap_or(0.0)
+        );
     }
 
     // Verify results are sorted by score (descending)
@@ -122,7 +129,10 @@ async fn test_bfs_empty_seeds() {
         .await
         .expect("BFS with empty seeds should not error");
 
-    assert!(result.is_empty(), "BFS with empty seeds should return empty results");
+    assert!(
+        result.is_empty(),
+        "BFS with empty seeds should return empty results"
+    );
     println!("✓ BFS handles empty seeds gracefully");
 }
 
@@ -254,7 +264,7 @@ async fn test_bfs_decay_scoring() {
 
     // Find the seed node in results
     let seed_in_results = result.iter().find(|n| n.uuid.to_string() == seed_uuid);
-    
+
     println!("Decay test results ({} nodes):", result.len());
     for node in result.iter().take(10) {
         let is_seed = node.uuid.to_string() == seed_uuid;
@@ -372,14 +382,8 @@ async fn test_bfs_min_score_cutoff() {
         .await
         .expect("BFS with low cutoff should work");
 
-    println!(
-        "High cutoff (0.5): {} nodes",
-        high_cutoff_result.len()
-    );
-    println!(
-        "Low cutoff (0.01): {} nodes",
-        low_cutoff_result.len()
-    );
+    println!("High cutoff (0.5): {} nodes", high_cutoff_result.len());
+    println!("Low cutoff (0.01): {} nodes", low_cutoff_result.len());
 
     // High cutoff should generally return fewer nodes
     // (not strictly true if graph is sparse)
@@ -425,7 +429,7 @@ async fn test_bfs_edge_search() {
 
     let start = Instant::now();
     let result = timeout(
-        Duration::from_secs(60),  // Longer timeout for edge BFS
+        Duration::from_secs(60), // Longer timeout for edge BFS
         search_edges_bfs(&mut conn, seed_edges, &config, None),
     )
     .await
@@ -433,12 +437,20 @@ async fn test_bfs_edge_search() {
     .expect("Edge BFS search failed");
 
     let elapsed = start.elapsed();
-    println!("\nEdge BFS returned {} edges in {:?}", result.len(), elapsed);
+    println!(
+        "\nEdge BFS returned {} edges in {:?}",
+        result.len(),
+        elapsed
+    );
 
     // Verify results have scores
     for edge in result.iter().take(5) {
         assert!(edge.score.is_some(), "Edge results should have scores");
-        println!("  - {} (score: {:.4})", edge.fact, edge.score.unwrap_or(0.0));
+        println!(
+            "  - {} (score: {:.4})",
+            edge.fact,
+            edge.score.unwrap_or(0.0)
+        );
     }
 
     println!("✓ Edge BFS works correctly");
@@ -564,7 +576,7 @@ async fn benchmark_bfs_vs_similarity() {
     let seed_nodes = get_seed_nodes(&mut conn, 5).await;
     let mut bfs_times = Vec::new();
     let config = BfsConfig::default();
-    
+
     for _ in 0..iterations {
         let start = Instant::now();
         let _result = search_nodes_bfs(&mut conn, seed_nodes.clone(), &config, None)
@@ -591,7 +603,10 @@ async fn benchmark_bfs_vs_similarity() {
     println!("Similarity only:     {:>8.2?}", avg_sim);
     println!("BFS only:            {:>8.2?}", avg_bfs);
     println!("Combined (sim+BFS):  {:>8.2?}", avg_combined);
-    println!("BFS overhead:        {:>8.2?}", avg_combined.saturating_sub(avg_sim));
+    println!(
+        "BFS overhead:        {:>8.2?}",
+        avg_combined.saturating_sub(avg_sim)
+    );
 
     println!("\n✓ Comparison complete");
 }
