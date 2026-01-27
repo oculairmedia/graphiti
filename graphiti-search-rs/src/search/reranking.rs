@@ -82,7 +82,7 @@ pub fn centrality_boosted_rerank<T: Clone>(
 
 /// Maximal Marginal Relevance (MMR) for diversity-aware reranking
 /// Returns items with their MMR scores
-/// 
+///
 /// IMPORTANT: MMR has O(n²) complexity. The timeout_ms parameter prevents runaway computation
 /// when input size is large. If timeout is reached, partial results are returned.
 pub fn maximal_marginal_relevance<T: Clone>(
