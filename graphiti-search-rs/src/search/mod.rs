@@ -23,6 +23,8 @@ pub struct SearchEngine {
     redis_pool: RedisPool,
     cache: EnhancedCache,
     max_method_results: usize,
+    mmr_timeout_ms: u64,
+    max_pre_rerank_results: usize,
     reranker_client: Option<crate::reranker::RerankerClient>,
 }
 
@@ -31,6 +33,8 @@ impl SearchEngine {
         falkor_pool: FalkorPool,
         redis_pool: RedisPool,
         max_method_results: usize,
+        mmr_timeout_ms: u64,
+        max_pre_rerank_results: usize,
         reranker_client: Option<crate::reranker::RerankerClient>,
     ) -> Self {
         let cache = EnhancedCache::new(redis_pool.clone());
@@ -39,6 +43,8 @@ impl SearchEngine {
             redis_pool,
             cache,
             max_method_results,
+            mmr_timeout_ms,
+            max_pre_rerank_results,
             reranker_client,
         }
     }
@@ -171,6 +177,29 @@ impl SearchEngine {
             method_results.push(edges);
         }
 
+        // Cap total results before reranking to prevent O(n²) explosion
+        let total_results: usize = method_results.iter().map(|v| v.len()).sum();
+        let method_results = if total_results > self.max_pre_rerank_results {
+            tracing::warn!(
+                "Capping {} edge results to {} before reranking",
+                total_results,
+                self.max_pre_rerank_results
+            );
+            let mut capped = Vec::new();
+            let mut remaining = self.max_pre_rerank_results;
+            for mut list in method_results {
+                if remaining == 0 {
+                    break;
+                }
+                list.truncate(remaining);
+                remaining = remaining.saturating_sub(list.len());
+                capped.push(list);
+            }
+            capped
+        } else {
+            method_results
+        };
+
         // Apply reranking
         let reranked = reranking::rerank_edges(
             method_results,
@@ -178,6 +207,7 @@ impl SearchEngine {
             query,
             query_vector,
             config.mmr_lambda,
+            self.mmr_timeout_ms,
             self.reranker_client.as_ref(),
             limit,
         )
@@ -260,6 +290,29 @@ impl SearchEngine {
             method_results.push(nodes);
         }
 
+        // Cap total results before reranking to prevent O(n²) explosion
+        let total_results: usize = method_results.iter().map(|v| v.len()).sum();
+        let method_results = if total_results > self.max_pre_rerank_results {
+            tracing::warn!(
+                "Capping {} node results to {} before reranking",
+                total_results,
+                self.max_pre_rerank_results
+            );
+            let mut capped = Vec::new();
+            let mut remaining = self.max_pre_rerank_results;
+            for mut list in method_results {
+                if remaining == 0 {
+                    break;
+                }
+                list.truncate(remaining);
+                remaining = remaining.saturating_sub(list.len());
+                capped.push(list);
+            }
+            capped
+        } else {
+            method_results
+        };
+
         // Apply reranking with centrality boost factor
         let reranked = reranking::rerank_nodes(
             method_results,
@@ -267,6 +320,7 @@ impl SearchEngine {
             query,
             query_vector,
             config.mmr_lambda,
+            self.mmr_timeout_ms,
             config.centrality_boost_factor.unwrap_or(1.0),
             self.reranker_client.as_ref(),
             limit,

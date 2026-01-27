@@ -96,6 +96,8 @@ pub async fn node_search_handler(
         state.falkor_pool.clone(),
         state.redis_pool.clone(),
         state.config.max_method_results,
+        state.config.mmr_timeout_ms,
+        state.config.max_pre_rerank_results,
         reranker_client,
     );
 

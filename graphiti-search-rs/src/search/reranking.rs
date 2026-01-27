@@ -3,6 +3,7 @@ use crate::models::{Edge, EdgeReranker, Node, NodeReranker};
 use crate::reranker::RerankerClient;
 use crate::search::similarity::cosine_similarity_simd;
 use std::collections::{HashMap, HashSet};
+use std::time::{Duration, Instant};
 use tracing::instrument;
 
 /// Reciprocal Rank Fusion (RRF) for combining multiple ranked lists
@@ -81,12 +82,16 @@ pub fn centrality_boosted_rerank<T: Clone>(
 
 /// Maximal Marginal Relevance (MMR) for diversity-aware reranking
 /// Returns items with their MMR scores
+/// 
+/// IMPORTANT: MMR has O(n²) complexity. The timeout_ms parameter prevents runaway computation
+/// when input size is large. If timeout is reached, partial results are returned.
 pub fn maximal_marginal_relevance<T: Clone>(
     items: Vec<T>,
     query_embedding: Option<&[f32]>,
     get_embedding: impl Fn(&T) -> Option<&[f32]> + Sync,
     lambda: f32,
     limit: usize,
+    timeout_ms: u64,
 ) -> Vec<(T, f32)> {
     if items.is_empty() || query_embedding.is_none() {
         // Return items with default scores when no embedding available
@@ -102,7 +107,23 @@ pub fn maximal_marginal_relevance<T: Clone>(
     let mut selected: Vec<(T, f32)> = Vec::new();
     let mut remaining: Vec<(usize, &T)> = items.iter().enumerate().collect();
 
+    // Timeout protection for O(n²) complexity
+    let start = Instant::now();
+    let timeout = Duration::from_millis(timeout_ms);
+
     while selected.len() < limit && !remaining.is_empty() {
+        // Check timeout at start of each iteration
+        if start.elapsed() > timeout {
+            tracing::warn!(
+                "MMR timeout after {}ms, returning {} partial results (requested {}, input size {})",
+                start.elapsed().as_millis(),
+                selected.len(),
+                limit,
+                items.len()
+            );
+            break;
+        }
+
         let scores: Vec<f32> = remaining
             .iter()
             .map(|(_, item)| {
@@ -184,6 +205,7 @@ pub async fn rerank_edges(
     query: &str,
     query_vector: Option<&[f32]>,
     mmr_lambda: f32,
+    mmr_timeout_ms: u64,
     reranker_client: Option<&RerankerClient>,
     limit: usize,
 ) -> SearchResult<Vec<Edge>> {
@@ -200,9 +222,10 @@ pub async fn rerank_edges(
             let scored = maximal_marginal_relevance(
                 all_edges,
                 query_vector,
-                |_edge| None, // Edges typically don't have embeddings
+                |_edge| None,
                 mmr_lambda,
                 limit,
+                mmr_timeout_ms,
             );
             Ok(apply_scores_to_edges(scored))
         }
@@ -320,6 +343,7 @@ pub async fn rerank_nodes(
     query: &str,
     query_vector: Option<&[f32]>,
     mmr_lambda: f32,
+    mmr_timeout_ms: u64,
     centrality_boost_factor: f32,
     reranker_client: Option<&RerankerClient>,
     limit: usize,
@@ -340,6 +364,7 @@ pub async fn rerank_nodes(
                 |node| node.embedding.as_deref(),
                 mmr_lambda,
                 limit,
+                mmr_timeout_ms,
             );
             Ok(apply_scores_to_nodes(scored))
         }
@@ -544,6 +569,7 @@ mod tests {
             "q",
             None,
             0.5,
+            5000,
             None,
             100,
         )
@@ -571,6 +597,7 @@ mod tests {
             "q",
             None,
             0.5,
+            5000,
             0.0,
             None,
             100,
@@ -609,6 +636,7 @@ mod tests {
             "q",
             None,
             0.5,
+            5000,
             0.0,
             Some(&client),
             100,

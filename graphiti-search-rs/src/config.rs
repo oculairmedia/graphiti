@@ -22,6 +22,11 @@ pub struct Config {
     pub reranker_url: String,
     /// Timeout for reranker requests (ms)
     pub reranker_timeout_ms: u64,
+
+    /// Timeout for MMR reranking computation (ms) - prevents O(n²) explosion
+    pub mmr_timeout_ms: u64,
+    /// Maximum total results before reranking - caps O(n²) input size
+    pub max_pre_rerank_results: usize,
 }
 
 impl Config {
@@ -64,6 +69,13 @@ impl Config {
                 .unwrap_or_else(|_| "http://100.81.139.20:11435".to_string()),
             reranker_timeout_ms: env::var("RERANKER_TIMEOUT_MS")
                 .unwrap_or_else(|_| "5000".to_string())
+                .parse()?,
+
+            mmr_timeout_ms: env::var("MMR_TIMEOUT_MS")
+                .unwrap_or_else(|_| "5000".to_string())
+                .parse()?,
+            max_pre_rerank_results: env::var("MAX_PRE_RERANK_RESULTS")
+                .unwrap_or_else(|_| "500".to_string())
                 .parse()?,
         })
     }
