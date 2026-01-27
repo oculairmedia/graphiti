@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 from typing_extensions import LiteralString
 
 from graphiti_core.driver.driver import GraphDriver
-from graphiti_core.graph_queries import get_fulltext_indices, get_range_indices
+from graphiti_core.graph_queries import get_fulltext_indices, get_range_indices, get_vector_indices
 from graphiti_core.helpers import parse_db_date, semaphore_gather
 from graphiti_core.utils.constraints import get_all_constraints
 from graphiti_core.nodes import EpisodeType, EpisodicNode
@@ -30,7 +30,9 @@ EPISODE_WINDOW_LEN = 3
 logger = logging.getLogger(__name__)
 
 
-async def build_indices_and_constraints(driver: GraphDriver, delete_existing: bool = False):
+async def build_indices_and_constraints(
+    driver: GraphDriver, delete_existing: bool = False, embedding_dim: int = 2560
+):
     if delete_existing:
         await driver.delete_all_indexes()
 
@@ -38,9 +40,11 @@ async def build_indices_and_constraints(driver: GraphDriver, delete_existing: bo
 
     fulltext_indices: list[LiteralString] = get_fulltext_indices()
 
+    vector_indices: list[str] = get_vector_indices(embedding_dim)
+
     constraint_queries: list[LiteralString] = get_all_constraints()
 
-    all_queries: list[LiteralString] = range_indices + fulltext_indices
+    all_queries: list[LiteralString | str] = range_indices + fulltext_indices + vector_indices
 
     await semaphore_gather(
         *[

@@ -44,6 +44,17 @@ def get_fulltext_indices() -> list[LiteralString]:
     ]
 
 
+def get_vector_indices(embedding_dim: int = 2560) -> list[str]:
+    """
+    Get HNSW vector index queries required by search-rs for fast similarity search.
+    Without these indexes, searches fall back to O(n) brute-force which exhausts connection pools.
+    """
+    return [
+        f"""CREATE VECTOR INDEX FOR (n:Entity) ON (n.name_embedding) OPTIONS {{dimension: {embedding_dim}, similarityFunction: 'cosine'}}""",
+        f"""CREATE VECTOR INDEX FOR ()-[r:RELATES_TO]->() ON (r.fact_embedding) OPTIONS {{dimension: {embedding_dim}, similarityFunction: 'cosine'}}""",
+    ]
+
+
 def get_nodes_query(name: str = '', query: str | None = None) -> str:
     label = FULLTEXT_INDEX_NAME_TO_LABEL[name]
     return f"CALL db.idx.fulltext.queryNodes('{label}', {query})"

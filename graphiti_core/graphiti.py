@@ -298,9 +298,15 @@ class Graphiti:
         """Close the connection to the graph database."""
         await self.driver.close()
 
-    async def build_indices_and_constraints(self, delete_existing: bool = False):
+    async def build_indices_and_constraints(
+        self, delete_existing: bool = False, embedding_dim: int | None = None
+    ):
         """Build indices and constraints in the graph database."""
-        await build_indices_and_constraints(self.driver, delete_existing)
+        if embedding_dim is None:
+            from graphiti_core.embedder.client import EMBEDDING_DIM
+
+            embedding_dim = EMBEDDING_DIM
+        await build_indices_and_constraints(self.driver, delete_existing, embedding_dim)
 
     async def retrieve_episodes(
         self,
