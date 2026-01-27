@@ -198,6 +198,7 @@ fn apply_scores_to_edges(scored: Vec<(Edge, f32)>) -> Vec<Edge> {
         .collect()
 }
 
+#[allow(clippy::too_many_arguments)]
 #[instrument(skip(method_results, query_vector, reranker_client))]
 pub async fn rerank_edges(
     method_results: Vec<Vec<Edge>>,
