@@ -1,4 +1,5 @@
 import logging
+import asyncio
 import os
 import sys
 from typing import Annotated, Any
@@ -22,6 +23,9 @@ from graph_service.dto import FactResult
 logger = logging.getLogger(__name__)
 
 from graphiti_core.driver.falkordb_driver import FalkorDriver
+
+_entity_locks: dict[str, asyncio.Lock] = {}
+_entity_locks_lock = asyncio.Lock()
 
 
 class ZepGraphiti(Graphiti):
@@ -50,15 +54,97 @@ class ZepGraphiti(Graphiti):
     async def save_entity_node(
         self, name: str, uuid: str, group_id: str, summary: str = ''
     ) -> EntityNode:
-        new_node = EntityNode(
-            name=name,
-            uuid=uuid,
-            group_id=group_id,
-            summary=summary,
-        )
-        await new_node.generate_name_embedding(self.embedder)
-        await new_node.save(self.driver)
-        return new_node
+        return await self._upsert_entity_by_name(name, uuid, group_id, summary)
+
+    async def _upsert_entity_by_name(
+        self, name: str, uuid: str, group_id: str, summary: str = ''
+    ) -> EntityNode:
+        """Atomic upsert with per-entity mutex to prevent race conditions."""
+        from datetime import datetime, timezone
+
+        lock_key = f'{group_id}:{name}'
+        async with _entity_locks_lock:
+            if lock_key not in _entity_locks:
+                _entity_locks[lock_key] = asyncio.Lock()
+            entity_lock = _entity_locks[lock_key]
+
+        async with entity_lock:
+            now = datetime.now(timezone.utc).isoformat()
+            node = EntityNode(name=name, uuid=uuid, group_id=group_id, summary=summary)
+            await node.generate_name_embedding(self.embedder)
+            embedding = node.name_embedding or []
+
+            existing = await self._find_existing_entity(name, group_id)
+            if existing:
+                existing.summary = summary or existing.summary
+                existing.name_embedding = embedding
+                query = """
+                    MATCH (n:Entity {name: $name, group_id: $group_id})
+                    SET n.summary = $summary,
+                        n.updated_at = $now,
+                        n.name_embedding = vecf32($embedding)
+                    RETURN n.uuid as uuid
+                """
+                await self.driver.execute_query(
+                    query,
+                    name=name,
+                    group_id=group_id,
+                    summary=existing.summary,
+                    now=now,
+                    embedding=embedding,
+                )
+                return existing
+
+            create_query = """
+                CREATE (n:Entity {
+                    uuid: $uuid,
+                    name: $name,
+                    group_id: $group_id,
+                    summary: $summary,
+                    created_at: $now,
+                    updated_at: $now,
+                    name_embedding: vecf32($embedding)
+                })
+                RETURN n.uuid as uuid
+            """
+            await self.driver.execute_query(
+                create_query,
+                uuid=uuid,
+                name=name,
+                group_id=group_id,
+                summary=summary,
+                now=now,
+                embedding=embedding,
+            )
+            return node
+
+    async def _find_existing_entity(self, name: str, group_id: str) -> EntityNode | None:
+        query = """
+            MATCH (n:Entity {name: $name, group_id: $group_id})
+            RETURN n.uuid as uuid, n.name as name, n.group_id as group_id, 
+                   n.summary as summary, n.created_at as created_at, n.updated_at as updated_at,
+                   n.name_embedding as name_embedding
+            LIMIT 1
+        """
+        try:
+            result = await self.driver.execute_query(query, name=name, group_id=group_id)  # type: ignore[union-attr]
+            records = result[0] if result else []
+            if records and len(records) > 0:
+                row = records[0]
+                if row and row.get('uuid'):
+                    return EntityNode(
+                        uuid=row['uuid'],
+                        name=row['name'],
+                        group_id=row['group_id'],
+                        summary=row.get('summary', ''),
+                        created_at=row.get('created_at'),
+                        name_embedding=list(row['name_embedding'])
+                        if row.get('name_embedding')
+                        else None,
+                    )
+        except Exception as e:
+            logger.warning(f'Error checking for existing entity: {e}', exc_info=True)
+        return None
 
     async def get_entity_edge(self, uuid: str) -> EntityEdge:
         try:
