@@ -1,3 +1,5 @@
 services:
   graphiti-worker:
     image: ghcr.io/oculairmedia/graphiti-worker:main
+  graphiti-search-rs:
+    image: ghcr.io/oculairmedia/graphiti-search-rs:main
