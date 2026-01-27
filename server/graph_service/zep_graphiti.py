@@ -27,6 +27,9 @@ from graphiti_core.driver.falkordb_driver import FalkorDriver
 _entity_locks: dict[str, asyncio.Lock] = {}
 _entity_locks_lock = asyncio.Lock()
 
+# Shared ZepGraphiti client instance (initialized at startup, reused across requests)
+_graphiti_client: 'ZepGraphiti | None' = None
+
 
 class ZepGraphiti(Graphiti):
     def __init__(
@@ -213,14 +216,28 @@ class ZepGraphiti(Graphiti):
             raise HTTPException(status_code=404, detail=e.message) from e
 
 
-async def get_graphiti(settings: ZepEnvDep) -> Any:  # Returns generator
+async def get_graphiti(settings: ZepEnvDep) -> ZepGraphiti:
+    if _graphiti_client is None:
+        raise RuntimeError('ZepGraphiti client not initialized. Call initialize_graphiti() first.')
+    return _graphiti_client
+
+
+async def close_graphiti() -> None:
+    global _graphiti_client
+    if _graphiti_client is not None:
+        await _graphiti_client.close()
+        _graphiti_client = None
+        logger.info('Shared ZepGraphiti client closed')
+
+
+async def initialize_graphiti(settings: ZepEnvDep) -> None:
+    global _graphiti_client
     from graph_service.factories import (
         create_llm_client,
         create_embedder_client,
         configure_non_ollama_clients,
     )
 
-    # Delegate client creation to factories
     llm_client = create_llm_client(settings)
     embedder = create_embedder_client(settings)
 
@@ -229,43 +246,15 @@ async def get_graphiti(settings: ZepEnvDep) -> Any:  # Returns generator
         settings.falkordb_uri
         or f'redis://{settings.falkordb_host}:{settings.falkordb_port or 6379}'
     )
-    client = ZepGraphiti(
+    _graphiti_client = ZepGraphiti(
         uri=falkordb_uri,
         llm_client=llm_client,
         embedder=embedder,
         use_dspy=use_dspy,
     )
-
-    logger.info(
-        f'ZepGraphiti embedder model: {client.embedder.config.embedding_model if client.embedder else "None"}'
-    )
-
-    configure_non_ollama_clients(client, settings)
-
-    try:
-        yield client
-    finally:
-        await client.close()
-
-
-async def initialize_graphiti(settings: ZepEnvDep) -> None:
-    from graph_service.factories import create_llm_client, create_embedder_client
-
-    llm_client = create_llm_client(settings)
-    embedder = create_embedder_client(settings)
-
-    use_dspy = os.getenv('USE_DSPY', 'false').lower() == 'true'
-    falkordb_uri = (
-        settings.falkordb_uri
-        or f'redis://{settings.falkordb_host}:{settings.falkordb_port or 6379}'
-    )
-    client = ZepGraphiti(
-        uri=falkordb_uri,
-        llm_client=llm_client,
-        embedder=embedder,
-        use_dspy=use_dspy,
-    )
-    await client.build_indices_and_constraints()
+    configure_non_ollama_clients(_graphiti_client, settings)
+    await _graphiti_client.build_indices_and_constraints()
+    logger.info('Shared ZepGraphiti client initialized')
 
 
 def get_fact_result_from_edge(edge: EntityEdge) -> FactResult:

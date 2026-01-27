@@ -34,7 +34,7 @@ try:
     from graph_service.routers import tools as tools_router
 except ImportError:
     tools_router = None
-from graph_service.zep_graphiti import initialize_graphiti
+from graph_service.zep_graphiti import initialize_graphiti, close_graphiti
 from graph_service.websocket_manager import manager
 from graph_service.webhooks import webhook_service
 from graph_service.async_webhooks import (
@@ -84,7 +84,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     await close_caches()
     await shutdown_webhook_dispatcher()
     await webhook_service.close()
-    # No need to close Graphiti here, as it's handled per-request
+    await close_graphiti()
 
 
 app = FastAPI(lifespan=lifespan)

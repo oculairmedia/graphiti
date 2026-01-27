@@ -31,7 +31,13 @@ services:
       #   E = Keyevent events (published with __keyevent@<db>__ prefix)
       #   A = Alias for "g$lshzxe" - all events except debug
       - REDIS_ARGS=--loglevel warning --maxmemory 8g --maxmemory-policy allkeys-lru --save 300 1 --save 60 100 --dir /var/lib/falkordb/data --dbfilename falkordb.rdb --stop-writes-on-bgsave-error no --rdbcompression yes --rdb-save-incremental-fsync yes --notify-keyspace-events KEA
-      - FALKORDB_ARGS=NODE_CREATION_BUFFER 128 QUERY_MEM_CAPACITY 134217728 CMD_INFO no OMP_THREAD_COUNT 1 CACHE_SIZE 5
+      # PERFORMANCE TUNING (12-core system):
+      # - THREAD_COUNT 12: matches CPU cores for concurrent query processing
+      # - OMP_THREAD_COUNT 4: parallel GraphBLAS computation per query
+      # - CACHE_SIZE 100: cache more query execution plans (LRU eviction)
+      # - NODE_CREATION_BUFFER 128: batch node creation buffer
+      # - QUERY_MEM_CAPACITY 128MB: per-query memory limit
+      - FALKORDB_ARGS=THREAD_COUNT 12 OMP_THREAD_COUNT 4 CACHE_SIZE 100 NODE_CREATION_BUFFER 128 QUERY_MEM_CAPACITY 134217728 CMD_INFO no
     # MEMORY STRATEGY:
     # - mem_limit 16g: allows 2x headroom for RDB reload (dataset ~5-6GB, reload peaks ~10-12GB)
     # - memswap_limit 20g: 4GB emergency swap buffer if reload exceeds expectations
