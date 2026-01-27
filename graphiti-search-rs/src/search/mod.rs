@@ -12,8 +12,13 @@ use crate::models::{
     SearchFilters, SearchMethod, SearchRequest, SearchResults,
 };
 use deadpool_redis::Pool as RedisPool;
+use std::cmp::Ordering;
 use std::time::Instant;
-use tracing::{debug, instrument};
+use tracing::{debug, info, instrument};
+
+/// Maximum number of seed edges/nodes to use for BFS expansion
+/// Prevents exponential growth when BFS is combined with other search methods
+const MAX_BFS_SEEDS: usize = 50;
 
 use self::cache::EnhancedCache;
 
@@ -155,7 +160,24 @@ impl SearchEngine {
                     if method_results.is_empty() {
                         vec![]
                     } else {
-                        let seed_edges = method_results.iter().flatten().cloned().collect();
+                        let total_seeds: usize =
+                            method_results.iter().map(|r: &Vec<Edge>| r.len()).sum();
+                        let mut seed_edges: Vec<Edge> =
+                            method_results.iter().flatten().cloned().collect();
+
+                        seed_edges.sort_by(|a, b| {
+                            b.score.partial_cmp(&a.score).unwrap_or(Ordering::Equal)
+                        });
+                        seed_edges.truncate(MAX_BFS_SEEDS);
+
+                        if seed_edges.len() < total_seeds {
+                            info!(
+                                "BFS edge seeds capped from {} to {}",
+                                total_seeds,
+                                seed_edges.len()
+                            );
+                        }
+
                         let bfs_config = bfs::BfsConfig::from(config);
                         bfs::search_edges_bfs(
                             &mut falkor_conn,
@@ -256,7 +278,24 @@ impl SearchEngine {
                     if method_results.is_empty() {
                         vec![]
                     } else {
-                        let seed_nodes = method_results.iter().flatten().cloned().collect();
+                        let total_seeds: usize =
+                            method_results.iter().map(|r: &Vec<Node>| r.len()).sum();
+                        let mut seed_nodes: Vec<Node> =
+                            method_results.iter().flatten().cloned().collect();
+
+                        seed_nodes.sort_by(|a, b| {
+                            b.score.partial_cmp(&a.score).unwrap_or(Ordering::Equal)
+                        });
+                        seed_nodes.truncate(MAX_BFS_SEEDS);
+
+                        if seed_nodes.len() < total_seeds {
+                            info!(
+                                "BFS node seeds capped from {} to {}",
+                                total_seeds,
+                                seed_nodes.len()
+                            );
+                        }
+
                         let bfs_config = bfs::BfsConfig::from(config);
                         bfs::search_nodes_bfs(
                             &mut falkor_conn,
