@@ -79,7 +79,7 @@ async fn test_bfs_basic_traversal() {
     let start = Instant::now();
     let result = timeout(
         Duration::from_secs(30),
-        search_nodes_bfs(&mut conn, seed_nodes.clone(), &config, None),
+        search_nodes_bfs(&mut conn, seed_nodes.clone(), &config, None, 10000, 50),
     )
     .await
     .expect("Test timed out")
@@ -125,7 +125,7 @@ async fn test_bfs_empty_seeds() {
     let config = BfsConfig::default();
     let empty_seeds: Vec<graphiti_search_rs::models::Node> = vec![];
 
-    let result = search_nodes_bfs(&mut conn, empty_seeds, &config, None)
+    let result = search_nodes_bfs(&mut conn, empty_seeds, &config, None, 10000, 50)
         .await
         .expect("BFS with empty seeds should not error");
 
@@ -161,9 +161,16 @@ async fn test_bfs_beam_width_limits() {
         ..Default::default()
     };
 
-    let small_result = search_nodes_bfs(&mut conn, seed_nodes.clone(), &small_beam_config, None)
-        .await
-        .expect("BFS with small beam should work");
+    let small_result = search_nodes_bfs(
+        &mut conn,
+        seed_nodes.clone(),
+        &small_beam_config,
+        None,
+        10000,
+        50,
+    )
+    .await
+    .expect("BFS with small beam should work");
 
     // Test with larger beam width
     let large_beam_config = BfsConfig {
@@ -172,7 +179,7 @@ async fn test_bfs_beam_width_limits() {
         ..Default::default()
     };
 
-    let large_result = search_nodes_bfs(&mut conn, seed_nodes, &large_beam_config, None)
+    let large_result = search_nodes_bfs(&mut conn, seed_nodes, &large_beam_config, None, 10000, 50)
         .await
         .expect("BFS with large beam should work");
 
@@ -211,9 +218,16 @@ async fn test_bfs_hub_suppression() {
     };
 
     let start = Instant::now();
-    let result = search_nodes_bfs(&mut conn, seed_nodes.clone(), &aggressive_config, None)
-        .await
-        .expect("BFS with hub suppression should work");
+    let result = search_nodes_bfs(
+        &mut conn,
+        seed_nodes.clone(),
+        &aggressive_config,
+        None,
+        10000,
+        50,
+    )
+    .await
+    .expect("BFS with hub suppression should work");
     let elapsed = start.elapsed();
 
     println!(
@@ -258,7 +272,7 @@ async fn test_bfs_decay_scoring() {
         ..Default::default()
     };
 
-    let result = search_nodes_bfs(&mut conn, seed_nodes, &config, None)
+    let result = search_nodes_bfs(&mut conn, seed_nodes, &config, None, 10000, 50)
         .await
         .expect("BFS should work");
 
@@ -322,7 +336,7 @@ async fn test_bfs_expansion_limits() {
         ..Default::default()
     };
 
-    let result = search_nodes_bfs(&mut conn, seed_nodes, &limited_config, None)
+    let result = search_nodes_bfs(&mut conn, seed_nodes, &limited_config, None, 10000, 50)
         .await
         .expect("BFS with expansion limits should work");
 
@@ -366,10 +380,16 @@ async fn test_bfs_min_score_cutoff() {
         ..Default::default()
     };
 
-    let high_cutoff_result =
-        search_nodes_bfs(&mut conn, seed_nodes.clone(), &high_cutoff_config, None)
-            .await
-            .expect("BFS with high cutoff should work");
+    let high_cutoff_result = search_nodes_bfs(
+        &mut conn,
+        seed_nodes.clone(),
+        &high_cutoff_config,
+        None,
+        10000,
+        50,
+    )
+    .await
+    .expect("BFS with high cutoff should work");
 
     // Low cutoff should allow more traversal
     let low_cutoff_config = BfsConfig {
@@ -378,9 +398,10 @@ async fn test_bfs_min_score_cutoff() {
         ..Default::default()
     };
 
-    let low_cutoff_result = search_nodes_bfs(&mut conn, seed_nodes, &low_cutoff_config, None)
-        .await
-        .expect("BFS with low cutoff should work");
+    let low_cutoff_result =
+        search_nodes_bfs(&mut conn, seed_nodes, &low_cutoff_config, None, 10000, 50)
+            .await
+            .expect("BFS with low cutoff should work");
 
     println!("High cutoff (0.5): {} nodes", high_cutoff_result.len());
     println!("Low cutoff (0.01): {} nodes", low_cutoff_result.len());
@@ -430,7 +451,7 @@ async fn test_bfs_edge_search() {
     let start = Instant::now();
     let result = timeout(
         Duration::from_secs(60), // Longer timeout for edge BFS
-        search_edges_bfs(&mut conn, seed_edges, &config, None),
+        search_edges_bfs(&mut conn, seed_edges, &config, None, 10000, 50),
     )
     .await
     .expect("Test timed out")
@@ -527,7 +548,7 @@ async fn benchmark_bfs_latency() {
 
         for _ in 0..iterations {
             let start = Instant::now();
-            let result = search_nodes_bfs(&mut conn, seed_nodes.clone(), &config, None)
+            let result = search_nodes_bfs(&mut conn, seed_nodes.clone(), &config, None, 10000, 50)
                 .await
                 .expect("BFS should work");
             times.push(start.elapsed());
@@ -579,7 +600,7 @@ async fn benchmark_bfs_vs_similarity() {
 
     for _ in 0..iterations {
         let start = Instant::now();
-        let _result = search_nodes_bfs(&mut conn, seed_nodes.clone(), &config, None)
+        let _result = search_nodes_bfs(&mut conn, seed_nodes.clone(), &config, None, 10000, 50)
             .await
             .expect("BFS should work");
         bfs_times.push(start.elapsed());
@@ -593,7 +614,7 @@ async fn benchmark_bfs_vs_similarity() {
             .similarity_search_nodes(&embedding, 10, 0.0, None)
             .await
             .unwrap_or_default();
-        let _final_results = search_nodes_bfs(&mut conn, sim_results, &config, None)
+        let _final_results = search_nodes_bfs(&mut conn, sim_results, &config, None, 10000, 50)
             .await
             .expect("BFS should work");
         combined_times.push(start.elapsed());
