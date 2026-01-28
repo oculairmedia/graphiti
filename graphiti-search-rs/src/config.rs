@@ -32,6 +32,13 @@ pub struct Config {
     pub bfs_timeout_ms: u64,
     /// Maximum nodes to expand per batch in BFS - controls DB query batching
     pub bfs_batch_size: usize,
+
+    /// Timeout for HippoRAG spreading activation (ms)
+    pub hipporag_timeout_ms: u64,
+    /// Maximum nodes to expand per batch in HippoRAG
+    pub hipporag_batch_size: usize,
+    /// Hub degree threshold for HippoRAG - limits neighbors from high-degree nodes
+    pub hipporag_hub_threshold: usize,
 }
 
 impl Config {
@@ -88,6 +95,16 @@ impl Config {
                 .parse()?,
             bfs_batch_size: env::var("BFS_BATCH_SIZE")
                 .unwrap_or_else(|_| "50".to_string())
+                .parse()?,
+
+            hipporag_timeout_ms: env::var("HIPPORAG_TIMEOUT_MS")
+                .unwrap_or_else(|_| "10000".to_string())
+                .parse()?,
+            hipporag_batch_size: env::var("HIPPORAG_BATCH_SIZE")
+                .unwrap_or_else(|_| "50".to_string())
+                .parse()?,
+            hipporag_hub_threshold: env::var("HIPPORAG_HUB_THRESHOLD")
+                .unwrap_or_else(|_| "200".to_string())
                 .parse()?,
         })
     }

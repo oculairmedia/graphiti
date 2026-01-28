@@ -114,6 +114,9 @@ pub async fn search_handler(
         state.config.max_pre_rerank_results,
         state.config.bfs_timeout_ms,
         state.config.bfs_batch_size,
+        state.config.hipporag_timeout_ms,
+        state.config.hipporag_batch_size,
+        state.config.hipporag_hub_threshold,
         reranker_client,
     );
 

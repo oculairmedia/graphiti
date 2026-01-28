@@ -32,6 +32,9 @@ pub struct SearchEngine {
     max_pre_rerank_results: usize,
     bfs_timeout_ms: u64,
     bfs_batch_size: usize,
+    hipporag_timeout_ms: u64,
+    hipporag_batch_size: usize,
+    hipporag_hub_threshold: usize,
     reranker_client: Option<crate::reranker::RerankerClient>,
 }
 
@@ -45,6 +48,9 @@ impl SearchEngine {
         max_pre_rerank_results: usize,
         bfs_timeout_ms: u64,
         bfs_batch_size: usize,
+        hipporag_timeout_ms: u64,
+        hipporag_batch_size: usize,
+        hipporag_hub_threshold: usize,
         reranker_client: Option<crate::reranker::RerankerClient>,
     ) -> Self {
         let cache = EnhancedCache::new(redis_pool.clone());
@@ -57,6 +63,9 @@ impl SearchEngine {
             max_pre_rerank_results,
             bfs_timeout_ms,
             bfs_batch_size,
+            hipporag_timeout_ms,
+            hipporag_batch_size,
+            hipporag_hub_threshold,
             reranker_client,
         }
     }
@@ -198,8 +207,29 @@ impl SearchEngine {
                         .unwrap_or_default()
                     }
                 }
+                SearchMethod::Hipporag if query_vector.is_some() => {
+                    let hipporag_config = hipporag::HippoRAGConfig {
+                        max_hops: config.hipporag_max_hops.unwrap_or(2),
+                        decay: config.hipporag_decay.unwrap_or(0.85),
+                        seed_count: config.hipporag_seed_count.unwrap_or(10),
+                        min_score: config.sim_min_score,
+                        hub_degree_threshold: self.hipporag_hub_threshold,
+                        per_hop_limit: 100,
+                    };
+                    hipporag::search_edges_hipporag(
+                        &mut falkor_conn,
+                        query_vector.unwrap(),
+                        &hipporag_config,
+                        filters,
+                        self.max_method_results,
+                        self.hipporag_timeout_ms,
+                        self.hipporag_batch_size,
+                    )
+                    .await
+                    .unwrap_or_default()
+                }
                 SearchMethod::Hipporag => {
-                    debug!("HippoRAG edge search not yet implemented, skipping");
+                    debug!("HippoRAG edge search requires query vector, skipping");
                     vec![]
                 }
                 _ => vec![],
@@ -324,6 +354,8 @@ impl SearchEngine {
                         decay: config.hipporag_decay.unwrap_or(0.85),
                         seed_count: config.hipporag_seed_count.unwrap_or(10),
                         min_score: config.sim_min_score,
+                        hub_degree_threshold: self.hipporag_hub_threshold,
+                        per_hop_limit: 100,
                     };
                     hipporag::search_nodes_hipporag(
                         &mut falkor_conn,
@@ -331,6 +363,8 @@ impl SearchEngine {
                         &hipporag_config,
                         filters,
                         self.max_method_results,
+                        self.hipporag_timeout_ms,
+                        self.hipporag_batch_size,
                     )
                     .await?
                 }
