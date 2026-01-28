@@ -30,13 +30,23 @@ async fn test_hipporag_search_integration() {
         decay: 0.85,
         seed_count: 5,
         min_score: 0.0,
+        hub_degree_threshold: 200,
+        per_hop_limit: 100,
     };
 
     let filters = SearchFilters::default();
 
     let result = timeout(
         Duration::from_secs(30),
-        search_nodes_hipporag(&mut conn, &embedding, &hipporag_config, &filters, 10),
+        search_nodes_hipporag(
+            &mut conn,
+            &embedding,
+            &hipporag_config,
+            &filters,
+            10,
+            10000,
+            50,
+        ),
     )
     .await
     .expect("Test timed out")

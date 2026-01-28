@@ -86,7 +86,7 @@ fn bench_hub_graph_traversal(c: &mut Criterion) {
 
 fn bench_bfs_config_creation(c: &mut Criterion) {
     c.bench_function("BfsConfig::default", |b| {
-        b.iter(|| BfsConfig::default());
+        b.iter(BfsConfig::default);
     });
 }
 
