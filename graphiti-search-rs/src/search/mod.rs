@@ -30,16 +30,21 @@ pub struct SearchEngine {
     max_method_results: usize,
     mmr_timeout_ms: u64,
     max_pre_rerank_results: usize,
+    bfs_timeout_ms: u64,
+    bfs_batch_size: usize,
     reranker_client: Option<crate::reranker::RerankerClient>,
 }
 
 impl SearchEngine {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         falkor_pool: FalkorPool,
         redis_pool: RedisPool,
         max_method_results: usize,
         mmr_timeout_ms: u64,
         max_pre_rerank_results: usize,
+        bfs_timeout_ms: u64,
+        bfs_batch_size: usize,
         reranker_client: Option<crate::reranker::RerankerClient>,
     ) -> Self {
         let cache = EnhancedCache::new(redis_pool.clone());
@@ -50,6 +55,8 @@ impl SearchEngine {
             max_method_results,
             mmr_timeout_ms,
             max_pre_rerank_results,
+            bfs_timeout_ms,
+            bfs_batch_size,
             reranker_client,
         }
     }
@@ -184,6 +191,8 @@ impl SearchEngine {
                             seed_edges,
                             &bfs_config,
                             filters.group_ids.as_deref(),
+                            self.bfs_timeout_ms,
+                            self.bfs_batch_size,
                         )
                         .await
                         .unwrap_or_default()
@@ -302,6 +311,8 @@ impl SearchEngine {
                             seed_nodes,
                             &bfs_config,
                             filters.group_ids.as_deref(),
+                            self.bfs_timeout_ms,
+                            self.bfs_batch_size,
                         )
                         .await
                         .unwrap_or_default()

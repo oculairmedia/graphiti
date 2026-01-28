@@ -50,6 +50,8 @@ pub async fn episode_search_handler(
         state.config.max_method_results,
         state.config.mmr_timeout_ms,
         state.config.max_pre_rerank_results,
+        state.config.bfs_timeout_ms,
+        state.config.bfs_batch_size,
         reranker_client,
     );
 

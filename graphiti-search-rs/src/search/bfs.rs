@@ -2,13 +2,15 @@ use crate::error::SearchResult;
 use crate::falkor::FalkorConnection;
 use crate::models::{Edge, EdgeSearchConfig, Node, NodeSearchConfig};
 use std::cmp::Ordering;
-use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
-use tracing::{debug, instrument};
+use std::collections::{HashMap, HashSet, VecDeque};
+use std::time::Instant;
+use tracing::{debug, instrument, warn};
 
 #[derive(Debug, Clone)]
 struct ScoredNode {
     uuid: String,
     score: f32,
+    #[allow(dead_code)]
     distance: usize,
 }
 
@@ -89,36 +91,61 @@ impl From<&EdgeSearchConfig> for BfsConfig {
     }
 }
 
+/// Level-synchronized BFS with batched neighbor queries and timeout.
+///
+/// Key improvements over naive per-node BFS:
+/// 1. BATCHED QUERIES: Fetches neighbors for all nodes at current level in ONE query
+/// 2. TIMEOUT: Prevents runaway traversal on large graphs
+/// 3. LEVEL-SYNC: Processes all nodes at depth N before moving to depth N+1
 #[instrument(skip(conn))]
 pub async fn search_nodes_bfs(
     conn: &mut FalkorConnection,
     seed_nodes: Vec<Node>,
     config: &BfsConfig,
     group_ids: Option<&[String]>,
+    timeout_ms: u64,
+    batch_size: usize,
 ) -> SearchResult<Vec<Node>> {
     if seed_nodes.is_empty() {
         debug!("BFS: No seed nodes provided");
         return Ok(Vec::new());
     }
 
-    let mut frontier = BinaryHeap::new();
-    let mut visited = HashSet::new();
+    let start_time = Instant::now();
+    let timeout = std::time::Duration::from_millis(timeout_ms);
+
+    let mut visited: HashSet<String> = HashSet::new();
     let mut best_scores: HashMap<String, f32> = HashMap::new();
     let mut expansions = 0usize;
+    let mut db_queries = 0usize;
 
-    for node in seed_nodes {
-        let initial_score = node.score.unwrap_or(1.0);
-        frontier.push(ScoredNode {
-            uuid: node.uuid.to_string(),
-            score: initial_score,
-            distance: 0,
-        });
-        best_scores.insert(node.uuid.to_string(), initial_score);
-    }
+    let mut current_level: Vec<ScoredNode> = seed_nodes
+        .into_iter()
+        .map(|node| {
+            let score = node.score.unwrap_or(1.0);
+            best_scores.insert(node.uuid.to_string(), score);
+            ScoredNode {
+                uuid: node.uuid.to_string(),
+                score,
+                distance: 0,
+            }
+        })
+        .collect();
 
-    while let Some(current) = frontier.pop() {
-        if visited.contains(&current.uuid) {
-            continue;
+    for depth in 0..config.max_depth {
+        if current_level.is_empty() {
+            debug!("BFS: No more nodes to expand at depth {}", depth);
+            break;
+        }
+
+        if start_time.elapsed() > timeout {
+            warn!(
+                "BFS: Timeout after {:?} at depth {}, visited {} nodes",
+                start_time.elapsed(),
+                depth,
+                visited.len()
+            );
+            break;
         }
 
         if visited.len() >= config.max_visited {
@@ -126,20 +153,21 @@ pub async fn search_nodes_bfs(
             break;
         }
 
-        if current.distance >= config.max_depth {
-            continue;
+        let nodes_to_expand: Vec<ScoredNode> = current_level
+            .into_iter()
+            .filter(|n| !visited.contains(&n.uuid))
+            .filter(|n| n.score >= config.min_score_cutoff)
+            .take(config.max_expansions.saturating_sub(expansions))
+            .collect();
+
+        if nodes_to_expand.is_empty() {
+            break;
         }
 
-        if current.score < config.min_score_cutoff {
-            debug!(
-                "BFS: Score {} below cutoff {}",
-                current.score, config.min_score_cutoff
-            );
-            continue;
+        for node in &nodes_to_expand {
+            visited.insert(node.uuid.clone());
         }
-
-        visited.insert(current.uuid.clone());
-        expansions += 1;
+        expansions += nodes_to_expand.len();
 
         if expansions >= config.max_expansions {
             debug!(
@@ -149,64 +177,85 @@ pub async fn search_nodes_bfs(
             break;
         }
 
-        let neighbors_result = conn
-            .get_node_neighbors(std::slice::from_ref(&current.uuid))
-            .await
-            .map_err(|e| crate::error::SearchError::Database(e.to_string()))?;
-
-        let mut neighbor_uuids: Vec<String> = neighbors_result
-            .into_iter()
-            .map(|(_, target)| target)
-            .collect::<HashSet<_>>()
-            .into_iter()
-            .collect();
-
-        if neighbor_uuids.len() > config.hub_degree_threshold {
-            debug!(
-                "BFS: Hub node {} has {} neighbors, limiting to {}",
-                current.uuid,
-                neighbor_uuids.len(),
-                config.per_hop_limit
-            );
-            neighbor_uuids.truncate(config.per_hop_limit);
-        } else {
-            neighbor_uuids.truncate(config.per_hop_limit);
-        }
-
-        let next_distance = current.distance + 1;
+        let mut next_level: Vec<ScoredNode> = Vec::new();
+        let next_distance = depth + 1;
         let decay_factor = config.decay.powi(next_distance as i32);
 
-        let mut scored_neighbors = Vec::new();
-        for neighbor_uuid in neighbor_uuids {
-            if visited.contains(&neighbor_uuid) {
-                continue;
+        for batch_start in (0..nodes_to_expand.len()).step_by(batch_size) {
+            if start_time.elapsed() > timeout {
+                warn!("BFS: Timeout during batch processing");
+                break;
             }
 
-            let neighbor_score = current.score * decay_factor;
+            let batch_end = (batch_start + batch_size).min(nodes_to_expand.len());
+            let batch: Vec<&str> = nodes_to_expand[batch_start..batch_end]
+                .iter()
+                .map(|n| n.uuid.as_str())
+                .collect();
 
-            let existing_score = best_scores.get(&neighbor_uuid).copied().unwrap_or(0.0);
-            if neighbor_score > existing_score {
-                best_scores.insert(neighbor_uuid.clone(), neighbor_score);
-                scored_neighbors.push(ScoredNode {
-                    uuid: neighbor_uuid,
-                    score: neighbor_score,
-                    distance: next_distance,
-                });
+            let batch_owned: Vec<String> = batch.iter().map(|s| s.to_string()).collect();
+
+            let neighbors_result = conn
+                .get_node_neighbors(&batch_owned)
+                .await
+                .map_err(|e| crate::error::SearchError::Database(e.to_string()))?;
+
+            db_queries += 1;
+
+            let mut source_to_neighbors: HashMap<String, Vec<String>> = HashMap::new();
+            for (source, target) in neighbors_result {
+                source_to_neighbors.entry(source).or_default().push(target);
+            }
+
+            for node in &nodes_to_expand[batch_start..batch_end] {
+                let neighbors = match source_to_neighbors.get(&node.uuid) {
+                    Some(n) => n,
+                    None => continue,
+                };
+
+                if neighbors.len() > config.hub_degree_threshold {
+                    debug!(
+                        "BFS: Hub node {} has {} neighbors (threshold {}), limiting",
+                        node.uuid,
+                        neighbors.len(),
+                        config.hub_degree_threshold
+                    );
+                }
+
+                let neighbor_limit = config.per_hop_limit.min(neighbors.len());
+
+                for neighbor_uuid in neighbors.iter().take(neighbor_limit) {
+                    if visited.contains(neighbor_uuid) {
+                        continue;
+                    }
+
+                    let neighbor_score = node.score * decay_factor;
+                    let existing_score = best_scores.get(neighbor_uuid).copied().unwrap_or(0.0);
+
+                    if neighbor_score > existing_score {
+                        best_scores.insert(neighbor_uuid.clone(), neighbor_score);
+                        next_level.push(ScoredNode {
+                            uuid: neighbor_uuid.clone(),
+                            score: neighbor_score,
+                            distance: next_distance,
+                        });
+                    }
+                }
             }
         }
 
-        scored_neighbors.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(Ordering::Equal));
-        scored_neighbors.truncate(config.beam_width);
+        next_level.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(Ordering::Equal));
+        next_level.truncate(config.beam_width);
 
-        for scored in scored_neighbors {
-            frontier.push(scored);
-        }
+        current_level = next_level;
     }
 
     debug!(
-        "BFS: Visited {} nodes, performed {} expansions",
+        "BFS: Visited {} nodes, {} expansions, {} DB queries in {:?}",
         visited.len(),
-        expansions
+        expansions,
+        db_queries,
+        start_time.elapsed()
     );
 
     let uuids: Vec<String> = visited.into_iter().collect();
@@ -239,6 +288,8 @@ pub async fn search_edges_bfs(
     seed_edges: Vec<Edge>,
     config: &BfsConfig,
     group_ids: Option<&[String]>,
+    timeout_ms: u64,
+    batch_size: usize,
 ) -> SearchResult<Vec<Edge>> {
     if seed_edges.is_empty() {
         debug!("BFS: No seed edges provided");
@@ -265,7 +316,15 @@ pub async fn search_edges_bfs(
         })
         .collect();
 
-    let expanded_nodes = search_nodes_bfs(conn, nodes_with_score, config, group_ids).await?;
+    let expanded_nodes = search_nodes_bfs(
+        conn,
+        nodes_with_score,
+        config,
+        group_ids,
+        timeout_ms,
+        batch_size,
+    )
+    .await?;
 
     if expanded_nodes.is_empty() {
         return Ok(Vec::new());

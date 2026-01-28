@@ -27,6 +27,11 @@ pub struct Config {
     pub mmr_timeout_ms: u64,
     /// Maximum total results before reranking - caps O(n²) input size
     pub max_pre_rerank_results: usize,
+
+    /// Timeout for BFS traversal (ms) - prevents runaway graph exploration
+    pub bfs_timeout_ms: u64,
+    /// Maximum nodes to expand per batch in BFS - controls DB query batching
+    pub bfs_batch_size: usize,
 }
 
 impl Config {
@@ -76,6 +81,13 @@ impl Config {
                 .parse()?,
             max_pre_rerank_results: env::var("MAX_PRE_RERANK_RESULTS")
                 .unwrap_or_else(|_| "500".to_string())
+                .parse()?,
+
+            bfs_timeout_ms: env::var("BFS_TIMEOUT_MS")
+                .unwrap_or_else(|_| "10000".to_string())
+                .parse()?,
+            bfs_batch_size: env::var("BFS_BATCH_SIZE")
+                .unwrap_or_else(|_| "50".to_string())
                 .parse()?,
         })
     }
