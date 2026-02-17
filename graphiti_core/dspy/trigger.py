@@ -137,10 +137,10 @@ class OptimizationTrigger:
 
     async def _has_enough_training_data(self) -> bool:
         try:
-            from graphiti_core.dspy.modules import get_training_stats
+            from graphiti_core.dspy.training_storage import get_training_stats
 
-            stats = get_training_stats()
-            if stats is None:
+            stats = await get_training_stats()
+            if not stats:
                 return False
 
             min_count = min(stats.values()) if stats else 0

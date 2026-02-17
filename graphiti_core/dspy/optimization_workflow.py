@@ -87,41 +87,47 @@ class OptimizationWorkflowResult:
 # =============================================================================
 
 
-def load_and_split_training_data(
+async def load_and_split_training_data(
     training_data_dir: str,
     task: str,
     min_examples: int,
     train_split: float,
 ) -> TrainingDataSplit | None:
+    """Load training data from FalkorDB and split into train/val sets.
+
+    Falls back to JSON files if FalkorDB has no data.
     """
-    Load training data for a task and split into train/val sets.
+    from graphiti_core.dspy.training_storage import get_training_examples
 
-    Returns None if insufficient data.
-    """
-    import json
-    import os
-    from pathlib import Path
+    examples_raw: list[dict] = []
 
-    path = Path(training_data_dir) / f'{task}.json'
-    if not path.exists():
-        logger.warning(f'No training data found at {path}')
-        return None
+    stored = await get_training_examples(task, limit=10000)
+    if stored:
+        examples_raw = [{'inputs': ex.inputs, 'expected_output': ex.output} for ex in stored]
+        logger.info(f'{task}: Loaded {len(examples_raw)} examples from FalkorDB')
+    else:
+        import json
+        from pathlib import Path
 
-    with open(path) as f:
-        data = json.load(f)
+        path = Path(training_data_dir) / f'{task}.json'
+        if path.exists():
+            with open(path) as f:
+                data = json.load(f)
+            examples_raw = data.get('examples', [])
+            logger.info(f'{task}: Loaded {len(examples_raw)} examples from {path} (fallback)')
+        else:
+            logger.warning(f'{task}: No training data in FalkorDB or {path}')
+            return None
 
-    examples = data.get('examples', [])
-    total = len(examples)
-
+    total = len(examples_raw)
     if total < min_examples:
         logger.warning(f'{task}: Only {total} examples, need {min_examples}')
         return None
 
-    # Shuffle and split
-    random.shuffle(examples)
+    random.shuffle(examples_raw)
     split_idx = int(total * train_split)
-    train_examples = examples[:split_idx]
-    val_examples = examples[split_idx:]
+    train_examples = examples_raw[:split_idx]
+    val_examples = examples_raw[split_idx:]
 
     logger.info(
         f'{task}: Split {total} examples into {len(train_examples)} train, {len(val_examples)} val'
@@ -361,8 +367,7 @@ class OptimizationActivities:
         min_examples: int,
         train_split: float,
     ) -> dict | None:
-        """Load and split training data for a task."""
-        result = load_and_split_training_data(
+        result = await load_and_split_training_data(
             training_data_dir=training_data_dir,
             task=task,
             min_examples=min_examples,

@@ -67,13 +67,41 @@ def _use_falkordb_training_storage() -> bool:
     return _use_falkordb_storage
 
 
+async def _record_and_check_optimization(
+    task: str,
+    inputs: dict[str, Any],
+    output: dict[str, Any],
+    metadata: dict[str, Any] | None = None,
+) -> None:
+    """Record training data and check optimization trigger in a single async task.
+
+    Combines training recording + optimization counter increment to avoid
+    two separate fire-and-forget tasks competing for event loop time.
+    """
+    from .training_storage import record_training_example
+
+    try:
+        await record_training_example(task, inputs, output, metadata)
+    except Exception as e:
+        logger.warning(f'Failed to record training example: {e}')
+
+    trigger = _get_optimization_trigger()
+    if trigger is not None:
+        try:
+            should_trigger = await trigger.increment()
+            if should_trigger:
+                await trigger.trigger_optimization()
+        except Exception as e:
+            logger.warning(f'Optimization trigger check failed: {e}')
+
+
 def _schedule_training_record(
     task: str,
     inputs: dict[str, Any],
     output: dict[str, Any],
     metadata: dict[str, Any] | None = None,
 ) -> None:
-    """Schedule async training data recording from sync context."""
+    """Schedule async training data recording + optimization check from sync context."""
     if not is_training_collection_enabled():
         return
 
@@ -82,13 +110,12 @@ def _schedule_training_record(
 
     try:
         import asyncio
-        from .training_storage import record_training_example
 
         try:
             loop = asyncio.get_running_loop()
-            loop.create_task(record_training_example(task, inputs, output, metadata))
+            loop.create_task(_record_and_check_optimization(task, inputs, output, metadata))
         except RuntimeError:
-            asyncio.run(record_training_example(task, inputs, output, metadata))
+            asyncio.run(_record_and_check_optimization(task, inputs, output, metadata))
     except Exception as e:
         logger.debug(f'Failed to schedule training record: {e}')
 
@@ -120,40 +147,6 @@ def _get_optimization_trigger():
     except Exception as e:
         logger.warning(f'Failed to initialize optimization trigger: {e}')
         return None
-
-
-async def _maybe_check_optimization_trigger() -> None:
-    trigger = _get_optimization_trigger()
-    if trigger is None:
-        return
-
-    try:
-        should_trigger = await trigger.increment()
-        if should_trigger:
-            await trigger.trigger_optimization()
-    except Exception as e:
-        logger.warning(f'Optimization trigger check failed: {e}')
-
-
-def _schedule_optimization_check() -> None:
-    """
-    Schedule the async optimization trigger check.
-    Works from both sync and async contexts.
-    """
-    trigger = _get_optimization_trigger()
-    if trigger is None:
-        return
-
-    try:
-        import asyncio
-
-        try:
-            loop = asyncio.get_running_loop()
-            loop.create_task(_maybe_check_optimization_trigger())
-        except RuntimeError:
-            pass
-    except Exception as e:
-        logger.debug(f'Could not schedule optimization check: {e}')
 
 
 def save_training_data() -> dict[str, int] | None:
@@ -297,7 +290,6 @@ class NodeExtractor(dspy.Module):
         logger.info(
             f'Recorded entity extraction training example ({len(result.extracted_entities)} entities)'
         )
-        _schedule_optimization_check()
 
     def forward(
         self,
@@ -627,7 +619,6 @@ class EdgeExtractor(dspy.Module):
         output = {'extracted_edges': result.model_dump()}
 
         _schedule_training_record('edge_extraction', inputs, output)
-        _schedule_optimization_check()
 
     def forward(
         self,
@@ -757,7 +748,6 @@ class NodeResolver(dspy.Module):
         logger.info(
             f'Recorded node resolution training example ({len(result.entity_resolutions)} entities)'
         )
-        _schedule_optimization_check()
 
     def forward(
         self,
@@ -869,7 +859,6 @@ class SummaryGenerator(dspy.Module):
         output = {'summary': result.model_dump()}
 
         _schedule_training_record('summary_generation', inputs, output)
-        _schedule_optimization_check()
 
     def forward(
         self,
