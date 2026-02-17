@@ -36,11 +36,11 @@ class OptimizationConfig:
     """Configuration for the optimization workflow."""
 
     training_data_dir: str = '/data/training_data'
-    min_examples_per_task: int = 50
+    min_examples_per_task: int = 20
     train_split: float = 0.8
-    max_examples: int = 300
-    num_candidates: int = 7
-    num_threads: int = 4
+    max_examples: int = 100  # MIPROv2 needs ≥20 val examples for minibatch; 100 = 80 train + 20 val
+    num_candidates: int = 3  # Reduced from 7; each candidate = full bootstrap + eval cycle
+    num_threads: int = 1  # Single-threaded to avoid cache/lock contention
     tasks: list[str] = field(
         default_factory=lambda: [
             'entity_extraction',
@@ -198,7 +198,9 @@ async def run_miprov2_optimization(
     start_time = time.time()
 
     # Configure LM (idempotent)
-    configure_lm()
+    # Disable response caching for optimization — DSPy's SQLite cache deadlocks
+    # when MIPROv2's thread pool makes concurrent access attempts.
+    configure_lm(cache=False)
 
     # Map task to module and metric
     task_config = {
@@ -263,8 +265,16 @@ async def run_miprov2_optimization(
         valset = [to_dspy_example(ex) for ex in data.val_examples]
 
         # Create module (sync creation - use baseline signatures)
+        # Disable stateful features during optimization — they fire async tasks
+        # that hang in Temporal's activity thread pool context.
         module_class = config['module_class']
-        module = module_class()
+        import inspect
+
+        init_params = inspect.signature(module_class.__init__).parameters
+        if 'enable_stateful' in init_params:
+            module = module_class(enable_stateful=False)
+        else:
+            module = module_class()
 
         # Run MIPROv2
         logger.info(
@@ -282,11 +292,14 @@ async def run_miprov2_optimization(
             verbose=True,
         )
 
+        # Set minibatch_size to valset size to avoid "Minibatch exceeds valset" error
+        minibatch_size = min(len(valset), 20)
         optimized = optimizer.compile(
             module,
             trainset=trainset,
             valset=valset,
             num_trials=num_trials,
+            minibatch_size=minibatch_size,
         )
 
         # Extract optimized docstring and demos
@@ -489,18 +502,18 @@ class DSPyOptimizationWorkflow:
         """Execute the optimization workflow."""
         start_ns = workflow.time_ns()
 
-        # Parse config
+        # Parse config — use OptimizationConfig defaults as fallbacks
+        _defaults = OptimizationConfig()
         config = OptimizationConfig(
-            training_data_dir=config_dict.get('training_data_dir', '/data/training_data'),
-            min_examples_per_task=config_dict.get('min_examples_per_task', 50),
-            train_split=config_dict.get('train_split', 0.8),
-            max_examples=config_dict.get('max_examples', 300),
-            num_candidates=config_dict.get('num_candidates', 7),
-            num_threads=config_dict.get('num_threads', 4),
-            tasks=config_dict.get(
-                'tasks',
-                ['entity_extraction', 'edge_extraction', 'node_resolution', 'summary_generation'],
+            training_data_dir=config_dict.get('training_data_dir', _defaults.training_data_dir),
+            min_examples_per_task=config_dict.get(
+                'min_examples_per_task', _defaults.min_examples_per_task
             ),
+            train_split=config_dict.get('train_split', _defaults.train_split),
+            max_examples=config_dict.get('max_examples', _defaults.max_examples),
+            num_candidates=config_dict.get('num_candidates', _defaults.num_candidates),
+            num_threads=config_dict.get('num_threads', _defaults.num_threads),
+            tasks=config_dict.get('tasks', _defaults.tasks),
         )
 
         results: list[dict] = []
