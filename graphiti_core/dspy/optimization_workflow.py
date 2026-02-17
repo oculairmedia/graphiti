@@ -3,6 +3,10 @@ Temporal Workflow for MIPROv2 DSPy Prompt Optimization.
 
 Runs MIPROv2 optimization on collected training data and stores optimized prompts
 as candidates in the PromptRegistry.
+
+Architecture note: Training data is loaded INSIDE the optimize_task activity
+(not passed through Temporal). This avoids Temporal's 4MB gRPC payload limit
+since training examples average ~10KB each and we may have thousands.
 """
 
 from __future__ import annotations
@@ -34,6 +38,7 @@ class OptimizationConfig:
     training_data_dir: str = '/data/training_data'
     min_examples_per_task: int = 50
     train_split: float = 0.8
+    max_examples: int = 300
     num_candidates: int = 7
     num_threads: int = 4
     tasks: list[str] = field(
@@ -69,6 +74,7 @@ class OptimizationTaskResult:
     demos: list[dict[str, Any]] | None = None
     error: str | None = None
     duration_ms: int = 0
+    total_examples: int = 0
 
 
 @dataclass
@@ -83,7 +89,7 @@ class OptimizationWorkflowResult:
 
 
 # =============================================================================
-# Activity Functions
+# Activity Functions (internal - called by activity wrappers)
 # =============================================================================
 
 
@@ -92,10 +98,15 @@ async def load_and_split_training_data(
     task: str,
     min_examples: int,
     train_split: float,
+    max_examples: int = 300,
 ) -> TrainingDataSplit | None:
     """Load training data from FalkorDB and split into train/val sets.
 
     Falls back to JSON files if FalkorDB has no data.
+
+    Args:
+        max_examples: Cap on total examples to use. MIPROv2 works well with
+            200-500 examples. Kept in-process to avoid Temporal payload limits.
     """
     from graphiti_core.dspy.training_storage import get_training_examples
 
@@ -119,39 +130,51 @@ async def load_and_split_training_data(
             logger.warning(f'{task}: No training data in FalkorDB or {path}')
             return None
 
-    total = len(examples_raw)
-    if total < min_examples:
-        logger.warning(f'{task}: Only {total} examples, need {min_examples}')
+    total_available = len(examples_raw)
+    if total_available < min_examples:
+        logger.warning(f'{task}: Only {total_available} examples, need {min_examples}')
         return None
 
+    # Shuffle first, then cap to max_examples
     random.shuffle(examples_raw)
+    if total_available > max_examples:
+        logger.info(
+            f'{task}: Sampling {max_examples} of {total_available} examples for optimization'
+        )
+        examples_raw = examples_raw[:max_examples]
+
+    total = len(examples_raw)
     split_idx = int(total * train_split)
     train_examples = examples_raw[:split_idx]
     val_examples = examples_raw[split_idx:]
 
     logger.info(
-        f'{task}: Split {total} examples into {len(train_examples)} train, {len(val_examples)} val'
+        f'{task}: Split {total} examples (of {total_available} available) into '
+        f'{len(train_examples)} train, {len(val_examples)} val'
     )
 
     return TrainingDataSplit(
         task=task,
         train_examples=train_examples,
         val_examples=val_examples,
-        total_examples=total,
+        total_examples=total_available,
     )
 
 
 async def run_miprov2_optimization(
     task: str,
-    train_examples: list[dict[str, Any]],
-    val_examples: list[dict[str, Any]],
+    training_data_dir: str,
+    min_examples: int,
+    train_split: float,
+    max_examples: int,
     num_candidates: int,
     num_threads: int,
 ) -> OptimizationTaskResult:
     """
-    Run MIPROv2 optimization for a single task.
+    Load training data and run MIPROv2 optimization for a single task.
 
-    Returns the optimized docstring, demos, and validation score.
+    Data is loaded in-process (not passed through Temporal) to avoid
+    gRPC payload size limits.
     """
     import time
 
@@ -174,8 +197,8 @@ async def run_miprov2_optimization(
 
     start_time = time.time()
 
-    # Configure LM
-    await configure_lm()
+    # Configure LM (idempotent)
+    configure_lm()
 
     # Map task to module and metric
     task_config = {
@@ -209,6 +232,23 @@ async def run_miprov2_optimization(
             duration_ms=int((time.time() - start_time) * 1000),
         )
 
+    # Step 1: Load training data in-process
+    data = await load_and_split_training_data(
+        training_data_dir=training_data_dir,
+        task=task,
+        min_examples=min_examples,
+        train_split=train_split,
+        max_examples=max_examples,
+    )
+
+    if data is None:
+        return OptimizationTaskResult(
+            task=task,
+            success=False,
+            error='Insufficient training data',
+            duration_ms=int((time.time() - start_time) * 1000),
+        )
+
     config = task_config[task]
 
     try:
@@ -219,8 +259,8 @@ async def run_miprov2_optimization(
             example_dict = {**inputs, **output}
             return dspy.Example(**example_dict).with_inputs(*inputs.keys())
 
-        trainset = [to_dspy_example(ex) for ex in train_examples]
-        valset = [to_dspy_example(ex) for ex in val_examples]
+        trainset = [to_dspy_example(ex) for ex in data.train_examples]
+        valset = [to_dspy_example(ex) for ex in data.val_examples]
 
         # Create module (sync creation - use baseline signatures)
         module_class = config['module_class']
@@ -231,8 +271,12 @@ async def run_miprov2_optimization(
             f'{task}: Starting MIPROv2 with {len(trainset)} train, {len(valset)} val examples'
         )
 
+        # DSPy 3.1.3: auto=None required when setting num_candidates manually,
+        # and num_trials must also be provided. Recommended: ~1.5x num_candidates.
+        num_trials = max(num_candidates + num_candidates // 2, num_candidates + 1)
         optimizer = MIPROv2(
             metric=config['metric'],
+            auto=None,
             num_candidates=num_candidates,
             num_threads=num_threads,
             verbose=True,
@@ -242,6 +286,7 @@ async def run_miprov2_optimization(
             module,
             trainset=trainset,
             valset=valset,
+            num_trials=num_trials,
         )
 
         # Extract optimized docstring and demos
@@ -292,6 +337,7 @@ async def run_miprov2_optimization(
             docstring=docstring or '',
             demos=demos,
             duration_ms=duration_ms,
+            total_examples=data.total_examples,
         )
 
     except Exception as e:
@@ -301,6 +347,7 @@ async def run_miprov2_optimization(
             success=False,
             error=str(e),
             duration_ms=int((time.time() - start_time) * 1000),
+            total_examples=data.total_examples if data else 0,
         )
 
 
@@ -357,45 +404,31 @@ async def store_candidate(
 
 
 class OptimizationActivities:
-    """Activity implementations for the optimization workflow."""
+    """Activity implementations for the optimization workflow.
 
-    @activity.defn
-    async def load_training_data(
-        self,
-        training_data_dir: str,
-        task: str,
-        min_examples: int,
-        train_split: float,
-    ) -> dict | None:
-        result = await load_and_split_training_data(
-            training_data_dir=training_data_dir,
-            task=task,
-            min_examples=min_examples,
-            train_split=train_split,
-        )
-        if result is None:
-            return None
-        return {
-            'task': result.task,
-            'train_examples': result.train_examples,
-            'val_examples': result.val_examples,
-            'total_examples': result.total_examples,
-        }
+    Note: Training data is loaded INSIDE optimize_task (not passed as args)
+    to avoid Temporal's 4MB gRPC payload limit. Each training example averages
+    ~10KB, so even 250 examples would be ~2.5MB - too close to the limit.
+    """
 
     @activity.defn
     async def optimize_task(
         self,
         task: str,
-        train_examples: list[dict[str, Any]],
-        val_examples: list[dict[str, Any]],
+        training_data_dir: str,
+        min_examples: int,
+        train_split: float,
+        max_examples: int,
         num_candidates: int,
         num_threads: int,
     ) -> dict:
-        """Run MIPROv2 optimization for a task."""
+        """Load data + run MIPROv2 optimization for a task (all in-process)."""
         result = await run_miprov2_optimization(
             task=task,
-            train_examples=train_examples,
-            val_examples=val_examples,
+            training_data_dir=training_data_dir,
+            min_examples=min_examples,
+            train_split=train_split,
+            max_examples=max_examples,
             num_candidates=num_candidates,
             num_threads=num_threads,
         )
@@ -409,6 +442,7 @@ class OptimizationActivities:
             'demos': result.demos,
             'error': result.error,
             'duration_ms': result.duration_ms,
+            'total_examples': result.total_examples,
         }
 
     @activity.defn
@@ -445,10 +479,9 @@ class DSPyOptimizationWorkflow:
     Temporal workflow for running MIPROv2 optimization on DSPy modules.
 
     Flow:
-    1. Load training data for each task
-    2. Run MIPROv2 optimization (can be parallelized)
-    3. Store optimized prompts as candidates
-    4. Return results summary
+    1. For each task: load data + run MIPROv2 (single activity, avoids payload limits)
+    2. Store optimized prompts as candidates
+    3. Return results summary
     """
 
     @workflow.run
@@ -461,6 +494,7 @@ class DSPyOptimizationWorkflow:
             training_data_dir=config_dict.get('training_data_dir', '/data/training_data'),
             min_examples_per_task=config_dict.get('min_examples_per_task', 50),
             train_split=config_dict.get('train_split', 0.8),
+            max_examples=config_dict.get('max_examples', 300),
             num_candidates=config_dict.get('num_candidates', 7),
             num_threads=config_dict.get('num_threads', 4),
             tasks=config_dict.get(
@@ -475,50 +509,23 @@ class DSPyOptimizationWorkflow:
 
         # Process each task sequentially (MIPROv2 is already parallelized internally)
         for task in config.tasks:
-            # Step 1: Load training data
-            data = await workflow.execute_activity(
-                'load_training_data',
-                args=[
-                    config.training_data_dir,
-                    task,
-                    config.min_examples_per_task,
-                    config.train_split,
-                ],
-                start_to_close_timeout=timedelta(minutes=5),
-                retry_policy=common.RetryPolicy(
-                    initial_interval=timedelta(seconds=2),
-                    backoff_coefficient=2.0,
-                    maximum_attempts=3,
-                ),
-            )
-
-            if data is None:
-                results.append(
-                    {
-                        'task': task,
-                        'success': False,
-                        'error': 'Insufficient training data',
-                        'duration_ms': 0,
-                    }
-                )
-                tasks_failed += 1
-                continue
-
-            # Step 2: Run MIPROv2 optimization
+            # Single activity: load data + optimize (avoids gRPC payload limits)
             opt_result = await workflow.execute_activity(
                 'optimize_task',
                 args=[
                     task,
-                    data['train_examples'],
-                    data['val_examples'],
+                    config.training_data_dir,
+                    config.min_examples_per_task,
+                    config.train_split,
+                    config.max_examples,
                     config.num_candidates,
                     config.num_threads,
                 ],
-                start_to_close_timeout=timedelta(hours=2),  # MIPROv2 can take a while
+                start_to_close_timeout=timedelta(hours=2),
                 retry_policy=common.RetryPolicy(
                     initial_interval=timedelta(seconds=10),
                     backoff_coefficient=2.0,
-                    maximum_attempts=2,  # Fewer retries for expensive optimization
+                    maximum_attempts=2,
                 ),
             )
 
@@ -527,7 +534,7 @@ class DSPyOptimizationWorkflow:
                 tasks_failed += 1
                 continue
 
-            # Step 3: Store as candidate
+            # Store as candidate
             store_result = await workflow.execute_activity(
                 'store_optimized_candidate',
                 args=[
@@ -535,7 +542,7 @@ class DSPyOptimizationWorkflow:
                     opt_result['docstring'] or '',
                     opt_result['demos'] or [],
                     opt_result['val_score'] or 0.0,
-                    data['total_examples'],
+                    opt_result['total_examples'],
                 ],
                 start_to_close_timeout=timedelta(minutes=5),
                 retry_policy=common.RetryPolicy(
@@ -591,6 +598,7 @@ async def start_optimization_workflow(
             'training_data_dir': config.training_data_dir,
             'min_examples_per_task': config.min_examples_per_task,
             'train_split': config.train_split,
+            'max_examples': config.max_examples,
             'num_candidates': config.num_candidates,
             'num_threads': config.num_threads,
             'tasks': config.tasks,

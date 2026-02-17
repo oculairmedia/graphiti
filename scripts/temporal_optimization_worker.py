@@ -74,7 +74,6 @@ async def main() -> None:
         task_queue=task_queue,
         workflows=[DSPyOptimizationWorkflow],
         activities=[
-            activities_instance.load_training_data,
             activities_instance.optimize_task,
             activities_instance.store_optimized_candidate,
         ],
