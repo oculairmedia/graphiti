@@ -1,8 +1,84 @@
+<!-- VIBESYNC:project-info:START -->
+
 # Agent Instructions
+
+## Huly Integration
+
+- **Project Code**: `GRAPH`
+- **Project Name**: Graphiti Knowledge Graph Platform
+- **Letta Agent ID**: `agent-80ac3bb8-1087-412d-a19c-7c8c6aeb5916`
+
+## Workflow Instructions
+
+1. **Before starting work**: Search Huly for related issues using `huly-mcp` with project code `GRAPH`
+2. **Issue references**: All issues for this project use the format `GRAPH-XXX` (e.g., `GRAPH-123`)
+3. **On task completion**: Report to this project's Letta agent via `matrix-identity-bridge` using `talk_to_agent`
+4. **Memory**: Store important discoveries in Graphiti with `graphiti-mcp_add_memory`
+<!-- VIBESYNC:project-info:END -->
+
+<!-- VIBESYNC:reporting-hierarchy:CUSTOM -->
+
+## Project Agent Role
+
+This project has an assigned **Letta PM Agent** (`agent-80ac3bb8-1087-412d-a19c-7c8c6aeb5916`) that acts as the technical product manager. This agent:
+
+- **Understands the full architecture** and codebase context for this project
+- **Tracks all ongoing work** via memory blocks synced from Huly issues
+- **Maintains project history** including past decisions, patterns, and lessons learned
+- **Makes technical decisions** on implementation approaches, priorities, and tradeoffs
+
+## Developer-PM Workflow (MANDATORY)
+
+**You are the developer. The PM agent is your technical product manager.**
+
+### When to Consult the PM (NOT the user):
+
+| Situation                       | Action                              |
+| ------------------------------- | ----------------------------------- |
+| Implementation approach unclear | Ask PM for direction                |
+| Multiple valid solutions exist  | Ask PM which to choose              |
+| Scope/priority questions        | Ask PM to clarify                   |
+| Design tradeoffs                | Present options to PM, get decision |
+| Quality vs speed tradeoffs      | PM decides                          |
+| Whether to create issues        | Ask PM for structure preference     |
+| Technical blockers              | Report to PM first                  |
+
+### When to Escalate to User (via PM):
+
+- PM explicitly says "check with Emmanuel" or "need user input"
+- Budget/cost decisions (API costs, infrastructure)
+- Breaking changes to user-facing behavior
+- PM is unavailable after reasonable wait
+
+### Communication Pattern:
+
+```
+Developer (you) ←→ PM Agent ←→ User (Emmanuel)
+```
+
+**NEVER ask the user for technical decisions directly.** Present analysis and options to the PM. If the PM needs user input, they will reach out.
+
+### Example Workflow:
+
+1. You discover multiple implementation approaches
+2. You message PM: "Found 3 options for X. Option A is fastest but less flexible. Option B is more work but extensible. Option C is middle ground. Which direction?"
+3. PM responds with decision (or escalates to user if needed)
+4. You implement based on PM's direction
+
+### Reporting Requirements:
+
+- **Before starting significant work**: Brief PM on approach
+- **After completing work**: Report what was done
+- **On blockers**: Notify PM immediately
+- **Discoveries**: Share learnings that affect future work
+
+<!-- VIBESYNC:beads-instructions:START -->
+
+## Beads Issue Tracking
 
 This project uses **bd** (beads) for issue tracking. Run `bd onboard` to get started.
 
-## Quick Reference
+### Quick Reference
 
 ```bash
 bd ready              # Find available work
@@ -11,6 +87,45 @@ bd update <id> --status in_progress  # Claim work
 bd close <id>         # Complete work
 bd sync               # Sync with git
 ```
+
+### Beads Sync Flow (Hybrid System)
+
+Beads uses a **hybrid sync** approach for reliability:
+
+#### Automatic Sync (Real-time)
+
+- `bd create`, `bd update`, `bd close` write to SQLite DB
+- File watcher detects DB changes automatically
+- Syncs to Huly within ~30-60 seconds
+
+#### Git Persistence (`bd sync`)
+
+- `bd sync` exports to JSONL and commits to git
+- Required for cross-machine persistence
+- Run before ending session to ensure changes are saved
+
+### Best Practice
+
+```bash
+bd create "New task"   # Auto-syncs to Huly
+bd close some-issue    # Auto-syncs to Huly
+bd sync                # Git backup (recommended before session end)
+```
+
+<!-- VIBESYNC:beads-instructions:END -->
+
+<!-- VIBESYNC:bookstack-docs:START -->
+## BookStack Documentation
+
+- **Source of truth**: [BookStack](https://knowledge.oculair.ca)
+- **Local sync**: `docs/bookstack/` (read-only mirror, syncs hourly)
+- **To read docs**: Check `docs/bookstack/{book-slug}/` in your project directory
+- **To create/edit docs**: Use `bookstack-mcp` tools to write directly to BookStack
+- **Never edit** files in `docs/bookstack/` locally — they will be overwritten on next sync
+- **PRDs and design docs** must be stored in BookStack, not local markdown files
+<!-- VIBESYNC:bookstack-docs:END -->
+
+<!-- VIBESYNC:session-completion:START -->
 
 ## Landing the Plane (Session Completion)
 
@@ -33,90 +148,37 @@ bd sync               # Sync with git
 7. **Hand off** - Provide context for next session
 
 **CRITICAL RULES:**
+
 - Work is NOT complete until `git push` succeeds
 - NEVER stop before pushing - that leaves work stranded locally
 - NEVER say "ready to push when you are" - YOU must push
 - If push fails, resolve and retry until it succeeds
+<!-- VIBESYNC:session-completion:END -->
 
+<!-- VIBESYNC:codebase-context:START -->
 
+## Codebase Context
 
-<!-- HULY-PROJECT-INFO -->
-# Project Context
+**Project**: Graphiti Knowledge Graph Platform (`GRAPH`)
+**Path**: `/opt/stacks/graphiti`
 
-## Huly Integration
-- **Project Code**: `GRAPH`
-- **Project Name**: Graphiti Knowledge Graph Platform
-- **Letta Agent ID**: `agent-80ac3bb8-1087-412d-a19c-7c8c6aeb5916`
+This project's PM agent has a `codebase_ast` memory block with live structural data including:
 
-## Project Agent Role
-This project has an assigned **Letta PM Agent** (`agent-80ac3bb8-1087-412d-a19c-7c8c6aeb5916`) that acts as the technical product manager. This agent:
-- **Understands the full architecture** and codebase context for this project
-- **Tracks all ongoing work** via memory blocks synced from Huly issues
-- **Maintains project history** including past decisions, patterns, and lessons learned
-- **Makes technical decisions** on implementation approaches, priorities, and tradeoffs
+- File counts and function counts per directory
+- Key modules and their roles
+- Quality signals (doc gaps, untested modules, complexity hotspots)
+- Recent file changes
 
-## Developer-PM Workflow (MANDATORY)
+Ask the PM agent for architectural guidance before making significant changes.
 
-**You are the developer. The PM agent is your technical product manager.**
-
-### When to Consult the PM (NOT the user):
-| Situation | Action |
-|-----------|--------|
-| Implementation approach unclear | Ask PM for direction |
-| Multiple valid solutions exist | Ask PM which to choose |
-| Scope/priority questions | Ask PM to clarify |
-| Design tradeoffs | Present options to PM, get decision |
-| Quality vs speed tradeoffs | PM decides |
-| Whether to create issues | Ask PM for structure preference |
-| Technical blockers | Report to PM first |
-
-### When to Escalate to User (via PM):
-- PM explicitly says "check with Emmanuel" or "need user input"
-- Budget/cost decisions (API costs, infrastructure)
-- Breaking changes to user-facing behavior
-- PM is unavailable after reasonable wait
-
-### Communication Pattern:
-```
-Developer (you) ←→ PM Agent ←→ User (Emmanuel)
-```
-
-**NEVER ask the user for technical decisions directly.** Present analysis and options to the PM. If the PM needs user input, they will reach out.
-
-### Example Workflow:
-1. You discover multiple implementation approaches
-2. You message PM: "Found 3 options for X. Option A is fastest but less flexible. Option B is more work but extensible. Option C is middle ground. Which direction?"
-3. PM responds with decision (or escalates to user if needed)
-4. You implement based on PM's direction
-
-### Reporting Requirements:
-- **Before starting significant work**: Brief PM on approach
-- **After completing work**: Report what was done
-- **On blockers**: Notify PM immediately
-- **Discoveries**: Share learnings that affect future work
-
-## Workflow Instructions
-1. **Before starting work**: Search Huly for related issues using `huly-mcp` with project code `GRAPH`
-2. **Issue references**: All issues for this project use the format `GRAPH-XXX` (e.g., `GRAPH-123`)
-3. **On task completion**: Report to this project's Letta agent via `matrix-identity-bridge` using `talk_to_agent` or `letta_chat`
-4. **Memory**: Store important discoveries in Graphiti with `graphiti-mcp_add_memory`
-
-### Reporting Example
-```json
-{
-  "operation": "talk_to_agent",
-  "agent": "agent-80ac3bb8-1087-412d-a19c-7c8c6aeb5916",
-  "message": "Completed task GRAPH-XXX: [summary of work done]"
-}
-```
-
-<!-- END-HULY-PROJECT-INFO -->
+<!-- VIBESYNC:codebase-context:END -->
 
 # Graphiti Stack Agent Instructions
 
 ## CRITICAL: Safe Disk Cleanup
 
 ### ⚠️ NEVER USE THESE COMMANDS:
+
 ```bash
 # ❌ DANGEROUS - will delete FalkorDB data volume
 docker system prune --volumes
@@ -127,6 +189,7 @@ docker system prune -a --volumes
 ```
 
 ### ✅ USE THIS INSTEAD:
+
 ```bash
 # Safe cleanup script - protects all data volumes
 /opt/stacks/graphiti/scripts/safe_cleanup.sh
@@ -139,6 +202,7 @@ docker system prune -a --volumes
 ```
 
 ### 🛡️ FalkorDB Protection Commands:
+
 ```bash
 # Create protection copy OUTSIDE Docker (survives volume prune)
 /opt/stacks/graphiti/scripts/protect_falkordb.sh
@@ -151,6 +215,7 @@ docker system prune -a --volumes
 ```
 
 ### Protected Volumes (NEVER manually delete):
+
 - `graphiti_falkordb_data` - FalkorDB graph data (PRIMARY DATA STORE)
 - `graphiti_visualizer_duckdb` - Visualizer cache
 - `dspy_training_data` - DSPy MIPROv2 training data
@@ -162,6 +227,7 @@ docker system prune -a --volumes
 ### ✅ FalkorDB is the Primary Data Store (Updated Jan 2026)
 
 **FalkorDB** (`falkordb` service):
+
 - **PRIMARY AND ONLY DATA STORE** - all data persists via RDB snapshots
 - Restarts reload from RDB in **~2 minutes**
 - RDB snapshots occur every 5 minutes (if changes) or every 1 minute (if 100+ changes)
@@ -174,6 +240,7 @@ docker system prune -a --volumes
 ## Service Architecture (Simplified Jan 2026)
 
 ### Current Stack (Jan 2026 - Temporal-native)
+
 ```
 falkordb (persisted) → graph-visualizer-rust → frontend/nginx
                     → graph (API) → Temporal Ingestion Workflows
@@ -188,11 +255,13 @@ To enable legacy queue: `docker compose --profile legacy-queue up -d`
 ### Safe Commands
 
 **ALWAYS check status before taking action:**
+
 ```bash
 docker-compose ps
 ```
 
 **To view logs without affecting services:**
+
 ```bash
 docker-compose logs <service-name>
 docker-compose logs --tail=20 <service-name>
@@ -200,6 +269,7 @@ docker-compose logs -f <service-name>  # Follow logs
 ```
 
 **SAFE operations (no dependencies, no data loss):**
+
 ```bash
 # Frontend - safe to restart anytime
 docker-compose restart frontend
@@ -211,6 +281,7 @@ docker restart graphiti-graph-1
 ```
 
 **NOW SAFER with persistence (but still use caution):**
+
 ```bash
 # ⚠️ FalkorDB restart is now SAFE - data persists and reloads in ~2 minutes
 docker-compose restart falkordb
@@ -224,6 +295,7 @@ docker-compose up -d graphiti-init
 ```
 
 **If visualizer needs restart (use container name, NOT service name):**
+
 ```bash
 # ✅ SAFE - restarts only the visualizer container
 docker restart graphiti-graph-visualizer-rust-1
@@ -235,18 +307,21 @@ docker-compose restart graph-visualizer-rust
 ## Graph Data Monitoring
 
 ### Check FalkorDB Counts
+
 ```bash
 # Edge count
 redis-cli -h localhost -p 6379 GRAPH.QUERY graphiti_migration "MATCH ()-[r]->() RETURN count(r) as edge_count" --csv
 # Node count
 redis-cli -h localhost -p 6379 GRAPH.QUERY graphiti_migration "MATCH (n) RETURN count(n) as node_count" --csv
 ```
+
 Current (Jan 2026): ~66K nodes, ~224K edges
 Historical baseline (Dec 2025): 48K nodes, 121K edges
 
 ## Service-Specific Notes
 
 ### graph-visualizer-rust (Port 3000)
+
 - **Image**: `graphiti-rust-visualizer:incremental-updates` (local, not pulled from registry)
 - **State**: Depends on FalkorDB data
 - **Batch size**: 5000 edges (set in src/main.rs line 399)
@@ -258,6 +333,7 @@ Historical baseline (Dec 2025): 48K nodes, 121K edges
 - **Why healthcheck is long**: After sync completes, visualizer must load ALL edges (currently 224K+) and build DuckDB cache before becoming healthy
 
 ### FalkorDB (Port 6379)
+
 - **Database name**: `graphiti_migration`
 - **Protocol**: Redis-compatible
 - **Indexes**: UUID indexes exist on all node/edge types (RANGE indexes)
@@ -266,6 +342,7 @@ Historical baseline (Dec 2025): 48K nodes, 121K edges
 - **Performance**: Queries scale with graph size (currently 224K+ edges)
 
 ### Frontend (Port 8085)
+
 - React + TypeScript + Vite
 - Connects directly to Rust visualizer (port 3000)
 - Safe to restart anytime
@@ -273,12 +350,14 @@ Historical baseline (Dec 2025): 48K nodes, 121K edges
 - **Note**: If created but not started after stack restart, manually start with `docker start graphiti-frontend-1`
 
 ### Nginx (Ports 8088, 8443)
+
 - Reverse proxy for graph API and visualizer
 - Safe to restart anytime
 - **Depends on**: graph-visualizer-rust being healthy
 - **Note**: If created but not started after stack restart, manually start with `docker start graphiti-nginx-1`
 
 ### Python API (Port 8003)
+
 - Used for data ingestion only
 - Does NOT serve visualization data
 - Safe to restart (persists to FalkorDB)
@@ -286,6 +365,7 @@ Historical baseline (Dec 2025): 48K nodes, 121K edges
 ## Common Workflows
 
 ### 1. After FalkorDB Restart
+
 ```bash
 # Check data loaded correctly (should match expected counts)
 redis-cli -h localhost -p 6379 GRAPH.QUERY graphiti_migration "MATCH ()-[r]->() RETURN count(r)" --csv
@@ -296,6 +376,7 @@ docker-compose logs --tail=50 falkordb
 ```
 
 ### 2. Checking Visualizer Status
+
 ```bash
 # Is it running and healthy?
 docker-compose ps graph-visualizer-rust
@@ -308,6 +389,7 @@ open http://localhost:3000
 ```
 
 ### 3. Safe Visualizer Restart
+
 ```bash
 # Method 1: Docker restart (preserves other services)
 docker restart graphiti-graph-visualizer-rust-1
@@ -320,6 +402,7 @@ docker start graphiti-graph-visualizer-rust-1
 ## Environment Variables
 
 Key variables from docker-compose.yml:
+
 - `FALKORDB_HOST=falkordb` (internal Docker network)
 - `FALKORDB_PORT=6379`
 - `FALKORDB_DATABASE=graphiti_migration`
@@ -332,39 +415,48 @@ Key variables from docker-compose.yml:
 ## Troubleshooting
 
 ### Nginx/Frontend Not Starting After Stack Restart
+
 **Symptom**: After `docker-compose up`, nginx and frontend show "Created" status but never start
 
 **Cause**: They depend on visualizer being healthy, but visualizer's healthcheck had insufficient time (was 105s, now 85 minutes). If visualizer takes too long to load graph data, it never becomes healthy, so nginx/frontend never start.
 
-**Fix Applied**: 
+**Fix Applied**:
+
 - Increased visualizer healthcheck `start_period` from 30s to 3600s (1 hour)
 - Increased healthcheck `retries` from 5 to 100 (25 more minutes)
 - Total: Up to 85 minutes for visualizer to become healthy after loading large graphs
 
 **Immediate Workaround**: If they're stuck in "Created" state:
+
 ```bash
 docker start graphiti-nginx-1 graphiti-frontend-1
 ```
 
 ### Visualizer Shows Incomplete Data
+
 **Symptom**: Frontend shows far fewer edges than expected
 
 **Causes**:
+
 1. FalkorDB RDB not fully loaded yet (wait ~2 minutes after restart)
 2. DuckDB cache stale (delete and let it rebuild)
 3. Visualizer started before FalkorDB finished loading
 
 **Fix**:
+
 1. Verify data loaded: `redis-cli -h localhost -p 6379 GRAPH.QUERY graphiti_migration "MATCH ()-[r]->() RETURN count(r)" --csv`
 2. If count is correct, restart visualizer: `docker restart graphiti-graph-visualizer-rust-1`
 
 ### FalkorDB OOM (Out of Memory)
+
 **Symptom**: FalkorDB container restarts, queries fail
 
 **Fix**: FalkorDB memory limit is 16GB in docker-compose. With 224K+ edges and 66K+ nodes, this should be sufficient. If OOM occurs, increase memory limit in docker-compose.yml.
 
 ### Vector Search Returns 0 Results / "expected Vectorf32 but was List" Error
+
 **Symptom**: Node or edge similarity search returns 0 results, logs show:
+
 ```
 Type mismatch: expected Null or Vectorf32 but was List
 ```
@@ -372,18 +464,21 @@ Type mismatch: expected Null or Vectorf32 but was List
 **Cause**: Some embeddings were stored as Python Lists instead of FalkorDB's native Vectorf32 type. This happens when embeddings are ingested through code paths that don't properly convert to Vectorf32. Even one corrupted embedding breaks ALL vector queries because FalkorDB fails when it encounters the List-type embedding.
 
 **Diagnosis**:
+
 ```bash
 # Run the validation script
 python3 /opt/stacks/graphiti/scripts/validate_embeddings.py
 ```
 
 **Fix**:
+
 ```bash
 # Remove corrupted embeddings (they can be re-embedded later)
 python3 /opt/stacks/graphiti/scripts/validate_embeddings.py --fix
 ```
 
 **Prevention**: All embedding storage code MUST use `vecf32([...])` Cypher syntax, not raw Python lists. Example:
+
 ```python
 # CORRECT - stores as Vectorf32
 query = f"SET n.embedding = vecf32([{','.join(str(v) for v in embedding)}])"
@@ -403,6 +498,7 @@ query = f"SET n.embedding = {embedding}"
 Training data is stored as `TrainingExample` nodes in FalkorDB, enabling atomic concurrent writes from all Temporal workers without race conditions.
 
 ### Monitoring Collection Progress
+
 ```bash
 # Check training data counts
 redis-cli -p 6379 GRAPH.QUERY graphiti_prompts "MATCH (t:TrainingExample) RETURN t.task, count(t) ORDER BY t.task" --csv
@@ -447,6 +543,7 @@ train, val = await split_train_val(task='entity_extraction', val_ratio=0.2)
 ### Architecture
 
 Prompts are stored in a separate FalkorDB graph (`graphiti_prompts`) to isolate optimization data from the main knowledge graph (`graphiti_migration`). This enables:
+
 - Hot-swapping prompts without restart
 - A/B testing of candidate prompts
 - Full version history with metrics
@@ -532,136 +629,19 @@ live → archived (automatic when new prompt promoted)
 candidate → failed (if evaluation fails)
 ```
 
-## Optimization Trigger
+## MIPROv2 Optimization Pipeline (REMOVED - Feb 2026)
 
-**Status**: Production-ready (Jan 2026). Automatic trigger for MIPROv2 optimization based on ingestion count.
+**Status**: Removed. The optimization trigger, workflow, and Temporal worker have been deleted.
 
-### Overview
+**Why**: MIPROv2 validation showed default prompts are already near-optimal for GLM-4.5. Results: entity extraction 0% improvement, edge extraction +6.84%, node resolution +2.06%. Did not meet the pre-committed >=10% threshold on >=2 tasks. PM decided to rip out the pipeline.
 
-The optimization trigger tracks how many episodes have been ingested and automatically triggers MIPROv2 prompt optimization when:
-1. Ingestion count reaches the configured threshold (default: 100)
-2. Sufficient training examples exist (default: 50 per task)
+**What was kept**:
+- Training data collection (modules.py still records to FalkorDB)
+- 21K+ training examples in `graphiti_prompts` graph
+- PromptRegistry for prompt versioning
+- `IngestionCounter` node still exists in FalkorDB (harmless, not incremented)
 
-The counter is persisted in FalkorDB's `graphiti_prompts` graph as an `IngestionCounter` node, surviving container restarts.
-
-### Environment Variables
-
-```bash
-DSPY_OPTIMIZATION_ENABLED=true           # Enable/disable auto-optimization (default: true)
-DSPY_OPTIMIZATION_THRESHOLD=100          # Trigger after N ingestions (default: 100)
-DSPY_OPTIMIZATION_MIN_EXAMPLES=50        # Minimum training examples per task (default: 50)
-```
-
-### Schema (IngestionCounter node)
-
-```
-(:IngestionCounter {
-  id: string,              // 'ingestion_counter'
-  count: int,              // Current ingestion count
-  last_reset: datetime,    // When counter was last reset
-  last_optimization: datetime  // When optimization was last triggered
-})
-```
-
-### Query Counter Status
-
-```bash
-# Check current count
-redis-cli -p 6379 GRAPH.QUERY graphiti_prompts "MATCH (c:IngestionCounter) RETURN c.count, c.last_reset, c.last_optimization" --csv
-```
-
-### Python API
-
-```python
-from graphiti_core.dspy import (
-    OptimizationTrigger,
-    TriggerConfig,
-    get_optimization_trigger,
-    configure_optimization_trigger,
-)
-
-# Get singleton trigger
-trigger = get_optimization_trigger()
-
-# Check status
-status = await trigger.get_status()
-print(f"Count: {status['count']}/{status['threshold']}")
-
-# Manual increment (usually done automatically by DSPy modules)
-should_optimize = await trigger.increment()
-if should_optimize:
-    await trigger.trigger_optimization()
-
-# Custom trigger with callback
-async def my_optimization_job():
-    print("Starting MIPROv2 optimization...")
-    # Launch Temporal workflow here
-
-custom_trigger = OptimizationTrigger(
-    config=TriggerConfig(threshold=50, min_training_examples=25),
-    on_trigger=my_optimization_job,
-)
-configure_optimization_trigger(custom_trigger)
-```
-
-### Integration Flow
-
-1. **During ingestion**: After each successful DSPy extraction, `_schedule_optimization_check()` is called
-2. **Counter increment**: The ingestion counter in FalkorDB is atomically incremented
-3. **Threshold check**: If count >= threshold AND sufficient training data exists:
-   - Counter is reset to 0
-   - `on_trigger` callback is invoked (launches MIPROv2 job)
-4. **No callback**: If no callback is configured, a warning is logged but counter still resets
-
-### MIPROv2 Optimization Workflow
-
-**Status**: Production-ready (Jan 2026). Temporal workflow for running MIPROv2 optimization.
-
-The optimization workflow is triggered automatically when the ingestion counter reaches threshold. It:
-1. Loads training data for each task from `/data/training_data/`
-2. Splits into 80% train / 20% validation
-3. Runs MIPROv2 optimization for each task
-4. Stores optimized prompts as candidates in PromptRegistry
-
-**Enable:**
-```bash
-docker compose --profile temporal-optimization up -d graphiti-temporal-optimization-worker
-```
-
-**Environment Variables:**
-```bash
-TEMPORAL_OPTIMIZATION_TASK_QUEUE=graphiti-dspy-optimization  # Task queue name
-```
-
-**Python API (wiring trigger to workflow):**
-```python
-from graphiti_core.dspy import (
-    setup_default_trigger_with_temporal,
-    create_temporal_optimization_callback,
-    OptimizationTrigger,
-    TriggerConfig,
-    configure_optimization_trigger,
-)
-
-# Option 1: Auto-setup (recommended for workers)
-trigger = setup_default_trigger_with_temporal()
-
-# Option 2: Manual setup with custom config
-callback = await create_temporal_optimization_callback()
-trigger = OptimizationTrigger(
-    config=TriggerConfig(threshold=100, min_training_examples=50),
-    on_trigger=callback,
-)
-configure_optimization_trigger(trigger)
-```
-
-**Workflow ID Format:** `dspy-optimization-<uuid>`
-
-**Monitor in Temporal UI:** http://192.168.50.90:8084 (namespace: `graphiti`)
-
-### Next Steps
-
-- **graphiti-p07m**: Add A/B evaluation framework for optimized prompt candidates
+**Removed files**: `optimization_workflow.py`, `trigger.py`, `run_optimization_direct.py`, `trigger_optimization.py`, `temporal_optimization_worker.py`, `temporal-optimization` docker-compose profile.
 
 ## Temporal Integration
 
@@ -674,6 +654,7 @@ Graphiti supports two modes of Temporal integration:
 When enabled, the existing `add_episode_resilient()` pipeline emits signals to a Temporal workflow for observability. The existing pipeline remains authoritative—Temporal just watches.
 
 **Environment Variables:**
+
 ```bash
 TEMPORAL_VISIBILITY_ENABLED=true
 TEMPORAL_VISIBILITY_ADDRESS=192.168.50.90:7233
@@ -683,6 +664,7 @@ TEMPORAL_VISIBILITY_RPC_TIMEOUT_SECONDS=0.5
 ```
 
 **Enable:**
+
 ```bash
 docker compose --profile temporal up -d graphiti-temporal-visibility-worker
 docker restart graphiti-graphiti-worker-1
@@ -695,6 +677,7 @@ docker restart graphiti-graphiti-worker-1
 When enabled, the queue worker routes ALL episode ingestion through Temporal instead of calling `add_episode_resilient()` directly. Each stage (extract_nodes, resolve_nodes, extract_edges, resolve_edges_and_persist) is a separate Temporal Activity.
 
 **Environment Variables:**
+
 ```bash
 TEMPORAL_INGESTION_ENABLED=true
 TEMPORAL_VISIBILITY_ADDRESS=192.168.50.90:7233
@@ -731,12 +714,14 @@ TEMPORAL_INGESTION_WORKFLOW_TIMEOUT_HOURS=8  # Default 8 hours per workflow
 ```
 
 **Rate Limiting Strategy:**
+
 - `TEMPORAL_MAX_CONCURRENT_ACTIVITIES=5` is the primary knob in legacy mode
 - In staged mode, tune `TEMPORAL_EXTRACT/RESOLVE/EDGE/PERSIST_MAX_CONCURRENT_ACTIVITIES`
 - For rate-limited APIs (429 errors), drop extract/resolve/edge to 1-2
 - `TEMPORAL_RATE_LIMIT_POST_LLM_DELAY=2.0` adds 2-second delay after each LLM activity
 
 **Enable (Legacy Single Queue):**
+
 ```bash
 docker compose --profile temporal up -d graphiti-temporal-ingestion-worker
 # Ensure TEMPORAL_INGESTION_ENABLED=true in .env, then:
@@ -744,6 +729,7 @@ docker compose up -d graphiti-worker
 ```
 
 **Enable (Staged Queues + One Worker Per Stage):**
+
 ```bash
 # During migration (keep legacy worker to drain old workflows)
 docker compose --profile temporal --profile temporal-staged up -d
@@ -756,6 +742,7 @@ docker compose up -d graphiti-worker
 ```
 
 **Migration (Staged Queues):**
+
 - Strategy A (safe): run both `temporal` and `temporal-staged` profiles until legacy queue drains, then stop legacy worker.
 - Strategy B (fast): cancel + requeue old workflows using `scripts/migrate_to_staged_queues.py`.
 
@@ -770,6 +757,7 @@ python3 scripts/migrate_to_staged_queues.py --limit 100 --force
 **Workflow ID Format:** `ingest-episode-<episode_uuid>`
 
 **Activities:**
+
 - `extract_nodes` - Entity extraction via DSPy/LLM
 - `resolve_nodes` - Node deduplication and resolution
 - `extract_edges` - Relationship extraction
@@ -808,12 +796,14 @@ Full implementation guide will be added to this file once infrastructure is comp
 ## File Locations
 
 ### Key Configuration Files
+
 - `/opt/stacks/graphiti/docker-compose.yml` - Main orchestration
 - `/opt/stacks/graphiti/.env` - Environment variables
 - `/opt/stacks/graphiti/graph-visualizer-rust/src/main.rs` - Visualizer code (batch size line 399)
 - `/opt/stacks/graphiti/temporal/` - Temporal workflows (when implemented)
 
 ### Data Volumes
+
 - `falkordb_data` - FalkorDB RDB snapshots (PRIMARY DATA - NEVER DELETE)
 - `visualizer_duckdb` - DuckDB cache (safe to delete, will rebuild)
 
@@ -822,9 +812,11 @@ Full implementation guide will be added to this file once infrastructure is comp
 **MANDATORY CHECKS - DO THIS EVERY TIME:**
 
 1. **Check if service is already running:**
+
    ```bash
    docker-compose ps | grep <service-name>
    ```
+
    - If already running and healthy → DON'T restart it!
 
 2. **Check dependency chains in docker-compose.yml:**
@@ -837,6 +829,7 @@ Full implementation guide will be added to this file once infrastructure is comp
    - Use `docker restart` for individual containers to avoid dependency chain issues
 
 **SAFE PATTERN:**
+
 ```bash
 # 1. Check first
 docker-compose ps graph-visualizer-rust
@@ -850,6 +843,7 @@ docker restart graphiti-graph-visualizer-rust-1
 ```
 
 **WHEN IN DOUBT:**
+
 - Use `docker restart <container-name>` instead of `docker-compose`
 - Use `docker-compose ps` to check status before acting
 - **ASK THE USER** before any operation that might restart databases or init containers

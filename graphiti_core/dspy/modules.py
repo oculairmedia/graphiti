@@ -57,10 +57,6 @@ _stateful_enabled: bool | None = None
 _training_collection_enabled: bool | None = None
 _use_falkordb_storage: bool | None = None
 
-# Optimization trigger globals
-_optimization_trigger = None
-_optimization_trigger_enabled: bool | None = None
-
 
 def is_stateful_learning_enabled() -> bool:
     """Check if stateful learning is enabled via env var."""
@@ -88,32 +84,19 @@ def _use_falkordb_training_storage() -> bool:
     return _use_falkordb_storage
 
 
-async def _record_and_check_optimization(
+async def _record_training_data(
     task: str,
     inputs: dict[str, Any],
     output: dict[str, Any],
     metadata: dict[str, Any] | None = None,
 ) -> None:
-    """Record training data and check optimization trigger in a single async task.
-
-    Combines training recording + optimization counter increment to avoid
-    two separate fire-and-forget tasks competing for event loop time.
-    """
+    """Record training data to FalkorDB for future use."""
     from .training_storage import record_training_example
 
     try:
         await record_training_example(task, inputs, output, metadata)
     except Exception as e:
         logger.warning(f'Failed to record training example: {e}')
-
-    trigger = _get_optimization_trigger()
-    if trigger is not None:
-        try:
-            should_trigger = await trigger.increment()
-            if should_trigger:
-                await trigger.trigger_optimization()
-        except Exception as e:
-            logger.warning(f'Optimization trigger check failed: {e}')
 
 
 def _schedule_training_record(
@@ -122,7 +105,6 @@ def _schedule_training_record(
     output: dict[str, Any],
     metadata: dict[str, Any] | None = None,
 ) -> None:
-    """Schedule async training data recording + optimization check from sync context."""
     if not is_training_collection_enabled():
         return
 
@@ -134,40 +116,11 @@ def _schedule_training_record(
 
         try:
             loop = asyncio.get_running_loop()
-            loop.create_task(_record_and_check_optimization(task, inputs, output, metadata))
+            loop.create_task(_record_training_data(task, inputs, output, metadata))
         except RuntimeError:
-            asyncio.run(_record_and_check_optimization(task, inputs, output, metadata))
+            asyncio.run(_record_training_data(task, inputs, output, metadata))
     except Exception as e:
         logger.debug(f'Failed to schedule training record: {e}')
-
-
-def is_optimization_trigger_enabled() -> bool:
-    global _optimization_trigger_enabled
-    if _optimization_trigger_enabled is None:
-        _optimization_trigger_enabled = (
-            os.getenv('DSPY_OPTIMIZATION_ENABLED', 'true').lower() == 'true'
-        )
-    return _optimization_trigger_enabled
-
-
-def _get_optimization_trigger():
-    global _optimization_trigger
-
-    if not is_optimization_trigger_enabled():
-        return None
-
-    if _optimization_trigger is not None:
-        return _optimization_trigger
-
-    try:
-        from .trigger import OptimizationTrigger
-
-        _optimization_trigger = OptimizationTrigger()
-        logger.info('Optimization trigger initialized')
-        return _optimization_trigger
-    except Exception as e:
-        logger.warning(f'Failed to initialize optimization trigger: {e}')
-        return None
 
 
 def save_training_data() -> dict[str, int] | None:

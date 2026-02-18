@@ -61,14 +61,7 @@ from graphiti_core.dspy.hot_reload import (
     get_hot_reloader,
     configure_hot_reload,
 )
-from graphiti_core.dspy.trigger import (
-    OptimizationTrigger,
-    TriggerConfig,
-    get_optimization_trigger,
-    configure_optimization_trigger,
-    create_temporal_optimization_callback,
-    setup_default_trigger_with_temporal,
-)
+
 
 __all__ = [
     # Config
@@ -121,11 +114,4 @@ __all__ = [
     'HotReloadConfig',
     'get_hot_reloader',
     'configure_hot_reload',
-    # Optimization Trigger
-    'OptimizationTrigger',
-    'TriggerConfig',
-    'get_optimization_trigger',
-    'configure_optimization_trigger',
-    'create_temporal_optimization_callback',
-    'setup_default_trigger_with_temporal',
 ]
