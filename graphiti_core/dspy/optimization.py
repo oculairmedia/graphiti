@@ -288,16 +288,30 @@ def entity_extraction_metric(example: dspy.Example, prediction: Any, trace=None)
     """
     try:
         expected = example.extracted_entities
+        if isinstance(expected, str):
+            try:
+                expected = json.loads(expected)
+            except (json.JSONDecodeError, TypeError):
+                expected = {}
         if isinstance(expected, dict):
             expected_names = {e['name'].lower() for e in expected.get('extracted_entities', [])}
+        elif isinstance(expected, ExtractedEntities):
+            expected_names = {e.name.lower() for e in expected.extracted_entities}
         else:
             expected_names = set()
 
-        predicted = prediction.extracted_entities
-        if isinstance(predicted, ExtractedEntities):
-            predicted_names = {e.name.lower() for e in predicted.extracted_entities}
-        elif isinstance(predicted, dict):
-            predicted_names = {e['name'].lower() for e in predicted.get('extracted_entities', [])}
+        if isinstance(prediction, ExtractedEntities):
+            predicted_names = {e.name.lower() for e in prediction.extracted_entities}
+        elif hasattr(prediction, 'extracted_entities'):
+            predicted = prediction.extracted_entities
+            if isinstance(predicted, ExtractedEntities):
+                predicted_names = {e.name.lower() for e in predicted.extracted_entities}
+            elif isinstance(predicted, dict):
+                predicted_names = {
+                    e['name'].lower() for e in predicted.get('extracted_entities', [])
+                }
+            else:
+                predicted_names = set()
         else:
             predicted_names = set()
 
@@ -335,16 +349,28 @@ def edge_extraction_metric(example: dspy.Example, prediction: Any, trace=None) -
             return (str(e.source_entity_id), e.relation_type.upper(), str(e.target_entity_id))
 
         expected = example.extracted_edges
+        if isinstance(expected, str):
+            try:
+                expected = json.loads(expected)
+            except (json.JSONDecodeError, TypeError):
+                expected = {}
         if isinstance(expected, dict):
             expected_edges = {normalize_edge(e) for e in expected.get('edges', [])}
+        elif isinstance(expected, ExtractedEdges):
+            expected_edges = {normalize_edge(e) for e in expected.edges}
         else:
             expected_edges = set()
 
-        predicted = prediction.extracted_edges
-        if isinstance(predicted, ExtractedEdges):
-            predicted_edges = {normalize_edge(e) for e in predicted.edges}
-        elif isinstance(predicted, dict):
-            predicted_edges = {normalize_edge(e) for e in predicted.get('edges', [])}
+        if isinstance(prediction, ExtractedEdges):
+            predicted_edges = {normalize_edge(e) for e in prediction.edges}
+        elif hasattr(prediction, 'extracted_edges'):
+            predicted = prediction.extracted_edges
+            if isinstance(predicted, ExtractedEdges):
+                predicted_edges = {normalize_edge(e) for e in predicted.edges}
+            elif isinstance(predicted, dict):
+                predicted_edges = {normalize_edge(e) for e in predicted.get('edges', [])}
+            else:
+                predicted_edges = set()
         else:
             predicted_edges = set()
 
@@ -371,20 +397,32 @@ def node_resolution_metric(example: dspy.Example, prediction: Any, trace=None) -
     """
     try:
         expected = example.entity_resolutions
+        if isinstance(expected, str):
+            try:
+                expected = json.loads(expected)
+            except (json.JSONDecodeError, TypeError):
+                expected = {}
         if isinstance(expected, dict):
             expected_map = {
                 r['id']: r['duplicate_idx'] for r in expected.get('entity_resolutions', [])
             }
+        elif isinstance(expected, NodeResolutions):
+            expected_map = {r.id: r.duplicate_idx for r in expected.entity_resolutions}
         else:
             expected_map = {}
 
-        predicted = prediction.entity_resolutions
-        if isinstance(predicted, NodeResolutions):
-            predicted_map = {r.id: r.duplicate_idx for r in predicted.entity_resolutions}
-        elif isinstance(predicted, dict):
-            predicted_map = {
-                r['id']: r['duplicate_idx'] for r in predicted.get('entity_resolutions', [])
-            }
+        if isinstance(prediction, NodeResolutions):
+            predicted_map = {r.id: r.duplicate_idx for r in prediction.entity_resolutions}
+        elif hasattr(prediction, 'entity_resolutions'):
+            predicted = prediction.entity_resolutions
+            if isinstance(predicted, NodeResolutions):
+                predicted_map = {r.id: r.duplicate_idx for r in predicted.entity_resolutions}
+            elif isinstance(predicted, dict):
+                predicted_map = {
+                    r['id']: r['duplicate_idx'] for r in predicted.get('entity_resolutions', [])
+                }
+            else:
+                predicted_map = {}
         else:
             predicted_map = {}
 

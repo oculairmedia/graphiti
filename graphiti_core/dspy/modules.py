@@ -28,6 +28,27 @@ from .signatures import (
 
 logger = logging.getLogger(__name__)
 
+
+def _ensure_list(value: Any) -> list:
+    """Parse JSON strings to lists for MIPROv2 compatibility.
+
+    During MIPROv2 optimization, training example inputs arrive as JSON strings
+    (since they were stored after json.dumps()). Module forward() methods expect
+    lists of dicts. This helper handles the conversion transparently.
+    """
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+            if isinstance(parsed, list):
+                return parsed
+        except (json.JSONDecodeError, TypeError):
+            pass
+        return []
+    if isinstance(value, list):
+        return value
+    return []
+
+
 _stateful_client = None
 _stateful_agent_id = None
 _stateful_enabled: bool | None = None
@@ -294,12 +315,16 @@ class NodeExtractor(dspy.Module):
     def forward(
         self,
         current_message: str,
-        entity_types: list[dict[str, Any]],
-        previous_messages: list[dict[str, Any]] | None = None,
+        entity_types: list[dict[str, Any]] | str,
+        previous_messages: list[dict[str, Any]] | str | None = None,
         custom_instructions: str = '',
     ) -> ExtractedEntities:
         if self._prompt_version:
             logger.debug(f'NodeExtractor.forward using prompt v{self._prompt_version}')
+
+        entity_types = _ensure_list(entity_types)
+        if previous_messages is not None:
+            previous_messages = _ensure_list(previous_messages)
 
         previous_extractions = self._get_extraction_hints(current_message)
 
@@ -623,16 +648,22 @@ class EdgeExtractor(dspy.Module):
     def forward(
         self,
         current_message: str,
-        entities: list[dict[str, Any]],
+        entities: list[dict[str, Any]] | str,
         reference_time: str,
-        previous_messages: list[dict[str, Any]] | None = None,
-        edge_types: list[dict[str, Any]] | None = None,
+        previous_messages: list[dict[str, Any]] | str | None = None,
+        edge_types: list[dict[str, Any]] | str | None = None,
         custom_instructions: str = '',
     ) -> ExtractedEdges:
         if self._prompt_version:
             logger.debug(f'EdgeExtractor.forward using prompt v{self._prompt_version}')
 
-        entity_names = [e.get('name', '') for e in entities]
+        entities = _ensure_list(entities)
+        if edge_types is not None:
+            edge_types = _ensure_list(edge_types)
+        if previous_messages is not None:
+            previous_messages = _ensure_list(previous_messages)
+
+        entity_names = [e.get('name', '') for e in entities if isinstance(e, dict)]
         edge_patterns = self._get_edge_hints(entity_names)
 
         with with_lm('complex'):
@@ -752,26 +783,19 @@ class NodeResolver(dspy.Module):
     def forward(
         self,
         current_message: str,
-        extracted_entities: list[dict[str, Any]],
-        existing_entities: list[dict[str, Any]],
-        previous_messages: list[dict[str, Any]] | None = None,
+        extracted_entities: list[dict[str, Any]] | str,
+        existing_entities: list[dict[str, Any]] | str,
+        previous_messages: list[dict[str, Any]] | str | None = None,
     ) -> NodeResolutions:
-        """
-        Resolve entities against existing entities for deduplication.
-
-        Args:
-            current_message: The source message for context.
-            extracted_entities: Newly extracted entities to deduplicate.
-            existing_entities: Existing entities with candidate idx.
-            previous_messages: Previous context messages.
-
-        Returns:
-            NodeResolutions with duplicate information for each entity.
-        """
         if self._prompt_version:
             logger.debug(f'NodeResolver.forward using prompt v{self._prompt_version}')
 
-        entity_names = [e.get('name', '') for e in extracted_entities]
+        extracted_entities = _ensure_list(extracted_entities)
+        existing_entities = _ensure_list(existing_entities)
+        if previous_messages is not None:
+            previous_messages = _ensure_list(previous_messages)
+
+        entity_names = [e.get('name', '') for e in extracted_entities if isinstance(e, dict)]
         resolution_history = self._get_resolution_hints(entity_names)
 
         with with_lm('complex'):
@@ -864,23 +888,14 @@ class SummaryGenerator(dspy.Module):
         self,
         current_message: str,
         entity_name: str,
-        previous_messages: list[dict[str, Any]] | None = None,
+        previous_messages: list[dict[str, Any]] | str | None = None,
         existing_summary: str = '',
     ) -> Summary:
-        """
-        Generate or update a summary for an entity.
-
-        Args:
-            current_message: The source message containing entity info.
-            entity_name: Name of the entity to summarize.
-            previous_messages: Previous context messages.
-            existing_summary: Existing summary to update.
-
-        Returns:
-            Summary with updated entity summary.
-        """
         if self._prompt_version:
             logger.debug(f'SummaryGenerator.forward using prompt v{self._prompt_version}')
+
+        if previous_messages is not None:
+            previous_messages = _ensure_list(previous_messages)
 
         with with_lm('simple'):
             result = self.predictor(
