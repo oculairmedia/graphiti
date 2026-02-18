@@ -373,6 +373,7 @@ SIGNATURE_BASE_CLASSES: dict[str, type[dspy.Signature]] = {
     'edge_extraction': EdgeExtractionSignature,
     'node_resolution': NodeDeduplicationSignature,
     'summary_generation': SummaryGenerationSignature,
+    'batch_summary_generation': BatchSummaryGenerationSignature,
 }
 
 
