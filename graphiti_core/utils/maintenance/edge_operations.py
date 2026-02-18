@@ -15,6 +15,7 @@ limitations under the License.
 """
 
 import logging
+import os
 import re
 import unicodedata
 from datetime import datetime
@@ -500,7 +501,21 @@ async def resolve_extracted_edges(
 
         edge_types_lst.append(extracted_edge_types)
 
-    # resolve edges with related edges in the graph and find invalidation candidates
+    if os.getenv('USE_BATCH_EXTRACTION', 'false').lower() == 'true':
+        resolved_edges, invalidated_edges = await resolve_extracted_edges_batch(
+            llm_client,
+            extracted_edges,
+            related_edges_lists,
+            edge_invalidation_candidates,
+            episode,
+            edge_types_lst,
+        )
+        await semaphore_gather(
+            create_entity_edge_embeddings(embedder, resolved_edges),
+            create_entity_edge_embeddings(embedder, invalidated_edges),
+        )
+        return resolved_edges, invalidated_edges
+
     results: list[tuple[EntityEdge, list[EntityEdge], list[EntityEdge]]] = list(
         await semaphore_gather(
             *[
@@ -538,6 +553,155 @@ async def resolve_extracted_edges(
         create_entity_edge_embeddings(embedder, resolved_edges),
         create_entity_edge_embeddings(embedder, invalidated_edges),
     )
+
+    return resolved_edges, invalidated_edges
+
+
+async def resolve_extracted_edges_batch(
+    llm_client: LLMClient,
+    extracted_edges: list[EntityEdge],
+    related_edges_lists: list[list[EntityEdge]],
+    edge_invalidation_candidates: list[list[EntityEdge]],
+    episode: EpisodicNode,
+    edge_types_lst: list[dict[str, BaseModel]],
+) -> tuple[list[EntityEdge], list[EntityEdge]]:
+    batch_size = int(os.getenv('BATCH_EDGE_RESOLUTION_SIZE', '3'))
+
+    resolved_edges: list[EntityEdge] = []
+    invalidated_edges: list[EntityEdge] = []
+
+    all_items = list(
+        zip(
+            extracted_edges,
+            related_edges_lists,
+            edge_invalidation_candidates,
+            edge_types_lst,
+            strict=True,
+        )
+    )
+
+    for batch_start in range(0, len(all_items), batch_size):
+        batch = all_items[batch_start : batch_start + batch_size]
+
+        skip_indices: set[int] = set()
+        for i, (edge, related, existing, _) in enumerate(batch):
+            if len(related) == 0 and len(existing) == 0:
+                resolved_edges.append(edge)
+                skip_indices.add(i)
+
+        active_batch = [(i, item) for i, item in enumerate(batch) if i not in skip_indices]
+        if not active_batch:
+            continue
+
+        edge_contexts = []
+        all_edge_types_context = []
+        for _, (edge, related, existing, edge_types) in active_batch:
+            edge_contexts.append(
+                {
+                    'new_edge': edge.fact,
+                    'existing_edges': [{'id': e.uuid, 'fact': e.fact} for e in related],
+                    'edge_invalidation_candidates': [
+                        {'id': i, 'fact': e.fact} for i, e in enumerate(existing)
+                    ],
+                }
+            )
+            if edge_types:
+                for type_name, type_model in edge_types.items():
+                    all_edge_types_context.append(
+                        {
+                            'fact_type_name': type_name,
+                            'fact_type_description': type_model.__doc__,
+                        }
+                    )
+
+        batch_context = {
+            'edges': edge_contexts,
+            'edge_types': all_edge_types_context if all_edge_types_context else [],
+        }
+
+        try:
+            llm_response = await llm_client.generate_response(
+                prompt_library.dedupe_edges.resolve_edges_batch(batch_context),
+                model_size=ModelSize.small,
+            )
+
+            results = llm_response.get('results', [])
+
+            for result_idx, (
+                orig_idx,
+                (extracted_edge, related, existing, edge_types),
+            ) in enumerate(active_batch):
+                result = results[result_idx] if result_idx < len(results) else {}
+
+                raw_duplicates = result.get('duplicate_facts', [])
+                parsed_duplicates = [
+                    item['id'] if isinstance(item, dict) else item for item in raw_duplicates
+                ]
+                duplicate_fact_ids: list[int] = [
+                    idx
+                    for idx in parsed_duplicates
+                    if isinstance(idx, int) and 0 <= idx < len(related)
+                ]
+
+                resolved_edge = extracted_edge
+                for dup_id in duplicate_fact_ids:
+                    resolved_edge = related[dup_id]
+                    break
+
+                if duplicate_fact_ids and episode is not None:
+                    resolved_edge.episodes.append(episode.uuid)
+
+                raw_contradicted = result.get('contradicted_facts', [])
+                contradicted_facts: list[int] = [
+                    item['id'] if isinstance(item, dict) else item for item in raw_contradicted
+                ]
+                invalidation_candidates: list[EntityEdge] = [
+                    existing[i]
+                    for i in contradicted_facts
+                    if isinstance(i, int) and 0 <= i < len(existing)
+                ]
+
+                fact_type: str = str(result.get('fact_type', 'DEFAULT'))
+                if fact_type.upper() != 'DEFAULT' and edge_types:
+                    resolved_edge.name = fact_type
+
+                now = utc_now()
+                if resolved_edge.invalid_at and not resolved_edge.expired_at:
+                    resolved_edge.expired_at = now
+
+                if resolved_edge.expired_at is None:
+                    invalidation_candidates.sort(key=lambda c: (c.valid_at is None, c.valid_at))
+                    for candidate in invalidation_candidates:
+                        if (
+                            candidate.valid_at
+                            and resolved_edge.valid_at
+                            and candidate.valid_at.tzinfo
+                            and resolved_edge.valid_at.tzinfo
+                            and candidate.valid_at > resolved_edge.valid_at
+                        ):
+                            resolved_edge.invalid_at = candidate.valid_at
+                            resolved_edge.expired_at = now
+                            break
+
+                inv_edges = resolve_edge_contradictions(resolved_edge, invalidation_candidates)
+                resolved_edges.append(resolved_edge)
+                invalidated_edges.extend(inv_edges)
+
+            logger.info(f'Batch resolved {len(active_batch)} edges in one LLM call')
+
+        except Exception as e:
+            logger.warning(f'Batch edge resolution failed, falling back to individual: {e}')
+            for _, (extracted_edge, related, existing, edge_types) in active_batch:
+                result = await resolve_extracted_edge(
+                    llm_client,
+                    extracted_edge,
+                    related,
+                    existing,
+                    episode,
+                    edge_types,
+                )
+                resolved_edges.append(result[0])
+                invalidated_edges.extend(result[1])
 
     return resolved_edges, invalidated_edges
 

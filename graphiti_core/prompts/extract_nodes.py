@@ -80,6 +80,7 @@ class Prompt(Protocol):
     reflexion: PromptVersion
     classify_nodes: PromptVersion
     extract_attributes: PromptVersion
+    extract_attributes_batch: PromptVersion
 
 
 class Versions(TypedDict):
@@ -89,6 +90,7 @@ class Versions(TypedDict):
     reflexion: PromptFunction
     classify_nodes: PromptFunction
     extract_attributes: PromptFunction
+    extract_attributes_batch: PromptFunction
 
 
 def extract_message(context: dict[str, Any]) -> list[Message]:
@@ -291,7 +293,6 @@ def classify_nodes(context: dict[str, Any]) -> list[Message]:
 
 
 def extract_attributes(context: dict[str, Any]) -> list[Message]:
-    # Import safe serializer for datetime handling
     from graphiti_core.utils.prompt_utils import safe_json_dumps
 
     return [
@@ -333,6 +334,52 @@ Guidelines:
     ]
 
 
+def extract_attributes_batch(context: dict[str, Any]) -> list[Message]:
+    from graphiti_core.utils.prompt_utils import safe_json_dumps
+
+    nodes_block = '\n'.join(
+        f'  {i + 1}. {safe_json_dumps(node)}' for i, node in enumerate(context['nodes'])
+    )
+
+    return [
+        Message(
+            role='system',
+            content="""You are a JSON extraction assistant. You MUST respond with ONLY a valid JSON object.
+
+CRITICAL RULES:
+- Output ONLY a single JSON object - no explanations, no markdown, no extra text
+- Do not wrap the JSON in code blocks or backticks
+- The response must be parseable by json.loads() directly""",
+        ),
+        Message(
+            role='user',
+            content=f"""Extract entity properties from the provided text for EACH entity listed below.
+
+<MESSAGES>
+{safe_json_dumps(context['previous_episodes'])}
+{safe_json_dumps(context['episode_content'])}
+</MESSAGES>
+
+Given the above MESSAGES and the following ENTITIES, update each entity's attributes based on the information
+provided in MESSAGES.
+
+Guidelines:
+1. Do not hallucinate entity property values if they cannot be found in the current context.
+2. Only use the provided MESSAGES and ENTITIES to set attribute values.
+3. The summary attribute represents a summary of each ENTITY, and should be updated with new information from MESSAGES.
+    Summaries must be no longer than 250 words.
+4. Return ALL {len(context['nodes'])} entities in the response.
+
+<ENTITIES>
+{nodes_block}
+</ENTITIES>
+
+Return format: {{"entities": [{{"name": "<entity_name>", "summary": "<updated summary>", ...}}, ...]}}
+""",
+        ),
+    ]
+
+
 versions: Versions = {
     'extract_message': extract_message,
     'extract_json': extract_json,
@@ -340,4 +387,5 @@ versions: Versions = {
     'reflexion': reflexion,
     'classify_nodes': classify_nodes,
     'extract_attributes': extract_attributes,
+    'extract_attributes_batch': extract_attributes_batch,
 }

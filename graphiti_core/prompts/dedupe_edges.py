@@ -47,12 +47,14 @@ class Prompt(Protocol):
     edge: PromptVersion
     edge_list: PromptVersion
     resolve_edge: PromptVersion
+    resolve_edges_batch: PromptVersion
 
 
 class Versions(TypedDict):
     edge: PromptFunction
     edge_list: PromptFunction
     resolve_edge: PromptFunction
+    resolve_edges_batch: PromptFunction
 
 
 def edge(context: dict[str, Any]) -> list[Message]:
@@ -160,4 +162,55 @@ def resolve_edge(context: dict[str, Any]) -> list[Message]:
     ]
 
 
-versions: Versions = {'edge': edge, 'edge_list': edge_list, 'resolve_edge': resolve_edge}
+def resolve_edges_batch(context: dict[str, Any]) -> list[Message]:
+    edges_block = ''
+    for i, edge_ctx in enumerate(context['edges']):
+        edges_block += f"""
+    <EDGE index="{i}">
+        <NEW FACT>{edge_ctx['new_edge']}</NEW FACT>
+        <EXISTING FACTS>{json.dumps(edge_ctx['existing_edges'])}</EXISTING FACTS>
+        <FACT INVALIDATION CANDIDATES>{json.dumps(edge_ctx['edge_invalidation_candidates'])}</FACT INVALIDATION CANDIDATES>
+    </EDGE>"""
+
+    edge_types_section = ''
+    if context.get('edge_types'):
+        edge_types_section = f"""
+        <FACT TYPES>
+        {json.dumps(context['edge_types'])}
+        </FACT TYPES>"""
+
+    return [
+        Message(
+            role='system',
+            content='You are a helpful assistant that de-duplicates facts from fact lists and determines which existing '
+            'facts are contradicted by new facts. You process multiple edges in a single request.',
+        ),
+        Message(
+            role='user',
+            content=f"""For EACH edge below, determine duplicates and contradictions against its own EXISTING FACTS and FACT INVALIDATION CANDIDATES.
+{edges_block}
+{edge_types_section}
+
+Task:
+For each EDGE (identified by index), determine:
+1. If the NEW FACT is a duplicate of any of its EXISTING FACTS, return the idx of the duplicate facts.
+2. Which FACT INVALIDATION CANDIDATES are contradicted by the NEW FACT.
+3. The fact type classification (one of the FACT TYPES or DEFAULT).
+
+Guidelines:
+1. Facts with similar information but key differences (especially numeric values) are NOT duplicates.
+2. Each edge's duplicates/contradictions are relative to ITS OWN existing facts and invalidation candidates.
+
+Return format: {{"results": [{{"edge_index": 0, "duplicate_facts": [], "contradicted_facts": [], "fact_type": "DEFAULT"}}, ...]}}
+Include ALL {len(context['edges'])} edges in the response.
+""",
+        ),
+    ]
+
+
+versions: Versions = {
+    'edge': edge,
+    'edge_list': edge_list,
+    'resolve_edge': resolve_edge,
+    'resolve_edges_batch': resolve_edges_batch,
+}

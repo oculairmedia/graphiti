@@ -1259,6 +1259,11 @@ async def extract_attributes_from_nodes(
         force_update: If True (default), bypass cache and always call LLM to update
             summaries with new episode context. Set to False for read-only operations.
     """
+    if os.getenv('USE_BATCH_EXTRACTION', 'false').lower() == 'true':
+        return await extract_attributes_from_nodes_batch(
+            clients, nodes, episode, previous_episodes, entity_types, group_id, force_update
+        )
+
     llm_client = clients.llm_client
     embedder = clients.embedder
 
@@ -1288,6 +1293,125 @@ async def extract_attributes_from_nodes(
 
     await create_entity_node_embeddings(embedder, updated_nodes)
 
+    return updated_nodes
+
+
+async def extract_attributes_from_nodes_batch(
+    clients: GraphitiClients,
+    nodes: list[EntityNode],
+    episode: EpisodicNode | None = None,
+    previous_episodes: list[EpisodicNode] | None = None,
+    entity_types: dict[str, BaseModel] | None = None,
+    group_id: str | None = None,
+    force_update: bool = True,
+) -> list[EntityNode]:
+    llm_client = clients.llm_client
+    embedder = clients.embedder
+    effective_group_id = group_id or (episode.group_id if episode else None) or 'default'
+    batch_size = int(os.getenv('BATCH_EXTRACTION_SIZE', '5'))
+    entity_cache = get_entity_cache()
+
+    cached_nodes: list[EntityNode] = []
+    uncached_nodes: list[EntityNode] = []
+
+    for node in nodes:
+        if not force_update and entity_types is None:
+            cached_summary = entity_cache.get_cached_summary(node.name, effective_group_id)
+            if cached_summary:
+                node.summary = cached_summary
+                cached_nodes.append(node)
+                continue
+        uncached_nodes.append(node)
+
+    if not uncached_nodes:
+        await create_entity_node_embeddings(embedder, cached_nodes)
+        return cached_nodes
+
+    updated_nodes: list[EntityNode] = list(cached_nodes)
+
+    for batch_start in range(0, len(uncached_nodes), batch_size):
+        batch = uncached_nodes[batch_start : batch_start + batch_size]
+
+        node_contexts = []
+        for node in batch:
+            node_contexts.append(
+                {
+                    'name': node.name,
+                    'summary': node.summary,
+                    'entity_types': node.labels,
+                    'attributes': node.attributes,
+                }
+            )
+
+        batch_context: dict[str, Any] = {
+            'nodes': node_contexts,
+            'episode_content': episode.content if episode is not None else '',
+            'previous_episodes': [ep.content for ep in previous_episodes]
+            if previous_episodes is not None
+            else [],
+        }
+        batch_context = enforce_max_prompt_tokens(batch_context)
+
+        try:
+            llm_response = await llm_client.generate_response(
+                prompt_library.extract_nodes.extract_attributes_batch(batch_context),
+                model_size=ModelSize.small,
+            )
+
+            entities_data = llm_response.get('entities', [])
+            if not entities_data and isinstance(llm_response, dict):
+                entities_data = [
+                    {'name': k, **v} if isinstance(v, dict) else {'name': k, 'summary': str(v)}
+                    for k, v in llm_response.items()
+                    if k != 'entities'
+                ]
+
+            response_map: dict[str, dict] = {}
+            for entity_data in entities_data:
+                if isinstance(entity_data, dict) and 'name' in entity_data:
+                    response_map[entity_data['name'].lower()] = entity_data
+
+            for node in batch:
+                entity_data = response_map.get(node.name.lower())
+                if entity_data:
+                    original_summary = node.summary
+                    node.summary = entity_data.get('summary', node.summary)
+                    node_attributes = {
+                        k: v for k, v in entity_data.items() if k not in ('name', 'summary')
+                    }
+                    node.attributes.update(node_attributes)
+                    if node.summary and node.summary != original_summary:
+                        entity_cache.cache_summary(node.name, effective_group_id, node.summary)
+                updated_nodes.append(node)
+
+            logger.info(
+                f'Batch extracted attributes for {len(batch)} nodes '
+                f'({len(response_map)} matched) in one LLM call'
+            )
+
+        except Exception as e:
+            logger.warning(f'Batch attribute extraction failed, falling back to individual: {e}')
+            individual_results: list[EntityNode] = await semaphore_gather(
+                *[
+                    extract_attributes_from_node(
+                        llm_client,
+                        node,
+                        episode,
+                        previous_episodes,
+                        entity_types.get(
+                            next((item for item in node.labels if item != 'Entity'), '')
+                        )
+                        if entity_types is not None
+                        else None,
+                        group_id=effective_group_id,
+                        force_update=force_update,
+                    )
+                    for node in batch
+                ]
+            )
+            updated_nodes.extend(individual_results)
+
+    await create_entity_node_embeddings(embedder, updated_nodes)
     return updated_nodes
 
 
