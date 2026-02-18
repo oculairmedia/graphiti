@@ -258,6 +258,72 @@ class NodeDeduplicationSignature(dspy.Signature):
     )
 
 
+class EntitySummaryResult(BaseModel):
+    """Summary result for a single entity in a batch."""
+
+    entity_name: str = Field(..., description='Name of the entity (must match input)')
+    summary: str = Field(
+        ...,
+        description='Updated summary for the entity (under 250 words)',
+    )
+
+
+class BatchSummaries(BaseModel):
+    """Batch summary results for multiple entities."""
+
+    summaries: list[EntitySummaryResult] = Field(
+        default_factory=list,
+        description='List of summaries, one per entity in the input list',
+    )
+
+    @model_validator(mode='before')
+    @classmethod
+    def wrap_bare_list(cls, data: Any) -> Any:
+        if isinstance(data, list):
+            return {'summaries': data}
+        return data
+
+
+class BatchSummaryGenerationSignature(dspy.Signature):
+    """Generate or update summaries for multiple entities from the same message context.
+
+    You are an expert at synthesizing information about entities. For each entity listed,
+    create a concise, informative summary (under 250 words) that captures the most important facts.
+
+    BATCH RULES:
+    1. Generate exactly ONE summary per entity in the entities list
+    2. The entity_name in each result MUST exactly match the name from the input
+    3. If existing_summary is provided for an entity, UPDATE it by integrating new information
+    4. Preserve important facts from existing summaries - don't lose information
+    5. Resolve contradictions: newer information takes precedence
+
+    CONTENT GUIDELINES:
+    - Include: roles, relationships, key actions, attributes, affiliations
+    - Exclude: speculation, opinions, ephemeral details
+    - Use third person ("X is..." not "You are...")
+    - Be specific: prefer "CEO of Acme Corp since 2020" over "a business leader"
+
+    STYLE:
+    - Concise, professional prose
+    - No bullet points or lists
+    - Under 250 words per summary
+    """
+
+    previous_messages: str = dspy.InputField(desc='Previous messages for context (JSON array)')
+    current_message: str = dspy.InputField(desc='The current message containing entity information')
+    entities: str = dspy.InputField(
+        desc='JSON array of entities to summarize: [{"name": "...", "existing_summary": "..."}]'
+    )
+    task_reminder: str = dspy.InputField(
+        desc='REMINDER: Generate a summary for EACH entity in the list.',
+        default='Create/update summary for EACH entity using current_message. Under 250 words each, third person, factual. entity_name must match input exactly.',
+    )
+
+    summaries: BatchSummaries = dspy.OutputField(
+        desc='Summary for EACH entity in the input list - one per entity'
+    )
+
+
 class SummaryGenerationSignature(dspy.Signature):
     """Generate or update an entity summary based on new context.
 
@@ -299,6 +365,7 @@ DEFAULT_DOCSTRINGS: dict[str, str] = {
     'edge_extraction': EdgeExtractionSignature.__doc__ or '',
     'node_resolution': NodeDeduplicationSignature.__doc__ or '',
     'summary_generation': SummaryGenerationSignature.__doc__ or '',
+    'batch_summary_generation': BatchSummaryGenerationSignature.__doc__ or '',
 }
 
 SIGNATURE_BASE_CLASSES: dict[str, type[dspy.Signature]] = {

@@ -917,6 +917,9 @@ services:
       - ZAI_TOKENS_PER_HOUR=${ZAI_TOKENS_PER_HOUR:-1000000}
       - DSPY_COLLECT_TRAINING_DATA=${DSPY_COLLECT_TRAINING_DATA:-false}
       - DSPY_TRAINING_DATA_DIR=${DSPY_TRAINING_DATA_DIR:-/data/training_data}
+      - USE_BATCH_EXTRACTION=${USE_BATCH_EXTRACTION:-false}
+      - BATCH_EXTRACTION_SIZE=${BATCH_EXTRACTION_SIZE:-5}
+      - BATCH_EDGE_RESOLUTION_SIZE=${BATCH_EDGE_RESOLUTION_SIZE:-3}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:

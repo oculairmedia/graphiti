@@ -1565,35 +1565,143 @@ class Graphiti:
             return nodes
 
         pipeline = _get_dspy_pipeline(episode.group_id)
-
-        # Format previous episodes
         prev_messages = [{'content': ep.content} for ep in previous_episodes if ep.content]
 
-        # Generate summaries for each node
-        def run_summaries():
-            updated = []
-            for node in nodes:
-                try:
-                    result = pipeline.summary_generator(
-                        current_message=episode.content,
-                        entity_name=node.name,
-                        previous_messages=prev_messages,
-                        existing_summary=node.summary or '',
-                    )
-                    node.summary = result.summary
-                except Exception as e:
-                    logger.warning(f'DSPy summary failed for {node.name}: {e}')
-                updated.append(node)
-            return updated
+        use_batch = os.environ.get('USE_BATCH_EXTRACTION', 'false').lower() == 'true'
+        batch_size = int(os.environ.get('BATCH_EXTRACTION_SIZE', '5'))
 
-        loop = asyncio.get_event_loop()
-        updated_nodes = await loop.run_in_executor(None, run_summaries)
+        if use_batch and len(nodes) > 1:
+            updated_nodes = await self._extract_attributes_dspy_batch(
+                nodes, episode, prev_messages, pipeline, batch_size
+            )
+        else:
 
-        # Generate embeddings for the nodes
+            def run_summaries():
+                updated = []
+                for node in nodes:
+                    try:
+                        result = pipeline.summary_generator(
+                            current_message=episode.content,
+                            entity_name=node.name,
+                            previous_messages=prev_messages,
+                            existing_summary=node.summary or '',
+                        )
+                        node.summary = result.summary
+                    except Exception as e:
+                        logger.warning(f'DSPy summary failed for {node.name}: {e}')
+                    updated.append(node)
+                return updated
+
+            loop = asyncio.get_event_loop()
+            updated_nodes = await loop.run_in_executor(None, run_summaries)
+
         await create_entity_node_embeddings(self.embedder, updated_nodes)
-
         logger.info(f'DSPy generated summaries for {len(updated_nodes)} nodes')
         return updated_nodes
+
+    async def _extract_attributes_dspy_batch(
+        self,
+        nodes: list[EntityNode],
+        episode: EpisodicNode,
+        prev_messages: list[dict],
+        pipeline: Any,
+        batch_size: int,
+    ) -> list[EntityNode]:
+        """Batch extract summaries using DSPy BatchSummaryGenerationSignature."""
+        import asyncio
+        import json
+
+        import dspy
+
+        from graphiti_core.dspy.config import with_lm
+        from graphiti_core.dspy.signatures import BatchSummaries, BatchSummaryGenerationSignature
+
+        for i in range(0, len(nodes), batch_size):
+            batch = nodes[i : i + batch_size]
+
+            entities_data = [
+                {'name': node.name, 'existing_summary': node.summary or ''} for node in batch
+            ]
+
+            try:
+                entities_json = json.dumps(entities_data, indent=2)
+                prev_json = json.dumps(prev_messages, indent=2)
+                content = episode.content
+
+                def run_batch(
+                    ej: str = entities_json, c: str = content, pj: str = prev_json
+                ) -> Any:
+                    predictor = dspy.Predict(BatchSummaryGenerationSignature)
+                    with with_lm('simple'):
+                        result = predictor(
+                            previous_messages=pj,
+                            current_message=c,
+                            entities=ej,
+                        )
+                    return result.summaries
+
+                loop = asyncio.get_event_loop()
+                batch_result = await loop.run_in_executor(None, run_batch)
+
+                if isinstance(batch_result, BatchSummaries):
+                    summaries_list = batch_result.summaries
+                elif isinstance(batch_result, dict):
+                    summaries_list = BatchSummaries(**batch_result).summaries
+                elif isinstance(batch_result, list):
+                    summaries_list = batch_result
+                else:
+                    raise ValueError(f'Unexpected batch result type: {type(batch_result)}')
+
+                summary_map: dict[str, str] = {}
+                for s in summaries_list:
+                    if hasattr(s, 'entity_name'):
+                        summary_map[s.entity_name.lower()] = s.summary
+                    elif isinstance(s, dict):
+                        summary_map[s.get('entity_name', '').lower()] = s.get('summary', '')
+
+                updated_count = 0
+                for node in batch:
+                    summary = summary_map.get(node.name.lower())
+                    if summary:
+                        node.summary = summary
+                        updated_count += 1
+
+                logger.info(
+                    f'DSPy batch extracted summaries for {updated_count}/{len(batch)} nodes '
+                    f'in one LLM call'
+                )
+
+            except Exception as e:
+                logger.warning(
+                    f'DSPy batch summary extraction failed, falling back to individual: {e}'
+                )
+                cur_batch = batch
+                cur_pipeline = pipeline
+                cur_content = episode.content
+                cur_prev = prev_messages
+
+                def run_individual(
+                    b: list = cur_batch,
+                    p: Any = cur_pipeline,
+                    c: str = cur_content,
+                    pm: list = cur_prev,
+                ) -> None:
+                    for node in b:
+                        try:
+                            result = p.summary_generator(
+                                current_message=c,
+                                entity_name=node.name,
+                                previous_messages=pm,
+                                existing_summary=node.summary or '',
+                            )
+                            node.summary = result.summary
+                        except Exception as ex:
+                            logger.warning(f'DSPy summary failed for {node.name}: {ex}')
+
+                loop = asyncio.get_event_loop()
+                await loop.run_in_executor(None, run_individual)
+
+        return nodes
 
     ##### EXPERIMENTAL #####
     async def add_episode_bulk(

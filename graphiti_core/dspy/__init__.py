@@ -11,6 +11,9 @@ from graphiti_core.dspy.signatures import (
     EdgeExtractionSignature,
     NodeDeduplicationSignature,
     SummaryGenerationSignature,
+    BatchSummaryGenerationSignature,
+    BatchSummaries,
+    EntitySummaryResult,
 )
 from graphiti_core.dspy.modules import (
     NodeExtractor,
@@ -72,6 +75,9 @@ __all__ = [
     'EdgeExtractionSignature',
     'NodeDeduplicationSignature',
     'SummaryGenerationSignature',
+    'BatchSummaryGenerationSignature',
+    'BatchSummaries',
+    'EntitySummaryResult',
     # Modules
     'NodeExtractor',
     'EdgeExtractor',
