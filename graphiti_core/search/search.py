@@ -44,6 +44,8 @@ from graphiti_core.search.search_config import (
 from graphiti_core.search.search_filters import SearchFilters
 from graphiti_core.search.rust_client import rust_search
 from graphiti_core.search.search_utils import (
+    centrality_reranker,
+    community_boost_search,
     community_fulltext_search,
     community_similarity_search,
     edge_bfs_search,
@@ -87,18 +89,24 @@ async def search(
             # Convert filters to dict format for Rust service
             filters_dict = {}
             if search_filter:
-                if hasattr(search_filter, 'node_labels') and search_filter.node_labels:
-                    filters_dict['node_types'] = search_filter.node_labels
-                if hasattr(search_filter, 'edge_types') and search_filter.edge_types:
-                    filters_dict['edge_types'] = search_filter.edge_types
-                if hasattr(search_filter, 'group_ids') and search_filter.group_ids:
-                    filters_dict['group_ids'] = search_filter.group_ids
+                search_filter_data = search_filter.model_dump()
+                node_labels = search_filter_data.get('node_labels')
+                edge_types = search_filter_data.get('edge_types')
+                if node_labels:
+                    filters_dict['node_types'] = node_labels
+                if edge_types:
+                    filters_dict['edge_types'] = edge_types
+                search_filter_group_ids = search_filter_data.get('group_ids')
+                if search_filter_group_ids:
+                    filters_dict['group_ids'] = search_filter_group_ids
                 elif group_ids:
                     filters_dict['group_ids'] = group_ids
-                if hasattr(search_filter, 'created_after') and search_filter.created_after:
-                    filters_dict['created_after'] = search_filter.created_after.isoformat()
-                if hasattr(search_filter, 'created_before') and search_filter.created_before:
-                    filters_dict['created_before'] = search_filter.created_before.isoformat()
+                search_filter_created_after = search_filter_data.get('created_after')
+                if search_filter_created_after:
+                    filters_dict['created_after'] = search_filter_created_after.isoformat()
+                search_filter_created_before = search_filter_data.get('created_before')
+                if search_filter_created_before:
+                    filters_dict['created_before'] = search_filter_created_before.isoformat()
 
             # Use Rust search service
             return await rust_search(
@@ -117,6 +125,7 @@ async def search(
     driver = clients.driver
     embedder = clients.embedder
     cross_encoder = clients.cross_encoder
+    assert cross_encoder is not None
 
     if query.strip() == '':
         return SearchResults(
@@ -299,7 +308,29 @@ async def edge_search(
         source_uuids = [source_node_uuid for source_node_uuid in source_to_edge_uuid_map]
 
         reranked_node_uuids = await node_distance_reranker(
-            driver, source_uuids, center_node_uuid, min_score=reranker_min_score
+            driver,
+            source_uuids,
+            center_node_uuid,
+            min_score=reranker_min_score,
+            max_hops=config.distance_max_hops,
+        )
+
+        for node_uuid in reranked_node_uuids:
+            reranked_uuids.extend(source_to_edge_uuid_map[node_uuid])
+    elif config.reranker == EdgeReranker.centrality:
+        source_to_edge_uuid_map = defaultdict(list)
+        for edge in [
+            edge_uuid_map[uuid]
+            for uuid in rrf(
+                [[edge.uuid for edge in result] for result in search_results],
+                min_score=reranker_min_score,
+            )
+        ]:
+            source_to_edge_uuid_map[edge.source_node_uuid].append(edge.uuid)
+
+        source_uuids = list(source_to_edge_uuid_map.keys())
+        reranked_node_uuids = await centrality_reranker(
+            driver, [source_uuids], config.centrality_boost_factor, min_score=reranker_min_score
         )
 
         for node_uuid in reranked_node_uuids:
@@ -347,6 +378,15 @@ async def node_search(
                 driver, bfs_origin_node_uuids, search_filter, config.bfs_max_depth, 2 * limit
             )
         )
+    if NodeSearchMethod.community_boost in config.search_methods:
+        community_results = await community_fulltext_search(
+            driver, query, group_ids, config.community_boost_limit
+        )
+        if community_results:
+            community_uuids = [community.uuid for community in community_results]
+            search_tasks.append(
+                community_boost_search(driver, community_uuids, search_filter, group_ids, 2 * limit)
+            )
 
     # Execute only the configured search methods
     search_results: list[list[EntityNode]] = []
@@ -400,6 +440,14 @@ async def node_search(
             driver,
             rrf(search_result_uuids, min_score=reranker_min_score),
             center_node_uuid,
+            min_score=reranker_min_score,
+            max_hops=config.distance_max_hops,
+        )
+    elif config.reranker == NodeReranker.centrality:
+        reranked_uuids = await centrality_reranker(
+            driver,
+            search_result_uuids,
+            config.centrality_boost_factor,
             min_score=reranker_min_score,
         )
 

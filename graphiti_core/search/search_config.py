@@ -44,6 +44,7 @@ class NodeSearchMethod(Enum):
     bm25 = 'bm25'
     bfs = 'breadth_first_search'
     hipporag = 'hipporag'
+    community_boost = 'community_boost'
 
 
 class EpisodeSearchMethod(Enum):
@@ -61,6 +62,7 @@ class EdgeReranker(Enum):
     episode_mentions = 'episode_mentions'
     mmr = 'mmr'
     cross_encoder = 'cross_encoder'
+    centrality = 'centrality'
 
 
 class NodeReranker(Enum):
@@ -69,6 +71,7 @@ class NodeReranker(Enum):
     episode_mentions = 'episode_mentions'
     mmr = 'mmr'
     cross_encoder = 'cross_encoder'
+    centrality = 'centrality'
 
 
 class EpisodeReranker(Enum):
@@ -87,7 +90,9 @@ class EdgeSearchConfig(BaseModel):
     reranker: EdgeReranker = Field(default=EdgeReranker.rrf)
     sim_min_score: float = Field(default=DEFAULT_MIN_SCORE)
     mmr_lambda: float = Field(default=DEFAULT_MMR_LAMBDA)
+    centrality_boost_factor: float = Field(default=0.3)
     bfs_max_depth: int = Field(default=MAX_SEARCH_DEPTH)
+    distance_max_hops: int = Field(default=MAX_SEARCH_DEPTH)
     hipporag_max_hops: int = Field(default=2)
     hipporag_decay: float = Field(default=0.85)
     hipporag_seed_count: int = Field(default=10)
@@ -98,10 +103,13 @@ class NodeSearchConfig(BaseModel):
     reranker: NodeReranker = Field(default=NodeReranker.rrf)
     sim_min_score: float = Field(default=DEFAULT_MIN_SCORE)
     mmr_lambda: float = Field(default=DEFAULT_MMR_LAMBDA)
+    centrality_boost_factor: float = Field(default=0.3)
     bfs_max_depth: int = Field(default=MAX_SEARCH_DEPTH)
     hipporag_max_hops: int = Field(default=2)
     hipporag_decay: float = Field(default=0.85)
     hipporag_seed_count: int = Field(default=10)
+    community_boost_limit: int = Field(default=5)
+    distance_max_hops: int = Field(default=MAX_SEARCH_DEPTH)
 
 
 class EpisodeSearchConfig(BaseModel):

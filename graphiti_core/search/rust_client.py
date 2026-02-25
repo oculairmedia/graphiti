@@ -13,8 +13,8 @@ from uuid import UUID
 import aiohttp
 from pydantic import BaseModel, Field
 
-from graphiti_core.nodes import EntityNode
-from graphiti_core.edges import EntityEdge, EpisodicEdge
+from graphiti_core.nodes import EntityNode, EpisodicNode, EpisodeType
+from graphiti_core.edges import EntityEdge
 from graphiti_core.search.search_config import SearchConfig, SearchResults
 
 # Mapping from Python enum values to Rust-expected values
@@ -245,6 +245,7 @@ class RustSearchClient:
                     'bfs_max_depth': config.edge_config.bfs_max_depth,
                     'sim_min_score': config.edge_config.sim_min_score,
                     'mmr_lambda': config.edge_config.mmr_lambda,
+                    'centrality_boost_factor': config.edge_config.centrality_boost_factor,
                 }
                 if config.edge_config
                 else None
@@ -258,7 +259,7 @@ class RustSearchClient:
                     'bfs_max_depth': config.node_config.bfs_max_depth,
                     'sim_min_score': config.node_config.sim_min_score,
                     'mmr_lambda': config.node_config.mmr_lambda,
-                    'centrality_boost_factor': 1.0,
+                    'centrality_boost_factor': config.node_config.centrality_boost_factor,
                     'hipporag_max_hops': getattr(config.node_config, 'hipporag_max_hops', 2),
                     'hipporag_decay': getattr(config.node_config, 'hipporag_decay', 0.85),
                     'hipporag_seed_count': getattr(config.node_config, 'hipporag_seed_count', 10),
@@ -302,12 +303,13 @@ class RustSearchClient:
         """Parse edge data from JSON."""
         return EntityEdge(
             uuid=data['uuid'],
+            name=data.get('name', 'RELATES_TO'),
             source_node_uuid=data['source_node_uuid'],
             target_node_uuid=data['target_node_uuid'],
-            fact=data['fact'],
+            fact=data.get('fact', ''),
             created_at=data['created_at'],
             episodes=data.get('episodes', []),
-            group_id=data.get('group_id'),
+            group_id=data.get('group_id', 'default'),
         )
 
     def _parse_node(self, data: Dict[str, Any]) -> EntityNode:
@@ -315,21 +317,25 @@ class RustSearchClient:
         return EntityNode(
             uuid=data['uuid'],
             name=data['name'],
-            label=data['node_type'],
-            summary=data.get('summary'),
+            labels=data.get('labels', ['Entity']),
+            summary=data.get('summary', ''),
             created_at=data['created_at'],
-            group_id=data.get('group_id'),
+            group_id=data.get('group_id', 'default'),
+            attributes=data.get('attributes', {}),
         )
 
-    def _parse_episode(self, data: Dict[str, Any]) -> EpisodicEdge:
+    def _parse_episode(self, data: Dict[str, Any]) -> EpisodicNode:
         """Parse episode data from JSON."""
-        return EpisodicEdge(
+        return EpisodicNode(
             uuid=data['uuid'],
-            source_node_uuid=data.get('source_node_uuid'),
-            target_node_uuid=data.get('target_node_uuid'),
-            content=data['content'],
+            name=data.get('name', 'episode'),
+            source=EpisodeType.from_str(data.get('source', 'text')),
+            source_description=data.get('source_description', 'rust_search'),
+            content=data.get('content', '[empty]'),
+            valid_at=data.get('valid_at', data['created_at']),
+            entity_edges=data.get('entity_edges', []),
             created_at=data['created_at'],
-            group_id=data.get('group_id'),
+            group_id=data.get('group_id', 'default'),
         )
 
 

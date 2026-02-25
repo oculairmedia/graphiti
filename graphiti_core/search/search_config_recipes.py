@@ -29,6 +29,7 @@ from graphiti_core.search.search_config import (
     NodeSearchMethod,
     SearchConfig,
 )
+from graphiti_core.search.search_filters import SearchFilters  # noqa: F401
 
 # Performs a hybrid search with rrf reranking over edges, nodes, and communities
 COMBINED_HYBRID_SEARCH_RRF = SearchConfig(
@@ -197,6 +198,22 @@ NODE_HYBRID_SEARCH_CROSS_ENCODER = SearchConfig(
     limit=10,
 )
 
+# performs a hybrid search over edges with centrality reranking
+EDGE_HYBRID_SEARCH_CENTRALITY = SearchConfig(
+    edge_config=EdgeSearchConfig(
+        search_methods=[EdgeSearchMethod.bm25, EdgeSearchMethod.cosine_similarity],
+        reranker=EdgeReranker.centrality,
+    )
+)
+
+# performs a hybrid search over nodes with centrality reranking
+NODE_HYBRID_SEARCH_CENTRALITY = SearchConfig(
+    node_config=NodeSearchConfig(
+        search_methods=[NodeSearchMethod.bm25, NodeSearchMethod.cosine_similarity],
+        reranker=NodeReranker.centrality,
+    )
+)
+
 # performs a hybrid search over communities with rrf reranking
 COMMUNITY_HYBRID_SEARCH_RRF = SearchConfig(
     community_config=CommunitySearchConfig(
@@ -220,4 +237,50 @@ COMMUNITY_HYBRID_SEARCH_CROSS_ENCODER = SearchConfig(
         reranker=CommunityReranker.cross_encoder,
     ),
     limit=3,
+)
+
+# NOTE: _CURRENT recipes are meant to be used with SearchFilters.current_only()
+# The temporal filtering is applied through SearchFilters.exclude_invalidated, not SearchConfig
+
+# Same as EDGE_HYBRID_SEARCH_RRF but with temporal validity (excludes invalidated edges)
+EDGE_HYBRID_SEARCH_RRF_CURRENT = SearchConfig(
+    edge_config=EdgeSearchConfig(
+        search_methods=[EdgeSearchMethod.bm25, EdgeSearchMethod.cosine_similarity],
+        reranker=EdgeReranker.rrf,
+    )
+)
+
+# Same as COMBINED_HYBRID_SEARCH_RRF but with temporal validity
+COMBINED_HYBRID_SEARCH_RRF_CURRENT = SearchConfig(
+    edge_config=EdgeSearchConfig(
+        search_methods=[EdgeSearchMethod.bm25, EdgeSearchMethod.cosine_similarity],
+        reranker=EdgeReranker.rrf,
+    ),
+    node_config=NodeSearchConfig(
+        search_methods=[NodeSearchMethod.bm25, NodeSearchMethod.cosine_similarity],
+        reranker=NodeReranker.rrf,
+    ),
+    episode_config=EpisodeSearchConfig(
+        search_methods=[
+            EpisodeSearchMethod.bm25,
+        ],
+        reranker=EpisodeReranker.rrf,
+    ),
+    community_config=CommunitySearchConfig(
+        search_methods=[CommunitySearchMethod.bm25, CommunitySearchMethod.cosine_similarity],
+        reranker=CommunityReranker.rrf,
+    ),
+)
+
+
+# performs a hybrid search over nodes with community boost and rrf reranking
+NODE_HYBRID_SEARCH_COMMUNITY_BOOSTED = SearchConfig(
+    node_config=NodeSearchConfig(
+        search_methods=[
+            NodeSearchMethod.bm25,
+            NodeSearchMethod.cosine_similarity,
+            NodeSearchMethod.community_boost,
+        ],
+        reranker=NodeReranker.rrf,
+    )
 )

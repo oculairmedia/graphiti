@@ -511,6 +511,71 @@ async def node_bfs_search(
     return nodes
 
 
+async def community_boost_search(
+    driver: GraphDriver,
+    community_uuids: list[str],
+    search_filter: SearchFilters,
+    group_ids: list[str] | None,
+    limit: int = 20,
+) -> list[EntityNode]:
+    """Fetch member entities from matched communities.
+
+    When communities are found via community search, this retrieves their
+    member entities to inject into node search results.
+
+    Args:
+        driver: Graph database driver
+        community_uuids: UUIDs of communities to expand
+        search_filter: Search filters to apply to member entities
+        group_ids: Group IDs to filter by
+        limit: Maximum number of member entities to return
+    """
+    if not community_uuids:
+        return []
+
+    node_filter_query, node_filter_params = node_search_filter_query_constructor(search_filter)
+
+    group_filter = ''
+    if group_ids:
+        group_filter = '\nAND n.group_id IN $group_ids'
+
+    query = (
+        'UNWIND $community_uuids AS community_uuid '
+        'MATCH (c:Community {uuid: community_uuid})-[:HAS_MEMBER]->(n:Entity) '
+        'WHERE true ' + node_filter_query + group_filter + ' '
+        'RETURN DISTINCT n.uuid AS uuid, n.name AS name, n.group_id AS group_id, '
+        'n.labels AS labels, n.created_at AS created_at, n.summary AS summary '
+        'LIMIT $limit'
+    )
+
+    params = {
+        'community_uuids': community_uuids,
+        'limit': limit,
+        **node_filter_params,
+    }
+    if group_ids:
+        params['group_ids'] = group_ids
+
+    results, _, _ = await driver.execute_query(query, **params, routing_='r')
+
+    nodes = []
+    for result in results:
+        try:
+            node = EntityNode(
+                uuid=result['uuid'],
+                name=result['name'],
+                group_id=result['group_id'],
+                labels=result.get('labels', []),
+                created_at=result['created_at'],
+                summary=result.get('summary', ''),
+            )
+            nodes.append(node)
+        except Exception:
+            continue
+
+    return nodes
+
+
 async def episode_fulltext_search(
     driver: GraphDriver,
     query: str,
@@ -1039,43 +1104,129 @@ async def node_distance_reranker(
     node_uuids: list[str],
     center_node_uuid: str,
     min_score: float = 0,
+    max_hops: int = MAX_SEARCH_DEPTH,
 ) -> list[str]:
-    # filter out node_uuid center node node uuid
-    filtered_uuids = list(filter(lambda node_uuid: node_uuid != center_node_uuid, node_uuids))
-    scores: dict[str, float] = {center_node_uuid: 0.0}
+    """Rerank nodes by shortest path distance to a center node.
 
-    # Find the shortest path to center node
-    query = """
-        UNWIND $node_uuids AS node_uuid
-        MATCH (center:Entity {uuid: $center_uuid})-[:RELATES_TO]-(n:Entity {uuid: node_uuid})
-        RETURN 1 AS score, node_uuid AS uuid
-        """
-    results, header, _ = await driver.execute_query(
-        query,
-        node_uuids=filtered_uuids,
-        center_uuid=center_node_uuid,
-        routing_='r',
-    )
-    results = [dict(zip(header, row, strict=True)) for row in results]
+    Uses FalkorDB shortestPath() to compute actual multi-hop distances
+    rather than only checking direct (1-hop) neighbors.
 
-    for result in results:
-        uuid = result['uuid']
-        score = result['score']
-        scores[uuid] = score
+    Args:
+        driver: Graph database driver
+        node_uuids: Flat list of candidate node UUIDs to rerank
+        center_node_uuid: UUID of the center/anchor node
+        min_score: Minimum score threshold (score = 1/(distance+1))
+        max_hops: Maximum traversal depth for shortest path (default 3)
 
+    Returns:
+        List of node UUIDs sorted by ascending distance from center node
+    """
+    # Filter out center node from candidates
+    filtered_uuids = [uuid for uuid in node_uuids if uuid != center_node_uuid]
+    distances: dict[str, float] = {center_node_uuid: 0.0}
+
+    if filtered_uuids:
+        # Use shortestPath for multi-hop distance calculation
+        # FalkorDB requires directed traversal, so we try both directions
+        # max_hops must be interpolated into the query string (not a parameter)
+        # because FalkorDB shortestPath range is a static syntax element
+        hops = int(max_hops)
+        query = (
+            'UNWIND $node_uuids AS node_uuid '
+            'MATCH (center:Entity {uuid: $center_uuid}), (n:Entity {uuid: node_uuid}) '
+            'WITH center, n, node_uuid '
+            f'OPTIONAL MATCH p = shortestPath((center)-[*..{hops}]->(n)) '
+            f'OPTIONAL MATCH p2 = shortestPath((n)-[*..{hops}]->(center)) '
+            'WITH node_uuid, '
+            'CASE WHEN p IS NOT NULL THEN length(p) ELSE -1 END AS dist_forward, '
+            'CASE WHEN p2 IS NOT NULL THEN length(p2) ELSE -1 END AS dist_reverse '
+            'WITH node_uuid, '
+            'CASE '
+            'WHEN dist_forward >= 0 AND dist_reverse >= 0 '
+            'THEN CASE WHEN dist_forward <= dist_reverse THEN dist_forward ELSE dist_reverse END '
+            'WHEN dist_forward >= 0 THEN dist_forward '
+            'WHEN dist_reverse >= 0 THEN dist_reverse '
+            'ELSE -1 '
+            'END AS distance '
+            'RETURN node_uuid AS uuid, distance'
+        )
+        results, _, _ = await driver.execute_query(
+            query,
+            node_uuids=filtered_uuids,
+            center_uuid=center_node_uuid,
+            routing_='r',
+        )
+
+        for result in results:
+            uuid = result['uuid']
+            dist = result['distance']
+            if dist >= 0:
+                distances[uuid] = float(dist)
+            else:
+                distances[uuid] = float('inf')
+
+    # Assign infinity to any UUIDs not returned by query
     for uuid in filtered_uuids:
-        if uuid not in scores:
-            scores[uuid] = float('inf')
+        if uuid not in distances:
+            distances[uuid] = float('inf')
 
-    # rerank on shortest distance
-    filtered_uuids.sort(key=lambda cur_uuid: scores[cur_uuid])
+    # Sort by ascending distance
+    filtered_uuids.sort(key=lambda cur_uuid: distances[cur_uuid])
 
-    # add back in filtered center uuid if it was filtered out
+    # Add center node back at front if it was in the original list
     if center_node_uuid in node_uuids:
-        scores[center_node_uuid] = 0.1
         filtered_uuids = [center_node_uuid] + filtered_uuids
 
-    return [uuid for uuid in filtered_uuids if (1 / scores[uuid]) >= min_score]
+    # Score = 1/(distance+1): center=1.0, 1-hop=0.5, 2-hop=0.33, etc.
+    return [
+        uuid
+        for uuid in filtered_uuids
+        if (1.0 / (distances.get(uuid, float('inf')) + 1)) >= min_score
+    ]
+
+
+async def centrality_reranker(
+    driver: GraphDriver,
+    node_uuids: list[list[str]],
+    boost_factor: float = 0.3,
+    min_score: float = 0,
+) -> list[str]:
+    """Rerank nodes by combining RRF rank with stored centrality importance."""
+    rrf_ranked = rrf(node_uuids)
+
+    if not rrf_ranked:
+        return []
+
+    query = """
+        UNWIND $node_uuids AS node_uuid
+        MATCH (n:Entity {uuid: node_uuid})
+        RETURN n.uuid AS uuid,
+               coalesce(n.centrality_importance, 0.0) AS importance,
+               coalesce(n.centrality_pagerank, 0.0) AS pagerank,
+               coalesce(n.centrality_degree, 0) AS degree
+    """
+    results, _, _ = await driver.execute_query(
+        query,
+        node_uuids=rrf_ranked,
+        routing_='r',
+    )
+
+    centrality_scores: dict[str, float] = {}
+    for result in results:
+        uuid = result['uuid']
+        importance = float(result['importance'])
+        centrality_scores[uuid] = importance
+
+    combined_scores: dict[str, float] = {}
+    for rank, uuid in enumerate(rrf_ranked):
+        rrf_score = 1.0 / (rank + 1)
+        centrality_score = centrality_scores.get(uuid, 0.0)
+        combined = (1 - boost_factor) * rrf_score + boost_factor * centrality_score
+        combined_scores[uuid] = combined
+
+    sorted_uuids = sorted(combined_scores.keys(), key=lambda u: combined_scores[u], reverse=True)
+
+    return [uuid for uuid in sorted_uuids if combined_scores[uuid] >= min_score]
 
 
 async def episode_mentions_reranker(

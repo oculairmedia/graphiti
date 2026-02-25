@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
+import os
 from datetime import datetime
 from enum import Enum
 from typing import Any
@@ -48,6 +49,15 @@ class SearchFilters(BaseModel):
     invalid_at: list[list[DateFilter]] | None = Field(default=None)
     created_at: list[list[DateFilter]] | None = Field(default=None)
     expired_at: list[list[DateFilter]] | None = Field(default=None)
+    exclude_invalidated: bool = Field(
+        default=False,
+        description='When True, exclude edges that have been invalidated (invalid_at is set)',
+    )
+
+    @classmethod
+    def current_only(cls, **kwargs) -> 'SearchFilters':
+        """Create a SearchFilters that excludes invalidated/contradicted edges."""
+        return cls(exclude_invalidated=True, **kwargs)
 
 
 def node_search_filter_query_constructor(
@@ -180,5 +190,17 @@ def edge_search_filter_query_constructor(
                 expired_at_filter += ' OR '
 
         filter_query += expired_at_filter
+
+    # Auto-exclude invalidated edges when requested or when env var is set
+    _exclude_invalidated = filters.exclude_invalidated
+    if not _exclude_invalidated:
+        _exclude_invalidated = os.getenv('SEARCH_EXCLUDE_INVALIDATED', 'false').lower() in (
+            'true',
+            '1',
+            'yes',
+        )
+
+    if _exclude_invalidated:
+        filter_query += '\nAND r.invalid_at IS NULL'
 
     return filter_query, filter_params

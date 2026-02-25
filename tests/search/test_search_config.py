@@ -107,7 +107,7 @@ class TestEdgeReranker:
 
     def test_all_rerankers_defined(self):
         rerankers = list(EdgeReranker)
-        assert len(rerankers) == 5
+        assert len(rerankers) == 6
 
 
 class TestNodeReranker:
