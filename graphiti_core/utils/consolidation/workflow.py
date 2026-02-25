@@ -12,11 +12,13 @@ common = importlib.import_module('temporalio.common')
 with workflow.unsafe.imports_passed_through():
     from graphiti_core.utils.consolidation.activities import (
         ConsolidationResult,
+        EnrichResult,
         GraphMetrics,
         MergeResult,
         PruneResult,
     )
     from graphiti_core.utils.consolidation.config import ConsolidationConfig
+    from graphiti_core.utils.consolidation.semantic_dedup import SemanticDedupResult
 
 _CONSOLIDATION_CONFIG = ConsolidationConfig.from_env()
 
@@ -122,6 +124,54 @@ class GraphConsolidationWorkflow:
         )
         prune_results.append(post_merge_orphan_result)
 
+        enrich_results: list[dict[str, Any]] = []
+
+        summary_result: dict[str, Any] = await workflow.execute_activity(
+            'regenerate_entity_summaries',
+            args=[input.batch_size],
+            start_to_close_timeout=timedelta(hours=1),
+            task_queue=_CONSOLIDATION_CONFIG.task_queue,
+            retry_policy=retry_policy,
+        )
+        enrich_results.append(summary_result)
+
+        embedding_result: dict[str, Any] = await workflow.execute_activity(
+            'backfill_entity_embeddings',
+            args=[input.batch_size],
+            start_to_close_timeout=timedelta(minutes=30),
+            task_queue=_CONSOLIDATION_CONFIG.task_queue,
+            retry_policy=retry_policy,
+        )
+        enrich_results.append(embedding_result)
+
+        semantic_dedup_result: dict[str, Any] = await workflow.execute_activity(
+            'semantic_entity_dedup',
+            args=[],
+            start_to_close_timeout=timedelta(hours=2),
+            task_queue=_CONSOLIDATION_CONFIG.task_queue,
+            retry_policy=retry_policy,
+        )
+        enrich_results.append(semantic_dedup_result)
+
+        # Post-semantic-dedup prune: semantic merges can create new orphans
+        post_dedup_orphan_result: dict[str, Any] = await workflow.execute_activity(
+            'prune_orphaned_nodes',
+            args=[input.batch_size],
+            start_to_close_timeout=timedelta(minutes=30),
+            task_queue=_CONSOLIDATION_CONFIG.task_queue,
+            retry_policy=retry_policy,
+        )
+        prune_results.append(post_dedup_orphan_result)
+
+        centrality_result: dict[str, Any] = await workflow.execute_activity(
+            'recalculate_centrality',
+            args=[],
+            start_to_close_timeout=timedelta(hours=1),
+            task_queue=_CONSOLIDATION_CONFIG.task_queue,
+            retry_policy=retry_policy,
+        )
+        enrich_results.append(centrality_result)
+
         # === COLLECT POST-METRICS ===
 
         post_metrics_data: dict[str, Any] = await workflow.execute_activity(
@@ -141,6 +191,7 @@ class GraphConsolidationWorkflow:
             post_metrics=post_metrics_data,
             prune_results=prune_results,
             merge_results=merge_results,
+            enrich_results=enrich_results,
             total_duration_ms=total_duration_ms,
         )
 

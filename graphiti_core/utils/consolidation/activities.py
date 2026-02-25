@@ -78,6 +78,15 @@ class MergeResult:
 
 
 @dataclass
+class EnrichResult:
+    processed_count: int
+    updated_count: int
+    category: str  # 'entity_summaries', 'entity_embeddings', 'centrality'
+    details: dict[str, Any]
+    duration_ms: int
+
+
+@dataclass
 class ConsolidationResult:
     run_id: str
     started_at: str
@@ -86,7 +95,9 @@ class ConsolidationResult:
     post_metrics: dict[str, Any]
     prune_results: list[dict[str, Any]]
     merge_results: list[dict[str, Any]]
+    enrich_results: list[dict[str, Any]]
     total_duration_ms: int
+
 
 class ConsolidationActivities:
     def __init__(self, graphiti_factory):
@@ -316,7 +327,10 @@ class ConsolidationActivities:
                 total_deleted += stats.get('nodes_deleted', 0) if 'nodes_deleted' in stats else 1
                 logger.info(
                     'Merged IS_DUPLICATE_OF: %s (%s) -> %s (%s), edges=%d',
-                    dup_uuid, dup_name, canon_uuid, canon_name,
+                    dup_uuid,
+                    dup_name,
+                    canon_uuid,
+                    canon_name,
                     stats.get('edges_transferred', 0),
                 )
             except Exception as e:
@@ -413,12 +427,17 @@ class ConsolidationActivities:
                         total_merged += 1
                         total_edges_transferred += stats.get('edges_transferred', 0)
                         total_conflicts += stats.get('conflicts_resolved', 0)
-                        total_deleted += stats.get('nodes_deleted', 0) if 'nodes_deleted' in stats else 1
+                        total_deleted += (
+                            stats.get('nodes_deleted', 0) if 'nodes_deleted' in stats else 1
+                        )
                     except Exception as e:
                         total_failed += 1
                         logger.error(
                             'Failed to merge %s into %s (name=%s): %s',
-                            dup_uuid, canonical_uuid, lname, e,
+                            dup_uuid,
+                            canonical_uuid,
+                            lname,
+                            e,
                         )
 
                 groups_processed += 1
@@ -434,6 +453,155 @@ class ConsolidationActivities:
             failed_merges=total_failed,
             category='same_name_entities',
             details={'groups_processed': groups_processed, 'batch_size': batch_size},
+            duration_ms=duration_ms,
+        )
+
+    @activity.defn
+    async def regenerate_entity_summaries(self, batch_size: int = 50) -> EnrichResult:
+        """Regenerate summaries for entities with missing or empty summaries.
+
+        For each entity, gathers connected RELATES_TO edge facts and uses LLM
+        to generate a contextual summary.
+        """
+        start = time()
+        graphiti = await self._get_graphiti()
+        driver = graphiti.driver
+        llm_client = graphiti.llm_client
+
+        total_processed = 0
+        total_updated = 0
+
+        while True:
+            records, _, _ = await driver.execute_query(
+                'MATCH (n:Entity) '
+                "WHERE n.summary IS NULL OR n.summary = '' "
+                'WITH n LIMIT $batch_size '
+                'OPTIONAL MATCH (n)-[r:RELATES_TO]-() '
+                'WITH n, collect(DISTINCT r.fact) AS facts '
+                'RETURN n.uuid AS uuid, n.name AS name, n.labels AS labels, facts',
+                batch_size=batch_size,
+            )
+
+            if not records:
+                break
+
+            for record in records:
+                total_processed += 1
+                uuid = record['uuid']
+                name = record['name']
+                labels = record.get('labels', [])
+                facts = [f for f in (record.get('facts') or []) if f]
+
+                if not facts:
+                    summary = f'{name}'
+                    logger.debug('Entity %s has no connected facts, using name as summary', name)
+                else:
+                    facts_text = '; '.join(facts[:20])
+                    prompt = (
+                        f'Generate a concise summary (under 200 words) for the entity "{name}" '
+                        f'(type: {", ".join(labels) if labels else "unknown"}) based on these known facts:\n\n'
+                        f'{facts_text}\n\n'
+                        f'Focus on the most important information. Be factual and concise.'
+                    )
+
+                    try:
+                        from graphiti_core.llm_client.config import ModelSize
+
+                        response = await llm_client.generate_response(
+                            prompt, model_size=ModelSize.small
+                        )
+                        summary = str(response) if response else name
+                        if len(summary) > 2000:
+                            summary = summary[:2000]
+                    except Exception as e:
+                        logger.warning('LLM summary generation failed for %s: %s', name, e)
+                        summary = name
+
+                await driver.execute_query(
+                    'MATCH (n:Entity {uuid: $uuid}) SET n.summary = $summary',
+                    uuid=uuid,
+                    summary=summary,
+                )
+                total_updated += 1
+
+        duration_ms = int((time() - start) * 1000)
+        return EnrichResult(
+            processed_count=total_processed,
+            updated_count=total_updated,
+            category='entity_summaries',
+            details={'batch_size': batch_size},
+            duration_ms=duration_ms,
+        )
+
+    @activity.defn
+    async def backfill_entity_embeddings(self, batch_size: int = 100) -> EnrichResult:
+        """Backfill name_embedding for entities that are missing them."""
+        start = time()
+        graphiti = await self._get_graphiti()
+        driver = graphiti.driver
+        embedder = graphiti.embedder
+
+        total_processed = 0
+        total_updated = 0
+
+        while True:
+            records, _, _ = await driver.execute_query(
+                'MATCH (n:Entity) WHERE n.name_embedding IS NULL '
+                'RETURN n.uuid AS uuid, n.name AS name '
+                'LIMIT $batch_size',
+                batch_size=batch_size,
+            )
+
+            if not records:
+                break
+
+            names = [r['name'] for r in records]
+            uuids = [r['uuid'] for r in records]
+            total_processed += len(records)
+
+            try:
+                embeddings = await embedder.create_batch(names)
+
+                for uuid, embedding in zip(uuids, embeddings):
+                    embedding_str = ','.join(str(v) for v in embedding)
+                    await driver.execute_query(
+                        f'MATCH (n:Entity {{uuid: $uuid}}) SET n.name_embedding = vecf32([{embedding_str}])',
+                        uuid=uuid,
+                    )
+                    total_updated += 1
+            except Exception as e:
+                logger.error('Embedding backfill batch failed: %s', e)
+
+        duration_ms = int((time() - start) * 1000)
+        return EnrichResult(
+            processed_count=total_processed,
+            updated_count=total_updated,
+            category='entity_embeddings',
+            details={'batch_size': batch_size},
+            duration_ms=duration_ms,
+        )
+
+    @activity.defn
+    async def recalculate_centrality(self) -> EnrichResult:
+        """Recalculate all centrality metrics (PageRank, degree, betweenness, importance)."""
+        start = time()
+        graphiti = await self._get_graphiti()
+        driver = graphiti.driver
+
+        from graphiti_core.utils.maintenance.centrality_operations import calculate_all_centralities
+
+        scores = await calculate_all_centralities(
+            driver=driver,
+            group_id=None,
+            store_results=True,
+        )
+
+        duration_ms = int((time() - start) * 1000)
+        return EnrichResult(
+            processed_count=len(scores),
+            updated_count=len(scores),
+            category='centrality',
+            details={'metrics': ['pagerank', 'degree', 'betweenness', 'importance']},
             duration_ms=duration_ms,
         )
 
@@ -461,12 +629,18 @@ class ConsolidationActivities:
                 total_merged += int(merge_result.get('merged_count', 0) or 0)
                 total_edges_transferred += int(merge_result.get('edges_transferred', 0) or 0)
 
+        enrich_results = result_data.get('enrich_results', [])
+        total_enriched = 0
+        for enrich_result in enrich_results:
+            if isinstance(enrich_result, dict):
+                total_enriched += int(enrich_result.get('updated_count', 0) or 0)
+
         await prompts_driver.execute_query(
             'CREATE (r:ConsolidationReport { '
             'run_id: $run_id, started_at: $started_at, completed_at: $completed_at, '
             'pre_entity_nodes: $pre_entity_nodes, post_entity_nodes: $post_entity_nodes, '
             'pre_total_edges: $pre_total_edges, post_total_edges: $post_total_edges, '
-            'total_pruned: $total_pruned, total_merged: $total_merged, '
+            'total_pruned: $total_pruned, total_merged: $total_merged, total_enriched: $total_enriched, '
             'total_edges_transferred: $total_edges_transferred, '
             'total_duration_ms: $total_duration_ms })',
             run_id=str(result_data.get('run_id', '')),
@@ -478,6 +652,7 @@ class ConsolidationActivities:
             post_total_edges=int(post_metrics.get('total_edges', 0) or 0),
             total_pruned=total_pruned,
             total_merged=total_merged,
+            total_enriched=total_enriched,
             total_edges_transferred=total_edges_transferred,
             total_duration_ms=int(result_data.get('total_duration_ms', 0) or 0),
         )

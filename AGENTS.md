@@ -878,6 +878,11 @@ Temporal Schedule (3 AM UTC daily)
        ├─ merge_duplicate_of_edges      ← Phase 2
        ├─ merge_same_name_entities      ← Phase 2
        ├─ prune_orphaned_nodes (post-merge)
+       ├─ regenerate_entity_summaries   ← Phase 3
+       ├─ backfill_entity_embeddings    ← Phase 3
+       ├─ semantic_entity_dedup         ← Phase 3
+       ├─ prune_orphaned_nodes (post-dedup)
+       ├─ recalculate_centrality        ← Phase 3
        ├─ collect_metrics (post-snapshot)
        └─ store_consolidation_report
 ```
@@ -885,8 +890,24 @@ Temporal Schedule (3 AM UTC daily)
 **Worker**: `graphiti-temporal-consolidation-worker` (Prometheus metrics on port 9196)
 **Temporal UI**: http://192.168.50.90:8080 (namespace: `graphiti`, search for `consolidation-`)
 
+**Phase 3 — ENRICH (Feb 2026):**
+
+7. **Regenerates entity summaries** — Finds entities with NULL/empty summaries, gathers connected RELATES_TO edge facts, uses LLM to generate summaries
+8. **Backfills entity embeddings** — Safety net for entities with NULL `name_embedding`, stores as vecf32
+9. **Semantic entity dedup** — Batch iterates entities, uses HNSW vector index on `name_embedding` for cosine similarity (threshold 0.92), selects canonical (most edges → longest summary → earliest created_at), merges via `merge_node_into()`
+10. **Post-dedup orphan prune** — Cleans up entities orphaned by edge reassignment during semantic merge
+11. **Recalculates centrality** — Calls `calculate_all_centralities(driver, store_results=True)` for full PageRank, degree, and betweenness recalc across entire graph
+
+**Semantic Dedup Details:**
+- Default similarity threshold: 0.92 (conservative, tune based on observed results)
+- Uses `processed_uuids` set to avoid double-processing
+- Canonical selection: most edges → longest summary → earliest `created_at` (same as Phase 2 name merge)
+- `merge_node_into()` with `allow_cross_graph_merge=True`
+- `SemanticDedupActivities` registered as separate activity class in consolidation worker
+- First run data (Feb 2026): 160 entities needed summaries, 12,137 needed centrality, semantic dedup results TBD
+
 **Future Phases (planned):**
-- Phase 3 (ENRICH): Regenerate summaries for merged entities, backfill embeddings, recalculate centrality, semantic entity dedup via embeddings
+- Phase 4: Community refresh, edge quality scoring, knowledge graph enrichment from external sources
 
 ---
 

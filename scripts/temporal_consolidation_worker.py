@@ -104,6 +104,7 @@ async def main() -> None:
 
     from graphiti_core.utils.consolidation.activities import ConsolidationActivities
     from graphiti_core.utils.consolidation.workflow import GraphConsolidationWorkflow
+    from graphiti_core.utils.consolidation.semantic_dedup import SemanticDedupActivities
 
     Client = temporalio_client.Client
     Worker = temporalio_worker.Worker
@@ -115,6 +116,7 @@ async def main() -> None:
     client = await Client.connect(temporal_address, **connect_kwargs)
 
     activities_instance = ConsolidationActivities(_create_graphiti)
+    semantic_dedup_instance = SemanticDedupActivities(_create_graphiti)
     activities = [
         activities_instance.collect_metrics,
         activities_instance.prune_orphaned_nodes,
@@ -123,7 +125,11 @@ async def main() -> None:
         activities_instance.prune_invalidated_edges,
         activities_instance.merge_duplicate_of_edges,
         activities_instance.merge_same_name_entities,
+        activities_instance.regenerate_entity_summaries,
+        activities_instance.backfill_entity_embeddings,
+        activities_instance.recalculate_centrality,
         activities_instance.store_consolidation_report,
+        semantic_dedup_instance.semantic_entity_dedup,
     ]
 
     logger.info(
