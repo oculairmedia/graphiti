@@ -135,7 +135,13 @@ def normalize_entity_name(name: str) -> str:
 
     stripped = name.strip()
 
-    if '/' in stripped or stripped.startswith('/opt/') or stripped.startswith('C:'):
+    # Detect file paths: absolute paths, Windows paths, or relative paths with file extensions
+    is_path = (
+        stripped.startswith('/')
+        or bool(re.match(r'^[A-Za-z]:[/\\]', stripped))
+        or ('/' in stripped and bool(re.search(r'\.\w{1,10}$', stripped)))
+    )
+    if is_path:
         return stripped.replace('\\', '/').rstrip('/')
 
     normalized = stripped.lower()

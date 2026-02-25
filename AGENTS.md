@@ -645,7 +645,7 @@ candidate → failed (if evaluation fails)
 
 ## Temporal Integration
 
-Graphiti supports two modes of Temporal integration:
+Graphiti supports three modes of Temporal integration:
 
 ### 1. Temporal Visibility (Observability Only)
 
@@ -790,6 +790,103 @@ Queue → graphiti-worker → Temporal Workflow → Activities → FalkorDB
 - Set appropriate timeouts (startToCloseTimeout, scheduleToCloseTimeout)
 
 Full implementation guide will be added to this file once infrastructure is complete (graphiti-37d).
+
+
+### 3. Graph Consolidation ("Graph Sleep")
+
+**Status**: Production-ready (Feb 2026). Scheduled background pipeline that prunes noise, merges duplicate entities, and tracks quality metrics.
+
+The consolidation system runs nightly as a Temporal workflow, gradually improving graph quality — like biological memory consolidation during sleep.
+
+**Environment Variables:**
+
+```bash
+TEMPORAL_CONSOLIDATION_TASK_QUEUE=graphiti-consolidation
+TEMPORAL_CONSOLIDATION_MAX_ACTIVITIES=2
+```
+
+**Enable:**
+
+```bash
+docker compose --profile temporal-consolidation up -d graphiti-temporal-consolidation-worker
+```
+
+**Manual Trigger:**
+
+```bash
+# One-off consolidation run
+python3 scripts/schedule_consolidation.py --once
+
+# Custom retention (default 90 days) and batch size
+python3 scripts/schedule_consolidation.py --once --retention-days 60 --batch-size 200
+
+# Create nightly schedule (3 AM UTC)
+python3 scripts/schedule_consolidation.py --schedule
+
+# Custom cron schedule
+python3 scripts/schedule_consolidation.py --schedule --cron "0 5 * * *"
+
+# Delete schedule
+python3 scripts/schedule_consolidation.py --delete-schedule
+```
+
+**What It Does:**
+
+**Phase 1 — PRUNE:**
+
+1. **Collects pre-metrics** — snapshot of graph quality (node/edge counts, orphans, duplicates)
+2. **Prunes orphaned entities** — Entity nodes with zero edges
+3. **Prunes junk entities** — Generic names ("medium", "high", "priority", etc.) with ≤2 edges
+4. **Prunes old episodic nodes** — Episodic nodes older than retention period (default 90 days), detaches MENTIONS edges
+5. **Prunes invalidated edges** — RELATES_TO edges with `invalid_at` set (contradicted facts)
+
+**Phase 2 — MERGE (Feb 2026):**
+
+6. **Merges IS_DUPLICATE_OF edges** — Resolves pre-existing duplicate relationships by merging duplicate into canonical node
+7. **Merges same-name entities** — Case-insensitive name grouping, selects canonical (most edges → longest summary → earliest created_at), merges duplicates via `merge_node_into()`
+8. **Post-merge orphan prune** — Cleans up entities orphaned by edge reassignment during merge
+
+**Phase 3 — REPORT:**
+
+9. **Collects post-metrics** — snapshot for comparison
+10. **Stores consolidation report** — `ConsolidationReport` node in `graphiti_prompts` graph
+
+**Merge Mechanics:**
+- Uses existing `merge_node_into()` from `node_operations.py` — transfers all edges (incoming + outgoing), merges edge properties, deletes duplicate
+- Canonical selection: most connected node wins (tie-break: longest summary, then earliest creation date)
+- Self-healing: failures ("canonical not found") are logged and retried on next nightly run
+- Centrality recalculation deferred (planned for Phase 3 ENRICH)
+- First run (Feb 2026): merged 721 entities, transferred 2,669 edges, reduced graph from 12,715 → 11,924 nodes
+
+**Consolidation Reports:**
+
+```bash
+# View all consolidation reports
+redis-cli -p 6379 GRAPH.QUERY graphiti_prompts "MATCH (r:ConsolidationReport) RETURN r.run_id, r.started_at, r.total_pruned, r.total_merged, r.pre_entity_nodes, r.post_entity_nodes ORDER BY r.started_at DESC" --csv
+```
+
+**Architecture:**
+
+```
+Temporal Schedule (3 AM UTC daily)
+  └─ GraphConsolidationWorkflow
+       ├─ collect_metrics (pre-snapshot)
+       ├─ prune_orphaned_nodes
+       ├─ prune_junk_entities
+       ├─ prune_old_episodic_nodes
+       ├─ prune_invalidated_edges
+       ├─ merge_duplicate_of_edges      ← Phase 2
+       ├─ merge_same_name_entities      ← Phase 2
+       ├─ prune_orphaned_nodes (post-merge)
+       ├─ collect_metrics (post-snapshot)
+       └─ store_consolidation_report
+```
+
+**Worker**: `graphiti-temporal-consolidation-worker` (Prometheus metrics on port 9196)
+**Temporal UI**: http://192.168.50.90:8080 (namespace: `graphiti`, search for `consolidation-`)
+
+**Future Phases (planned):**
+- Phase 3 (ENRICH): Regenerate summaries for merged entities, backfill embeddings, recalculate centrality, semantic entity dedup via embeddings
 
 ---
 

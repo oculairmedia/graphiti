@@ -1015,6 +1015,53 @@ services:
         condition: service_healthy
     profiles: ["temporal-monitoring"]
 
+  graphiti-temporal-consolidation-worker:
+    image: ghcr.io/oculairmedia/graphiti-worker:main
+    restart: unless-stopped
+    command:
+      - /bin/bash
+      - -c
+      - |
+        pip install --quiet temporalio 2>/dev/null
+        python -u /scripts/temporal_consolidation_worker.py
+    ports:
+      - "9196:9196"
+    volumes:
+      - ./scripts:/scripts:ro
+      - ./graphiti_core:/app/graphiti_core:ro
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - TEMPORAL_VISIBILITY_ADDRESS=${TEMPORAL_VISIBILITY_ADDRESS:-192.168.50.90:7233}
+      - TEMPORAL_VISIBILITY_NAMESPACE=${TEMPORAL_VISIBILITY_NAMESPACE:-graphiti}
+      - TEMPORAL_CONSOLIDATION_TASK_QUEUE=${TEMPORAL_CONSOLIDATION_TASK_QUEUE:-graphiti-consolidation}
+      - TEMPORAL_CONSOLIDATION_MAX_ACTIVITIES=${TEMPORAL_CONSOLIDATION_MAX_ACTIVITIES:-2}
+      - TEMPORAL_MAX_CONCURRENT_WORKFLOW_TASKS=${TEMPORAL_MAX_CONCURRENT_WORKFLOW_TASKS:-1}
+      - TEMPORAL_MAX_CONCURRENT_LOCAL_ACTIVITIES=${TEMPORAL_MAX_CONCURRENT_LOCAL_ACTIVITIES:-2}
+      - TEMPORAL_METRICS_ENABLED=${TEMPORAL_METRICS_ENABLED:-true}
+      - TEMPORAL_METRICS_PORT=9196
+      - FALKORDB_HOST=${FALKORDB_HOST:-falkordb}
+      - FALKORDB_PORT=${FALKORDB_PORT:-6379}
+      - FALKORDB_DATABASE=${FALKORDB_DATABASE:-graphiti_migration}
+      - USE_DSPY=${USE_DSPY:-false}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-sk-dummy}
+      - USE_OLLAMA=${USE_OLLAMA:-true}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://192.168.50.90:8082/v1}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-haiku-4-5}
+      - OLLAMA_EMBEDDING_MODEL=${OLLAMA_EMBEDDING_MODEL:-dengcao/Qwen3-Embedding-4B:Q4_K_M}
+      - EMBEDDING_DIMENSION=${EMBEDDING_DIMENSION:-2560}
+      - USE_OLLAMA_EMBEDDINGS=${USE_OLLAMA_EMBEDDINGS:-true}
+      - USE_DEDICATED_EMBEDDING_ENDPOINT=${USE_DEDICATED_EMBEDDING_ENDPOINT:-true}
+      - OLLAMA_EMBEDDING_BASE_URL=${OLLAMA_EMBEDDING_BASE_URL:-http://192.168.50.80:11434/v1}
+      - OLLAMA_EMBEDDING_API_KEY=${OLLAMA_EMBEDDING_API_KEY:-ollama}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - graphiti_network
+    depends_on:
+      falkordb:
+        condition: service_healthy
+    profiles: ["temporal-consolidation"]
+
   # =============================================================================
   # Reverse Proxy and Load Balancing
   # =============================================================================
@@ -1066,6 +1113,8 @@ services:
     restart: unless-stopped
     ports:
       - ${FRONTEND_PORT:-8084}:80
+    volumes:
+      - ./frontend/nginx.conf:/etc/nginx/nginx.conf:ro
     environment:
       - NODE_ENV=production
       - VITE_API_BASE_URL=http://graph-visualizer-rust:3000
