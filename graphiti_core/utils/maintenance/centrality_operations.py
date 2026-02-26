@@ -15,6 +15,8 @@ limitations under the License.
 """
 
 import asyncio
+import random
+from collections import defaultdict, deque
 import logging
 import math
 import os
@@ -111,37 +113,50 @@ async def calculate_pagerank(
     if num_nodes == 0:
         return {}
 
+    # Load ALL edges once — O(1) query instead of O(n²) per iteration
+    if group_id:
+        edges_query = """
+        MATCH (source)-[e]->(target)
+        WHERE source.group_id = $group_id OR target.group_id = $group_id
+        RETURN source.uuid AS source_id, target.uuid AS target_id
+        """
+        edge_records, _, _ = await driver.execute_query(edges_query, group_id=group_id)
+    else:
+        edges_query = """
+        MATCH (source)-[e]->(target)
+        RETURN source.uuid AS source_id, target.uuid AS target_id
+        """
+        edge_records, _, _ = await driver.execute_query(edges_query)
+
+    # Build adjacency structures in memory
+
+    incoming: Dict[str, List[str]] = defaultdict(list)  # target -> [source, ...]
+    out_degree: Dict[str, int] = defaultdict(int)  # source -> count
+
+    node_set = set(node_ids)
+    for record in edge_records:
+        src = record['source_id']
+        tgt = record['target_id']
+        if src in node_set and tgt in node_set:
+            incoming[tgt].append(src)
+            out_degree[src] += 1
+
+    logger.info(
+        f'Loaded {len(edge_records)} edges for {num_nodes} nodes — running {iterations} iterations in-memory'
+    )
+
     # Initialize PageRank scores
     initial_score = 1.0 / num_nodes
     pagerank = {node_id: initial_score for node_id in node_ids}
 
-    # Run PageRank iterations
+    # Run PageRank iterations — pure Python, zero DB queries
     for iteration in range(iterations):
         new_pagerank = {}
 
         for node_id in node_ids:
-            # Get incoming edges
-            in_edges_query = """
-            MATCH (source)-[e]->(target)
-            WHERE target.uuid = $node_id
-            RETURN source.uuid AS source_id
-            """
-            in_edges, _, _ = await driver.execute_query(in_edges_query, node_id=node_id)
-
-            # Calculate new PageRank score
             rank_sum = 0.0
-            for edge in in_edges:
-                source_id = edge['source_id']
-                # Get outgoing edge count for source
-                out_count_query = """
-                MATCH (n)-[e]->()
-                WHERE n.uuid = $node_id
-                RETURN count(e) AS out_count
-                """
-                out_records, _, _ = await driver.execute_query(out_count_query, node_id=source_id)
-                out_count = out_records[0]['out_count'] if out_records else 1
-
-                rank_sum += pagerank.get(source_id, initial_score) / max(out_count, 1)
+            for source_id in incoming.get(node_id, []):
+                rank_sum += pagerank.get(source_id, initial_score) / max(out_degree.get(source_id, 1), 1)
 
             new_pagerank[node_id] = (1 - damping_factor) / num_nodes + damping_factor * rank_sum
 
@@ -266,66 +281,118 @@ async def calculate_betweenness_centrality(
 
     logger.info(f'Calculating betweenness centrality with sample_size={sample_size}')
 
-    # Note: Full betweenness calculation is computationally expensive
-    # This is a simplified version that samples paths
+    # Get all nodes
+    if group_id:
+        nodes_query = """
+        MATCH (n)
+        WHERE n.group_id = $group_id
+        RETURN n.uuid AS uuid
+        """
+        records, _, _ = await driver.execute_query(nodes_query, group_id=group_id)
+    else:
+        nodes_query = """
+        MATCH (n)
+        RETURN n.uuid AS uuid
+        """
+        records, _, _ = await driver.execute_query(nodes_query)
 
-    where_clause = 'WHERE n.group_id = $group_id' if group_id else ''
-    params = {'group_id': group_id} if group_id else {}
+    all_node_ids = [record['uuid'] for record in records]
+    num_nodes = len(all_node_ids)
 
-    # Get nodes
-    nodes_query = f"""
-    MATCH (n)
-    {where_clause}
-    RETURN n.uuid AS uuid
-    """
+    if num_nodes == 0:
+        return {}
 
-    records, _, _ = await driver.execute_query(nodes_query, **params)
-    node_ids = [record['uuid'] for record in records]
+    # Load ALL edges once — O(1) query instead of O(n²) shortestPath queries
+    if group_id:
+        edges_query = """
+        MATCH (source)-[e]->(target)
+        WHERE source.group_id = $group_id OR target.group_id = $group_id
+        RETURN source.uuid AS source_id, target.uuid AS target_id
+        """
+        edge_records, _, _ = await driver.execute_query(edges_query, group_id=group_id)
+    else:
+        edges_query = """
+        MATCH (source)-[e]->(target)
+        RETURN source.uuid AS source_id, target.uuid AS target_id
+        """
+        edge_records, _, _ = await driver.execute_query(edges_query)
 
-    if sample_size and sample_size < len(node_ids):
-        import random
+    # Build adjacency list in memory (directed: source -> [targets])
 
-        node_ids = random.sample(node_ids, sample_size)
 
-    betweenness = {node_id: 0.0 for node_id in node_ids}
+    adjacency: Dict[str, List[str]] = defaultdict(list)
+    node_set = set(all_node_ids)
 
-    # For each pair of nodes, find shortest paths and count intermediate nodes
-    for i, source in enumerate(node_ids):
+    for record in edge_records:
+        src = record['source_id']
+        tgt = record['target_id']
+        if src in node_set and tgt in node_set:
+            adjacency[src].append(tgt)
+
+    logger.info(
+        f'Loaded {len(edge_records)} edges for {num_nodes} nodes — running Brandes algorithm in-memory'
+    )
+
+    # Sample source nodes for BFS (betweenness is expensive even in-memory for large graphs)
+    if sample_size and sample_size < num_nodes:
+
+        source_nodes = random.sample(all_node_ids, sample_size)
+    else:
+        source_nodes = all_node_ids
+
+    # Initialize betweenness scores for ALL nodes (not just sampled)
+    betweenness: Dict[str, float] = {node_id: 0.0 for node_id in all_node_ids}
+
+    # Brandes' algorithm: BFS from each source, accumulate dependency
+    for i, source in enumerate(source_nodes):
         if i % 10 == 0:
-            logger.debug(f'Processing betweenness for node {i + 1}/{len(node_ids)}')
+            logger.debug(f'Brandes BFS from source {i + 1}/{len(source_nodes)}')
 
-        for target in node_ids:
-            if source == target:
-                continue
+        # BFS / shortest path counting
+        stack: List[str] = []  # nodes in order of non-increasing distance
+        predecessors: Dict[str, List[str]] = defaultdict(list)
+        sigma: Dict[str, int] = defaultdict(int)  # number of shortest paths
+        sigma[source] = 1
+        dist: Dict[str, int] = {source: 0}
+        queue: deque = deque([source])
 
-            # Find shortest paths - FalkorDB requires directed traversal
-            paths_query = """
-            MATCH (source), (target)
-            WHERE source.uuid = $source AND target.uuid = $target
-            WITH source, target
-            RETURN nodes(shortestPath((source)-[*..10]->(target))) AS path_nodes
-            LIMIT 3
-            """
+        while queue:
+            v = queue.popleft()
+            stack.append(v)
+            for w in adjacency.get(v, []):
+                # w found for the first time?
+                if w not in dist:
+                    dist[w] = dist[v] + 1
+                    queue.append(w)
+                # shortest path to w via v?
+                if dist.get(w) == dist[v] + 1:
+                    sigma[w] += sigma[v]
+                    predecessors[w].append(v)
 
-            paths_records, _, _ = await driver.execute_query(
-                paths_query, source=source, target=target
-            )
-
-            for path_record in paths_records:
-                path_nodes = path_record.get('path_nodes')
-                if path_nodes and len(path_nodes) > 2:
-                    # Increment betweenness for intermediate nodes
-                    for node in path_nodes[1:-1]:  # Exclude source and target
-                        node_uuid = node.get('uuid') if isinstance(node, dict) else None
-                        if node_uuid and node_uuid in betweenness:
-                            betweenness[node_uuid] += 1.0
+        # Accumulation — back-propagation of dependencies
+        delta: Dict[str, float] = defaultdict(float)
+        while stack:
+            w = stack.pop()
+            for v in predecessors[w]:
+                delta[v] += (sigma[v] / sigma[w]) * (1.0 + delta[w])
+            if w != source:
+                betweenness[w] += delta[w]
 
     # Normalize scores
-    if len(node_ids) > 2:
-        normalization = 2.0 / ((len(node_ids) - 1) * (len(node_ids) - 2))
+    # For directed graphs with sampling, normalize by n*(n-1) scaled by sampling ratio
+    if num_nodes > 2:
+        if sample_size and sample_size < num_nodes:
+            # Scale up: we only sampled a fraction of sources
+            scale = num_nodes / len(source_nodes)
+            normalization = scale / ((num_nodes - 1) * (num_nodes - 2))
+        else:
+            normalization = 1.0 / ((num_nodes - 1) * (num_nodes - 2))
         betweenness = {k: v * normalization for k, v in betweenness.items()}
 
-    logger.info(f'Betweenness centrality calculation complete')
+    logger.info(
+        f'Betweenness centrality complete: {len(source_nodes)} source BFS runs, '
+        f'{num_nodes} nodes scored'
+    )
     return betweenness
 
 
