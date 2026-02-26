@@ -370,7 +370,7 @@ class GraphitiConfig(BaseModel):
         if args.group_id:
             config.group_id = args.group_id
         else:
-            config.group_id = 'default'
+            config.group_id = None
 
         config.use_custom_entities = args.use_custom_entities
         config.destroy_graph = args.destroy_graph
@@ -796,7 +796,7 @@ async def add_memory(
 
             # Use the provided group_id or fall back to the default from config
             effective_group_id = group_id if group_id is not None else config.group_id
-            group_id_str = str(effective_group_id) if effective_group_id is not None else 'default'
+            group_id_str = str(effective_group_id) if effective_group_id else 'claude_conversations'
 
             # Prepare request payload according to AddMessagesRequest schema
             message = {
@@ -1139,8 +1139,8 @@ async def get_episodes(
         raise McpError(ErrorCode.INTERNAL_ERROR, 'HTTP client not initialized')
 
     try:
-        # Use the provided group_id or fall back to the default from config
-        effective_group_id = group_id if group_id is not None else config.group_id
+        # Use provided group_id; fall back to config, skip None for cross-group
+        effective_group_id = group_id if group_id is not None else (config.group_id if config.group_id else 'claude_conversations')
 
         if not isinstance(effective_group_id, str):
             raise McpError(ErrorCode.INVALID_PARAMS, 'Group ID must be a string')
@@ -1203,8 +1203,8 @@ async def search_recent_context(
 
     try:
         effective_group_id = group_id if group_id is not None else config.group_id
-        group_id_str = str(effective_group_id) if effective_group_id is not None else 'default'
-        effective_group_ids = [group_id_str]
+        group_id_str = str(effective_group_id) if effective_group_id else 'claude_conversations'
+        effective_group_ids = [group_id_str] if effective_group_id else []
 
         import asyncio
 
@@ -2666,7 +2666,7 @@ async def save_insight(
     try:
         # Use provided group_id or default
         effective_group_id = group_id if group_id is not None else config.group_id
-        group_id_str = str(effective_group_id) if effective_group_id is not None else 'default'
+        group_id_str = str(effective_group_id) if effective_group_id else 'claude_conversations'
 
         # Create structured insight content
         timestamp = datetime.now(timezone.utc).isoformat()
@@ -2800,7 +2800,7 @@ async def create_pattern(
     try:
         # Use provided group_id or default
         effective_group_id = group_id if group_id is not None else config.group_id
-        group_id_str = str(effective_group_id) if effective_group_id is not None else 'default'
+        group_id_str = str(effective_group_id) if effective_group_id else 'claude_conversations'
 
         # Create structured pattern content
         timestamp = datetime.now(timezone.utc).isoformat()
@@ -2977,7 +2977,7 @@ async def document_solution(
     try:
         # Use provided group_id or default
         effective_group_id = group_id if group_id is not None else config.group_id
-        group_id_str = str(effective_group_id) if effective_group_id is not None else 'default'
+        group_id_str = str(effective_group_id) if effective_group_id else 'claude_conversations'
 
         # Create structured solution documentation
         timestamp = datetime.now(timezone.utc).isoformat()
