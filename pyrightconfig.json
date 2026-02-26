@@ -1,0 +1,15 @@
+{
+  "include": ["graphiti_core"],
+  "exclude": [
+    "**/node_modules",
+    "**/__pycache__",
+    "**/.*",
+    "build",
+    "dist"
+  ],
+  "typeCheckingMode": "basic",
+  "reportMissingImports": true,
+  "reportMissingTypeStubs": false,
+  "pythonVersion": "3.11",
+  "pythonPlatform": "Linux"
+}
