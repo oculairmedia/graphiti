@@ -107,7 +107,7 @@ async def add_memory(
     try:
         # Use the provided group_id or fall back to the default from config
         effective_group_id = group_id if group_id is not None else config.group_id
-        group_id_str = str(effective_group_id) if effective_group_id is not None else 'default'
+        group_id_str = str(effective_group_id) if effective_group_id and effective_group_id != 'default' else 'claude_conversations'
 
         # Prepare request payload according to AddMessagesRequest schema
         message = {
@@ -192,10 +192,8 @@ async def search_memory_nodes(
         raise McpError(ErrorCode.INTERNAL_ERROR, 'HTTP client not initialized')
 
     try:
-        # Use the provided group_ids or fall back to the default from config if none provided
-        effective_group_ids = (
-            group_ids if group_ids is not None else [config.group_id] if config.group_id else []
-        )
+        # Use provided group_ids, or empty list for cross-group search
+        effective_group_ids = group_ids if group_ids is not None else []
 
         # Prepare advanced search configuration
         search_config = {
@@ -304,10 +302,8 @@ async def search_memory_facts(
         if max_facts <= 0:
             raise McpError(ErrorCode.INVALID_PARAMS, 'max_facts must be a positive integer')
 
-        # Use the provided group_ids or fall back to the default from config if none provided
-        effective_group_ids = (
-            group_ids if group_ids is not None else [config.group_id] if config.group_id else []
-        )
+        # Use provided group_ids, or empty list for cross-group search
+        effective_group_ids = group_ids if group_ids is not None else []
 
         # Prepare advanced search configuration
         search_config = {
@@ -572,8 +568,8 @@ async def get_episodes(
         raise McpError(ErrorCode.INTERNAL_ERROR, 'HTTP client not initialized')
 
     try:
-        # Use the provided group_id or fall back to the default from config
-        effective_group_id = group_id if group_id is not None else config.group_id
+        # Use provided group_id; fall back to config, but skip 'default' (no data uses it)
+        effective_group_id = group_id if group_id is not None else (config.group_id if config.group_id and config.group_id != 'default' else 'claude_conversations')
 
         if not isinstance(effective_group_id, str):
             raise McpError(ErrorCode.INVALID_PARAMS, 'Group ID must be a string')
