@@ -1086,17 +1086,30 @@ async def get_edge_invalidation_candidates(
 
 # takes in a list of rankings of uuids
 def rrf(results: list[list[str]], rank_const=1, min_score: float = 0) -> list[str]:
+    """Fuse ranked UUID lists with normalized Reciprocal Rank Fusion scores.
+
+    Raw RRF scores are normalized to [0, 1] by dividing by the maximum observed
+    score before applying the ``min_score`` filter.
+    """
     scores: dict[str, float] = defaultdict(float)
     for result in results:
         for i, uuid in enumerate(result):
             scores[uuid] += 1 / (i + rank_const)
 
-    scored_uuids = [term for term in scores.items()]
-    scored_uuids.sort(reverse=True, key=lambda term: term[1])
+    if not scores:
+        return []
 
+    max_score = max(scores.values())
+    normalized_scores = (
+        {uuid: score / max_score for uuid, score in scores.items()}
+        if max_score > 0
+        else {uuid: 0.0 for uuid in scores}
+    )
+
+    scored_uuids = sorted(normalized_scores.items(), reverse=True, key=lambda term: term[1])
     sorted_uuids = [term[0] for term in scored_uuids]
 
-    return [uuid for uuid in sorted_uuids if scores[uuid] >= min_score]
+    return [uuid for uuid in sorted_uuids if normalized_scores[uuid] >= min_score]
 
 
 async def node_distance_reranker(

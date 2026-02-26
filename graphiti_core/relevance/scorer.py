@@ -188,6 +188,9 @@ class RelevanceScorer:
         """
         Apply Reciprocal Rank Fusion to combine multiple rankings.
 
+        Raw fused scores are normalized to [0, 1] by dividing by the maximum
+        observed RRF score.
+
         Args:
             rankings: Dict mapping ranking source to ordered list of IDs
             k: RRF parameter (default from config)
@@ -207,7 +210,14 @@ class RelevanceScorer:
         # Sort by RRF score
         sorted_results = sorted(rrf_scores.items(), key=lambda x: x[1], reverse=True)
 
-        return sorted_results
+        if not sorted_results:
+            return []
+
+        max_score = sorted_results[0][1]
+        if max_score <= 0:
+            return [(memory_id, 0.0) for memory_id, _ in sorted_results]
+
+        return [(memory_id, score / max_score) for memory_id, score in sorted_results]
 
     async def combine_scores(
         self,

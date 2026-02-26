@@ -7,6 +7,10 @@ from pydantic import BaseModel, Field
 from graph_service.dto.common import Message
 
 
+def _encode_datetime(value: datetime) -> str:
+    return value.astimezone(timezone.utc).isoformat()
+
+
 class SearchMethod(str, Enum):
     """Search method options."""
 
@@ -14,6 +18,7 @@ class SearchMethod(str, Enum):
     similarity = 'similarity'
     bfs = 'bfs'
     hipporag = 'hipporag'  # Spreading activation through graph
+    community_boost = 'community_boost'
 
 
 class NodeReranker(str, Enum):
@@ -107,7 +112,7 @@ class FactResult(BaseModel):
     expired_at: datetime | None
 
     class Config:
-        json_encoders = {datetime: lambda v: v.astimezone(timezone.utc).isoformat()}
+        json_encoders = {datetime: _encode_datetime}
 
 
 class SearchResults(BaseModel):
@@ -152,7 +157,7 @@ class NodeResult(BaseModel):
     attributes: Dict[str, Any]
 
     class Config:
-        json_encoders = {datetime: lambda v: v.astimezone(timezone.utc).isoformat()}
+        json_encoders = {datetime: _encode_datetime}
 
 
 class NodeSearchResults(BaseModel):
