@@ -485,28 +485,31 @@ class ConsolidationActivities:
             if not records:
                 break
 
-            for record in records:
-                total_processed += 1
+            # Prepare all summary generation tasks
+            from graphiti_core.llm_client.config import ModelSize
+            import asyncio
+
+            sem = asyncio.Semaphore(5)  # Limit concurrent LLM calls
+
+            async def _generate_summary(record: dict) -> dict:
                 uuid = record['uuid']
                 name = record['name']
                 labels = record.get('labels', [])
                 facts = [f for f in (record.get('facts') or []) if f]
 
                 if not facts:
-                    summary = f'{name}'
-                    logger.debug('Entity %s has no connected facts, using name as summary', name)
-                else:
-                    facts_text = '; '.join(facts[:20])
-                    prompt = (
-                        f'Generate a concise summary (under 200 words) for the entity "{name}" '
-                        f'(type: {", ".join(labels) if labels else "unknown"}) based on these known facts:\n\n'
-                        f'{facts_text}\n\n'
-                        f'Focus on the most important information. Be factual and concise.'
-                    )
+                    return {'uuid': uuid, 'summary': name}
 
+                facts_text = '; '.join(facts[:20])
+                prompt = (
+                    f'Generate a concise summary (under 200 words) for the entity "{name}" '
+                    f'(type: {", ".join(labels) if labels else "unknown"}) based on these known facts:\n\n'
+                    f'{facts_text}\n\n'
+                    f'Focus on the most important information. Be factual and concise.'
+                )
+
+                async with sem:
                     try:
-                        from graphiti_core.llm_client.config import ModelSize
-
                         response = await llm_client.generate_response(
                             prompt, model_size=ModelSize.small
                         )
@@ -517,12 +520,28 @@ class ConsolidationActivities:
                         logger.warning('LLM summary generation failed for %s: %s', name, e)
                         summary = name
 
+                return {'uuid': uuid, 'summary': summary}
+
+            # Parallel LLM calls for all records in batch
+            results = await asyncio.gather(
+                *[_generate_summary(r) for r in records]
+            )
+            total_processed += len(records)
+
+            # Batch SET via UNWIND — summaries are plain strings, no vecf32 constraint
+            updates = [{'uuid': r['uuid'], 'summary': r['summary']} for r in results]
+            if updates:
                 await driver.execute_query(
-                    'MATCH (n:Entity {uuid: $uuid}) SET n.summary = $summary',
-                    uuid=uuid,
-                    summary=summary,
+                    'UNWIND $updates AS update '
+                    'MATCH (n:Entity {uuid: update.uuid}) '
+                    'SET n.summary = update.summary',
+                    updates=updates,
                 )
-                total_updated += 1
+                total_updated += len(updates)
+                logger.info(
+                    'Regenerated %d summaries in parallel + batch UNWIND',
+                    len(updates),
+                )
 
         duration_ms = int((time() - start) * 1000)
         return EnrichResult(
@@ -562,13 +581,31 @@ class ConsolidationActivities:
             try:
                 embeddings = await embedder.create_batch(names)
 
-                for uuid, embedding in zip(uuids, embeddings):
-                    embedding_str = ','.join(str(v) for v in embedding)
-                    await driver.execute_query(
-                        f'MATCH (n:Entity {{uuid: $uuid}}) SET n.name_embedding = vecf32([{embedding_str}])',
-                        uuid=uuid,
-                    )
-                    total_updated += 1
+                # Parallelize SET queries — vecf32 requires inline floats,
+                # can't batch via UNWIND params. Use asyncio.gather instead
+                # of sequential await to reduce wall time by ~10x.
+                import asyncio
+
+                sem = asyncio.Semaphore(10)
+
+                async def _store_embedding(uid: str, emb: list) -> None:
+                    async with sem:
+                        emb_str = ','.join(str(v) for v in emb)
+                        await driver.execute_query(
+                            f'MATCH (n:Entity {{uuid: $uuid}}) '
+                            f'SET n.name_embedding = vecf32([{emb_str}])',
+                            uuid=uid,
+                        )
+
+                await asyncio.gather(
+                    *[_store_embedding(uid, emb) for uid, emb in zip(uuids, embeddings)]
+                )
+                total_updated += len(uuids)
+
+                logger.info(
+                    'Backfilled %d embeddings in parallel (batch_size=%d)',
+                    len(uuids), batch_size,
+                )
             except Exception as e:
                 logger.error('Embedding backfill batch failed: %s', e)
 

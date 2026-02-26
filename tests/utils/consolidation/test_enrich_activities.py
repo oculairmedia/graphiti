@@ -90,7 +90,7 @@ async def test_regenerate_summaries_with_entities() -> None:
                 return ([], [], None)
             query_side_effect.called = True
             return (records, [], None)
-        if 'SET n.summary = $summary' in query:
+        if 'SET n.summary' in query:
             return ([], [], None)
         return ([], [], None)
 
@@ -111,12 +111,13 @@ async def test_regenerate_summaries_with_entities() -> None:
     assert result.updated_count == 2
     assert result.category == 'entity_summaries'
 
+    # Now uses batch UNWIND query instead of individual SETs
     set_calls = [
         call
         for call in mock_driver.execute_query.call_args_list
-        if 'SET n.summary = $summary' in call.args[0]
+        if 'SET n.summary' in call.args[0]
     ]
-    assert len(set_calls) == 2
+    assert len(set_calls) == 1  # Single batch UNWIND query for all summaries
 
 
 @pytest.mark.asyncio
