@@ -234,8 +234,8 @@ docker system prune -a --volumes
 - Memory limit: 16GB to handle RDB reload overhead
 - Runtime `maxmemory` is 8GB (reload can temporarily use more)
 - Check data status: `redis-cli -h localhost -p 6379 GRAPH.QUERY graphiti_migration "MATCH ()-[r]->() RETURN count(r)" --csv`
-- **Current size (Jan 2026)**: ~66K nodes, ~224K edges
-- Historical note: Started with 48K nodes, 121K edges (Dec 2025)
+- **Current size (Feb 2026)**: ~13K nodes, ~36K edges (reduced from ~66K after duplicate UUID cleanup)
+- Historical note: Started with 48K nodes, 121K edges (Dec 2025), grew to ~66K/224K, reduced to ~13K/36K after consolidation + duplicate cleanup (Feb 2026)
 
 ## Service Architecture (Simplified Jan 2026)
 
@@ -315,22 +315,22 @@ redis-cli -h localhost -p 6379 GRAPH.QUERY graphiti_migration "MATCH ()-[r]->() 
 redis-cli -h localhost -p 6379 GRAPH.QUERY graphiti_migration "MATCH (n) RETURN count(n) as node_count" --csv
 ```
 
-Current (Jan 2026): ~66K nodes, ~224K edges
-Historical baseline (Dec 2025): 48K nodes, 121K edges
+Current (Feb 2026): ~13K nodes, ~36K edges
+Historical: ~66K/224K (Jan 2026, pre-consolidation), 48K/121K (Dec 2025)
 
 ## Service-Specific Notes
 
 ### graph-visualizer-rust (Port 3000)
 
-- **Image**: `graphiti-rust-visualizer:incremental-updates` (local, not pulled from registry)
+- **Image**: `ghcr.io/oculairmedia/graphiti-rust-visualizer:main` (pulled from GHCR)
 - **State**: Depends on FalkorDB data
 - **Batch size**: 5000 edges (set in src/main.rs line 399)
 - **DuckDB cache**: 17GB stored in `visualizer_duckdb` volume
 - **To rebuild**: Must use `docker build` in `graph-visualizer-rust/` directory
 - **Restart safely**: `docker restart graphiti-graph-visualizer-rust-1`
-- **Healthcheck**: 1 hour start_period + 100 retries (15s interval) = up to 85 minutes to become healthy
+- **Healthcheck**: 120s start_period + 10 retries (15s interval) = up to 4.5 minutes to become healthy
 - **Initial load time**: Loads ALL edges from FalkorDB into memory on startup - scales with graph size
-- **Why healthcheck is long**: After sync completes, visualizer must load ALL edges (currently 224K+) and build DuckDB cache before becoming healthy
+- **Why healthcheck is short**: Graph loads in ~2 seconds (13K nodes, 36K edges). DuckDB cache builds in <5s. Previous 85-minute healthcheck was needed for 224K+ edges.
 
 ### FalkorDB (Port 6379)
 
@@ -339,7 +339,7 @@ Historical baseline (Dec 2025): 48K nodes, 121K edges
 - **Indexes**: UUID indexes exist on all node/edge types (RANGE indexes)
 - **Persistence**: RDB snapshots to `falkordb_data` volume
 - **Memory**: 16GB limit, 8GB runtime maxmemory
-- **Performance**: Queries scale with graph size (currently 224K+ edges)
+- **Performance**: Queries scale with graph size (currently ~36K edges)
 
 ### Frontend (Port 8085)
 
@@ -418,13 +418,13 @@ Key variables from docker-compose.yml:
 
 **Symptom**: After `docker-compose up`, nginx and frontend show "Created" status but never start
 
-**Cause**: They depend on visualizer being healthy, but visualizer's healthcheck had insufficient time (was 105s, now 85 minutes). If visualizer takes too long to load graph data, it never becomes healthy, so nginx/frontend never start.
+**Cause**: They depend on visualizer being healthy, but visualizer's healthcheck had insufficient time (was 105s, increased to 85 minutes in Jan 2026, then reduced to ~4.5 minutes in Feb 2026 after graph shrunk). If visualizer takes too long to load graph data, it never becomes healthy, so nginx/frontend never start.
 
 **Fix Applied**:
 
-- Increased visualizer healthcheck `start_period` from 30s to 3600s (1 hour)
-- Increased healthcheck `retries` from 5 to 100 (25 more minutes)
-- Total: Up to 85 minutes for visualizer to become healthy after loading large graphs
+- Healthcheck `start_period` set to 120s (sufficient for current ~13K nodes / ~36K edges)
+- Healthcheck `retries` set to 10 (2.5 more minutes)
+- Total: Up to ~4.5 minutes for visualizer to become healthy
 
 **Immediate Workaround**: If they're stuck in "Created" state:
 
@@ -451,7 +451,7 @@ docker start graphiti-nginx-1 graphiti-frontend-1
 
 **Symptom**: FalkorDB container restarts, queries fail
 
-**Fix**: FalkorDB memory limit is 16GB in docker-compose. With 224K+ edges and 66K+ nodes, this should be sufficient. If OOM occurs, increase memory limit in docker-compose.yml.
+**Fix**: FalkorDB memory limit is 16GB in docker-compose. With ~36K edges and ~13K nodes, this is more than sufficient. If OOM occurs after significant graph growth, increase memory limit in docker-compose.yml.
 
 ### Vector Search Returns 0 Results / "expected Vectorf32 but was List" Error
 

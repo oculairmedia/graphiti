@@ -30,7 +30,7 @@ EPISODIC_NODE_SAVE_BULK = """
 """
 
 ENTITY_NODE_SAVE = """
-        MERGE (n:Entity {uuid: $entity_data.uuid, name: $entity_data.name, group_id: $entity_data.group_id})
+        MERGE (n:Entity {uuid: $entity_data.uuid})
         ON CREATE SET n = $entity_data
         ON MATCH SET n += $entity_data, n.created_at = n.created_at
         FOREACH (_ IN CASE WHEN $entity_data.name_embedding IS NOT NULL THEN [1] ELSE [] END |
@@ -40,7 +40,7 @@ ENTITY_NODE_SAVE = """
 
 ENTITY_NODE_SAVE_BULK = """
     UNWIND $nodes AS node
-    MERGE (n:Entity {uuid: node.uuid, name: node.name, group_id: node.group_id})
+    MERGE (n:Entity {uuid: node.uuid})
     ON CREATE SET n = node
     ON MATCH SET n += node, n.created_at = n.created_at
     SET n.name_embedding = vecf32(node.name_embedding)

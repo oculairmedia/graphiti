@@ -169,6 +169,40 @@ async def add_nodes_and_edges_bulk_tx(
         entity_data['labels'] = list(set(node.labels + ['Entity']))
         nodes.append(entity_data)
 
+    # De-duplicate EntityNodes by UUID to prevent constraint violations in bulk save
+    # This handles duplicates that can slip through when multiple episodes in the same
+    # batch extract the same entity, or when uuid_map remaps different extracted nodes
+    # to the same existing entity UUID
+    unique_nodes: dict[str, dict[str, Any]] = {}
+    node_duplicates_count = 0
+    for n in nodes:
+        uuid_val = n.get('uuid')
+        if not uuid_val:
+            continue
+        if uuid_val in unique_nodes:
+            node_duplicates_count += 1
+            existing = unique_nodes[uuid_val]
+            # Merge labels (union)
+            existing_labels = set(existing.get('labels') or [])
+            new_labels = set(n.get('labels') or [])
+            existing['labels'] = list(existing_labels | new_labels)
+            # Prefer non-empty summary
+            if not existing.get('summary') and n.get('summary'):
+                existing['summary'] = n['summary']
+            # Keep earliest created_at
+            ca_new = n.get('created_at')
+            ca_existing = existing.get('created_at')
+            if ca_new and ca_existing and ca_new < ca_existing:
+                existing['created_at'] = ca_new
+            # Prefer non-empty name_embedding
+            if not existing.get('name_embedding') and n.get('name_embedding'):
+                existing['name_embedding'] = n['name_embedding']
+        else:
+            unique_nodes[uuid_val] = n
+    if node_duplicates_count:
+        logger.info(f'De-duplicated {node_duplicates_count} EntityNodes in-batch (by uuid)')
+    nodes = list(unique_nodes.values())
+
     edges: list[dict[str, Any]] = []
     for edge in entity_edges:
         if edge.fact_embedding is None:

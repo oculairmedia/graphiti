@@ -279,7 +279,24 @@ impl DuckDBStore {
         let mut sorted_nodes = nodes.clone();
         sorted_nodes.sort_by(|a, b| a.id.cmp(&b.id));
         
-        // Build node_to_idx map first
+        // Deduplicate nodes by UUID since FalkorDB may contain duplicate-UUID nodes
+        // (same entity with different label combinations). DuckDB PRIMARY KEY requires uniqueness.
+        let mut seen_node_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
+        let mut node_duplicate_count = 0;
+        sorted_nodes.retain(|node| {
+            if seen_node_ids.contains(&node.id) {
+                node_duplicate_count += 1;
+                false
+            } else {
+                seen_node_ids.insert(node.id.clone());
+                true
+            }
+        });
+        if node_duplicate_count > 0 {
+            warn!("Deduplicated {} nodes with duplicate UUIDs", node_duplicate_count);
+        }
+        
+        // Build node_to_idx map from deduplicated nodes
         for (idx, node) in sorted_nodes.iter().enumerate() {
             node_to_idx.insert(node.id.clone(), idx as u32);
         }
