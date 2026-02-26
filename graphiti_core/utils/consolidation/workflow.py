@@ -172,6 +172,16 @@ class GraphConsolidationWorkflow:
         )
         enrich_results.append(centrality_result)
 
+        # Ensure HNSW vector indexes are intact after all deletes/merges
+        rebuild_indexes_result: dict[str, Any] = await workflow.execute_activity(
+            'rebuild_vector_indexes',
+            args=[],
+            start_to_close_timeout=timedelta(minutes=30),
+            task_queue=_CONSOLIDATION_CONFIG.task_queue,
+            retry_policy=retry_policy,
+        )
+        enrich_results.append(rebuild_indexes_result)
+
         # === COLLECT POST-METRICS ===
 
         post_metrics_data: dict[str, Any] = await workflow.execute_activity(

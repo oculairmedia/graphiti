@@ -129,6 +129,7 @@ async def main() -> None:
         activities_instance.backfill_entity_embeddings,
         activities_instance.recalculate_centrality,
         activities_instance.store_consolidation_report,
+        activities_instance.rebuild_vector_indexes,
         semantic_dedup_instance.semantic_entity_dedup,
     ]
 

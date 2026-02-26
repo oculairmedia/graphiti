@@ -606,6 +606,46 @@ class ConsolidationActivities:
         )
 
     @activity.defn
+    async def rebuild_vector_indexes(self, embedding_dim: int = 2560) -> EnrichResult:
+        """Verify and rebuild HNSW vector indexes if missing.
+
+        After bulk deletes/merges, FalkorDB HNSW indexes can become invalid
+        or disappear entirely. This activity ensures they always exist.
+        CREATE VECTOR INDEX is idempotent — it's a no-op if the index already exists.
+        """
+        start = time()
+        graphiti = await self._get_graphiti()
+        driver = graphiti.driver
+
+        from graphiti_core.graph_queries import get_vector_indices
+
+        vector_queries = get_vector_indices(embedding_dim)
+        rebuilt_count = 0
+
+        for query in vector_queries:
+            try:
+                await driver.execute_query(query)
+                rebuilt_count += 1
+                logger.info('Vector index ensured: %s', query[:80])
+            except Exception as e:
+                # 'Index already exists' is expected and fine
+                err_msg = str(e).lower()
+                if 'already exists' in err_msg or 'duplicate' in err_msg:
+                    logger.debug('Vector index already exists (ok): %s', query[:80])
+                    rebuilt_count += 1
+                else:
+                    logger.error('Failed to create vector index: %s — %s', query[:80], e)
+
+        duration_ms = int((time() - start) * 1000)
+        return EnrichResult(
+            processed_count=len(vector_queries),
+            updated_count=rebuilt_count,
+            category='vector_indexes',
+            details={'embedding_dim': embedding_dim, 'indexes_ensured': rebuilt_count},
+            duration_ms=duration_ms,
+        )
+
+    @activity.defn
     async def store_consolidation_report(
         self, result: ConsolidationResult | dict[str, Any]
     ) -> None:
