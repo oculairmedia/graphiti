@@ -501,7 +501,7 @@ async def resolve_extracted_edges(
 
         edge_types_lst.append(extracted_edge_types)
 
-    if os.getenv('USE_BATCH_EXTRACTION', 'false').lower() == 'true':
+    if os.getenv('USE_BATCH_EXTRACTION', 'true').lower() == 'true':
         resolved_edges, invalidated_edges = await resolve_extracted_edges_batch(
             llm_client,
             extracted_edges,
@@ -511,8 +511,8 @@ async def resolve_extracted_edges(
             edge_types_lst,
         )
         await semaphore_gather(
-            create_entity_edge_embeddings(embedder, resolved_edges),
-            create_entity_edge_embeddings(embedder, invalidated_edges),
+            create_entity_edge_embeddings(embedder, resolved_edges, skip_existing=True),
+            create_entity_edge_embeddings(embedder, invalidated_edges, skip_existing=True),
         )
         return resolved_edges, invalidated_edges
 
@@ -550,8 +550,8 @@ async def resolve_extracted_edges(
     logger.debug(f'Resolved edges: {[(e.name, e.uuid) for e in resolved_edges]}')
 
     await semaphore_gather(
-        create_entity_edge_embeddings(embedder, resolved_edges),
-        create_entity_edge_embeddings(embedder, invalidated_edges),
+        create_entity_edge_embeddings(embedder, resolved_edges, skip_existing=True),
+        create_entity_edge_embeddings(embedder, invalidated_edges, skip_existing=True),
     )
 
     return resolved_edges, invalidated_edges

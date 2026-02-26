@@ -14,9 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
+import hashlib
 import logging
 import os
-from collections import defaultdict
+from collections import OrderedDict, defaultdict
 from time import time
 
 from graphiti_core.cross_encoder.client import CrossEncoderClient
@@ -65,6 +66,29 @@ from graphiti_core.search.search_utils import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Module-level LRU cache for query embeddings (deterministic for same text)
+# Avoids redundant API calls when the same query is searched repeatedly
+_EMBEDDING_CACHE_MAX = int(os.getenv('GRAPHITI_EMBEDDING_CACHE_SIZE', '256'))
+_embedding_cache: OrderedDict[str, list[float]] = OrderedDict()
+
+
+def _get_cached_embedding(query: str) -> list[float] | None:
+    """Get cached embedding for a query string, or None if not cached."""
+    key = hashlib.sha256(query.encode()).hexdigest()[:16]
+    if key in _embedding_cache:
+        _embedding_cache.move_to_end(key)
+        return _embedding_cache[key]
+    return None
+
+
+def _cache_embedding(query: str, embedding: list[float]) -> None:
+    """Cache an embedding for a query string."""
+    key = hashlib.sha256(query.encode()).hexdigest()[:16]
+    _embedding_cache[key] = embedding
+    _embedding_cache.move_to_end(key)
+    while len(_embedding_cache) > _EMBEDDING_CACHE_MAX:
+        _embedding_cache.popitem(last=False)
 
 
 async def search(
@@ -134,11 +158,15 @@ async def search(
             episodes=[],
             communities=[],
         )
-    query_vector = (
-        query_vector
-        if query_vector is not None
-        else await embedder.create(input_data=[query.replace('\n', ' ')])
-    )
+    if query_vector is not None:
+        pass  # caller provided vector
+    else:
+        cached = _get_cached_embedding(query)
+        if cached is not None:
+            query_vector = cached
+        else:
+            query_vector = await embedder.create(input_data=[query.replace('\n', ' ')])
+            _cache_embedding(query, query_vector)
 
     # if group_ids is empty, set it to None
     group_ids = group_ids if group_ids and group_ids != [''] else None

@@ -1567,7 +1567,7 @@ class Graphiti:
         pipeline = _get_dspy_pipeline(episode.group_id)
         prev_messages = [{'content': ep.content} for ep in previous_episodes if ep.content]
 
-        use_batch = os.environ.get('USE_BATCH_EXTRACTION', 'false').lower() == 'true'
+        use_batch = os.environ.get('USE_BATCH_EXTRACTION', 'true').lower() == 'true'
         batch_size = int(os.environ.get('BATCH_EXTRACTION_SIZE', '5'))
 
         if use_batch and len(nodes) > 1:

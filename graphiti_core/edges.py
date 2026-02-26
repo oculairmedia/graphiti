@@ -795,9 +795,20 @@ def get_community_edge_from_record(record: Any):
     )
 
 
-async def create_entity_edge_embeddings(embedder: EmbedderClient, edges: list[EntityEdge]):
+async def create_entity_edge_embeddings(
+    embedder: EmbedderClient, edges: list[EntityEdge], skip_existing: bool = False
+):
     if len(edges) == 0:
         return
-    fact_embeddings = await embedder.create_batch([edge.fact for edge in edges])
-    for edge, fact_embedding in zip(edges, fact_embeddings, strict=True):
-        edge.fact_embedding = fact_embedding
+    if skip_existing:
+        # Only embed edges without existing embeddings (avoids redundant API calls)
+        edges_to_embed = [e for e in edges if e.fact_embedding is None or len(e.fact_embedding) == 0]
+        if not edges_to_embed:
+            return
+        fact_embeddings = await embedder.create_batch([edge.fact for edge in edges_to_embed])
+        for edge, fact_embedding in zip(edges_to_embed, fact_embeddings, strict=True):
+            edge.fact_embedding = fact_embedding
+    else:
+        fact_embeddings = await embedder.create_batch([edge.fact for edge in edges])
+        for edge, fact_embedding in zip(edges, fact_embeddings, strict=True):
+            edge.fact_embedding = fact_embedding
