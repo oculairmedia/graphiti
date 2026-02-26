@@ -14,6 +14,7 @@ with workflow.unsafe.imports_passed_through():
         ConsolidationResult,
         EnrichResult,
         GraphMetrics,
+        HealthCheckResult,
         MergeResult,
         PruneResult,
     )
@@ -192,6 +193,16 @@ class GraphConsolidationWorkflow:
             retry_policy=retry_policy,
         )
 
+        # === HEALTH CHECK ===
+
+        health_check_data: dict[str, Any] = await workflow.execute_activity(
+            'check_constraint_health',
+            args=[],
+            start_to_close_timeout=timedelta(minutes=5),
+            task_queue=_CONSOLIDATION_CONFIG.task_queue,
+            retry_policy=retry_policy,
+        )
+
         total_duration_ms = (workflow.time_ns() - start_ns) // 1_000_000
         result = ConsolidationResult(
             run_id=run_id,
@@ -203,6 +214,7 @@ class GraphConsolidationWorkflow:
             merge_results=merge_results,
             enrich_results=enrich_results,
             total_duration_ms=total_duration_ms,
+            health_check=health_check_data,
         )
 
         await workflow.execute_activity(

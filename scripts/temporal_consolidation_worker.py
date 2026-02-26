@@ -53,12 +53,15 @@ async def _create_graphiti():
     falkordb_host = os.getenv('FALKORDB_HOST', 'falkordb')
     falkordb_port = int(os.getenv('FALKORDB_PORT', '6379'))
     falkordb_database = os.getenv('FALKORDB_DATABASE', 'graphiti_migration')
+    falkordb_max_conn_str = os.getenv('FALKORDB_MAX_CONNECTIONS')
+    falkordb_max_connections = int(falkordb_max_conn_str) if falkordb_max_conn_str else None
     use_dspy = os.getenv('USE_DSPY', 'false').lower() == 'true'
 
     driver = FalkorDriver(
         host=falkordb_host,
         port=falkordb_port,
         database=falkordb_database,
+        max_connections=falkordb_max_connections,
     )
 
     if use_dspy:
@@ -130,6 +133,7 @@ async def main() -> None:
         activities_instance.recalculate_centrality,
         activities_instance.store_consolidation_report,
         activities_instance.rebuild_vector_indexes,
+        activities_instance.check_constraint_health,
         semantic_dedup_instance.semantic_entity_dedup,
     ]
 

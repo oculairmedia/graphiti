@@ -2,6 +2,7 @@ from graphiti_core.utils.consolidation.activities import (
     ConsolidationActivities,
     ConsolidationResult,
     GraphMetrics,
+    HealthCheckResult,
     MergeResult,
     PruneResult,
 )
@@ -18,6 +19,7 @@ __all__ = [
     'ConsolidationResult',
     'GraphConsolidationWorkflow',
     'GraphMetrics',
+    'HealthCheckResult',
     'MergeResult',
     'PruneResult',
 ]

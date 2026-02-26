@@ -260,6 +260,7 @@ class FalkorDriver(GraphDriver):
         password: str | None = None,
         falkor_db: FalkorDB | None = None,
         database: str = 'default_db',
+        max_connections: int | None = None,
     ):
         """
         Initialize the FalkorDB driver.
@@ -267,6 +268,16 @@ class FalkorDriver(GraphDriver):
         FalkorDB is a multi-tenant graph database.
         To connect, provide the host and port.
         The default parameters assume a local (on-premises) FalkorDB instance.
+
+        Args:
+            host: FalkorDB host address.
+            port: FalkorDB port.
+            username: Optional authentication username.
+            password: Optional authentication password.
+            falkor_db: Pre-configured FalkorDB instance (bypasses host/port/auth).
+            database: Graph database name.
+            max_connections: Maximum connections in the Redis connection pool.
+                If None, uses the redis-py default (typically 2**31).
         """
         super().__init__()
         if falkor_db is not None:
@@ -277,9 +288,20 @@ class FalkorDriver(GraphDriver):
                 f'FalkorDriver initialized with provided client, database: {self._database}'
             )
         else:
-            self.client = FalkorDB(host=host, port=port, username=username, password=password)
+            kwargs: dict[str, Any] = {
+                'host': host,
+                'port': port,
+                'username': username,
+                'password': password,
+            }
+            if max_connections is not None:
+                kwargs['max_connections'] = max_connections
+            self.client = FalkorDB(**kwargs)
             self._database = database
-            logger.info(f'FalkorDriver initialized with database: {self._database}')
+            logger.info(
+                f'FalkorDriver initialized with database: {self._database}'
+                + (f', max_connections: {max_connections}' if max_connections else '')
+            )
 
         self.fulltext_syntax = '@'  # FalkorDB uses a redisearch-like syntax for fulltext queries see https://redis.io/docs/latest/develop/ai/search-and-query/query/full-text/
 

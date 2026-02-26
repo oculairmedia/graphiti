@@ -54,6 +54,7 @@ class GraphMetrics:
     low_connectivity_entities: int
     invalidated_edges: int
     duplicate_name_groups: int
+    duplicate_uuid_count: int
     timestamp: str
 
 
@@ -87,6 +88,17 @@ class EnrichResult:
 
 
 @dataclass
+class HealthCheckResult:
+    constraint_status: list[dict[str, str]]
+    failed_constraints: int
+    duplicate_uuids_found: int
+    all_healthy: bool
+    details: dict[str, Any]
+    duration_ms: int
+
+
+
+@dataclass
 class ConsolidationResult:
     run_id: str
     started_at: str
@@ -97,6 +109,7 @@ class ConsolidationResult:
     merge_results: list[dict[str, Any]]
     enrich_results: list[dict[str, Any]]
     total_duration_ms: int
+    health_check: dict[str, Any] | None = None
 
 
 class ConsolidationActivities:
@@ -154,6 +167,9 @@ class ConsolidationActivities:
         duplicate_records, _, _ = await driver.execute_query(
             'MATCH (n:Entity) WITH n.name as name, count(*) as cnt WHERE cnt > 1 RETURN count(name) as cnt'
         )
+        duplicate_uuid_records, _, _ = await driver.execute_query(
+            'MATCH (n) WITH n.uuid AS uuid, count(n) AS cnt WHERE cnt > 1 RETURN count(uuid) as cnt'
+        )
 
         return GraphMetrics(
             total_nodes=sum(node_counts.values()),
@@ -173,9 +189,11 @@ class ConsolidationActivities:
             duplicate_name_groups=int(
                 (duplicate_records[0] if duplicate_records else {}).get('cnt') or 0
             ),
+            duplicate_uuid_count=int(
+                (duplicate_uuid_records[0] if duplicate_uuid_records else {}).get('cnt') or 0
+            ),
             timestamp=datetime.now(timezone.utc).isoformat(),
         )
-
     @activity.defn
     async def prune_orphaned_nodes(self, batch_size: int = 100) -> PruneResult:
         start = time()
@@ -683,6 +701,74 @@ class ConsolidationActivities:
         )
 
     @activity.defn
+    async def check_constraint_health(self) -> HealthCheckResult:
+        """Check FalkorDB constraint status and detect duplicate UUID nodes."""
+        start = time()
+        graphiti = await self._get_graphiti()
+        driver = graphiti.driver
+
+        # Query all constraints
+        constraint_records, _, _ = await driver.execute_query(
+            'CALL db.constraints() YIELD type, label, properties, entitytype, status '
+            'RETURN type, label, properties, entitytype, status'
+        )
+        constraint_status: list[dict[str, str]] = []
+        failed_count = 0
+        for record in constraint_records:
+            status = str(record.get('status') or '')
+            entry = {
+                'type': str(record.get('type') or ''),
+                'label': str(record.get('label') or ''),
+                'properties': str(record.get('properties') or ''),
+                'entitytype': str(record.get('entitytype') or ''),
+                'status': status,
+            }
+            constraint_status.append(entry)
+            if status != 'OPERATIONAL':
+                failed_count += 1
+
+        # Check for duplicate UUID nodes
+        dup_records, _, _ = await driver.execute_query(
+            'MATCH (n) WITH n.uuid AS uuid, count(n) AS cnt '
+            'WHERE cnt > 1 RETURN uuid, cnt ORDER BY cnt DESC LIMIT 20'
+        )
+        duplicate_uuids_found = len(dup_records)
+        dup_details: list[dict[str, Any]] = []
+        for record in dup_records:
+            dup_details.append({
+                'uuid': str(record.get('uuid') or ''),
+                'count': int(record.get('cnt') or 0),
+            })
+
+        all_healthy = failed_count == 0 and duplicate_uuids_found == 0
+        duration_ms = int((time() - start) * 1000)
+
+        if not all_healthy:
+            logger.warning(
+                'Health check FAILED: %d failed constraints, %d duplicate UUIDs',
+                failed_count,
+                duplicate_uuids_found,
+            )
+        else:
+            logger.info(
+                'Health check passed: %d constraints all OPERATIONAL, 0 duplicate UUIDs',
+                len(constraint_status),
+            )
+
+        return HealthCheckResult(
+            constraint_status=constraint_status,
+            failed_constraints=failed_count,
+            duplicate_uuids_found=duplicate_uuids_found,
+            all_healthy=all_healthy,
+            details={
+                'total_constraints': len(constraint_status),
+                'duplicate_uuid_details': dup_details,
+            },
+            duration_ms=duration_ms,
+        )
+
+
+    @activity.defn
     async def store_consolidation_report(
         self, result: ConsolidationResult | dict[str, Any]
     ) -> None:
@@ -712,6 +798,26 @@ class ConsolidationActivities:
             if isinstance(enrich_result, dict):
                 total_enriched += int(enrich_result.get('updated_count', 0) or 0)
 
+        health_check = result_data.get('health_check') or {}
+        failed_constraints = int(health_check.get('failed_constraints', 0) or 0)
+        duplicate_uuids_found = int(health_check.get('duplicate_uuids_found', 0) or 0)
+        health_all_healthy = bool(health_check.get('all_healthy', True))
+
+        # Aggregate per-phase durations from individual activity results
+        prune_duration_ms = sum(
+            int(r.get('duration_ms', 0) or 0)
+            for r in prune_results if isinstance(r, dict)
+        )
+        merge_duration_ms = sum(
+            int(r.get('duration_ms', 0) or 0)
+            for r in merge_results if isinstance(r, dict)
+        )
+        enrich_duration_ms = sum(
+            int(r.get('duration_ms', 0) or 0)
+            for r in enrich_results if isinstance(r, dict)
+        )
+        health_duration_ms = int(health_check.get('duration_ms', 0) or 0)
+
         await prompts_driver.execute_query(
             'CREATE (r:ConsolidationReport { '
             'run_id: $run_id, started_at: $started_at, completed_at: $completed_at, '
@@ -719,6 +825,12 @@ class ConsolidationActivities:
             'pre_total_edges: $pre_total_edges, post_total_edges: $post_total_edges, '
             'total_pruned: $total_pruned, total_merged: $total_merged, total_enriched: $total_enriched, '
             'total_edges_transferred: $total_edges_transferred, '
+            'failed_constraints: $failed_constraints, duplicate_uuids_found: $duplicate_uuids_found, '
+            'health_all_healthy: $health_all_healthy, '
+            'prune_duration_ms: $prune_duration_ms, '
+            'merge_duration_ms: $merge_duration_ms, '
+            'enrich_duration_ms: $enrich_duration_ms, '
+            'health_duration_ms: $health_duration_ms, '
             'total_duration_ms: $total_duration_ms })',
             run_id=str(result_data.get('run_id', '')),
             started_at=str(result_data.get('started_at', '')),
@@ -731,5 +843,12 @@ class ConsolidationActivities:
             total_merged=total_merged,
             total_enriched=total_enriched,
             total_edges_transferred=total_edges_transferred,
+            failed_constraints=failed_constraints,
+            duplicate_uuids_found=duplicate_uuids_found,
+            health_all_healthy=health_all_healthy,
+            prune_duration_ms=prune_duration_ms,
+            merge_duration_ms=merge_duration_ms,
+            enrich_duration_ms=enrich_duration_ms,
+            health_duration_ms=health_duration_ms,
             total_duration_ms=int(result_data.get('total_duration_ms', 0) or 0),
         )
