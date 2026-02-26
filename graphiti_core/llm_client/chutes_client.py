@@ -447,7 +447,7 @@ class ChutesClient(LLMClient):
             logger.info('Budget check passed, making HTTP request...')
 
             # GLM-4.5 returns empty content with json_schema format - use json_object instead
-            response_format = {'type': 'json_object'}
+            response_format = typing.cast(typing.Any, {'type': 'json_object'})
             if response_model is not None:
                 logger.debug(f'Using json_object format for schema: {response_model.__name__}')
 
@@ -482,12 +482,9 @@ class ChutesClient(LLMClient):
             result = message.content or ''
 
             # Check reasoning_content field if content is empty (GLM-4.5-FP8 behavior)
-            if (
-                not result.strip()
-                and hasattr(message, 'reasoning_content')
-                and message.reasoning_content
-            ):
-                result = message.reasoning_content
+            reasoning_content = getattr(message, 'reasoning_content', None)
+            if not result.strip() and isinstance(reasoning_content, str) and reasoning_content:
+                result = reasoning_content
                 logger.debug('Using reasoning_content field from GLM-4.5-FP8 response')
 
             # Handle empty or whitespace-only responses
@@ -1000,14 +997,24 @@ Rules:
 
         context_existing_text = existing_nodes_text
         if context_existing_text is None and existing_nodes_list:
-            context_existing_text, compression_stats = (
-                compressor.compress_existing_entities_for_batch(existing_nodes_list)
-            )
-            if compression_stats.original_tokens and compression_stats.compression_ratio < 0.95:
-                logger.debug(
-                    'Chutes batch dedup compression stats: %s',
-                    compression_stats.__dict__,
+            compress_for_batch = getattr(compressor, 'compress_existing_entities_for_batch', None)
+            if callable(compress_for_batch):
+                compress_for_batch_fn = typing.cast(
+                    typing.Callable[[list[dict[str, Any]]], object],
+                    compress_for_batch,
                 )
+                compression_result = compress_for_batch_fn(existing_nodes_list)
+                if isinstance(compression_result, tuple) and len(compression_result) == 2:
+                    context_existing_text = typing.cast(str, compression_result[0])
+                    compression_stats = compression_result[1]
+                    if (
+                        getattr(compression_stats, 'original_tokens', 0)
+                        and getattr(compression_stats, 'compression_ratio', 1.0) < 0.95
+                    ):
+                        logger.debug(
+                            'Chutes batch dedup compression stats: %s',
+                            getattr(compression_stats, '__dict__', {}),
+                        )
 
         existing_nodes_block = context_existing_text or ''
 
@@ -1313,9 +1320,7 @@ class RobustJSONParser:
                 name = match.group(1).strip()
                 entity_type = match.group(2).strip() if match.group(2) else 'unknown'
                 if name:
-                    episode.entities.append(
-                        BatchEntity(name=name, type=entity_type, episode_index=idx)
-                    )
+                    episode.entities.append(BatchEntity(name=name, type=entity_type))
 
             # Extract relationships
             rel_pattern = (
@@ -1331,7 +1336,6 @@ class RobustJSONParser:
                             source=source,
                             target=target,
                             relationship_type=rel_type,
-                            episode_index=idx,
                         )
                     )
 
@@ -1391,7 +1395,6 @@ class RobustJSONParser:
                                                         'type', e.get('entity_type', 'unknown')
                                                     ),
                                                     context=e.get('context', ''),
-                                                    episode_index=episode_idx,
                                                 )
                                             )
 
@@ -1410,7 +1413,6 @@ class RobustJSONParser:
                                                     'relationship_type', r.get('type', 'RELATED_TO')
                                                 ),
                                                 context=r.get('context', ''),
-                                                episode_index=episode_idx,
                                             )
                                         )
 
@@ -1455,9 +1457,7 @@ class RobustJSONParser:
             for i, entity_name in enumerate(entities_found):
                 episode_idx = min(i // entities_per_episode, expected_episodes - 1)
                 result.episodes[episode_idx].entities.append(
-                    BatchEntity(
-                        name=entity_name, type='unknown', context='', episode_index=episode_idx
-                    )
+                    BatchEntity(name=entity_name, type='unknown', context='')
                 )
 
         result.calculate_totals()
@@ -1513,7 +1513,6 @@ class RobustJSONParser:
                                             name=entity_name,
                                             type=e.get('type', e.get('entity_type', 'unknown')),
                                             context=e.get('context', ''),
-                                            episode_index=i,
                                         )
                                     )
                                 except ValidationError:
@@ -1533,7 +1532,6 @@ class RobustJSONParser:
                                             'relationship_type', r.get('type', 'RELATED_TO')
                                         ),
                                         context=r.get('context', ''),
-                                        episode_index=i,
                                     )
                                 )
                             except ValidationError:

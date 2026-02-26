@@ -20,8 +20,9 @@ import os
 import re
 from contextlib import suppress
 from difflib import SequenceMatcher
+from types import SimpleNamespace
 from time import time
-from typing import Any
+from typing import Any, Awaitable, Callable, cast
 from uuid import uuid4, uuid5, NAMESPACE_DNS
 
 import pydantic
@@ -1180,13 +1181,24 @@ async def resolve_extracted_nodes_batch(
             for record in records
         ]
 
-        existing_nodes_text, compression_stats = compressor.compress_existing_entities_for_batch(
-            existing_nodes_raw
+        compress_for_batch = cast(
+            Callable[[list[dict[str, Any]]], tuple[str, Any]] | None,
+            getattr(cast(Any, compressor), 'compress_existing_entities_for_batch', None),
         )
+        if callable(compress_for_batch):
+            compress_for_batch_fn = cast(
+                Callable[[list[dict[str, Any]]], tuple[str, Any]], compress_for_batch
+            )
+            existing_nodes_text, compression_stats = compress_for_batch_fn(existing_nodes_raw)
+        else:
+            existing_nodes_text = '\n'.join(
+                [f'Candidate idx={idx}: {node}' for idx, node in enumerate(existing_nodes_raw)]
+            )
+            compression_stats = SimpleNamespace(original_tokens=0, compression_ratio=1.0)
         if compression_stats.original_tokens and compression_stats.compression_ratio < 0.95:
             logger.debug(
                 'Batch dedup prompt compression applied: %s',
-                compression_stats.__dict__,
+                vars(compression_stats),
             )
 
         existing_nodes_metadata = [
@@ -1200,7 +1212,17 @@ async def resolve_extracted_nodes_batch(
         ]
 
         # Make single batch LLM call
-        llm_response = await llm_client.dedupe_entities_batch(
+        dedupe_entities_batch = cast(
+            Callable[..., Awaitable[dict[str, Any]]] | None,
+            getattr(cast(Any, llm_client), 'dedupe_entities_batch', None),
+        )
+        if not callable(dedupe_entities_batch):
+            raise AttributeError('dedupe_entities_batch is not available on llm_client')
+        dedupe_entities_batch_fn = cast(
+            Callable[..., Awaitable[dict[str, Any]]], dedupe_entities_batch
+        )
+
+        llm_response = await dedupe_entities_batch_fn(
             episodes_nodes_for_llm,
             episode_contents,
             existing_nodes_metadata,

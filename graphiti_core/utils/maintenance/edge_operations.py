@@ -21,6 +21,7 @@ import unicodedata
 from datetime import datetime
 from time import time
 from typing import Any
+from collections.abc import Mapping
 
 from pydantic import BaseModel
 from typing_extensions import LiteralString
@@ -302,7 +303,7 @@ async def extract_edges(
     previous_episodes: list[EpisodicNode],
     edge_type_map: dict[tuple[str, str], list[str]],
     group_id: str = '',
-    edge_types: dict[str, BaseModel] | None = None,
+    edge_types: Mapping[str, BaseModel | type[BaseModel]] | None = None,
 ) -> list[EntityEdge]:
     start = time()
 
@@ -344,18 +345,28 @@ async def extract_edges(
     facts_missed = True
     reflexion_iterations = 0
     while facts_missed and reflexion_iterations <= MAX_REFLEXION_ITERATIONS:
-        llm_response = await llm_client.generate_response(
+        llm_response: Any = await llm_client.generate_response(
             prompt_library.extract_edges.edge(context),
             response_model=ExtractedEdges,
             max_tokens=extract_edges_max_tokens,
         )
         # Handle both dict and list responses from LLM
+        edges_data: list[dict[str, Any]]
         if isinstance(llm_response, list):
-            edges_data = llm_response
+            edges_data = [item for item in llm_response if isinstance(item, dict)]
+        elif isinstance(llm_response, dict):
+            raw_edges = llm_response.get('edges', []) or llm_response.get('facts', []) or []
+            if isinstance(raw_edges, list):
+                edges_data = [item for item in raw_edges if isinstance(item, dict)]
+            else:
+                edges_data = []
         else:
-            edges_data = llm_response.get('edges', []) or llm_response.get('facts', []) or []
+            edges_data = []
 
-        context['extracted_facts'] = [edge_data.get('fact', '') for edge_data in edges_data]
+        context['extracted_facts'] = [
+            edge_data.get('fact', '') if isinstance(edge_data, dict) else ''
+            for edge_data in edges_data
+        ]
 
         reflexion_iterations += 1
         if reflexion_iterations < MAX_REFLEXION_ITERATIONS:
@@ -384,6 +395,8 @@ async def extract_edges(
     # Convert the extracted data into EntityEdge objects
     edges = []
     for edge_data in edges_data:
+        if not isinstance(edge_data, dict):
+            continue
         # Validate Edge Date information
         valid_at = edge_data.get('valid_at', None)
         invalid_at = edge_data.get('invalid_at', None)
@@ -450,7 +463,7 @@ async def resolve_extracted_edges(
     extracted_edges: list[EntityEdge],
     episode: EpisodicNode,
     entities: list[EntityNode],
-    edge_types: dict[str, BaseModel],
+    edge_types: Mapping[str, BaseModel | type[BaseModel]],
     edge_type_map: dict[tuple[str, str], list[str]],
 ) -> tuple[list[EntityEdge], list[EntityEdge]]:
     driver = clients.driver
@@ -473,7 +486,7 @@ async def resolve_extracted_edges(
     uuid_entity_map: dict[str, EntityNode] = {entity.uuid: entity for entity in entities}
 
     # Determine which edge types are relevant for each edge
-    edge_types_lst: list[dict[str, BaseModel]] = []
+    edge_types_lst: list[Mapping[str, BaseModel | type[BaseModel]]] = []
     for extracted_edge in extracted_edges:
         source_node = uuid_entity_map.get(extracted_edge.source_node_uuid)
         target_node = uuid_entity_map.get(extracted_edge.target_node_uuid)
@@ -563,7 +576,7 @@ async def resolve_extracted_edges_batch(
     related_edges_lists: list[list[EntityEdge]],
     edge_invalidation_candidates: list[list[EntityEdge]],
     episode: EpisodicNode,
-    edge_types_lst: list[dict[str, BaseModel]],
+    edge_types_lst: list[Mapping[str, BaseModel | type[BaseModel]]],
 ) -> tuple[list[EntityEdge], list[EntityEdge]]:
     batch_size = int(os.getenv('BATCH_EDGE_RESOLUTION_SIZE', '3'))
 
@@ -745,7 +758,7 @@ async def resolve_extracted_edge(
     related_edges: list[EntityEdge],
     existing_edges: list[EntityEdge],
     episode: EpisodicNode,
-    edge_types: dict[str, BaseModel] | None = None,
+    edge_types: Mapping[str, BaseModel | type[BaseModel]] | None = None,
 ) -> tuple[EntityEdge, list[EntityEdge], list[EntityEdge]]:
     if len(related_edges) == 0 and len(existing_edges) == 0:
         return extracted_edge, [], []
@@ -814,10 +827,16 @@ async def resolve_extracted_edge(
         }
 
         edge_model = edge_types.get(fact_type)
-        if edge_model is not None and len(edge_model.model_fields) != 0:
+        model_cls: type[BaseModel] | None = None
+        if isinstance(edge_model, type) and issubclass(edge_model, BaseModel):
+            model_cls = edge_model
+        elif isinstance(edge_model, BaseModel):
+            model_cls = type(edge_model)
+
+        if model_cls is not None and len(model_cls.model_fields) != 0:
             edge_attributes_response = await llm_client.generate_response(
                 prompt_library.extract_edges.extract_attributes(edge_attributes_context),
-                response_model=edge_model,  # type: ignore
+                response_model=model_cls,
                 model_size=ModelSize.small,
             )
 

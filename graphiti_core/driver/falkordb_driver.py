@@ -93,6 +93,10 @@ def _preprocess_vectors_in_params(params: dict[str, Any]) -> dict[str, Any]:
     return {key: convert(val, 0) for key, val in params.items()}
 
 
+def _ensure_dict_params(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
 def _wrap_vector_params_in_query(query: str, params: dict[str, Any]) -> str:
     """Wrap vector parameters with vecf32() in Cypher queries.
 
@@ -184,7 +188,7 @@ class FalkorDriverSession(GraphDriverSession):
             results = []
             errors = []
             for cypher, params in query:
-                params = convert_datetimes_to_strings(params)
+                params = _ensure_dict_params(convert_datetimes_to_strings(params))
                 params = _preprocess_vectors_in_params(params)
                 wrapped_cypher = _wrap_vector_params_in_query(str(cypher), params)
                 summary = _summarize_params(params)
@@ -218,7 +222,7 @@ class FalkorDriverSession(GraphDriverSession):
             return results
         else:
             params = _flatten_params(dict(kwargs))
-            params = convert_datetimes_to_strings(params)
+            params = _ensure_dict_params(convert_datetimes_to_strings(params))
             params = _preprocess_vectors_in_params(params)
             wrapped_query = _wrap_vector_params_in_query(str(query), params)
             summary = _summarize_params(params)
@@ -294,6 +298,7 @@ class FalkorDriver(GraphDriver):
 
         # 2) Convert datetime objects to ISO strings (FalkorDB does not support datetime objects directly)
         params = convert_datetimes_to_strings(raw_params)
+        params = _ensure_dict_params(params)
 
         # 3) Convert nested vector lists to VectorF32 so FalkorDB accepts them in UNWIND payloads
         params = _preprocess_vectors_in_params(params)

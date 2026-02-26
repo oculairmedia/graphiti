@@ -8,13 +8,19 @@ This replaces the agentic-learning SDK which requires an older letta-client vers
 """
 
 import logging
+import importlib
 import os
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from contextlib import contextmanager
 from functools import wraps
 from typing import Any, Callable, Generator, TypeVar
 
-from letta_client import Letta
+try:
+    Letta = importlib.import_module('letta_client').Letta
+except ImportError:
+    raise ImportError(
+        'letta-client is required for stateful learning. Install it with: pip install letta-client'
+    ) from None
 
 logger = logging.getLogger(__name__)
 
@@ -132,12 +138,16 @@ class StatefulLearningClient:
                 for result in results.results:
                     if hasattr(result, 'content'):
                         memories.append(result.content)
-                    elif hasattr(result, 'text'):
-                        memories.append(result.text)
+                    else:
+                        result_text = getattr(result, 'text', None)
+                        if isinstance(result_text, str):
+                            memories.append(result_text)
             elif hasattr(results, 'passages'):
-                for passage in results.passages:
-                    if hasattr(passage, 'text'):
-                        memories.append(passage.text)
+                passages = getattr(results, 'passages', [])
+                for passage in passages:
+                    passage_text = getattr(passage, 'text', None)
+                    if isinstance(passage_text, str):
+                        memories.append(passage_text)
 
             return memories
         except Exception as e:

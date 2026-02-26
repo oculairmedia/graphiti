@@ -43,16 +43,17 @@ CEREBRAS_RATE_LIMIT_DELAY = 8.0  # seconds
 class CerebrasClient(LLMClient):
     """
     CerebrasClient is a client class for interacting with Cerebras's Qwen language models.
-    
+
     This class extends the LLMClient and provides Cerebras-specific implementation
     for creating completions using the Qwen Coder model.
-    
+
     Attributes:
         client (Cerebras): The Cerebras client used to interact with the API.
     """
+
     # Class-level variable to track last request time across all instances
     _last_request_time: ClassVar[float] = 0.0
-    
+
     def __init__(
         self,
         config: LLMConfig | None = None,
@@ -62,7 +63,7 @@ class CerebrasClient(LLMClient):
     ):
         """
         Initialize the CerebrasClient with the provided configuration.
-        
+
         Args:
             config (LLMConfig | None): The configuration for the LLM client.
             cache (bool): Whether to use caching for responses. Defaults to False.
@@ -70,21 +71,23 @@ class CerebrasClient(LLMClient):
         """
         if cache:
             raise NotImplementedError('Caching is not implemented for Cerebras client')
-        
+
         if config is None:
             config = LLMConfig()
-            
+
         # Set default models if not provided
         if not config.model:
             config.model = DEFAULT_CEREBRAS_MODEL
         if not config.small_model:
             config.small_model = DEFAULT_CEREBRAS_SMALL_MODEL
-            
+
         super().__init__(config, cache)
         self.max_tokens = max_tokens
-        
-        logger.info(f"CerebrasClient initialized with rate limiting (delay: {CEREBRAS_RATE_LIMIT_DELAY}s)")
-        
+
+        logger.info(
+            f'CerebrasClient initialized with rate limiting (delay: {CEREBRAS_RATE_LIMIT_DELAY}s)'
+        )
+
         if client is None:
             # Get API key from config or environment
             api_key = config.api_key or os.getenv('CEREBRAS_API_KEY')
@@ -96,17 +99,15 @@ class CerebrasClient(LLMClient):
             self.client = Cerebras(api_key=api_key)
         else:
             self.client = client
-    
+
     def _get_model_for_size(self, model_size: ModelSize) -> str:
         """Get the appropriate model name based on the requested size."""
         if model_size == ModelSize.small:
             return self.small_model or DEFAULT_CEREBRAS_SMALL_MODEL
         else:
             return self.model or DEFAULT_CEREBRAS_MODEL
-    
-    def _convert_messages_to_cerebras_format(
-        self, messages: list[Message]
-    ) -> list[dict[str, str]]:
+
+    def _convert_messages_to_cerebras_format(self, messages: list[Message]) -> list[dict[str, str]]:
         """Convert internal Message format to Cerebras message format."""
         cerebras_messages = []
         for m in messages:
@@ -114,11 +115,11 @@ class CerebrasClient(LLMClient):
             if m.role in ['user', 'system']:
                 cerebras_messages.append({'role': m.role, 'content': m.content})
         return cerebras_messages
-    
+
     def _create_json_schema(self, response_model: type[BaseModel]) -> dict:
         """Create a Cerebras-compatible JSON schema from a Pydantic model."""
         schema = response_model.model_json_schema()
-        
+
         # Cerebras requires additionalProperties to be set to false
         # and all properties to be in the required array
         def fix_schema_for_cerebras(obj, path=''):
@@ -133,15 +134,11 @@ class CerebrasClient(LLMClient):
             elif isinstance(obj, list):
                 for i, item in enumerate(obj):
                     fix_schema_for_cerebras(item, f'{path}[{i}]')
-        
+
         fix_schema_for_cerebras(schema)
-        
-        return {
-            'name': response_model.__name__.lower(),
-            'strict': True,
-            'schema': schema
-        }
-    
+
+        return {'name': response_model.__name__.lower(), 'strict': True, 'schema': schema}
+
     async def _generate_response(
         self,
         messages: list[Message],
@@ -151,38 +148,43 @@ class CerebrasClient(LLMClient):
     ) -> dict[str, Any]:
         """
         Generate a response using the Cerebras API.
-        
+
         Args:
             messages: List of messages in the conversation.
             response_model: Optional Pydantic model for structured output.
             max_tokens: Maximum tokens to generate.
             model_size: Size of the model to use.
-            
+
         Returns:
             Dictionary containing the response.
         """
-        logger.info("CerebrasClient._generate_response called - starting request processing")
-        
+        logger.info('CerebrasClient._generate_response called - starting request processing')
+
         # Rate limiting: ensure 4 seconds between requests
         current_time = time.time()
         time_since_last_request = current_time - CerebrasClient._last_request_time
-        
-        logger.info(f"Cerebras rate limiting check: time since last request = {time_since_last_request:.2f}s (limit: {CEREBRAS_RATE_LIMIT_DELAY}s)")
-        
+
+        logger.info(
+            f'Cerebras rate limiting check: time since last request = {time_since_last_request:.2f}s (limit: {CEREBRAS_RATE_LIMIT_DELAY}s)'
+        )
+
         if time_since_last_request < CEREBRAS_RATE_LIMIT_DELAY:
             delay_needed = CEREBRAS_RATE_LIMIT_DELAY - time_since_last_request
-            logger.info(f"Rate limiting: waiting {delay_needed:.2f} seconds before Cerebras request")
+            logger.info(
+                f'Rate limiting: waiting {delay_needed:.2f} seconds before Cerebras request'
+            )
             import asyncio  # Import locally to avoid scoping issues
+
             await asyncio.sleep(delay_needed)
         else:
-            logger.info("Rate limiting: no delay needed, proceeding with Cerebras request")
-        
+            logger.info('Rate limiting: no delay needed, proceeding with Cerebras request')
+
         # Update last request time
         CerebrasClient._last_request_time = time.time()
-        
+
         cerebras_messages = self._convert_messages_to_cerebras_format(messages)
         model = self._get_model_for_size(model_size)
-        
+
         try:
             completion_params = {
                 'messages': cerebras_messages,
@@ -192,13 +194,13 @@ class CerebrasClient(LLMClient):
                 'top_p': 0.8,  # Recommended for qwen-3-coder-480b
                 # Note: top_k, frequency_penalty, repetition_penalty not supported by Cerebras API
             }
-            
+
             # Add structured output format if response model is provided
             if response_model:
                 json_schema = self._create_json_schema(response_model)
                 completion_params['response_format'] = {
                     'type': 'json_schema',
-                    'json_schema': json_schema
+                    'json_schema': json_schema,
                 }
             else:
                 # For non-structured responses, still request JSON format
@@ -207,38 +209,41 @@ class CerebrasClient(LLMClient):
                     'json_schema': {
                         'name': 'response',
                         'strict': False,
-                        'schema': {
-                            'type': 'object',
-                            'additionalProperties': True
-                        }
-                    }
+                        'schema': {'type': 'object', 'additionalProperties': True},
+                    },
                 }
-            
+
             # Use synchronous API call and wrap in async context
             # Note: Cerebras SDK doesn't have native async support yet
             import asyncio
+
             loop = asyncio.get_event_loop()
-            
+
             def sync_completion():
                 return self.client.chat.completions.create(**completion_params)
-            
+
             chat_completion = await loop.run_in_executor(None, sync_completion)
-            
-            if chat_completion.choices and len(chat_completion.choices) > 0:
-                content = chat_completion.choices[0].message.content
-                
+            completion_obj = typing.cast(typing.Any, chat_completion)
+
+            choices = getattr(completion_obj, 'choices', None)
+            if isinstance(choices, list) and len(choices) > 0:
+                first_choice = choices[0]
+                message = getattr(first_choice, 'message', None)
+                content = getattr(message, 'content', None)
+
                 if content:
                     try:
                         result = json.loads(content)
-                        
+
                         # Log token usage if available
-                        if hasattr(chat_completion, 'usage') and chat_completion.usage:
+                        usage = getattr(completion_obj, 'usage', None)
+                        if usage:
                             logger.debug(
-                                f'Token usage - Prompt: {chat_completion.usage.prompt_tokens}, '
-                                f'Completion: {chat_completion.usage.completion_tokens}, '
-                                f'Total: {chat_completion.usage.total_tokens}'
+                                f'Token usage - Prompt: {getattr(usage, "prompt_tokens", None)}, '
+                                f'Completion: {getattr(usage, "completion_tokens", None)}, '
+                                f'Total: {getattr(usage, "total_tokens", None)}'
                             )
-                        
+
                         # Validate against response model if provided (similar to Gemini client)
                         if response_model is not None:
                             try:
@@ -246,10 +251,14 @@ class CerebrasClient(LLMClient):
                                 # Return as a dictionary for API consistency
                                 return validated_model.model_dump()
                             except Exception as e:
-                                logger.error(f'Failed to validate response against model {response_model.__name__}: {e}')
-                                logger.error(f'Raw response that failed validation: {json.dumps(result, indent=2)[:500]}...')
+                                logger.error(
+                                    f'Failed to validate response against model {response_model.__name__}: {e}'
+                                )
+                                logger.error(
+                                    f'Raw response that failed validation: {json.dumps(result, indent=2)[:500]}...'
+                                )
                                 raise e
-                        
+
                         return result
                     except json.JSONDecodeError as e:
                         logger.error(f'Failed to parse JSON response: {content[:500]}')
@@ -260,7 +269,7 @@ class CerebrasClient(LLMClient):
             else:
                 logger.error('No choices in Cerebras response')
                 return {}
-                
+
         except CerebrasError as e:
             if 'rate_limit' in str(e).lower():
                 raise RateLimitError(f'Cerebras rate limit exceeded: {e}')

@@ -8,7 +8,7 @@ that ensures entities and edges are correctly stored and maintain referential in
 import logging
 import os
 from enum import Enum
-from typing import Any, Dict, List, Optional, Union, Callable
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Union
 from dataclasses import dataclass
 from datetime import datetime
 import asyncio
@@ -50,7 +50,12 @@ class IntegrityCheckResult:
     repair_suggestion: Optional[str] = None
 
     @classmethod
-    def success(cls, check_name: str, message: str = '', entity_id: str = None):
+    def success(
+        cls,
+        check_name: str,
+        message: str = '',
+        entity_id: Optional[str] = None,
+    ):
         """Create a successful integrity check result."""
         return cls(
             passed=True,
@@ -65,8 +70,8 @@ class IntegrityCheckResult:
         cls,
         check_name: str,
         message: str,
-        entity_id: str = None,
-        repair_suggestion: str = None,
+        entity_id: Optional[str] = None,
+        repair_suggestion: Optional[str] = None,
         severity: str = 'ERROR',
     ):
         """Create a failed integrity check result."""
@@ -81,7 +86,11 @@ class IntegrityCheckResult:
 
     @classmethod
     def warning(
-        cls, check_name: str, message: str, entity_id: str = None, repair_suggestion: str = None
+        cls,
+        check_name: str,
+        message: str,
+        entity_id: Optional[str] = None,
+        repair_suggestion: Optional[str] = None,
     ):
         """Create a warning integrity check result."""
         return cls(
@@ -101,10 +110,16 @@ class PostSaveValidator:
         self.driver = driver
         self.enable_auto_repair = enable_auto_repair
         self.logger = logging.getLogger(f'{__name__}.PostSaveValidator')
-        self._integrity_checks: Dict[str, Callable] = {}
+        self._integrity_checks: Dict[
+            str, Callable[[Any, Dict[str, Any]], Awaitable[Optional[IntegrityCheckResult]]]
+        ] = {}
         self._register_default_checks()
 
-    def register_integrity_check(self, name: str, check_function: Callable):
+    def register_integrity_check(
+        self,
+        name: str,
+        check_function: Callable[[Any, Dict[str, Any]], Awaitable[Optional[IntegrityCheckResult]]],
+    ):
         """Register a custom integrity check function."""
         self._integrity_checks[name] = check_function
         self.logger.info(f'Registered integrity check: {name}')
@@ -119,15 +134,26 @@ class PostSaveValidator:
         self.register_integrity_check('embedding_consistency', self._check_embedding_consistency)
         self.register_integrity_check('temporal_consistency', self._check_temporal_consistency)
 
+    @staticmethod
+    def _get_value(item: Any, field: str) -> Any:
+        if isinstance(item, dict):
+            return item.get(field)
+        return getattr(item, field, None)
+
+    @classmethod
+    def _get_optional_str(cls, item: Any, field: str) -> Optional[str]:
+        value = cls._get_value(item, field)
+        return value if isinstance(value, str) else None
+
     async def validate_entity_post_save(
-        self, entity: Union[EntityNode, dict], context: Dict[str, Any] = None
+        self, entity: Union[EntityNode, dict], context: Optional[Dict[str, Any]] = None
     ) -> List[IntegrityCheckResult]:
         """Run post-save validation checks on an entity."""
         if context is None:
             context = {}
 
         results = []
-        entity_id = entity.uuid if isinstance(entity, EntityNode) else entity.get('uuid')
+        entity_id = self._get_optional_str(entity, 'uuid')
 
         # Run all relevant integrity checks
         for check_name, check_function in self._integrity_checks.items():
@@ -150,14 +176,14 @@ class PostSaveValidator:
         return results
 
     async def validate_edge_post_save(
-        self, edge: Union[EntityEdge, dict], context: Dict[str, Any] = None
+        self, edge: Union[EntityEdge, dict], context: Optional[Dict[str, Any]] = None
     ) -> List[IntegrityCheckResult]:
         """Run post-save validation checks on an edge."""
         if context is None:
             context = {}
 
         results = []
-        edge_id = edge.uuid if isinstance(edge, EntityEdge) else edge.get('uuid')
+        edge_id = self._get_optional_str(edge, 'uuid')
 
         # Run all relevant integrity checks
         for check_name, check_function in self._integrity_checks.items():
@@ -180,7 +206,7 @@ class PostSaveValidator:
         return results
 
     async def validate_batch_post_save(
-        self, entities: List[Any], context: Dict[str, Any] = None
+        self, entities: List[Any], context: Optional[Dict[str, Any]] = None
     ) -> List[IntegrityCheckResult]:
         """Run post-save validation checks on a batch of entities."""
         if context is None:
@@ -190,13 +216,11 @@ class PostSaveValidator:
 
         # Individual entity/edge checks
         for entity in entities:
-            if isinstance(entity, (EntityNode, dict)) and (
-                'name' in entity or hasattr(entity, 'name')
-            ):
+            if isinstance(entity, EntityNode) or (isinstance(entity, dict) and 'name' in entity):
                 results = await self.validate_entity_post_save(entity, context)
                 all_results.extend(results)
-            elif isinstance(entity, (EntityEdge, dict)) and (
-                'source_node_uuid' in entity or hasattr(entity, 'source_node_uuid')
+            elif isinstance(entity, EntityEdge) or (
+                isinstance(entity, dict) and 'source_node_uuid' in entity
             ):
                 results = await self.validate_edge_post_save(entity, context)
                 all_results.extend(results)
@@ -212,7 +236,7 @@ class PostSaveValidator:
         self, entity: Any, context: Dict[str, Any]
     ) -> Optional[IntegrityCheckResult]:
         """Check that entity exists in database after save."""
-        entity_id = entity.uuid if hasattr(entity, 'uuid') else entity.get('uuid')
+        entity_id = self._get_optional_str(entity, 'uuid')
         if not entity_id:
             return IntegrityCheckResult.failure(
                 'entity_exists',
@@ -253,17 +277,9 @@ class PostSaveValidator:
         self, edge: Any, context: Dict[str, Any]
     ) -> Optional[IntegrityCheckResult]:
         """Check that edge references valid nodes."""
-        source_uuid = (
-            edge.source_node_uuid
-            if hasattr(edge, 'source_node_uuid')
-            else edge.get('source_node_uuid')
-        )
-        target_uuid = (
-            edge.target_node_uuid
-            if hasattr(edge, 'target_node_uuid')
-            else edge.get('target_node_uuid')
-        )
-        edge_id = edge.uuid if hasattr(edge, 'uuid') else edge.get('uuid')
+        source_uuid = self._get_optional_str(edge, 'source_node_uuid')
+        target_uuid = self._get_optional_str(edge, 'target_node_uuid')
+        edge_id = self._get_optional_str(edge, 'uuid')
 
         if not source_uuid or not target_uuid:
             return IntegrityCheckResult.failure(
@@ -318,7 +334,7 @@ class PostSaveValidator:
         self, entity: Any, context: Dict[str, Any]
     ) -> Optional[IntegrityCheckResult]:
         """Check that entity UUID is unique in the database."""
-        entity_id = entity.uuid if hasattr(entity, 'uuid') else entity.get('uuid')
+        entity_id = self._get_optional_str(entity, 'uuid')
         if not entity_id:
             return None
 
@@ -346,7 +362,7 @@ class PostSaveValidator:
         self, entity: Any, context: Dict[str, Any]
     ) -> Optional[IntegrityCheckResult]:
         """Check that centrality values are within valid bounds."""
-        entity_id = entity.uuid if hasattr(entity, 'uuid') else entity.get('uuid')
+        entity_id = self._get_optional_str(entity, 'uuid')
 
         centrality_fields = [
             'centrality_degree',
@@ -357,13 +373,7 @@ class PostSaveValidator:
 
         issues = []
         for field in centrality_fields:
-            value = (
-                getattr(entity, field, None)
-                if hasattr(entity, field)
-                else entity.get(field)
-                if isinstance(entity, dict)
-                else None
-            )
+            value = self._get_value(entity, field)
 
             if value is not None:
                 try:
@@ -391,13 +401,7 @@ class PostSaveValidator:
         self, entity: Any, context: Dict[str, Any]
     ) -> Optional[IntegrityCheckResult]:
         """Check that required fields are present and valid."""
-        entity_id = (
-            getattr(entity, 'uuid', None)
-            if hasattr(entity, 'uuid')
-            else entity.get('uuid')
-            if isinstance(entity, dict)
-            else None
-        )
+        entity_id = self._get_optional_str(entity, 'uuid')
 
         # Determine entity type and required fields
         if hasattr(entity, 'source_node_uuid') or (
@@ -411,13 +415,7 @@ class PostSaveValidator:
 
         missing_fields = []
         for field in required_fields:
-            value = (
-                getattr(entity, field, None)
-                if hasattr(entity, field)
-                else entity.get(field)
-                if isinstance(entity, dict)
-                else None
-            )
+            value = self._get_value(entity, field)
             if not value:
                 missing_fields.append(field)
 
@@ -437,29 +435,11 @@ class PostSaveValidator:
         self, entity: Any, context: Dict[str, Any]
     ) -> Optional[IntegrityCheckResult]:
         """Check that embeddings are consistent with their source text."""
-        entity_id = (
-            getattr(entity, 'uuid', None)
-            if hasattr(entity, 'uuid')
-            else entity.get('uuid')
-            if isinstance(entity, dict)
-            else None
-        )
+        entity_id = self._get_optional_str(entity, 'uuid')
 
         # Check name embedding
-        name = (
-            getattr(entity, 'name', None)
-            if hasattr(entity, 'name')
-            else entity.get('name')
-            if isinstance(entity, dict)
-            else None
-        )
-        name_embedding = (
-            getattr(entity, 'name_embedding', None)
-            if hasattr(entity, 'name_embedding')
-            else entity.get('name_embedding')
-            if isinstance(entity, dict)
-            else None
-        )
+        name = self._get_value(entity, 'name')
+        name_embedding = self._get_value(entity, 'name_embedding')
 
         issues = []
 
@@ -473,20 +453,8 @@ class PostSaveValidator:
             issues.append('name_embedding is empty')
 
         # Check fact embedding (for edges)
-        fact = (
-            getattr(entity, 'fact', None)
-            if hasattr(entity, 'fact')
-            else entity.get('fact')
-            if isinstance(entity, dict)
-            else None
-        )
-        fact_embedding = (
-            getattr(entity, 'fact_embedding', None)
-            if hasattr(entity, 'fact_embedding')
-            else entity.get('fact_embedding')
-            if isinstance(entity, dict)
-            else None
-        )
+        fact = self._get_value(entity, 'fact')
+        fact_embedding = self._get_value(entity, 'fact_embedding')
 
         if fact and not fact_embedding:
             issues.append('fact present but fact_embedding missing')
@@ -513,50 +481,14 @@ class PostSaveValidator:
         self, entity: Any, context: Dict[str, Any]
     ) -> Optional[IntegrityCheckResult]:
         """Check that timestamps are logically consistent."""
-        entity_id = (
-            getattr(entity, 'uuid', None)
-            if hasattr(entity, 'uuid')
-            else entity.get('uuid')
-            if isinstance(entity, dict)
-            else None
-        )
+        entity_id = self._get_optional_str(entity, 'uuid')
 
         # Get timestamps
-        created_at = (
-            getattr(entity, 'created_at', None)
-            if hasattr(entity, 'created_at')
-            else entity.get('created_at')
-            if isinstance(entity, dict)
-            else None
-        )
-        updated_at = (
-            getattr(entity, 'updated_at', None)
-            if hasattr(entity, 'updated_at')
-            else entity.get('updated_at')
-            if isinstance(entity, dict)
-            else None
-        )
-        valid_at = (
-            getattr(entity, 'valid_at', None)
-            if hasattr(entity, 'valid_at')
-            else entity.get('valid_at')
-            if isinstance(entity, dict)
-            else None
-        )
-        invalid_at = (
-            getattr(entity, 'invalid_at', None)
-            if hasattr(entity, 'invalid_at')
-            else entity.get('invalid_at')
-            if isinstance(entity, dict)
-            else None
-        )
-        expired_at = (
-            getattr(entity, 'expired_at', None)
-            if hasattr(entity, 'expired_at')
-            else entity.get('expired_at')
-            if isinstance(entity, dict)
-            else None
-        )
+        created_at = self._get_value(entity, 'created_at')
+        updated_at = self._get_value(entity, 'updated_at')
+        valid_at = self._get_value(entity, 'valid_at')
+        invalid_at = self._get_value(entity, 'invalid_at')
+        expired_at = self._get_value(entity, 'expired_at')
 
         issues = []
         now = datetime.now()
@@ -597,13 +529,7 @@ class PostSaveValidator:
         # Check for UUID duplicates within batch
         uuids = []
         for entity in entities:
-            uuid = (
-                getattr(entity, 'uuid', None)
-                if hasattr(entity, 'uuid')
-                else entity.get('uuid')
-                if isinstance(entity, dict)
-                else None
-            )
+            uuid = self._get_optional_str(entity, 'uuid')
             if uuid:
                 uuids.append(uuid)
 
@@ -624,20 +550,8 @@ class PostSaveValidator:
         if expected_group_id:
             mismatched_entities = []
             for entity in entities:
-                group_id = (
-                    getattr(entity, 'group_id', None)
-                    if hasattr(entity, 'group_id')
-                    else entity.get('group_id')
-                    if isinstance(entity, dict)
-                    else None
-                )
-                entity_id = (
-                    getattr(entity, 'uuid', None)
-                    if hasattr(entity, 'uuid')
-                    else entity.get('uuid')
-                    if isinstance(entity, dict)
-                    else 'unknown'
-                )
+                group_id = self._get_value(entity, 'group_id')
+                entity_id = self._get_optional_str(entity, 'uuid') or 'unknown'
                 if group_id != expected_group_id:
                     mismatched_entities.append(f'{entity_id}({group_id})')
 
@@ -683,7 +597,9 @@ def get_post_save_validator(driver: GraphDriver) -> PostSaveValidator:
 
 # Utility functions for integration
 async def run_post_save_checks(
-    driver: GraphDriver, entities: List[Any], context: Dict[str, Any] = None
+    driver: GraphDriver,
+    entities: List[Any],
+    context: Optional[Dict[str, Any]] = None,
 ) -> List[IntegrityCheckResult]:
     """Run post-save integrity checks on a list of entities."""
     config = get_post_save_config()
@@ -696,11 +612,11 @@ async def run_post_save_checks(
         # Apply timeout if configured
         if config['timeout_seconds'] > 0:
             results = await asyncio.wait_for(
-                validator.validate_batch_post_save(entities, context),
+                validator.validate_batch_post_save(entities, context or {}),
                 timeout=config['timeout_seconds'],
             )
         else:
-            results = await validator.validate_batch_post_save(entities, context)
+            results = await validator.validate_batch_post_save(entities, context or {})
 
         # Log results
         for result in results:

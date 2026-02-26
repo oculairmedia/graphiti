@@ -15,25 +15,22 @@ limitations under the License.
 """
 
 import logging
+import importlib
 import re
-from typing import TYPE_CHECKING
+from typing import Any
 
 from ..helpers import semaphore_gather
 from ..llm_client import LLMConfig, RateLimitError
 from .client import CrossEncoderClient
 
-if TYPE_CHECKING:
-    from google import genai
-    from google.genai import types
-else:
-    try:
-        from google import genai
-        from google.genai import types
-    except ImportError:
-        raise ImportError(
-            'google-genai is required for GeminiRerankerClient. '
-            'Install it with: pip install graphiti-core[google-genai]'
-        ) from None
+try:
+    genai = importlib.import_module('google.genai')
+    types = importlib.import_module('google.genai.types')
+except ImportError:
+    raise ImportError(
+        'google-genai is required for GeminiRerankerClient. '
+        'Install it with: pip install graphiti-core[google-genai]'
+    ) from None
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +45,7 @@ class GeminiRerankerClient(CrossEncoderClient):
     def __init__(
         self,
         config: LLMConfig | None = None,
-        client: 'genai.Client | None' = None,
+        client: Any = None,
     ):
         """
         Initialize the GeminiRerankerClient with the provided configuration and client.

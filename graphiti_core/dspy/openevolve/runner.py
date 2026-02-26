@@ -104,7 +104,7 @@ class MultiProviderManager:
         self._sequential_index = 0
         self._provider_cycle = cycle(range(len(providers))) if providers else None
         self._call_counts: dict[str, int] = {p.name: 0 for p in providers}
-        self._error_counts: dict[str, int] = {p.name: 0 for p in providers}
+        self._error_counts: dict[str, float] = {p.name: 0.0 for p in providers}
 
     def select_provider(self) -> ProviderConfig:
         """Select a provider based on the current mode."""
@@ -185,7 +185,11 @@ class MultiProviderManager:
         all_models = []
         for provider in self.providers:
             for model in provider.models:
-                model_config = model.copy() if isinstance(model, dict) else {'name': model}
+                model_config: dict[str, Any]
+                if isinstance(model, dict):
+                    model_config = dict(model)
+                else:
+                    model_config = {'name': model}
                 model_config['_provider'] = provider.name
                 model_config['_api_base'] = provider.api_base
                 model_config['_api_key'] = provider.api_key
@@ -225,50 +229,56 @@ def create_default_providers() -> list[ProviderConfig]:
 
     # OpenAI Proxy (local) - Port 8082
     proxy_key = os.environ.get('OPENAI_API_KEY', 'dummy')
-    providers.append(ProviderConfig(
-        name='openai-proxy',
-        api_base='http://192.168.50.90:8082/v1',
-        api_key=proxy_key,
-        weight=1.0,
-        models=[
-            {'name': 'gpt5', 'weight': 1.0},
-            {'name': 'gpt51', 'weight': 0.9},
-            {'name': 'codexmini', 'weight': 0.7},
-            {'name': 'gpt5-reasoning-medium', 'weight': 0.5, 'reasoning': True},
-        ],
-    ))
+    providers.append(
+        ProviderConfig(
+            name='openai-proxy',
+            api_base='http://192.168.50.90:8082/v1',
+            api_key=proxy_key,
+            weight=1.0,
+            models=[
+                {'name': 'gpt5', 'weight': 1.0},
+                {'name': 'gpt51', 'weight': 0.9},
+                {'name': 'codexmini', 'weight': 0.7},
+                {'name': 'gpt5-reasoning-medium', 'weight': 0.5, 'reasoning': True},
+            ],
+        )
+    )
 
     # Gemini Proxy (local) - Port 8083
     gemini_key = os.environ.get('GOOGLE_API_KEY', '')
     if gemini_key:
-        providers.append(ProviderConfig(
-            name='gemini-proxy',
-            api_base='http://192.168.50.90:8083/v1',
-            api_key=gemini_key,
-            weight=1.0,
-            models=[
-                {'name': 'gemini-2.5-flash', 'weight': 1.0},
-                {'name': 'gemini-2.5-pro', 'weight': 0.8},
-                {'name': 'gemini-2.0-flash', 'weight': 0.7},
-                {'name': 'gemini-2.0-flash-exp', 'weight': 0.5},
-            ],
-        ))
+        providers.append(
+            ProviderConfig(
+                name='gemini-proxy',
+                api_base='http://192.168.50.90:8083/v1',
+                api_key=gemini_key,
+                weight=1.0,
+                models=[
+                    {'name': 'gemini-2.5-flash', 'weight': 1.0},
+                    {'name': 'gemini-2.5-pro', 'weight': 0.8},
+                    {'name': 'gemini-2.0-flash', 'weight': 0.7},
+                    {'name': 'gemini-2.0-flash-exp', 'weight': 0.5},
+                ],
+            )
+        )
 
     # Z.AI GLM
     zai_key = os.environ.get('CHUTES_API_KEY', '')
     if zai_key:
-        providers.append(ProviderConfig(
-            name='z-ai-glm',
-            api_base='https://api.z.ai/api/coding/paas/v4',
-            api_key=zai_key,
-            weight=0.6,  # Lower due to timeout issues
-            timeout=180,  # Longer timeout for Z.AI
-            models=[
-                {'name': 'GLM-4.5', 'weight': 1.0},
-                {'name': 'glm-4.6', 'weight': 0.8, 'reasoning': True},
-                {'name': 'glm-4.7', 'weight': 0.6, 'reasoning': True},
-            ],
-        ))
+        providers.append(
+            ProviderConfig(
+                name='z-ai-glm',
+                api_base='https://api.z.ai/api/coding/paas/v4',
+                api_key=zai_key,
+                weight=0.6,  # Lower due to timeout issues
+                timeout=180,  # Longer timeout for Z.AI
+                models=[
+                    {'name': 'GLM-4.5', 'weight': 1.0},
+                    {'name': 'glm-4.6', 'weight': 0.8, 'reasoning': True},
+                    {'name': 'glm-4.7', 'weight': 0.6, 'reasoning': True},
+                ],
+            )
+        )
 
     return providers
 
@@ -298,19 +308,25 @@ class EvolutionConfig:
     llm_api_base: str = 'https://api.z.ai/api/coding/paas/v4'
     llm_model: str = 'GLM-4.5'  # Standard model - reliable output format
     llm_temperature: float = 0.7
-    llm_models: list[dict[str, Any]] = field(default_factory=lambda: [
-        {'name': 'GLM-4.5', 'weight': 1.0},  # Standard model - reliable for structured output
-    ])
+    llm_models: list[dict[str, Any]] = field(
+        default_factory=lambda: [
+            {'name': 'GLM-4.5', 'weight': 1.0},  # Standard model - reliable for structured output
+        ]
+    )
 
     # Feature dimensions for MAP-Elites (use built-in OpenEvolve features)
-    feature_dimensions: list[str] = field(default_factory=lambda: [
-        'score',
-        'complexity',
-        'diversity',
-    ])
+    feature_dimensions: list[str] = field(
+        default_factory=lambda: [
+            'score',
+            'complexity',
+            'diversity',
+        ]
+    )
 
     # API key for Z.AI (read from env)
-    llm_api_key: str = field(default_factory=lambda: __import__('os').environ.get('CHUTES_API_KEY', ''))
+    llm_api_key: str = field(
+        default_factory=lambda: __import__('os').environ.get('CHUTES_API_KEY', '')
+    )
 
     # Evaluation settings
     enable_artifacts: bool = True
@@ -525,8 +541,9 @@ class CheckpointManager:
         """Remove old checkpoints, keeping only the last N."""
         checkpoints = sorted(self.checkpoint_dir.glob('checkpoint_*'))
         if len(checkpoints) > self.max_checkpoints:
-            for old_checkpoint in checkpoints[:-self.max_checkpoints]:
+            for old_checkpoint in checkpoints[: -self.max_checkpoints]:
                 import shutil
+
                 shutil.rmtree(old_checkpoint)
                 logger.debug(f'Removed old checkpoint: {old_checkpoint}')
 
@@ -636,6 +653,7 @@ class OpenEvolveRunner:
         """Check if OpenEvolve is installed."""
         try:
             import openevolve  # noqa: F401
+
             return True
         except ImportError:
             return False
@@ -707,7 +725,7 @@ if __name__ == '__main__':
         if not template:
             return f'You are optimizing a {task_name} prompt for a knowledge graph system.'
 
-        return f'''You are an expert prompt engineer optimizing a {task_name} prompt for Graphiti, a temporal knowledge graph framework.
+        return f"""You are an expert prompt engineer optimizing a {task_name} prompt for Graphiti, a temporal knowledge graph framework.
 
 TARGET: Improve {template.metadata.get('target_metric', 'extraction quality')} by 10-20%
 
@@ -727,7 +745,7 @@ CONSTRAINTS:
 CURRENT CONSTRAINTS TO PRESERVE:
 {json.dumps(template.constraints, indent=2)}
 
-Focus on clarity, precision, and robustness to edge cases.'''
+Focus on clarity, precision, and robustness to edge cases."""
 
     def evolve(
         self,
@@ -747,7 +765,9 @@ Focus on clarity, precision, and robustness to edge cases.'''
             EvolutionResult with best evolved program and metrics
         """
         if task_name not in self._evaluators:
-            raise ValueError(f'Unknown task: {task_name}. Choose from {list(self._evaluators.keys())}')
+            raise ValueError(
+                f'Unknown task: {task_name}. Choose from {list(self._evaluators.keys())}'
+            )
 
         result = EvolutionResult(
             task_name=task_name,
@@ -830,11 +850,15 @@ Focus on clarity, precision, and robustness to edge cases.'''
             return result
 
         cmd = [
-            sys.executable, '-m', 'openevolve',
+            sys.executable,
+            '-m',
+            'openevolve',
             str(initial_program_path),
             str(evaluator_path),
-            '--config', str(config_path),
-            '--iterations', str(self.config.max_iterations),
+            '--config',
+            str(config_path),
+            '--iterations',
+            str(self.config.max_iterations),
         ]
 
         logger.info(f'Running OpenEvolve: {" ".join(cmd)}')
@@ -1115,7 +1139,7 @@ def create_evolution_workspace(
 
     # Create README
     readme_path = output_dir / 'README.md'
-    readme_path.write_text('''# Graphiti OpenEvolve Workspace
+    readme_path.write_text("""# Graphiti OpenEvolve Workspace
 
 This directory contains files for evolving Graphiti DSPy prompts using OpenEvolve.
 
@@ -1158,7 +1182,7 @@ Edit `config.yaml` to customize:
 ## Results
 
 Evolved prompts are saved to `openevolve_work/<task>/output/`.
-''')
+""")
     paths['readme'] = readme_path
 
     logger.info(f'Created evolution workspace in {output_dir}')
@@ -1169,15 +1193,15 @@ if __name__ == '__main__':
     import argparse
 
     parser = argparse.ArgumentParser(description='Run OpenEvolve prompt evolution')
-    parser.add_argument('--task', default='entity_extraction',
-                       choices=['entity_extraction', 'edge_extraction', 'resolution'],
-                       help='Task to evolve')
-    parser.add_argument('--iterations', type=int, default=50,
-                       help='Number of evolution iterations')
-    parser.add_argument('--work-dir', default='openevolve_work',
-                       help='Working directory')
-    parser.add_argument('--setup', action='store_true',
-                       help='Create evolution workspace and exit')
+    parser.add_argument(
+        '--task',
+        default='entity_extraction',
+        choices=['entity_extraction', 'edge_extraction', 'resolution'],
+        help='Task to evolve',
+    )
+    parser.add_argument('--iterations', type=int, default=50, help='Number of evolution iterations')
+    parser.add_argument('--work-dir', default='openevolve_work', help='Working directory')
+    parser.add_argument('--setup', action='store_true', help='Create evolution workspace and exit')
 
     args = parser.parse_args()
 

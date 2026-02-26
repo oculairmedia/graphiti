@@ -15,10 +15,11 @@ limitations under the License.
 """
 
 import json
+import importlib
 import logging
 import re
 import typing
-from typing import TYPE_CHECKING, ClassVar
+from typing import Any, ClassVar
 
 from pydantic import BaseModel
 
@@ -27,19 +28,15 @@ from .client import MULTILINGUAL_EXTRACTION_RESPONSES, LLMClient
 from .config import LLMConfig, ModelSize
 from .errors import RateLimitError
 
-if TYPE_CHECKING:
-    from google import genai
-    from google.genai import types
-else:
-    try:
-        from google import genai
-        from google.genai import types
-    except ImportError:
-        # If gemini client is not installed, raise an ImportError
-        raise ImportError(
-            'google-genai is required for GeminiClient. '
-            'Install it with: pip install graphiti-core[google-genai]'
-        ) from None
+try:
+    genai = importlib.import_module('google.genai')
+    types = importlib.import_module('google.genai.types')
+except ImportError:
+    # If gemini client is not installed, raise an ImportError
+    raise ImportError(
+        'google-genai is required for GeminiClient. '
+        'Install it with: pip install graphiti-core[google-genai]'
+    ) from None
 
 
 logger = logging.getLogger(__name__)
@@ -95,8 +92,8 @@ class GeminiClient(LLMClient):
         config: LLMConfig | None = None,
         cache: bool = False,
         max_tokens: int | None = None,
-        thinking_config: types.ThinkingConfig | None = None,
-        client: 'genai.Client | None' = None,
+        thinking_config: Any = None,
+        client: Any = None,
     ):
         """
         Initialize the GeminiClient with the provided configuration, cache setting, and optional thinking config.

@@ -17,18 +17,19 @@ warnings.warn(
 
 import json
 import asyncio
+import importlib
 from typing import Any, Dict, List, Optional, TypedDict
 from datetime import datetime
 from dataclasses import dataclass, asdict
 from enum import Enum
 import httpx
-import msgpack
 import logging
 from contextlib import asynccontextmanager
 
 from graphiti_core.utils.datetime_utils import utc_now
 
 logger = logging.getLogger(__name__)
+msgpack = importlib.import_module('msgpack')
 
 
 class TaskType(str, Enum):
@@ -61,9 +62,9 @@ class IngestionTask:
     priority: TaskPriority = TaskPriority.NORMAL
     retry_count: int = 0
     max_retries: int = 3
-    created_at: datetime = None
+    created_at: Optional[datetime] = None
     visibility_timeout: int = 300  # 5 minutes
-    metadata: Dict[str, Any] = None
+    metadata: Optional[Dict[str, Any]] = None
 
     def __post_init__(self):
         if self.created_at is None:
@@ -74,7 +75,10 @@ class IngestionTask:
     def to_json(self) -> str:
         """Serialize task to JSON for queue storage"""
         data = asdict(self)
-        data['created_at'] = self.created_at.isoformat()
+        created_at = self.created_at
+        if created_at is None:
+            created_at = utc_now()
+        data['created_at'] = created_at.isoformat()
         data['type'] = self.type.value
         data['priority'] = self.priority.value
         return json.dumps(data)
@@ -390,7 +394,7 @@ class QueueMetrics:
     def record_retry(self, count: int = 1):
         self.tasks_retried += count
 
-    def get_stats(self) -> Dict[str, int]:
+    def get_stats(self) -> Dict[str, float]:
         return {
             'pushed': self.tasks_pushed,
             'polled': self.tasks_polled,

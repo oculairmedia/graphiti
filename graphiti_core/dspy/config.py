@@ -258,9 +258,13 @@ class ReasoningLMWrapper:
 
     def _process_single(self, item: Any) -> Any:
         """Process a single response item."""
-        # If it's a dict-like object with choices
-        if hasattr(item, 'choices') or (isinstance(item, dict) and 'choices' in item):
-            choices = item.choices if hasattr(item, 'choices') else item['choices']
+        choices: Any = None
+        if isinstance(item, dict):
+            choices = item.get('choices')
+        else:
+            choices = getattr(item, 'choices', None)
+
+        if isinstance(choices, list):
             for choice in choices:
                 message = (
                     choice.message if hasattr(choice, 'message') else choice.get('message', {})

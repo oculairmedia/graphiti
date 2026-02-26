@@ -206,9 +206,12 @@ class PromptRegistry:
         async with self._lock:
             if not force_refresh and not self._cache.is_stale():
                 if all(self._cache.get(task) is not None for task in PromptTask):
-                    return {
-                        task: self._cache.get(task) for task in PromptTask if self._cache.get(task)
-                    }
+                    cached_prompts: dict[PromptTask, PromptVersion] = {}
+                    for task in PromptTask:
+                        cached_prompt = self._cache.get(task)
+                        if cached_prompt is not None:
+                            cached_prompts[task] = cached_prompt
+                    return cached_prompts
 
             prompts = await self._fetch_all_live_prompts()
             for task, prompt in prompts.items():

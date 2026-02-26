@@ -8,13 +8,13 @@ data integrity and consistency.
 
 import logging
 from contextlib import asynccontextmanager
-from typing import Any, AsyncGenerator, Callable, TypeVar
+from typing import Any, AsyncGenerator, Callable
 
 from graphiti_core.driver.driver import GraphDriver
 
 logger = logging.getLogger(__name__)
 
-T = TypeVar('T')
+
 
 
 class TransactionError(Exception):
@@ -95,7 +95,7 @@ async def execute_atomic_operation(
     *args,
     database: str | None = None,
     **kwargs,
-) -> T:
+) -> Any:
     """
     Execute a complex operation atomically within a transaction.
 
@@ -272,7 +272,7 @@ class TransactionManager:
 
     async def execute_with_retry(
         self, operation: Callable[[Any], Any], *args, max_retries: int = 3, **kwargs
-    ) -> T:
+    ) -> Any:
         """
         Execute an operation with automatic retry on transient failures.
 

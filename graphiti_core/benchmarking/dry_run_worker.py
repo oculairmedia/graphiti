@@ -15,6 +15,7 @@ limitations under the License.
 """
 
 import asyncio
+import importlib
 import logging
 import time
 import traceback
@@ -31,7 +32,7 @@ except ImportError:
     psutil = None
 
 try:
-    import pyinstrument
+    pyinstrument = importlib.import_module('pyinstrument')
 
     PYINSTRUMENT_AVAILABLE = True
 except ImportError:
@@ -74,7 +75,7 @@ class DryRunWorker:
         )
 
         self.profiler = None
-        if config.enable_profiling and PYINSTRUMENT_AVAILABLE:
+        if config.enable_profiling and PYINSTRUMENT_AVAILABLE and pyinstrument is not None:
             self.profiler = pyinstrument.Profiler()
 
     async def run_benchmark(self) -> BenchmarkMetrics:
@@ -178,7 +179,7 @@ class DryRunWorker:
 
         try:
             # Record memory usage before processing
-            if self.config.collect_memory_stats and PSUTIL_AVAILABLE:
+            if self.config.collect_memory_stats and PSUTIL_AVAILABLE and psutil is not None:
                 process = psutil.Process()
                 memory_before = process.memory_info().rss / 1024 / 1024  # MB
                 episode_metrics.memory_used_mb = memory_before
@@ -215,7 +216,7 @@ class DryRunWorker:
                     await self._restore_hyperparameters(original_config)
 
             # Record final memory usage
-            if self.config.collect_memory_stats and PSUTIL_AVAILABLE:
+            if self.config.collect_memory_stats and PSUTIL_AVAILABLE and psutil is not None:
                 memory_after = process.memory_info().rss / 1024 / 1024  # MB
                 episode_metrics.memory_used_mb = max(
                     episode_metrics.memory_used_mb or 0, memory_after
@@ -249,9 +250,9 @@ class DryRunWorker:
                         self.dry_run_graphiti.llm_client.max_tokens = param_value
 
                 elif param_name == 'search_limit':
-                    if hasattr(self.dry_run_graphiti.search, 'limit'):
-                        original_config['search_limit'] = self.dry_run_graphiti.search.limit
-                        self.dry_run_graphiti.search.limit = param_value
+                    logger.debug(
+                        'search_limit hyperparameter is not directly mutable on Graphiti.search'
+                    )
 
                 # Add more hyperparameters as needed
                 logger.debug(f'Applied hyperparameter {param_name}={param_value}')
@@ -270,7 +271,7 @@ class DryRunWorker:
                 elif param_name == 'max_tokens':
                     self.dry_run_graphiti.llm_client.max_tokens = param_value
                 elif param_name == 'search_limit':
-                    self.dry_run_graphiti.search.limit = param_value
+                    continue
             except Exception as e:
                 logger.warning(f'Failed to restore hyperparameter {param_name}: {e}')
 

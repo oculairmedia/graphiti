@@ -18,7 +18,8 @@ import logging
 import os
 from datetime import datetime
 from time import time
-from typing import Any
+from typing import Any, cast
+from collections.abc import Mapping
 
 from dotenv import load_dotenv
 from pydantic import BaseModel
@@ -185,14 +186,15 @@ class Graphiti:
 
         self.store_raw_episode_content = store_raw_episode_content
         self.max_coroutines = max_coroutines
-        if llm_client:
-            self.llm_client = llm_client
-        else:
-            self.llm_client = GraphitiClientFactory.create_llm_client()
-        if embedder:
-            self.embedder = embedder
-        else:
-            self.embedder = GraphitiClientFactory.create_embedder()
+        resolved_llm_client = llm_client or GraphitiClientFactory.create_llm_client()
+        if resolved_llm_client is None:
+            raise ValueError('Failed to initialize llm_client')
+        self.llm_client: LLMClient = resolved_llm_client
+
+        resolved_embedder = embedder or GraphitiClientFactory.create_embedder()
+        if resolved_embedder is None:
+            raise ValueError('Failed to initialize embedder')
+        self.embedder: EmbedderClient = resolved_embedder
         if cross_encoder:
             self.cross_encoder = cross_encoder
         else:
@@ -221,9 +223,10 @@ class Graphiti:
     def _init_event_publisher(self):
         """Initialize the event publisher for real-time change sync (GRAPH-106)."""
         redis_client = None
+        driver_client = getattr(cast(Any, self.driver), 'client', None)
 
-        if hasattr(self.driver, 'client') and hasattr(self.driver.client, 'connection'):
-            redis_client = self.driver.client.connection
+        if driver_client is not None and hasattr(driver_client, 'connection'):
+            redis_client = driver_client.connection
             logger.info('Event publisher: using FalkorDB Redis connection')
         else:
             redis_url = os.getenv('GRAPHITI_REDIS_URL')
@@ -480,7 +483,7 @@ class Graphiti:
                     content=episode_body,
                     source_description=source_description,
                     created_at=now,
-                    valid_at=ensure_utc(reference_time),
+                    valid_at=ensure_utc(reference_time) or now,
                 )
             )
 
@@ -494,6 +497,11 @@ class Graphiti:
                 {('Entity', 'Entity'): list(edge_types.keys())}
                 if edge_types is not None
                 else {('Entity', 'Entity'): []}
+            )
+            resolved_edge_types: dict[str, BaseModel | type[BaseModel]] | None = (
+                {name: model for name, model in edge_types.items()}
+                if edge_types is not None
+                else None
             )
 
             # Extract entities as nodes
@@ -509,7 +517,7 @@ class Graphiti:
             # Extract edges and resolve nodes
             if self.use_dspy:
                 edges_coro = self._extract_edges_dspy(
-                    episode, extracted_nodes, previous_episodes, edge_types
+                    episode, extracted_nodes, previous_episodes, resolved_edge_types
                 )
             else:
                 edges_coro = extract_edges(
@@ -519,7 +527,7 @@ class Graphiti:
                     previous_episodes,
                     edge_type_map or edge_type_map_default,
                     group_id,
-                    edge_types,
+                    resolved_edge_types,
                 )
 
             (nodes, uuid_map, node_duplicates), extracted_edges = await semaphore_gather(
@@ -544,7 +552,7 @@ class Graphiti:
                     edges,
                     episode,
                     nodes,
-                    edge_types or {},
+                    resolved_edge_types or {},
                     edge_type_map or edge_type_map_default,
                 ),
                 extract_attributes_from_nodes(
@@ -650,6 +658,8 @@ class Graphiti:
         Each stage can be retried independently, preventing loss of progress when
         providers like Cerebras have elevated error rates.
         """
+        resolved_group_id = group_id or get_default_group_id(self.driver.provider)
+
         try:
             start = time()
             now = utc_now()
@@ -664,11 +674,14 @@ class Graphiti:
             except Exception as e:
                 logger.debug('Temporal visibility client unavailable: %s', e)
 
-            # if group_id is None, use the default group id by the provider
-            group_id = group_id or get_default_group_id(self.driver.provider)
             validate_entity_types(entity_types)
             validate_excluded_entity_types(excluded_entity_types, entity_types)
-            validate_group_id(group_id)
+            validate_group_id(resolved_group_id)
+            resolved_edge_types: dict[str, BaseModel | type[BaseModel]] = (
+                {name: model for name, model in edge_types.items()}
+                if edge_types is not None
+                else {}
+            )
 
             # Create episode node first (before other processing)
             # If UUID provided, try to fetch existing; if not found, create new with that UUID
@@ -682,24 +695,24 @@ class Graphiti:
                     episode = EpisodicNode(
                         uuid=uuid,
                         name=name,
-                        group_id=group_id,
+                        group_id=resolved_group_id,
                         labels=[],
                         source=source,
                         content=episode_body,
                         source_description=source_description,
                         created_at=now,
-                        valid_at=ensure_utc(reference_time),
+                        valid_at=ensure_utc(reference_time) or now,
                     )
             else:
                 episode = EpisodicNode(
                     name=name,
-                    group_id=group_id,
+                    group_id=resolved_group_id,
                     labels=[],
                     source=source,
                     content=episode_body,
                     source_description=source_description,
                     created_at=now,
-                    valid_at=ensure_utc(reference_time),
+                    valid_at=ensure_utc(reference_time) or now,
                 )
 
             logger.info(
@@ -709,17 +722,19 @@ class Graphiti:
             if visibility_enabled and visibility is not None:
                 import asyncio
 
-                asyncio.create_task(visibility.ensure_workflow_started(episode.uuid, group_id))
+                asyncio.create_task(
+                    visibility.ensure_workflow_started(episode.uuid, resolved_group_id)
+                )
 
             # Get or create resilient ingestion state
-            state = ingestion_cache.get_or_create_state(episode.uuid, group_id)
+            state = ingestion_cache.get_or_create_state(episode.uuid, resolved_group_id)
 
             # Get previous episodes
             previous_episodes = (
                 await self.retrieve_episodes(
                     reference_time,
                     last_n=RELEVANT_SCHEMA_LIMIT,
-                    group_ids=[group_id],
+                    group_ids=[resolved_group_id],
                     source=source,
                 )
                 if previous_episode_uuids is None
@@ -735,7 +750,7 @@ class Graphiti:
                     asyncio.create_task(
                         visibility.stage_started(
                             episode.uuid,
-                            group_id,
+                            resolved_group_id,
                             'extract_nodes',
                             {'cached': False},
                         )
@@ -752,7 +767,7 @@ class Graphiti:
                         asyncio.create_task(
                             visibility.ingestion_failed(
                                 episode.uuid,
-                                group_id,
+                                resolved_group_id,
                                 'extract_nodes',
                                 str(e),
                                 e.__class__.__name__,
@@ -768,7 +783,7 @@ class Graphiti:
                     asyncio.create_task(
                         visibility.stage_completed(
                             episode.uuid,
-                            group_id,
+                            resolved_group_id,
                             'extract_nodes',
                             {
                                 'cached': False,
@@ -778,17 +793,17 @@ class Graphiti:
                         )
                     )
             else:
+                extracted_nodes = state.extracted_nodes or []
                 logger.info(
-                    f'Episode {episode.uuid}: Using cached extracted nodes ({len(state.extracted_nodes)} nodes)'
+                    f'Episode {episode.uuid}: Using cached extracted nodes ({len(extracted_nodes)} nodes)'
                 )
-                extracted_nodes = state.extracted_nodes
                 if visibility_enabled and visibility is not None:
                     import asyncio
 
                     asyncio.create_task(
                         visibility.stage_completed(
                             episode.uuid,
-                            group_id,
+                            resolved_group_id,
                             'extract_nodes',
                             {
                                 'cached': True,
@@ -806,7 +821,7 @@ class Graphiti:
                     asyncio.create_task(
                         visibility.stage_started(
                             episode.uuid,
-                            group_id,
+                            resolved_group_id,
                             'resolve_nodes',
                             {'cached': False},
                         )
@@ -823,7 +838,7 @@ class Graphiti:
                         asyncio.create_task(
                             visibility.ingestion_failed(
                                 episode.uuid,
-                                group_id,
+                                resolved_group_id,
                                 'resolve_nodes',
                                 str(e),
                                 e.__class__.__name__,
@@ -841,7 +856,7 @@ class Graphiti:
                     asyncio.create_task(
                         visibility.stage_completed(
                             episode.uuid,
-                            group_id,
+                            resolved_group_id,
                             'resolve_nodes',
                             {
                                 'cached': False,
@@ -853,10 +868,10 @@ class Graphiti:
                         )
                     )
             else:
+                nodes = state.resolved_nodes or []
                 logger.info(
-                    f'Episode {episode.uuid}: Using cached resolved nodes ({len(state.resolved_nodes)} nodes)'
+                    f'Episode {episode.uuid}: Using cached resolved nodes ({len(nodes)} nodes)'
                 )
-                nodes = state.resolved_nodes
                 uuid_map = state.uuid_map or {}
                 node_duplicates = state.node_duplicates or []
                 if visibility_enabled and visibility is not None:
@@ -865,7 +880,7 @@ class Graphiti:
                     asyncio.create_task(
                         visibility.stage_completed(
                             episode.uuid,
-                            group_id,
+                            resolved_group_id,
                             'resolve_nodes',
                             {
                                 'cached': True,
@@ -885,7 +900,7 @@ class Graphiti:
                     asyncio.create_task(
                         visibility.stage_started(
                             episode.uuid,
-                            group_id,
+                            resolved_group_id,
                             'extract_edges',
                             {'cached': False},
                         )
@@ -897,8 +912,8 @@ class Graphiti:
                         extracted_nodes,
                         previous_episodes,
                         edge_type_map,
-                        group_id,
-                        edge_types,
+                        resolved_group_id,
+                        resolved_edge_types,
                         state,
                     )
                 except Exception as e:
@@ -908,7 +923,7 @@ class Graphiti:
                         asyncio.create_task(
                             visibility.ingestion_failed(
                                 episode.uuid,
-                                group_id,
+                                resolved_group_id,
                                 'extract_edges',
                                 str(e),
                                 e.__class__.__name__,
@@ -924,7 +939,7 @@ class Graphiti:
                     asyncio.create_task(
                         visibility.stage_completed(
                             episode.uuid,
-                            group_id,
+                            resolved_group_id,
                             'extract_edges',
                             {
                                 'cached': False,
@@ -934,17 +949,17 @@ class Graphiti:
                         )
                     )
             else:
+                extracted_edges = state.extracted_edges or []
                 logger.info(
-                    f'Episode {episode.uuid}: Using cached extracted edges ({len(state.extracted_edges)} edges)'
+                    f'Episode {episode.uuid}: Using cached extracted edges ({len(extracted_edges)} edges)'
                 )
-                extracted_edges = state.extracted_edges
                 if visibility_enabled and visibility is not None:
                     import asyncio
 
                     asyncio.create_task(
                         visibility.stage_completed(
                             episode.uuid,
-                            group_id,
+                            resolved_group_id,
                             'extract_edges',
                             {
                                 'cached': True,
@@ -955,8 +970,8 @@ class Graphiti:
 
             # Continue with edge processing (non-LLM operations, less likely to fail)
             edge_type_map_default = (
-                {('Entity', 'Entity'): list(edge_types.keys())}
-                if edge_types is not None
+                {('Entity', 'Entity'): list(resolved_edge_types.keys())}
+                if resolved_edge_types
                 else {('Entity', 'Entity'): []}
             )
 
@@ -972,7 +987,7 @@ class Graphiti:
                 asyncio.create_task(
                     visibility.stage_started(
                         episode.uuid,
-                        group_id,
+                        resolved_group_id,
                         'resolve_edges',
                         {'use_dspy': self.use_dspy},
                     )
@@ -987,7 +1002,7 @@ class Graphiti:
                             edges,
                             episode,
                             nodes,
-                            edge_types or {},
+                            resolved_edge_types,
                             edge_type_map or edge_type_map_default,
                         ),
                         self._extract_attributes_dspy(nodes, episode, previous_episodes),
@@ -1000,7 +1015,7 @@ class Graphiti:
                             edges,
                             episode,
                             nodes,
-                            edge_types or {},
+                            resolved_edge_types,
                             edge_type_map or edge_type_map_default,
                         ),
                         extract_attributes_from_nodes(
@@ -1019,7 +1034,7 @@ class Graphiti:
                     edges,
                     episode,
                     nodes,
-                    edge_types or {},
+                    resolved_edge_types,
                     edge_type_map or edge_type_map_default,
                 )
                 hydrated_nodes = nodes
@@ -1030,7 +1045,7 @@ class Graphiti:
                 asyncio.create_task(
                     visibility.stage_completed(
                         episode.uuid,
-                        group_id,
+                        resolved_group_id,
                         'resolve_edges',
                         {
                             'duration_ms': int((time() - resolution_started_at) * 1000),
@@ -1060,7 +1075,7 @@ class Graphiti:
                     asyncio.create_task(
                         visibility.stage_started(
                             episode.uuid,
-                            group_id,
+                            resolved_group_id,
                             'persist',
                             {},
                         )
@@ -1112,7 +1127,7 @@ class Graphiti:
                         asyncio.create_task(
                             visibility.stage_completed(
                                 episode.uuid,
-                                group_id,
+                                resolved_group_id,
                                 'persist',
                                 {
                                     'duration_ms': int((time() - persist_started_at) * 1000),
@@ -1131,7 +1146,7 @@ class Graphiti:
                         asyncio.create_task(
                             visibility.ingestion_failed(
                                 episode.uuid,
-                                group_id,
+                                resolved_group_id,
                                 'persist',
                                 str(e),
                                 e.__class__.__name__,
@@ -1161,7 +1176,7 @@ class Graphiti:
                 asyncio.create_task(
                     visibility.ingestion_completed(
                         episode.uuid,
-                        group_id,
+                        resolved_group_id,
                         {
                             'duration_ms': int((end - start) * 1000),
                             'node_count': len(nodes),
@@ -1173,17 +1188,17 @@ class Graphiti:
             return AddEpisodeResults(episode=episode, nodes=nodes, edges=entity_edges)
 
         except Exception as e:
-            logger.error(
-                f'Resilient ingestion failed for episode {episode.uuid if "episode" in locals() else "unknown"}: {e}'
-            )
+            failed_episode = episode if 'episode' in locals() and episode is not None else None
+            failed_episode_uuid = failed_episode.uuid if failed_episode is not None else 'unknown'
+            logger.error(f'Resilient ingestion failed for episode {failed_episode_uuid}: {e}')
 
-            if visibility_enabled and visibility is not None and 'episode' in locals():
+            if visibility_enabled and visibility is not None and failed_episode is not None:
                 import asyncio
 
                 asyncio.create_task(
                     visibility.ingestion_failed(
-                        episode.uuid,
-                        group_id,
+                        failed_episode.uuid,
+                        resolved_group_id,
                         'add_episode_resilient',
                         str(e),
                         e.__class__.__name__,
@@ -1200,7 +1215,7 @@ class Graphiti:
         entity_types: dict[str, BaseModel] | None,
         excluded_entity_types: list[str] | None,
         state: ResilientIngestionState,
-    ) -> list[dict[str, Any]]:
+    ) -> list[EntityNode]:
         """Extract nodes with retry logic."""
         state.nodes_extract_attempts += 1
         logger.info(
@@ -1284,12 +1299,12 @@ class Graphiti:
     @retry_with_backoff(max_retries=3, base_delay=2.0)
     async def _resolve_nodes_with_retry(
         self,
-        extracted_nodes: list[dict[str, Any]],
+        extracted_nodes: list[EntityNode],
         episode: EpisodicNode,
         previous_episodes: list[EpisodicNode],
         entity_types: dict[str, BaseModel] | None,
         state: ResilientIngestionState,
-    ) -> tuple[list[EntityNode], dict[str, str], list[EntityNode]]:
+    ) -> tuple[list[EntityNode], dict[str, str], list[tuple[EntityNode, EntityNode]]]:
         """Resolve nodes with retry logic."""
         state.nodes_resolve_attempts += 1
         logger.info(
@@ -1315,7 +1330,7 @@ class Graphiti:
         extracted_nodes: list[EntityNode],
         episode: EpisodicNode,
         previous_episodes: list[EpisodicNode],
-    ) -> tuple[list[EntityNode], dict[str, str], list[EntityNode]]:
+    ) -> tuple[list[EntityNode], dict[str, str], list[tuple[EntityNode, EntityNode]]]:
         """Resolve nodes using DSPy NodeResolver."""
         import asyncio
         from graphiti_core.utils.datetime_utils import utc_now
@@ -1359,7 +1374,7 @@ class Graphiti:
         # Convert DSPy output to legacy format
         resolved_nodes: list[EntityNode] = []
         uuid_map: dict[str, str] = {}
-        node_duplicates: list[EntityNode] = []
+        node_duplicates: list[tuple[EntityNode, EntityNode]] = []
 
         for resolution in result.entity_resolutions:
             original_node = (
@@ -1381,7 +1396,7 @@ class Graphiti:
                 )
                 resolved_nodes.append(existing_node)
                 uuid_map[original_node.uuid] = existing_node.uuid
-                node_duplicates.append(original_node)
+                node_duplicates.append((original_node, existing_node))
                 logger.debug(
                     f"DSPy resolved '{original_node.name}' as duplicate of '{existing_node.name}'"
                 )
@@ -1447,13 +1462,13 @@ class Graphiti:
     async def _extract_edges_with_retry(
         self,
         episode: EpisodicNode,
-        extracted_nodes: list[dict[str, Any]],
+        extracted_nodes: list[EntityNode],
         previous_episodes: list[EpisodicNode],
         edge_type_map: dict[tuple[str, str], list[str]] | None,
         group_id: str,
-        edge_types: dict[str, BaseModel] | None,
+        edge_types: dict[str, BaseModel | type[BaseModel]] | None,
         state: ResilientIngestionState,
-    ) -> list[dict[str, Any]]:
+    ) -> list[EntityEdge]:
         """Extract edges with retry logic."""
         state.edges_extract_attempts += 1
         logger.info(
@@ -1487,7 +1502,7 @@ class Graphiti:
         episode: EpisodicNode,
         extracted_nodes: list[EntityNode],
         previous_episodes: list[EpisodicNode],
-        edge_types: dict[str, BaseModel] | None,
+        edge_types: dict[str, BaseModel | type[BaseModel]] | None,
     ) -> list[EntityEdge]:
         """Extract edges using DSPy pipeline."""
         import asyncio
@@ -1756,11 +1771,16 @@ class Graphiti:
             # if group_id is None, use the default group id by the provider
             group_id = group_id or get_default_group_id(self.driver.provider)
             validate_group_id(group_id)
+            resolved_edge_types: dict[str, BaseModel | type[BaseModel]] = (
+                {name: model for name, model in edge_types.items()}
+                if edge_types is not None
+                else {}
+            )
 
             # Create default edge type map
             edge_type_map_default = (
-                {('Entity', 'Entity'): list(edge_types.keys())}
-                if edge_types is not None
+                {('Entity', 'Entity'): list(resolved_edge_types.keys())}
+                if resolved_edge_types
                 else {('Entity', 'Entity'): []}
             )
 
@@ -1782,7 +1802,7 @@ class Graphiti:
                     source_description=episode.source_description,
                     group_id=group_id,
                     created_at=now,
-                    valid_at=ensure_utc(episode.reference_time),
+                    valid_at=ensure_utc(episode.reference_time) or episode.reference_time,
                 )
                 # If episode had a UUID, preserve it for deterministic processing
                 if episode.uuid is not None:
@@ -1837,10 +1857,16 @@ class Graphiti:
             episodic_edges: list[EpisodicEdge] = []
             for episode_uuid, nodes in nodes_by_episode.items():
                 # Get episode's group_id for cross-group edge UUID generation
-                episode_group_id = episodes_by_uuid.get(episode_uuid, episodes[0]).group_id
+                episode_node = episodes_by_uuid.get(episode_uuid)
+                episode_group_id = (
+                    episode_node.group_id if episode_node is not None else episodes[0].group_id
+                )
                 episodic_edges.extend(
                     build_episodic_edges(
-                        nodes, episode_uuid, now, episode_group_id=episode_group_id
+                        nodes,
+                        episode_uuid,
+                        now,
+                        episode_group_id=episode_group_id or group_id,
                     )
                 )
 
@@ -1980,7 +2006,7 @@ class Graphiti:
                         edges_by_episode_unique[episode.uuid],
                         episode,
                         hydrated_nodes,
-                        edge_types or {},
+                        resolved_edge_types,
                         edge_type_map or edge_type_map_default,
                     )
                     for episode in episodes

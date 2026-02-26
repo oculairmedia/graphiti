@@ -6,7 +6,7 @@ Handles rate limiting, retries, and error recovery.
 import asyncio
 import logging
 import time
-from typing import Dict, Any, Optional, Set, List, Coroutine
+from typing import Dict, Any, Optional, Set, List, Coroutine, Callable, Awaitable, cast
 from datetime import datetime, timedelta
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -85,7 +85,7 @@ class CentralityClient:
     Client for updating node centrality scores via Rust centrality service.
     """
 
-    def __init__(self, base_url: str = None):
+    def __init__(self, base_url: Optional[str] = None):
         self.base_url = base_url or os.getenv(
             'RUST_CENTRALITY_URL', 'http://graphiti-centrality-rs:3003'
         )
@@ -446,6 +446,11 @@ class IngestionWorker:
     async def _process_episode(self, task: IngestionTask):
         """Process an episode ingestion task"""
         payload = task.payload
+        effective_group_id = task.group_id or payload.get('group_id')
+        if not effective_group_id:
+            from graphiti_core.helpers import get_default_group_id
+
+            effective_group_id = get_default_group_id(self.graphiti.driver.provider)
 
         try:
             # Skip tasks with malformed task IDs (old malformed messages)
@@ -463,13 +468,6 @@ class IngestionWorker:
             timestamp = payload.get('timestamp')
             if timestamp and isinstance(timestamp, str):
                 timestamp = datetime.fromisoformat(timestamp)
-
-            # Ensure group_id is not None - use payload group_id or default
-            effective_group_id = task.group_id or payload.get('group_id')
-            if not effective_group_id:
-                from graphiti_core.helpers import get_default_group_id
-
-                effective_group_id = get_default_group_id(self.graphiti.driver.provider)
 
             logger.info(
                 f'Processing episode with group_id: {effective_group_id} (task.group_id: {task.group_id}, payload.group_id: {payload.get("group_id")})'
@@ -641,7 +639,8 @@ class IngestionWorker:
         payload = task.payload
 
         try:
-            entity_name = payload.get('name')
+            entity_name_raw = payload.get('name')
+            entity_name = entity_name_raw if isinstance(entity_name_raw, str) else ''
             entity_summary = payload.get('summary', '')
 
             # Ensure group_id is not None - use payload group_id or default
@@ -680,7 +679,15 @@ class IngestionWorker:
                 return existing_uuid
             else:
                 # Entity doesn't exist, create new one with normalized name
-                node = await self.graphiti.save_entity_node(
+                save_entity_node_raw = getattr(self.graphiti, 'save_entity_node', None)
+                if not callable(save_entity_node_raw):
+                    raise PermanentError('Graphiti instance missing save_entity_node method')
+                save_entity_node = cast(
+                    Callable[..., Awaitable[Any]],
+                    save_entity_node_raw,
+                )
+
+                node = await save_entity_node(
                     uuid=payload.get('uuid'),
                     group_id=effective_group_id,
                     name=normalized_name,
@@ -897,7 +904,7 @@ class IngestionWorker:
             raise
 
     async def _handle_failure(
-        self, message_id: str, poll_tag: str, task: IngestionTask, error: Exception
+        self, message_id: int, poll_tag: int, task: IngestionTask, error: Exception
     ):
         """
         Handle task failure with retry logic.
@@ -945,6 +952,9 @@ class IngestionWorker:
             task: The failed task
             error: The error that caused the failure
         """
+        if task.metadata is None:
+            task.metadata = {}
+
         task.metadata['error'] = str(error)
         task.metadata['error_type'] = type(error).__name__
         task.metadata['failed_at'] = utc_now().isoformat()
@@ -957,7 +967,7 @@ class IngestionWorker:
 
     def get_metrics(self) -> Dict[str, Any]:
         """Get worker metrics"""
-        stats = self.metrics.get_stats()
+        stats: Dict[str, Any] = self.metrics.get_stats()
         stats['worker_id'] = self.worker_id
         stats['running'] = self.running
         return stats

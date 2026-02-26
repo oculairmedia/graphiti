@@ -20,32 +20,36 @@ from collections import defaultdict, deque
 import logging
 import math
 import os
-from typing import Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, cast
 
 from graphiti_core.driver.driver import GraphDriver
 from graphiti_core.nodes import EntityNode
 
 logger = logging.getLogger(__name__)
 
-# Import Rust client if available
-try:
+if TYPE_CHECKING:
     from .rust_centrality_client import RustCentralityClient
 
-    _rust_client = None
-
-    def _get_rust_client() -> RustCentralityClient:
-        global _rust_client
-        if _rust_client is None:
-            _rust_client = RustCentralityClient()
-        return _rust_client
+# Import Rust client if available
+try:
+    from .rust_centrality_client import RustCentralityClient as RustCentralityClientRuntime
 
     RUST_AVAILABLE = True
 except ImportError:
+    RustCentralityClientRuntime = None
     logger.warning('Rust centrality client not available, falling back to Python implementation')
     RUST_AVAILABLE = False
 
-    def _get_rust_client():
+_rust_client: 'RustCentralityClient | None' = None
+
+
+def _get_rust_client() -> 'RustCentralityClient':
+    global _rust_client
+    if not RUST_AVAILABLE or RustCentralityClientRuntime is None:
         raise ImportError('Rust centrality client not available')
+    if _rust_client is None:
+        _rust_client = cast('RustCentralityClient', RustCentralityClientRuntime())
+    return _rust_client
 
 
 def _should_use_rust() -> bool:
@@ -156,7 +160,9 @@ async def calculate_pagerank(
         for node_id in node_ids:
             rank_sum = 0.0
             for source_id in incoming.get(node_id, []):
-                rank_sum += pagerank.get(source_id, initial_score) / max(out_degree.get(source_id, 1), 1)
+                rank_sum += pagerank.get(source_id, initial_score) / max(
+                    out_degree.get(source_id, 1), 1
+                )
 
             new_pagerank[node_id] = (1 - damping_factor) / num_nodes + damping_factor * rank_sum
 
@@ -319,7 +325,6 @@ async def calculate_betweenness_centrality(
 
     # Build adjacency list in memory (directed: source -> [targets])
 
-
     adjacency: Dict[str, List[str]] = defaultdict(list)
     node_set = set(all_node_ids)
 
@@ -335,7 +340,6 @@ async def calculate_betweenness_centrality(
 
     # Sample source nodes for BFS (betweenness is expensive even in-memory for large graphs)
     if sample_size and sample_size < num_nodes:
-
         source_nodes = random.sample(all_node_ids, sample_size)
     else:
         source_nodes = all_node_ids
@@ -412,14 +416,14 @@ async def store_centrality_scores(
     if use_atomic:
         # Use atomic storage with transaction safety
         from .atomic_centrality_storage import AtomicCentralityStorage
-        
+
         storage = AtomicCentralityStorage(
             driver=driver,
             batch_size=100,
             max_retries=3,
             checkpoint_interval=500,
         )
-        
+
         try:
             transaction = await storage.store_centrality_atomic(scores)
             logger.info(
@@ -436,7 +440,7 @@ async def store_centrality_scores(
         for node_uuid, node_scores in scores.items():
             # Build SET clause for scores
             set_clauses = []
-            params = {'uuid': node_uuid}
+            params: dict[str, Any] = {'uuid': node_uuid}
 
             for score_name, score_value in node_scores.items():
                 set_clauses.append(f'n.centrality_{score_name} = ${score_name}')

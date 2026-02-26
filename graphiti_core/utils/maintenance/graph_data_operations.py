@@ -16,6 +16,7 @@ limitations under the License.
 
 import logging
 from datetime import datetime, timezone
+from typing import Any, cast
 
 from typing_extensions import LiteralString
 
@@ -62,7 +63,11 @@ async def build_indices_and_constraints(
             try:
                 if '{graph_key}' in query:
                     command = query.format(graph_key=graph_key)
-                    await driver.client.execute_command(*command.split())
+                    driver_client = getattr(cast(Any, driver), 'client', None)
+                    if driver_client is not None and hasattr(driver_client, 'execute_command'):
+                        await driver_client.execute_command(*command.split())
+                    else:
+                        await driver.execute_query(command)
                 else:
                     await driver.execute_query(query)
             except Exception as e:

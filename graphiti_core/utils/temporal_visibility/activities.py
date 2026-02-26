@@ -12,6 +12,74 @@ from temporalio import activity
 logger = logging.getLogger(__name__)
 
 
+def _normalize_extracted_node_dicts(
+    extracted_nodes_or_dicts: list[dict[str, Any]] | list[Any],
+) -> list[dict[str, Any]]:
+    normalized: list[dict[str, Any]] = []
+    for item in extracted_nodes_or_dicts:
+        if isinstance(item, dict):
+            normalized.append(item)
+            continue
+
+        normalized.append(
+            {
+                'name': getattr(item, 'name', ''),
+                'labels': getattr(item, 'labels', ['Entity']),
+                'uuid': getattr(item, 'uuid', ''),
+                'group_id': getattr(item, 'group_id', ''),
+            }
+        )
+
+    return normalized
+
+
+def _normalize_extracted_edge_dicts(
+    extracted_edges_or_dicts: list[dict[str, Any]] | list[Any],
+) -> list[dict[str, Any]]:
+    normalized: list[dict[str, Any]] = []
+    for item in extracted_edges_or_dicts:
+        if isinstance(item, dict):
+            normalized.append(item)
+            continue
+
+        normalized.append(
+            {
+                'source_node_uuid': getattr(item, 'source_node_uuid', ''),
+                'target_node_uuid': getattr(item, 'target_node_uuid', ''),
+                'name': getattr(item, 'name', ''),
+                'fact': getattr(item, 'fact', ''),
+                'uuid': getattr(item, 'uuid', ''),
+            }
+        )
+
+    return normalized
+
+
+def _normalize_edge_type_map(
+    edge_type_map: dict[str, list[str]] | dict[tuple[str, str], list[str]] | None,
+    default: dict[tuple[str, str], list[str]],
+) -> dict[tuple[str, str], list[str]]:
+    if not edge_type_map:
+        return default
+
+    normalized: dict[tuple[str, str], list[str]] = {}
+    for key, edge_names in edge_type_map.items():
+        normalized_edge_names = [
+            edge_name for edge_name in edge_names if isinstance(edge_name, str)
+        ]
+        if (
+            isinstance(key, tuple)
+            and len(key) == 2
+            and isinstance(key[0], str)
+            and isinstance(key[1], str)
+        ):
+            normalized[(key[0], key[1])] = normalized_edge_names
+        elif isinstance(key, str):
+            normalized[('Entity', 'Entity')] = normalized_edge_names
+
+    return normalized or default
+
+
 @dataclass
 class RateLimitConfig:
     """Configuration for rate limiting between activities."""
@@ -165,7 +233,7 @@ class IngestionActivities:
             content=episode_content,
             source_description=source_description,
             created_at=utc_now(),
-            valid_at=ensure_utc(ref_time),
+            valid_at=ensure_utc(ref_time) or ref_time,
         )
 
         if previous_episode_uuids:
@@ -183,17 +251,15 @@ class IngestionActivities:
             )
 
         if graphiti.use_dspy:
-            extracted_nodes = await graphiti._extract_nodes_dspy(
+            extracted_nodes_or_dicts = await graphiti._extract_nodes_dspy(
                 episode, previous_episodes, entity_types
             )
-            extracted_node_dicts = [
-                {'name': n.name, 'labels': n.labels, 'uuid': n.uuid, 'group_id': n.group_id}
-                for n in extracted_nodes
-            ]
         else:
-            extracted_node_dicts = await extract_nodes(
+            extracted_nodes_or_dicts = await extract_nodes(
                 graphiti.clients, episode, previous_episodes, entity_types, excluded_entity_types
             )
+
+        extracted_node_dicts = _normalize_extracted_node_dicts(extracted_nodes_or_dicts)
 
         duration_ms = int((time() - start) * 1000)
         logger.info(
@@ -243,7 +309,7 @@ class IngestionActivities:
             content=episode_content,
             source_description=source_description,
             created_at=utc_now(),
-            valid_at=ensure_utc(ref_time),
+            valid_at=ensure_utc(ref_time) or ref_time,
         )
 
         if previous_episode_uuids:
@@ -341,7 +407,7 @@ class IngestionActivities:
             content=episode_content,
             source_description=source_description,
             created_at=utc_now(),
-            valid_at=ensure_utc(ref_time),
+            valid_at=ensure_utc(ref_time) or ref_time,
         )
 
         if previous_episode_uuids:
@@ -364,43 +430,38 @@ class IngestionActivities:
             else {('Entity', 'Entity'): []}
         )
 
-        if graphiti.use_dspy:
-            from graphiti_core.nodes import EntityNode
+        from graphiti_core.nodes import EntityNode
 
-            entity_nodes = [
-                EntityNode(
-                    uuid=d.get('uuid', ''),
-                    name=d['name'],
-                    group_id=group_id,
-                    labels=d.get('labels', ['Entity']),
-                    created_at=utc_now(),
-                    summary='',
-                )
-                for d in extracted_node_dicts
-            ]
+        entity_nodes = [
+            EntityNode(
+                uuid=d.get('uuid', ''),
+                name=d['name'],
+                group_id=group_id,
+                labels=d.get('labels', ['Entity']),
+                created_at=utc_now(),
+                summary='',
+            )
+            for d in extracted_node_dicts
+        ]
+
+        normalized_edge_type_map = _normalize_edge_type_map(edge_type_map, edge_type_map_default)
+
+        if graphiti.use_dspy:
             extracted_edges = await graphiti._extract_edges_dspy(
                 episode, entity_nodes, previous_episodes, edge_types
             )
-            extracted_edge_dicts = [
-                {
-                    'source_node_uuid': e.source_node_uuid,
-                    'target_node_uuid': e.target_node_uuid,
-                    'name': e.name,
-                    'fact': e.fact,
-                    'uuid': e.uuid,
-                }
-                for e in extracted_edges
-            ]
+            extracted_edge_dicts = _normalize_extracted_edge_dicts(extracted_edges)
         else:
-            extracted_edge_dicts = await extract_edges(
+            extracted_edges = await extract_edges(
                 graphiti.clients,
                 episode,
-                extracted_node_dicts,
+                entity_nodes,
                 previous_episodes,
-                edge_type_map or edge_type_map_default,
+                normalized_edge_type_map,
                 group_id,
                 edge_types,
             )
+            extracted_edge_dicts = _normalize_extracted_edge_dicts(extracted_edges)
 
         duration_ms = int((time() - start) * 1000)
         logger.info(
@@ -466,7 +527,7 @@ class IngestionActivities:
             content=episode_content if store_raw_content else '',
             source_description=source_description,
             created_at=now,
-            valid_at=ensure_utc(ref_time),
+            valid_at=ensure_utc(ref_time) or ref_time,
         )
 
         if previous_episode_uuids:
@@ -541,6 +602,8 @@ class IngestionActivities:
             else {('Entity', 'Entity'): []}
         )
 
+        normalized_edge_type_map = _normalize_edge_type_map(edge_type_map, edge_type_map_default)
+
         # Use DSPy for attribute extraction (summaries) if enabled
         # This matches the behavior in graphiti.py add_episode_resilient
         if graphiti.use_dspy:
@@ -552,7 +615,7 @@ class IngestionActivities:
                     episode,
                     nodes,
                     edge_types or {},
-                    edge_type_map or edge_type_map_default,
+                    normalized_edge_type_map,
                 ),
                 graphiti._extract_attributes_dspy(nodes, episode, previous_episodes),
             )
@@ -564,7 +627,7 @@ class IngestionActivities:
                     episode,
                     nodes,
                     edge_types or {},
-                    edge_type_map or edge_type_map_default,
+                    normalized_edge_type_map,
                 ),
                 extract_attributes_from_nodes(
                     graphiti.clients, nodes, episode, previous_episodes, None

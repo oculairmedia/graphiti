@@ -87,6 +87,9 @@ class TrainingDataStorage:
             UUID of the created example
         """
         await self._ensure_connected()
+        graph = self._graph
+        if graph is None:
+            raise RuntimeError('Training storage graph is not initialized')
 
         example_id = str(uuid.uuid4())
         now = datetime.now(timezone.utc).isoformat()
@@ -104,7 +107,7 @@ class TrainingDataStorage:
         """
 
         try:
-            await self._graph.query(
+            await graph.query(
                 query,
                 {
                     'id': example_id,
@@ -141,6 +144,9 @@ class TrainingDataStorage:
             List of StoredTrainingExample objects
         """
         await self._ensure_connected()
+        graph = self._graph
+        if graph is None:
+            raise RuntimeError('Training storage graph is not initialized')
 
         if since or until:
             query = """
@@ -167,7 +173,7 @@ class TrainingDataStorage:
             params = {'task': task, 'limit': limit}
 
         try:
-            result = await self._graph.query(query, params)
+            result = await graph.query(query, params)
 
             examples = []
             for row in result.result_set:
@@ -200,6 +206,9 @@ class TrainingDataStorage:
     async def get_stats(self) -> dict[str, int]:
         """Get count of training examples per task."""
         await self._ensure_connected()
+        graph = self._graph
+        if graph is None:
+            raise RuntimeError('Training storage graph is not initialized')
 
         query = """
         MATCH (t:TrainingExample)
@@ -207,7 +216,7 @@ class TrainingDataStorage:
         """
 
         try:
-            result = await self._graph.query(query)
+            result = await graph.query(query)
             stats = {task: 0 for task in TRAINING_TASKS}
             for row in result.result_set:
                 if row[0] in stats:
@@ -220,11 +229,14 @@ class TrainingDataStorage:
     async def get_total_count(self) -> int:
         """Get total count of all training examples."""
         await self._ensure_connected()
+        graph = self._graph
+        if graph is None:
+            raise RuntimeError('Training storage graph is not initialized')
 
         query = 'MATCH (t:TrainingExample) RETURN count(t)'
 
         try:
-            result = await self._graph.query(query)
+            result = await graph.query(query)
             return result.result_set[0][0] if result.result_set else 0
         except Exception as e:
             logger.error(f'Failed to get total count: {e}')
