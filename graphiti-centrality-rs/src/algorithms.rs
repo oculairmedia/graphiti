@@ -4,7 +4,7 @@ use crate::client::{
 use crate::error::{CentralityError, Result};
 use crate::models::CentralityScores;
 use falkordb::FalkorValue;
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::time::Instant;
 use tracing::{debug, info, warn};
 
@@ -163,28 +163,35 @@ async fn calculate_pagerank_custom(
     let node_count = nodes.len();
     info!("Processing {} nodes for PageRank", node_count);
 
-    // Build adjacency lists and out-degree counts
-    let mut out_links: HashMap<String, Vec<String>> = HashMap::new();
+    // Build incoming adjacency list and out-degree counts
+    // incoming: target -> [sources that link TO target]
+    // out_degree: source -> number of outgoing edges
+    let mut incoming: HashMap<String, Vec<String>> = HashMap::new();
     let mut out_degree: HashMap<String, usize> = HashMap::new();
+    let node_set: HashSet<String> = nodes.iter().cloned().collect();
 
-    // Initialize structures
+    // Initialize incoming lists for all nodes
     for node in &nodes {
-        out_links.insert(node.clone(), Vec::new());
+        incoming.insert(node.clone(), Vec::new());
         out_degree.insert(node.clone(), 0);
     }
 
-    // Process edges
+    // Process edges — build incoming adjacency and out-degree
     for record in edge_results {
         if let (Some(source_val), Some(target_val)) = (record.get("source"), record.get("target")) {
             let source = falkor_value_to_string(source_val);
             let target = falkor_value_to_string(target_val);
 
-            if let Some(links) = out_links.get_mut(&source) {
-                links.push(target);
-                *out_degree.get_mut(&source).unwrap() += 1;
+            if node_set.contains(&source) && node_set.contains(&target) {
+                if let Some(sources) = incoming.get_mut(&target) {
+                    sources.push(source.clone());
+                }
+                *out_degree.entry(source).or_insert(0) += 1;
             }
         }
     }
+
+    info!("Loaded edges for {} nodes — running PageRank in-memory", node_count);
 
     // Initialize PageRank scores
     let initial_score = 1.0 / node_count as f64;
@@ -202,16 +209,13 @@ async fn calculate_pagerank_custom(
         for node in &nodes {
             let mut rank = (1.0 - damping_factor) / node_count as f64;
 
-            // Sum contributions from incoming links
-            for other_node in &nodes {
-                if let Some(links) = out_links.get(other_node) {
-                    if links.contains(node) {
-                        let out_deg = *out_degree.get(other_node).unwrap() as f64;
-                        if out_deg > 0.0 {
-                            let contribution = scores.get(other_node).unwrap() / out_deg;
-                            rank += damping_factor * contribution;
-                        }
-                    }
+            // Sum contributions from incoming links — O(in-degree) per node
+            let empty_vec = Vec::new();
+            for source in incoming.get(node).unwrap_or(&empty_vec) {
+                let out_deg = *out_degree.get(source).unwrap_or(&1) as f64;
+                if out_deg > 0.0 {
+                    let contribution = scores.get(source).unwrap_or(&initial_score) / out_deg;
+                    rank += damping_factor * contribution;
                 }
             }
 
@@ -441,13 +445,17 @@ async fn calculate_betweenness_native(
     })
 }
 
-/// Simplified betweenness centrality approximation
+/// In-memory Brandes betweenness centrality approximation
+/// Replaces the old O(N²) shortestPath-query approach with O(V+E) BFS per source
 async fn calculate_betweenness_approximation(
     client: &FalkorClient,
     group_id: Option<&str>,
     sample_size: Option<u32>,
 ) -> Result<CentralityScores> {
-    // Get all nodes first
+    let start = Instant::now();
+    info!("Starting in-memory Brandes betweenness approximation");
+
+    // Get all nodes
     let nodes_query = if let Some(group_id) = group_id {
         format!(
             "MATCH (n) WHERE n.group_id = '{}' RETURN n.uuid as uuid",
@@ -458,94 +466,151 @@ async fn calculate_betweenness_approximation(
     };
 
     let node_results = client.execute_query(&nodes_query, None).await?;
-    let mut node_uuids: Vec<String> = node_results
+    let all_nodes: Vec<String> = node_results
         .iter()
         .filter_map(|record| record.get("uuid").map(|v| falkor_value_to_string(v)))
         .collect();
 
-    // Apply sampling if requested
-    if let Some(sample_size) = sample_size {
-        if node_uuids.len() > sample_size as usize {
-            // Simple sampling - take every nth node
-            let step = node_uuids.len() / sample_size as usize;
-            node_uuids = node_uuids.into_iter().step_by(step.max(1)).collect();
-        }
+    let num_nodes = all_nodes.len();
+    if num_nodes == 0 {
+        return Err(CentralityError::NoNodesFound);
     }
 
-    let mut betweenness = HashMap::new();
-    for uuid in &node_uuids {
-        betweenness.insert(uuid.clone(), 0.0);
-    }
-
-    // For betweenness centrality, we need to find shortest paths between pairs of nodes
-    // We'll sample a subset of nodes and find all shortest paths between them
-
-    // First, get a sample of well-connected nodes (higher degree nodes are more likely to be on paths)
-    let sample_nodes_query = if let Some(group_id) = group_id {
+    // Load ALL edges once — O(1) DB query
+    let edges_query = if let Some(group_id) = group_id {
         format!(
-            "MATCH (n) WHERE n.group_id = '{}'
-             OPTIONAL MATCH (n)-[r]-()
-             WITH n, count(r) as degree
-             ORDER BY degree DESC
-             LIMIT 50
-             RETURN n.uuid as uuid",
-            group_id
+            "MATCH (source)-[r]->(target)
+             WHERE source.group_id = '{}' OR target.group_id = '{}'
+             RETURN source.uuid as source, target.uuid as target",
+            group_id, group_id
         )
     } else {
-        "MATCH (n)
-         OPTIONAL MATCH (n)-[r]-()
-         WITH n, count(r) as degree
-         ORDER BY degree DESC
-         LIMIT 50
-         RETURN n.uuid as uuid"
+        "MATCH (source)-[r]->(target)
+         RETURN source.uuid as source, target.uuid as target"
             .to_string()
     };
 
-    let sample_results = client.execute_query(&sample_nodes_query, None).await?;
-    let sample_uuids: Vec<String> = sample_results
-        .iter()
-        .filter_map(|record| record.get("uuid").map(|v| falkor_value_to_string(v)))
-        .collect();
+    let edge_results = client.execute_query(&edges_query, None).await?;
 
-    // Now find shortest paths between all pairs in our sample
-    for i in 0..sample_uuids.len() {
-        for j in i + 1..sample_uuids.len() {
-            let path_query = format!(
-                "MATCH (source {{uuid: '{}'}}), (target {{uuid: '{}'}})
-                 MATCH path = shortestPath((source)-[*..15]-(target))
-                 RETURN nodes(path) as path_nodes",
-                sample_uuids[i], sample_uuids[j]
+    // Build adjacency list in memory (directed: source -> [targets])
+    let mut adjacency: HashMap<String, Vec<String>> = HashMap::new();
+    let node_set: HashSet<String> = all_nodes.iter().cloned().collect();
+
+    for record in edge_results {
+        if let (Some(source_val), Some(target_val)) = (record.get("source"), record.get("target")) {
+            let source = falkor_value_to_string(source_val);
+            let target = falkor_value_to_string(target_val);
+
+            if node_set.contains(&source) && node_set.contains(&target) {
+                adjacency.entry(source).or_default().push(target);
+            }
+        }
+    }
+
+    info!(
+        "Loaded edges for {} nodes — running Brandes algorithm in-memory",
+        num_nodes
+    );
+
+    // Sample source nodes for BFS
+    let source_nodes: Vec<&String> = if let Some(sample_size) = sample_size {
+        if all_nodes.len() > sample_size as usize {
+            let step = all_nodes.len() / sample_size as usize;
+            all_nodes.iter().step_by(step.max(1)).collect()
+        } else {
+            all_nodes.iter().collect()
+        }
+    } else {
+        all_nodes.iter().collect()
+    };
+
+    // Initialize betweenness scores for ALL nodes
+    let mut betweenness: HashMap<String, f64> =
+        all_nodes.iter().map(|n| (n.clone(), 0.0)).collect();
+
+    // Brandes' algorithm: BFS from each source, accumulate dependency
+    let empty_adj: Vec<String> = Vec::new();
+    for (i, source) in source_nodes.iter().enumerate() {
+        if i % 10 == 0 {
+            debug!(
+                "Brandes BFS from source {}/{}",
+                i + 1,
+                source_nodes.len()
             );
+        }
 
-            if let Ok(path_results) = client.execute_query(&path_query, None).await {
-                for record in path_results {
-                    if let Some(FalkorValue::Array(path_nodes)) = record.get("path_nodes") {
-                        // Count intermediate nodes in the path (exclude source and target)
-                        for k in 1..path_nodes.len().saturating_sub(1) {
-                            if let Some(node_map) = path_nodes[k].as_map() {
-                                if let Some(uuid_val) = node_map.get("uuid") {
-                                    let uuid = falkor_value_to_string(uuid_val);
-                                    if let Some(score) = betweenness.get_mut(&uuid) {
-                                        *score += 1.0;
-                                    }
-                                }
-                            }
-                        }
-                    }
+        // BFS / shortest path counting
+        let mut stack: Vec<String> = Vec::new();
+        let mut predecessors: HashMap<String, Vec<String>> = HashMap::new();
+        let mut sigma: HashMap<String, u64> = HashMap::new();
+        sigma.insert((*source).clone(), 1);
+        let mut dist: HashMap<String, i64> = HashMap::new();
+        dist.insert((*source).clone(), 0);
+        let mut queue: VecDeque<String> = VecDeque::new();
+        queue.push_back((*source).clone());
+
+        while let Some(v) = queue.pop_front() {
+            stack.push(v.clone());
+            let v_dist = *dist.get(&v).unwrap();
+
+            for w in adjacency.get(&v).unwrap_or(&empty_adj) {
+                // w found for the first time?
+                if !dist.contains_key(w) {
+                    dist.insert(w.clone(), v_dist + 1);
+                    queue.push_back(w.clone());
                 }
+                // shortest path to w via v?
+                if dist.get(w) == Some(&(v_dist + 1)) {
+                    let sigma_v = *sigma.get(&v).unwrap_or(&0);
+                    *sigma.entry(w.clone()).or_insert(0) += sigma_v;
+                    predecessors.entry(w.clone()).or_default().push(v.clone());
+                }
+            }
+        }
+
+        // Accumulation — back-propagation of dependencies
+        let mut delta: HashMap<String, f64> = HashMap::new();
+        let empty_preds: Vec<String> = Vec::new();
+        while let Some(w) = stack.pop() {
+            for v in predecessors.get(&w).unwrap_or(&empty_preds) {
+                let sigma_v = *sigma.get(v).unwrap_or(&1) as f64;
+                let sigma_w = *sigma.get(&w).unwrap_or(&1) as f64;
+                let delta_w = *delta.get(&w).unwrap_or(&0.0);
+                *delta.entry(v.clone()).or_insert(0.0) +=
+                    (sigma_v / sigma_w) * (1.0 + delta_w);
+            }
+            if &w != *source {
+                *betweenness.entry(w.clone()).or_insert(0.0) +=
+                    *delta.get(&w).unwrap_or(&0.0);
             }
         }
     }
 
     // Normalize scores
-    let max_score = betweenness.values().fold(0.0_f64, |a, &b| a.max(b));
-    if max_score > 0.0 {
+    if num_nodes > 2 {
+        let scale = if let Some(sample_size) = sample_size {
+            if (sample_size as usize) < num_nodes {
+                (num_nodes as f64) / (source_nodes.len() as f64)
+            } else {
+                1.0
+            }
+        } else {
+            1.0
+        };
+        let normalization = scale / ((num_nodes - 1) as f64 * (num_nodes - 2) as f64);
         for score in betweenness.values_mut() {
-            *score /= max_score;
+            *score *= normalization;
         }
     }
 
+    let duration = start.elapsed();
     let processed = betweenness.len();
+    info!(
+        "Brandes betweenness completed in {:?}: {} source BFS runs, {} nodes scored",
+        duration,
+        source_nodes.len(),
+        processed
+    );
 
     Ok(CentralityScores {
         scores: betweenness,

@@ -1053,12 +1053,16 @@ services:
       - USE_DEDICATED_EMBEDDING_ENDPOINT=${USE_DEDICATED_EMBEDDING_ENDPOINT:-true}
       - OLLAMA_EMBEDDING_BASE_URL=${OLLAMA_EMBEDDING_BASE_URL:-http://192.168.50.80:11434/v1}
       - OLLAMA_EMBEDDING_API_KEY=${OLLAMA_EMBEDDING_API_KEY:-ollama}
+      - USE_RUST_CENTRALITY=${USE_RUST_CENTRALITY:-true}
+      - RUST_CENTRALITY_URL=${RUST_CENTRALITY_URL:-http://graphiti-centrality-rs:3003}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
       - graphiti_network
     depends_on:
       falkordb:
+        condition: service_healthy
+      graphiti-centrality-rs:
         condition: service_healthy
     profiles: ["temporal-consolidation"]
 
