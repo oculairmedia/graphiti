@@ -9,6 +9,8 @@ from typing import Any
 
 from temporalio import activity
 
+from graphiti_core.utils.content_sanitizer import sanitize_content
+
 logger = logging.getLogger(__name__)
 
 
@@ -235,6 +237,7 @@ class IngestionActivities:
             created_at=utc_now(),
             valid_at=ensure_utc(ref_time) or ref_time,
         )
+        episode.content = sanitize_content(episode.content)
 
         if previous_episode_uuids:
             previous_episodes = await EpisodicNode.get_by_uuids(

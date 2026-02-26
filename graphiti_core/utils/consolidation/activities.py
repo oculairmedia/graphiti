@@ -97,7 +97,6 @@ class HealthCheckResult:
     duration_ms: int
 
 
-
 @dataclass
 class ConsolidationResult:
     run_id: str
@@ -194,6 +193,7 @@ class ConsolidationActivities:
             ),
             timestamp=datetime.now(timezone.utc).isoformat(),
         )
+
     @activity.defn
     async def prune_orphaned_nodes(self, batch_size: int = 100) -> PruneResult:
         start = time()
@@ -228,7 +228,7 @@ class ConsolidationActivities:
         total_deleted = 0
         while True:
             records, _, _ = await driver.execute_query(
-                'MATCH (n:Entity) WHERE toLower(n.name) IN $junk_names WITH n LIMIT $batch_size OPTIONAL MATCH (n)-[r]-() WITH n, count(r) as edge_count WHERE edge_count <= 2 DETACH DELETE n RETURN count(n) as deleted',
+                "MATCH (n:Entity) WHERE toLower(n.name) IN $junk_names OR n.name =~ '^toolu_.*' WITH n LIMIT $batch_size OPTIONAL MATCH (n)-[r]-() WITH n, count(r) as edge_count WHERE edge_count <= 2 DETACH DELETE n RETURN count(n) as deleted",
                 junk_names=JUNK_NAMES,
                 batch_size=batch_size,
             )
@@ -541,9 +541,7 @@ class ConsolidationActivities:
                 return {'uuid': uuid, 'summary': summary}
 
             # Parallel LLM calls for all records in batch
-            results = await asyncio.gather(
-                *[_generate_summary(r) for r in records]
-            )
+            results = await asyncio.gather(*[_generate_summary(r) for r in records])
             total_processed += len(records)
 
             # Batch SET via UNWIND — summaries are plain strings, no vecf32 constraint
@@ -622,7 +620,8 @@ class ConsolidationActivities:
 
                 logger.info(
                     'Backfilled %d embeddings in parallel (batch_size=%d)',
-                    len(uuids), batch_size,
+                    len(uuids),
+                    batch_size,
                 )
             except Exception as e:
                 logger.error('Embedding backfill batch failed: %s', e)
@@ -735,10 +734,12 @@ class ConsolidationActivities:
         duplicate_uuids_found = len(dup_records)
         dup_details: list[dict[str, Any]] = []
         for record in dup_records:
-            dup_details.append({
-                'uuid': str(record.get('uuid') or ''),
-                'count': int(record.get('cnt') or 0),
-            })
+            dup_details.append(
+                {
+                    'uuid': str(record.get('uuid') or ''),
+                    'count': int(record.get('cnt') or 0),
+                }
+            )
 
         all_healthy = failed_count == 0 and duplicate_uuids_found == 0
         duration_ms = int((time() - start) * 1000)
@@ -766,7 +767,6 @@ class ConsolidationActivities:
             },
             duration_ms=duration_ms,
         )
-
 
     @activity.defn
     async def store_consolidation_report(
@@ -805,16 +805,13 @@ class ConsolidationActivities:
 
         # Aggregate per-phase durations from individual activity results
         prune_duration_ms = sum(
-            int(r.get('duration_ms', 0) or 0)
-            for r in prune_results if isinstance(r, dict)
+            int(r.get('duration_ms', 0) or 0) for r in prune_results if isinstance(r, dict)
         )
         merge_duration_ms = sum(
-            int(r.get('duration_ms', 0) or 0)
-            for r in merge_results if isinstance(r, dict)
+            int(r.get('duration_ms', 0) or 0) for r in merge_results if isinstance(r, dict)
         )
         enrich_duration_ms = sum(
-            int(r.get('duration_ms', 0) or 0)
-            for r in enrich_results if isinstance(r, dict)
+            int(r.get('duration_ms', 0) or 0) for r in enrich_results if isinstance(r, dict)
         )
         health_duration_ms = int(health_check.get('duration_ms', 0) or 0)
 

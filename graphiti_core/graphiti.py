@@ -72,6 +72,7 @@ from graphiti_core.utils.bulk_utils import (
     retrieve_previous_episodes_bulk,
 )
 from graphiti_core.utils.datetime_utils import utc_now, ensure_utc
+from graphiti_core.utils.content_sanitizer import sanitize_content
 from graphiti_core.utils.maintenance.community_operations import (
     build_communities,
     remove_communities,
@@ -460,6 +461,7 @@ class Graphiti:
 
             validate_excluded_entity_types(excluded_entity_types, entity_types)
             validate_group_id(group_id)
+            episode_body = sanitize_content(episode_body)
 
             previous_episodes = (
                 await self.retrieve_episodes(
@@ -677,6 +679,7 @@ class Graphiti:
             validate_entity_types(entity_types)
             validate_excluded_entity_types(excluded_entity_types, entity_types)
             validate_group_id(resolved_group_id)
+            episode_body = sanitize_content(episode_body)
             resolved_edge_types: dict[str, BaseModel | type[BaseModel]] = (
                 {name: model for name, model in edge_types.items()}
                 if edge_types is not None
