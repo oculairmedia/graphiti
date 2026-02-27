@@ -228,7 +228,7 @@ class ConsolidationActivities:
         total_deleted = 0
         while True:
             records, _, _ = await driver.execute_query(
-                "MATCH (n:Entity) WHERE toLower(n.name) IN $junk_names OR n.name =~ '^toolu_.*' WITH n LIMIT $batch_size OPTIONAL MATCH (n)-[r]-() WITH n, count(r) as edge_count WHERE edge_count <= 2 DETACH DELETE n RETURN count(n) as deleted",
+                "MATCH (n:Entity) WHERE toLower(n.name) IN $junk_names OR n.name STARTS WITH 'toolu_' WITH n LIMIT $batch_size OPTIONAL MATCH (n)-[r]-() WITH n, count(r) as edge_count WHERE edge_count <= 2 DETACH DELETE n RETURN count(n) as deleted",
                 junk_names=JUNK_NAMES,
                 batch_size=batch_size,
             )

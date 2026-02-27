@@ -346,7 +346,7 @@ class IngestionActivities:
             nodes, uuid_map, dspy_duplicates = await graphiti._resolve_nodes_dspy(
                 extracted_nodes, episode, previous_episodes
             )
-            duplicate_uuids = [n.uuid for n in dspy_duplicates]
+            duplicate_uuids = [dup[0].uuid for dup in dspy_duplicates]
         else:
             from graphiti_core.utils.maintenance.node_operations import resolve_extracted_nodes
 

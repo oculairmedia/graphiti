@@ -862,7 +862,7 @@ python3 scripts/schedule_consolidation.py --delete-schedule
 
 ```bash
 # View all consolidation reports
-redis-cli -p 6379 GRAPH.QUERY graphiti_prompts "MATCH (r:ConsolidationReport) RETURN r.run_id, r.started_at, r.total_pruned, r.total_merged, r.pre_entity_nodes, r.post_entity_nodes ORDER BY r.started_at DESC" --csv
+redis-cli -p 6379 GRAPH.QUERY graphiti_prompts "MATCH (r:ConsolidationReport) RETURN r.run_id, r.started_at, r.total_pruned, r.total_merged, r.health_all_healthy, r.failed_constraints, r.duplicate_uuids_found ORDER BY r.started_at DESC" --csv
 ```
 
 **Architecture:**
@@ -884,6 +884,7 @@ Temporal Schedule (3 AM UTC daily)
        ├─ prune_orphaned_nodes (post-dedup)
        ├─ recalculate_centrality        ← Phase 3
        ├─ collect_metrics (post-snapshot)
+       ├─ check_constraint_health     ← Health Check
        └─ store_consolidation_report
 ```
 

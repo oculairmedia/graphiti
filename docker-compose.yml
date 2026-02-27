@@ -202,13 +202,12 @@ services:
         pip install --quiet --target=/app/server/.venv/lib/python3.12/site-packages temporalio 2>/dev/null || true
         exec /app/start.sh
     volumes:
+      - ./graphiti_core:/app/graphiti_core:ro
       - ./server/graph_service/zep_graphiti.py:/app/server/graph_service/zep_graphiti.py:ro
       - ./server/graph_service/queue_proxy.py:/app/server/graph_service/queue_proxy.py:ro
       - ./server/graph_service/routers/search_proxy.py:/app/server/graph_service/routers/search_proxy.py:ro
       - ./server/graph_service/routers/ingest.py:/app/server/graph_service/routers/ingest.py:ro
       - ./server/graph_service/dto/common.py:/app/server/graph_service/dto/common.py:ro
-      - ./graphiti_core/search/rust_client.py:/app/graphiti_core/search/rust_client.py:ro
-      - ./graphiti_core/utils/temporal_visibility:/app/graphiti_core/utils/temporal_visibility:ro
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY:-sk-dummy}
       - FALKORDB_HOST=${FALKORDB_HOST:-falkordb}
