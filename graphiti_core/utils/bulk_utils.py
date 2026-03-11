@@ -65,6 +65,21 @@ logger = logging.getLogger(__name__)
 
 CHUNK_SIZE = 10
 
+# Module-level counters for MENTIONS persistence validation metrics.
+# These accumulate across the process lifetime and can be scraped by Prometheus.
+_mentions_metrics: dict[str, int] = {
+    'intended': 0,
+    'saved': 0,
+    'mismatch_episodes': 0,
+    'mismatch_edges': 0,
+}
+
+
+def get_mentions_metrics() -> dict[str, int]:
+    """Return current MENTIONS persistence metrics for monitoring/Prometheus."""
+    return dict(_mentions_metrics)
+
+
 
 class RawEpisode(BaseModel):
     name: str
@@ -323,9 +338,39 @@ async def add_nodes_and_edges_bulk_tx(
                         existing_target=ex_tgt,
                     )
 
-    await tx.run(
-        EPISODIC_EDGE_SAVE_BULK, episodic_edges=[edge.model_dump() for edge in episodic_edges]
+    episodic_edge_dicts = [edge.model_dump() for edge in episodic_edges]
+    mentions_result = await tx.run(
+        EPISODIC_EDGE_SAVE_BULK, episodic_edges=episodic_edge_dicts
     )
+
+    # Post-save validation: compare intended vs actually persisted MENTIONS edges.
+    # EPISODIC_EDGE_SAVE_BULK uses MATCH on both Episodic and Entity nodes;
+    # if either side is missing (race condition, constraint violation, 0 extracted
+    # entities), the UNWIND row silently produces no result — no error, no edge.
+    saved_uuids = {r['uuid'] for r in mentions_result}
+    intended_uuids = {e.uuid for e in episodic_edges}
+
+    _mentions_metrics['intended'] += len(intended_uuids)
+    _mentions_metrics['saved'] += len(saved_uuids)
+
+    if len(saved_uuids) != len(intended_uuids):
+        missing_uuids = intended_uuids - saved_uuids
+        missing_edges = [e for e in episodic_edges if e.uuid in missing_uuids]
+        affected_episode_uuids = list({e.source_node_uuid for e in missing_edges})
+        missing_entity_uuids = list({e.target_node_uuid for e in missing_edges})
+
+        _mentions_metrics['mismatch_episodes'] += len(affected_episode_uuids)
+        _mentions_metrics['mismatch_edges'] += len(missing_uuids)
+
+        logger.warning(
+            'MENTIONS persist mismatch: intended=%d saved=%d missing=%d '
+            'affected_episodes=%s missing_entity_targets=%s',
+            len(intended_uuids),
+            len(saved_uuids),
+            len(missing_uuids),
+            affected_episode_uuids[:5],
+            missing_entity_uuids[:10],
+        )
 
     # Guard: check for existing RELATES_TO edges with same UUIDs but different endpoints
     entity_edge_uuids = [e['uuid'] for e in edges]

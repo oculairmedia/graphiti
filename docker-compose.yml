@@ -640,6 +640,9 @@ services:
       - ZAI_TOKENS_PER_HOUR=${ZAI_TOKENS_PER_HOUR:-1000000}
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
     networks:
       - graphiti_network
     depends_on:
@@ -695,6 +698,9 @@ services:
       - ZAI_TOKENS_PER_HOUR=${ZAI_TOKENS_PER_HOUR:-1000000}
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
     networks:
       - graphiti_network
     depends_on:
@@ -755,8 +761,17 @@ services:
       - LETTA_GRAPHITI_AGENT_ID=${LETTA_GRAPHITI_AGENT_ID:-}
       - DSPY_COLLECT_TRAINING_DATA=${DSPY_COLLECT_TRAINING_DATA:-false}
       - DSPY_TRAINING_DATA_DIR=${DSPY_TRAINING_DATA_DIR:-/data/training_data}
+      - MAX_PROMPT_TOKENS=${MAX_PROMPT_TOKENS:-6000}
+      - MAX_EPISODE_CONTENT_CHARS=${MAX_EPISODE_CONTENT_CHARS:-5000}
+      - MAX_PREVIOUS_EPISODES=${MAX_PREVIOUS_EPISODES:-3}
+      - DEDUP_FUZZY_THRESHOLD=${DEDUP_FUZZY_THRESHOLD:-0.92}
+      - ENABLE_AGGRESSIVE_DEDUP=${ENABLE_AGGRESSIVE_DEDUP:-true}
+      - DEDUP_NORMALIZE_NAMES=${DEDUP_NORMALIZE_NAMES:-true}
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
     networks:
       - graphiti_network
     depends_on:
@@ -815,8 +830,17 @@ services:
       - ZAI_TOKENS_PER_HOUR=${ZAI_TOKENS_PER_HOUR:-1000000}
       - DSPY_COLLECT_TRAINING_DATA=${DSPY_COLLECT_TRAINING_DATA:-false}
       - DSPY_TRAINING_DATA_DIR=${DSPY_TRAINING_DATA_DIR:-/data/training_data}
+      - MAX_PROMPT_TOKENS=${MAX_PROMPT_TOKENS:-6000}
+      - MAX_EPISODE_CONTENT_CHARS=${MAX_EPISODE_CONTENT_CHARS:-5000}
+      - MAX_PREVIOUS_EPISODES=${MAX_PREVIOUS_EPISODES:-3}
+      - DEDUP_FUZZY_THRESHOLD=${DEDUP_FUZZY_THRESHOLD:-0.92}
+      - ENABLE_AGGRESSIVE_DEDUP=${ENABLE_AGGRESSIVE_DEDUP:-true}
+      - DEDUP_NORMALIZE_NAMES=${DEDUP_NORMALIZE_NAMES:-true}
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
     networks:
       - graphiti_network
     depends_on:
@@ -877,6 +901,9 @@ services:
       - DSPY_TRAINING_DATA_DIR=${DSPY_TRAINING_DATA_DIR:-/data/training_data}
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
     networks:
       - graphiti_network
     depends_on:
@@ -940,6 +967,9 @@ services:
       - BATCH_EDGE_RESOLUTION_SIZE=${BATCH_EDGE_RESOLUTION_SIZE:-3}
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
     networks:
       - graphiti_network
     depends_on:
@@ -994,6 +1024,9 @@ services:
       - ZAI_TOKENS_PER_HOUR=${ZAI_TOKENS_PER_HOUR:-1000000}
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
     networks:
       - graphiti_network
     depends_on:
