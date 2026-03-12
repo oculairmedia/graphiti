@@ -263,13 +263,17 @@ async def record_training_example(
     """
     Convenience function to record a training example.
 
+    Creates a fresh storage instance per call to avoid event loop binding issues
+    when called from background threads in Temporal activities.
+
     Returns the example ID or None if collection is disabled.
     """
     if os.getenv('DSPY_COLLECT_TRAINING_DATA', 'false').lower() != 'true':
         return None
 
     try:
-        storage = get_training_storage()
+        # Create fresh instance per call to avoid event loop binding issues
+        storage = TrainingDataStorage()
         return await storage.record_example(task, inputs, output, metadata)
     except Exception as e:
         logger.warning(f'Failed to record training example: {e}')
