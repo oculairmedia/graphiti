@@ -64,6 +64,10 @@ async def _delayed_centrality_calculation() -> None:
     try:
         settings = get_settings()
 
+        if not settings.auto_centrality_enabled:
+            print('CENTRALITY_DEBUG: Automatic centrality disabled, skipping', flush=True)
+            return
+
         if not settings.use_rust_centrality:
             print('CENTRALITY_DEBUG: Rust centrality service disabled, skipping', flush=True)
             return

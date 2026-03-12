@@ -254,6 +254,7 @@ services:
       - EMBEDDING_ENDPOINT_FALLBACK=${EMBEDDING_ENDPOINT_FALLBACK:-true}
       - USE_RUST_CENTRALITY=${USE_RUST_CENTRALITY:-true}
       - RUST_CENTRALITY_URL=${RUST_CENTRALITY_URL:-http://graphiti-centrality-rs:3003}
+      - AUTO_CENTRALITY_ENABLED=${AUTO_CENTRALITY_ENABLED:-true}
       - RUST_SERVER_URL=${RUST_SERVER_URL:-http://graph-visualizer-rust:3000}
       - RUST_SEARCH_URL=${RUST_SEARCH_URL:-http://graphiti-search-rs:3004}
       - USE_RUST_SEARCH=${USE_RUST_SEARCH:-true}
