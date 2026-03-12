@@ -95,7 +95,8 @@ def get_entity_node_save_bulk_query(nodes) -> list[tuple[str, dict[str, Any]]]:
                               n.group_id = node.group_id,
                               n.summary = node.summary,
                               n.created_at = node.created_at
-                ON MATCH SET n.summary = node.summary
+                ON MATCH SET n.name = COALESCE(n.name, node.name),
+                             n.summary = node.summary
                 SET n:{label}
                 WITH n, node
                 WHERE node.name_embedding IS NOT NULL
