@@ -80,7 +80,6 @@ def get_mentions_metrics() -> dict[str, int]:
     return dict(_mentions_metrics)
 
 
-
 class RawEpisode(BaseModel):
     name: str
     uuid: str | None = Field(default=None)
@@ -218,6 +217,17 @@ async def add_nodes_and_edges_bulk_tx(
         logger.info(f'De-duplicated {node_duplicates_count} EntityNodes in-batch (by uuid)')
     nodes = list(unique_nodes.values())
 
+    invalid_name_nodes = [
+        n for n in nodes if not isinstance(n.get('name'), str) or not n['name'].strip()
+    ]
+    if invalid_name_nodes:
+        logger.warning(
+            'Skipping %d entity nodes with invalid/empty name; sample uuids=%s',
+            len(invalid_name_nodes),
+            [n.get('uuid') for n in invalid_name_nodes[:10]],
+        )
+    nodes = [n for n in nodes if isinstance(n.get('name'), str) and bool(n['name'].strip())]
+
     edges: list[dict[str, Any]] = []
     for edge in entity_edges:
         if edge.fact_embedding is None:
@@ -292,25 +302,49 @@ async def add_nodes_and_edges_bulk_tx(
             sample_nodes,
         )
 
-    # Try to save entity nodes, but handle constraint violations gracefully
-    # This prevents orphaned episodic nodes when race conditions occur
-    try:
-        # FalkorDB requires executing each node/label combination separately
-        for query, params in entity_node_save_queries:
+    failed_entity_uuids: set[str] = set()
+    for query, params in entity_node_save_queries:
+        try:
             await tx.run(query, **params)
-    except Exception as e:
-        error_msg = str(e).lower()
-        if 'unique constraint violation' in error_msg or 'constraint violation' in error_msg:
-            logger.warning(
-                f'Constraint violation during entity node bulk save (expected race condition). '
-                f'Entities likely already exist. Error: {str(e)[:200]}'
-            )
-            # Entity nodes already exist - this is OK, MERGE should have found them
-            # Continue to save edges using the existing entities
-        else:
-            # Unexpected error - re-raise
-            logger.error(f'Unexpected error during entity node bulk save: {e}')
-            raise
+        except Exception as e:
+            error_msg = str(e).lower()
+            node_uuid = 'unknown'
+            node_name = 'unknown'
+            if 'nodes' in params and params['nodes']:
+                node_uuid = params['nodes'][0].get('uuid', 'unknown')
+                node_name = repr(params['nodes'][0].get('name', 'unknown'))
+            if 'constraint violation' in error_msg:
+                failed_entity_uuids.add(node_uuid)
+                logger.warning(
+                    'Constraint violation saving entity node uuid=%s name=%s: %s',
+                    node_uuid,
+                    node_name,
+                    str(e)[:300],
+                )
+            elif 'mem consumption exceeded' in error_msg:
+                failed_entity_uuids.add(node_uuid)
+                logger.error(
+                    'Memory exceeded saving entity node uuid=%s name=%s: %s',
+                    node_uuid,
+                    node_name,
+                    str(e)[:300],
+                )
+            else:
+                failed_entity_uuids.add(node_uuid)
+                logger.error(
+                    'Unexpected error saving entity node uuid=%s name=%s: %s',
+                    node_uuid,
+                    node_name,
+                    str(e)[:500],
+                )
+
+    if failed_entity_uuids:
+        logger.warning(
+            'Entity node save: %d/%d node UUIDs had failures (some may have partial label saves): %s',
+            len(failed_entity_uuids),
+            len(nodes),
+            list(failed_entity_uuids)[:10],
+        )
 
     # Guard: check for existing MENTIONS edges with same UUIDs but different endpoints
     episodic_edge_uuids = [e.uuid for e in episodic_edges]
@@ -339,9 +373,7 @@ async def add_nodes_and_edges_bulk_tx(
                     )
 
     episodic_edge_dicts = [edge.model_dump() for edge in episodic_edges]
-    mentions_result = await tx.run(
-        EPISODIC_EDGE_SAVE_BULK, episodic_edges=episodic_edge_dicts
-    )
+    mentions_result = await tx.run(EPISODIC_EDGE_SAVE_BULK, episodic_edges=episodic_edge_dicts)
 
     # Post-save validation: compare intended vs actually persisted MENTIONS edges.
     # EPISODIC_EDGE_SAVE_BULK uses MATCH on both Episodic and Entity nodes;
