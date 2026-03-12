@@ -1,3 +1,69 @@
+# Graphiti Agent Index
+
+> **READ THIS FIRST**: This file maps tasks to documentation. For detailed info, follow the links.
+
+---
+
+## Quick Task-to-File Mapping
+
+| I want to... | Read this file |
+|-------------|----------------|
+| Add data/episodes | [docs/how-to/add-episode.md](docs/how-to/add-episode.md) |
+| Search/query graph | [docs/how-to/search-graph.md](docs/how-to/search-graph.md) |
+| Start/stop Docker | [docs/how-to/run-docker.md](docs/how-to/run-docker.md) |
+| Query FalkorDB directly | [docs/how-to/query-falkordb.md](docs/how-to/query-falkordb.md) |
+| Work with Temporal | [docs/how-to/temporal-workflows.md](docs/how-to/temporal-workflows.md) |
+| Write/run tests | [docs/how-to/write-tests.md](docs/how-to/write-tests.md) |
+| Add API endpoint | [docs/how-to/add-api-endpoint.md](docs/how-to/add-api-endpoint.md) |
+| Debug ingestion | [docs/how-to/debug-ingestion.md](docs/how-to/debug-ingestion.md) |
+| **CRITICAL GOTCHAS** | [docs/gotchas.md](docs/gotchas.md) |
+| Full documentation index | [docs/INDEX.md](docs/INDEX.md) |
+
+---
+
+## Critical Safety Rules
+
+### ⚠️ NEVER USE THESE COMMANDS
+
+```bash
+# ❌ DANGEROUS - deletes FalkorDB data volume
+docker system prune --volumes
+docker volume prune
+docker system prune -a --volumes
+```
+
+### ✅ USE THIS INSTEAD
+
+```bash
+# Safe cleanup - protects all data volumes
+/opt/stacks/graphiti/scripts/safe_cleanup.sh --dry-run  # Preview
+/opt/stacks/graphiti/scripts/safe_cleanup.sh           # Execute
+```
+
+### 🛡️ Protected Volumes (NEVER delete)
+
+- `graphiti_falkordb_data` - PRIMARY DATA STORE
+- `graphiti_visualizer_duckdb` - Visualizer cache
+
+---
+
+## Docker Quick Reference
+
+```bash
+# Check status
+docker-compose ps
+
+# Safe restarts (use container name)
+docker restart graphiti-graph-visualizer-rust-1
+docker restart graphiti-nginx-1
+docker restart graphiti-frontend-1
+
+# ❌ NEVER - cascades through dependencies
+docker-compose restart graph-visualizer-rust
+```
+
+---
+
 <!-- VIBESYNC:project-info:START -->
 
 # Agent Instructions
@@ -14,6 +80,7 @@
 2. **Issue references**: All issues for this project use the format `GRAPH-XXX` (e.g., `GRAPH-123`)
 3. **On task completion**: Report to this project's Letta agent via `matrix-identity-bridge` using `talk_to_agent`
 4. **Memory**: Store important discoveries in Graphiti with `graphiti-mcp_add_memory`
+
 <!-- VIBESYNC:project-info:END -->
 
 <!-- VIBESYNC:reporting-hierarchy:CUSTOM -->
