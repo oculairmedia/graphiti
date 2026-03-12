@@ -99,28 +99,51 @@ async def _record_training_data(
         logger.warning(f'Failed to record training example: {e}')
 
 
+def _run_in_thread(
+    task: str,
+    inputs: dict[str, Any],
+    output: dict[str, Any],
+    metadata: dict[str, Any] | None,
+) -> None:
+    """Run training recording in a separate thread with its own event loop."""
+    import asyncio
+
+    try:
+        asyncio.run(_record_training_data(task, inputs, output, metadata))
+    except Exception as e:
+        logger.debug(f'Training recording thread failed: {e}')
+
+
 def _schedule_training_record(
     task: str,
     inputs: dict[str, Any],
     output: dict[str, Any],
     metadata: dict[str, Any] | None = None,
 ) -> None:
+    """Schedule training data recording in a background thread.
+
+    Uses a separate thread with its own event loop to isolate from the caller's
+    async context. This prevents "Event loop is closed" errors when called from
+    Temporal activities that clean up their event loops quickly.
+    """
     if not is_training_collection_enabled():
         return
 
     if not _use_falkordb_training_storage():
         return
 
-    try:
-        import asyncio
+    import threading
 
-        try:
-            loop = asyncio.get_running_loop()
-            loop.create_task(_record_training_data(task, inputs, output, metadata))
-        except RuntimeError:
-            asyncio.run(_record_training_data(task, inputs, output, metadata))
+    try:
+        thread = threading.Thread(
+            target=_run_in_thread,
+            args=(task, inputs, output, metadata),
+            daemon=True,
+            name=f'training-record-{task}',
+        )
+        thread.start()
     except Exception as e:
-        logger.debug(f'Failed to schedule training record: {e}')
+        logger.debug(f'Failed to start training record thread: {e}')
 
 
 def save_training_data() -> dict[str, int] | None:
