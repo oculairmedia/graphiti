@@ -17,6 +17,7 @@ class FakeTx:
         self.fail_uuid = fail_uuid
         self.attempted_entity_node_uuids: list[str] = []
         self.saved_entity_node_uuids: set[str] = set()
+        self.fallback_entity_node_uuids: list[str] = []
 
     async def run(self, query: str, **params):
         if 'UNWIND $nodes AS node' in query and 'MERGE (n:Entity {uuid: node.uuid})' in query:
@@ -27,6 +28,18 @@ class FakeTx:
                 raise Exception(
                     'mandatory constraint violation: node with label Entity missing property name'
                 )
+            self.saved_entity_node_uuids.add(node_uuid)
+            return [{'uuid': node_uuid}]
+
+        if 'CREATE (n:Entity {uuid: $uuid, name: $name, group_id: $group_id})' in query:
+            node_uuid = params['uuid']
+            self.fallback_entity_node_uuids.append(node_uuid)
+            self.saved_entity_node_uuids.add(node_uuid)
+            return [{'uuid': node_uuid}]
+
+        if 'MATCH (n:Entity {uuid: $uuid})' in query and 'SET n.name = COALESCE' in query:
+            node_uuid = params['uuid']
+            self.fallback_entity_node_uuids.append(node_uuid)
             self.saved_entity_node_uuids.add(node_uuid)
             return [{'uuid': node_uuid}]
 
@@ -114,8 +127,11 @@ async def test_entity_node_save_failure_does_not_abort_remaining_nodes(caplog):
 
     assert bad_node.uuid in tx.attempted_entity_node_uuids
     assert good_node.uuid in tx.attempted_entity_node_uuids
+    assert bad_node.uuid in tx.fallback_entity_node_uuids
+    assert bad_node.uuid in tx.saved_entity_node_uuids
     assert good_node.uuid in tx.saved_entity_node_uuids
-    assert 'MENTIONS persist mismatch' in caplog.text
+    assert 'Retried entity node save via explicit CREATE' in caplog.text
+    assert 'MENTIONS persist mismatch' not in caplog.text
 
 
 @pytest.mark.asyncio

@@ -74,10 +74,96 @@ _mentions_metrics: dict[str, int] = {
     'mismatch_edges': 0,
 }
 
+ENTITY_NODE_CREATE_FALLBACK = """
+    CREATE (n:Entity {uuid: $uuid, name: $name, group_id: $group_id})
+    SET n.summary = $summary,
+        n.created_at = $created_at
+    FOREACH (_ IN CASE WHEN $name_embedding IS NOT NULL THEN [1] ELSE [] END |
+        SET n.name_embedding = vecf32($name_embedding)
+    )
+    RETURN n.uuid AS uuid
+"""
+
+ENTITY_NODE_UPDATE_FALLBACK = """
+    MATCH (n:Entity {uuid: $uuid})
+    SET n.name = COALESCE(n.name, $name),
+        n.group_id = COALESCE(n.group_id, $group_id),
+        n.summary = $summary
+    FOREACH (_ IN CASE WHEN $name_embedding IS NOT NULL THEN [1] ELSE [] END |
+        SET n.name_embedding = vecf32($name_embedding)
+    )
+    RETURN n.uuid AS uuid
+"""
+
 
 def get_mentions_metrics() -> dict[str, int]:
     """Return current MENTIONS persistence metrics for monitoring/Prometheus."""
     return dict(_mentions_metrics)
+
+
+def _is_entity_required_property_constraint_violation(error_msg: str) -> bool:
+    normalized = error_msg.lower()
+    return (
+        'mandatory constraint violation' in normalized
+        and 'node with label entity missing property' in normalized
+        and ('name' in normalized or 'group_id' in normalized)
+    )
+
+
+async def _retry_entity_node_save_with_required_props(
+    tx: GraphDriverSession, node: dict[str, Any]
+) -> bool:
+    params = {
+        'uuid': node['uuid'],
+        'name': node['name'],
+        'group_id': node['group_id'],
+        'summary': node.get('summary'),
+        'created_at': node.get('created_at'),
+        'name_embedding': node.get('name_embedding'),
+    }
+
+    try:
+        await tx.run(ENTITY_NODE_CREATE_FALLBACK, **params)
+        logger.info(
+            'Retried entity node save via explicit CREATE for uuid=%s name=%r',
+            node['uuid'],
+            node.get('name'),
+        )
+        return True
+    except Exception as create_error:
+        create_error_msg = str(create_error).lower()
+        if (
+            'constraint violation' not in create_error_msg
+            and 'already exists' not in create_error_msg
+            and 'duplicate' not in create_error_msg
+            and 'unique' not in create_error_msg
+        ):
+            logger.warning(
+                'Entity node fallback CREATE failed for uuid=%s name=%r: %s',
+                node['uuid'],
+                node.get('name'),
+                str(create_error)[:300],
+            )
+            return False
+
+    try:
+        update_result = await tx.run(ENTITY_NODE_UPDATE_FALLBACK, **params)
+        if update_result:
+            logger.info(
+                'Retried entity node save via MATCH/SET for uuid=%s name=%r',
+                node['uuid'],
+                node.get('name'),
+            )
+            return True
+    except Exception as update_error:
+        logger.warning(
+            'Entity node fallback MATCH/SET failed for uuid=%s name=%r: %s',
+            node['uuid'],
+            node.get('name'),
+            str(update_error)[:300],
+        )
+
+    return False
 
 
 class RawEpisode(BaseModel):
@@ -310,9 +396,21 @@ async def add_nodes_and_edges_bulk_tx(
             error_msg = str(e).lower()
             node_uuid = 'unknown'
             node_name = 'unknown'
+            node_params: dict[str, Any] | None = None
             if 'nodes' in params and params['nodes']:
-                node_uuid = params['nodes'][0].get('uuid', 'unknown')
-                node_name = repr(params['nodes'][0].get('name', 'unknown'))
+                candidate = params['nodes'][0]
+                if isinstance(candidate, dict):
+                    node_params = candidate
+                    node_uuid = node_params.get('uuid', 'unknown')
+                    node_name = repr(node_params.get('name', 'unknown'))
+
+            if (
+                node_params is not None
+                and _is_entity_required_property_constraint_violation(error_msg)
+            ):
+                if await _retry_entity_node_save_with_required_props(tx, node_params):
+                    continue
+
             if 'constraint violation' in error_msg:
                 failed_entity_uuids.add(node_uuid)
                 logger.warning(
