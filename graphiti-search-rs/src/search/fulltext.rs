@@ -77,15 +77,42 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_sanitize_lucene_query() {
-        // We no longer add wildcards automatically since FalkorDB CONTAINS does partial matching
+    fn leaves_plain_text_queries_unchanged() {
         assert_eq!(sanitize_lucene_query("hello world"), "hello world");
-        assert_eq!(sanitize_lucene_query("test+query"), r"test\+query");
+    }
+
+    #[test]
+    fn escapes_lucene_special_characters() {
         assert_eq!(
-            sanitize_lucene_query("\"exact phrase\""),
-            "\"exact phrase\""
+            sanitize_lucene_query(r#"team+(alpha):beta/path\gamma"#),
+            r#"team\+\(alpha\)\:beta\/path\\gamma"#
         );
-        // Wildcards are escaped since they're special Lucene characters
-        assert_eq!(sanitize_lucene_query("wild*card"), r"wild\*card");
+        assert_eq!(sanitize_lucene_query("wild*card?"), r"wild\*card\?");
+    }
+
+    #[test]
+    fn preserves_quotes_while_escaping_other_special_characters() {
+        assert_eq!(
+            sanitize_lucene_query("\"exact phrase\" +(beta)"),
+            "\"exact phrase\" \\+\\(beta\\)"
+        );
+    }
+
+    #[test]
+    fn handles_empty_queries_without_panicking() {
+        assert_eq!(sanitize_lucene_query(""), "");
+    }
+
+    #[test]
+    fn preserves_unicode_text() {
+        assert_eq!(sanitize_lucene_query("cafe 東京"), "cafe 東京");
+    }
+
+    #[test]
+    fn sanitizes_lucene_injection_attempts() {
+        assert_eq!(
+            sanitize_lucene_query("title:foo OR body:*"),
+            r"title\:foo OR body\:\*"
+        );
     }
 }

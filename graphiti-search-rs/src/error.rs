@@ -58,3 +58,66 @@ impl IntoResponse for SearchError {
 }
 
 pub type SearchResult<T> = Result<T, SearchError>;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::body::to_bytes;
+    use serde_json::Value;
+
+    async fn response_body(error: SearchError) -> Value {
+        let response = error.into_response();
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        serde_json::from_slice(&body).unwrap()
+    }
+
+    #[tokio::test]
+    async fn invalid_query_maps_to_bad_request() {
+        let response = SearchError::InvalidQuery("bad query".to_string()).into_response();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+        let body = response_body(SearchError::InvalidQuery("bad query".to_string())).await;
+        assert_eq!(body["error"], "bad query");
+        assert_eq!(body["status"], 400);
+    }
+
+    #[tokio::test]
+    async fn database_error_maps_to_service_unavailable() {
+        let response = SearchError::Database("redis down".to_string()).into_response();
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+
+        let body = response_body(SearchError::Database("redis down".to_string())).await;
+        assert_eq!(body["error"], "redis down");
+        assert_eq!(body["status"], 503);
+    }
+
+    #[tokio::test]
+    async fn cache_error_maps_to_ok_with_degraded_message() {
+        let response = SearchError::Cache("cache offline".to_string()).into_response();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = response_body(SearchError::Cache("cache offline".to_string())).await;
+        assert_eq!(body["error"], "Cache miss, proceeding without cache");
+        assert_eq!(body["status"], 200);
+    }
+
+    #[tokio::test]
+    async fn reranking_error_maps_to_internal_server_error() {
+        let response = SearchError::Reranking("reranker failed".to_string()).into_response();
+        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+
+        let body = response_body(SearchError::Reranking("reranker failed".to_string())).await;
+        assert_eq!(body["error"], "Reranking error: reranker failed");
+        assert_eq!(body["status"], 500);
+    }
+
+    #[tokio::test]
+    async fn internal_error_maps_to_internal_server_error() {
+        let response = SearchError::Internal(anyhow::anyhow!("unexpected")).into_response();
+        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+
+        let body = response_body(SearchError::Internal(anyhow::anyhow!("unexpected"))).await;
+        assert_eq!(body["error"], "Internal error: unexpected");
+        assert_eq!(body["status"], 500);
+    }
+}

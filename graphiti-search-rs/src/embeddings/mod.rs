@@ -204,3 +204,53 @@ impl OllamaEmbedder {
 lazy_static::lazy_static! {
     pub static ref EMBEDDER: OllamaEmbedder = OllamaEmbedder::new();
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn unit_vector_stays_normalized() {
+        let mut embedding = vec![1.0, 0.0, 0.0];
+        let norm = l2_normalize_embedding(&mut embedding);
+
+        assert_eq!(norm, Some(1.0));
+        assert_eq!(embedding, vec![1.0, 0.0, 0.0]);
+    }
+
+    #[test]
+    fn non_unit_vector_normalizes_to_length_one() {
+        let mut embedding = vec![3.0, 4.0];
+        let norm = l2_normalize_embedding(&mut embedding);
+        let length = embedding
+            .iter()
+            .map(|value| value * value)
+            .sum::<f32>()
+            .sqrt();
+
+        assert_eq!(norm, Some(5.0));
+        assert!((embedding[0] - 0.6).abs() < 0.0001);
+        assert!((embedding[1] - 0.8).abs() < 0.0001);
+        assert!((length - 1.0).abs() < 0.0001);
+    }
+
+    #[test]
+    fn zero_vector_returns_none_without_dividing() {
+        let mut embedding = vec![0.0, 0.0, 0.0];
+        let norm = l2_normalize_embedding(&mut embedding);
+
+        assert_eq!(norm, None);
+        assert_eq!(embedding, vec![0.0, 0.0, 0.0]);
+    }
+
+    #[test]
+    fn non_finite_values_do_not_poison_finite_components() {
+        let mut embedding = vec![3.0, f32::NAN, 4.0];
+        let norm = l2_normalize_embedding(&mut embedding);
+
+        assert_eq!(norm, Some(5.0));
+        assert!((embedding[0] - 0.6).abs() < 0.0001);
+        assert!(embedding[1].is_nan());
+        assert!((embedding[2] - 0.8).abs() < 0.0001);
+    }
+}

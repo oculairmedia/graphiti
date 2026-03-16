@@ -1,57 +1,15 @@
 #![allow(clippy::uninlined_format_args)]
 
 use anyhow::Result;
-use axum::{
-    routing::{get, post},
-    Router,
+use graphiti_search_rs::{
+    app::{build_reranker_client, AppState},
+    config::Config,
+    create_router,
+    falkor::create_falkor_pool,
 };
 use std::net::SocketAddr;
-use tower_http::{compression::CompressionLayer, cors::CorsLayer, trace::TraceLayer};
 use tracing::info;
 use tracing_subscriber::{filter::EnvFilter, FmtSubscriber};
-
-mod config;
-mod embeddings;
-mod error;
-mod falkor;
-mod handlers;
-mod models;
-mod reranker;
-mod retry;
-mod search;
-
-use crate::config::Config;
-use crate::falkor::{create_falkor_pool, FalkorPool};
-use crate::handlers::{health_check, search_handler};
-use crate::retry::RetryConfig;
-use crate::search::SearchEngine;
-use std::time::Duration;
-
-#[derive(Clone)]
-pub struct AppState {
-    pub falkor_pool: FalkorPool,
-    pub redis_pool: deadpool_redis::Pool,
-    pub config: Config,
-    pub reranker_client: Option<reranker::RerankerClient>,
-}
-
-impl AppState {
-    pub fn create_search_engine(&self) -> SearchEngine {
-        SearchEngine::new(
-            self.falkor_pool.clone(),
-            self.redis_pool.clone(),
-            self.config.max_method_results,
-            self.config.mmr_timeout_ms,
-            self.config.max_pre_rerank_results,
-            self.config.bfs_timeout_ms,
-            self.config.bfs_batch_size,
-            self.config.hipporag_timeout_ms,
-            self.config.hipporag_batch_size,
-            self.config.hipporag_hub_threshold,
-            self.reranker_client.clone(),
-        )
-    }
-}
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -84,27 +42,7 @@ async fn main() -> Result<()> {
     info!("Redis connection pool initialized");
 
     // Create reranker client once (connection pooling)
-    let reranker_client = if config.reranker_enabled {
-        match reranker::RerankerClient::new(
-            &config.reranker_url,
-            config.reranker_timeout_ms,
-            RetryConfig::new(
-                config.reranker_max_retries,
-                Duration::from_millis(config.reranker_retry_base_ms),
-            ),
-        ) {
-            Ok(client) => {
-                info!("RerankerClient initialized for {}", config.reranker_url);
-                Some(client)
-            }
-            Err(e) => {
-                tracing::warn!("Failed to create reranker client: {}", e);
-                None
-            }
-        }
-    } else {
-        None
-    };
+    let reranker_client = build_reranker_client(&config);
 
     // Create application state
     let state = AppState {
@@ -115,20 +53,7 @@ async fn main() -> Result<()> {
     };
 
     // Build router
-    let app = Router::new()
-        .route("/health", get(health_check))
-        .route("/search", post(search_handler))
-        .route("/search/edges", post(handlers::edge_search_handler))
-        .route("/search/nodes", post(handlers::node_search_handler))
-        .route("/search/episodes", post(handlers::episode_search_handler))
-        .route(
-            "/search/communities",
-            post(handlers::community_search_handler),
-        )
-        .layer(CompressionLayer::new())
-        .layer(CorsLayer::permissive())
-        .layer(TraceLayer::new_for_http())
-        .with_state(state);
+    let app = create_router(state);
 
     // Start server
     let addr = SocketAddr::from(([0, 0, 0, 0], config.port));

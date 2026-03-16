@@ -63,7 +63,7 @@ pub fn _batch_cosine_similarity(
 
     // Sort by similarity descending
     let mut sorted_results = results;
-    sorted_results.par_sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+    sorted_results.par_sort_by(|a, b| b.1.total_cmp(&a.1));
     sorted_results
 }
 
@@ -110,26 +110,79 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_cosine_similarity() {
-        let a = vec![1.0, 2.0, 3.0, 4.0];
-        let b = vec![1.0, 2.0, 3.0, 4.0];
-        assert!((cosine_similarity_simd(&a, &b) - 1.0).abs() < 0.0001);
-
-        let c = vec![-1.0, -2.0, -3.0, -4.0];
-        assert!((cosine_similarity_simd(&a, &c) + 1.0).abs() < 0.0001);
+    fn cosine_identical_vectors_is_one() {
+        let vector = vec![1.0, 2.0, 3.0, 4.0];
+        assert!((cosine_similarity_simd(&vector, &vector) - 1.0).abs() < 0.0001);
     }
 
     #[test]
-    fn test_batch_similarity() {
-        let query = vec![1.0, 2.0, 3.0];
-        let vectors = vec![
-            vec![1.0, 2.0, 3.0],    // Same as query
-            vec![2.0, 4.0, 6.0],    // Same direction
-            vec![-1.0, -2.0, -3.0], // Opposite direction
-        ];
+    fn cosine_orthogonal_vectors_is_zero() {
+        let a = vec![1.0, 0.0, 0.0];
+        let b = vec![0.0, 1.0, 0.0];
+        assert!(cosine_similarity_simd(&a, &b).abs() < 0.0001);
+    }
+
+    #[test]
+    fn cosine_opposite_vectors_is_negative_one() {
+        let a = vec![1.0, 2.0, 3.0, 4.0];
+        let b = vec![-1.0, -2.0, -3.0, -4.0];
+        assert!((cosine_similarity_simd(&a, &b) + 1.0).abs() < 0.0001);
+    }
+
+    #[test]
+    fn cosine_mismatched_dimensions_returns_zero() {
+        let a = vec![1.0, 0.0];
+        let b = vec![1.0, 0.0, 0.0];
+        assert_eq!(cosine_similarity_simd(&a, &b), 0.0);
+    }
+
+    #[test]
+    fn cosine_zero_vector_returns_zero_without_nan() {
+        let a = vec![0.0, 0.0, 0.0];
+        let b = vec![1.0, 0.0, 0.0];
+        let similarity = cosine_similarity_simd(&a, &b);
+        assert_eq!(similarity, 0.0);
+        assert!(!similarity.is_nan());
+    }
+
+    #[test]
+    fn cosine_empty_vectors_returns_zero_without_nan() {
+        let a: Vec<f32> = vec![];
+        let b: Vec<f32> = vec![];
+        let similarity = cosine_similarity_simd(&a, &b);
+        assert_eq!(similarity, 0.0);
+        assert!(!similarity.is_nan());
+    }
+
+    #[test]
+    fn cosine_nan_input_does_not_panic() {
+        let a = vec![f32::NAN, 1.0];
+        let b = vec![1.0, 0.0];
+        let similarity = cosine_similarity_simd(&a, &b);
+        assert!(similarity.is_nan());
+    }
+
+    #[test]
+    fn batch_similarity_filters_and_sorts_descending() {
+        let query = vec![1.0, 0.0];
+        let vectors = vec![vec![1.0, 0.0], vec![0.5, 0.5], vec![-1.0, 0.0]];
 
         let results = _batch_cosine_similarity(&query, &vectors, Some(0.5));
-        assert_eq!(results.len(), 2); // Should filter out the negative similarity
-        assert_eq!(results[0].0, 0); // First vector should be most similar
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0].0, 0);
+        assert!(results[0].1 >= results[1].1);
+    }
+
+    #[test]
+    fn batch_similarity_handles_nan_scores_without_panicking() {
+        let query = vec![1.0, 0.0];
+        let vectors = vec![vec![f32::NAN, 0.0], vec![1.0, 0.0]];
+
+        let results = _batch_cosine_similarity(&query, &vectors, None);
+        assert_eq!(results.len(), 2);
+        assert!(results.iter().any(|(_, score)| score.is_nan()));
+        assert!(results
+            .iter()
+            .any(|(idx, score)| *idx == 1 && score.is_finite()));
     }
 }
