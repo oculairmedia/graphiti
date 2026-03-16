@@ -17,12 +17,15 @@ mod falkor;
 mod handlers;
 mod models;
 mod reranker;
+mod retry;
 mod search;
 
 use crate::config::Config;
 use crate::falkor::{create_falkor_pool, FalkorPool};
 use crate::handlers::{health_check, search_handler};
+use crate::retry::RetryConfig;
 use crate::search::SearchEngine;
+use std::time::Duration;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -82,7 +85,14 @@ async fn main() -> Result<()> {
 
     // Create reranker client once (connection pooling)
     let reranker_client = if config.reranker_enabled {
-        match reranker::RerankerClient::new(&config.reranker_url, config.reranker_timeout_ms) {
+        match reranker::RerankerClient::new(
+            &config.reranker_url,
+            config.reranker_timeout_ms,
+            RetryConfig::new(
+                config.reranker_max_retries,
+                Duration::from_millis(config.reranker_retry_base_ms),
+            ),
+        ) {
             Ok(client) => {
                 info!("RerankerClient initialized for {}", config.reranker_url);
                 Some(client)

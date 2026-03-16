@@ -7,6 +7,7 @@ by delegating search operations to the Rust service.
 
 import asyncio
 import json
+import logging
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
@@ -16,6 +17,8 @@ from pydantic import BaseModel, Field
 from graphiti_core.nodes import EntityNode, EpisodicNode, EpisodeType
 from graphiti_core.edges import EntityEdge
 from graphiti_core.search.search_config import SearchConfig, SearchResults
+
+logger = logging.getLogger(__name__)
 
 # Mapping from Python enum values to Rust-expected values
 PYTHON_TO_RUST_SEARCH_METHOD = {
@@ -138,10 +141,8 @@ class RustSearchClient:
 
         # Debug: Log the payload being sent
         import json as json_module
-        import logging as logging_module
 
-        _logger = logging_module.getLogger(__name__)
-        _logger.info(
+        logger.info(
             f'DEBUG Rust search payload: {json_module.dumps(payload, indent=2, default=str)[:2000]}'
         )
 
@@ -293,12 +294,19 @@ class RustSearchClient:
         nodes = [self._parse_node(n) for n in data.get('nodes', [])]
         episodes = [self._parse_episode(e) for e in data.get('episodes', [])]
         communities = data.get('communities', [])  # TODO: Parse communities
+        degraded = data.get('degraded', False)
+        warnings = data.get('warnings', [])
+
+        if degraded:
+            logger.warning('Rust search returned degraded results: %s', '; '.join(warnings))
 
         return SearchResults(
             edges=edges,
             nodes=nodes,
             episodes=episodes,
             communities=communities,
+            degraded=degraded,
+            warnings=warnings,
         )
 
     def _parse_edge(self, data: Dict[str, Any]) -> EntityEdge:

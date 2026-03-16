@@ -142,3 +142,5 @@ class SearchResults(BaseModel):
     nodes: list[EntityNode]
     episodes: list[EpisodicNode]
     communities: list[CommunityNode]
+    degraded: bool = False
+    warnings: list[str] = Field(default_factory=list)

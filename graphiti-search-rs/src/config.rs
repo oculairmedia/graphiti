@@ -22,6 +22,10 @@ pub struct Config {
     pub reranker_url: String,
     /// Timeout for reranker requests (ms)
     pub reranker_timeout_ms: u64,
+    /// Max reranker HTTP attempts including the first try
+    pub reranker_max_retries: u32,
+    /// Base reranker retry backoff in milliseconds
+    pub reranker_retry_base_ms: u64,
 
     /// Timeout for MMR reranking computation (ms) - prevents O(n²) explosion
     pub mmr_timeout_ms: u64,
@@ -74,13 +78,19 @@ impl Config {
                 .parse()?,
 
             reranker_enabled: env::var("RERANKER_ENABLED")
-                .unwrap_or_else(|_| "false".to_string())
+                .unwrap_or_else(|_| "true".to_string())
                 .to_lowercase()
                 == "true",
             reranker_url: env::var("RERANKER_URL")
                 .unwrap_or_else(|_| "http://100.81.139.20:11435".to_string()),
             reranker_timeout_ms: env::var("RERANKER_TIMEOUT_MS")
                 .unwrap_or_else(|_| "5000".to_string())
+                .parse()?,
+            reranker_max_retries: env::var("RERANKER_MAX_RETRIES")
+                .unwrap_or_else(|_| "3".to_string())
+                .parse()?,
+            reranker_retry_base_ms: env::var("RERANKER_RETRY_BASE_MS")
+                .unwrap_or_else(|_| "200".to_string())
                 .parse()?,
 
             mmr_timeout_ms: env::var("MMR_TIMEOUT_MS")

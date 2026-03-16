@@ -1,7 +1,10 @@
 use crate::error::{SearchError, SearchResult};
+use crate::retry::{retry_with_backoff, RetryConfig, RetryableError};
 use reqwest::Client;
+use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
+use std::{error::Error as StdError, fmt};
 
 /// Request format for vLLM /v1/rerank endpoint
 #[derive(Debug, Serialize)]
@@ -32,10 +35,47 @@ struct RerankerResponse {
 pub struct RerankerClient {
     client: Client,
     base_url: String,
+    retry_config: RetryConfig,
+}
+
+#[derive(Debug)]
+enum RerankerRequestError {
+    Request(reqwest::Error),
+    HttpStatus { status: StatusCode, body: String },
+}
+
+impl RetryableError for RerankerRequestError {
+    fn is_retriable(&self) -> bool {
+        match self {
+            Self::Request(error) => error.is_timeout() || error.is_connect(),
+            Self::HttpStatus { status, .. } => {
+                *status == StatusCode::REQUEST_TIMEOUT
+                    || *status == StatusCode::TOO_MANY_REQUESTS
+                    || status.is_server_error()
+            }
+        }
+    }
+}
+
+impl fmt::Display for RerankerRequestError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Request(error) => write!(f, "Reranker request failed: {error}"),
+            Self::HttpStatus { status, body } => write!(f, "Reranker returned {status}: {body}"),
+        }
+    }
+}
+
+impl StdError for RerankerRequestError {}
+
+impl From<RerankerRequestError> for SearchError {
+    fn from(value: RerankerRequestError) -> Self {
+        SearchError::Reranking(value.to_string())
+    }
 }
 
 impl RerankerClient {
-    pub fn new(base_url: &str, timeout_ms: u64) -> SearchResult<Self> {
+    pub fn new(base_url: &str, timeout_ms: u64, retry_config: RetryConfig) -> SearchResult<Self> {
         let client = Client::builder()
             .timeout(Duration::from_millis(timeout_ms))
             .pool_max_idle_per_host(10)
@@ -47,6 +87,7 @@ impl RerankerClient {
         Ok(Self {
             client,
             base_url: base_url.trim_end_matches('/').to_string(),
+            retry_config,
         })
     }
 
@@ -62,25 +103,30 @@ impl RerankerClient {
             documents,
             top_k,
         };
+        let url = format!("{}/rerank", self.base_url);
 
-        let response = self
-            .client
-            .post(format!("{}/rerank", self.base_url))
-            .json(&request)
-            .send()
-            .await
-            .map_err(|e| SearchError::Reranking(format!("Reranker request failed: {e}")))?;
-
-        if !response.status().is_success() {
-            let status = response.status();
-            let body = response
-                .text()
+        let response = retry_with_backoff("reranker request", self.retry_config, || async {
+            let response = self
+                .client
+                .post(&url)
+                .json(&request)
+                .send()
                 .await
-                .unwrap_or_else(|_| "<failed to read body>".to_string());
-            return Err(SearchError::Reranking(format!(
-                "Reranker returned {status}: {body}"
-            )));
-        }
+                .map_err(RerankerRequestError::Request)?;
+
+            if response.status().is_success() {
+                Ok(response)
+            } else {
+                let status = response.status();
+                let body = response
+                    .text()
+                    .await
+                    .unwrap_or_else(|_| "<failed to read body>".to_string());
+                Err(RerankerRequestError::HttpStatus { status, body })
+            }
+        })
+        .await
+        .map_err(SearchError::from)?;
 
         let reranker_response: RerankerResponse = response
             .json()

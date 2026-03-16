@@ -29,7 +29,7 @@ pub async fn community_search_handler(
 ) -> SearchResult<Json<CommunitySearchResponse>> {
     let start = std::time::Instant::now();
 
-    ensure_query_embedding(
+    let _ = ensure_query_embedding(
         &request.query,
         &mut request.query_vector,
         !request.query.is_empty(),

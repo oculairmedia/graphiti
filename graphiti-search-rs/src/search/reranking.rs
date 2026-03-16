@@ -465,7 +465,9 @@ pub async fn rerank_nodes(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::retry::RetryConfig;
     use chrono::Utc;
+    use std::time::Duration;
     use uuid::Uuid;
     use wiremock::matchers::{body_string_contains, method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -689,7 +691,12 @@ mod tests {
             .mount(&server)
             .await;
 
-        let client = RerankerClient::new(&server.uri(), 2_000).unwrap();
+        let client = RerankerClient::new(
+            &server.uri(),
+            2_000,
+            RetryConfig::new(3, Duration::from_millis(1)),
+        )
+        .unwrap();
 
         let node_a = test_node("A", Some("node A"));
         let node_b = test_node("B", Some("node B"));

@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use falkordb::{
@@ -144,8 +142,7 @@ fn parse_edges_from_properties(result: LazyResultSet<'_>) -> Result<Vec<Edge>> {
 }
 
 pub struct FalkorClientV2 {
-    #[allow(dead_code)]
-    client: FalkorAsyncClient,
+    _client: FalkorAsyncClient,
     graph: AsyncGraph,
 }
 
@@ -164,7 +161,10 @@ impl FalkorClientV2 {
         // Select the graph
         let graph = client.select_graph(&config.graph_name);
 
-        Ok(Self { client, graph })
+        Ok(Self {
+            _client: client,
+            graph,
+        })
     }
 
     pub async fn ping(&mut self) -> Result<()> {

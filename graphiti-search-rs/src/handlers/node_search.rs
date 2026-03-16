@@ -36,7 +36,8 @@ pub async fn node_search_handler(
     let start = std::time::Instant::now();
 
     let needs_embedding = search_methods_need_embedding(&request.config.search_methods);
-    ensure_query_embedding(&request.query, &mut request.query_vector, needs_embedding).await;
+    let _ =
+        ensure_query_embedding(&request.query, &mut request.query_vector, needs_embedding).await;
 
     let mut engine = state.create_search_engine();
 

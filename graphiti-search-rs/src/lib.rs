@@ -6,4 +6,5 @@ pub mod error;
 pub mod falkor;
 pub mod models;
 pub mod reranker;
+pub mod retry;
 pub mod search;

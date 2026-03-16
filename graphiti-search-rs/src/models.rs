@@ -245,6 +245,10 @@ pub struct SearchResults {
     pub episodes: Vec<Episode>,
     pub communities: Vec<Community>,
     pub latency_ms: u64,
+    #[serde(default)]
+    pub degraded: bool,
+    #[serde(default)]
+    pub warnings: Vec<String>,
 }
 
 #[cfg(test)]

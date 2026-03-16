@@ -85,6 +85,8 @@ class SearchResults(BaseModel):
     """Search results response"""
 
     facts: List[FactResult]
+    degraded: bool = False
+    warnings: List[str] = Field(default_factory=list)
 
 
 # Remove local NodeSearchQuery - using from dto.retrieve now
@@ -396,6 +398,13 @@ async def search_proxy(query: SearchQuery) -> SearchResults:
                 )
 
             rust_result = response.json()
+            degraded = rust_result.get('degraded', False)
+            warnings = rust_result.get('warnings', [])
+            if degraded:
+                logger.warning(
+                    '[SEARCH] Rust search returned degraded results: %s',
+                    '; '.join(warnings) or 'unknown warning',
+                )
 
             # Transform Rust response to API format
             facts = []
@@ -490,7 +499,7 @@ async def search_proxy(query: SearchQuery) -> SearchResults:
                     metadata={'group_ids': query.group_ids},
                 )
 
-            return SearchResults(facts=facts)
+            return SearchResults(facts=facts, degraded=degraded, warnings=warnings)
 
     except httpx.RequestError as e:
         raise HTTPException(

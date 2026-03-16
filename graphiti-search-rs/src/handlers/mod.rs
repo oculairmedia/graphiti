@@ -41,9 +41,11 @@ pub(crate) async fn ensure_query_embedding(
     query: &str,
     query_vector: &mut Option<Vec<f32>>,
     needs_embedding: bool,
-) {
+) -> Vec<String> {
+    let mut warnings = Vec::new();
+
     if !needs_embedding {
-        return;
+        return warnings;
     }
 
     if query_vector.is_none() && !query.is_empty() {
@@ -54,10 +56,17 @@ pub(crate) async fn ensure_query_embedding(
                 *query_vector = Some(embedding);
             }
             Ok(None) => {
-                info!("No embedding generated, continuing without embedding-backed search");
+                let warning = "Embedding service returned no vector; embedding-backed search methods were skipped".to_string();
+                info!("{}", warning);
+                warnings.push(warning);
             }
             Err(e) => {
-                error!("Failed to generate embedding: {}, continuing without it", e);
+                let warning = format!(
+                    "Embedding generation failed; embedding-backed search methods were skipped: {}",
+                    e
+                );
+                error!("{}", warning);
+                warnings.push(warning);
             }
         }
     }
@@ -68,6 +77,8 @@ pub(crate) async fn ensure_query_embedding(
             None => info!("Skipping query embedding normalization (zero or non-finite norm)"),
         }
     }
+
+    warnings
 }
 
 /// Health check endpoint
@@ -126,20 +137,27 @@ pub async fn search_handler(
     info!("Processing search request for query: {}", request.query);
 
     let needs_embedding = search_request_needs_embedding(&request);
-    ensure_query_embedding(&request.query, &mut request.query_vector, needs_embedding).await;
+    let embedding_warnings =
+        ensure_query_embedding(&request.query, &mut request.query_vector, needs_embedding).await;
 
     let mut engine = state.create_search_engine();
 
     // Execute search
-    let results = engine.search(request).await?;
+    let mut results = engine.search(request).await?;
+    if !embedding_warnings.is_empty() {
+        results.degraded = true;
+        results.warnings.extend(embedding_warnings);
+    }
 
     info!(
-        "Search completed - edges: {}, nodes: {}, episodes: {}, communities: {}, latency: {}ms",
+        "Search completed - edges: {}, nodes: {}, episodes: {}, communities: {}, latency: {}ms, degraded: {}, warnings: {}",
         results.edges.len(),
         results.nodes.len(),
         results.episodes.len(),
         results.communities.len(),
-        results.latency_ms
+        results.latency_ms,
+        results.degraded,
+        results.warnings.len()
     );
 
     Ok(Json(results))

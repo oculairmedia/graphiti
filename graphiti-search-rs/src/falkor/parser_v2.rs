@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use anyhow::{anyhow, Result};
 use chrono::{DateTime, Utc};
 use falkordb::{FalkorValue, LazyResultSet};
@@ -59,70 +57,6 @@ pub fn parse_edges_from_falkor_v2(result: LazyResultSet<'_>) -> Result<Vec<Edge>
                 if let Some(parsed_edge) = parse_single_edge_v2(source, edge, target)? {
                     edges.push(parsed_edge);
                 }
-            }
-        }
-    }
-
-    Ok(edges)
-}
-
-pub fn parse_edges_with_properties_from_falkor_v2(result: LazyResultSet<'_>) -> Result<Vec<Edge>> {
-    let mut edges = Vec::new();
-
-    for row in result {
-        if row.len() >= 7 {
-            if let (
-                FalkorValue::Node(source),
-                edge_uuid,
-                edge_fact,
-                edge_created_at,
-                edge_group_id,
-                edge_weight,
-                FalkorValue::Node(target),
-            ) = (
-                &row[0], &row[1], &row[2], &row[3], &row[4], &row[5], &row[6],
-            ) {
-                let source_node_uuid = Uuid::parse_str(&get_string_property(source, "uuid")?)?;
-                let target_node_uuid = Uuid::parse_str(&get_string_property(target, "uuid")?)?;
-
-                let uuid_str = match edge_uuid {
-                    FalkorValue::String(s) => s.clone(),
-                    _ => continue,
-                };
-                let uuid = Uuid::parse_str(&uuid_str)?;
-
-                let fact = match edge_fact {
-                    FalkorValue::String(s) => s.clone(),
-                    _ => String::new(),
-                };
-
-                let created_at = parse_datetime_value(edge_created_at).unwrap_or_else(Utc::now);
-                let group_id = match edge_group_id {
-                    FalkorValue::String(s) => Some(s.clone()),
-                    _ => None,
-                };
-                let weight = match edge_weight {
-                    FalkorValue::F64(f) => *f as f32,
-                    FalkorValue::I64(i) => *i as f32,
-                    _ => 1.0,
-                };
-
-                edges.push(Edge {
-                    uuid,
-                    source_node_uuid,
-                    target_node_uuid,
-                    name: None,
-                    fact,
-                    created_at,
-                    episodes: Vec::new(),
-                    group_id,
-                    weight,
-                    valid_at: None,
-                    invalid_at: None,
-                    expired_at: None,
-                    attributes: None,
-                    score: None,
-                });
             }
         }
     }
@@ -317,7 +251,6 @@ fn get_edge_datetime_property(edge: &falkordb::Edge, key: &str) -> Result<DateTi
         .ok_or_else(|| anyhow!("Missing edge datetime property: {}", key))
 }
 
-#[allow(dead_code)]
 fn get_edge_optional_datetime_property(edge: &falkordb::Edge, key: &str) -> Option<DateTime<Utc>> {
     edge.properties.get(key).and_then(parse_datetime_value)
 }

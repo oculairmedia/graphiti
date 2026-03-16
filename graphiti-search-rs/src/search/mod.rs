@@ -24,9 +24,8 @@ use self::cache::EnhancedCache;
 
 pub struct SearchEngine {
     falkor_pool: FalkorPool,
-    #[allow(dead_code)]
-    redis_pool: RedisPool,
     cache: EnhancedCache,
+    warnings: Vec<String>,
     max_method_results: usize,
     mmr_timeout_ms: u64,
     max_pre_rerank_results: usize,
@@ -53,11 +52,11 @@ impl SearchEngine {
         hipporag_hub_threshold: usize,
         reranker_client: Option<crate::reranker::RerankerClient>,
     ) -> Self {
-        let cache = EnhancedCache::new(redis_pool.clone());
+        let cache = EnhancedCache::new(redis_pool);
         Self {
             falkor_pool,
-            redis_pool,
             cache,
+            warnings: Vec::new(),
             max_method_results,
             mmr_timeout_ms,
             max_pre_rerank_results,
@@ -98,9 +97,18 @@ impl SearchEngine {
         capped
     }
 
+    fn reset_warnings(&mut self) {
+        self.warnings.clear();
+    }
+
+    fn record_warning(&mut self, warning: impl Into<String>) {
+        self.warnings.push(warning.into());
+    }
+
     #[instrument(skip(self))]
     pub async fn search(&mut self, request: SearchRequest) -> SearchResult<SearchResults> {
         let start = Instant::now();
+        self.reset_warnings();
 
         let mut edges = Vec::new();
         let mut nodes = Vec::new();
@@ -161,6 +169,8 @@ impl SearchEngine {
             episodes,
             communities,
             latency_ms,
+            degraded: !self.warnings.is_empty(),
+            warnings: self.warnings.clone(),
         })
     }
 
@@ -191,14 +201,19 @@ impl SearchEngine {
                     .await?
                 }
                 SearchMethod::Similarity if query_vector.is_some() => {
-                    similarity::search_edges_by_embedding(
-                        &mut falkor_conn,
-                        query_vector.unwrap(),
-                        config.sim_min_score,
-                        filters,
-                        self.max_method_results,
-                    )
-                    .await?
+                    if let Some(query_vector) = query_vector {
+                        similarity::search_edges_by_embedding(
+                            &mut falkor_conn,
+                            query_vector,
+                            config.sim_min_score,
+                            filters,
+                            self.max_method_results,
+                        )
+                        .await?
+                    } else {
+                        debug!("Similarity edge search requires query vector, skipping");
+                        Vec::new()
+                    }
                 }
                 SearchMethod::Bfs => {
                     if method_results.is_empty() {
@@ -232,7 +247,15 @@ impl SearchEngine {
                             self.bfs_batch_size,
                         )
                         .await
-                        .unwrap_or_default()
+                        .unwrap_or_else(|error| {
+                            let warning = format!(
+                                "BFS edge search failed; returning degraded results: {}",
+                                error
+                            );
+                            tracing::warn!("{}", warning);
+                            self.record_warning(warning);
+                            Vec::new()
+                        })
                     }
                 }
                 SearchMethod::Hipporag if query_vector.is_some() => {
@@ -246,7 +269,7 @@ impl SearchEngine {
                     };
                     hipporag::search_edges_hipporag(
                         &mut falkor_conn,
-                        query_vector.unwrap(),
+                        query_vector.expect("guarded by query_vector.is_some()"),
                         &hipporag_config,
                         filters,
                         self.max_method_results,
@@ -254,7 +277,15 @@ impl SearchEngine {
                         self.hipporag_batch_size,
                     )
                     .await
-                    .unwrap_or_default()
+                    .unwrap_or_else(|error| {
+                        let warning = format!(
+                            "HippoRAG edge search failed; returning degraded results: {}",
+                            error
+                        );
+                        tracing::warn!("{}", warning);
+                        self.record_warning(warning);
+                        Vec::new()
+                    })
                 }
                 SearchMethod::Hipporag => {
                     debug!("HippoRAG edge search requires query vector, skipping");
@@ -318,14 +349,19 @@ impl SearchEngine {
                     .await?
                 }
                 SearchMethod::Similarity if query_vector.is_some() => {
-                    similarity::search_nodes_by_embedding(
-                        &mut falkor_conn,
-                        query_vector.unwrap(),
-                        config.sim_min_score,
-                        filters,
-                        self.max_method_results,
-                    )
-                    .await?
+                    if let Some(query_vector) = query_vector {
+                        similarity::search_nodes_by_embedding(
+                            &mut falkor_conn,
+                            query_vector,
+                            config.sim_min_score,
+                            filters,
+                            self.max_method_results,
+                        )
+                        .await?
+                    } else {
+                        debug!("Similarity node search requires query vector, skipping");
+                        Vec::new()
+                    }
                 }
                 SearchMethod::Bfs => {
                     if method_results.is_empty() {
@@ -359,7 +395,15 @@ impl SearchEngine {
                             self.bfs_batch_size,
                         )
                         .await
-                        .unwrap_or_default()
+                        .unwrap_or_else(|error| {
+                            let warning = format!(
+                                "BFS node search failed; returning degraded results: {}",
+                                error
+                            );
+                            tracing::warn!("{}", warning);
+                            self.record_warning(warning);
+                            Vec::new()
+                        })
                     }
                 }
                 SearchMethod::Hipporag if query_vector.is_some() => {
@@ -373,14 +417,23 @@ impl SearchEngine {
                     };
                     hipporag::search_nodes_hipporag(
                         &mut falkor_conn,
-                        query_vector.unwrap(),
+                        query_vector.expect("guarded by query_vector.is_some()"),
                         &hipporag_config,
                         filters,
                         self.max_method_results,
                         self.hipporag_timeout_ms,
                         self.hipporag_batch_size,
                     )
-                    .await?
+                    .await
+                    .unwrap_or_else(|error| {
+                        let warning = format!(
+                            "HippoRAG node search failed; returning degraded results: {}",
+                            error
+                        );
+                        tracing::warn!("{}", warning);
+                        self.record_warning(warning);
+                        Vec::new()
+                    })
                 }
                 SearchMethod::Hipporag => {
                     debug!("HippoRAG node search requires query vector, skipping");
