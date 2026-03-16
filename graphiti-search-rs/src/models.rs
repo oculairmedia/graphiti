@@ -161,6 +161,7 @@ pub enum SearchMethod {
     Similarity,
     Bfs,
     Hipporag,
+    CommunityBoost,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -171,6 +172,7 @@ pub enum EdgeReranker {
     CrossEncoder,
     NodeDistance,
     EpisodeMentions,
+    Centrality,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -181,7 +183,8 @@ pub enum NodeReranker {
     CrossEncoder,
     EpisodeMentions,
     NodeDistance,
-    CentralityBoosted,
+    #[serde(alias = "centrality_boosted")]
+    Centrality,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -215,4 +218,30 @@ pub struct SearchResults {
     pub episodes: Vec<Episode>,
     pub communities: Vec<Community>,
     pub latency_ms: u64,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{EdgeReranker, NodeReranker, SearchMethod};
+
+    #[test]
+    fn test_search_method_deserializes_community_boost() {
+        let method: SearchMethod = serde_json::from_str("\"community_boost\"").unwrap();
+        assert!(matches!(method, SearchMethod::CommunityBoost));
+    }
+
+    #[test]
+    fn test_node_reranker_deserializes_centrality_aliases() {
+        let canonical: NodeReranker = serde_json::from_str("\"centrality\"").unwrap();
+        assert!(matches!(canonical, NodeReranker::Centrality));
+
+        let legacy: NodeReranker = serde_json::from_str("\"centrality_boosted\"").unwrap();
+        assert!(matches!(legacy, NodeReranker::Centrality));
+    }
+
+    #[test]
+    fn test_edge_reranker_deserializes_centrality() {
+        let reranker: EdgeReranker = serde_json::from_str("\"centrality\"").unwrap();
+        assert!(matches!(reranker, EdgeReranker::Centrality));
+    }
 }

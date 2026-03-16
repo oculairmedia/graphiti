@@ -232,6 +232,12 @@ impl SearchEngine {
                     debug!("HippoRAG edge search requires query vector, skipping");
                     vec![]
                 }
+                SearchMethod::CommunityBoost => {
+                    debug!(
+                        "CommunityBoost search is only supported for nodes, skipping edge search"
+                    );
+                    vec![]
+                }
                 _ => vec![],
             };
 
@@ -367,6 +373,14 @@ impl SearchEngine {
                         self.hipporag_batch_size,
                     )
                     .await?
+                }
+                SearchMethod::Hipporag => {
+                    debug!("HippoRAG node search requires query vector, skipping");
+                    vec![]
+                }
+                SearchMethod::CommunityBoost => {
+                    debug!("CommunityBoost node search not yet implemented in Rust, returning empty result set");
+                    vec![]
                 }
                 _ => vec![],
             };

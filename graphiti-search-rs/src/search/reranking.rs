@@ -2,6 +2,7 @@ use crate::error::SearchResult;
 use crate::models::{Edge, EdgeReranker, Node, NodeReranker};
 use crate::reranker::RerankerClient;
 use crate::search::similarity::cosine_similarity_simd;
+use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
 use tracing::instrument;
@@ -28,7 +29,7 @@ pub fn reciprocal_rank_fusion<T: Clone>(
     }
 
     let mut results: Vec<(T, f32)> = scores.into_values().collect();
-    results.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+    results.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(Ordering::Equal));
     results
 }
 
@@ -74,7 +75,7 @@ pub fn centrality_boosted_rerank<T: Clone>(
         .collect();
 
     // Sort by combined score (descending)
-    scored_items.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+    scored_items.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(Ordering::Equal));
 
     // Return top results with scores
     scored_items.into_iter().take(limit).collect()
@@ -134,7 +135,7 @@ pub fn maximal_marginal_relevance<T: Clone>(
                         .iter()
                         .filter_map(|(s, _): &(T, f32)| get_embedding(s))
                         .map(|s_emb| cosine_similarity_simd(item_emb, s_emb))
-                        .max_by(|a, b| a.partial_cmp(b).unwrap())
+                        .max_by(|a, b| a.partial_cmp(b).unwrap_or(Ordering::Equal))
                         .unwrap_or(0.0);
 
                     lambda * relevance - (1.0 - lambda) * max_similarity
@@ -147,7 +148,7 @@ pub fn maximal_marginal_relevance<T: Clone>(
         if let Some((max_idx, &max_score)) = scores
             .iter()
             .enumerate()
-            .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap())
+            .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(Ordering::Equal))
         {
             let (orig_idx, _item) = remaining.remove(max_idx);
             selected.push((items[orig_idx].clone(), max_score));
@@ -322,6 +323,16 @@ pub async fn rerank_edges(
                 })
                 .collect())
         }
+        EdgeReranker::Centrality => {
+            tracing::debug!(
+                "Edge centrality reranker requested without source-node centrality data in Rust; falling back to RRF"
+            );
+            let scored = reciprocal_rank_fusion(method_results, 60.0, |edge| edge.uuid.to_string());
+            Ok(apply_scores_to_edges(scored)
+                .into_iter()
+                .take(limit)
+                .collect())
+        }
     }
 }
 
@@ -422,7 +433,7 @@ pub async fn rerank_nodes(
                     .collect())
             }
         }
-        NodeReranker::CentralityBoosted => {
+        NodeReranker::Centrality => {
             let all_nodes: Vec<Node> = method_results.into_iter().flatten().collect();
             let scored = centrality_boosted_rerank(
                 all_nodes,
@@ -517,6 +528,17 @@ mod tests {
     }
 
     #[test]
+    fn test_rrf_with_nan_score() {
+        let list1 = vec!["a", "b"];
+        let list2 = vec!["b", "c"];
+
+        let result = reciprocal_rank_fusion(vec![list1, list2], f32::NAN, |s| s.to_string());
+
+        assert_eq!(result.len(), 3);
+        assert!(result.iter().all(|(_, score)| score.is_nan()));
+    }
+
+    #[test]
     fn test_centrality_boosted_rerank() {
         let nodes = vec![
             MockNode {
@@ -552,6 +574,44 @@ mod tests {
         assert_eq!(result[0].0.id, "high_centrality");
         // Should have a score
         assert!(result[0].1 > 0.0);
+    }
+
+    #[test]
+    fn test_mmr_with_nan_embedding() {
+        let nodes = vec![
+            MockNode {
+                id: "finite".to_string(),
+                centrality: None,
+                embedding: Some(vec![1.0, 0.0]),
+            },
+            MockNode {
+                id: "nan".to_string(),
+                centrality: None,
+                embedding: Some(vec![f32::NAN, 0.0]),
+            },
+            MockNode {
+                id: "other".to_string(),
+                centrality: None,
+                embedding: Some(vec![0.0, 1.0]),
+            },
+        ];
+
+        let query_embedding = vec![1.0, 0.0];
+        let result = maximal_marginal_relevance(
+            nodes,
+            Some(&query_embedding),
+            |node| node.embedding.as_deref(),
+            0.5,
+            3,
+            5_000,
+        );
+
+        assert_eq!(result.len(), 3);
+        let ids: HashSet<_> = result.iter().map(|(node, _)| node.id.as_str()).collect();
+        assert_eq!(ids.len(), 3);
+        assert!(ids.contains("finite"));
+        assert!(ids.contains("nan"));
+        assert!(ids.contains("other"));
     }
 
     #[tokio::test]

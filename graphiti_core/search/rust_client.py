@@ -23,6 +23,7 @@ PYTHON_TO_RUST_SEARCH_METHOD = {
     'bm25': 'fulltext',
     'breadth_first_search': 'bfs',
     'hipporag': 'hipporag',
+    'community_boost': 'community_boost',
 }
 
 PYTHON_TO_RUST_RERANKER = {
@@ -31,6 +32,7 @@ PYTHON_TO_RUST_RERANKER = {
     'episode_mentions': 'episode_mentions',
     'mmr': 'mmr',
     'cross_encoder': 'cross_encoder',
+    'centrality': 'centrality',
 }
 
 
