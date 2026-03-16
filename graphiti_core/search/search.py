@@ -449,7 +449,7 @@ async def node_search(
     elif config.reranker == NodeReranker.cross_encoder:
         name_to_uuid_map = {
             f'[NODE:{node.uuid[:8]}] {node.name}': node.uuid
-            for node in list(node_uuid_map.values())
+            for node in list(node_uuid_map.values())[:limit]
         }
         reranked_node_names = await cross_encoder.rank(query, list(name_to_uuid_map.keys()))
         reranked_uuids = [
@@ -573,10 +573,10 @@ async def community_search(
             query_vector, search_result_uuids_and_vectors, config.mmr_lambda, reranker_min_score
         )
     elif config.reranker == CommunityReranker.cross_encoder:
+        rrf_result_uuids = rrf(search_result_uuids, min_score=reranker_min_score)
+        rrf_results = [community_uuid_map[uuid] for uuid in rrf_result_uuids][:limit]
         name_to_uuid_map = {
-            f'[COMMUNITY:{node.uuid[:8]}] {node.name}': node.uuid
-            for result in search_results
-            for node in result
+            f'[COMMUNITY:{node.uuid[:8]}] {node.name}': node.uuid for node in rrf_results
         }
         reranked_nodes = await cross_encoder.rank(query, list(name_to_uuid_map.keys()))
         reranked_uuids = [

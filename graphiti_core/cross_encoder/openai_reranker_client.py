@@ -21,7 +21,7 @@ import numpy as np
 import openai
 from openai import AsyncAzureOpenAI, AsyncOpenAI
 
-from ..helpers import semaphore_gather
+from ..helpers import MAX_RERANK_PASSAGES, RERANKER_SEMAPHORE_LIMIT, semaphore_gather
 from ..llm_client import LLMConfig, OpenAIClient, RateLimitError
 from ..prompts import Message
 from .client import CrossEncoderClient
@@ -59,6 +59,10 @@ class OpenAIRerankerClient(CrossEncoderClient):
             self.client = client
 
     async def rank(self, query: str, passages: list[str]) -> list[tuple[str, float]]:
+        if len(passages) > MAX_RERANK_PASSAGES:
+            logger.warning(f'Capping rerank from {len(passages)} to {MAX_RERANK_PASSAGES} passages')
+            passages = passages[:MAX_RERANK_PASSAGES]
+
         openai_messages_list: Any = [
             [
                 Message(
@@ -94,7 +98,8 @@ class OpenAIRerankerClient(CrossEncoderClient):
                         top_logprobs=2,
                     )
                     for openai_messages in openai_messages_list
-                ]
+                ],
+                max_coroutines=RERANKER_SEMAPHORE_LIMIT,
             )
 
             responses_top_logprobs = [

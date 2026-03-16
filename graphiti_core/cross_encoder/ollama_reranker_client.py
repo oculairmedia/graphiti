@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
+import asyncio
 import logging
 from typing import Any
 
@@ -127,15 +128,23 @@ class OllamaRerankerClient(CrossEncoderClient):
             # Fallback: return passages in original order
             return [(p, 1.0 / (i + 1)) for i, p in enumerate(passages)]
 
-    async def close(self):
-        """Close the HTTP client."""
+    async def close(self) -> None:
         await self.client.aclose()
 
-    def __del__(self):
-        """Cleanup on deletion."""
-        try:
-            import asyncio
+    async def __aenter__(self) -> 'OllamaRerankerClient':
+        return self
 
-            asyncio.create_task(self.close())
-        except Exception:
-            pass
+    async def __aexit__(self, *exc: object) -> None:
+        await self.close()
+
+    def __del__(self) -> None:
+        if self.client.is_closed:
+            return
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(self.client.aclose())
+        except RuntimeError:
+            try:
+                asyncio.run(self.client.aclose())
+            except RuntimeError:
+                pass

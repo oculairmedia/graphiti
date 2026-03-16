@@ -19,7 +19,7 @@ import importlib
 import re
 from typing import Any
 
-from ..helpers import semaphore_gather
+from ..helpers import MAX_RERANK_PASSAGES, RERANKER_SEMAPHORE_LIMIT, semaphore_gather
 from ..llm_client import LLMConfig, RateLimitError
 from .client import CrossEncoderClient
 
@@ -76,6 +76,10 @@ class GeminiRerankerClient(CrossEncoderClient):
         if len(passages) <= 1:
             return [(passage, 1.0) for passage in passages]
 
+        if len(passages) > MAX_RERANK_PASSAGES:
+            logger.warning(f'Capping rerank from {len(passages)} to {MAX_RERANK_PASSAGES} passages')
+            passages = passages[:MAX_RERANK_PASSAGES]
+
         scoring_prompts = []
         for passage in passages:
             prompt = f"""Rate how well this passage answers or relates to the query. Use a scale from 0 to 100.
@@ -111,7 +115,8 @@ Provide only a number between 0 and 100 (no explanation, just the number):"""
                         ),
                     )
                     for prompt_messages in scoring_prompts
-                ]
+                ],
+                max_coroutines=RERANKER_SEMAPHORE_LIMIT,
             )
 
             # Extract scores and create results

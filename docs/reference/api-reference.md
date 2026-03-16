@@ -17,13 +17,27 @@ http://localhost:8003
 ### Health
 
 ```
-GET /health
+GET /healthcheck
 ```
 
 **Response**:
 ```json
 {
   "status": "healthy"
+}
+```
+
+### Graph Ping
+
+```
+GET /api/graph/ping
+```
+
+**Response**:
+```json
+{
+  "ok": true,
+  "service": "graph"
 }
 ```
 
@@ -181,7 +195,7 @@ GET /api/centrality/{node_uuid}
 
 ---
 
-### MCP Server (Port 8001)
+### MCP Server (Port 3010)
 
 The MCP server provides tools for Claude integration.
 
@@ -200,7 +214,7 @@ The MCP server provides tools for Claude integration.
 | `search_nodes` | Search for nodes |
 | `search_edges` | Search for edges |
 
-See [mcp-tools.md](../how-to/mcp-tools.md) for detailed MCP usage.
+See the MCP server README at `mcp_server/README.md` for detailed MCP usage.
 
 ---
 
@@ -255,14 +269,14 @@ TEMPORAL_RATE_LIMIT_POST_LLM_DELAY=2.0
 
 | File | Purpose |
 |------|---------|
-| `server/main.py` | FastAPI app entry point |
-| `server/routes/` | API route handlers |
-| `mcp_server/server.py` | MCP server implementation |
+| `server/graph_service/main.py` | FastAPI app entry point |
+| `server/graph_service/routers/` | API route handlers |
+| `mcp_server/graphiti_mcp_server.py` | MCP server implementation |
 
 ---
 
 ## See Also
 
-- [../how-to/add-api-endpoint.md](../how-to/add-api-endpoint.md) - Adding new endpoints
 - [schema-reference.md](schema-reference.md) - Data schemas
 - [config-reference.md](config-reference.md) - Configuration
+- [../how-to/add-api-endpoint.md](../how-to/add-api-endpoint.md) - Add new endpoints

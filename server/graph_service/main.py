@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from graph_service.config import get_settings
 from graph_service.routers import centrality, ingest, nodes, retrieve
 from graph_service.routers import metrics, search_proxy
+from graph_service.routers.search_proxy import close_proxy_clients
 
 # Import others conditionally
 try:
@@ -81,6 +82,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
     # Shutdown
     logger.info('Shutting down services')
+    await close_proxy_clients()
     await close_caches()
     await shutdown_webhook_dispatcher()
     await webhook_service.close()
@@ -122,6 +124,11 @@ if tools_router:
 @app.get('/healthcheck')
 async def healthcheck() -> JSONResponse:
     return JSONResponse(content={'status': 'healthy'}, status_code=200)
+
+
+@app.get('/api/graph/ping')
+async def graph_ping() -> JSONResponse:
+    return JSONResponse(content={'ok': True, 'service': 'graph'}, status_code=200)
 
 
 @app.get('/metrics/webhooks')

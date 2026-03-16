@@ -33,6 +33,38 @@ RERANKER_URL = os.getenv('RERANKER_URL', 'http://100.81.139.20:11435')
 RERANKER_ENABLED = os.getenv('RERANKER_ENABLED', 'true').lower() == 'true'
 RERANKER_TIMEOUT = float(os.getenv('RERANKER_TIMEOUT', '30.0'))
 
+# --- Module-level HTTP client singletons (connection pooling) ---
+_POOL_LIMITS = httpx.Limits(max_connections=20, max_keepalive_connections=10)
+
+_embedding_client: httpx.AsyncClient | None = None
+_reranker_client: httpx.AsyncClient | None = None
+
+
+def get_embedding_client() -> httpx.AsyncClient:
+    global _embedding_client
+    if _embedding_client is None:
+        _embedding_client = httpx.AsyncClient(timeout=60.0, limits=_POOL_LIMITS)
+    return _embedding_client
+
+
+def get_reranker_client() -> httpx.AsyncClient:
+    global _reranker_client
+    if _reranker_client is None:
+        _reranker_client = httpx.AsyncClient(timeout=RERANKER_TIMEOUT, limits=_POOL_LIMITS)
+    return _reranker_client
+
+
+async def close_proxy_clients() -> None:
+    """Shutdown hook — close pooled HTTP clients."""
+    global _embedding_client, _reranker_client
+    if _embedding_client is not None:
+        await _embedding_client.aclose()
+        _embedding_client = None
+    if _reranker_client is not None:
+        await _reranker_client.aclose()
+        _reranker_client = None
+
+
 # Remove local SearchQuery - using from dto.retrieve now
 
 
@@ -102,20 +134,19 @@ async def generate_embedding(text: str) -> Optional[List[float]]:
         ollama_url = os.getenv('OLLAMA_BASE_URL', 'http://192.168.50.80:11434/v1')
         ollama_model = os.getenv('OLLAMA_EMBEDDING_MODEL', 'mxbai-embed-large:latest')
 
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            response = await client.post(
-                f'{ollama_url}/embeddings',
-                json={'input': text, 'model': ollama_model},
-                headers={'Authorization': 'Bearer ollama'},
-            )
+        client = get_embedding_client()
+        response = await client.post(
+            f'{ollama_url}/embeddings',
+            json={'input': text, 'model': ollama_model},
+            headers={'Authorization': 'Bearer ollama'},
+        )
 
-            if response.status_code == 200:
-                result = response.json()
-                # Extract embedding from response
-                if 'data' in result and len(result['data']) > 0:
-                    return result['data'][0]['embedding']
-            else:
-                logger.warning(f'Failed to generate embedding: {response.status_code}')
+        if response.status_code == 200:
+            result = response.json()
+            if 'data' in result and len(result['data']) > 0:
+                return result['data'][0]['embedding']
+        else:
+            logger.warning(f'Failed to generate embedding: {response.status_code}')
 
     except Exception as e:
         logger.error(f'Error generating embedding: {e}')
@@ -136,47 +167,42 @@ async def rerank_facts_with_cross_encoder(
         return facts
 
     try:
-        async with httpx.AsyncClient(timeout=RERANKER_TIMEOUT) as client:
-            logger.info(f'[SEARCH] Reranking {len(facts)} facts with vLLM cross-encoder')
+        client = get_reranker_client()
+        logger.info(f'[SEARCH] Reranking {len(facts)} facts with vLLM cross-encoder')
 
-            # Extract document texts for reranking
-            documents = [fact.fact for fact in facts]
+        documents = [fact.fact for fact in facts]
 
-            # Call vLLM rerank endpoint with all documents at once
-            response = await client.post(
-                f'{RERANKER_URL}/v1/rerank',
-                json={
-                    'model': 'qwen3-reranker-4b',
-                    'query': query,
-                    'documents': documents,
-                },
-            )
+        response = await client.post(
+            f'{RERANKER_URL}/v1/rerank',
+            json={
+                'model': 'qwen3-reranker-4b',
+                'query': query,
+                'documents': documents,
+            },
+        )
 
-            if response.status_code != 200:
-                logger.warning(f'[SEARCH] Reranker returned status {response.status_code}')
-                return facts[:top_k]
+        if response.status_code != 200:
+            logger.warning(f'[SEARCH] Reranker returned status {response.status_code}')
+            return facts[:top_k]
 
-            result = response.json()
-            results = result.get('results', [])
+        result = response.json()
+        results = result.get('results', [])
 
-            if not results:
-                logger.warning('[SEARCH] Reranker returned empty results')
-                return facts[:top_k]
+        if not results:
+            logger.warning('[SEARCH] Reranker returned empty results')
+            return facts[:top_k]
 
-            # vLLM returns results sorted by relevance, with original indices
-            reranked_facts: List[FactResult] = []
-            for item in results[:top_k]:
-                idx = item.get('index', 0)
-                score = float(item.get('relevance_score', 0.0))
-                if 0 <= idx < len(facts):
-                    fact = facts[idx]
-                    fact.score = score
-                    reranked_facts.append(fact)
+        reranked_facts: List[FactResult] = []
+        for item in results[:top_k]:
+            idx = item.get('index', 0)
+            score = float(item.get('relevance_score', 0.0))
+            if 0 <= idx < len(facts):
+                fact = facts[idx]
+                fact.score = score
+                reranked_facts.append(fact)
 
-            logger.info(
-                f'[SEARCH] Cross-encoder reranked {len(facts)} -> {len(reranked_facts)} facts'
-            )
-            return reranked_facts
+        logger.info(f'[SEARCH] Cross-encoder reranked {len(facts)} -> {len(reranked_facts)} facts')
+        return reranked_facts
 
     except Exception as e:
         logger.warning(f'[SEARCH] Cross-encoder reranking failed: {e}')
