@@ -2,6 +2,7 @@ use anyhow::Result;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::env;
+use std::time::Duration;
 use tracing::{debug, warn};
 
 pub fn l2_normalize_embedding(embedding: &mut [f32]) -> Option<f32> {
@@ -79,7 +80,13 @@ impl OllamaEmbedder {
         );
 
         Self {
-            client: Client::new(),
+            client: Client::builder()
+                .pool_max_idle_per_host(10)
+                .pool_idle_timeout(Duration::from_secs(300))
+                .tcp_keepalive(Duration::from_secs(30))
+                .timeout(Duration::from_secs(60))
+                .build()
+                .expect("Failed to build embedding HTTP client"),
             base_url,
             model,
         }

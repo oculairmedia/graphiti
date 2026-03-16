@@ -28,6 +28,7 @@ pub struct AppState {
     pub falkor_pool: FalkorPool,
     pub redis_pool: deadpool_redis::Pool,
     pub config: Config,
+    pub reranker_client: Option<reranker::RerankerClient>,
 }
 
 #[tokio::main]
@@ -60,11 +61,28 @@ async fn main() -> Result<()> {
     let redis_pool = redis_config.create_pool(Some(deadpool_redis::Runtime::Tokio1))?;
     info!("Redis connection pool initialized");
 
+    // Create reranker client once (connection pooling)
+    let reranker_client = if config.reranker_enabled {
+        match reranker::RerankerClient::new(&config.reranker_url, config.reranker_timeout_ms) {
+            Ok(client) => {
+                info!("RerankerClient initialized for {}", config.reranker_url);
+                Some(client)
+            }
+            Err(e) => {
+                tracing::warn!("Failed to create reranker client: {}", e);
+                None
+            }
+        }
+    } else {
+        None
+    };
+
     // Create application state
     let state = AppState {
         falkor_pool,
         redis_pool,
         config: config.clone(),
+        reranker_client,
     };
 
     // Build router

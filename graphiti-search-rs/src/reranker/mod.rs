@@ -38,6 +38,9 @@ impl RerankerClient {
     pub fn new(base_url: &str, timeout_ms: u64) -> SearchResult<Self> {
         let client = Client::builder()
             .timeout(Duration::from_millis(timeout_ms))
+            .pool_max_idle_per_host(10)
+            .pool_idle_timeout(Duration::from_secs(300))
+            .tcp_keepalive(Duration::from_secs(30))
             .build()
             .map_err(|e| SearchError::Reranking(format!("Failed to create HTTP client: {e}")))?;
 

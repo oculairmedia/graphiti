@@ -90,21 +90,7 @@ pub async fn search_handler(
         }
     }
 
-    // Create search engine with pools
-    let reranker_client = if state.config.reranker_enabled {
-        match crate::reranker::RerankerClient::new(
-            &state.config.reranker_url,
-            state.config.reranker_timeout_ms,
-        ) {
-            Ok(client) => Some(client),
-            Err(e) => {
-                tracing::warn!("Failed to init reranker client (disabled): {}", e);
-                None
-            }
-        }
-    } else {
-        None
-    };
+    let reranker_client = state.reranker_client.clone();
 
     let mut engine = SearchEngine::new(
         state.falkor_pool.clone(),
