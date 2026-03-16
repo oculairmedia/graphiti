@@ -4,7 +4,6 @@ use tracing::instrument;
 
 use crate::error::SearchResult;
 use crate::models::{Episode, SearchFilters};
-use crate::search::SearchEngine;
 use crate::AppState;
 
 #[derive(Debug, Deserialize)]
@@ -28,21 +27,7 @@ pub async fn episode_search_handler(
 ) -> SearchResult<Json<EpisodeSearchResponse>> {
     let start = std::time::Instant::now();
 
-    let reranker_client = state.reranker_client.clone();
-
-    let mut engine = SearchEngine::new(
-        state.falkor_pool.clone(),
-        state.redis_pool.clone(),
-        state.config.max_method_results,
-        state.config.mmr_timeout_ms,
-        state.config.max_pre_rerank_results,
-        state.config.bfs_timeout_ms,
-        state.config.bfs_batch_size,
-        state.config.hipporag_timeout_ms,
-        state.config.hipporag_batch_size,
-        state.config.hipporag_hub_threshold,
-        reranker_client,
-    );
+    let mut engine = state.create_search_engine();
 
     // Execute episode search
     let episodes = engine

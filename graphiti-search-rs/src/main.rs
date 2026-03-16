@@ -22,6 +22,7 @@ mod search;
 use crate::config::Config;
 use crate::falkor::{create_falkor_pool, FalkorPool};
 use crate::handlers::{health_check, search_handler};
+use crate::search::SearchEngine;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -29,6 +30,24 @@ pub struct AppState {
     pub redis_pool: deadpool_redis::Pool,
     pub config: Config,
     pub reranker_client: Option<reranker::RerankerClient>,
+}
+
+impl AppState {
+    pub fn create_search_engine(&self) -> SearchEngine {
+        SearchEngine::new(
+            self.falkor_pool.clone(),
+            self.redis_pool.clone(),
+            self.config.max_method_results,
+            self.config.mmr_timeout_ms,
+            self.config.max_pre_rerank_results,
+            self.config.bfs_timeout_ms,
+            self.config.bfs_batch_size,
+            self.config.hipporag_timeout_ms,
+            self.config.hipporag_batch_size,
+            self.config.hipporag_hub_threshold,
+            self.reranker_client.clone(),
+        )
+    }
 }
 
 #[tokio::main]

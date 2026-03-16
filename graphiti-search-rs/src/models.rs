@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use serde_json::{Map, Value};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -12,6 +13,12 @@ pub struct Node {
     pub embedding: Option<Vec<f32>>,
     pub group_id: Option<String>,
     pub centrality: Option<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attributes: Option<Map<String, Value>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub valid_at: Option<DateTime<Utc>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub invalid_at: Option<DateTime<Utc>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub score: Option<f32>,
 }
@@ -21,11 +28,21 @@ pub struct Edge {
     pub uuid: Uuid,
     pub source_node_uuid: Uuid,
     pub target_node_uuid: Uuid,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
     pub fact: String,
     pub created_at: DateTime<Utc>,
     pub episodes: Vec<Uuid>,
     pub group_id: Option<String>,
     pub weight: f32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub valid_at: Option<DateTime<Utc>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub invalid_at: Option<DateTime<Utc>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expired_at: Option<DateTime<Utc>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attributes: Option<Map<String, Value>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub score: Option<f32>,
 }
@@ -33,9 +50,19 @@ pub struct Edge {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Episode {
     pub uuid: Uuid,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
     pub content: String,
     pub created_at: DateTime<Utc>,
     pub group_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_description: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub valid_at: Option<DateTime<Utc>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub entity_edges: Option<Vec<Uuid>>,
     pub timestamp: Option<DateTime<Utc>>,
 }
 

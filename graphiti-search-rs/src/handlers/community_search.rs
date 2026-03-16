@@ -2,9 +2,9 @@ use axum::{extract::State, Json};
 use serde::{Deserialize, Serialize};
 use tracing::instrument;
 
+use super::ensure_query_embedding;
 use crate::error::SearchResult;
 use crate::models::{Community, CommunitySearchConfig, SearchFilters};
-use crate::search::SearchEngine;
 use crate::AppState;
 
 #[derive(Debug, Deserialize)]
@@ -25,25 +25,18 @@ pub struct CommunitySearchResponse {
 #[instrument(skip(state))]
 pub async fn community_search_handler(
     State(state): State<AppState>,
-    Json(request): Json<CommunitySearchRequest>,
+    Json(mut request): Json<CommunitySearchRequest>,
 ) -> SearchResult<Json<CommunitySearchResponse>> {
     let start = std::time::Instant::now();
 
-    let reranker_client = state.reranker_client.clone();
+    ensure_query_embedding(
+        &request.query,
+        &mut request.query_vector,
+        !request.query.is_empty(),
+    )
+    .await;
 
-    let mut engine = SearchEngine::new(
-        state.falkor_pool.clone(),
-        state.redis_pool.clone(),
-        state.config.max_method_results,
-        state.config.mmr_timeout_ms,
-        state.config.max_pre_rerank_results,
-        state.config.bfs_timeout_ms,
-        state.config.bfs_batch_size,
-        state.config.hipporag_timeout_ms,
-        state.config.hipporag_batch_size,
-        state.config.hipporag_hub_threshold,
-        reranker_client,
-    );
+    let mut engine = state.create_search_engine();
 
     // Execute community search
     let communities = engine

@@ -482,11 +482,16 @@ mod tests {
             uuid: Uuid::new_v4(),
             source_node_uuid: Uuid::new_v4(),
             target_node_uuid: Uuid::new_v4(),
+            name: None,
             fact: fact.to_string(),
             created_at: Utc::now(),
             episodes: vec![],
             group_id: None,
             weight: 1.0,
+            valid_at: None,
+            invalid_at: None,
+            expired_at: None,
+            attributes: None,
             score: None,
         }
     }
@@ -501,6 +506,9 @@ mod tests {
             embedding: None,
             group_id: None,
             centrality: None,
+            attributes: None,
+            valid_at: None,
+            invalid_at: None,
             score: None,
         }
     }

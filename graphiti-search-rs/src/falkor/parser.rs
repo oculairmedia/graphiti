@@ -111,6 +111,9 @@ fn parse_single_node(node_data: &Value) -> Result<Option<Node>> {
             embedding: None,
             group_id,
             centrality,
+            attributes: None,
+            valid_at: None,
+            invalid_at: None,
             score: None,
         }))
     } else {
@@ -328,11 +331,16 @@ fn parse_single_edge(
         uuid,
         source_node_uuid,
         target_node_uuid,
+        name: None,
         fact,
         created_at,
         episodes: Vec::new(),
         group_id,
         weight,
+        valid_at: None,
+        invalid_at: None,
+        expired_at: None,
+        attributes: None,
         score: None,
     }))
 }
@@ -500,9 +508,14 @@ fn parse_single_episode(episode_data: &Value) -> Result<Option<Episode>> {
 
     Ok(Some(Episode {
         uuid,
+        name: None,
         content,
         created_at,
         group_id,
+        source: None,
+        source_description: None,
+        valid_at: timestamp,
+        entity_edges: None,
         timestamp,
     }))
 }

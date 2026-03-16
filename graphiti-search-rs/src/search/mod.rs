@@ -70,6 +70,34 @@ impl SearchEngine {
         }
     }
 
+    fn cap_method_results<T>(&self, method_results: Vec<Vec<T>>, label: &str) -> Vec<Vec<T>> {
+        let total_results: usize = method_results.iter().map(Vec::len).sum();
+        if total_results <= self.max_pre_rerank_results {
+            return method_results;
+        }
+
+        tracing::warn!(
+            "Capping {} {} results to {} before reranking",
+            total_results,
+            label,
+            self.max_pre_rerank_results
+        );
+
+        let mut capped = Vec::new();
+        let mut remaining = self.max_pre_rerank_results;
+
+        for mut list in method_results {
+            if remaining == 0 {
+                break;
+            }
+            list.truncate(remaining);
+            remaining = remaining.saturating_sub(list.len());
+            capped.push(list);
+        }
+
+        capped
+    }
+
     #[instrument(skip(self))]
     pub async fn search(&mut self, request: SearchRequest) -> SearchResult<SearchResults> {
         let start = Instant::now();
@@ -245,27 +273,7 @@ impl SearchEngine {
         }
 
         // Cap total results before reranking to prevent O(n²) explosion
-        let total_results: usize = method_results.iter().map(|v| v.len()).sum();
-        let method_results = if total_results > self.max_pre_rerank_results {
-            tracing::warn!(
-                "Capping {} edge results to {} before reranking",
-                total_results,
-                self.max_pre_rerank_results
-            );
-            let mut capped = Vec::new();
-            let mut remaining = self.max_pre_rerank_results;
-            for mut list in method_results {
-                if remaining == 0 {
-                    break;
-                }
-                list.truncate(remaining);
-                remaining = remaining.saturating_sub(list.len());
-                capped.push(list);
-            }
-            capped
-        } else {
-            method_results
-        };
+        let method_results = self.cap_method_results(method_results, "edge");
 
         // Apply reranking
         let reranked = reranking::rerank_edges(
@@ -389,27 +397,7 @@ impl SearchEngine {
         }
 
         // Cap total results before reranking to prevent O(n²) explosion
-        let total_results: usize = method_results.iter().map(|v| v.len()).sum();
-        let method_results = if total_results > self.max_pre_rerank_results {
-            tracing::warn!(
-                "Capping {} node results to {} before reranking",
-                total_results,
-                self.max_pre_rerank_results
-            );
-            let mut capped = Vec::new();
-            let mut remaining = self.max_pre_rerank_results;
-            for mut list in method_results {
-                if remaining == 0 {
-                    break;
-                }
-                list.truncate(remaining);
-                remaining = remaining.saturating_sub(list.len());
-                capped.push(list);
-            }
-            capped
-        } else {
-            method_results
-        };
+        let method_results = self.cap_method_results(method_results, "node");
 
         // Apply reranking with centrality boost factor
         let reranked = reranking::rerank_nodes(

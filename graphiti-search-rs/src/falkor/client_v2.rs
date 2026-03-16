@@ -122,6 +122,7 @@ fn parse_edges_from_properties(result: LazyResultSet<'_>) -> Result<Vec<Edge>> {
             uuid: edge_uuid,
             source_node_uuid: source_uuid,
             target_node_uuid: target_uuid,
+            name: None,
             fact,
             created_at,
             episodes: vec![], // We don't fetch episodes in this optimized path
@@ -131,6 +132,10 @@ fn parse_edges_from_properties(result: LazyResultSet<'_>) -> Result<Vec<Edge>> {
                 Some(group_id)
             },
             weight: weight as f32,
+            valid_at: None,
+            invalid_at: None,
+            expired_at: None,
+            attributes: None,
             score: None,
         });
     }

@@ -312,6 +312,10 @@ class RustSearchClient:
             created_at=data['created_at'],
             episodes=data.get('episodes', []),
             group_id=data.get('group_id', 'default'),
+            valid_at=data.get('valid_at'),
+            invalid_at=data.get('invalid_at'),
+            expired_at=data.get('expired_at'),
+            attributes=data.get('attributes', {}),
         )
 
     def _parse_node(self, data: Dict[str, Any]) -> EntityNode:

@@ -2,10 +2,9 @@ use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
 use serde_json::json;
 use tracing::{error, info, instrument};
 
-use crate::embeddings::EMBEDDER;
+use crate::embeddings::{l2_normalize_embedding, EMBEDDER};
 use crate::error::SearchResult;
-use crate::models::{SearchRequest, SearchResults};
-use crate::search::SearchEngine;
+use crate::models::{SearchMethod, SearchRequest, SearchResults};
 use crate::AppState;
 
 pub mod community_search;
@@ -17,6 +16,59 @@ pub use community_search::community_search_handler;
 pub use edge_search::edge_search_handler;
 pub use episode_search::episode_search_handler;
 pub use node_search::node_search_handler;
+
+pub(crate) fn search_methods_need_embedding(methods: &[SearchMethod]) -> bool {
+    methods
+        .iter()
+        .any(|method| matches!(method, SearchMethod::Similarity | SearchMethod::Hipporag))
+}
+
+pub(crate) fn search_request_needs_embedding(request: &SearchRequest) -> bool {
+    request
+        .config
+        .edge_config
+        .as_ref()
+        .is_some_and(|config| search_methods_need_embedding(&config.search_methods))
+        || request
+            .config
+            .node_config
+            .as_ref()
+            .is_some_and(|config| search_methods_need_embedding(&config.search_methods))
+        || request.config.community_config.is_some()
+}
+
+pub(crate) async fn ensure_query_embedding(
+    query: &str,
+    query_vector: &mut Option<Vec<f32>>,
+    needs_embedding: bool,
+) {
+    if !needs_embedding {
+        return;
+    }
+
+    if query_vector.is_none() && !query.is_empty() {
+        info!("Generating embedding for query: {}", query);
+        match EMBEDDER.generate_embedding(query).await {
+            Ok(Some(embedding)) => {
+                info!("Generated embedding with {} dimensions", embedding.len());
+                *query_vector = Some(embedding);
+            }
+            Ok(None) => {
+                info!("No embedding generated, continuing without embedding-backed search");
+            }
+            Err(e) => {
+                error!("Failed to generate embedding: {}, continuing without it", e);
+            }
+        }
+    }
+
+    if let Some(embedding) = query_vector.as_mut() {
+        match l2_normalize_embedding(embedding) {
+            Some(norm) => info!("Normalized query embedding (l2_norm={:.6})", norm),
+            None => info!("Skipping query embedding normalization (zero or non-finite norm)"),
+        }
+    }
+}
 
 /// Health check endpoint
 pub async fn health_check(State(state): State<AppState>) -> impl IntoResponse {
@@ -73,38 +125,10 @@ pub async fn search_handler(
 ) -> SearchResult<Json<SearchResults>> {
     info!("Processing search request for query: {}", request.query);
 
-    // Generate embedding if not provided
-    if request.query_vector.is_none() && !request.query.is_empty() {
-        info!("Generating embedding for query: {}", request.query);
-        match EMBEDDER.generate_embedding(&request.query).await {
-            Ok(Some(embedding)) => {
-                info!("Generated embedding with {} dimensions", embedding.len());
-                request.query_vector = Some(embedding);
-            }
-            Ok(None) => {
-                info!("No embedding generated, continuing with fulltext search only");
-            }
-            Err(e) => {
-                error!("Failed to generate embedding: {}, continuing without it", e);
-            }
-        }
-    }
+    let needs_embedding = search_request_needs_embedding(&request);
+    ensure_query_embedding(&request.query, &mut request.query_vector, needs_embedding).await;
 
-    let reranker_client = state.reranker_client.clone();
-
-    let mut engine = SearchEngine::new(
-        state.falkor_pool.clone(),
-        state.redis_pool.clone(),
-        state.config.max_method_results,
-        state.config.mmr_timeout_ms,
-        state.config.max_pre_rerank_results,
-        state.config.bfs_timeout_ms,
-        state.config.bfs_batch_size,
-        state.config.hipporag_timeout_ms,
-        state.config.hipporag_batch_size,
-        state.config.hipporag_hub_threshold,
-        reranker_client,
-    );
+    let mut engine = state.create_search_engine();
 
     // Execute search
     let results = engine.search(request).await?;
