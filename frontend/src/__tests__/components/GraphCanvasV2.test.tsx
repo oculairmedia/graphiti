@@ -9,8 +9,8 @@ import GraphCanvasV2 from '../../components/GraphCanvasV2';
 import { GraphNode } from '../../api/types';
 
 // Mock the contexts - must export raw context objects for useGraphConfigHooks
-vi.mock('../../contexts/GraphConfigProvider', () => {
-  const React = require('react');
+vi.mock('../../contexts/GraphConfigProvider', async () => {
+  const React = await import('react');
 
   const defaultConfig = {
     nodeSize: 5,
@@ -386,9 +386,9 @@ vi.mock('../../hooks/useGraphNodeIndex', () => ({
   })
 }));
 
-vi.mock('../../hooks/useGraphSelection', () => ({
-  useGraphSelection: vi.fn(() => {
-    const React = require('react');
+vi.mock('../../hooks/useGraphSelection', async () => {
+  const React = await import('react');
+  return { useGraphSelection: vi.fn(() => {
     const [selectedNodeIds, setSelectedNodeIds] = React.useState(new Set<string>());
 
     const selectNode = React.useCallback((id: string) => {
@@ -429,13 +429,13 @@ vi.mock('../../hooks/useGraphSelection', () => ({
       isNodeSelected: vi.fn(() => false),
       getSelectedNodes: vi.fn(() => [])
     };
-  })
-}));
+  }) };
+});
 
 // Mock Cosmograph
-vi.mock('@cosmograph/react', () => ({
-  Cosmograph: require('react').forwardRef(({ onClick, onPointMouseOver, onPointMouseOut, onReady }: any, ref: any) => {
-    const React = require('react');
+vi.mock('@cosmograph/react', async () => {
+  const React = await import('react');
+  return { Cosmograph: React.forwardRef(({ onClick, onPointMouseOver, onPointMouseOut, onReady }: any, ref: any) => {
 
     React.useEffect(() => {
       if (onReady) {
@@ -470,7 +470,8 @@ vi.mock('@cosmograph/react', () => ({
     );
   }),
   prepareCosmographData: vi.fn((data) => data)
-}));
+  };
+});
 
 // Mock utility functions
 vi.mock('../../utils/nodeTypeColors', () => ({

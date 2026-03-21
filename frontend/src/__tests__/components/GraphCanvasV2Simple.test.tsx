@@ -8,8 +8,8 @@ import React from 'react';
 import GraphCanvasV2 from '../../components/GraphCanvasV2';
 
 // Must export raw context objects for useGraphConfigHooks
-vi.mock('../../contexts/GraphConfigProvider', () => {
-  const React = require('react');
+vi.mock('../../contexts/GraphConfigProvider', async () => {
+  const React = await import('react');
 
   const defaultConfig = {
     nodeSize: 5, linkWidth: 1, backgroundColor: '#ffffff', showLabels: true,
