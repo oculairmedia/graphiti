@@ -228,8 +228,8 @@ const ParallelInitContent: React.FC<ParallelInitProviderProps> = ({
         );
         
         if (failures.length > 0) {
-          const errorMsg = `Initialization failed for: ${failures.map((f: any) => 
-            f.value?.type || 'unknown'
+          const errorMsg = `Initialization failed for: ${failures.map((f) => 
+            (f.status === 'fulfilled' ? f.value?.type : undefined) || 'unknown'
           ).join(', ')}`;
           
           throw new Error(errorMsg);

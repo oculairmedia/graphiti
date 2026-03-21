@@ -38,9 +38,7 @@ export function isSchemaDebuggingEnabled(): boolean {
   return false;
 }
 
-// Use a generic ref type that accepts any object with a current property
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type CosmographRefLike = { current?: any };
+type CosmographRefLike = { current?: unknown };
 
 export async function inspectCosmographSchema(cosmographRef: CosmographRefLike) {
   if (!isSchemaDebuggingEnabled()) {

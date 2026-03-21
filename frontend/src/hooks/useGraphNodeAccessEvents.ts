@@ -37,7 +37,7 @@ export function useGraphNodeAccessEvents(options: NodeAccessEventsOptions): void
   const { subscribe: subscribeToWebSocket } = useWebSocketContext();
   
   useEffect(() => {
-    const unsubscribe = subscribeToWebSocket((event: any) => {
+    const unsubscribe = subscribeToWebSocket((event) => {
       if (event.type === 'node_access' && event.node_ids) {
         if (debug) {
           console.log('[useGraphNodeAccessEvents] Node access event received:', {

@@ -6,15 +6,12 @@ import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { useGraphZoom } from '../hooks/useGraphZoom';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type CosmographRefType = React.RefObject<any>;
-
 interface GraphTimelineProps {
   onTimeRangeChange?: (range: [Date, Date] | [number, number] | undefined) => void;
   className?: string;
   isVisible?: boolean;
   onVisibilityChange?: (visible: boolean) => void;
-  cosmographRef?: CosmographRefType;
+  cosmographRef?: React.RefObject<unknown>;
   selectedCount?: number;
   onClearSelection?: () => void;
   onScreenshot?: () => void;

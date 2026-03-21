@@ -145,7 +145,7 @@ export function useGraphSelection(
   // Internal Helpers (not memoized - only used internally)
   // ============================================================================
 
-  const log = (message: string, ...args: any[]) => {
+  const log = (message: string, ...args: unknown[]) => {
     if (configRef.current.debug) {
       console.debug(`[useGraphSelection] ${message}`, ...args);
     }

@@ -215,7 +215,7 @@ export function useGraphCamera(
   /**
    * Log debug message
    */
-  const log = useCallback((message: string, ...args: any[]) => {
+  const log = useCallback((message: string, ...args: unknown[]) => {
     if (debug) {
       console.debug(`[useGraphCamera] ${message}`, ...args);
     }

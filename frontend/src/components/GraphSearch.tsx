@@ -5,6 +5,15 @@ import { Input } from '@/components/ui/input';
 import { useGraphConfig } from '@/hooks/useGraphConfigHooks';
 import { GraphNode } from '../types/graph';
 
+interface CosmographExtended {
+  getPointIndicesByExactValues?: (query: Record<string, unknown>) => number[];
+  setFocusedPoint?: (index: number | undefined) => void;
+  selectPoint?: (index: number, selectAdjacentLinks?: boolean, selectAdjacentNodes?: boolean) => void;
+  selectPoints?: (indices: number[], selectAdjacentLinks?: boolean) => void;
+  fitViewByIndices?: (indices: number[], duration?: number, padding?: number) => void;
+  zoomToPoint?: (index: number, duration?: number, scale?: number, canZoomOut?: boolean) => void;
+}
+
 interface GraphSearchProps {
   className?: string;
   onNodeSelect?: (node: GraphNode) => void;
@@ -64,10 +73,7 @@ export const GraphSearch: React.FC<GraphSearchProps> = React.memo(({
       const [, field, value] = match;
       const lowercaseValue = value.toLowerCase();
       
-      // Try to use Cosmograph's exact value search for better performance
-      // Cast needed since these methods are dynamically available on the Cosmograph instance
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const cosmoRef = cosmographRef?.current as any;
+      const cosmoRef = cosmographRef?.current as CosmographExtended | null | undefined;
       if (cosmoRef && typeof cosmoRef.getPointIndicesByExactValues === 'function') {
         try {
           let searchQuery: Record<string, unknown> = {};
@@ -192,10 +198,7 @@ export const GraphSearch: React.FC<GraphSearchProps> = React.memo(({
       onNodeSelect(node);
     }
     
-    // Focus and select the node in Cosmograph if available
-    // Cast needed since these methods are dynamically available on the Cosmograph instance
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const cosmoRef = cosmographRef?.current as any;
+    const cosmoRef = cosmographRef?.current as CosmographExtended | null | undefined;
     if (cosmoRef) {
       try {
         // Find the node index for focusing

@@ -54,8 +54,7 @@ export interface IncrementalUpdateMetrics {
  * Hook for managing incremental Cosmograph updates
  */
 export function useCosmographIncrementalUpdates(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  cosmographRef: React.RefObject<any>,
+  cosmographRef: React.RefObject<CosmographRef>,
   currentNodes: GraphNode[],
   currentEdges: GraphLink[],
   options: UseCosmographIncrementalUpdatesOptions = {}

@@ -184,7 +184,7 @@ export function useGraphDataManagement(config: UseGraphDataManagementConfig = {}
   /**
    * Log debug message
    */
-  const log = useCallback((message: string, ...args: any[]) => {
+  const log = useCallback((message: string, ...args: unknown[]) => {
     if (debug) {
       console.debug(`[useGraphDataManagement] ${message}`, ...args);
     }
@@ -592,7 +592,7 @@ export function useGraphDataManagement(config: UseGraphDataManagementConfig = {}
   const batchUpdate = useCallback((operations: Array<{
     type: 'add' | 'update' | 'remove';
     target: 'nodes' | 'links';
-    data: any[];
+    data: GraphNode[] | GraphLink[];
   }>) => {
     log(`Executing ${operations.length} batch operations`);
     
@@ -602,30 +602,33 @@ export function useGraphDataManagement(config: UseGraphDataManagementConfig = {}
       
       operations.forEach(op => {
         if (op.target === 'nodes') {
+          const nodeData = op.data as GraphNode[];
           switch (op.type) {
             case 'add':
-              nodes = autoDedup ? mergeNodeArrays(nodes, op.data) : [...nodes, ...op.data];
+              nodes = autoDedup ? mergeNodeArrays(nodes, nodeData) : [...nodes, ...nodeData];
               break;
             case 'update':
-              nodes = updateNodesInArray(nodes, op.data);
+              nodes = updateNodesInArray(nodes, nodeData);
               break;
             case 'remove':
-              nodes = removeNodesFromArray(nodes, op.data.map(n => n.id || n));
-              links = removeLinksByNodeIds(links, op.data.map(n => n.id || n));
+              nodes = removeNodesFromArray(nodes, nodeData.map(n => n.id));
+              links = removeLinksByNodeIds(links, nodeData.map(n => n.id));
               break;
           }
         } else {
+          const linkData = op.data as GraphLink[];
           switch (op.type) {
-            case 'add':
+            case 'add': {
               const nodeIds = new Set(nodes.map(n => n.id));
-              const validLinks = filterValidLinks(op.data, nodeIds);
+              const validLinks = filterValidLinks(linkData, nodeIds);
               links = autoDedup ? mergeLinkArrays(links, validLinks) : [...links, ...validLinks];
               break;
+            }
             case 'update':
-              links = updateLinksInArray(links, op.data);
+              links = updateLinksInArray(links, linkData);
               break;
             case 'remove':
-              links = removeLinksFromArray(links, op.data);
+              links = removeLinksFromArray(links, linkData);
               break;
           }
         }

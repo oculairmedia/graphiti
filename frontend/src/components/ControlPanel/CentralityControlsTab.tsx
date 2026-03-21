@@ -99,7 +99,7 @@ export function CentralityControlsTab({ onCentralityUpdate }: CentralityControls
     <div className="space-y-4">
       <div className="space-y-2">
         <Label>Centrality Metric</Label>
-        <Select value={selectedMetric} onValueChange={(value: any) => setSelectedMetric(value)}>
+        <Select value={selectedMetric} onValueChange={(value) => setSelectedMetric(value as typeof selectedMetric)}>
           <SelectTrigger>
             <SelectValue />
           </SelectTrigger>
@@ -169,7 +169,7 @@ export function CentralityControlsTab({ onCentralityUpdate }: CentralityControls
       {selectedMetric === 'degree' && (
         <div className="space-y-2">
           <Label>Direction</Label>
-          <Select value={direction} onValueChange={(value: any) => setDirection(value)}>
+          <Select value={direction} onValueChange={(value) => setDirection(value as typeof direction)}>
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>

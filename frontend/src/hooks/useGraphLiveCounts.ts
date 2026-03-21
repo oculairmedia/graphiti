@@ -36,9 +36,9 @@ export function useGraphLiveCounts(options: LiveCountsOptions = {}): LiveCountsR
   
   // Subscribe to WebSocket delta events for live count updates
   useEffect(() => {
-    const unsubscribe = subscribeToWebSocket((event: any) => {
-      if (event.type === 'delta' && event.data) {
-        const deltaData = event.data;
+    const unsubscribe = subscribeToWebSocket((event) => {
+      if (event.type === 'graph:delta' && 'data' in event && event.data) {
+        const deltaData = event.data as { added_nodes?: unknown[]; removed_nodes?: unknown[]; added_edges?: unknown[]; removed_edges?: unknown[] };
         
         // Update node count
         if (deltaData.added_nodes?.length > 0 || deltaData.removed_nodes?.length > 0) {

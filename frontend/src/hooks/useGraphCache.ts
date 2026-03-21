@@ -161,7 +161,7 @@ export function useGraphCache(options: UseGraphCacheOptions = {}) {
           // Note: DuckDBService doesn't have a direct query method
           // Using getNodesForUI and filtering client-side as a workaround
           const allNodes = await duckDBService.getNodesForUI();
-          return allNodes.filter((n: any) => n.node_type === nodeType);
+          return allNodes.filter((n: Record<string, unknown>) => n.node_type === nodeType);
         });
       }
       // Add more patterns as needed

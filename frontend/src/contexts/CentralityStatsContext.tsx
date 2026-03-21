@@ -102,7 +102,7 @@ function applyBetweennessGating(values: number[], mean: number): number[] {
 /**
  * Calculate robust scaling maximum based on method
  */
-function calculateScalingMax(values: number[], method: ScalingMethod, stats: any, metricType?: string): number {
+function calculateScalingMax(values: number[], method: ScalingMethod, stats: { min: number; max: number; mean: number; median: number; q1: number; q3: number; iqr: number; mad: number }, metricType?: string): number {
   // Apply betweenness gating if this is betweenness centrality
   let processedValues = values;
   if (metricType === 'betweenness') {
@@ -181,7 +181,7 @@ function calculateCentralityStats(nodes: GraphNode[], scalingMethod: ScalingMeth
     
     // Extract values from nodes, checking both root level and properties
     nodes.forEach(node => {
-      const value = (node as any)[propName] || node.properties?.[propName];
+      const value = (node as unknown as Record<string, unknown>)[propName] || node.properties?.[propName];
       if (typeof value === 'number' && !isNaN(value)) {
         rawValues.push(value);
       }
