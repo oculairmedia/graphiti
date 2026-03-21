@@ -7,34 +7,140 @@ import { render } from '@testing-library/react';
 import React from 'react';
 import GraphCanvasV2 from '../../components/GraphCanvasV2';
 
-// Mock all contexts and dependencies first
-vi.mock('../../contexts/GraphConfigProvider', () => ({
-  useGraphConfig: vi.fn(() => ({
-    config: {
-      nodeSize: 5,
-      linkWidth: 1,
-      backgroundColor: '#ffffff',
-      showLabels: true,
-      labelSize: 12,
-      simulationEnabled: true,
-      simulationGravity: 0.1,
-      simulationCenter: 0.1,
-      simulationRepulsion: -300,
-      simulationLinkDistance: 30,
-      simulationLinkSpring: 1,
-      simulationFriction: 0.9,
-      simulationDecay: 0.4
-    },
+// Must export raw context objects for useGraphConfigHooks
+vi.mock('../../contexts/GraphConfigProvider', () => {
+  const React = require('react');
+
+  const defaultConfig = {
+    nodeSize: 5, linkWidth: 1, backgroundColor: '#ffffff', showLabels: true,
+    labelSize: 12, simulationEnabled: true, simulationGravity: 0.1,
+    simulationCenter: 0.1, simulationRepulsion: -300, simulationLinkDistance: 30,
+    simulationLinkSpring: 1, simulationFriction: 0.9, simulationDecay: 0.4,
+    gravity: 0.25, repulsion: 0.5, centerForce: 0.1, friction: 0.9,
+    linkSpring: 0.1, linkDistance: 10, linkDistRandomVariationRange: [1, 1.1],
+    mouseRepulsion: 0.2, simulationRepulsionTheta: 1.7, simulationCluster: 0.05,
+    spaceSize: 8192, useQuadtree: true, useClassicQuadtree: false, quadtreeLevels: 12,
+    disableSimulation: false, renderLinks: true, showHoveredNodeLabel: true,
+    showDynamicLabels: false, showTopLabels: false, showTopLabelsLimit: 50,
+    nodeTypeColors: {}, nodeTypeVisibility: {}, nodeAccessHighlightColor: '#FFD700',
+    sizeMapping: 'uniform', clusteringEnabled: false, pointClusterBy: 'node_type',
+    pointClusterStrengthBy: 'clusterStrength', clusteringMethod: 'none',
+    centralityMetric: 'degree', clusterStrength: 0.3, queryType: 'entire_graph',
+    nodeLimit: 100000, searchTerm: '', layout: 'force', hierarchyDirection: 'TB',
+    radialCenter: 'most_connected', circularOrdering: 'degree', clusterBy: 'community',
+    fitViewOnInit: true, fitViewDelay: 1500, fitViewPadding: 0.2, fitViewDuration: 1000,
+    renderLabels: true, edgeArrows: false, edgeArrowScale: 1, pointsOnEdge: false,
+    advancedOptionsEnabled: false, pixelationThreshold: 100000,
+    renderSelectedNodesOnTop: true, performanceMode: false,
+    showFPS: false, showNodeCount: true, showDebugInfo: false,
+    enableHoverEffects: true, enablePanOnDrag: true, enableZoomOnScroll: true,
+    enableClickSelection: true, enableDoubleClickFocus: true,
+    enableKeyboardShortcuts: true, followSelectedNode: false,
+    filteredNodeTypes: [], minDegree: 0, maxDegree: 100,
+    minPagerank: 0, maxPagerank: 1, minBetweenness: 0, maxBetweenness: 1,
+    minEigenvector: 0, maxEigenvector: 1, minConnections: 0, maxConnections: 1000,
+    startDate: '', endDate: '', colorScheme: 'by-type',
+    gradientHighColor: '#FF0000', gradientLowColor: '#0000FF',
+    scalingMethod: 'winsorized', useQuantileScaling: true, useThresholdScaling: false,
+    quantileBins: 7, minNodeSize: 4, maxNodeSize: 30, sizeMultiplier: 1,
+    nodeOpacity: 0.9, borderWidth: 2, labelBy: 'label', labelColor: '#FFFFFF',
+    hoveredLabelColor: '#FFFFFF', labelOpacity: 0.8, labelVisibilityThreshold: 0.5,
+    labelFontWeight: 400, labelBackgroundColor: 'rgba(0,0,0,0.7)',
+    hoveredLabelSize: 14, hoveredLabelFontWeight: 600,
+    hoveredLabelBackgroundColor: 'rgba(0,0,0,0.9)',
+    hoveredPointCursor: 'pointer', renderHoveredPointRing: false,
+    hoveredPointRingColor: '#FFD700', focusedPointRingColor: '#FF6B6B',
+    linkWidthBy: 'weight', linkWidthScheme: 'uniform', linkWidthScale: 0.5,
+    linkWidthMin: 0.1, linkWidthMax: 5, linkOpacity: 0.85,
+    linkOpacityScheme: 'uniform', linkOpacityMin: 0.1, linkOpacityMax: 1,
+    linkGreyoutOpacity: 0.1, linkColor: '#9CA3AF', linkColorScheme: 'uniform',
+    scaleLinksOnZoom: true, linkVisibilityDistance: [50, 200],
+    linkVisibilityMinTransparency: 0.05, linkArrows: false, linkArrowsSizeScale: 1,
+    curvedLinks: false, curvedLinkSegments: 10, curvedLinkWeight: 0.5,
+    curvedLinkControlPointDistance: 0.5, linkStrengthEnabled: true,
+    entityEntityStrength: 1.5, episodicStrength: 0.5, defaultLinkStrength: 1.0,
+    linkAnimationEnabled: false, linkAnimationAmplitude: 0.15,
+    linkAnimationFrequency: 0.5,
+  };
+
+  const StableConfigContext = React.createContext({
+    config: defaultConfig,
+    updateConfig: vi.fn(),
+  });
+  const DynamicConfigContext = React.createContext({
+    config: defaultConfig,
+    updateConfig: vi.fn(),
+    batchUpdate: vi.fn(),
+  });
+  const GraphControlContext = React.createContext({
+    cosmographRef: { current: null },
     setCosmographRef: vi.fn(),
-    updateConfig: vi.fn()
-  }))
-}));
+    zoomIn: vi.fn(),
+    zoomOut: vi.fn(),
+    fitView: vi.fn(),
+    applyLayout: vi.fn(),
+    isApplyingLayout: false,
+    updateNodeTypeConfigurations: vi.fn(),
+  });
+
+  return {
+    StableConfigContext,
+    DynamicConfigContext,
+    GraphControlContext,
+    useGraphConfig: vi.fn(() => ({
+      config: defaultConfig,
+      setCosmographRef: vi.fn(),
+      updateConfig: vi.fn(),
+      cosmographRef: { current: null },
+      zoomIn: vi.fn(),
+      zoomOut: vi.fn(),
+      fitView: vi.fn(),
+      applyLayout: vi.fn(),
+      isApplyingLayout: false,
+      updateNodeTypeConfigurations: vi.fn(),
+    })),
+    useStableConfig: vi.fn(() => ({
+      config: defaultConfig,
+      updateConfig: vi.fn(),
+    })),
+    useDynamicConfig: vi.fn(() => ({
+      config: defaultConfig,
+      updateConfig: vi.fn(),
+      batchUpdate: vi.fn(),
+    })),
+    useGraphControl: vi.fn(() => ({
+      cosmographRef: { current: null },
+      setCosmographRef: vi.fn(),
+      zoomIn: vi.fn(),
+      zoomOut: vi.fn(),
+      fitView: vi.fn(),
+      applyLayout: vi.fn(),
+      isApplyingLayout: false,
+      updateNodeTypeConfigurations: vi.fn(),
+    })),
+    GraphConfigProvider: ({ children }: { children: React.ReactNode }) => children,
+  };
+});
 
 vi.mock('../../contexts/LoadingCoordinator', () => ({
+  LoadingCoordinatorProvider: ({ children }: { children: React.ReactNode }) => children,
   useLoadingCoordinator: vi.fn(() => ({
+    setInitialized: vi.fn(),
+    setError: vi.fn(),
+    resetError: vi.fn(),
+    isInitialized: true,
+    error: null,
+    updateStage: vi.fn(),
+    updateStatus: vi.fn(),
+    completeStage: vi.fn(),
+    setStageComplete: vi.fn(),
+    getStageStatus: vi.fn(() => 'complete'),
+    isStageComplete: vi.fn().mockReturnValue(false),
+    getStageProgress: vi.fn().mockReturnValue(0),
+    stages: {},
     startLoading: vi.fn(),
     stopLoading: vi.fn(),
-    isLoading: false
+    isLoading: false,
   }))
 }));
 

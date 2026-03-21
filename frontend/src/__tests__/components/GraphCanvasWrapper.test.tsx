@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import React, { createRef } from 'react';
 import { GraphCanvasTestWrapper } from './GraphCanvasTestWrapper';
@@ -241,7 +241,7 @@ describe('GraphCanvas Interface Contract', () => {
       expect(ref.current.fitView).toBeDefined();
     });
 
-    it('should handle zoom operations', () => {
+    it('should handle zoom operations', async () => {
       const ref = createRef<any>();
 
       render(
@@ -258,21 +258,19 @@ describe('GraphCanvas Interface Contract', () => {
 
       const canvas = screen.getByTestId('graph-canvas');
       
-      // Initial zoom
       expect(canvas.getAttribute('data-zoom')).toBe('1');
 
-      // Zoom in
-      ref.current?.zoomIn();
+      await act(() => { ref.current?.zoomIn(); });
       expect(canvas.getAttribute('data-zoom')).toBe('1.2');
 
-      // Zoom out
-      ref.current?.zoomOut();
+      await act(() => { ref.current?.zoomOut(); });
       expect(canvas.getAttribute('data-zoom')).toBe('1');
 
-      // Fit view resets zoom
-      ref.current?.zoomIn();
-      ref.current?.zoomIn();
-      ref.current?.fitView();
+      await act(() => {
+        ref.current?.zoomIn();
+        ref.current?.zoomIn();
+        ref.current?.fitView();
+      });
       expect(canvas.getAttribute('data-zoom')).toBe('1');
     });
 
@@ -320,7 +318,7 @@ describe('GraphCanvas Interface Contract', () => {
   });
 
   describe('Data Management', () => {
-    it('should handle incremental data addition', () => {
+    it('should handle incremental data addition', async () => {
       const ref = createRef<any>();
       const onStatsUpdate = vi.fn();
 
@@ -351,7 +349,7 @@ describe('GraphCanvas Interface Contract', () => {
       };
 
       onStatsUpdate.mockClear();
-      ref.current?.addIncrementalData([newNode], [newLink]);
+      await act(() => { ref.current?.addIncrementalData([newNode], [newLink]); });
 
       expect(onStatsUpdate).toHaveBeenCalledWith({
         nodeCount: 4,
@@ -392,7 +390,7 @@ describe('GraphCanvas Interface Contract', () => {
       });
     });
 
-    it('should handle node removal', () => {
+    it('should handle node removal', async () => {
       const ref = createRef<any>();
       const onStatsUpdate = vi.fn();
 
@@ -410,17 +408,16 @@ describe('GraphCanvas Interface Contract', () => {
       );
 
       onStatsUpdate.mockClear();
-      ref.current?.removeNodes(['node1']);
+      await act(() => { ref.current?.removeNodes(['node1']); });
 
-      // Should remove node and its connected links
       expect(onStatsUpdate).toHaveBeenCalledWith({
         nodeCount: 2,
-        edgeCount: 1, // One link should be removed
+        edgeCount: 1,
         lastUpdated: expect.any(Number)
       });
     });
 
-    it('should replace all data', () => {
+    it('should replace all data', async () => {
       const ref = createRef<any>();
       const onStatsUpdate = vi.fn();
 
@@ -447,7 +444,7 @@ describe('GraphCanvas Interface Contract', () => {
       ];
 
       onStatsUpdate.mockClear();
-      ref.current?.setData(newNodes, newLinks);
+      await act(() => { ref.current?.setData(newNodes, newLinks); });
 
       expect(onStatsUpdate).toHaveBeenCalledWith({
         nodeCount: 2,
@@ -505,7 +502,7 @@ describe('GraphCanvas Interface Contract', () => {
   });
 
   describe('Simulation Control', () => {
-    it('should start simulation', () => {
+    it('should start simulation', async () => {
       const ref = createRef<any>();
 
       render(
@@ -523,11 +520,11 @@ describe('GraphCanvas Interface Contract', () => {
       const canvas = screen.getByTestId('graph-canvas');
       expect(canvas.getAttribute('data-simulation')).toBe('false');
 
-      ref.current?.startSimulation();
+      await act(() => { ref.current?.startSimulation(); });
       expect(canvas.getAttribute('data-simulation')).toBe('true');
     });
 
-    it('should pause and resume simulation', () => {
+    it('should pause and resume simulation', async () => {
       const ref = createRef<any>();
 
       render(
@@ -544,17 +541,17 @@ describe('GraphCanvas Interface Contract', () => {
 
       const canvas = screen.getByTestId('graph-canvas');
       
-      ref.current?.startSimulation();
+      await act(() => { ref.current?.startSimulation(); });
       expect(canvas.getAttribute('data-simulation')).toBe('true');
 
-      ref.current?.pauseSimulation();
+      await act(() => { ref.current?.pauseSimulation(); });
       expect(canvas.getAttribute('data-simulation')).toBe('false');
 
-      ref.current?.resumeSimulation();
+      await act(() => { ref.current?.resumeSimulation(); });
       expect(canvas.getAttribute('data-simulation')).toBe('true');
     });
 
-    it('should keep simulation running', () => {
+    it('should keep simulation running', async () => {
       const ref = createRef<any>();
 
       render(
@@ -573,11 +570,11 @@ describe('GraphCanvas Interface Contract', () => {
       
       expect(canvas.getAttribute('data-keep-running')).toBe('false');
 
-      ref.current?.keepSimulationRunning(true);
+      await act(() => { ref.current?.keepSimulationRunning(true); });
       expect(canvas.getAttribute('data-keep-running')).toBe('true');
       expect(canvas.getAttribute('data-simulation')).toBe('true');
 
-      ref.current?.keepSimulationRunning(false);
+      await act(() => { ref.current?.keepSimulationRunning(false); });
       expect(canvas.getAttribute('data-keep-running')).toBe('false');
     });
   });

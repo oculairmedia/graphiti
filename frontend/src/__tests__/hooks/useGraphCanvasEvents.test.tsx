@@ -76,7 +76,7 @@ describe('useGraphCanvasEvents', () => {
       expect(result.current.handleClick).toBeDefined();
     });
 
-    it('should show panel immediately and fetch details in background', async () => {
+    it('should show panel immediately with local data (no network fetch)', async () => {
       const { result } = renderHook(() => 
         useGraphCanvasEvents({
           nodes: mockNodes,
@@ -89,16 +89,11 @@ describe('useGraphCanvasEvents', () => {
         await result.current.handleClick(1);
       });
 
-      // Panel should open immediately with cached data
       expect(mockCallbacks.onNodeClick).toHaveBeenCalledWith(
         expect.objectContaining({ id: 'node2' })
       );
 
-      // Wait for background fetch to complete
-      await waitFor(() => {
-        // Should be called twice: once with cached data, once with full data
-        expect(mockCallbacks.onNodeClick).toHaveBeenCalledTimes(2);
-      }, { timeout: 1000 });
+      expect(mockCallbacks.onNodeClick).toHaveBeenCalledTimes(1);
     });
 
     it('should handle click on empty space', async () => {
