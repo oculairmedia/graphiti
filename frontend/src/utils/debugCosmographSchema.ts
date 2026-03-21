@@ -50,9 +50,8 @@ export async function inspectCosmographSchema(cosmographRef: CosmographRefLike) 
     return;
   }
 
-  const cosmograph = cosmographRef.current;
+  const cosmograph = cosmographRef.current as Record<string, unknown>;
   
-  // Try to access internal DuckDB instance
   const internalKeys = Object.keys(cosmograph);
   console.log('[Schema Debug] Cosmograph internal keys:', internalKeys);
   

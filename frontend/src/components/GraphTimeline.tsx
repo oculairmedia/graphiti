@@ -36,12 +36,11 @@ export const GraphTimeline = forwardRef<GraphTimelineHandle, GraphTimelineProps>
     const [isAnimating, setIsAnimating] = useState(false);
     const [isCosmographReady, setIsCosmographReady] = useState(false);
     
-    // Get zoom controls from the hook
     const { zoomIn, zoomOut, fitView } = useGraphZoom(
-      cosmographRef || { current: null },
+      (cosmographRef || { current: null }) as React.RefObject<null>,
       {
         fitViewDuration: 750,
-        fitViewPadding: 0.2,  // Normalized value (0-1), not pixels - 0.2 = 20% padding
+        fitViewPadding: 0.2,
         zoomFactor: 1.5,
       }
     );
@@ -53,12 +52,11 @@ export const GraphTimeline = forwardRef<GraphTimelineHandle, GraphTimelineProps>
     const [currentTimeWindow, setCurrentTimeWindow] = useState<string>('');
     const tickCheckInterval = useRef<NodeJS.Timeout | null>(null);
 
-    // Check if cosmograph is available through ref or context
     useEffect(() => {
-      // Try to get the actual Cosmograph ref from the GraphCanvas handle
       let actualCosmographRef = null;
-      if (cosmographRef?.current?.getCosmographRef) {
-        actualCosmographRef = cosmographRef.current.getCosmographRef();
+      const handle = cosmographRef?.current as { getCosmographRef?: () => React.RefObject<unknown> } | null;
+      if (handle?.getCosmographRef) {
+        actualCosmographRef = handle.getCosmographRef();
       }
       
       const hasCosmo = !!((actualCosmographRef as React.RefObject<unknown> | null)?.current || cosmograph);

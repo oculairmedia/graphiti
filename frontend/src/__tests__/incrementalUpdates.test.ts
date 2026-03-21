@@ -56,7 +56,8 @@ const createDelta = (
 
 describe('Incremental Updates', () => {
   let mockCosmograph: ReturnType<typeof createMockCosmograph>;
-  let cosmographRef: { current: any };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let cosmographRef: React.RefObject<any>;
   
   beforeEach(() => {
     mockCosmograph = createMockCosmograph();
@@ -482,9 +483,9 @@ describe('Fallback Strategies', () => {
   it('should batch multiple failed updates', async () => {
     // Test that multiple rapid failures get batched together
     const mockCosmograph = createMockCosmograph();
-    const cosmographRef = { current: mockCosmograph };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const cosmographRef = { current: mockCosmograph } as React.RefObject<any>;
     
-    // Make all operations fail initially
     mockCosmograph.addPoints.mockRejectedValue(new Error('Busy'));
     mockCosmograph.addLinks.mockRejectedValue(new Error('Busy'));
     
@@ -517,7 +518,8 @@ describe('Fallback Strategies', () => {
   
   it('should skip non-critical updates when overloaded', async () => {
     const mockCosmograph = createMockCosmograph();
-    const cosmographRef = { current: mockCosmograph };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const cosmographRef = { current: mockCosmograph } as React.RefObject<any>;
     
     const { result } = renderHook(() =>
       useCosmographIncrementalUpdates(
