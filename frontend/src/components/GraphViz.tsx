@@ -63,8 +63,8 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
     clearAll: clearSelection,
   } = useSelectionStore();
   
-  // Track when we're intentionally clearing selection to prevent race conditions
   const isClearingRef = useRef(false);
+  const clearingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Refs
   const graphCanvasRef = useRef<GraphCanvasHandle>(null);
@@ -137,8 +137,11 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
   const handleCloseDetails = useCallback(() => {
     isClearingRef.current = true;
     selectNode(null);
-    // Reset the flag after a short delay to allow re-selection again
-    setTimeout(() => { isClearingRef.current = false; }, 100);
+    if (clearingTimerRef.current) clearTimeout(clearingTimerRef.current);
+    clearingTimerRef.current = setTimeout(() => {
+      isClearingRef.current = false;
+      clearingTimerRef.current = null;
+    }, 100);
   }, [selectNode]);
 
   // Stable graph props for child components
@@ -150,6 +153,12 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
     stableGraphPropsRef.current = props;
     return props;
   }, [cosmographNodes, cosmographLinks]);
+
+  useEffect(() => {
+    return () => {
+      if (clearingTimerRef.current) clearTimeout(clearingTimerRef.current);
+    };
+  }, []);
 
   // Error state
   if (error) {

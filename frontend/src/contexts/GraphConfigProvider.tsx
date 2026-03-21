@@ -278,6 +278,7 @@ export function GraphConfigProvider({ children }: { children: ReactNode }) {
   const stableConfigRef = useRef<StableConfig>(stableConfig);
   const dynamicConfigRef = useRef<DynamicConfig>(dynamicConfig);
   const hasLoadedPersistedRef = useRef(false);
+  const fitViewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   // Update refs when state changes
   useEffect(() => {
@@ -546,14 +547,22 @@ export function GraphConfigProvider({ children }: { children: ReactNode }) {
         
         cosmographRef.current.setData(nodesWithPositions, links, false);
         
-        setTimeout(() => {
+        if (fitViewTimerRef.current) clearTimeout(fitViewTimerRef.current);
+        fitViewTimerRef.current = setTimeout(() => {
           cosmographRef.current?.fitView(stableConfig.fitViewDuration, stableConfig.fitViewPadding);
+          fitViewTimerRef.current = null;
         }, 100);
       }
     } finally {
       setIsApplyingLayout(false);
     }
   }, [cosmographRef, stableConfig.fitViewDuration, stableConfig.fitViewPadding]);
+
+  useEffect(() => {
+    return () => {
+      if (fitViewTimerRef.current) clearTimeout(fitViewTimerRef.current);
+    };
+  }, []);
   
   return (
     <StableConfigContext.Provider value={{ config: stableConfig, updateConfig: updateStableConfig }}>
