@@ -141,6 +141,7 @@ export interface SanitizedNode {
   created_at_timestamp: number;
   cluster: string;
   clusterStrength: number;
+  [key: string]: unknown;
 }
 
 /**
@@ -152,6 +153,8 @@ export interface SanitizedLink {
   sourceIndex: number;
   targetIndex: number;
   edge_type: string;
+  weight?: number;
+  [key: string]: unknown;
 }
 
 /**

@@ -11,7 +11,7 @@
 import { useMemo, useRef } from 'react';
 import { hexToRgba } from '../utils/NodeColorManager';
 import { generateNodeTypeColor } from '../utils/NodeColorManager';
-import type { TransformedGraphNode, TransformedGraphLink } from '../types/graph';
+import type { CosmographData } from './useCosmographDataTransform';
 
 interface LinkColorConfig {
   linkColorScheme: string;
@@ -24,11 +24,6 @@ interface LinkColorConfig {
   nodeAccessHighlightColor?: string;
   highlightedEdgeColor?: string;
   partialHighlightedEdgeColor?: string;
-}
-
-interface CosmographData {
-  nodes: TransformedGraphNode[];
-  links: TransformedGraphLink[];
 }
 
 interface UsePrecomputedLinkColorsProps {

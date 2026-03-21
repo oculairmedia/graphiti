@@ -1,23 +1,17 @@
 import { useMemo, useRef, useEffect } from 'react';
 import { NodeColorManager, getGlobalColorManager, generateNodeTypeColor } from '../utils/NodeColorManager';
 import { hexToRgba, interpolateColor } from '../utils/NodeColorManager';
-import { TransformedGraphNode, TransformedGraphLink } from '../types/graph';
 import { GraphConfig } from '../contexts/configTypes';
+import type { CosmographData } from './useCosmographDataTransform';
 
 import { usePrecomputedLinkColors } from './usePrecomputedLinkColors';
 
-// PERFORMANCE FIX: Module-level constant to avoid array recreation on each render
 const COMMUNITY_COLORS = [
   '#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6',
   '#1abc9c', '#34495e', '#e67e22', '#95a5a6', '#d35400',
   '#16a085', '#27ae60', '#2980b9', '#8e44ad', '#2c3e50',
   '#f1c40f', '#e74c3c', '#ecf0f1', '#95a5a6', '#34495e'
 ] as const;
-
-interface CosmographData {
-  nodes: TransformedGraphNode[];
-  links: TransformedGraphLink[];
-}
 
 interface VisualizationConfig {
   pointSizeRange: [number, number];
@@ -248,7 +242,7 @@ export function useCosmographVisualization({
         case 'by-source-pagerank': {
           const sourceNode = cosmographData.nodes[link.sourceIndex];
           if (!sourceNode) return minWidth;
-          const pagerank = sourceNode.pagerank_centrality || sourceNode.pagerank || 0;
+          const pagerank = sourceNode.pagerank_centrality || 0;
           return minWidth + (pagerank * (maxWidth - minWidth));
         }
         

@@ -1,11 +1,7 @@
 import { useEffect, type RefObject } from 'react';
 import type { CosmographRef } from '@cosmograph/react';
 import type { GraphNode, GraphLink } from '../types/graph';
-
-interface CosmographData {
-  nodes: GraphNode[];
-  links: GraphLink[];
-}
+import type { CosmographData } from './useCosmographDataTransform';
 
 interface LoadingCoordinator {
   getStageStatus: (stage: string) => string;

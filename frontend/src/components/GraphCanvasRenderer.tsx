@@ -9,23 +9,16 @@
 
 import React, { useMemo } from 'react';
 import { Cosmograph } from '@cosmograph/react';
-import { TransformedGraphNode, TransformedGraphLink } from '../types/graph';
+import type { CosmographData } from '../hooks/useCosmographDataTransform';
 
-// Cosmograph ref type - use unknown since library doesn't export a proper type
 type CosmographRefType = React.RefObject<unknown>;
 
-// PERFORMANCE FIX: Module-level constants to avoid array recreation on each render
 const DEFAULT_COLOR_PALETTE = [
   '#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6',
   '#1abc9c', '#34495e', '#e67e22', '#95a5a6', '#d35400'
 ] as const;
 
 const DEFAULT_LINK_DIST_VARIATION_RANGE = [1, 1.2] as const;
-
-interface CosmographData {
-  nodes: TransformedGraphNode[];
-  links: TransformedGraphLink[];
-}
 
 interface VisualizationConfig {
   pointSizeRange: [number, number];
@@ -77,9 +70,7 @@ export const GraphCanvasRenderer: React.FC<GraphCanvasRendererProps> = React.mem
   const { pointSizeRange, linkWidthRange, nodeColorConfig, linkWidthByFn, linkColorByFn } = visualConfig;
   const { handleClick, handleMouseOver, handleMouseOut } = eventHandlers;
   
-  // Use Cosmograph component with type assertion for props compatibility
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const CosmographComponent = Cosmograph as React.ComponentType<any>;
+  const CosmographComponent = Cosmograph as React.ComponentType<Record<string, unknown>>;
   
   // Safety check - ensure data arrays exist before rendering Cosmograph
   const safeNodes = cosmographData?.nodes || [];
