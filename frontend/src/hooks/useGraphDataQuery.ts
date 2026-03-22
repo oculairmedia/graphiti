@@ -216,7 +216,6 @@ export function useGraphDataQuery() {
 
             nodes[i] = {
               id: n.id,
-              idx: n.idx !== undefined ? n.idx : i,
               label: n.label || n.id,
               name: n.label || n.id,
               node_type: n.node_type || 'Unknown',
