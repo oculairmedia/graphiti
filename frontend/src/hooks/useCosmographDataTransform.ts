@@ -8,7 +8,7 @@
  * instead of direct array references to prevent unnecessary re-processing.
  */
 
-import { useMemo, useRef } from 'react';
+import { useMemo, useRef, useCallback } from 'react';
 import { GraphNode, GraphLink } from '../types/graph';
 import {
   CosmographDataPreparer,
@@ -28,6 +28,12 @@ interface TransformConfig {
 export interface CosmographData {
   nodes: SanitizedNode[];
   links: SanitizedLink[];
+}
+
+export interface CosmographDataTransformResult extends CosmographData {
+  /** Call after a successful incremental Cosmograph addPoints to prevent
+   *  the next hash-change from triggering a full 57K-node re-sanitization. */
+  markIncrementalSync: () => void;
 }
 
 /**
@@ -59,7 +65,7 @@ export const useCosmographDataTransform = (
   nodes: GraphNode[],
   links: GraphLink[],
   config: TransformConfig
-): CosmographData => {
+): CosmographDataTransformResult => {
   const safeNodes = Array.isArray(nodes) ? nodes : [];
   const safeLinks = Array.isArray(links) ? links : [];
 
@@ -70,6 +76,10 @@ export const useCosmographDataTransform = (
       clusterStrength: config.clusterStrength
     })
   );
+
+  // When set, the next useMemo invocation will update the stored hash
+  // but return the cached result — preventing a full re-sanitization.
+  const skipNextRef = useRef(false);
 
   // PERFORMANCE FIX (GRAPH-67 + GRAPH-182): Content-based hashes computed directly
   // (no useMemo wrapper — hash functions are O(1) and avoid unstable array deps)
@@ -90,6 +100,15 @@ export const useCosmographDataTransform = (
     const currentHash = `${nodesHash}|${linksHash}|${config.clusteringMethod}|${config.centralityMetric}|${config.clusterStrength}`;
 
     if (currentHash === prevHashRef.current && prevResultRef.current.nodes.length > 0) {
+      return prevResultRef.current;
+    }
+
+    // PERF: After a successful incremental addPoints, React state changes
+    // but Cosmograph already has the data. Accept the new hash without
+    // re-sanitizing the full dataset.
+    if (skipNextRef.current && prevResultRef.current.nodes.length > 0) {
+      skipNextRef.current = false;
+      prevHashRef.current = currentHash;
       return prevResultRef.current;
     }
 
@@ -137,5 +156,9 @@ export const useCosmographDataTransform = (
     return result;
   }, [nodesHash, linksHash, config.clusteringMethod, config.centralityMetric, config.clusterStrength]);
 
-  return cosmographData;
+  const markIncrementalSync = useCallback(() => {
+    skipNextRef.current = true;
+  }, []);
+
+  return { ...cosmographData, markIncrementalSync };
 };

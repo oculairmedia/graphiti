@@ -197,6 +197,10 @@ export function useGraphCanvasOrchestration(
     },
   );
 
+  // Ref for markIncrementalSync — declared before handleDeltaUpdate but populated
+  // after useCosmographDataTransform initializes (avoids block-scope forward reference).
+  const markIncrementalSyncRef = useRef<(() => void) | null>(null);
+
   const handleGraphUpdate = useCallback(async (event: WebSocketEvent) => {
     if (event.nodes && event.edges) {
       if (incrementalUpdatesReady && replaceDataWithConfig) {
@@ -210,7 +214,17 @@ export function useGraphCanvasOrchestration(
   const handleDeltaUpdate = useCallback(async (event: DeltaUpdateEvent) => {
     if (incrementalUpdatesReady && cosmographRef.current) {
       const success = await applyDelta(event as unknown as import('../utils/cosmographDataPreparer').DeltaUpdate);
-      if (success) return;
+      if (success) {
+        markIncrementalSyncRef.current?.();
+        if (event.nodes?.length) {
+          if (event.operation === 'add') addNodes(event.nodes);
+          else if (event.operation === 'update') updateNodes(event.nodes);
+        }
+        if (event.edges?.length) {
+          if (event.operation === 'add') addLinks(event.edges);
+        }
+        return;
+      }
     }
 
     if (event.nodes && event.nodes.length > 0) {
@@ -283,6 +297,7 @@ export function useGraphCanvasOrchestration(
       clusterStrength: config.clusterStrength,
     },
   );
+  markIncrementalSyncRef.current = cosmographData.markIncrementalSync;
 
   const { handleClick, handleMouseOver, handleMouseOut } = useGraphCanvasEvents({
     nodes: nodes || [],
