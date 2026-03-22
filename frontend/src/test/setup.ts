@@ -215,6 +215,7 @@ vi.mock('@duckdb/duckdb-wasm', () => {
 // Mock Cosmograph
 vi.mock('@cosmograph/react', () => ({
   Cosmograph: vi.fn(({ children }) => children),
+  CosmographProvider: vi.fn(({ children }) => children),
   useCosmograph: vi.fn(() => ({
     fitView: vi.fn(),
     zoomIn: vi.fn(),
