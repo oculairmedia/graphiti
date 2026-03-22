@@ -240,7 +240,10 @@ struct NodeUpdateResponse {
 async fn main() -> anyhow::Result<()> {
     // Initialize tracing
     tracing_subscriber::fmt()
-        .with_env_filter("graph_visualizer=debug,tower_http=debug")
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| "info,tower_http=info".parse().unwrap()),
+        )
         .init();
 
     // Connect to FalkorDB
@@ -1447,7 +1450,7 @@ async fn clear_cache(State(state): State<AppState>) -> Result<Json<CacheResponse
     *arrow_cache = None;
     drop(arrow_cache);
     
-    info!("Cache cleared: {} entries removed, arrow cache cleared", cleared_entries);
+    debug!("Cache cleared: {} entries removed, arrow cache cleared", cleared_entries);
     
     Ok(Json(CacheResponse {
         message: "Cache cleared successfully".to_string(),
@@ -2967,7 +2970,7 @@ async fn webhook_data_ingestion(
     State(state): State<AppState>,
     Json(webhook): Json<DataIngestionWebhook>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<ErrorResponse>)> {
-    info!("Received data ingestion webhook: operation={}, nodes={}, edges={}", 
+    debug!("Received data ingestion webhook: operation={}, nodes={}, edges={}", 
         webhook.operation, webhook.nodes.len(), webhook.edges.len());
     
     // Transform entities to Rust format
@@ -3009,7 +3012,7 @@ async fn webhook_data_ingestion(
             // handles cache invalidation. Clearing on every webhook was causing
             // 56 clears/min → 834% FalkorDB CPU from uncached reads.
             
-            info!("Webhook data processed: {} nodes, {} edges added", 
+            debug!("Webhook data processed: {} nodes, {} edges added", 
                 rust_nodes.len(), rust_edges.len());
             
             Ok(Json(serde_json::json!({

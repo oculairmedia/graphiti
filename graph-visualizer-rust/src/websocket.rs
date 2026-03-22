@@ -59,26 +59,22 @@ async fn handle_socket(mut socket: WebSocket, state: AppState) {
             
             // Broadcast delta updates (preferred)
             Ok(delta) = delta_rx.recv() => {
-                info!("Received delta broadcast for client {}", client_id);
+                debug!("Received delta broadcast for client {}", client_id);
                 if use_deltas {
                     if let Err(e) = send_delta_update(&mut socket, delta).await {
                         error!("Failed to send delta: {}", e);
                         break;
-                    } else {
-                        info!("Delta sent successfully to client {}", client_id);
                     }
                 }
             }
             
             // Broadcast full updates (fallback for clients that don't use deltas)
             Ok(update) = update_rx.recv() => {
-                info!("Received update broadcast for client {}", client_id);
+                debug!("Received update broadcast for client {}", client_id);
                 if !use_deltas {
                     if let Err(e) = send_full_update(&mut socket, update).await {
                         error!("Failed to send update: {}", e);
                         break;
-                    } else {
-                        info!("Update sent successfully to client {}", client_id);
                     }
                 } else {
                     // Client prefers deltas, skip full updates
