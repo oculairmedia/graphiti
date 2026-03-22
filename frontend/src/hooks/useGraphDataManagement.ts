@@ -135,41 +135,45 @@ export function useGraphDataManagement(config: UseGraphDataManagementConfig = {}
 
   // Track if this is the first render to avoid double-setting data
   const isFirstRenderRef = useRef(true);
-  const prevInitialNodesLengthRef = useRef(initialNodes.length);
+  const prevFingerprintRef = useRef('');
 
-  // CRITICAL FIX: Sync state when initialNodes/initialLinks props change
-  // This handles the case where data is loaded asynchronously (e.g., from DuckDB)
-  // and passed as props after initial render
+  // Lightweight fingerprint: length + first/last node ids
+  // Catches both length changes AND full data swaps (same-length, different content)
+  const dataFingerprint = useMemo(() => {
+    if (initialNodes.length === 0) return '0';
+    const first = initialNodes[0]?.id ?? '';
+    const last = initialNodes[initialNodes.length - 1]?.id ?? '';
+    return `${initialNodes.length}:${first}:${last}:${initialLinks.length}`;
+  }, [initialNodes, initialLinks]);
+
+  // Sync state when initialNodes/initialLinks props change
   useEffect(() => {
-    // Skip first render - state is already initialized with initialNodes
     if (isFirstRenderRef.current) {
       isFirstRenderRef.current = false;
+      prevFingerprintRef.current = dataFingerprint;
       return;
     }
 
-    // Only sync if the data has actually changed (not just reference)
-    const hasNewData = initialNodes.length > 0 && 
-      (initialNodes.length !== prevInitialNodesLengthRef.current || 
-       dataState.nodes.length === 0);
+    if (dataFingerprint === prevFingerprintRef.current) return;
+    prevFingerprintRef.current = dataFingerprint;
 
-    if (hasNewData) {
+    if (initialNodes.length === 0) return;
+
+    if (debug) {
       console.log('[useGraphDataManagement] Syncing with new initialNodes:', {
-        prevLength: prevInitialNodesLengthRef.current,
-        newLength: initialNodes.length,
+        fingerprint: dataFingerprint,
         currentStateLength: dataState.nodes.length
       });
-      prevInitialNodesLengthRef.current = initialNodes.length;
-      
-      // Update state with new data
-      setDataState(prev => ({
-        ...prev,
-        nodes: initialNodes,
-        links: initialLinks,
-        lastUpdate: Date.now(),
-        updateCount: prev.updateCount + 1
-      }));
     }
-  }, [initialNodes.length, initialLinks.length]);
+
+    setDataState(prev => ({
+      ...prev,
+      nodes: initialNodes,
+      links: initialLinks,
+      lastUpdate: Date.now(),
+      updateCount: prev.updateCount + 1
+    }));
+  }, [dataFingerprint]);
 
   // Cache management
   const cacheRef = useRef<Map<string, CacheEntry>>(new Map());

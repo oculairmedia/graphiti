@@ -198,7 +198,20 @@ export interface PreparedIncrementalData {
 
 // PERFORMANCE: Cache for sanitized nodes to avoid re-processing
 const sanitizationCache = new Map<string, SanitizedNode>();
-const CACHE_MAX_SIZE = 10000; // Limit cache size to prevent memory issues
+const CACHE_MAX_SIZE = 100000; // Sized for 57K+ node graph to prevent cache thrashing
+
+/**
+ * Deterministic pseudo-noise from an integer index.
+ * Replaces Math.random() for STDDEV_SAMP epsilon noise —
+ * same index always produces the same value, zero allocation cost.
+ */
+function pseudoNoise(index: number): number {
+  let h = (index * 2654435761) >>> 0;   // Knuth multiplicative hash
+  h = ((h >> 16) ^ h) * 0x45d9f3b;
+  h = ((h >> 16) ^ h) * 0x45d9f3b;
+  h = (h >> 16) ^ h;
+  return (h >>> 0) / 0xFFFFFFFF;        // 0..1
+}
 
 /**
  * Generate cache key for a node
@@ -233,10 +246,8 @@ export function sanitizeNode(
   const cacheKey = generateNodeCacheKey(node.id, config.clusteringMethod, isIncremental);
   if (sanitizationCache.has(cacheKey)) {
     const cached = sanitizationCache.get(cacheKey)!;
-    // PERFORMANCE FIX (GRAPH-62): Return shallow copy with updated index
-    // Mutating cached object in place was causing React to detect "changes" 
-    // and trigger unnecessary re-renders. Spread operator creates a new reference
-    // but reuses all the existing property values (cheap shallow copy).
+    // PERFORMANCE FIX (GRAPH-62): Only clone when index differs to reduce GC pressure
+    if (cached.index === Number(index)) return cached;
     return { ...cached, index: Number(index) };
   }
   
@@ -283,11 +294,10 @@ export function sanitizeNode(
     const betweennessValue = Number(sanitizedProperties.betweenness_centrality || 0);
     const eigenvectorValue = Number(sanitizedProperties.eigenvector_centrality || 0);
 
-    // Add tiny random noise to prevent STDDEV_SAMP errors
-    sanitizedNode.degree_centrality = degreeValue + (Math.random() * epsilon);
-    sanitizedNode.pagerank_centrality = pagerankValue + (Math.random() * epsilon);
-    sanitizedNode.betweenness_centrality = betweennessValue + (Math.random() * epsilon);
-    sanitizedNode.eigenvector_centrality = eigenvectorValue + (Math.random() * epsilon);
+    sanitizedNode.degree_centrality = degreeValue + (pseudoNoise(index) * epsilon);
+    sanitizedNode.pagerank_centrality = pagerankValue + (pseudoNoise(index + 1) * epsilon);
+    sanitizedNode.betweenness_centrality = betweennessValue + (pseudoNoise(index + 2) * epsilon);
+    sanitizedNode.eigenvector_centrality = eigenvectorValue + (pseudoNoise(index + 3) * epsilon);
 
     // Add x, y coordinates (required by cosmograph_points view)
     // For incremental updates, these will be null initially and computed by Cosmograph
@@ -363,11 +373,10 @@ export function sanitizeNode(
     const betweennessValue = Number(sanitizedProperties.betweenness_centrality || 0);
     const eigenvectorValue = Number(sanitizedProperties.eigenvector_centrality || 0);
     
-    // Add tiny random noise to centrality values to ensure variance
-    sanitizedNode.degree_centrality = degreeValue + (Math.random() * epsilon);
-    sanitizedNode.pagerank_centrality = pagerankValue + (Math.random() * epsilon);
-    sanitizedNode.betweenness_centrality = betweennessValue + (Math.random() * epsilon);
-    sanitizedNode.eigenvector_centrality = eigenvectorValue + (Math.random() * epsilon);
+    sanitizedNode.degree_centrality = degreeValue + (pseudoNoise(index) * epsilon);
+    sanitizedNode.pagerank_centrality = pagerankValue + (pseudoNoise(index + 1) * epsilon);
+    sanitizedNode.betweenness_centrality = betweennessValue + (pseudoNoise(index + 2) * epsilon);
+    sanitizedNode.eigenvector_centrality = eigenvectorValue + (pseudoNoise(index + 3) * epsilon);
     
     sanitizedNode.x = node.x ?? null;
     sanitizedNode.y = node.y ?? null;
