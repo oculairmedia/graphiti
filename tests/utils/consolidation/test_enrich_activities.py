@@ -113,9 +113,7 @@ async def test_regenerate_summaries_with_entities() -> None:
 
     # Now uses batch UNWIND query instead of individual SETs
     set_calls = [
-        call
-        for call in mock_driver.execute_query.call_args_list
-        if 'SET n.summary' in call.args[0]
+        call for call in mock_driver.execute_query.call_args_list if 'SET n.summary' in call.args[0]
     ]
     assert len(set_calls) == 1  # Single batch UNWIND query for all summaries
 
@@ -193,13 +191,12 @@ async def test_recalculate_centrality_calls_function() -> None:
     }
 
     with patch(
-        'graphiti_core.utils.maintenance.centrality_operations.calculate_all_centralities',
+        'graphiti_core.utils.maintenance.rust_centrality_client.RustCentralityClient.calculate_all_centralities',
         new=AsyncMock(return_value=mocked_scores),
     ) as mock_calc:
         result = await activities.recalculate_centrality()
 
     mock_calc.assert_awaited_once_with(
-        driver=mock_graphiti.driver,
         group_id=None,
         store_results=True,
     )
@@ -228,7 +225,7 @@ async def test_enrich_result_categories() -> None:
     centrality_graphiti = MagicMock()
     centrality_graphiti.driver = MagicMock()
     with patch(
-        'graphiti_core.utils.maintenance.centrality_operations.calculate_all_centralities',
+        'graphiti_core.utils.maintenance.rust_centrality_client.RustCentralityClient.calculate_all_centralities',
         new=AsyncMock(return_value={}),
     ):
         centrality_result = await _build_activities(centrality_graphiti).recalculate_centrality()

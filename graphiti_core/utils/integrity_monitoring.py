@@ -18,7 +18,6 @@ from collections import defaultdict
 import json
 
 from .post_save_validation import PostSaveValidator, IntegrityCheckResult
-from .centrality_validation import CentralityValidator
 from .validation_service import CentralizedValidationService, ValidationReport
 
 logger = logging.getLogger(__name__)
@@ -188,10 +187,8 @@ class IntegrityMonitoringService:
         # Initialize validators
         if driver:
             self.post_save_validator = PostSaveValidator(driver)
-            self.centrality_validator = CentralityValidator()
         else:
             self.post_save_validator = None
-            self.centrality_validator = CentralityValidator()
 
         # Monitoring configuration
         self.monitoring_enabled = (
@@ -339,74 +336,6 @@ class IntegrityMonitoringService:
                 severity=MonitoringSeverity.ERROR,
                 metric=MonitoringMetric.ORPHANED_EDGES,
                 message=f'Failed to check orphaned edges: {str(e)}',
-                details={'error': str(e)},
-            )
-            alerts.append(alert)
-
-        return alerts
-
-    async def check_centrality_validity(self) -> List[MonitoringAlert]:
-        """Check for invalid centrality values"""
-        if not self.driver:
-            return []
-
-        alerts = []
-
-        try:
-            async with self.driver.session() as session:
-                # Count entities with invalid centrality values
-                invalid_query = """
-                MATCH (n:Entity)
-                WHERE 
-                    n.centrality_degree < 0 OR n.centrality_degree > 1 OR
-                    n.centrality_pagerank < 0 OR n.centrality_pagerank > 1 OR
-                    n.centrality_betweenness < 0 OR n.centrality_betweenness > 1 OR
-                    n.centrality_eigenvector < 0 OR n.centrality_eigenvector > 1
-                RETURN count(n) as invalid_count, collect(n.uuid)[0..10] as sample_entity_ids
-                """
-                result = await session.run(invalid_query)
-                record = await result.single()
-                invalid_count = record['invalid_count'] if record else 0
-                sample_entity_ids = record['sample_entity_ids'] if record else []
-
-                # Get total entity count for percentage calculation
-                result = await session.run('MATCH (n:Entity) RETURN count(n) as total')
-                record = await result.single()
-                total_entities = record['total'] if record else 0
-
-                if invalid_count > 0 and total_entities > 0:
-                    invalid_percent = invalid_count / total_entities * 100
-
-                    if invalid_percent > self.thresholds.max_invalid_centrality_percent:
-                        severity = (
-                            MonitoringSeverity.WARNING
-                            if invalid_percent < 5.0
-                            else MonitoringSeverity.ERROR
-                        )
-                        alert = MonitoringAlert(
-                            id=f'invalid_centrality_{int(time.time())}',
-                            timestamp=datetime.now(),
-                            severity=severity,
-                            metric=MonitoringMetric.INVALID_CENTRALITY,
-                            message=f'Found {invalid_count} entities with invalid centrality values ({invalid_percent:.1f}% of total)',
-                            details={
-                                'invalid_count': invalid_count,
-                                'total_entities': total_entities,
-                                'invalid_percent': invalid_percent,
-                                'sample_entity_ids': sample_entity_ids,
-                            },
-                            entity_ids=sample_entity_ids,
-                        )
-                        alerts.append(alert)
-
-        except Exception as e:
-            logger.error(f'Error checking centrality validity: {e}')
-            alert = MonitoringAlert(
-                id=f'centrality_validity_error_{int(time.time())}',
-                timestamp=datetime.now(),
-                severity=MonitoringSeverity.ERROR,
-                metric=MonitoringMetric.INVALID_CENTRALITY,
-                message=f'Failed to check centrality validity: {str(e)}',
                 details={'error': str(e)},
             )
             alerts.append(alert)
@@ -578,7 +507,6 @@ class IntegrityMonitoringService:
         check_functions: List[Callable[[], Awaitable[List[MonitoringAlert]]]] = [
             self.check_entity_count_changes,
             self.check_orphaned_edges,
-            self.check_centrality_validity,
             self.check_duplicate_entities,
             self.check_missing_embeddings,
         ]

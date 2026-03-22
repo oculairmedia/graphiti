@@ -34,9 +34,6 @@ class TestValidationPhase:
     def test_deduplication_value(self):
         assert ValidationPhase.DEDUPLICATION.value == 'deduplication'
 
-    def test_centrality_value(self):
-        assert ValidationPhase.CENTRALITY.value == 'centrality'
-
     def test_integrity_check_value(self):
         assert ValidationPhase.INTEGRITY_CHECK.value == 'integrity_check'
 
@@ -75,7 +72,7 @@ class TestValidationIssue:
 
     def test_default_values(self):
         issue = ValidationIssue(
-            phase=ValidationPhase.CENTRALITY,
+            phase=ValidationPhase.PRE_SAVE,
             severity=ValidationSeverity.WARNING,
             message='Test warning',
         )
@@ -305,11 +302,9 @@ class TestValidationConfig:
         config = ValidationConfig()
         assert config.enable_pre_save_validation is True
         assert config.enable_post_save_validation is True
-        assert config.enable_centrality_validation is True
         assert config.enable_deduplication is True
         assert config.enable_integrity_checks is True
         assert config.fail_on_warnings is False
-        assert config.fail_on_centrality_errors is False
         assert config.max_validation_time == 300
         assert config.batch_size == 100
         assert config.parallel_validation is True
@@ -495,7 +490,7 @@ class TestCentralizedValidationService:
                 total_edges=10,
                 issues=[
                     ValidationIssue(
-                        phase=ValidationPhase.CENTRALITY,
+                        phase=ValidationPhase.PRE_SAVE,
                         severity=ValidationSeverity.ERROR,
                         message='Error 1',
                     ),
@@ -525,7 +520,6 @@ class TestCentralizedValidationServiceAsync:
     async def test_validate_entities_comprehensive_empty(self):
         config = ValidationConfig(
             enable_pre_save_validation=False,
-            enable_centrality_validation=False,
             enable_deduplication=False,
             audit_logging=False,
         )
@@ -540,7 +534,6 @@ class TestCentralizedValidationServiceAsync:
     async def test_validate_entities_comprehensive_single(self):
         config = ValidationConfig(
             enable_pre_save_validation=False,
-            enable_centrality_validation=False,
             enable_deduplication=False,
             audit_logging=False,
         )

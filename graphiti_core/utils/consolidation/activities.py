@@ -642,10 +642,10 @@ class ConsolidationActivities:
         graphiti = await self._get_graphiti()
         driver = graphiti.driver
 
-        from graphiti_core.utils.maintenance.centrality_operations import calculate_all_centralities
+        from graphiti_core.utils.maintenance.rust_centrality_client import RustCentralityClient
 
-        scores = await calculate_all_centralities(
-            driver=driver,
+        client = RustCentralityClient()
+        scores = await client.calculate_all_centralities(
             group_id=None,
             store_results=True,
         )

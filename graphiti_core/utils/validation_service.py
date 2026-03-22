@@ -2,7 +2,7 @@
 Centralized validation service that orchestrates all validation components.
 
 This service provides a unified interface for all validation operations,
-integrating pre-save hooks, post-save integrity checks, centrality validation,
+integrating pre-save hooks, post-save integrity checks,
 merge policies, and other validation components into a cohesive system.
 """
 
@@ -28,10 +28,6 @@ from graphiti_core.utils.post_save_validation import (
     IntegrityCheckResult,
     get_post_save_validator,
 )
-from graphiti_core.utils.centrality_validation import (
-    CentralityValidator,
-    CentralityValidationResult,
-)
 from graphiti_core.utils.merge_policies import EntityMerger, MergePolicyConfig, get_entity_merger
 from graphiti_core.utils.fuzzy_matching import FuzzyMatcher, FuzzyMatchingConfig, get_fuzzy_matcher
 
@@ -44,7 +40,6 @@ class ValidationPhase(Enum):
     PRE_SAVE = 'pre_save'
     POST_SAVE = 'post_save'
     DEDUPLICATION = 'deduplication'
-    CENTRALITY = 'centrality'
     INTEGRITY_CHECK = 'integrity_check'
     MERGE_CONFLICT = 'merge_conflict'
 
@@ -147,13 +142,11 @@ class ValidationConfig:
     # Phase enablement
     enable_pre_save_validation: bool = True
     enable_post_save_validation: bool = True
-    enable_centrality_validation: bool = True
     enable_deduplication: bool = True
     enable_integrity_checks: bool = True
 
     # Validation strictness
     fail_on_warnings: bool = False
-    fail_on_centrality_errors: bool = False
     max_validation_time: int = 300  # seconds
 
     # Deduplication settings
@@ -186,11 +179,9 @@ class ValidationConfig:
         return cls(
             enable_pre_save_validation=get_bool_env('VALIDATION_ENABLE_PRE_SAVE', True),
             enable_post_save_validation=get_bool_env('VALIDATION_ENABLE_POST_SAVE', True),
-            enable_centrality_validation=get_bool_env('VALIDATION_ENABLE_CENTRALITY', True),
             enable_deduplication=get_bool_env('VALIDATION_ENABLE_DEDUPLICATION', True),
             enable_integrity_checks=get_bool_env('VALIDATION_ENABLE_INTEGRITY', True),
             fail_on_warnings=get_bool_env('VALIDATION_FAIL_ON_WARNINGS', False),
-            fail_on_centrality_errors=get_bool_env('VALIDATION_FAIL_ON_CENTRALITY', False),
             max_validation_time=get_int_env('VALIDATION_MAX_TIME', 300),
             batch_size=get_int_env('VALIDATION_BATCH_SIZE', 100),
             parallel_validation=get_bool_env('VALIDATION_PARALLEL', True),
@@ -212,7 +203,6 @@ class CentralizedValidationService:
 
         # Initialize component validators
         self.hook_service = HookValidationService()
-        self.centrality_validator = CentralityValidator()
 
         # Driver-dependent services (initialized when driver is available)
         self.post_save_validator: Optional[PostSaveValidator] = None
@@ -263,11 +253,7 @@ class CentralizedValidationService:
             if self.config.enable_pre_save_validation:
                 await self._run_pre_save_validation(entities, report, context)
 
-            # Phase 2: Centrality validation
-            if self.config.enable_centrality_validation:
-                await self._run_centrality_validation(entities, report, context)
-
-            # Phase 3: Deduplication analysis (without actual merging)
+            # Phase 2: Deduplication analysis (without actual merging)
             if self.config.enable_deduplication:
                 await self._run_deduplication_analysis(entities, report, context)
 
@@ -468,41 +454,6 @@ class CentralizedValidationService:
 
         phase_time = (datetime.now() - phase_start).total_seconds()
         report.performance_metrics['pre_save_time'] = phase_time
-
-    async def _run_centrality_validation(
-        self, entities: List[Any], report: ValidationReport, context: Dict[str, Any]
-    ):
-        """Run centrality validation."""
-
-        phase_start = datetime.now()
-
-        for entity in entities:
-            entity_attrs = entity.__dict__ if hasattr(entity, '__dict__') else entity
-            entity_id = self._get_optional_str(entity, 'uuid')
-
-            # Run centrality validation
-            result = self.centrality_validator.validate_entity_centrality(entity_attrs)
-
-            if not result.is_valid:
-                severity = (
-                    ValidationSeverity.ERROR
-                    if self.config.fail_on_centrality_errors
-                    else ValidationSeverity.WARNING
-                )
-
-                for error in result.errors:
-                    report.add_issue(
-                        ValidationIssue(
-                            phase=ValidationPhase.CENTRALITY,
-                            severity=severity,
-                            message=error,
-                            entity_id=entity_id,
-                            suggested_fix='Recalculate centrality values or set to 0',
-                        )
-                    )
-
-        phase_time = (datetime.now() - phase_start).total_seconds()
-        report.performance_metrics['centrality_time'] = phase_time
 
     async def _run_deduplication_analysis(
         self, entities: List[Any], report: ValidationReport, context: Dict[str, Any]

@@ -51,10 +51,6 @@ from graphiti_core.utils.post_save_validation import (
     IntegrityCheckResult,
     run_post_save_checks,
 )
-from graphiti_core.utils.centrality_validation import (
-    CentralityValidator,
-    validate_entity_centrality,
-)
 from graphiti_core.utils.fuzzy_matching import (
     FuzzyMatcher,
     FuzzyMatchingConfig,
@@ -408,41 +404,6 @@ class ComprehensiveValidationTestSuite:
         assert len(results) > 0, 'Should have batch integrity results'
         print('✅ Batch post-save validation works')
 
-    async def test_centrality_validation_integration(self):
-        """Test centrality validation system."""
-        print('Testing centrality validation integration...')
-
-        validator = CentralityValidator()
-
-        # Test valid centrality values
-        valid_entity = self.test_data.create_valid_entity(
-            degree_centrality=0.5,
-            pagerank_centrality=0.3,
-            betweenness_centrality=0.2,
-            eigenvector_centrality=0.8,
-        )
-
-        result = validator.validate_entity_centrality(valid_entity)
-        assert result.is_valid, f'Valid centrality should pass: {result.errors}'
-        print('✅ Valid centrality validation works')
-
-        # Test invalid centrality values
-        invalid_entity = self.test_data.create_valid_entity(
-            degree_centrality=1.5,  # Invalid > 1
-            pagerank_centrality=-0.1,  # Invalid < 0
-            betweenness_centrality=float('nan'),  # Invalid NaN
-        )
-
-        result = validator.validate_entity_centrality(invalid_entity)
-        assert not result.is_valid, 'Invalid centrality should fail'
-        assert len(result.errors) >= 3, 'Should report multiple errors'
-        print('✅ Invalid centrality validation works')
-
-        # Test auto-correction
-        result = validator.validate_entity_centrality(invalid_entity, auto_correct=True)
-        assert result.corrected_values is not None, 'Should provide corrections'
-        print('✅ Centrality auto-correction works')
-
     async def test_fuzzy_matching_integration(self):
         """Test fuzzy matching and deduplication system."""
         print('Testing fuzzy matching integration...')
@@ -549,7 +510,6 @@ class ComprehensiveValidationTestSuite:
         config = ValidationConfig(
             enable_pre_save_validation=True,
             enable_post_save_validation=True,
-            enable_centrality_validation=True,
             enable_deduplication=True,
             batch_size=50,
             detailed_reports=True,
@@ -737,7 +697,6 @@ class ComprehensiveValidationTestSuite:
             self.test_transaction_management_integration,
             self.test_validation_hooks_integration,
             self.test_post_save_validation_integration,
-            self.test_centrality_validation_integration,
             self.test_fuzzy_matching_integration,
             self.test_merge_policies_integration,
             self.test_centralized_service_integration,

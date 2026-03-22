@@ -468,18 +468,6 @@ class EntityMerger:
         if not merged_entity.get('name'):
             raise ValueError('Merged entity must have a name')
 
-        # Centrality validation (if centrality validation is available)
-        try:
-            from graphiti_core.utils.centrality_validation import validate_entity_centrality
-
-            result = validate_entity_centrality(merged_entity, auto_correct=True)
-            if not result.is_valid:
-                logger.warning(f'Merged entity failed centrality validation: {result.errors}')
-                if result.corrected_values:
-                    merged_entity.update(result.corrected_values)
-        except ImportError:
-            pass  # Centrality validation not available
-
     def merge_with_conflict_report(
         self, entities: List[Dict[str, Any]], metadata: Optional[Dict[str, Any]] = None
     ) -> tuple[Dict[str, Any], Dict[str, List[str]]]:
