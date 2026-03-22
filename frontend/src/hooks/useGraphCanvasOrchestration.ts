@@ -31,6 +31,7 @@ import { useGraphFPS } from './useGraphFPS';
 import { useGraphNodeIndex } from './useGraphNodeIndex';
 import { useGraphLiveCounts } from './useGraphLiveCounts';
 import { useLoadingCoordinator } from '../contexts/LoadingCoordinator';
+import { useGraphStore } from '../stores/useGraphStore';
 import { inspectCosmographSchema, attachSchemaDebugger, isSchemaDebuggingEnabled } from '../utils/debugCosmographSchema';
 
 export interface GraphCanvasOrchestrationResult {
@@ -74,10 +75,12 @@ export function useGraphCanvasOrchestration(
   const cosmographRef = useRef<CosmographRef>(null);
   const [isReady, setIsReady] = useState(false);
   const [isCanvasReady, setIsCanvasReady] = useState(false);
-  const [loadingPhase, setLoadingPhase] = useState<string>('');
-  const [loadingProgress, setLoadingProgress] = useState<{ loaded: number; total: number }>({ loaded: 0, total: 0 });
   const nodesLengthRef = useRef<number>(0);
   const linksLengthRef = useRef<number>(0);
+
+  const streamingProgress = useGraphStore(state => state.streamingProgress);
+  const loadingPhase = streamingProgress.isStreaming ? streamingProgress.phase : '';
+  const loadingProgress = { loaded: streamingProgress.loaded, total: streamingProgress.total };
 
   // Schema debugger (conditional on debug flag)
   useEffect(() => {

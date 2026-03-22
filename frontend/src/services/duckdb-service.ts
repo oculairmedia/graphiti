@@ -3,6 +3,7 @@ import { loadDuckDB } from './duckdb-lazy-loader';
 import type * as duckdb from '@duckdb/duckdb-wasm';
 import { graphCache, type CacheDataItem } from './graph-cache';
 import { GraphNode, GraphLink } from '../types/graph';
+import { useGraphStore } from '../stores/useGraphStore';
 
 export interface DuckDBConfig {
   rustServerUrl: string;
@@ -28,11 +29,6 @@ export class DuckDBService {
   private _initialized = false;
   public readonly nodesTableName = 'nodes';
   public readonly edgesTableName = 'edges';
-  private _onProgress: ((loaded: number, total: number, phase: 'nodes' | 'edges') => void) | null = null;
-
-  set onProgress(callback: ((loaded: number, total: number, phase: 'nodes' | 'edges') => void) | null) {
-    this._onProgress = callback;
-  }
   
   get initialized(): boolean {
     return this._initialized;
@@ -464,7 +460,7 @@ export class DuckDBService {
 
         const loaded = Math.min(cursor + BATCH_SIZE, totalNodes);
         console.log(`[DuckDB] Nodes: ${loaded.toLocaleString()} / ${totalNodes.toLocaleString()}`);
-        this._onProgress?.(loaded, totalNodes, 'nodes');
+        useGraphStore.getState().setStreamingProgress(loaded, totalNodes, 'nodes');
 
         cursor = nextCursor ? parseInt(nextCursor, 10) : cursor + BATCH_SIZE;
 
@@ -504,7 +500,7 @@ export class DuckDBService {
 
         const loaded = Math.min(cursor + BATCH_SIZE, totalEdges);
         console.log(`[DuckDB] Edges: ${loaded.toLocaleString()} / ${totalEdges.toLocaleString()}`);
-        this._onProgress?.(loaded, totalEdges, 'edges');
+        useGraphStore.getState().setStreamingProgress(loaded, totalEdges, 'edges');
 
         cursor = nextCursor ? parseInt(nextCursor, 10) : cursor + BATCH_SIZE;
 
@@ -542,10 +538,13 @@ export class DuckDBService {
           strength
         FROM edges`);
 
+      useGraphStore.getState().clearStreamingProgress();
+
       const elapsed = ((performance.now() - startTime) / 1000).toFixed(2);
       console.log(`[DuckDB] Streaming load complete: ${totalNodes} nodes, ${totalEdges} edges in ${elapsed}s`);
 
     } catch (error) {
+      useGraphStore.getState().clearStreamingProgress();
       console.error('[DuckDB] Streaming load failed:', error);
       throw error;
     }

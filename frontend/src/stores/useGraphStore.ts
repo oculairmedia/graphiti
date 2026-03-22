@@ -7,6 +7,13 @@ interface LiveStats {
   lastUpdated: number;
 }
 
+interface StreamingProgress {
+  loaded: number;
+  total: number;
+  phase: 'nodes' | 'edges' | '';
+  isStreaming: boolean;
+}
+
 interface GraphState {
   // Simulation state
   isSimulationRunning: boolean;
@@ -20,6 +27,9 @@ interface GraphState {
   isRefreshing: boolean;
   error: string | null;
   
+  // Streaming progress for initial data load
+  streamingProgress: StreamingProgress;
+  
   // Actions
   setSimulationRunning: (running: boolean) => void;
   toggleSimulation: () => void;
@@ -32,6 +42,9 @@ interface GraphState {
   setRefreshing: (refreshing: boolean) => void;
   setError: (error: string | null) => void;
   clearError: () => void;
+  
+  setStreamingProgress: (loaded: number, total: number, phase: 'nodes' | 'edges') => void;
+  clearStreamingProgress: () => void;
 }
 
 export const useGraphStore = create<GraphState>()(
@@ -43,6 +56,7 @@ export const useGraphStore = create<GraphState>()(
     isLoading: false,
     isRefreshing: false,
     error: null,
+    streamingProgress: { loaded: 0, total: 0, phase: '', isStreaming: false },
     
     // Simulation actions
     setSimulationRunning: (running) => set({ isSimulationRunning: running }),
@@ -62,6 +76,13 @@ export const useGraphStore = create<GraphState>()(
     setRefreshing: (refreshing) => set({ isRefreshing: refreshing }),
     setError: (error) => set({ error }),
     clearError: () => set({ error: null }),
+    
+    setStreamingProgress: (loaded, total, phase) => set({
+      streamingProgress: { loaded, total, phase, isStreaming: true }
+    }),
+    clearStreamingProgress: () => set({
+      streamingProgress: { loaded: 0, total: 0, phase: '', isStreaming: false }
+    }),
   }))
 );
 

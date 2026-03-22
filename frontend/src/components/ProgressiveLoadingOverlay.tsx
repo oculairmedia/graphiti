@@ -18,10 +18,14 @@ export const ProgressiveLoadingOverlay: React.FC<ProgressiveLoadingOverlayProps>
   
   const percentage = total > 0 ? (loaded / total) * 100 : 0;
   const phaseLabels: Record<string, string> = {
+    'nodes': 'Loading nodes',
+    'edges': 'Loading edges',
     'core': 'Loading core structure',
     'secondary': 'Loading connected nodes',
     'peripheral': 'Loading peripheral nodes'
   };
+
+  const itemLabel = phase === 'edges' ? 'edges' : 'nodes';
   
   return (
     <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-50 bg-background/95 backdrop-blur-sm border rounded-lg p-4 shadow-lg transition-all duration-300">
@@ -31,7 +35,7 @@ export const ProgressiveLoadingOverlay: React.FC<ProgressiveLoadingOverlayProps>
         </div>
         <Progress value={percentage} className="h-2" />
         <div className="text-xs text-muted-foreground text-center">
-          {loaded.toLocaleString()} / {total.toLocaleString()} nodes
+          {loaded.toLocaleString()} / {total.toLocaleString()} {itemLabel}
         </div>
       </div>
     </div>
