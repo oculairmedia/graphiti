@@ -215,6 +215,7 @@ export function useGraphCanvasOrchestration(
     if (incrementalUpdatesReady && cosmographRef.current) {
       const success = await applyDelta(event as unknown as import('../utils/cosmographDataPreparer').DeltaUpdate);
       if (success) {
+        markIncrementalSyncRef.current?.();
         return;
       }
     }
@@ -235,7 +236,7 @@ export function useGraphCanvasOrchestration(
   useGraphWebSocket({
     enablePython: false,
     enableRust: true,
-    batchInterval: 100,
+    batchInterval: 500,
     onNodeAccess: handleNodeAccess,
     onGraphUpdate: handleGraphUpdate,
     onDeltaUpdate: handleDeltaUpdate,
