@@ -70,6 +70,9 @@ export function useCosmographIncrementalUpdates(
   // Track node ID to index mapping
   const nodeIdToIndexRef = useRef<Map<string, number>>(new Map());
   
+  // Throttle simulation restarts across rapid-fire deltas
+  const simRestartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  
   // Data preparer for consistent data transformation
   const dataPreparerRef = useRef<CosmographDataPreparer>(getGlobalDataPreparer(config));
   
@@ -205,21 +208,9 @@ export function useCosmographIncrementalUpdates(
       
       await cosmographRef.current.addPoints(sanitizedNodes);
       
-      // Update the index map
       sanitizedNodes.forEach((node) => {
         nodeIdToIndexRef.current.set(node.id, node.index);
       });
-      
-      // Keep simulation running smoothly after adding nodes
-      // Use start() with low alpha instead of restart() to avoid pausing
-      if (cosmographRef.current.start) {
-        cosmographRef.current.start(0.1); // Small alpha value for gentle energy addition
-        log('Started simulation with alpha=0.1 after adding nodes');
-      } else if (cosmographRef.current.restart) {
-        // Fallback to restart if start is not available
-        cosmographRef.current.restart();
-        log('Restarted simulation after adding nodes (fallback)');
-      }
       
       onSuccess?.('addNodes', nodes.length);
       return true;
@@ -348,17 +339,6 @@ export function useCosmographIncrementalUpdates(
       
       await cosmographRef.current.addLinks(sanitizedLinks);
       
-      // Keep simulation running smoothly after adding edges
-      // Use start() with low alpha instead of restart() to avoid pausing
-      if (cosmographRef.current.start) {
-        cosmographRef.current.start(0.05); // Even smaller alpha for edges as they affect less
-        log('Started simulation with alpha=0.05 after adding edges');
-      } else if (cosmographRef.current.restart) {
-        // Fallback to restart if start is not available
-        cosmographRef.current.restart();
-        log('Restarted simulation after adding edges (fallback)');
-      }
-      
       onSuccess?.('addEdges', sanitizedLinks.length);
       return true;
     } catch (error) {
@@ -472,6 +452,16 @@ export function useCosmographIncrementalUpdates(
       
       if (success) {
         log(`Delta applied successfully in ${duration.toFixed(2)}ms`);
+        
+        // Debounce simulation restart: wait 500ms of quiet before nudging physics.
+        // During rapid ingestion this collapses dozens of restarts into one.
+        if (simRestartTimerRef.current) clearTimeout(simRestartTimerRef.current);
+        simRestartTimerRef.current = setTimeout(() => {
+          if (cosmographRef.current?.start) {
+            cosmographRef.current.start(0.05);
+          }
+          simRestartTimerRef.current = null;
+        }, 500);
       } else {
         log(`Delta application partially failed in ${duration.toFixed(2)}ms`);
       }
