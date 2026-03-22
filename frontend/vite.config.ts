@@ -11,10 +11,10 @@ export default defineConfig(({ mode }) => ({
   build: {
     rollupOptions: {
       output: {
-        // CRITICAL FIX: Use object syntax to avoid circular dependencies
-        // Function-based manualChunks was causing React circular imports
         manualChunks: {
           'vendor-react': ['react', 'react-dom', 'react/jsx-runtime'],
+          'vendor-arrow': ['apache-arrow', 'flatbuffers'],
+          'vendor-query': ['@tanstack/react-query', '@tanstack/query-core'],
         },
         chunkFileNames: 'chunk-[hash].js',
       },
