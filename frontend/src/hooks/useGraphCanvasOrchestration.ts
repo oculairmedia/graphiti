@@ -179,7 +179,7 @@ export function useGraphCanvasOrchestration(
     nodes,
     links as GraphLink[],
     {
-      debug: true,
+      debug: import.meta.env.DEV,
       config: {
         clusteringMethod: config.clusteringMethod,
         centralityMetric: config.centralityMetric,

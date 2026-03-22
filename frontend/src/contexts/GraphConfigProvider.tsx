@@ -296,11 +296,13 @@ export function GraphConfigProvider({ children }: { children: ReactNode }) {
     hasLoadedPersistedRef.current = true;
     
     if (persistedConfig && Object.keys(persistedConfig).length > 0) {
-      console.log('GraphConfigProvider: Loading persisted config', {
-        hasNodeTypeColors: !!persistedConfig.nodeTypeColors,
-        nodeTypeColorsCount: Object.keys(persistedConfig.nodeTypeColors || {}).length,
-        colorScheme: persistedConfig.colorScheme
-      });
+      if (import.meta.env.DEV) {
+        console.log('GraphConfigProvider: Loading persisted config', {
+          hasNodeTypeColors: !!persistedConfig.nodeTypeColors,
+          nodeTypeColorsCount: Object.keys(persistedConfig.nodeTypeColors || {}).length,
+          colorScheme: persistedConfig.colorScheme
+        });
+      }
       
       const { stable: loadedStable, dynamic: loadedDynamic } = splitConfig(persistedConfig);
       
@@ -316,7 +318,9 @@ export function GraphConfigProvider({ children }: { children: ReactNode }) {
         // This happens when Episodic nodes were added after the config was saved
         let correctedFilteredNodeTypes = filteredNodeTypes;
         if (filteredNodeTypes && filteredNodeTypes.length === 1 && filteredNodeTypes[0] === 'Entity') {
-          console.log('GraphConfigProvider: Fixing legacy filteredNodeTypes - clearing filter to show all nodes');
+          if (import.meta.env.DEV) {
+            console.log('GraphConfigProvider: Fixing legacy filteredNodeTypes - clearing filter to show all nodes');
+          }
           correctedFilteredNodeTypes = []; // Clear filter to show all node types
         }
         
@@ -332,17 +336,21 @@ export function GraphConfigProvider({ children }: { children: ReactNode }) {
             nodeTypeVisibility: { ...prev.nodeTypeVisibility, ...(otherDynamicConfig.nodeTypeVisibility || {}) }
           };
           
-          console.log('GraphConfigProvider: Applied persisted dynamic config', {
-            nodeTypeColors: configToApply.nodeTypeColors,
-            nodeTypeVisibility: configToApply.nodeTypeVisibility,
-            filteredNodeTypes: configToApply.filteredNodeTypes
-          });
+          if (import.meta.env.DEV) {
+            console.log('GraphConfigProvider: Applied persisted dynamic config', {
+              nodeTypeColors: configToApply.nodeTypeColors,
+              nodeTypeVisibility: configToApply.nodeTypeVisibility,
+              filteredNodeTypes: configToApply.filteredNodeTypes
+            });
+          }
           
           return configToApply;
         });
       }
     } else {
-      console.log('GraphConfigProvider: No persisted config found, using defaults');
+      if (import.meta.env.DEV) {
+        console.log('GraphConfigProvider: No persisted config found, using defaults');
+      }
     }
     
     setIsLoadingPersistedConfig(false);
@@ -356,7 +364,9 @@ export function GraphConfigProvider({ children }: { children: ReactNode }) {
   const updateStableConfig = useCallback((updates: Partial<StableConfig>) => {
     // Don't allow updates while loading persisted config
     if (isLoadingPersistedConfig) {
-      console.log('GraphConfigProvider: Ignoring stable config update during load', updates);
+      if (import.meta.env.DEV) {
+        console.log('GraphConfigProvider: Ignoring stable config update during load', updates);
+      }
       return;
     }
     
@@ -377,7 +387,9 @@ export function GraphConfigProvider({ children }: { children: ReactNode }) {
   const updateDynamicConfig = useCallback((updates: Partial<DynamicConfig>) => {
     // Don't allow updates while loading persisted config
     if (isLoadingPersistedConfig) {
-      console.log('GraphConfigProvider: Ignoring dynamic config update during load', updates);
+      if (import.meta.env.DEV) {
+        console.log('GraphConfigProvider: Ignoring dynamic config update during load', updates);
+      }
       return;
     }
     
@@ -395,11 +407,13 @@ export function GraphConfigProvider({ children }: { children: ReactNode }) {
       // Persist immediately within setState to ensure we capture the right values
       setTimeout(() => {
         const fullConfig = { ...stableConfigRef.current, ...newConfig };
-        console.log('GraphConfigProvider: Persisting dynamic config', {
-          updateKeys: Object.keys(updates),
-          nodeTypeColors: newConfig.nodeTypeColors,
-          nodeTypeVisibility: newConfig.nodeTypeVisibility
-        });
+        if (import.meta.env.DEV) {
+          console.log('GraphConfigProvider: Persisting dynamic config', {
+            updateKeys: Object.keys(updates),
+            nodeTypeColors: newConfig.nodeTypeColors,
+            nodeTypeVisibility: newConfig.nodeTypeVisibility
+          });
+        }
         setPersistedConfig(fullConfig);
       }, 0);
       
@@ -434,7 +448,9 @@ export function GraphConfigProvider({ children }: { children: ReactNode }) {
     
     // Don't allow updates while loading persisted config
     if (isLoadingPersistedConfig) {
-      console.log('GraphConfigProvider: Ignoring node type config update during load');
+      if (import.meta.env.DEV) {
+        console.log('GraphConfigProvider: Ignoring node type config update during load');
+      }
       return;
     }
     
@@ -484,10 +500,14 @@ export function GraphConfigProvider({ children }: { children: ReactNode }) {
   }, [cosmographRef]);
   
   const fitView = useCallback(() => {
-    console.log('GraphConfigProvider: fitView called - using fallback zoom approach');
+    if (import.meta.env.DEV) {
+      console.log('GraphConfigProvider: fitView called - using fallback zoom approach');
+    }
     
     if (!cosmographRef?.current) {
-      console.warn('GraphConfigProvider: No cosmographRef available');
+      if (import.meta.env.DEV) {
+        console.warn('GraphConfigProvider: No cosmographRef available');
+      }
       return;
     }
     
@@ -499,13 +519,19 @@ export function GraphConfigProvider({ children }: { children: ReactNode }) {
         // This is a workaround since we can't access the actual fitView method
         const defaultZoom = 1.0;
         cosmographRef.current.setZoomLevel(defaultZoom, stableConfig.fitViewDuration);
-        console.log('GraphConfigProvider: Reset zoom to', defaultZoom);
+        if (import.meta.env.DEV) {
+          console.log('GraphConfigProvider: Reset zoom to', defaultZoom);
+        }
       } else {
-        console.error('GraphConfigProvider: setZoomLevel not available');
-        console.log('Available on ref:', Object.keys(cosmographRef.current));
+        if (import.meta.env.DEV) {
+          console.error('GraphConfigProvider: setZoomLevel not available');
+          console.log('Available on ref:', Object.keys(cosmographRef.current));
+        }
       }
     } catch (error) {
-      console.error('fitView error:', error);
+      if (import.meta.env.DEV) {
+        console.error('fitView error:', error);
+      }
     }
   }, [cosmographRef, stableConfig.fitViewDuration]);
   
