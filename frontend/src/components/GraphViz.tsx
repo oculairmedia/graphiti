@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useCallback, useMemo } from 'react';
+import React, { useRef, useEffect, useCallback, useMemo, useState } from 'react';
 import { useStableCallback } from '../hooks/useStableCallback';
 import { useGraphConfig } from '../contexts/GraphConfigProvider';
 import { ControlPanel } from './ControlPanel';
@@ -6,6 +6,16 @@ import { LazyGraphCanvas } from './LazyGraphCanvas';
 
 // GRAPH-93: Zustand stores for global state management
 import { useUIStore, useGraphStore, useSelectionStore } from '../stores';
+
+// Lazy-load CosmographProvider so @cosmograph/react stays out of the main bundle.
+// Must wrap both LazyGraphCanvas and GraphTimeline (both use useCosmograph).
+const LazyCosmographProvider = React.lazy(() =>
+  import('@cosmograph/react').then(mod => ({
+    default: ({ children }: { children: React.ReactNode }) => (
+      <mod.CosmographProvider>{children}</mod.CosmographProvider>
+    ),
+  }))
+);
 
 // Lazy load modal panels - PERFORMANCE FIX (GRAPH-42): Lazy load all conditional panels
 const FilterPanel = React.lazy(() => import('./FilterPanel').then(m => ({ default: m.FilterPanel })));
@@ -205,44 +215,45 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
 
             {/* Graph Canvas */}
             <div className="flex-1 relative overflow-hidden bg-background/5">
-              <LazyGraphCanvas
-                ref={graphCanvasRef}
-                nodes={cosmographNodes}
-                links={cosmographLinks}
-                selectedNodes={selectedNode ? [selectedNode.id] : []}
-                highlightedNodes={highlightedNodes ? Array.from(highlightedNodes) : []}
-                onNodeClick={handleNodeClick}
-                onNodeSelect={(nodeId: string) => {
-                  const node = cosmographNodes.find(n => n.id === nodeId);
-                  if (node) selectNode(node);
-                }}
-                onSelectNodes={(nodes: GraphNode[]) => {
-                  // Only select if we have nodes AND we're not intentionally clearing
-                  // The isClearingRef prevents race conditions when closing the panel
-                  if (nodes.length > 0 && !isClearingRef.current) {
-                    selectNode(nodes[0]);
-                  }
-                }}
-                onClearSelection={clearSelection}
-                onNodeHover={handleNodeHover}
-                onStatsUpdate={handleLiveStatsUpdate}
-                onContextReady={handleContextReady}
-              />
+              <React.Suspense fallback={<div className="flex-1 bg-background/5" />}>
+                <LazyCosmographProvider>
+                  <LazyGraphCanvas
+                    ref={graphCanvasRef}
+                    nodes={cosmographNodes}
+                    links={cosmographLinks}
+                    selectedNodes={selectedNode ? [selectedNode.id] : []}
+                    highlightedNodes={highlightedNodes ? Array.from(highlightedNodes) : []}
+                    onNodeClick={handleNodeClick}
+                    onNodeSelect={(nodeId: string) => {
+                      const node = cosmographNodes.find(n => n.id === nodeId);
+                      if (node) selectNode(node);
+                    }}
+                    onSelectNodes={(nodes: GraphNode[]) => {
+                      if (nodes.length > 0 && !isClearingRef.current) {
+                        selectNode(nodes[0]);
+                      }
+                    }}
+                    onClearSelection={clearSelection}
+                    onNodeHover={handleNodeHover}
+                    onStatsUpdate={handleLiveStatsUpdate}
+                    onContextReady={handleContextReady}
+                  />
 
-              {/* Timeline - Positioned absolutely at bottom of graph canvas */}
-              {isTimelineVisible && cosmographNodes.length > 0 && (
-                <div className="absolute bottom-0 left-0 right-0 z-20 bg-card/95 backdrop-blur-sm border-t border-border shadow-lg">
-                  <React.Suspense fallback={<div className="h-[180px] bg-background/50 animate-pulse" />}>
-                    <GraphTimeline
-                      ref={timelineRef}
-                      cosmographRef={graphCanvasRef}
-                      updateMode={timelineUpdateMode}
-                      selectedCount={selectedNode ? 1 : 0}
-                      onClearSelection={clearSelection}
-                    />
-                  </React.Suspense>
-                </div>
-              )}
+                  {isTimelineVisible && cosmographNodes.length > 0 && (
+                    <div className="absolute bottom-0 left-0 right-0 z-20 bg-card/95 backdrop-blur-sm border-t border-border shadow-lg">
+                      <React.Suspense fallback={<div className="h-[180px] bg-background/50 animate-pulse" />}>
+                        <GraphTimeline
+                          ref={timelineRef}
+                          cosmographRef={graphCanvasRef}
+                          updateMode={timelineUpdateMode}
+                          selectedCount={selectedNode ? 1 : 0}
+                          onClearSelection={clearSelection}
+                        />
+                      </React.Suspense>
+                    </div>
+                  )}
+                </LazyCosmographProvider>
+              </React.Suspense>
             </div>
 
             {/* Right Panel - Node Details */}

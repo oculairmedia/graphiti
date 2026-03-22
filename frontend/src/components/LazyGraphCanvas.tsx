@@ -4,20 +4,7 @@ import { Skeleton } from './ui/skeleton';
 import type { GraphCanvasRef } from '@/types/graphCanvas';
 import type { GraphCanvasComponentProps } from './GraphCanvasV2';
 
-// Lazy load GraphCanvasV2 AND CosmographProvider together so the entire
-// @cosmograph/react library stays out of the main bundle.
-const GraphCanvasWithProvider = React.lazy(() =>
-  Promise.all([
-    import('./GraphCanvasV2'),
-    import('@cosmograph/react'),
-  ]).then(([canvasModule, cosmographModule]) => ({
-    default: React.forwardRef<GraphCanvasRef, GraphCanvasComponentProps>((props, ref) => (
-      <cosmographModule.CosmographProvider>
-        <canvasModule.default ref={ref} {...props} />
-      </cosmographModule.CosmographProvider>
-    )),
-  }))
-);
+const GraphCanvas = React.lazy(() => import('./GraphCanvasV2'));
 
 const GraphCanvasLoader: React.FC = () => (
   <div className="w-full h-full bg-background flex items-center justify-center">
@@ -34,7 +21,7 @@ const GraphCanvasLoader: React.FC = () => (
 export const LazyGraphCanvas = React.forwardRef<GraphCanvasRef, GraphCanvasComponentProps>((props, ref) => {
   return (
     <Suspense fallback={<GraphCanvasLoader />}>
-      <GraphCanvasWithProvider ref={ref} {...props} />
+      <GraphCanvas ref={ref} {...props} />
     </Suspense>
   );
 });
