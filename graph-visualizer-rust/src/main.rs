@@ -2759,13 +2759,11 @@ async fn add_nodes(
             // Broadcast update to WebSocket clients
             state.broadcast_update(update.clone());
             
-            // Clear caches to ensure fresh data
-            state.graph_cache.clear();
-            let mut arrow_cache = state.arrow_cache.write().await;
-            *arrow_cache = None;
-            drop(arrow_cache);
+            // GRAPH-lfpd: Don't clear caches here — data is already in DuckDB and
+            // broadcast via WebSocket delta. The 5s poll loop handles cache invalidation.
+            // Clearing on every update was causing 56 clears/min → 834% FalkorDB CPU.
             
-            info!("Nodes added successfully, caches cleared");
+            info!("Nodes added successfully");
             
             Ok(Json(serde_json::json!({
                 "status": "success",
@@ -2806,13 +2804,10 @@ async fn add_edges(
             // Broadcast update to WebSocket clients
             state.broadcast_update(update.clone());
             
-            // Clear caches to ensure fresh data
-            state.graph_cache.clear();
-            let mut arrow_cache = state.arrow_cache.write().await;
-            *arrow_cache = None;
-            drop(arrow_cache);
+            // GRAPH-lfpd: Don't clear caches here — data is already in DuckDB and
+            // broadcast via WebSocket delta. The 5s poll loop handles cache invalidation.
             
-            info!("Edges added successfully, caches cleared");
+            info!("Edges added successfully");
             
             Ok(Json(serde_json::json!({
                 "status": "success",
@@ -2862,13 +2857,10 @@ async fn batch_update(
             // Broadcast update to WebSocket clients
             state.broadcast_update(update.clone());
             
-            // Clear caches to ensure fresh data
-            state.graph_cache.clear();
-            let mut arrow_cache = state.arrow_cache.write().await;
-            *arrow_cache = None;
-            drop(arrow_cache);
+            // GRAPH-lfpd: Don't clear caches here — data is already in DuckDB and
+            // broadcast via WebSocket delta. The 5s poll loop handles cache invalidation.
             
-            info!("Batch update successful, caches cleared");
+            info!("Batch update successful");
             
             Ok(Json(serde_json::json!({
                 "status": "success",
@@ -3012,11 +3004,10 @@ async fn webhook_data_ingestion(
             };
             state.broadcast_delta(delta);
             
-            // Clear caches to ensure fresh data
-            state.graph_cache.clear();
-            let mut arrow_cache = state.arrow_cache.write().await;
-            *arrow_cache = None;
-            drop(arrow_cache);
+            // GRAPH-lfpd: Don't clear caches here — data is already in DuckDB via
+            // process_updates() and broadcast via WebSocket delta. The 5s poll loop
+            // handles cache invalidation. Clearing on every webhook was causing
+            // 56 clears/min → 834% FalkorDB CPU from uncached reads.
             
             info!("Webhook data processed: {} nodes, {} edges added", 
                 rust_nodes.len(), rust_edges.len());
