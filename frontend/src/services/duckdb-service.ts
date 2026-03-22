@@ -336,8 +336,8 @@ export class DuckDBService {
         // For Arrow format cache, nodes and edges are byte arrays
         // Don't validate based on array length, that's byte count not node count
         const isValidCache = cached.metadata?.format === 'arrow' 
-          ? cached.nodes.length < 50000000 && cached.edges.length < 50000000  // 50MB limit for arrow data
-          : cached.nodes.length < 100000 && cached.edges.length < 200000;      // Node/edge count limit for JSON
+          ? cached.nodes.length < 200000000 && cached.edges.length < 200000000  // 200MB limit for arrow data
+          : cached.nodes.length < 200000 && cached.edges.length < 500000;
         
         if (!isValidCache) {
           console.warn('[DuckDB] Cache appears invalid, clearing and fetching fresh data');
@@ -400,14 +400,9 @@ export class DuckDBService {
           const edgeCount = await this.conn.query('SELECT COUNT(*) as count FROM edges');
           console.log(`[DuckDB] Verified: ${nodeCount.get(0)?.count} nodes and ${edgeCount.get(0)?.count} edges`);
           
-          // If counts are suspicious, clear cache
-          if (nodeCount.get(0)?.count > 50000 || edgeCount.get(0)?.count > 100000) {
-            console.warn('[DuckDB] Suspicious data size detected, clearing cache');
-            await graphCache.clearCache();
-            // Reload
-            await this.loadInitialData();
-            return;
-          }
+          // GRAPH-89iq: Removed "suspicious size" check that rejected graphs >50K nodes.
+          // The graph legitimately has 61K+ nodes. This check was clearing valid data
+          // and triggering a streaming reload fallback, causing only 1 node to render.
           return;
         }
       }
