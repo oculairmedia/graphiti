@@ -120,8 +120,13 @@ class TrainingDataStorage:
             )
             logger.debug(f'Recorded training example {example_id[:8]}... for {task}')
             return example_id
+        except RuntimeError as e:
+            if 'shutdown' in str(e).lower():
+                logger.debug('Training storage unavailable during shutdown: %s', e)
+                return example_id
+            raise
         except Exception as e:
-            logger.error(f'Failed to record training example: {e}')
+            logger.warning('Failed to record training example: %s', e)
             raise
 
     async def get_examples(

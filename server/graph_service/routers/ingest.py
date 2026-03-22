@@ -127,9 +127,7 @@ async def invalidate_cache() -> None:
         async with httpx.AsyncClient(timeout=timeout) as client:
             response = await client.post(f'{settings.rust_server_url}/api/cache/clear')
 
-            if response.status_code == 200:
-                logger.info('Cache invalidated successfully')
-            else:
+            if response.status_code != 200:
                 logger.warning('Cache invalidation failed: %d', response.status_code)
 
     except Exception as e:
@@ -144,22 +142,12 @@ class AsyncWorker:
     async def worker(self) -> None:
         while True:
             try:
-                print(f'Got a job: (size of remaining queue: {self.queue.qsize()})', flush=True)
                 job = await self.queue.get()
-                print(f'DEBUG: Job type: {type(job).__name__}', flush=True)
-                print(f'DEBUG: Job details: {str(job)[:200]}', flush=True)
                 await job()
-                print('Job completed successfully', flush=True)
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                print(f'ERROR_DEBUG: ❌ Error processing job: {type(e).__name__}: {e}', flush=True)
-                import traceback
-
-                full_traceback = traceback.format_exc()
-                print(f'ERROR_DEBUG: Full job processing traceback:\n{full_traceback}', flush=True)
-                logger.error(f'Job processing error: {e}')
-                logger.error(f'Full traceback: {full_traceback}')
+                logger.error('Job processing error: %s', e, exc_info=True)
 
     async def start(self) -> None:
         self.task = asyncio.create_task(self.worker())
@@ -267,13 +255,6 @@ async def add_messages(
     MAX_CONTENT_SIZE = 8000  # ~8KB - larger messages are truncated
 
     async def add_messages_task(m: Message) -> None:
-        print(
-            f'=== TASK DEBUG: Processing message - group_id={request.group_id}, name={m.name} ===',
-            flush=True,
-        )
-        print(f'TASK DEBUG: Message content: {m.content[:100]}...', flush=True)
-
-        # Truncate large content to prevent storage bloat
         content = m.content
         if len(content) > MAX_CONTENT_SIZE:
             original_size = len(content)
@@ -281,25 +262,14 @@ async def add_messages(
                 content[:MAX_CONTENT_SIZE]
                 + f'\n\n[... truncated {original_size - MAX_CONTENT_SIZE} chars ...]'
             )
-            print(
-                f'TASK DEBUG: Content truncated from {original_size} to {len(content)} chars',
-                flush=True,
-            )
             logger.warning(
-                f'Truncated large message content from {original_size} to {len(content)} chars for uuid={m.uuid}'
+                'Truncated message content from %d to %d chars for uuid=%s',
+                original_size,
+                len(content),
+                m.uuid,
             )
 
         try:
-            print(f'EPISODE_DEBUG: About to call add_episode for uuid={m.uuid}', flush=True)
-            print(f'EPISODE_DEBUG: Using graphiti instance: {type(graphiti).__name__}', flush=True)
-            print(
-                f'EPISODE_DEBUG: Driver type: {type(graphiti.driver).__name__ if hasattr(graphiti, "driver") else "Unknown"}',
-                flush=True,
-            )
-
-            # Note: We pass just m.content without role prefixes to avoid
-            # the LLM extracting garbage entities like "agentassistant" or "unknown_user".
-            # Role information is preserved in source_description for context.
             source_desc = m.source_description or ''
             if m.role:
                 source_desc = f'{m.role} ({m.role_type}): {source_desc}'
@@ -308,55 +278,14 @@ async def add_messages(
                 uuid=m.uuid,
                 group_id=request.group_id,
                 name=m.name,
-                episode_body=content,  # Raw content only, no role prefix (may be truncated)
+                episode_body=content,
                 reference_time=m.timestamp,
                 source=EpisodeType.message,
                 source_description=source_desc,
             )
 
-            print(
-                f'EPISODE_DEBUG: add_episode returned, result type: {type(result).__name__ if result else "None"}',
-                flush=True,
-            )
-
-            if result:
-                print(
-                    f'EPISODE_DEBUG: Episode created: {result.episode.uuid if hasattr(result, "episode") and result.episode else "No episode in result"}',
-                    flush=True,
-                )
-                print(
-                    f'EPISODE_DEBUG: Episode group_id: {result.episode.group_id if hasattr(result, "episode") and result.episode and hasattr(result.episode, "group_id") else "N/A"}',
-                    flush=True,
-                )
-                print(
-                    f'EPISODE_DEBUG: Entities created: {len(result.nodes) if hasattr(result, "nodes") and result.nodes else 0}',
-                    flush=True,
-                )
-
-                # Log the actual episode data
-                if hasattr(result, 'episode') and result.episode:
-                    print(
-                        f'EPISODE_DEBUG: Episode data - name: {result.episode.name if hasattr(result.episode, "name") else "N/A"}',
-                        flush=True,
-                    )
-                    print(
-                        f'EPISODE_DEBUG: Episode data - content: {result.episode.content[:100] if hasattr(result.episode, "content") else "N/A"}...',
-                        flush=True,
-                    )
-            else:
-                print('EPISODE_DEBUG: ⚠️ add_episode returned None!', flush=True)
-
-            logger.info(
-                f'DEBUG: add_episode result - episode created: {result.episode.uuid if result and result.episode else "None"}'
-            )
-            logger.info(
-                f'DEBUG: Entities created: {len(result.nodes) if result and result.nodes else 0}'
-            )
-
-            # Invalidate cache after successful data operation
             await invalidate_cache()
 
-            # Emit webhook for data ingestion
             if result and (result.nodes or result.edges):
                 from graph_service.webhooks import webhook_service
 
@@ -372,28 +301,15 @@ async def add_messages(
                         'source': m.source_description,
                     },
                 )
-                logger.info(
-                    f'Data ingestion webhook sent for episode {result.episode.uuid if result and result.episode else "None"}'
-                )
 
-            # Trigger centrality calculation for new data
             await trigger_centrality_calculation(request.group_id)
         except Exception as e:
-            logger.error(f'DEBUG: Error in add_episode: {type(e).__name__}: {e}')
+            logger.error('Error in add_episode for uuid=%s: %s', m.uuid, e)
             raise
 
-    print(
-        f'=== ADD_MESSAGES DEBUG: Received {len(request.messages)} messages for group_id={request.group_id} ===',
-        flush=True,
-    )
-
     for m in request.messages:
-        print(f'DEBUG: Queueing message - content={m.content[:50]}...', flush=True)
         task = partial(add_messages_task, m)
         await async_worker.queue.put(task)
-        print(f'DEBUG: Message queued, queue size: {async_worker.queue.qsize()}', flush=True)
-
-    print(f'=== ADD_MESSAGES DEBUG: All messages queued ===', flush=True)
     return Result(message='Messages added to processing queue', success=True)
 
 
@@ -429,7 +345,7 @@ async def add_entity_node(
             group_id=request.group_id,
             metadata={'entity_uuid': request.uuid, 'entity_name': request.name},
         )
-        logger.info(f'Data ingestion webhook sent for entity node {node.uuid}')
+        logger.debug('Entity node %s webhook sent', node.uuid)
 
     # Trigger centrality calculation for new node
     await trigger_centrality_calculation(request.group_id)
@@ -450,7 +366,7 @@ async def add_entity_edge(
     from fastapi import HTTPException
     from graphiti_core.edges import EntityEdge
     from graphiti_core.nodes import EntityNode
-    from graphiti_core.errors import NodeNotFoundError
+    from graphiti_core.errors import DuplicateEdgeError, NodeNotFoundError
     from graphiti_core.utils.datetime_utils import utc_now
 
     # Validate that source and target nodes exist
@@ -486,13 +402,13 @@ async def add_entity_edge(
     if graphiti.embedder:
         await edge.generate_embedding(graphiti.embedder)
 
-    # Save to graph
-    await edge.save(graphiti.driver)
+    try:
+        await edge.save(graphiti.driver)
+    except DuplicateEdgeError as e:
+        raise HTTPException(status_code=409, detail=str(e))
 
-    # Invalidate cache after successful data operation
     await invalidate_cache()
 
-    # Emit webhook for edge creation
     from graph_service.webhooks import webhook_service
 
     await webhook_service.emit_data_ingestion(
@@ -508,7 +424,7 @@ async def add_entity_edge(
             'edge_name': request.name,
         },
     )
-    logger.info(f'Data ingestion webhook sent for entity edge {edge.uuid}')
+    logger.info('Entity edge %s created', edge.uuid)
 
     # Trigger centrality calculation (new edges affect node importance)
     await trigger_centrality_calculation(request.group_id)

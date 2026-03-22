@@ -219,6 +219,7 @@ services:
       - ./server/graph_service/queue_proxy.py:/app/server/graph_service/queue_proxy.py:ro
       - ./server/graph_service/routers/search_proxy.py:/app/server/graph_service/routers/search_proxy.py:ro
       - ./server/graph_service/routers/ingest.py:/app/server/graph_service/routers/ingest.py:ro
+      - ./server/graph_service/webhooks.py:/app/server/graph_service/webhooks.py:ro
       - ./server/graph_service/dto/common.py:/app/server/graph_service/dto/common.py:ro
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY:-sk-dummy}
