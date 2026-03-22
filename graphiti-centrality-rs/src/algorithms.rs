@@ -823,26 +823,8 @@ pub async fn calculate_eigenvector_centrality(
     let start = Instant::now();
     info!("Starting eigenvector centrality calculation");
 
-    // First check if eigenvector centrality values already exist (pre-computed)
-    let precomputed_query = if let Some(group_id) = group_id {
-        format!(
-            "MATCH (n) WHERE n.group_id = '{}' AND EXISTS(n.eigenvector_centrality) 
-             RETURN n.uuid as uuid, n.eigenvector_centrality as score",
-            group_id
-        )
-    } else {
-        "MATCH (n) WHERE EXISTS(n.eigenvector_centrality) 
-         RETURN n.uuid as uuid, n.eigenvector_centrality as score"
-            .to_string()
-    };
-
-    debug!("Checking for pre-computed eigenvector values: {}", precomputed_query);
-    if let Ok(results) = client.execute_query(&precomputed_query, None).await {
-        if !results.is_empty() {
-            info!("Using pre-computed FalkorDB eigenvector values");
-            return process_pagerank_results(results, start);
-        }
-    }
+    // Always recalculate fresh — pre-computed check removed due to feedback loop
+    // where garbage values from failed runs get read back, perpetuating bad data.
 
     // Analyze graph connectivity to choose appropriate algorithm
     let connectivity = analyze_graph_connectivity(client, group_id).await?;
