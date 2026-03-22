@@ -28,6 +28,11 @@ export class DuckDBService {
   private _initialized = false;
   public readonly nodesTableName = 'nodes';
   public readonly edgesTableName = 'edges';
+  private _onProgress: ((loaded: number, total: number, phase: 'nodes' | 'edges') => void) | null = null;
+
+  set onProgress(callback: ((loaded: number, total: number, phase: 'nodes' | 'edges') => void) | null) {
+    this._onProgress = callback;
+  }
   
   get initialized(): boolean {
     return this._initialized;
@@ -411,53 +416,101 @@ export class DuckDBService {
         }
       }
       
-      // Fetch from server - PARALLEL loading for speed with cache-busting
-      console.log('[DuckDB] Cache miss or cleared, fetching from server (parallel)...');
-      
-      // Fetch nodes and edges in PARALLEL with cache-busting
-      const cacheBuster = `?t=${Date.now()}`;
-      const [nodesResponse, edgesResponse] = await Promise.all([
-        fetch(`${this.rustServerUrl}/api/arrow/nodes${cacheBuster}`, {
+      console.log('[DuckDB] Cache miss or cleared, fetching from server (streaming)...');
+      await this.loadInitialDataStreaming();
+    } catch (error) {
+      console.error('Failed to load initial data:', error);
+      throw error;
+    }
+  }
+
+  private async loadInitialDataStreaming(): Promise<void> {
+    if (!this.conn) throw new Error('DuckDB connection not initialized');
+
+    const BATCH_SIZE = 10000;
+    const startTime = performance.now();
+
+    try {
+      let cursor = 0;
+      let hasMore = true;
+      let totalNodes = 0;
+      let isFirstNodeChunk = true;
+
+      console.log('[DuckDB] Starting streaming node load...');
+
+      while (hasMore) {
+        const url = `${this.rustServerUrl}/api/arrow/nodes?limit=${BATCH_SIZE}&cursor=${cursor}`;
+        const response = await fetch(url, {
           cache: 'no-cache',
-          headers: {
-            'Cache-Control': 'no-cache',
-            'Pragma': 'no-cache'
-          }
-        }),
-        fetch(`${this.rustServerUrl}/api/arrow/edges${cacheBuster}`, {
+          headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to fetch nodes chunk at cursor=${cursor}: ${response.statusText}`);
+        }
+
+        totalNodes = parseInt(response.headers.get('X-Total-Count') || '0', 10);
+        hasMore = response.headers.get('X-Has-More') === 'true';
+        const nextCursor = response.headers.get('X-Next-Cursor');
+
+        const buffer = await response.arrayBuffer();
+        const table = arrow.tableFromIPC(new Uint8Array(buffer));
+
+        await this.conn.insertArrowTable(table, {
+          name: 'nodes',
+          create: isFirstNodeChunk
+        });
+        isFirstNodeChunk = false;
+
+        const loaded = Math.min(cursor + BATCH_SIZE, totalNodes);
+        console.log(`[DuckDB] Nodes: ${loaded.toLocaleString()} / ${totalNodes.toLocaleString()}`);
+        this._onProgress?.(loaded, totalNodes, 'nodes');
+
+        cursor = nextCursor ? parseInt(nextCursor, 10) : cursor + BATCH_SIZE;
+
+        await new Promise(resolve => setTimeout(resolve, 0));
+      }
+
+      cursor = 0;
+      hasMore = true;
+      let totalEdges = 0;
+      let isFirstEdgeChunk = true;
+
+      console.log('[DuckDB] Starting streaming edge load...');
+
+      while (hasMore) {
+        const url = `${this.rustServerUrl}/api/arrow/edges?limit=${BATCH_SIZE}&cursor=${cursor}`;
+        const response = await fetch(url, {
           cache: 'no-cache',
-          headers: {
-            'Cache-Control': 'no-cache',
-            'Pragma': 'no-cache'
-          }
-        })
-      ]);
-      
-      if (!nodesResponse.ok) {
-        throw new Error(`Failed to fetch nodes: ${nodesResponse.statusText}`);
+          headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to fetch edges chunk at cursor=${cursor}: ${response.statusText}`);
+        }
+
+        totalEdges = parseInt(response.headers.get('X-Total-Count') || '0', 10);
+        hasMore = response.headers.get('X-Has-More') === 'true';
+        const nextCursor = response.headers.get('X-Next-Cursor');
+
+        const buffer = await response.arrayBuffer();
+        const table = arrow.tableFromIPC(new Uint8Array(buffer));
+
+        await this.conn.insertArrowTable(table, {
+          name: 'edges',
+          create: isFirstEdgeChunk
+        });
+        isFirstEdgeChunk = false;
+
+        const loaded = Math.min(cursor + BATCH_SIZE, totalEdges);
+        console.log(`[DuckDB] Edges: ${loaded.toLocaleString()} / ${totalEdges.toLocaleString()}`);
+        this._onProgress?.(loaded, totalEdges, 'edges');
+
+        cursor = nextCursor ? parseInt(nextCursor, 10) : cursor + BATCH_SIZE;
+
+        await new Promise(resolve => setTimeout(resolve, 0));
       }
-      if (!edgesResponse.ok) {
-        throw new Error(`Failed to fetch edges: ${edgesResponse.statusText}`);
-      }
-      
-      // Process responses in PARALLEL
-      const [nodesArrayBuffer, edgesArrayBuffer] = await Promise.all([
-        nodesResponse.arrayBuffer(),
-        edgesResponse.arrayBuffer()
-      ]);
-      
-      // Convert to Arrow tables
-      const nodesTable = arrow.tableFromIPC(new Uint8Array(nodesArrayBuffer));
-      const edgesTable = arrow.tableFromIPC(new Uint8Array(edgesArrayBuffer));
-      
-      // Insert both tables (can't parallelize DuckDB inserts)
-      await this.conn.insertArrowTable(nodesTable, { name: 'nodes' });
-      await this.conn.insertArrowTable(edgesTable, { name: 'edges' });
-      
-      // Also create Cosmograph-specific views/tables that map to our data
-      // Cosmograph expects cosmograph_points and cosmograph_links tables
-      // Map our 'idx' column to 'index' that Cosmograph expects
-      // Include all possible columns, using NULL defaults for those that might not exist yet
+
       await this.conn.query(`CREATE OR REPLACE VIEW cosmograph_points AS
         SELECT
           idx as index,
@@ -488,23 +541,12 @@ export class DuckDBService {
           color,
           strength
         FROM edges`);
-      
-      // Get stats
-      const nodeCount = await this.conn.query('SELECT COUNT(*) as count FROM nodes');
-      const edgeCount = await this.conn.query('SELECT COUNT(*) as count FROM edges');
-      
-      console.log(`Loaded ${nodeCount.get(0)?.count} nodes and ${edgeCount.get(0)?.count} edges into DuckDB`);
-      
-      // For now, skip caching Arrow format data to avoid the byte array issue
-      // TODO: Implement proper binary data caching if needed
-      console.log(`[DuckDB] Arrow format data (${(nodesArrayBuffer.byteLength / 1048576).toFixed(2)}MB nodes, ${(edgesArrayBuffer.byteLength / 1048576).toFixed(2)}MB edges) - caching disabled for binary format`);
-      
-      // Note: We could implement binary caching in the future by:
-      // 1. Storing ArrayBuffers directly in IndexedDB (supported)
-      // 2. Or parsing Arrow format to JavaScript objects before caching
-      // For now, we rely on the browser's disk cache for the Arrow files
+
+      const elapsed = ((performance.now() - startTime) / 1000).toFixed(2);
+      console.log(`[DuckDB] Streaming load complete: ${totalNodes} nodes, ${totalEdges} edges in ${elapsed}s`);
+
     } catch (error) {
-      console.error('Failed to load initial data:', error);
+      console.error('[DuckDB] Streaming load failed:', error);
       throw error;
     }
   }
