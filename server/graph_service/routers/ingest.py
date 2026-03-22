@@ -56,30 +56,20 @@ async def _delayed_centrality_calculation() -> None:
         groups_to_process = list(_centrality_groups)
         _centrality_groups.clear()
 
-    print(
-        f'=== CENTRALITY_DEBUG: Processing centrality for {len(groups_to_process)} groups ===',
-        flush=True,
-    )
+    logger.debug('Processing centrality for %d groups', len(groups_to_process))
 
     try:
         settings = get_settings()
 
         if not settings.auto_centrality_enabled:
-            print('CENTRALITY_DEBUG: Automatic centrality disabled, skipping', flush=True)
+            logger.debug('Automatic centrality disabled, skipping')
             return
 
         if not settings.use_rust_centrality:
-            print('CENTRALITY_DEBUG: Rust centrality service disabled, skipping', flush=True)
+            logger.debug('Rust centrality service disabled, skipping')
             return
 
-        # Use the Rust centrality service
         async with httpx.AsyncClient(timeout=30.0) as client:
-            print(
-                f'CENTRALITY_DEBUG: Calling centrality service at {settings.rust_centrality_url}',
-                flush=True,
-            )
-
-            # If we have specific groups, process them individually
             if groups_to_process:
                 for group_id in groups_to_process:
                     try:
@@ -90,133 +80,60 @@ async def _delayed_centrality_calculation() -> None:
 
                         if response.status_code == 200:
                             result = response.json()
-                            print(
-                                f'CENTRALITY_DEBUG: ✅ Centrality for group {group_id} - processed {len(result.get("scores", {}))} nodes',
-                                flush=True,
+                            logger.debug(
+                                'Centrality for group %s: %d nodes',
+                                group_id,
+                                len(result.get('scores', {})),
                             )
                         else:
-                            print(
-                                f'CENTRALITY_DEBUG: ❌ Centrality for group {group_id} failed with status {response.status_code}',
-                                flush=True,
+                            logger.warning(
+                                'Centrality for group %s failed: %d',
+                                group_id,
+                                response.status_code,
                             )
                     except Exception as e:
-                        print(
-                            f'CENTRALITY_DEBUG: ❌ Error calculating centrality for group {group_id}: {e}',
-                            flush=True,
-                        )
+                        logger.error('Centrality error for group %s: %s', group_id, e)
             else:
-                # Process entire graph
                 try:
                     response = await client.post(
                         f'{settings.rust_centrality_url}/centrality/all',
-                        json={'store_results': True},  # No group_id means process all
+                        json={'store_results': True},
                     )
 
                     if response.status_code == 200:
                         result = response.json()
-                        print(
-                            f'CENTRALITY_DEBUG: ✅ Centrality calculation successful - processed {len(result.get("scores", {}))} nodes',
-                            flush=True,
-                        )
                         logger.info(
-                            f'Centrality calculated for {len(result.get("scores", {}))} nodes'
+                            'Centrality calculated for %d nodes',
+                            len(result.get('scores', {})),
                         )
                     else:
-                        print(
-                            f'CENTRALITY_DEBUG: ❌ Centrality calculation failed with status {response.status_code}',
-                            flush=True,
-                        )
-                        logger.warning(f'Centrality calculation failed: {response.status_code}')
+                        logger.warning('Centrality calculation failed: %d', response.status_code)
 
                 except Exception as e:
-                    print(
-                        f'CENTRALITY_DEBUG: ❌ Error calculating centrality for entire graph: {e}',
-                        flush=True,
-                    )
+                    logger.error('Centrality error for entire graph: %s', e)
     except Exception as e:
-        print(
-            f'CENTRALITY_DEBUG: ❌ Exception in centrality calculation: {type(e).__name__}: {e}',
-            flush=True,
-        )
-        logger.error(f'Error in centrality calculation: {e}')
-        # Don't fail the main operation if centrality calculation fails
+        logger.error('Exception in centrality calculation: %s', e)
 
 
 async def invalidate_cache() -> None:
-    """Invalidate the Rust server cache after data changes"""
-    print(f'=== CACHE_INVALIDATION_DEBUG: Function called at {datetime.now()} ===', flush=True)
-
+    """Invalidate the Rust server cache after data changes."""
     try:
         settings = get_settings()
-        print(
-            f'CACHE_DEBUG: Settings loaded - enable_cache_invalidation={settings.enable_cache_invalidation}',
-            flush=True,
-        )
-        print(f'CACHE_DEBUG: rust_server_url={settings.rust_server_url}', flush=True)
-        print(
-            f'CACHE_DEBUG: cache_invalidation_timeout={settings.cache_invalidation_timeout}ms',
-            flush=True,
-        )
 
         if not settings.enable_cache_invalidation:
-            print('CACHE_DEBUG: Cache invalidation disabled, returning early', flush=True)
             return
 
-        timeout = settings.cache_invalidation_timeout / 1000.0  # Convert to seconds
-        print(f'CACHE_DEBUG: About to make HTTP request with timeout={timeout}s', flush=True)
-        print(f'CACHE_DEBUG: Target URL: {settings.rust_server_url}/api/cache/clear', flush=True)
-
-        # Test network connectivity first
-        print('NETWORK_DEBUG: Testing network connectivity to Rust server...', flush=True)
-        try:
-            async with httpx.AsyncClient(timeout=2.0) as test_client:
-                print(
-                    f'NETWORK_DEBUG: Attempting health check to {settings.rust_server_url}/health',
-                    flush=True,
-                )
-                health_response = await test_client.get(f'{settings.rust_server_url}/health')
-                print(
-                    f'NETWORK_DEBUG: Health check status: {health_response.status_code}', flush=True
-                )
-                print(
-                    f'NETWORK_DEBUG: Health check response: {health_response.text[:100]}',
-                    flush=True,
-                )
-        except Exception as conn_e:
-            print(
-                f'NETWORK_DEBUG: ❌ Network connectivity test failed: {type(conn_e).__name__}: {conn_e}',
-                flush=True,
-            )
-
+        timeout = settings.cache_invalidation_timeout / 1000.0
         async with httpx.AsyncClient(timeout=timeout) as client:
-            print('CACHE_DEBUG: HTTP client created, making POST request', flush=True)
             response = await client.post(f'{settings.rust_server_url}/api/cache/clear')
-            print(
-                f'CACHE_DEBUG: HTTP response received - status_code={response.status_code}',
-                flush=True,
-            )
-            print(f'CACHE_DEBUG: Response headers: {dict(response.headers)}', flush=True)
-            print(f'CACHE_DEBUG: Response body: {response.text[:200]}', flush=True)
 
             if response.status_code == 200:
-                print('CACHE_DEBUG: ✅ Cache invalidated successfully', flush=True)
                 logger.info('Cache invalidated successfully')
             else:
-                print(
-                    f'CACHE_DEBUG: ❌ Cache invalidation failed with status {response.status_code}',
-                    flush=True,
-                )
-                logger.warning(f'Cache invalidation failed: {response.status_code}')
+                logger.warning('Cache invalidation failed: %d', response.status_code)
 
     except Exception as e:
-        print(f'CACHE_DEBUG: ❌ Exception in invalidate_cache: {type(e).__name__}: {e}', flush=True)
-        import traceback
-
-        full_traceback = traceback.format_exc()
-        print(f'CACHE_DEBUG: Full traceback:\n{full_traceback}', flush=True)
-        logger.error(f'Error invalidating cache: {e}')
-        logger.error(f'Full traceback: {full_traceback}')
-        # Don't fail the main operation if cache invalidation fails
+        logger.error('Error invalidating cache: %s', e)
 
 
 class AsyncWorker:

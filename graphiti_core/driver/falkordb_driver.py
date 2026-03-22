@@ -35,7 +35,6 @@ else:
 from graphiti_core.driver.driver import GraphDriver, GraphDriverSession
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
 
 
 def _is_vector_list(val: Any) -> bool:
@@ -192,7 +191,7 @@ class FalkorDriverSession(GraphDriverSession):
                 params = _preprocess_vectors_in_params(params)
                 wrapped_cypher = _wrap_vector_params_in_query(str(cypher), params)
                 summary = _summarize_params(params)
-                logger.info(
+                logger.debug(
                     'Falkor RUN(list) query:\n%s\nparams=%s', wrapped_cypher[:2000], summary
                 )
                 try:
@@ -226,7 +225,7 @@ class FalkorDriverSession(GraphDriverSession):
             params = _preprocess_vectors_in_params(params)
             wrapped_query = _wrap_vector_params_in_query(str(query), params)
             summary = _summarize_params(params)
-            logger.info('Falkor RUN query:\n%s\nparams=%s', wrapped_query[:2000], summary)
+            logger.debug('Falkor RUN query:\n%s\nparams=%s', wrapped_query[:2000], summary)
             try:
                 result = await self.graph.query(wrapped_query, params)  # type: ignore[reportUnknownArgumentType]
                 # Convert result to list of dicts
@@ -330,7 +329,7 @@ class FalkorDriver(GraphDriver):
         cypher_query_ = _wrap_vector_params_in_query(cypher_query_, params)
 
         summary = _summarize_params(params)
-        logger.info(
+        logger.debug(
             "Falkor EXECUTE query on graph '%s':\n%s\nparams=%s",
             graph_name,
             cypher_query_[:2000],
