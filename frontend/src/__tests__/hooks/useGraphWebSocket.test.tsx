@@ -115,7 +115,7 @@ describe('useGraphWebSocket', () => {
         })
       );
       
-      expect(result.current.statistics.nodeAccessEvents).toBe(1);
+      expect(result.current.statistics.current.nodeAccessEvents).toBe(1);
     });
 
     it('should handle graph update events', () => {
@@ -136,7 +136,7 @@ describe('useGraphWebSocket', () => {
         })
       );
       
-      expect(result.current.statistics.totalUpdates).toBe(1);
+      expect(result.current.statistics.current.totalUpdates).toBe(1);
     });
 
     it('should handle cache invalidate events', () => {
@@ -156,7 +156,7 @@ describe('useGraphWebSocket', () => {
         })
       );
       
-      expect(result.current.statistics.cacheInvalidations).toBe(1);
+      expect(result.current.statistics.current.cacheInvalidations).toBe(1);
     });
   });
 
