@@ -30,10 +30,31 @@ export function useRustWebSocket(options: RustWebSocketOptions = {}) {
     reconnectDelay = 1000,
   } = options;
 
+  const DELTA_BATCH_INTERVAL_MS = 500;
+
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectCountRef = useRef(0);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const isConnectingRef = useRef(false);
+  const deltaBatchRef = useRef<{ nodes: GraphNode[]; edges: GraphEdge[] }>({ nodes: [], edges: [] });
+  const batchTimerRef = useRef<NodeJS.Timeout | undefined>(undefined);
+
+  const flushDeltaBatch = useCallback(() => {
+    const batch = deltaBatchRef.current;
+    if ((batch.nodes.length === 0 && batch.edges.length === 0) || !onDeltaUpdate) return;
+
+    const flushed: DeltaUpdate = {
+      type: 'graph:delta',
+      data: {
+        operation: 'add',
+        nodes: batch.nodes,
+        edges: batch.edges,
+        timestamp: Date.now(),
+      },
+    };
+    deltaBatchRef.current = { nodes: [], edges: [] };
+    onDeltaUpdate(flushed);
+  }, [onDeltaUpdate]);
 
   const connect = useCallback(() => {
     // Prevent duplicate connections
@@ -78,24 +99,21 @@ export function useRustWebSocket(options: RustWebSocketOptions = {}) {
       ws.onmessage = (event) => {
         try {
           const message = JSON.parse(event.data);
-          // Handle both graph:delta and graph:update message types
           if ((message.type === 'graph:delta' || message.type === 'graph:update') && onDeltaUpdate) {
-            
-            // Transform graph:update to delta format if needed
-            if (message.type === 'graph:update' && message.data) {
-              // Assume it's an add operation for new data
-              const deltaMessage: DeltaUpdate = {
-                type: 'graph:delta',
-                data: {
-                  operation: 'add' as const,
-                  nodes: message.data.nodes || [],
-                  edges: message.data.edges || [],
-                  timestamp: message.data.timestamp || Date.now()
-                }
-              };
-              onDeltaUpdate(deltaMessage);
-            } else {
-              onDeltaUpdate(message);
+            const data = message.data;
+            if (!data) return;
+
+            const nodes = (data.nodes_added || data.nodes || []) as GraphNode[];
+            const edges = (data.edges_added || data.edges || []) as GraphEdge[];
+
+            if (nodes.length > 0) deltaBatchRef.current.nodes.push(...nodes);
+            if (edges.length > 0) deltaBatchRef.current.edges.push(...edges);
+
+            if (!batchTimerRef.current) {
+              batchTimerRef.current = setTimeout(() => {
+                batchTimerRef.current = undefined;
+                flushDeltaBatch();
+              }, DELTA_BATCH_INTERVAL_MS);
             }
           }
         } catch (error) {
@@ -127,12 +145,15 @@ export function useRustWebSocket(options: RustWebSocketOptions = {}) {
       logError('[useRustWebSocket] Failed to create WebSocket:', error);
       isConnectingRef.current = false;
     }
-  }, [onDeltaUpdate, reconnectAttempts, reconnectDelay]);
+  }, [onDeltaUpdate, reconnectAttempts, reconnectDelay, flushDeltaBatch]);
 
   useEffect(() => {
     connect();
 
     return () => {
+      if (batchTimerRef.current) {
+        clearTimeout(batchTimerRef.current);
+      }
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
       }

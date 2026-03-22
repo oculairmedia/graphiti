@@ -449,15 +449,13 @@ export function useCosmographIncrementalUpdates(
       if (success) {
         log(`Delta applied successfully in ${duration.toFixed(2)}ms`);
         
-        // Debounce simulation restart: wait 500ms of quiet before nudging physics.
-        // During rapid ingestion this collapses dozens of restarts into one.
         if (simRestartTimerRef.current) clearTimeout(simRestartTimerRef.current);
         simRestartTimerRef.current = setTimeout(() => {
           if (cosmographRef.current?.start) {
             cosmographRef.current.start(0.05);
           }
           simRestartTimerRef.current = null;
-        }, 500);
+        }, 2000);
       } else {
         log(`Delta application partially failed in ${duration.toFixed(2)}ms`);
       }
