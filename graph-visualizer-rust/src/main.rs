@@ -189,6 +189,12 @@ struct QueryParams {
     search: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+struct ArrowPaginationParams {
+    cursor: Option<usize>,
+    limit: Option<usize>,
+}
+
 #[derive(Debug, Serialize)]
 struct QueryResponse {
     data: GraphData,
@@ -1015,7 +1021,16 @@ async fn main() -> anyhow::Result<()> {
         .route("/metrics", get(prometheus_metrics))  // GRAPH-110: Prometheus metrics endpoint
         .route("/ws", get(websocket_handler))
         .layer(CompressionLayer::new())  // Add gzip/brotli compression
-        .layer(CorsLayer::permissive())
+        .layer(
+            CorsLayer::permissive().expose_headers([
+                header::ETAG,
+                header::HeaderName::from_static("x-arrow-schema"),
+                header::HeaderName::from_static("x-cache-hit"),
+                header::HeaderName::from_static("x-total-count"),
+                header::HeaderName::from_static("x-has-more"),
+                header::HeaderName::from_static("x-next-cursor"),
+            ])
+        )
         .with_state(state);
 
     let addr = std::env::var("BIND_ADDR").unwrap_or_else(|_| "0.0.0.0:3000".to_string());
@@ -2351,10 +2366,55 @@ async fn get_duckdb_info(State(_state): State<AppState>) -> Result<Json<serde_js
 
 async fn get_nodes_arrow(
     State(state): State<AppState>,
+    Query(params): Query<ArrowPaginationParams>,
     headers: HeaderMap,
 ) -> Result<Response<Body>, (StatusCode, Json<ErrorResponse>)> {
-    // Check cache first (unless disabled or force fresh)
-    if state.cache_config.enabled && !state.cache_config.force_fresh {
+    let pagination_requested = params.limit.is_some() || params.cursor.is_some();
+
+    if let Some(limit) = params.limit {
+        let cursor = params.cursor.unwrap_or(0);
+        match state.duckdb_store.get_nodes_as_arrow_paginated(limit, cursor).await {
+            Ok((batch, total_count)) => {
+                match ArrowConverter::record_batch_to_bytes(&batch) {
+                    Ok(bytes) => {
+                        let has_more = cursor.saturating_add(limit) < total_count;
+                        let mut response = Response::builder()
+                            .status(StatusCode::OK)
+                            .header(header::CONTENT_TYPE, "application/vnd.apache.arrow.stream")
+                            .header("X-Arrow-Schema", "nodes")
+                            .header("X-Cache-Hit", "false")
+                            .header("X-Total-Count", total_count.to_string())
+                            .header("X-Has-More", has_more.to_string());
+
+                        if has_more {
+                            response = response.header("X-Next-Cursor", cursor.saturating_add(limit).to_string());
+                        }
+
+                        Ok(response.body(Body::from(Bytes::from(bytes))).unwrap())
+                    }
+                    Err(e) => {
+                        error!("Failed to convert nodes to Arrow: {}", e);
+                        Err((
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            Json(ErrorResponse {
+                                error: format!("Failed to convert to Arrow: {}", e),
+                            }),
+                        ))
+                    }
+                }
+            }
+            Err(e) => {
+                error!("Failed to get paginated nodes from DuckDB: {}", e);
+                Err((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ErrorResponse {
+                        error: format!("Failed to retrieve nodes: {}", e),
+                    }),
+                ))
+            }
+        }
+    } else {
+        if !pagination_requested && state.cache_config.enabled && !state.cache_config.force_fresh {
         let cache = state.arrow_cache.read().await;
         if let Some(ref cached) = *cache {
             // Check if client has the same version (ETag)
@@ -2388,6 +2448,8 @@ async fn get_nodes_arrow(
             }
         }
         drop(cache); // Release read lock
+    } else if state.cache_config.enabled && !state.cache_config.force_fresh {
+        debug!("Skipping Arrow cache for paginated nodes request");
     } else {
         debug!("Cache disabled or force fresh data requested");
     }
@@ -2401,13 +2463,15 @@ async fn get_nodes_arrow(
                     // Generate ETag for new data
                     let etag = ArrowCache::generate_etag(&bytes);
                     
-                    // Update cache if we have edges too
-                    let mut cache = state.arrow_cache.write().await;
-                    if let Some(cached) = cache.as_mut() {
-                        cached.nodes_batch = batch;
-                        cached.nodes_bytes = bytes.clone();
-                        cached.nodes_etag = etag.clone();
-                        cached.timestamp = std::time::Instant::now();
+                    if !pagination_requested {
+                        // Update cache if we have edges too
+                        let mut cache = state.arrow_cache.write().await;
+                        if let Some(cached) = cache.as_mut() {
+                            cached.nodes_batch = batch;
+                            cached.nodes_bytes = bytes.clone();
+                            cached.nodes_etag = etag.clone();
+                            cached.timestamp = std::time::Instant::now();
+                        }
                     }
                     
                     // Note: Compression is handled by CompressionLayer middleware
@@ -2443,14 +2507,60 @@ async fn get_nodes_arrow(
             ))
         }
     }
+    }
 }
 
 async fn get_edges_arrow(
     State(state): State<AppState>,
+    Query(params): Query<ArrowPaginationParams>,
     headers: HeaderMap,
 ) -> Result<Response<Body>, (StatusCode, Json<ErrorResponse>)> {
-    // Check cache first (unless disabled or force fresh)
-    if state.cache_config.enabled && !state.cache_config.force_fresh {
+    let pagination_requested = params.limit.is_some() || params.cursor.is_some();
+
+    if let Some(limit) = params.limit {
+        let cursor = params.cursor.unwrap_or(0);
+        match state.duckdb_store.get_edges_as_arrow_paginated(limit, cursor).await {
+            Ok((batch, total_count)) => {
+                match ArrowConverter::record_batch_to_bytes(&batch) {
+                    Ok(bytes) => {
+                        let has_more = cursor.saturating_add(limit) < total_count;
+                        let mut response = Response::builder()
+                            .status(StatusCode::OK)
+                            .header(header::CONTENT_TYPE, "application/vnd.apache.arrow.stream")
+                            .header("X-Arrow-Schema", "edges")
+                            .header("X-Cache-Hit", "false")
+                            .header("X-Total-Count", total_count.to_string())
+                            .header("X-Has-More", has_more.to_string());
+
+                        if has_more {
+                            response = response.header("X-Next-Cursor", cursor.saturating_add(limit).to_string());
+                        }
+
+                        Ok(response.body(Body::from(Bytes::from(bytes))).unwrap())
+                    }
+                    Err(e) => {
+                        error!("Failed to convert edges to Arrow: {}", e);
+                        Err((
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            Json(ErrorResponse {
+                                error: format!("Failed to convert to Arrow: {}", e),
+                            }),
+                        ))
+                    }
+                }
+            }
+            Err(e) => {
+                error!("Failed to get paginated edges from DuckDB: {}", e);
+                Err((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ErrorResponse {
+                        error: format!("Failed to retrieve edges: {}", e),
+                    }),
+                ))
+            }
+        }
+    } else {
+        if !pagination_requested && state.cache_config.enabled && !state.cache_config.force_fresh {
         let cache = state.arrow_cache.read().await;
         if let Some(ref cached) = *cache {
             // Check if client has the same version (ETag)
@@ -2484,6 +2594,8 @@ async fn get_edges_arrow(
             }
         }
         drop(cache); // Release read lock
+    } else if state.cache_config.enabled && !state.cache_config.force_fresh {
+        debug!("Skipping Arrow cache for paginated edges request");
     } else {
         debug!("Cache disabled or force fresh data requested");
     }
@@ -2497,13 +2609,15 @@ async fn get_edges_arrow(
                     // Generate ETag for new data
                     let etag = ArrowCache::generate_etag(&bytes);
                     
-                    // Update cache if we have nodes too
-                    let mut cache = state.arrow_cache.write().await;
-                    if let Some(cached) = cache.as_mut() {
-                        cached.edges_batch = batch;
-                        cached.edges_bytes = bytes.clone();
-                        cached.edges_etag = etag.clone();
-                        cached.timestamp = std::time::Instant::now();
+                    if !pagination_requested {
+                        // Update cache if we have nodes too
+                        let mut cache = state.arrow_cache.write().await;
+                        if let Some(cached) = cache.as_mut() {
+                            cached.edges_batch = batch;
+                            cached.edges_bytes = bytes.clone();
+                            cached.edges_etag = etag.clone();
+                            cached.timestamp = std::time::Instant::now();
+                        }
                     }
                     
                     // Note: Compression is handled by CompressionLayer middleware
@@ -2538,6 +2652,7 @@ async fn get_edges_arrow(
                 }),
             ))
         }
+    }
     }
 }
 

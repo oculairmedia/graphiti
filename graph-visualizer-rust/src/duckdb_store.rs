@@ -603,6 +603,110 @@ impl DuckDBStore {
         
         Ok(batch)
     }
+
+    pub async fn get_nodes_as_arrow_paginated(&self, limit: usize, offset: usize) -> Result<(RecordBatch, usize)> {
+        let conn = self.conn.lock().await;
+
+        let total_count: usize = conn.query_row(
+            "SELECT COUNT(*) FROM nodes",
+            params![],
+            |row| row.get(0),
+        )?;
+
+        let mut stmt = conn.prepare(&format!(
+            "SELECT id, idx, label, node_type, summary, degree_centrality, pagerank_centrality, betweenness_centrality, eigenvector_centrality, x, y, color, size, created_at, created_at_timestamp, cluster, clusterStrength
+             FROM nodes
+             ORDER BY idx
+             LIMIT {} OFFSET {}",
+            limit, offset
+        ))?;
+
+        let mut ids = Vec::new();
+        let mut indices = Vec::new();
+        let mut labels = Vec::new();
+        let mut node_types = Vec::new();
+        let mut summaries = Vec::new();
+        let mut degrees = Vec::new();
+        let mut pageranks = Vec::new();
+        let mut betweennesses = Vec::new();
+        let mut eigenvectors = Vec::new();
+        let mut xs = Vec::new();
+        let mut ys = Vec::new();
+        let mut colors = Vec::new();
+        let mut sizes = Vec::new();
+        let mut created_ats = Vec::new();
+        let mut timestamps = Vec::new();
+        let mut clusters = Vec::new();
+        let mut cluster_strengths = Vec::new();
+
+        let rows = stmt.query_map(params![], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, u32>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, Option<String>>(4)?,
+                row.get::<_, Option<f64>>(5)?,
+                row.get::<_, Option<f64>>(6)?,
+                row.get::<_, Option<f64>>(7)?,
+                row.get::<_, Option<f64>>(8)?,
+                row.get::<_, Option<f64>>(9)?,
+                row.get::<_, Option<f64>>(10)?,
+                row.get::<_, Option<String>>(11)?,
+                row.get::<_, Option<f64>>(12)?,
+                row.get::<_, Option<String>>(13)?,
+                row.get::<_, Option<f64>>(14)?,
+                row.get::<_, Option<String>>(15)?,
+                row.get::<_, Option<f64>>(16)?,
+            ))
+        })?;
+
+        for row in rows {
+            let (id, idx, label, node_type, summary, degree, pagerank, betweenness, eigenvector, x, y, color, size, created_at, timestamp, cluster, cluster_strength) = row?;
+            ids.push(id);
+            indices.push(idx);
+            labels.push(label);
+            node_types.push(node_type);
+            summaries.push(summary);
+            degrees.push(degree);
+            pageranks.push(pagerank);
+            betweennesses.push(betweenness);
+            eigenvectors.push(eigenvector);
+            xs.push(x);
+            ys.push(y);
+            colors.push(color);
+            sizes.push(size);
+            created_ats.push(created_at);
+            timestamps.push(timestamp);
+            clusters.push(cluster);
+            cluster_strengths.push(cluster_strength);
+        }
+
+        let batch = RecordBatch::try_new(
+            self.schema_nodes.clone(),
+            vec![
+                Arc::new(StringArray::from(ids)) as ArrayRef,
+                Arc::new(UInt32Array::from(indices)) as ArrayRef,
+                Arc::new(StringArray::from(labels)) as ArrayRef,
+                Arc::new(StringArray::from(node_types)) as ArrayRef,
+                Arc::new(StringArray::from(summaries)) as ArrayRef,
+                Arc::new(Float64Array::from(degrees)) as ArrayRef,
+                Arc::new(Float64Array::from(pageranks)) as ArrayRef,
+                Arc::new(Float64Array::from(betweennesses)) as ArrayRef,
+                Arc::new(Float64Array::from(eigenvectors)) as ArrayRef,
+                Arc::new(Float64Array::from(xs)) as ArrayRef,
+                Arc::new(Float64Array::from(ys)) as ArrayRef,
+                Arc::new(StringArray::from(colors)) as ArrayRef,
+                Arc::new(Float64Array::from(sizes)) as ArrayRef,
+                Arc::new(StringArray::from(created_ats)) as ArrayRef,
+                Arc::new(Float64Array::from(timestamps)) as ArrayRef,
+                Arc::new(StringArray::from(clusters)) as ArrayRef,
+                Arc::new(Float64Array::from(cluster_strengths)) as ArrayRef,
+            ],
+        )?;
+
+        Ok((batch, total_count))
+    }
     
     pub async fn get_edges_as_arrow(&self) -> Result<RecordBatch> {
         let conn = self.conn.lock().await;
@@ -685,6 +789,100 @@ impl DuckDBStore {
         )?;
         
         Ok(batch)
+    }
+
+    pub async fn get_edges_as_arrow_paginated(&self, limit: usize, offset: usize) -> Result<(RecordBatch, usize)> {
+        let conn = self.conn.lock().await;
+
+        let total_count: usize = conn.query_row(
+            "SELECT COUNT(*) FROM edges e INNER JOIN nodes n1 ON e.source = n1.id INNER JOIN nodes n2 ON e.target = n2.id",
+            params![],
+            |row| row.get(0),
+        )?;
+
+        let mut node_stmt = conn.prepare("SELECT id, idx FROM nodes ORDER BY idx")?;
+        let node_rows = node_stmt.query_map(params![], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, u32>(1)?,
+            ))
+        })?;
+
+        let mut node_id_to_index = std::collections::HashMap::new();
+        let mut current_index = 0u32;
+        for row in node_rows {
+            let (id, _) = row?;
+            node_id_to_index.insert(id, current_index);
+            current_index += 1;
+        }
+
+        let mut stmt = conn.prepare(&format!(
+            "SELECT e.source, e.target, e.edge_type, e.weight, e.color, e.strength
+             FROM edges e
+             INNER JOIN nodes n1 ON e.source = n1.id
+             INNER JOIN nodes n2 ON e.target = n2.id
+             LIMIT {} OFFSET {}",
+            limit, offset
+        ))?;
+
+        let mut sources = Vec::new();
+        let mut source_indices = Vec::new();
+        let mut targets = Vec::new();
+        let mut target_indices = Vec::new();
+        let mut edge_types = Vec::new();
+        let mut weights = Vec::new();
+        let mut colors = Vec::new();
+        let mut strengths = Vec::new();
+
+        let rows = stmt.query_map(params![], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, f64>(3)?,
+                row.get::<_, Option<String>>(4)?,
+                row.get::<_, Option<f64>>(5)?,
+            ))
+        })?;
+
+        for row in rows {
+            let (source, target, edge_type, weight, color, strength) = row?;
+
+            if let (Some(&source_idx), Some(&target_idx)) =
+                (node_id_to_index.get(&source), node_id_to_index.get(&target))
+            {
+                sources.push(source);
+                source_indices.push(source_idx);
+                targets.push(target);
+                target_indices.push(target_idx);
+                edge_types.push(edge_type);
+                weights.push(weight);
+                colors.push(color);
+                strengths.push(strength.unwrap_or(1.0));
+            }
+        }
+
+        let batch = RecordBatch::try_new(
+            self.schema_edges.clone(),
+            vec![
+                Arc::new(StringArray::from(sources)) as ArrayRef,
+                Arc::new(UInt32Array::from(source_indices)) as ArrayRef,
+                Arc::new(StringArray::from(targets)) as ArrayRef,
+                Arc::new(UInt32Array::from(target_indices)) as ArrayRef,
+                Arc::new(StringArray::from(edge_types)) as ArrayRef,
+                Arc::new(Float64Array::from(weights)) as ArrayRef,
+                Arc::new(StringArray::from(colors)) as ArrayRef,
+                Arc::new(Float64Array::from(strengths)) as ArrayRef,
+            ],
+        )?;
+
+        Ok((batch, total_count))
+    }
+
+    pub async fn get_node_count(&self) -> Result<usize> {
+        let conn = self.conn.lock().await;
+        let count: usize = conn.query_row("SELECT COUNT(*) FROM nodes", params![], |row| row.get(0))?;
+        Ok(count)
     }
     
     pub async fn queue_node_update(&self, node: Node) {
