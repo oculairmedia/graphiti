@@ -2079,7 +2079,12 @@ fn truncate_string(s: &str, max_len: usize) -> String {
     if s.len() <= max_len {
         s.to_string()
     } else {
-        format!("{}...", &s[..max_len-3])
+        let end = s.char_indices()
+            .take_while(|(i, _)| *i <= max_len.saturating_sub(3))
+            .last()
+            .map(|(i, _)| i)
+            .unwrap_or(0);
+        format!("{}...", &s[..end])
     }
 }
 
