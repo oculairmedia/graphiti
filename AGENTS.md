@@ -291,18 +291,39 @@ docker system prune -a --volumes
 
 ## CRITICAL: Data Persistence Rules
 
-### ✅ FalkorDB is the Primary Data Store (Updated Jan 2026)
+### ✅ FalkorDB is the Primary Data Store (Updated Mar 2026)
 
 **FalkorDB** (`falkordb` service):
 
 - **PRIMARY AND ONLY DATA STORE** - all data persists via RDB snapshots
-- Restarts reload from RDB in **~2 minutes**
-- RDB snapshots occur every 5 minutes (if changes) or every 1 minute (if 100+ changes)
-- Memory limit: 16GB to handle RDB reload overhead
-- Runtime `maxmemory` is 8GB (reload can temporarily use more)
+- Restarts reload from RDB in **~2 minutes** (longer for large graphs)
+- RDB snapshots occur every 24 hours (configured via `save 86400 1`)
 - Check data status: `redis-cli -h localhost -p 6379 GRAPH.QUERY graphiti_migration "MATCH ()-[r]->() RETURN count(r)" --csv`
-- **Current size (Feb 2026)**: ~13K nodes, ~36K edges (reduced from ~66K after duplicate UUID cleanup)
-- Historical note: Started with 48K nodes, 121K edges (Dec 2025), grew to ~66K/224K, reduced to ~13K/36K after consolidation + duplicate cleanup (Feb 2026)
+- **Current size (Mar 2026)**: ~57K nodes, ~182K edges
+- Historical note: Started with 48K nodes, 121K edges (Dec 2025), grew to ~66K/224K, reduced to ~13K/36K after consolidation + duplicate cleanup (Feb 2026), grew back to ~57K/182K (Mar 2026)
+
+#### ⚠️ CRITICAL: Memory Limits for Large Graphs
+
+**If `maxmemory` is too low, FalkorDB will silently load only a fraction of the graph data.** You will see the container come up healthy but with far fewer nodes/edges than expected. This is NOT data loss — the data is in the RDB file but FalkorDB stops loading when it hits the memory ceiling.
+
+**Current settings (Mar 2026):**
+- `maxmemory`: **20GB** (runtime limit for graph data in memory)
+- `mem_limit`: **32GB** (Docker container memory ceiling)
+- `memswap_limit`: **36GB** (emergency swap buffer)
+
+**Rule of thumb:** `maxmemory` must be **at least 2-3x the RDB file size** because graph data expands significantly when deserialized into memory. A 1.3GB RDB can require 7+ GB in memory.
+
+**Symptoms of maxmemory being too low:**
+- FalkorDB starts and reports healthy
+- Node/edge counts are a fraction of expected (e.g., 1.5K instead of 57K)
+- `redis-cli INFO memory` shows `used_memory` near `maxmemory`
+- No errors in logs — it just silently stops loading
+
+**How to fix:**
+1. Increase `maxmemory` in REDIS_ARGS in `docker-compose.yml`
+2. Increase `mem_limit` to be larger than `maxmemory` (needs headroom for RDB reload)
+3. Full down/up FalkorDB: `docker stop <container> && docker rm <container> && docker compose up -d falkordb`
+4. Verify: `redis-cli INFO memory | grep used_memory_human` and check node/edge counts
 
 ## Service Architecture (Simplified Jan 2026)
 
@@ -382,8 +403,8 @@ redis-cli -h localhost -p 6379 GRAPH.QUERY graphiti_migration "MATCH ()-[r]->() 
 redis-cli -h localhost -p 6379 GRAPH.QUERY graphiti_migration "MATCH (n) RETURN count(n) as node_count" --csv
 ```
 
-Current (Feb 2026): ~13K nodes, ~36K edges
-Historical: ~66K/224K (Jan 2026, pre-consolidation), 48K/121K (Dec 2025)
+Current (Mar 2026): ~57K nodes, ~182K edges
+Historical: ~13K/36K (Feb 2026, post-consolidation), ~66K/224K (Jan 2026), 48K/121K (Dec 2025)
 
 ## Service-Specific Notes
 
@@ -398,6 +419,7 @@ Historical: ~66K/224K (Jan 2026, pre-consolidation), 48K/121K (Dec 2025)
 - **Healthcheck**: 120s start_period + 10 retries (15s interval) = up to 4.5 minutes to become healthy
 - **Initial load time**: Loads ALL edges from FalkorDB into memory on startup - scales with graph size
 - **Why healthcheck is short**: Graph loads in ~2 seconds (13K nodes, 36K edges). DuckDB cache builds in <5s. Previous 85-minute healthcheck was needed for 224K+ edges.
+- **Note**: With current ~57K nodes / ~182K edges, initial load time may be longer. Monitor healthcheck if graph continues to grow.
 
 ### FalkorDB (Port 6379)
 
@@ -405,8 +427,8 @@ Historical: ~66K/224K (Jan 2026, pre-consolidation), 48K/121K (Dec 2025)
 - **Protocol**: Redis-compatible
 - **Indexes**: UUID indexes exist on all node/edge types (RANGE indexes)
 - **Persistence**: RDB snapshots to `falkordb_data` volume
-- **Memory**: 16GB limit, 8GB runtime maxmemory
-- **Performance**: Queries scale with graph size (currently ~36K edges)
+- **Memory**: 32GB container limit, 20GB runtime maxmemory (see "CRITICAL: Memory Limits" above)
+- **Performance**: Queries scale with graph size (currently ~182K edges)
 
 ### Frontend (Port 8085)
 
@@ -434,10 +456,15 @@ Historical: ~66K/224K (Jan 2026, pre-consolidation), 48K/121K (Dec 2025)
 ### 1. After FalkorDB Restart
 
 ```bash
-# Check data loaded correctly (should match expected counts)
+# Check data loaded correctly (should match expected counts ~57K nodes / ~182K edges)
+redis-cli -h localhost -p 6379 GRAPH.QUERY graphiti_migration "MATCH (n) RETURN count(n)" --csv
 redis-cli -h localhost -p 6379 GRAPH.QUERY graphiti_migration "MATCH ()-[r]->() RETURN count(r)" --csv
 
+# Check memory usage — if near maxmemory, graph may be partially loaded!
+redis-cli -h localhost -p 6379 INFO memory | grep used_memory_human
+
 # Data reloads from RDB in ~2 minutes
+# If counts are low but container is healthy, maxmemory is too low (see "CRITICAL: Memory Limits")
 # If count is 0, check FalkorDB logs for RDB load errors
 docker-compose logs --tail=50 falkordb
 ```
@@ -489,7 +516,7 @@ Key variables from docker-compose.yml:
 
 **Fix Applied**:
 
-- Healthcheck `start_period` set to 120s (sufficient for current ~13K nodes / ~36K edges)
+- Healthcheck `start_period` set to 120s (sufficient for current ~57K nodes / ~182K edges)
 - Healthcheck `retries` set to 10 (2.5 more minutes)
 - Total: Up to ~4.5 minutes for visualizer to become healthy
 
@@ -518,7 +545,21 @@ docker start graphiti-nginx-1 graphiti-frontend-1
 
 **Symptom**: FalkorDB container restarts, queries fail
 
-**Fix**: FalkorDB memory limit is 16GB in docker-compose. With ~36K edges and ~13K nodes, this is more than sufficient. If OOM occurs after significant graph growth, increase memory limit in docker-compose.yml.
+**Fix**: FalkorDB memory limit is 32GB in docker-compose. With ~182K edges and ~57K nodes, the graph uses ~4GB in memory but RDB reload can peak higher. If OOM occurs after significant graph growth, increase memory limit in docker-compose.yml.
+
+### FalkorDB Shows Partial Data After Restart (CRITICAL)
+
+**Symptom**: FalkorDB starts and reports healthy, but node/edge counts are a fraction of expected (e.g., 1.5K nodes instead of 57K). No errors in logs. `redis-cli INFO memory` shows `used_memory` near `maxmemory`.
+
+**Cause**: `maxmemory` is too low for the current graph size. FalkorDB silently stops loading graph data when it hits the memory ceiling during RDB deserialization. The data is NOT lost — it's in the RDB file, just not loaded.
+
+**This is the #1 cause of apparent "data loss" in this stack.** It happened in Mar 2026 when the graph grew past what the 16GB maxmemory could hold.
+
+**Fix**:
+1. Increase `maxmemory` in REDIS_ARGS in `docker-compose.yml` (current: 20g)
+2. Increase `mem_limit` to be larger than `maxmemory` (current: 32g)
+3. Full down/up: `docker stop <container> && docker rm <container> && docker compose up -d falkordb`
+4. Verify counts match expected values
 
 ### Vector Search Returns 0 Results / "expected Vectorf32 but was List" Error
 
