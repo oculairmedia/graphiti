@@ -146,41 +146,45 @@ impl FalkorClient {
                 ));
             }
 
-            let batch_query = format!(
-                "UNWIND [{}] AS d
-                 MATCH (n {{uuid: d.uuid}})
-                 SET n.pagerank_centrality = d.pr,
-                     n.degree_centrality = d.dg,
-                     n.betweenness_centrality = d.bt,
-                     n.eigenvector_centrality = d.ev,
-                     n.importance_score = d.im",
-                batch_data.join(", ")
-            );
+            let joined_data = batch_data.join(", ");
+            let labels = ["Entity", "Episodic"];
 
             let mut succeeded = false;
-            for attempt in 0..MAX_RETRIES {
-                match self.execute_query(&batch_query, None).await {
-                    Ok(_) => {
-                        processed += chunk.len();
-                        succeeded = true;
-                        if batch_size < INITIAL_BATCH_SIZE {
-                            batch_size = (batch_size * 2).min(INITIAL_BATCH_SIZE);
-                        }
-                        break;
-                    }
-                    Err(e) => {
+            'retry: for attempt in 0..MAX_RETRIES {
+                let mut all_ok = true;
+                for label in &labels {
+                    let batch_query = format!(
+                        "UNWIND [{}] AS d
+                         MATCH (n:{} {{uuid: d.uuid}})
+                         SET n.pagerank_centrality = d.pr,
+                             n.degree_centrality = d.dg,
+                             n.betweenness_centrality = d.bt,
+                             n.eigenvector_centrality = d.ev,
+                             n.importance_score = d.im",
+                        joined_data, label
+                    );
+                    if let Err(e) = self.execute_query(&batch_query, None).await {
                         let delay = INTER_BATCH_DELAY_MS * (2_u64.pow(attempt));
                         warn!(
-                            "Batch {}-{} failed (attempt {}/{}), backoff {}ms: {}",
-                            offset, end, attempt + 1, MAX_RETRIES, delay, e
+                            "Batch {}-{} ({}) failed (attempt {}/{}), backoff {}ms: {}",
+                            offset, end, label, attempt + 1, MAX_RETRIES, delay, e
                         );
                         tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
-
                         if attempt == MAX_RETRIES - 1 && batch_size > MIN_BATCH_SIZE {
                             batch_size = (batch_size / 2).max(MIN_BATCH_SIZE);
                             warn!("Reducing batch size to {}", batch_size);
                         }
+                        all_ok = false;
+                        break;
                     }
+                }
+                if all_ok {
+                    processed += chunk.len();
+                    succeeded = true;
+                    if batch_size < INITIAL_BATCH_SIZE {
+                        batch_size = (batch_size * 2).min(INITIAL_BATCH_SIZE);
+                    }
+                    break 'retry;
                 }
             }
 

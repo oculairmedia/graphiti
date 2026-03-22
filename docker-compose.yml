@@ -40,8 +40,7 @@ services:
       # - OMP_THREAD_COUNT 4: parallel GraphBLAS computation per query
       # - CACHE_SIZE 100: cache more query execution plans (LRU eviction)
       # - NODE_CREATION_BUFFER 128: batch node creation buffer
-      # - QUERY_MEM_CAPACITY 128MB: per-query memory limit
-      - FALKORDB_ARGS=THREAD_COUNT 12 OMP_THREAD_COUNT 4 CACHE_SIZE 100 NODE_CREATION_BUFFER 128 QUERY_MEM_CAPACITY 134217728 CMD_INFO no
+      - FALKORDB_ARGS=THREAD_COUNT 12 OMP_THREAD_COUNT 4 CACHE_SIZE 100 NODE_CREATION_BUFFER 128 QUERY_MEM_CAPACITY 4294967296 CMD_INFO no
     # MEMORY STRATEGY (updated Mar 2026 — graph now ~57K nodes / 182K edges):
     # - maxmemory 20g: runtime graph data limit (1.3GB RDB expands to ~4-7GB in memory)
     # - mem_limit 32g: container ceiling — must exceed maxmemory for RDB reload headroom
