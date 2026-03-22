@@ -388,11 +388,14 @@ async fn single_node_endpoint(
     .into_response()
 }
 
-// Helper functions for single node calculations
 async fn calculate_single_node_degree(client: &FalkorClient, node_uuid: &str) -> Result<f64> {
     let query = format!(
         r#"
-        MATCH (n {{uuid: '{}'}})
+        MATCH (n:Entity {{uuid: '{0}'}})
+        OPTIONAL MATCH (n)-[r]-(m)
+        RETURN COUNT(DISTINCT m) as degree
+        UNION ALL
+        MATCH (n:Episodic {{uuid: '{0}'}})
         OPTIONAL MATCH (n)-[r]-(m)
         RETURN COUNT(DISTINCT m) as degree
         "#,
@@ -401,11 +404,12 @@ async fn calculate_single_node_degree(client: &FalkorClient, node_uuid: &str) ->
 
     let result = client.execute_query(&query, None).await?;
 
-    if let Some(row) = result.first() {
+    for row in &result {
         if let Some(degree_value) = row.get("degree") {
             if let Some(degree) = crate::client::falkor_value_to_i64(degree_value) {
-                // Normalize degree (simple normalization by dividing by 10)
-                return Ok(degree as f64 / 10.0);
+                if degree > 0 {
+                    return Ok(degree as f64 / 10.0);
+                }
             }
         }
     }
