@@ -310,9 +310,9 @@ describe('useGraphWebSocket', () => {
         result.current.triggerCacheInvalidate();
       });
       
-      expect(result.current.statistics.totalUpdates).toBe(3);
-      expect(result.current.statistics.nodeAccessEvents).toBe(1);
-      expect(result.current.statistics.cacheInvalidations).toBe(1);
+      expect(result.current.statistics.current.totalUpdates).toBe(3);
+      expect(result.current.statistics.current.nodeAccessEvents).toBe(1);
+      expect(result.current.statistics.current.cacheInvalidations).toBe(1);
     });
 
     it('should calculate update rate', () => {
@@ -326,7 +326,7 @@ describe('useGraphWebSocket', () => {
       });
       
       // Update rate should reflect recent updates
-      expect(result.current.statistics.updateRate).toBeGreaterThan(0);
+      expect(result.current.statistics.current.updateRate).toBeGreaterThan(0);
     });
 
     it('should clear statistics', () => {
@@ -337,8 +337,8 @@ describe('useGraphWebSocket', () => {
         result.current.clearStatistics();
       });
       
-      expect(result.current.statistics.totalUpdates).toBe(0);
-      expect(result.current.statistics.nodeAccessEvents).toBe(0);
+      expect(result.current.statistics.current.totalUpdates).toBe(0);
+      expect(result.current.statistics.current.nodeAccessEvents).toBe(0);
     });
   });
 

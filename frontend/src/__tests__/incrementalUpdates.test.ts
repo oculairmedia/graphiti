@@ -389,7 +389,7 @@ describe('Incremental Updates', () => {
         );
       });
       
-      const metrics = result.current.metrics;
+      const metrics = result.current.metrics.current;
       expect(metrics.totalUpdates).toBe(1);
       expect(metrics.successfulUpdates).toBe(1);
       expect(metrics.failedUpdates).toBe(0);
@@ -417,9 +417,8 @@ describe('Incremental Updates', () => {
         );
       });
       
-      const metrics = result.current.metrics;
+      const metrics = result.current.metrics.current;
       expect(metrics.totalUpdates).toBe(1);
-      // Fallback orchestrator handles the error, so it counts as recovered
       expect(metrics.successfulUpdates + metrics.failedUpdates).toBe(1);
     });
   });
