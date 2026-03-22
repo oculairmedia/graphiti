@@ -10,6 +10,7 @@ import { useRustWebSocket } from '../contexts/RustWebSocketProvider';
 import { useRealtimeDataSync } from './useRealtimeDataSync';
 import { useGraphWebSocket } from './useGraphWebSocket';
 import { logger } from '../utils/logger';
+import { useGraphStore } from '../stores/useGraphStore';
 
 interface FilterConfig {
   nodeTypeVisibility: Record<string, boolean>;
@@ -184,102 +185,110 @@ export function useGraphDataQuery() {
       ]);
 
       if (nodesResult && edgesResult) {
-        // Convert Arrow tables to JavaScript arrays
+        const CHUNK_SIZE = 10000;
+        const { setStreamingProgress, clearStreamingProgress } = useGraphStore.getState();
+        const totalNodes = nodesResult.numRows;
+        const totalEdges = edgesResult.numRows;
+
         const nodesArray = nodesResult.toArray();
-        const edgesArray = edgesResult.toArray();
 
-        // Transform to GraphNode format - PRESERVE idx field for proper indexing
-        // Optimized: Direct property access (DuckDB WASM returns proper objects)
-        const nodes: GraphNode[] = nodesArray.map((n: DuckDBNodeRow, arrayIndex) => {
-          // Normalize temporal fields - ensure both exist
-          let created_at = n.created_at;
-          let created_at_timestamp = n.created_at_timestamp;
+        const nodes: GraphNode[] = new Array(totalNodes);
+        for (let offset = 0; offset < totalNodes; offset += CHUNK_SIZE) {
+          const end = Math.min(offset + CHUNK_SIZE, totalNodes);
+          for (let i = offset; i < end; i++) {
+            const n: DuckDBNodeRow = nodesArray[i];
+            let created_at = n.created_at;
+            let created_at_timestamp = n.created_at_timestamp;
 
-          if (!created_at && created_at_timestamp) {
-            const ts = Number(created_at_timestamp);
-            if (!Number.isNaN(ts)) {
-              created_at = new Date(ts).toISOString();
+            if (!created_at && created_at_timestamp) {
+              const ts = Number(created_at_timestamp);
+              if (!Number.isNaN(ts)) {
+                created_at = new Date(ts).toISOString();
+              }
+            } else if (created_at && !created_at_timestamp) {
+              created_at_timestamp = new Date(created_at).getTime();
             }
-          } else if (created_at && !created_at_timestamp) {
-            created_at_timestamp = new Date(created_at).getTime();
-          }
 
-          // Fallback to synthetic values if both missing
-          if (!created_at && !created_at_timestamp) {
-            created_at_timestamp = Date.now();
-            created_at = new Date(created_at_timestamp).toISOString();
-          }
+            if (!created_at && !created_at_timestamp) {
+              created_at_timestamp = Date.now();
+              created_at = new Date(created_at_timestamp).toISOString();
+            }
 
-          return {
-            id: n.id,
-            idx: n.idx !== undefined ? n.idx : arrayIndex,  // Preserve DuckDB idx or use array index
-            label: n.label || n.id,
-            name: n.label || n.id,  // Use label as name
-            node_type: n.node_type || 'Unknown',
-            summary: n.summary || null,
-            size: computeSizeFromStrategy(n, config),
-            created_at,
-            created_at_timestamp: created_at_timestamp || null,  // Add timestamp for timeline
-            // Store centrality at the root level for direct access
-            degree_centrality: n.degree_centrality || 0,
-            pagerank_centrality: n.pagerank_centrality || 0,
-            betweenness_centrality: n.betweenness_centrality || 0,
-            eigenvector_centrality: n.eigenvector_centrality || 0,
-            x: n.x,
-            y: n.y,
-            properties: {
-              idx: n.idx !== undefined ? n.idx : arrayIndex,  // Also store in properties for access
+            nodes[i] = {
+              id: n.id,
+              idx: n.idx !== undefined ? n.idx : i,
+              label: n.label || n.id,
+              name: n.label || n.id,
+              node_type: n.node_type || 'Unknown',
+              summary: n.summary || null,
+              size: computeSizeFromStrategy(n, config),
+              created_at,
+              created_at_timestamp: created_at_timestamp || null,
               degree_centrality: n.degree_centrality || 0,
               pagerank_centrality: n.pagerank_centrality || 0,
               betweenness_centrality: n.betweenness_centrality || 0,
               eigenvector_centrality: n.eigenvector_centrality || 0,
-              // Note: Removed misleading degree/connections properties that were incorrectly
-              // derived from centrality * 100. Actual edge counts are now computed in GraphViz
-              // using calculateNodeDegrees() for accurate connection counts.
-              created: created_at,  // Now guaranteed to exist
-              date: created_at,      // Now guaranteed to exist
-              created_at: created_at,  // Now guaranteed to exist
-              created_at_timestamp: created_at_timestamp  // Now guaranteed to exist
-            }
-          };
-        });
-
-        // Create node index map for edge indices
-        const nodeIndexMap = new Map<string, number>();
-        nodes.forEach((node, idx) => {
-          nodeIndexMap.set(String(node.id), idx);
-        });
-
-        // Transform to GraphLink format with indices
-        const edges: GraphLink[] = edgesArray.map((e: DuckDBEdgeRow) => {
-          const edgeType = e.edge_type || '';
-
-          // Calculate link strength based on edge type and config
-          // Use dynamic values from UI config if link strength is enabled
-          let strength = config.defaultLinkStrength || 1.0;
-          if (config.linkStrengthEnabled) {
-            if (edgeType === 'entity_entity' || edgeType === 'relates_to') {
-              strength = config.entityEntityStrength || 1.5;  // Stronger Entity-Entity connections
-            } else if (edgeType === 'episodic' || edgeType === 'temporal' || edgeType === 'mentioned_in') {
-              strength = config.episodicStrength || 0.5;  // Weaker Episodic connections
-            }
+              x: n.x,
+              y: n.y,
+              properties: {
+                idx: n.idx !== undefined ? n.idx : i,
+                degree_centrality: n.degree_centrality || 0,
+                pagerank_centrality: n.pagerank_centrality || 0,
+                betweenness_centrality: n.betweenness_centrality || 0,
+                eigenvector_centrality: n.eigenvector_centrality || 0,
+                created: created_at,
+                date: created_at,
+                created_at: created_at,
+                created_at_timestamp: created_at_timestamp
+              }
+            };
           }
+          setStreamingProgress(end, totalNodes, 'nodes');
+          await new Promise(resolve => setTimeout(resolve, 0));
+        }
 
-          return {
-            id: `${e.source}-${e.target}`,
-            source: e.source,
-            target: e.target,  // Always use UUID, no fallback to idx
-            from: e.source,
-            to: e.target,  // Always use UUID, no fallback to idx
-            sourceIndex: nodeIndexMap.get(String(e.source)) ?? -1,
-            targetIndex: nodeIndexMap.get(String(e.target)) ?? -1,  // Use actual target UUID
-            edge_type: edgeType,
-            weight: e.weight || 1,
-            strength: strength,  // Add strength for link force variation
-            created_at: e.created_at,
-            updated_at: e.updated_at
-          };
-        });
+        const nodeIndexMap = new Map<string, number>(
+          nodes.map((node, idx) => [String(node.id), idx])
+        );
+
+        const edgesArray = edgesResult.toArray();
+
+        const edges: GraphLink[] = new Array(totalEdges);
+        for (let offset = 0; offset < totalEdges; offset += CHUNK_SIZE) {
+          const end = Math.min(offset + CHUNK_SIZE, totalEdges);
+          for (let i = offset; i < end; i++) {
+            const e: DuckDBEdgeRow = edgesArray[i];
+            const edgeType = e.edge_type || '';
+
+            let strength = config.defaultLinkStrength || 1.0;
+            if (config.linkStrengthEnabled) {
+              if (edgeType === 'entity_entity' || edgeType === 'relates_to') {
+                strength = config.entityEntityStrength || 1.5;
+              } else if (edgeType === 'episodic' || edgeType === 'temporal' || edgeType === 'mentioned_in') {
+                strength = config.episodicStrength || 0.5;
+              }
+            }
+
+            edges[i] = {
+              id: `${e.source}-${e.target}`,
+              source: e.source,
+              target: e.target,
+              from: e.source,
+              to: e.target,
+              sourceIndex: nodeIndexMap.get(String(e.source)) ?? -1,
+              targetIndex: nodeIndexMap.get(String(e.target)) ?? -1,
+              edge_type: edgeType,
+              weight: e.weight || 1,
+              strength: strength,
+              created_at: e.created_at,
+              updated_at: e.updated_at
+            };
+          }
+          setStreamingProgress(end, totalEdges, 'edges');
+          await new Promise(resolve => setTimeout(resolve, 0));
+        }
+
+        clearStreamingProgress();
 
         // Only update if data has actually changed
         setDuckDBData(prevData => {
