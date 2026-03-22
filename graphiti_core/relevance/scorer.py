@@ -298,7 +298,18 @@ class RelevanceScorer:
     async def _load_feedback(self, memory_id: str) -> Optional[MemoryFeedback]:
         """Load feedback data from the database."""
         query = """
-        MATCH (n {uuid: $memory_id})
+        MATCH (n:Entity {uuid: $memory_id})
+        RETURN 
+            n.relevance_scores AS relevance_scores,
+            n.avg_relevance AS avg_relevance,
+            n.usage_count AS usage_count,
+            n.successful_uses AS successful_uses,
+            n.last_accessed AS last_accessed,
+            n.last_scored AS last_scored,
+            n.decay_factor AS decay_factor,
+            n.query_embeddings AS query_embeddings
+        UNION ALL
+        MATCH (n:Episodic {uuid: $memory_id})
         RETURN 
             n.relevance_scores AS relevance_scores,
             n.avg_relevance AS avg_relevance,
@@ -338,13 +349,21 @@ class RelevanceScorer:
 
     async def _save_feedback(self, feedback: MemoryFeedback):
         """Save feedback data to the database."""
-        # Serialize relevance scores
-        scores_data = [
-            score.model_dump(mode='json') for score in feedback.relevance_scores[-100:]
-        ]  # Keep last 100 scores
+        scores_data = [score.model_dump(mode='json') for score in feedback.relevance_scores[-100:]]
 
-        query = """
-        MATCH (n {uuid: $memory_id})
+        params = dict(
+            memory_id=feedback.memory_id,
+            relevance_scores=json.dumps(scores_data),
+            avg_relevance=feedback.avg_relevance,
+            usage_count=feedback.usage_count,
+            successful_uses=feedback.successful_uses,
+            last_accessed=feedback.last_accessed,
+            last_scored=feedback.last_scored,
+            decay_factor=feedback.decay_factor,
+            query_embeddings=feedback.query_embeddings[-50:],
+        )
+
+        set_clause = """
         SET 
             n.relevance_scores = $relevance_scores,
             n.avg_relevance = $avg_relevance,
@@ -356,15 +375,8 @@ class RelevanceScorer:
             n.query_embeddings = $query_embeddings
         """
 
-        await self.driver.execute_query(
-            query,
-            memory_id=feedback.memory_id,
-            relevance_scores=json.dumps(scores_data),
-            avg_relevance=feedback.avg_relevance,
-            usage_count=feedback.usage_count,
-            successful_uses=feedback.successful_uses,
-            last_accessed=feedback.last_accessed,
-            last_scored=feedback.last_scored,
-            decay_factor=feedback.decay_factor,
-            query_embeddings=feedback.query_embeddings[-50:],  # Keep last 50 query embeddings
-        )
+        for label in ('Entity', 'Episodic'):
+            await self.driver.execute_query(
+                f'MATCH (n:{label} {{uuid: $memory_id}}) {set_clause}',
+                **params,
+            )

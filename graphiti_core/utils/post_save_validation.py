@@ -246,10 +246,15 @@ class PostSaveValidator:
 
         session = self.driver.session()
         try:
-            query = f"MATCH (n {{uuid: '{entity_id}'}}) RETURN count(n) as count"
-            result = await session.run(query)
-            record = await result.single()
-            count = record['count'] if record else 0
+            query = """
+            MATCH (n:Entity {uuid: $entity_id}) RETURN count(n) as count
+            UNION ALL
+            MATCH (n:Episodic {uuid: $entity_id}) RETURN count(n) as count
+            """
+            result = await session.run(query, entity_id=entity_id)
+            count = 0
+            async for record in result:
+                count += record['count']
 
             if count == 0:
                 return IntegrityCheckResult.failure(
@@ -291,12 +296,12 @@ class PostSaveValidator:
 
         session = self.driver.session()
         try:
-            query = f"""
-            MATCH (source {{uuid: '{source_uuid}'}})
-            OPTIONAL MATCH (target {{uuid: '{target_uuid}'}})
+            query = """
+            MATCH (source:Entity {uuid: $source_uuid})
+            OPTIONAL MATCH (target:Entity {uuid: $target_uuid})
             RETURN count(source) as source_count, count(target) as target_count
             """
-            result = await session.run(query)
+            result = await session.run(query, source_uuid=source_uuid, target_uuid=target_uuid)
 
             record = await result.single()
             if not record:
@@ -340,10 +345,15 @@ class PostSaveValidator:
 
         session = self.driver.session()
         try:
-            query = f"MATCH (n {{uuid: '{entity_id}'}}) RETURN count(n) as count"
-            result = await session.run(query)
-            record = await result.single()
-            count = record['count'] if record else 0
+            query = """
+            MATCH (n:Entity {uuid: $entity_id}) RETURN count(n) as count
+            UNION ALL
+            MATCH (n:Episodic {uuid: $entity_id}) RETURN count(n) as count
+            """
+            result = await session.run(query, entity_id=entity_id)
+            count = 0
+            async for record in result:
+                count += record['count']
 
             if count > 1:
                 return IntegrityCheckResult.failure(
