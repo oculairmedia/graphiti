@@ -5,7 +5,7 @@
  * Uses Cosmograph's built-in incremental update API for smooth, real-time updates.
  */
 
-import { useCallback, useRef, useState, useEffect } from 'react';
+import { useCallback, useRef, useEffect } from 'react';
 import type { CosmographRef } from '@cosmograph/react';
 import type { GraphNode, GraphLink } from '../types/graph';
 import FallbackOrchestrator, { UpdateAttempt, ErrorClassifier } from '../utils/updateFallbackStrategies';
@@ -101,8 +101,8 @@ export function useCosmographIncrementalUpdates(
     dataPreparerRef.current.updateConfig(config);
   }, [config]);
   
-  // Performance metrics
-  const [metrics, setMetrics] = useState<IncrementalUpdateMetrics>({
+  // Performance metrics (ref to avoid re-renders on every delta)
+  const metricsRef = useRef<IncrementalUpdateMetrics>({
     totalUpdates: 0,
     successfulUpdates: 0,
     failedUpdates: 0,
@@ -118,24 +118,20 @@ export function useCosmographIncrementalUpdates(
     }
   }, [debug]);
 
-  // Update metrics
+  // Update metrics (mutate ref directly — no re-render)
   const updateMetrics = useCallback((success: boolean, duration: number) => {
-    setMetrics(prev => {
-      const newTotal = prev.totalUpdates + 1;
-      const newSuccessful = success ? prev.successfulUpdates + 1 : prev.successfulUpdates;
-      const newFailed = success ? prev.failedUpdates : prev.failedUpdates + 1;
-      const totalDuration = prev.averageUpdateTime * prev.totalUpdates + duration;
-      const newAverage = totalDuration / newTotal;
+    const prev = metricsRef.current;
+    const newTotal = prev.totalUpdates + 1;
+    const totalDuration = prev.averageUpdateTime * prev.totalUpdates + duration;
 
-      return {
-        totalUpdates: newTotal,
-        successfulUpdates: newSuccessful,
-        failedUpdates: newFailed,
-        averageUpdateTime: newAverage,
-        lastUpdateTime: Date.now(),
-        lastUpdateDuration: duration
-      };
-    });
+    metricsRef.current = {
+      totalUpdates: newTotal,
+      successfulUpdates: success ? prev.successfulUpdates + 1 : prev.successfulUpdates,
+      failedUpdates: success ? prev.failedUpdates : prev.failedUpdates + 1,
+      averageUpdateTime: totalDuration / newTotal,
+      lastUpdateTime: Date.now(),
+      lastUpdateDuration: duration
+    };
   }, []);
 
   /**
@@ -564,14 +560,14 @@ export function useCosmographIncrementalUpdates(
   const reset = useCallback(() => {
     nodeIdToIndexRef.current.clear();
     dataPreparerRef.current.reset();
-    setMetrics({
+    metricsRef.current = {
       totalUpdates: 0,
       successfulUpdates: 0,
       failedUpdates: 0,
       averageUpdateTime: 0,
       lastUpdateTime: Date.now(),
       lastUpdateDuration: 0
-    });
+    };
     log('Incremental update system reset');
   }, [log]);
 
@@ -594,7 +590,7 @@ export function useCosmographIncrementalUpdates(
     reset,
     
     // Metrics
-    metrics,
+    metrics: metricsRef,
     
     // Check if ready
     isReady: supportsIncrementalUpdates(cosmographRef)

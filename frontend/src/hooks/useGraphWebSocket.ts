@@ -201,8 +201,8 @@ export function useGraphWebSocket(config: UseGraphWebSocketConfig = {}) {
     overall: 'disconnected'
   });
 
-  // Update statistics
-  const [statistics, setStatistics] = useState<UpdateStatistics>({
+  // Update statistics (ref to avoid re-renders on every delta)
+  const statisticsRef = useRef<UpdateStatistics>({
     totalUpdates: 0,
     deltaUpdates: 0,
     nodeAccessEvents: 0,
@@ -272,15 +272,15 @@ export function useGraphWebSocket(config: UseGraphWebSocketConfig = {}) {
     const now = Date.now();
     updateTimestampsRef.current.push(now);
     
-    setStatistics(prev => ({
-      ...prev,
+    const prev = statisticsRef.current;
+    statisticsRef.current = {
       totalUpdates: prev.totalUpdates + 1,
       deltaUpdates: type === 'delta' ? prev.deltaUpdates + 1 : prev.deltaUpdates,
       nodeAccessEvents: type === 'nodeAccess' ? prev.nodeAccessEvents + 1 : prev.nodeAccessEvents,
       cacheInvalidations: type === 'cache' ? prev.cacheInvalidations + 1 : prev.cacheInvalidations,
       lastUpdateTime: now,
       updateRate: calculateUpdateRate()
-    }));
+    };
   }, [calculateUpdateRate]);
 
   /**
@@ -325,14 +325,13 @@ export function useGraphWebSocket(config: UseGraphWebSocketConfig = {}) {
       onDeltaUpdate(event);
     }
     
-    // Clear batch
-    updateBatchRef.current = {
-      nodes: new Map(),
-      edges: new Map(),
-      deletedNodeIds: new Set(),
-      deletedEdgeIds: new Set(),
-      timestamp: Date.now()
-    };
+    // Clear batch (in-place to avoid GC pressure from new Map/Set allocation)
+    batch.nodes.clear();
+    batch.edges.clear();
+    batch.deletedNodeIds.clear();
+    batch.deletedEdgeIds.clear();
+    batch.timestamp = Date.now();
+    batch.operation = undefined;
     
     updateStats('delta');
   }, [onDeltaUpdate, updateStats, log]);
@@ -518,14 +517,14 @@ export function useGraphWebSocket(config: UseGraphWebSocketConfig = {}) {
    * Clear statistics
    */
   const clearStatistics = useCallback(() => {
-    setStatistics({
+    statisticsRef.current = {
       totalUpdates: 0,
       deltaUpdates: 0,
       nodeAccessEvents: 0,
       cacheInvalidations: 0,
       lastUpdateTime: null,
       updateRate: 0
-    });
+    };
     updateTimestampsRef.current = [];
   }, []);
 
@@ -718,7 +717,7 @@ export function useGraphWebSocket(config: UseGraphWebSocketConfig = {}) {
     isConnected: connectionStatus.overall !== 'disconnected',
     
     // Statistics
-    statistics,
+    statistics: statisticsRef,
     clearStatistics,
     
     // Recent events
@@ -760,7 +759,7 @@ export function useSimpleGraphUpdates(
   });
   
   return {
-    updateCount: statistics.totalUpdates,
-    updateRate: statistics.updateRate
+    updateCount: statistics.current.totalUpdates,
+    updateRate: statistics.current.updateRate
   };
 }

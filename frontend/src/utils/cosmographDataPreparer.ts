@@ -346,17 +346,18 @@ export function sanitizeNode(
     
     // Verify we have exactly 16 fields to match cosmograph_points view
     // Note: x and y can be null for incremental updates (they'll be computed by Cosmograph)
-    const fieldCount = Object.keys(sanitizedNode).length;
-    const nullCount = Object.values(sanitizedNode).filter(v => v === null || v === undefined).length;
-    const allowedNulls = ['x', 'y']; // These fields can be null for incremental updates
-    const actualNulls = Object.entries(sanitizedNode)
-      .filter(([k, v]) => v === null || v === undefined)
-      .map(([k, v]) => k);
-    const unexpectedNulls = actualNulls.filter(field => !allowedNulls.includes(field));
+    if (import.meta.env.DEV) {
+      const fieldCount = Object.keys(sanitizedNode).length;
+      const allowedNulls = ['x', 'y']; // These fields can be null for incremental updates
+      const actualNulls = Object.entries(sanitizedNode)
+        .filter(([, v]) => v === null || v === undefined)
+        .map(([k]) => k);
+      const unexpectedNulls = actualNulls.filter(field => !allowedNulls.includes(field));
 
-    if (fieldCount !== 16 || unexpectedNulls.length > 0) {
-      console.error(`[sanitizeNode] CRITICAL: DuckDB cosmograph_points view requires exactly 16 fields with only x,y allowed to be null. Have ${fieldCount} fields with unexpected nulls in [${unexpectedNulls.join(', ')}]:`,
-        Object.entries(sanitizedNode).map(([k, v]) => `${k}: ${v === null ? 'NULL' : typeof v}`));
+      if (fieldCount !== 16 || unexpectedNulls.length > 0) {
+        console.error(`[sanitizeNode] CRITICAL: DuckDB cosmograph_points view requires exactly 16 fields with only x,y allowed to be null. Have ${fieldCount} fields with unexpected nulls in [${unexpectedNulls.join(', ')}]:`,
+          Object.entries(sanitizedNode).map(([k, v]) => `${k}: ${v === null ? 'NULL' : typeof v}`));
+      }
     }
   } else {
     // Initial load: include all fields
@@ -420,17 +421,18 @@ export function sanitizeNode(
     sanitizedNode.clusterStrength = Number(config.clusterStrength ?? 0.7);
     
     // Verify we have exactly 16 fields to match cosmograph_points view (for initial load too)
-    const fieldCount = Object.keys(sanitizedNode).length;
-    const nullCount = Object.values(sanitizedNode).filter(v => v === null || v === undefined).length;
-    const allowedNulls = ['x', 'y', 'summary']; // These fields can be null
-    const actualNulls = Object.entries(sanitizedNode)
-      .filter(([k, v]) => v === null || v === undefined)
-      .map(([k, v]) => k);
-    const unexpectedNulls = actualNulls.filter(field => !allowedNulls.includes(field));
+    if (import.meta.env.DEV) {
+      const fieldCount = Object.keys(sanitizedNode).length;
+      const allowedNulls = ['x', 'y', 'summary']; // These fields can be null
+      const actualNulls = Object.entries(sanitizedNode)
+        .filter(([, v]) => v === null || v === undefined)
+        .map(([k]) => k);
+      const unexpectedNulls = actualNulls.filter(field => !allowedNulls.includes(field));
 
-    if (fieldCount !== 16 || unexpectedNulls.length > 0) {
-      console.error(`[sanitizeNode] CRITICAL: DuckDB cosmograph_points view requires exactly 16 fields. Have ${fieldCount} fields with unexpected nulls in [${unexpectedNulls.join(', ')}]:`,
-        Object.entries(sanitizedNode).map(([k, v]) => `${k}: ${v === null ? 'NULL' : typeof v}`));
+      if (fieldCount !== 16 || unexpectedNulls.length > 0) {
+        console.error(`[sanitizeNode] CRITICAL: DuckDB cosmograph_points view requires exactly 16 fields. Have ${fieldCount} fields with unexpected nulls in [${unexpectedNulls.join(', ')}]:`,
+          Object.entries(sanitizedNode).map(([k, v]) => `${k}: ${v === null ? 'NULL' : typeof v}`));
+      }
     }
   }
   
