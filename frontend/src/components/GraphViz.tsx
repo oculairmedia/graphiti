@@ -1,6 +1,5 @@
 import React, { useRef, useEffect, useCallback, useMemo } from 'react';
 import { useStableCallback } from '../hooks/useStableCallback';
-import { CosmographProvider } from '@cosmograph/react';
 import { useGraphConfig } from '../contexts/GraphConfigProvider';
 import { ControlPanel } from './ControlPanel';
 import { LazyGraphCanvas } from './LazyGraphCanvas';
@@ -105,7 +104,7 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
 
   // DEBUG: Log what transformedData contains (only when state changes significantly)
   useEffect(() => {
-    if (hasValidData) {
+    if (hasValidData && import.meta.env.DEV) {
       console.log('[GraphViz] Data ready:', {
         nodesCount: cosmographNodes.length,
         linksCount: cosmographLinks.length
@@ -179,7 +178,6 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
   }
 
   return (
-    <CosmographProvider>
       <CentralityStatsProvider nodes={cosmographNodes}>
         <div className={`relative h-full w-full overflow-hidden ${isFullscreen ? 'fixed inset-0 z-50' : ''} ${className || ''}`}>
           {/* Navigation Bar - GRAPH-93: Now reads most state from Zustand stores */}
@@ -300,7 +298,6 @@ export const GraphViz: React.FC<GraphVizProps> = ({ className }) => {
           )}
         </div>
       </CentralityStatsProvider>
-    </CosmographProvider>
   );
 };
 
