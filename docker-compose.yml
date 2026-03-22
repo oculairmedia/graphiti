@@ -112,7 +112,7 @@ services:
         - CMD
         - curl
         - -f
-        - http://localhost:3000/api/stats
+        - http://localhost:3000/health
       interval: 15s
       timeout: 5s
       retries: 10
