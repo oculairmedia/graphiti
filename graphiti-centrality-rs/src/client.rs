@@ -106,7 +106,8 @@ impl FalkorClient {
         Ok(stats)
     }
 
-    /// Store centrality scores back to the database using batch updates
+    /// Store centrality scores using UNWIND batches with adaptive sizing
+    /// and retry-on-backpressure (replaces per-node fallback).
     pub async fn store_centrality_scores(
         &self,
         scores: &HashMap<String, HashMap<String, f64>>,
@@ -116,19 +117,23 @@ impl FalkorClient {
             scores.len()
         );
 
-        // Process in batches of 100 nodes for reliable FalkorDB updates
-        const BATCH_SIZE: usize = 100;
+        const INITIAL_BATCH_SIZE: usize = 500;
+        const MIN_BATCH_SIZE: usize = 50;
+        const INTER_BATCH_DELAY_MS: u64 = 20;
+        const MAX_RETRIES: u32 = 3;
+
+        let mut batch_size = INITIAL_BATCH_SIZE;
         let mut processed = 0;
 
-        // Convert scores to a vector for easier batching
         let score_entries: Vec<(&String, &HashMap<String, f64>)> = scores.iter().collect();
+        let mut offset = 0;
 
-        for chunk in score_entries.chunks(BATCH_SIZE) {
-            // Build batch update data
-            let mut batch_data = Vec::new();
+        while offset < score_entries.len() {
+            let end = (offset + batch_size).min(score_entries.len());
+            let chunk = &score_entries[offset..end];
 
+            let mut batch_data = Vec::with_capacity(chunk.len());
             for (node_uuid, node_scores) in chunk {
-                // Extract all centrality values with defaults
                 let pagerank = node_scores.get("pagerank").copied().unwrap_or(0.0);
                 let degree = node_scores.get("degree").copied().unwrap_or(0.0);
                 let betweenness = node_scores.get("betweenness").copied().unwrap_or(0.0);
@@ -136,80 +141,74 @@ impl FalkorClient {
                 let importance = node_scores.get("importance").copied().unwrap_or(0.0);
 
                 batch_data.push(format!(
-                    "{{uuid: '{}', pagerank: {}, degree: {}, betweenness: {}, eigenvector: {}, importance: {}}}",
+                    "{{uuid: '{}', pr: {}, dg: {}, bt: {}, ev: {}, im: {}}}",
                     node_uuid, pagerank, degree, betweenness, eigenvector, importance
                 ));
             }
 
-            // Use UNWIND for batch updates - much more efficient than individual queries
             let batch_query = format!(
-                "UNWIND [{}] AS nodeData
-                 MATCH (n {{uuid: nodeData.uuid}})
-                 SET n.pagerank_centrality = nodeData.pagerank,
-                     n.degree_centrality = nodeData.degree,
-                     n.betweenness_centrality = nodeData.betweenness,
-                     n.eigenvector_centrality = nodeData.eigenvector,
-                     n.importance_score = nodeData.importance",
+                "UNWIND [{}] AS d
+                 MATCH (n {{uuid: d.uuid}})
+                 SET n.pagerank_centrality = d.pr,
+                     n.degree_centrality = d.dg,
+                     n.betweenness_centrality = d.bt,
+                     n.eigenvector_centrality = d.ev,
+                     n.importance_score = d.im",
                 batch_data.join(", ")
             );
 
-            // Execute batch update
-            match self.execute_query(&batch_query, None).await {
-                Ok(_) => {
-                    processed += chunk.len();
-                    debug!(
-                        "Batch update completed for {} nodes (total: {})",
-                        chunk.len(),
-                        processed
-                    );
-                }
-                Err(e) => {
-                    warn!("Failed to store batch of {} scores: {}", chunk.len(), e);
-                    // Try individual updates as fallback for this batch
-                    for (node_uuid, node_scores) in chunk {
-                        let mut set_clauses = Vec::new();
-                        for (score_name, score_value) in node_scores.iter() {
-                            let property_name = match score_name.as_str() {
-                                "pagerank" => "pagerank_centrality",
-                                "degree" => "degree_centrality",
-                                "betweenness" => "betweenness_centrality",
-                                "eigenvector" => "eigenvector_centrality",
-                                "importance" => "importance_score",
-                                _ => &format!("{}_centrality", score_name),
-                            };
-                            set_clauses.push(format!("n.{} = {}", property_name, score_value));
+            let mut succeeded = false;
+            for attempt in 0..MAX_RETRIES {
+                match self.execute_query(&batch_query, None).await {
+                    Ok(_) => {
+                        processed += chunk.len();
+                        succeeded = true;
+                        if batch_size < INITIAL_BATCH_SIZE {
+                            batch_size = (batch_size * 2).min(INITIAL_BATCH_SIZE);
                         }
+                        break;
+                    }
+                    Err(e) => {
+                        let delay = INTER_BATCH_DELAY_MS * (2_u64.pow(attempt));
+                        warn!(
+                            "Batch {}-{} failed (attempt {}/{}), backoff {}ms: {}",
+                            offset, end, attempt + 1, MAX_RETRIES, delay, e
+                        );
+                        tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
 
-                        if !set_clauses.is_empty() {
-                            let fallback_query = format!(
-                                "MATCH (n {{uuid: '{}'}}) SET {}",
-                                node_uuid,
-                                set_clauses.join(", ")
-                            );
-
-                            if let Err(e) = self.execute_query(&fallback_query, None).await {
-                                warn!("Fallback update also failed for node {}: {}", node_uuid, e);
-                            } else {
-                                processed += 1;
-                            }
+                        if attempt == MAX_RETRIES - 1 && batch_size > MIN_BATCH_SIZE {
+                            batch_size = (batch_size / 2).max(MIN_BATCH_SIZE);
+                            warn!("Reducing batch size to {}", batch_size);
                         }
                     }
                 }
             }
 
-            // Log progress for large datasets
-            if scores.len() > 1000 && processed % 1000 == 0 {
-                info!(
-                    "Stored centrality scores for {}/{} nodes",
-                    processed,
-                    scores.len()
+            if !succeeded {
+                warn!(
+                    "Skipping batch {}-{} after {} retries",
+                    offset, end, MAX_RETRIES
                 );
             }
+
+            offset = end;
+
+            if scores.len() > 1000 && processed % 5000 == 0 && processed > 0 {
+                info!(
+                    "Stored centrality scores for {}/{} nodes (batch_size={})",
+                    processed,
+                    scores.len(),
+                    batch_size
+                );
+            }
+
+            tokio::time::sleep(std::time::Duration::from_millis(INTER_BATCH_DELAY_MS)).await;
         }
 
         info!(
-            "Centrality scores stored successfully for {} nodes",
-            processed
+            "Centrality scores stored for {}/{} nodes",
+            processed,
+            scores.len()
         );
         Ok(())
     }
