@@ -104,8 +104,7 @@ services:
         condition: service_healthy
       graphiti-centrality-rs:
         condition: service_healthy
-      graphiti-init:
-        condition: service_completed_successfully
+
     healthcheck:
       test:
         - CMD
@@ -366,52 +365,7 @@ services:
       - homepage.icon=si-rss
       - homepage.href=http://${HOMEPAGE_HOST:-192.168.50.90}:${MCP_PORT:-3010}
       - homepage.description=Model Context Protocol server
-  # =============================================================================
-  # Cold Boot Initialization Service
-  # =============================================================================
-  # Waits for FalkorDB to be healthy (RDB reload ~2min)
-  graphiti-init:
-    image: alpine:latest
-    container_name: graphiti-init
-    restart: no # Run once on startup, don't restart
-    entrypoint:
-      - /bin/sh
-      - -c
-    command:
-      - |
-        # Simple init: just verify FalkorDB has data loaded from RDB
-        apk add --no-cache redis bash
-        echo "Waiting for FalkorDB RDB reload to complete..."
-        sleep 5
-        # Check edge count
-        EDGES=$(redis-cli -h falkordb -p 6379 GRAPH.QUERY graphiti_migration "MATCH ()-[r]->() RETURN count(r)" --csv 2>/dev/null | tail -1)
-        echo "FalkorDB has $EDGES edges loaded from RDB persistence"
-        if [ "$EDGES" -gt 0 ]; then
-          echo "✅ FalkorDB ready with persisted data"
-        else
-          echo "⚠️ FalkorDB empty - this may be first boot or RDB was lost"
-        fi
-        touch /tmp/graphiti-init-complete
-        echo "Init complete"
-    volumes:
-      - ./scripts:/scripts:ro
-      - init_ready_marker:/tmp
-    environment:
-      - FALKORDB_HOST=${FALKORDB_HOST:-falkordb}
-      - FALKORDB_PORT=${FALKORDB_PORT:-6379}
-      - FALKORDB_DATABASE=${FALKORDB_DATABASE:-graphiti_migration}
-      - READY_MARKER_FILE=/tmp/graphiti-init-complete
-    networks:
-      - graphiti_network
-    depends_on:
-      falkordb:
-        condition: service_healthy
-    labels:
-      - homepage.group=Knowledge Graph
-      - homepage.name=Init Service
-      - homepage.icon=si-bootstrap
-      - homepage.description=Cold boot initialization (verifies FalkorDB RDB loaded)
-      - homepage.enable=false
+
   # =============================================================================
   # Temporal Worker Services
   # =============================================================================
@@ -1011,10 +965,6 @@ volumes:
     driver: local
     labels:
       - description=Grafana dashboards and configuration
-  init_ready_marker:
-    driver: local
-    labels:
-      - description=Cold boot initialization ready marker
 # =============================================================================
 # Networks
 # =============================================================================

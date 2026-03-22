@@ -21,22 +21,10 @@ scrape_configs:
       - targets: ['graph-visualizer-rust:3000']
     metrics_path: '/metrics'
 
-  # Queue Service
-  - job_name: 'graphiti-queue'
-    static_configs:
-      - targets: ['graphiti-queued:8080']
-    metrics_path: '/health'
-
-  # FalkorDB (Redis Exporter needed)
+  # FalkorDB (Redis Exporter)
   - job_name: 'falkordb'
     static_configs:
       - targets: ['redis-exporter:9121']
-
-  # API Server
-  - job_name: 'graphiti-api'
-    static_configs:
-      - targets: ['graph:8000']
-    metrics_path: '/metrics'
 
   # Temporal Ingestion Workers
   - job_name: 'temporal-workers'
@@ -53,9 +41,3 @@ scrape_configs:
         regex: 'graphiti-temporal-ingestion-(.+)-worker:.+'
         target_label: 'worker_stage'
         replacement: '${1}'
-
-  # Temporal Monitoring Worker
-  - job_name: 'temporal-monitoring'
-    static_configs:
-      - targets: ['graphiti-temporal-monitoring-worker:9195']
-    metrics_path: '/metrics'
