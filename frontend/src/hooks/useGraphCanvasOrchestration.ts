@@ -215,14 +215,6 @@ export function useGraphCanvasOrchestration(
     if (incrementalUpdatesReady && cosmographRef.current) {
       const success = await applyDelta(event as unknown as import('../utils/cosmographDataPreparer').DeltaUpdate);
       if (success) {
-        markIncrementalSyncRef.current?.();
-        if (event.nodes?.length) {
-          if (event.operation === 'add') addNodes(event.nodes);
-          else if (event.operation === 'update') updateNodes(event.nodes);
-        }
-        if (event.edges?.length) {
-          if (event.operation === 'add') addLinks(event.edges);
-        }
         return;
       }
     }
