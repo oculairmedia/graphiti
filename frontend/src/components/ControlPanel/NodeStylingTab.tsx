@@ -6,7 +6,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { ColorPicker } from '@/components/ui/ColorPicker';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { Slider } from '@/components/ui/slider';
+import { ControlSlider } from '@/components/ui/ControlSlider';
 import { useColorUtils } from '@/hooks/useColorUtils';
 import { generateNodeTypeColor } from '@/utils/NodeColorManager';
 
@@ -251,17 +251,15 @@ export const NodeStylingTab: React.FC<NodeStylingTabProps> = ({
 
             {config.useQuantileScaling && (
               <div>
-                <div className="flex justify-between items-center mb-2">
-                  <Label className="text-xs text-muted-foreground">Quantile Bins</Label>
-                  <Badge variant="outline" className="text-xs">{config.quantileBins || 5}</Badge>
-                </div>
-                <Slider
+                <ControlSlider
+                  label="Quantile Bins"
+                  showInput={false}
                   min={3}
                   max={10}
                   step={1}
-                  value={[config.quantileBins || 5]}
-                  onValueChange={([value]) => onConfigUpdate({ quantileBins: value })}
-                  className="w-full"
+                  value={config.quantileBins || 5}
+                  onChange={(value) => onConfigUpdate({ quantileBins: value })}
+                  className="w-full mt-2"
                 />
               </div>
             )}
@@ -298,47 +296,44 @@ export const NodeStylingTab: React.FC<NodeStylingTabProps> = ({
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <div className="flex justify-between items-center mb-2">
-                <Label className="text-xs text-muted-foreground">Min Size</Label>
-                <Badge variant="outline" className="text-xs">{config.minNodeSize}px</Badge>
-              </div>
-              <Slider
-                value={[config.minNodeSize]}
-                onValueChange={([value]) => onConfigUpdate({ minNodeSize: value })}
+              <ControlSlider
+                label="Min Size"
+                showInput={false}
+                value={config.minNodeSize}
+                onChange={(value) => onConfigUpdate({ minNodeSize: value })}
                 max={10}
                 min={1}
                 step={1}
                 className="w-full"
+                formatValue={(v) => `${v}px`}
               />
             </div>
             <div>
-              <div className="flex justify-between items-center mb-2">
-                <Label className="text-xs text-muted-foreground">Max Size</Label>
-                <Badge variant="outline" className="text-xs">{config.maxNodeSize}px</Badge>
-              </div>
-              <Slider
-                value={[config.maxNodeSize]}
-                onValueChange={([value]) => onConfigUpdate({ maxNodeSize: value })}
+              <ControlSlider
+                label="Max Size"
+                showInput={false}
+                value={config.maxNodeSize}
+                onChange={(value) => onConfigUpdate({ maxNodeSize: value })}
                 max={30}
                 min={5}
                 step={1}
                 className="w-full"
+                formatValue={(v) => `${v}px`}
               />
             </div>
           </div>
 
           <div>
-            <div className="flex justify-between items-center mb-2">
-              <Label className="text-xs text-muted-foreground">Size Multiplier</Label>
-              <Badge variant="outline" className="text-xs">{config.sizeMultiplier.toFixed(1)}x</Badge>
-            </div>
-            <Slider
-              value={[config.sizeMultiplier]}
-              onValueChange={([value]) => onConfigUpdate({ sizeMultiplier: value })}
+            <ControlSlider
+              label="Size Multiplier"
+              showInput={false}
+              value={config.sizeMultiplier}
+              onChange={(value) => onConfigUpdate({ sizeMultiplier: value })}
               max={3}
               min={0.1}
               step={0.1}
               className="w-full"
+              formatValue={(v) => `${v.toFixed(1)}x`}
             />
           </div>
         </CardContent>

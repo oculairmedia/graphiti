@@ -46,6 +46,52 @@ pub fn parse_nodes_from_falkor_v2(result: LazyResultSet<'_>) -> Result<Vec<Node>
     Ok(nodes)
 }
 
+/// Parse nodes with scores from fulltext search results
+/// Expects rows with format: [node, score]
+pub fn parse_nodes_with_scores_from_falkor_v2(result: LazyResultSet<'_>) -> Result<Vec<Node>> {
+    let mut nodes = Vec::new();
+    let mut row_count = 0;
+
+    for row in result {
+        row_count += 1;
+        if row.len() >= 2 {
+            // Extract node and score from row
+            if let FalkorValue::Node(falkor_node) = &row[0] {
+                if let Some(mut node) = parse_single_node_v2(falkor_node)? {
+                    // Extract score (second column)
+                    let score = match &row[1] {
+                        FalkorValue::F64(f) => Some(*f as f32),
+                        FalkorValue::I64(i) => Some(*i as f32),
+                        _ => {
+                            tracing::warn!(
+                                "Row {}: Expected numeric score, got {:?}",
+                                row_count,
+                                std::mem::discriminant(&row[1])
+                            );
+                            None
+                        }
+                    };
+                    node.score = score;
+                    nodes.push(node);
+                }
+            }
+        } else {
+            tracing::warn!(
+                "Row {}: Expected 2 columns (node, score), got {}",
+                row_count,
+                row.len()
+            );
+        }
+    }
+
+    tracing::debug!(
+        "parse_nodes_with_scores_from_falkor_v2: processed {} rows, parsed {} nodes with scores",
+        row_count,
+        nodes.len()
+    );
+    Ok(nodes)
+}
+
 pub fn parse_edges_from_falkor_v2(result: LazyResultSet<'_>) -> Result<Vec<Edge>> {
     let mut edges = Vec::new();
 

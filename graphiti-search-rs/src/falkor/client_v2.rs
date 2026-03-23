@@ -188,12 +188,12 @@ impl FalkorClientV2 {
 
         // Use FalkorDB's fulltext index procedure for fast search
         // This uses the index created on Entity(name) and Entity(summary)
-        // The fulltext index returns nodes ordered by relevance
+        // The fulltext index returns nodes ordered by relevance with scores
         let cypher = format!(
-            "CALL db.idx.fulltext.queryNodes('Entity', '{}') YIELD node
-             WITH node
+            "CALL db.idx.fulltext.queryNodes('Entity', '{}') YIELD node, score
+             WITH node, score
              LIMIT {}
-             RETURN node",
+             RETURN node, score",
             escaped_query, limit
         );
 
@@ -201,7 +201,7 @@ impl FalkorClientV2 {
 
         match self.graph.query(&cypher).execute().await {
             Ok(result) => {
-                let mut nodes = parser_v2::parse_nodes_from_falkor_v2(result.data)?;
+                let mut nodes = parser_v2::parse_nodes_with_scores_from_falkor_v2(result.data)?;
 
                 // Apply group filter if specified (post-filtering since fulltext index doesn't support it)
                 if let Some(groups) = group_ids {
@@ -303,7 +303,7 @@ impl FalkorClientV2 {
              YIELD node, score
              WITH node, (2 - score) / 2 AS similarity
              WHERE similarity >= {}
-             RETURN node.uuid AS uuid_str",
+             RETURN node.uuid AS uuid_str, similarity",
             limit, embedding_str, min_score
         );
 
@@ -313,16 +313,26 @@ impl FalkorClientV2 {
         );
 
         let mut node_uuids: Vec<String> = Vec::new();
+        let mut node_scores: std::collections::HashMap<String, f32> =
+            std::collections::HashMap::new();
 
         match self.graph.query(&vector_query_cypher).execute().await {
             Ok(result) => {
                 tracing::info!("HNSW node query returned {} rows", result.data.len());
                 for row in result.data {
-                    if let Some(falkordb::FalkorValue::String(uuid)) = row.first() {
-                        node_uuids.push(uuid.clone());
+                    if row.len() >= 2 {
+                        if let Some(falkordb::FalkorValue::String(uuid)) = row.first() {
+                            let score = match &row[1] {
+                                falkordb::FalkorValue::F64(f) => *f as f32,
+                                falkordb::FalkorValue::I64(i) => *i as f32,
+                                _ => 0.0,
+                            };
+                            node_uuids.push(uuid.clone());
+                            node_scores.insert(uuid.clone(), score);
+                        }
                     }
                 }
-                tracing::info!("Extracted {} node UUIDs", node_uuids.len());
+                tracing::info!("Extracted {} node UUIDs with scores", node_uuids.len());
             }
             Err(e) => {
                 tracing::warn!(
@@ -401,7 +411,16 @@ impl FalkorClientV2 {
         );
 
         let result = self.graph.query(&fetch_cypher).execute().await?;
-        parser_v2::parse_nodes_from_falkor_v2(result.data)
+        let mut nodes = parser_v2::parse_nodes_from_falkor_v2(result.data)?;
+
+        // Apply similarity scores from HNSW query to the fetched nodes
+        for node in &mut nodes {
+            if let Some(&score) = node_scores.get(&node.uuid.to_string()) {
+                node.score = Some(score);
+            }
+        }
+
+        Ok(nodes)
     }
 
     /// Fallback brute-force node similarity search
@@ -543,23 +562,34 @@ impl FalkorClientV2 {
 
         // Use FalkorDB's fulltext index procedure for fast search
         // This uses the index created on RELATES_TO(fact)
-        // Returns relationships ordered by relevance
+        // Returns relationships ordered by relevance with scores
         let cypher = format!(
-            "CALL db.idx.fulltext.queryRelationships('RELATES_TO', '{}') YIELD relationship
-             WITH relationship
+            "CALL db.idx.fulltext.queryRelationships('RELATES_TO', '{}') YIELD relationship, score
+             WITH relationship, score
              LIMIT {}
-             RETURN relationship.uuid AS uuid_str",
+             RETURN relationship.uuid AS uuid_str, score",
             escaped_query, limit
         );
 
         tracing::debug!("Fulltext edge query (phase 1): {}", cypher);
 
+        let mut edge_scores: std::collections::HashMap<String, f32> =
+            std::collections::HashMap::new();
         let edge_uuids: Vec<String> = match self.graph.query(&cypher).execute().await {
             Ok(result) => {
                 let mut uuids = Vec::new();
                 for row in result.data {
-                    if let Some(falkordb::FalkorValue::String(uuid)) = row.first() {
-                        uuids.push(uuid.clone());
+                    if row.len() >= 2 {
+                        if let Some(falkordb::FalkorValue::String(uuid)) = row.first() {
+                            uuids.push(uuid.clone());
+                            // Extract score
+                            let score = match &row[1] {
+                                falkordb::FalkorValue::F64(f) => *f as f32,
+                                falkordb::FalkorValue::I64(i) => *i as f32,
+                                _ => 0.0,
+                            };
+                            edge_scores.insert(uuid.clone(), score);
+                        }
                     }
                 }
                 uuids
@@ -630,7 +660,16 @@ impl FalkorClientV2 {
         );
 
         let fetch_result = self.graph.query(&fetch_cypher).execute().await?;
-        parse_edges_from_properties(fetch_result.data)
+        let mut edges = parse_edges_from_properties(fetch_result.data)?;
+
+        // Apply fulltext scores to edges
+        for edge in &mut edges {
+            if let Some(&score) = edge_scores.get(&edge.uuid.to_string()) {
+                edge.score = Some(score);
+            }
+        }
+
+        Ok(edges)
     }
 
     /// Fallback fulltext search using CONTAINS (slower but works without index)
@@ -703,6 +742,8 @@ impl FalkorClientV2 {
 
         let start = std::time::Instant::now();
         let mut edge_uuids: Vec<String> = Vec::new();
+        let mut edge_scores: std::collections::HashMap<String, f32> =
+            std::collections::HashMap::new();
 
         match self.graph.query(&vector_query_cypher).execute().await {
             Ok(result) => {
@@ -713,11 +754,17 @@ impl FalkorClientV2 {
                     result.data.len()
                 );
 
-                // Extract UUIDs from the vector index results
+                // Extract UUIDs and scores from the vector index results
                 for row in result.data {
                     if row.len() >= 2 {
                         if let Some(falkordb::FalkorValue::String(uuid)) = row.first() {
+                            let score = match &row[1] {
+                                falkordb::FalkorValue::F64(f) => *f as f32,
+                                falkordb::FalkorValue::I64(i) => *i as f32,
+                                _ => 0.0,
+                            };
                             edge_uuids.push(uuid.clone());
+                            edge_scores.insert(uuid.clone(), score);
                         }
                     }
                 }
@@ -767,7 +814,16 @@ impl FalkorClientV2 {
                 );
 
                 let fetch_result = self.graph.query(&fetch_cypher).execute().await?;
-                return parse_edges_from_properties(fetch_result.data);
+                let mut edges = parse_edges_from_properties(fetch_result.data)?;
+
+                // Apply similarity scores from HNSW query to the fetched edges
+                for edge in &mut edges {
+                    if let Some(&score) = edge_scores.get(&edge.uuid.to_string()) {
+                        edge.score = Some(score);
+                    }
+                }
+
+                return Ok(edges);
             }
         }
 
@@ -809,7 +865,16 @@ impl FalkorClientV2 {
         );
 
         // Parse edges using the optimized property-based parser
-        parse_edges_from_properties(fetch_result.data)
+        let mut edges = parse_edges_from_properties(fetch_result.data)?;
+
+        // Apply similarity scores from HNSW query to the fetched edges
+        for edge in &mut edges {
+            if let Some(&score) = edge_scores.get(&edge.uuid.to_string()) {
+                edge.score = Some(score);
+            }
+        }
+
+        Ok(edges)
     }
 
     /// Fallback brute-force similarity search (used when vector index is not available)

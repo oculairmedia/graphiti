@@ -64,9 +64,6 @@ export class MonitoringClient {
     this.visualizerBaseUrl = import.meta.env.VITE_VISUALIZER_URL || 'http://localhost:3000';
   }
 
-  /**
-   * Fetch with timeout and error handling
-   */
   private async fetchWithTimeout<T>(url: string, timeout = this.DEFAULT_TIMEOUT): Promise<T> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeout);
@@ -85,7 +82,15 @@ export class MonitoringClient {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
-      return await response.json();
+      const text = await response.text();
+      try {
+        return JSON.parse(text);
+      } catch (e) {
+        if (text.startsWith('<!DOCTYPE') || text.startsWith('<html')) {
+            throw new Error(`Service endpoint returned HTML (likely Nginx fallback) instead of JSON: ${url}`);
+        }
+        throw new Error(`Invalid JSON response from ${url}: ${e}`);
+      }
     } catch (error) {
       clearTimeout(timeoutId);
       throw error;

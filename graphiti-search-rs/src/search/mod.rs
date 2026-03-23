@@ -22,6 +22,28 @@ const MAX_BFS_SEEDS: usize = 50;
 
 use self::cache::EnhancedCache;
 
+/// Set default scores for nodes that don't have scores yet
+fn ensure_node_scores(nodes: &mut [Node]) {
+    let len = nodes.len().max(1) as f32;
+    for (i, node) in nodes.iter_mut().enumerate() {
+        if node.score.is_none() {
+            // Default score decreases with position (1.0 for first, approaching 0 for last)
+            node.score = Some(1.0 - (i as f32 / len));
+        }
+    }
+}
+
+/// Set default scores for edges that don't have scores yet
+fn ensure_edge_scores(edges: &mut [Edge]) {
+    let len = edges.len().max(1) as f32;
+    for (i, edge) in edges.iter_mut().enumerate() {
+        if edge.score.is_none() {
+            // Default score decreases with position (1.0 for first, approaching 0 for last)
+            edge.score = Some(1.0 - (i as f32 / len));
+        }
+    }
+}
+
 pub struct SearchEngine {
     falkor_pool: FalkorPool,
     cache: EnhancedCache,
@@ -304,7 +326,12 @@ impl SearchEngine {
         }
 
         // Cap total results before reranking to prevent O(n²) explosion
-        let method_results = self.cap_method_results(method_results, "edge");
+        let mut method_results = self.cap_method_results(method_results, "edge");
+
+        // Ensure all edges have scores before reranking
+        for edges in &mut method_results {
+            ensure_edge_scores(edges);
+        }
 
         // Apply reranking
         let reranked = reranking::rerank_edges(
@@ -450,7 +477,12 @@ impl SearchEngine {
         }
 
         // Cap total results before reranking to prevent O(n²) explosion
-        let method_results = self.cap_method_results(method_results, "node");
+        let mut method_results = self.cap_method_results(method_results, "node");
+
+        // Ensure all nodes have scores before reranking
+        for nodes in &mut method_results {
+            ensure_node_scores(nodes);
+        }
 
         // Apply reranking with centrality boost factor
         let reranked = reranking::rerank_nodes(
@@ -536,5 +568,121 @@ impl SearchEngine {
         } else {
             Ok(vec![])
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::Utc;
+    use uuid::Uuid;
+
+    #[test]
+    fn test_ensure_node_scores_sets_default_scores() {
+        let mut nodes = vec![
+            Node {
+                uuid: Uuid::new_v4(),
+                name: "Node 1".to_string(),
+                node_type: "test".to_string(),
+                created_at: Utc::now(),
+                group_id: None,
+                score: None,
+                summary: None,
+                embedding: None,
+                centrality: None,
+                attributes: None,
+                valid_at: None,
+                invalid_at: None,
+            },
+            Node {
+                uuid: Uuid::new_v4(),
+                name: "Node 2".to_string(),
+                node_type: "test".to_string(),
+                created_at: Utc::now(),
+                group_id: None,
+                score: None,
+                summary: None,
+                embedding: None,
+                centrality: None,
+                attributes: None,
+                valid_at: None,
+                invalid_at: None,
+            },
+            Node {
+                uuid: Uuid::new_v4(),
+                name: "Node 3".to_string(),
+                node_type: "test".to_string(),
+                created_at: Utc::now(),
+                group_id: None,
+                score: Some(0.99), // This one already has a score
+                summary: None,
+                embedding: None,
+                centrality: None,
+                attributes: None,
+                valid_at: None,
+                invalid_at: None,
+            },
+        ];
+
+        ensure_node_scores(&mut nodes);
+
+        // First node should get score of 1.0
+        assert!(nodes[0].score.is_some());
+        assert!((nodes[0].score.unwrap() - 1.0).abs() < 0.01);
+
+        // Second node should get a lower score
+        assert!(nodes[1].score.is_some());
+        assert!(nodes[1].score.unwrap() < 1.0);
+        assert!(nodes[1].score.unwrap() > 0.0);
+
+        // Third node should keep its original score
+        assert_eq!(nodes[2].score, Some(0.99));
+    }
+
+    #[test]
+    fn test_ensure_edge_scores_sets_default_scores() {
+        let mut edges = vec![
+            Edge {
+                uuid: Uuid::new_v4(),
+                source_node_uuid: Uuid::new_v4(),
+                target_node_uuid: Uuid::new_v4(),
+                name: Some("Edge 1".to_string()),
+                created_at: Utc::now(),
+                group_id: None,
+                score: None,
+                fact: "test fact".to_string(),
+                episodes: vec![],
+                weight: 1.0,
+                expired_at: None,
+                valid_at: None,
+                invalid_at: None,
+                attributes: None,
+            },
+            Edge {
+                uuid: Uuid::new_v4(),
+                source_node_uuid: Uuid::new_v4(),
+                target_node_uuid: Uuid::new_v4(),
+                name: Some("Edge 2".to_string()),
+                created_at: Utc::now(),
+                group_id: None,
+                score: Some(0.88), // This one already has a score
+                fact: "test fact 2".to_string(),
+                episodes: vec![],
+                weight: 1.0,
+                expired_at: None,
+                valid_at: None,
+                invalid_at: None,
+                attributes: None,
+            },
+        ];
+
+        ensure_edge_scores(&mut edges);
+
+        // First edge should get score of 1.0
+        assert!(edges[0].score.is_some());
+        assert!((edges[0].score.unwrap() - 1.0).abs() < 0.01);
+
+        // Second edge should keep its original score
+        assert_eq!(edges[1].score, Some(0.88));
     }
 }

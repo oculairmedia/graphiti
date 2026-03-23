@@ -206,21 +206,24 @@ export function useGraphDataQuery() {
                 created_at = new Date(ts).toISOString();
               }
             } else if (created_at && !created_at_timestamp) {
-              created_at_timestamp = new Date(created_at).getTime();
+              let parsed = new Date(created_at).getTime();
+              created_at_timestamp = isNaN(parsed) ? (Date.now() - (totalNodes - i) * 60000) : parsed;
             }
 
             if (!created_at && !created_at_timestamp) {
-              created_at_timestamp = Date.now();
+              created_at_timestamp = Date.now() - (totalNodes - i) * 60000;
               created_at = new Date(created_at_timestamp).toISOString();
             }
 
             nodes[i] = {
               id: n.id,
+              index: i,
               label: n.label || n.id,
               name: n.label || n.id,
               node_type: n.node_type || 'Unknown',
               summary: n.summary || null,
               size: computeSizeFromStrategy(n, config),
+              color: n.color,
               created_at,
               created_at_timestamp: created_at_timestamp || null,
               degree_centrality: n.degree_centrality || 0,
@@ -230,7 +233,7 @@ export function useGraphDataQuery() {
               x: n.x,
               y: n.y,
               properties: {
-                idx: n.idx !== undefined ? n.idx : i,
+                idx: n.idx !== undefined ? Number(n.idx) : i,
                 degree_centrality: n.degree_centrality || 0,
                 pagerank_centrality: n.pagerank_centrality || 0,
                 betweenness_centrality: n.betweenness_centrality || 0,
@@ -240,7 +243,7 @@ export function useGraphDataQuery() {
                 created_at: created_at,
                 created_at_timestamp: created_at_timestamp
               }
-            };
+            } as unknown as GraphNode;
           }
           setStreamingProgress(end, totalNodes, 'nodes');
           await new Promise(resolve => setTimeout(resolve, 0));

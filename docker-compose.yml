@@ -162,6 +162,8 @@ services:
   graphiti-search-rs:
     image: ghcr.io/oculairmedia/graphiti-search-rs:main
     restart: unless-stopped
+    mem_limit: 4g
+    memswap_limit: 4g
     ports:
       - ${RUST_SEARCH_PORT:-3004}:3004
     environment:
