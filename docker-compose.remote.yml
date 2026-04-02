@@ -1,0 +1,823 @@
+# =============================================================================
+# Graphiti Knowledge Graph Platform - Remote/Small Box (16GB)
+# =============================================================================
+# Production stack for 192.168.50.219 (dockge)
+# Includes visualizer and frontend, no grafana/prometheus
+# Memory-tuned for 16GB RAM + 8GB swap
+#
+# Services exposed on LAN:
+#   - FalkorDB:    6379
+#   - Graph API:   8003
+#   - Search-RS:   3004
+#   - Centrality:  3003
+#   - MCP:         3010
+#   - Visualizer:  3000
+#   - Frontend:    8084
+#   - Nginx:       8088
+
+services:
+  # =============================================================================
+  # Core Database
+  # =============================================================================
+  falkordb:
+    image: falkordb/falkordb:latest
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 300s
+    ports:
+      - ${FALKORDB_PORT:-6379}:6379
+    volumes:
+      - falkordb_data:/var/lib/falkordb/data
+    environment:
+      # MEMORY-TUNED for 16GB box:
+      # - maxmemory 6g: graph data limit (1.4GB RDB expands to ~5GB)
+      # - save 86400 1: snapshot once per 24h
+      - REDIS_ARGS=--loglevel warning --maxmemory 6g --maxmemory-policy allkeys-lru --save 86400 1 --dir /var/lib/falkordb/data --dbfilename falkordb.rdb --stop-writes-on-bgsave-error no --rdbcompression yes --rdb-save-incremental-fsync yes --notify-keyspace-events KEA
+      # TUNED for 4-core box:
+      - FALKORDB_ARGS=THREAD_COUNT 4 OMP_THREAD_COUNT 2 CACHE_SIZE 50 NODE_CREATION_BUFFER 64 QUERY_MEM_CAPACITY 2147483648 CMD_INFO no
+    # Container limit 8GB (leaves headroom for BGSAVE fork)
+    mem_limit: 8g
+    memswap_limit: 12g
+    networks:
+      - graphiti_network
+    healthcheck:
+      test:
+        - CMD
+        - redis-cli
+        - ping
+      interval: 15s
+      timeout: 30s
+      retries: 5
+      start_period: 600s
+    labels:
+      - homepage.group=Knowledge Graph
+      - homepage.name=FalkorDB
+      - homepage.icon=si-redis
+      - homepage.description=Graph database (remote)
+
+  # =============================================================================
+  # Rust Services
+  # =============================================================================
+  graphiti-centrality-rs:
+    image: ghcr.io/oculairmedia/graphiti-centrality-rs:main
+    restart: unless-stopped
+    stop_grace_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 256M
+    ports:
+      - ${RUST_CENTRALITY_PORT:-3003}:3003
+    environment:
+      - FALKORDB_HOST=${FALKORDB_HOST:-falkordb}
+      - FALKORDB_PORT=${FALKORDB_PORT:-6379}
+      - GRAPH_NAME=${FALKORDB_DATABASE:-graphiti_migration}
+      - RUST_LOG=${RUST_LOG:-info}
+    networks:
+      - graphiti_network
+    depends_on:
+      falkordb:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - -f
+        - http://localhost:3003/health
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    labels:
+      - homepage.group=Knowledge Graph
+      - homepage.name=Centrality Service
+      - homepage.icon=si-databricks
+      - homepage.description=Graph centrality calculations
+      - homepage.enable=false
+
+  graphiti-search-rs:
+    image: ghcr.io/oculairmedia/graphiti-search-rs:main
+    restart: unless-stopped
+    mem_limit: 1500m
+    memswap_limit: 2g
+    ports:
+      - ${RUST_SEARCH_PORT:-3004}:3004
+    environment:
+      - FALKORDB_HOST=${FALKORDB_HOST:-falkordb}
+      - FALKORDB_PORT=${FALKORDB_PORT:-6379}
+      - GRAPH_NAME=${FALKORDB_DATABASE:-graphiti_migration}
+      - REDIS_URL=${REDIS_URL:-redis://falkordb:6379}
+      - RUST_LOG=${RUST_LOG:-info}
+      - EMBEDDING_DIMENSION=${EMBEDDING_DIMENSION:-2560}
+      - MAX_METHOD_RESULTS=${MAX_METHOD_RESULTS:-100}
+      - OLLAMA_BASE_URL=${OLLAMA_EMBEDDING_BASE_URL:-http://192.168.50.247:11450/v1}
+      - OLLAMA_EMBEDDING_MODEL=${OLLAMA_EMBEDDING_MODEL:-qwen3-embedding}
+      - RERANKER_ENABLED=${RERANKER_ENABLED:-true}
+      - RERANKER_URL=${RERANKER_URL:-http://192.168.50.247:11435}
+      - RERANKER_TIMEOUT_MS=${RERANKER_TIMEOUT_MS:-10000}
+    networks:
+      - graphiti_network
+    depends_on:
+      falkordb:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - -f
+        - http://localhost:3004/health
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    labels:
+      - homepage.group=Knowledge Graph
+      - homepage.name=Search Service
+      - homepage.icon=si-elasticsearch
+      - homepage.description=High-performance graph search
+      - homepage.enable=false
+
+  # =============================================================================
+  # API and MCP Services
+  # =============================================================================
+  graph:
+    image: ghcr.io/oculairmedia/graphiti-api:main
+    restart: unless-stopped
+    stop_grace_period: 30s
+    ports:
+      - ${API_PORT:-8003}:8000
+    command:
+      - /bin/bash
+      - -c
+      - |
+        pip install --quiet --target=/app/server/.venv/lib/python3.12/site-packages temporalio 2>/dev/null || true
+        exec /app/start.sh
+    volumes:
+      - ./graphiti_core:/app/graphiti_core:ro
+      - ./server/graph_service/zep_graphiti.py:/app/server/graph_service/zep_graphiti.py:ro
+      - ./server/graph_service/queue_proxy.py:/app/server/graph_service/queue_proxy.py:ro
+      - ./server/graph_service/routers/search_proxy.py:/app/server/graph_service/routers/search_proxy.py:ro
+      - ./server/graph_service/routers/ingest.py:/app/server/graph_service/routers/ingest.py:ro
+      - ./server/graph_service/webhooks.py:/app/server/graph_service/webhooks.py:ro
+      - ./server/graph_service/dto/common.py:/app/server/graph_service/dto/common.py:ro
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-sk-dummy}
+      - FALKORDB_HOST=${FALKORDB_HOST:-falkordb}
+      - FALKORDB_PORT=${FALKORDB_PORT:-6379}
+      - FALKORDB_URI=${FALKORDB_URI:-redis://falkordb:6379}
+      - FALKORDB_DATABASE=${FALKORDB_DATABASE:-graphiti_migration}
+      - USE_DETERMINISTIC_UUIDS=${USE_DETERMINISTIC_UUIDS:-true}
+      - PORT=8000
+      - USE_CEREBRAS=${USE_CEREBRAS:-false}
+      - USE_CHUTES=${USE_CHUTES:-true}
+      - CHUTES_API_KEY=${CHUTES_API_KEY}
+      - CHUTES_MODEL=${CHUTES_MODEL:-zai-org/GLM-4.7-FP8}
+      - CHUTES_SMALL_MODEL=${CHUTES_SMALL_MODEL:-glm-4.5-air}
+      - CHUTES_BASE_URL=${CHUTES_BASE_URL:-https://api.z.ai/api/coding/paas/v4}
+      - ENABLE_FALLBACK=${ENABLE_FALLBACK:-true}
+      - USE_ANTHROPIC=${USE_ANTHROPIC:-false}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL:-http://192.168.50.90:8082}
+      - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-3-5-haiku-latest}
+      - ANTHROPIC_SMALL_MODEL=${ANTHROPIC_SMALL_MODEL:-claude-3-5-haiku-latest}
+      - USE_OLLAMA=${USE_OLLAMA:-false}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://100.81.139.20:11434/v1}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-glm-4.7}
+      - OLLAMA_EMBEDDING_MODEL=${OLLAMA_EMBEDDING_MODEL:-qwen3-embedding}
+      - EMBEDDING_DIMENSION=${EMBEDDING_DIMENSION:-2560}
+      - USE_OLLAMA_EMBEDDINGS=${USE_OLLAMA_EMBEDDINGS:-true}
+      - USE_DEDICATED_EMBEDDING_ENDPOINT=${USE_DEDICATED_EMBEDDING_ENDPOINT:-true}
+      - OLLAMA_EMBEDDING_BASE_URL=${OLLAMA_EMBEDDING_BASE_URL:-http://192.168.50.247:11450/v1}
+      - OLLAMA_EMBEDDING_API_KEY=${OLLAMA_EMBEDDING_API_KEY:-ollama}
+      - EMBEDDING_ENDPOINT_FALLBACK=${EMBEDDING_ENDPOINT_FALLBACK:-true}
+      - USE_RUST_CENTRALITY=${USE_RUST_CENTRALITY:-true}
+      - RUST_CENTRALITY_URL=${RUST_CENTRALITY_URL:-http://graphiti-centrality-rs:3003}
+      - AUTO_CENTRALITY_ENABLED=${AUTO_CENTRALITY_ENABLED:-true}
+      - RUST_SEARCH_URL=${RUST_SEARCH_URL:-http://graphiti-search-rs:3004}
+      - USE_RUST_SEARCH=${USE_RUST_SEARCH:-true}
+      - RERANKER_ENABLED=${RERANKER_ENABLED:-true}
+      - RERANKER_URL=${RERANKER_URL:-http://192.168.50.247:11435}
+      - NODE_LIMIT=${NODE_LIMIT:-100000}
+      - EDGE_LIMIT=${EDGE_LIMIT:-1000000}
+      - MIN_DEGREE_CENTRALITY=${MIN_DEGREE_CENTRALITY:-0}
+      - CACHE_ENABLED=${CACHE_ENABLED:-true}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - ENABLE_DEBUG_LOGGING=${ENABLE_DEBUG_LOGGING:-false}
+      - ENABLE_CACHE_INVALIDATION=${ENABLE_CACHE_INVALIDATION:-true}
+      - TEMPORAL_INGESTION_ENABLED=${TEMPORAL_INGESTION_ENABLED:-true}
+      - TEMPORAL_VISIBILITY_ADDRESS=${TEMPORAL_VISIBILITY_ADDRESS:-192.168.50.90:7233}
+      - TEMPORAL_VISIBILITY_NAMESPACE=${TEMPORAL_VISIBILITY_NAMESPACE:-graphiti}
+      - TEMPORAL_INGESTION_WORKFLOW_TASK_QUEUE=${TEMPORAL_INGESTION_WORKFLOW_TASK_QUEUE:-graphiti-ingestion-workflow}
+      - RESILIENT_INGESTION_ENABLED=${RESILIENT_INGESTION_ENABLED:-true}
+      - RESILIENT_RETRY_MAX_ATTEMPTS=${RESILIENT_RETRY_MAX_ATTEMPTS:-3}
+      - RESILIENT_RETRY_BASE_DELAY=${RESILIENT_RETRY_BASE_DELAY:-2.0}
+      - RESILIENT_RETRY_MAX_DELAY=${RESILIENT_RETRY_MAX_DELAY:-60.0}
+      - RESILIENT_RETRY_EXPONENTIAL_BASE=${RESILIENT_RETRY_EXPONENTIAL_BASE:-2.0}
+      - RESILIENT_CACHE_MAX_AGE_SECONDS=${RESILIENT_CACHE_MAX_AGE_SECONDS:-3600}
+      - DEDUP_SIMILARITY_THRESHOLD=${DEDUP_SIMILARITY_THRESHOLD:-0.6}
+      - DEDUP_FUZZY_THRESHOLD=${DEDUP_FUZZY_THRESHOLD:-0.85}
+      - ENABLE_AGGRESSIVE_DEDUP=${ENABLE_AGGRESSIVE_DEDUP:-true}
+      - DEDUP_NORMALIZE_NAMES=${DEDUP_NORMALIZE_NAMES:-true}
+      - DEDUP_EPISODE_INTERVAL=${DEDUP_EPISODE_INTERVAL:-10}
+      - USE_DSPY=${USE_DSPY:-true}
+    networks:
+      - graphiti_network
+    depends_on:
+      falkordb:
+        condition: service_healthy
+      graphiti-centrality-rs:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request;
+          urllib.request.urlopen('http://localhost:8000/healthcheck')
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    labels:
+      - homepage.group=Knowledge Graph
+      - homepage.name=Graphiti API
+      - homepage.icon=si-fastapi
+      - homepage.description=Knowledge graph API service
+
+  graphiti-mcp:
+    image: ghcr.io/oculairmedia/graphiti-mcp:main
+    restart: unless-stopped
+    stop_grace_period: 15s
+    ports:
+      - ${MCP_PORT:-3010}:3010
+    environment:
+      - FALKORDB_HOST=${FALKORDB_HOST:-falkordb}
+      - FALKORDB_PORT=${FALKORDB_PORT:-6379}
+      - FALKORDB_URI=${FALKORDB_URI:-redis://falkordb:6379}
+      - FALKORDB_DATABASE=${FALKORDB_DATABASE:-graphiti_migration}
+      - USE_CEREBRAS=${USE_CEREBRAS:-false}
+      - USE_CHUTES=${USE_CHUTES:-true}
+      - CHUTES_API_KEY=${CHUTES_API_KEY}
+      - CHUTES_MODEL=${CHUTES_MODEL:-zai-org/GLM-4.7-FP8}
+      - CHUTES_SMALL_MODEL=${CHUTES_SMALL_MODEL:-glm-4.5-air}
+      - CHUTES_BASE_URL=${CHUTES_BASE_URL:-https://api.z.ai/api/coding/paas/v4}
+      - ENABLE_FALLBACK=${ENABLE_FALLBACK:-true}
+      - USE_OLLAMA=${USE_OLLAMA:-false}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://100.81.139.20:11434/v1}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-glm-4.7}
+      - OLLAMA_EMBEDDING_MODEL=${OLLAMA_EMBEDDING_MODEL:-qwen3-embedding}
+      - EMBEDDING_DIMENSION=${EMBEDDING_DIMENSION:-2560}
+      - USE_OLLAMA_EMBEDDINGS=${USE_OLLAMA_EMBEDDINGS:-true}
+      - USE_DEDICATED_EMBEDDING_ENDPOINT=${USE_DEDICATED_EMBEDDING_ENDPOINT:-true}
+      - OLLAMA_EMBEDDING_BASE_URL=${OLLAMA_EMBEDDING_BASE_URL:-http://192.168.50.247:11450/v1}
+      - OLLAMA_EMBEDDING_API_KEY=${OLLAMA_EMBEDDING_API_KEY:-ollama}
+      - EMBEDDING_ENDPOINT_FALLBACK=${EMBEDDING_ENDPOINT_FALLBACK:-true}
+      - SEMAPHORE_LIMIT=${SEMAPHORE_LIMIT:-5}
+      - MCP_SERVER_PORT=3010
+      - MCP_TRANSPORT=http
+      - GRAPH_API_URL=http://graph:8000
+      - ENABLE_BFS_SEARCH=${ENABLE_BFS_SEARCH:-false}
+    networks:
+      - graphiti_network
+    depends_on:
+      falkordb:
+        condition: service_healthy
+      graph:
+        condition: service_healthy
+    labels:
+      - homepage.group=Knowledge Graph
+      - homepage.name=MCP Server
+      - homepage.icon=si-rss
+      - homepage.description=Model Context Protocol server
+
+  # =============================================================================
+  # Temporal Worker Services
+  # =============================================================================
+  graphiti-temporal-ingestion-workflow-worker:
+    image: ghcr.io/oculairmedia/graphiti-worker:main
+    restart: unless-stopped
+    stop_grace_period: 60s
+    command:
+      - /bin/bash
+      - -c
+      - |
+        pip install --quiet temporalio dspy-ai 2>/dev/null
+        python -u /scripts/temporal_ingestion_worker.py
+    ports:
+      - "9190:9190"
+    volumes:
+      - ./scripts:/scripts:ro
+      - ./graphiti_core:/app/graphiti_core:ro
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - WORKER_MODE=workflow
+      - TEMPORAL_METRICS_ENABLED=${TEMPORAL_METRICS_ENABLED:-true}
+      - TEMPORAL_METRICS_PORT=9190
+      - TEMPORAL_VISIBILITY_ADDRESS=${TEMPORAL_VISIBILITY_ADDRESS:-192.168.50.90:7233}
+      - TEMPORAL_VISIBILITY_NAMESPACE=${TEMPORAL_VISIBILITY_NAMESPACE:-graphiti}
+      - TEMPORAL_INGESTION_WORKFLOW_TASK_QUEUE=${TEMPORAL_INGESTION_WORKFLOW_TASK_QUEUE:-graphiti-ingestion-workflow}
+      - TEMPORAL_MAX_CONCURRENT_WORKFLOW_TASKS=${TEMPORAL_MAX_CONCURRENT_WORKFLOW_TASKS:-10}
+      - TEMPORAL_MAX_CONCURRENT_ACTIVITIES=${TEMPORAL_MAX_CONCURRENT_ACTIVITIES:-5}
+      - TEMPORAL_MAX_CONCURRENT_LOCAL_ACTIVITIES=${TEMPORAL_MAX_CONCURRENT_LOCAL_ACTIVITIES:-5}
+      - TEMPORAL_INGESTION_WORKFLOW_TIMEOUT_HOURS=${TEMPORAL_INGESTION_WORKFLOW_TIMEOUT_HOURS:-8}
+      - FALKORDB_HOST=${FALKORDB_HOST:-falkordb}
+      - FALKORDB_PORT=${FALKORDB_PORT:-6379}
+      - FALKORDB_DATABASE=${FALKORDB_DATABASE:-graphiti_migration}
+      - USE_DSPY=${USE_DSPY:-true}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-sk-dummy}
+      - USE_OLLAMA=${USE_OLLAMA:-false}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://100.81.139.20:11434/v1}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-glm-4.7}
+      - OLLAMA_EMBEDDING_MODEL=${OLLAMA_EMBEDDING_MODEL:-qwen3-embedding}
+      - EMBEDDING_DIMENSION=${EMBEDDING_DIMENSION:-2560}
+      - USE_OLLAMA_EMBEDDINGS=${USE_OLLAMA_EMBEDDINGS:-true}
+      - USE_DEDICATED_EMBEDDING_ENDPOINT=${USE_DEDICATED_EMBEDDING_ENDPOINT:-true}
+      - OLLAMA_EMBEDDING_BASE_URL=${OLLAMA_EMBEDDING_BASE_URL:-http://192.168.50.247:11450/v1}
+      - OLLAMA_EMBEDDING_API_KEY=${OLLAMA_EMBEDDING_API_KEY:-ollama}
+      - USE_CHUTES=${USE_CHUTES:-true}
+      - CHUTES_API_KEY=${CHUTES_API_KEY}
+      - CHUTES_BASE_URL=${CHUTES_BASE_URL:-https://api.z.ai/api/coding/paas/v4}
+      - CHUTES_MODEL=${CHUTES_MODEL:-zai-org/GLM-4.7-FP8}
+      - CHUTES_SMALL_MODEL=${CHUTES_SMALL_MODEL:-glm-4.5-air}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    networks:
+      - graphiti_network
+    depends_on:
+      falkordb:
+        condition: service_healthy
+    profiles: ["temporal-staged"]
+
+  graphiti-temporal-ingestion-extract-worker:
+    image: ghcr.io/oculairmedia/graphiti-worker:main
+    restart: unless-stopped
+    stop_grace_period: 60s
+    command:
+      - /bin/bash
+      - -c
+      - |
+        pip install --quiet temporalio dspy-ai letta-client 2>/dev/null
+        mkdir -p /data/training_data && chown worker:worker /data/training_data 2>/dev/null || true
+        python -u /scripts/temporal_ingestion_worker.py
+    ports:
+      - "9191:9191"
+    volumes:
+      - ./scripts:/scripts:ro
+      - ./graphiti_core:/app/graphiti_core:ro
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - WORKER_MODE=extract
+      - TEMPORAL_METRICS_ENABLED=${TEMPORAL_METRICS_ENABLED:-true}
+      - TEMPORAL_METRICS_PORT=9191
+      - TEMPORAL_VISIBILITY_ADDRESS=${TEMPORAL_VISIBILITY_ADDRESS:-192.168.50.90:7233}
+      - TEMPORAL_VISIBILITY_NAMESPACE=${TEMPORAL_VISIBILITY_NAMESPACE:-graphiti}
+      - TEMPORAL_INGESTION_EXTRACT_TASK_QUEUE=${TEMPORAL_INGESTION_EXTRACT_TASK_QUEUE:-graphiti-ingestion-extract}
+      - TEMPORAL_EXTRACT_MAX_CONCURRENT_ACTIVITIES=${TEMPORAL_EXTRACT_MAX_CONCURRENT_ACTIVITIES:-3}
+      - TEMPORAL_MAX_CONCURRENT_WORKFLOW_TASKS=${TEMPORAL_MAX_CONCURRENT_WORKFLOW_TASKS:-10}
+      - TEMPORAL_MAX_CONCURRENT_LOCAL_ACTIVITIES=${TEMPORAL_MAX_CONCURRENT_LOCAL_ACTIVITIES:-5}
+      - TEMPORAL_RATE_LIMIT_INTER_ACTIVITY_DELAY=${TEMPORAL_RATE_LIMIT_INTER_ACTIVITY_DELAY:-0.0}
+      - TEMPORAL_RATE_LIMIT_POST_LLM_DELAY=${TEMPORAL_RATE_LIMIT_POST_LLM_DELAY:-0.0}
+      - FALKORDB_HOST=${FALKORDB_HOST:-falkordb}
+      - FALKORDB_PORT=${FALKORDB_PORT:-6379}
+      - FALKORDB_DATABASE=${FALKORDB_DATABASE:-graphiti_migration}
+      - USE_DSPY=${USE_DSPY:-true}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-sk-dummy}
+      - USE_OLLAMA=${USE_OLLAMA:-false}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://100.81.139.20:11434/v1}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-glm-4.7}
+      - OLLAMA_EMBEDDING_MODEL=${OLLAMA_EMBEDDING_MODEL:-qwen3-embedding}
+      - EMBEDDING_DIMENSION=${EMBEDDING_DIMENSION:-2560}
+      - USE_OLLAMA_EMBEDDINGS=${USE_OLLAMA_EMBEDDINGS:-true}
+      - USE_DEDICATED_EMBEDDING_ENDPOINT=${USE_DEDICATED_EMBEDDING_ENDPOINT:-true}
+      - OLLAMA_EMBEDDING_BASE_URL=${OLLAMA_EMBEDDING_BASE_URL:-http://192.168.50.247:11450/v1}
+      - OLLAMA_EMBEDDING_API_KEY=${OLLAMA_EMBEDDING_API_KEY:-ollama}
+      - USE_CHUTES=${USE_CHUTES:-true}
+      - CHUTES_API_KEY=${CHUTES_API_KEY}
+      - CHUTES_BASE_URL=${CHUTES_BASE_URL:-https://api.z.ai/api/coding/paas/v4}
+      - CHUTES_MODEL=${CHUTES_MODEL:-zai-org/GLM-4.7-FP8}
+      - CHUTES_SMALL_MODEL=${CHUTES_SMALL_MODEL:-glm-4.5-air}
+      - LETTA_BASE_URL=${LETTA_BASE_URL:-http://192.168.50.90:8283}
+      - LETTA_GRAPHITI_AGENT_ID=${LETTA_GRAPHITI_AGENT_ID:-}
+      - DSPY_COLLECT_TRAINING_DATA=${DSPY_COLLECT_TRAINING_DATA:-false}
+      - DSPY_TRAINING_DATA_DIR=${DSPY_TRAINING_DATA_DIR:-/data/training_data}
+      - MAX_PROMPT_TOKENS=${MAX_PROMPT_TOKENS:-6000}
+      - MAX_EPISODE_CONTENT_CHARS=${MAX_EPISODE_CONTENT_CHARS:-5000}
+      - MAX_PREVIOUS_EPISODES=${MAX_PREVIOUS_EPISODES:-1}
+      - DEDUP_FUZZY_THRESHOLD=${DEDUP_FUZZY_THRESHOLD:-0.92}
+      - ENABLE_AGGRESSIVE_DEDUP=${ENABLE_AGGRESSIVE_DEDUP:-true}
+      - DEDUP_NORMALIZE_NAMES=${DEDUP_NORMALIZE_NAMES:-true}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    networks:
+      - graphiti_network
+    depends_on:
+      falkordb:
+        condition: service_healthy
+    profiles: ["temporal-staged"]
+
+  graphiti-temporal-ingestion-resolve-worker:
+    image: ghcr.io/oculairmedia/graphiti-worker:main
+    restart: unless-stopped
+    stop_grace_period: 60s
+    command:
+      - /bin/bash
+      - -c
+      - |
+        pip install --quiet temporalio dspy-ai 2>/dev/null
+        mkdir -p /data/training_data && chown worker:worker /data/training_data 2>/dev/null || true
+        python -u /scripts/temporal_ingestion_worker.py
+    ports:
+      - "9192:9192"
+    volumes:
+      - ./scripts:/scripts:ro
+      - ./graphiti_core:/app/graphiti_core:ro
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - WORKER_MODE=resolve
+      - TEMPORAL_METRICS_ENABLED=${TEMPORAL_METRICS_ENABLED:-true}
+      - TEMPORAL_METRICS_PORT=9192
+      - TEMPORAL_VISIBILITY_ADDRESS=${TEMPORAL_VISIBILITY_ADDRESS:-192.168.50.90:7233}
+      - TEMPORAL_VISIBILITY_NAMESPACE=${TEMPORAL_VISIBILITY_NAMESPACE:-graphiti}
+      - TEMPORAL_INGESTION_RESOLVE_TASK_QUEUE=${TEMPORAL_INGESTION_RESOLVE_TASK_QUEUE:-graphiti-ingestion-resolve}
+      - TEMPORAL_RESOLVE_MAX_CONCURRENT_ACTIVITIES=${TEMPORAL_RESOLVE_MAX_CONCURRENT_ACTIVITIES:-3}
+      - TEMPORAL_MAX_CONCURRENT_WORKFLOW_TASKS=${TEMPORAL_MAX_CONCURRENT_WORKFLOW_TASKS:-10}
+      - TEMPORAL_MAX_CONCURRENT_LOCAL_ACTIVITIES=${TEMPORAL_MAX_CONCURRENT_LOCAL_ACTIVITIES:-5}
+      - TEMPORAL_RATE_LIMIT_INTER_ACTIVITY_DELAY=${TEMPORAL_RATE_LIMIT_INTER_ACTIVITY_DELAY:-0.0}
+      - TEMPORAL_RATE_LIMIT_POST_LLM_DELAY=${TEMPORAL_RATE_LIMIT_POST_LLM_DELAY:-0.0}
+      - FALKORDB_HOST=${FALKORDB_HOST:-falkordb}
+      - FALKORDB_PORT=${FALKORDB_PORT:-6379}
+      - FALKORDB_DATABASE=${FALKORDB_DATABASE:-graphiti_migration}
+      - USE_DSPY=${USE_DSPY:-true}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-sk-dummy}
+      - USE_OLLAMA=${USE_OLLAMA:-false}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://100.81.139.20:11434/v1}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-glm-4.7}
+      - OLLAMA_EMBEDDING_MODEL=${OLLAMA_EMBEDDING_MODEL:-qwen3-embedding}
+      - EMBEDDING_DIMENSION=${EMBEDDING_DIMENSION:-2560}
+      - USE_OLLAMA_EMBEDDINGS=${USE_OLLAMA_EMBEDDINGS:-true}
+      - USE_DEDICATED_EMBEDDING_ENDPOINT=${USE_DEDICATED_EMBEDDING_ENDPOINT:-true}
+      - OLLAMA_EMBEDDING_BASE_URL=${OLLAMA_EMBEDDING_BASE_URL:-http://192.168.50.247:11450/v1}
+      - OLLAMA_EMBEDDING_API_KEY=${OLLAMA_EMBEDDING_API_KEY:-ollama}
+      - USE_CHUTES=${USE_CHUTES:-true}
+      - CHUTES_API_KEY=${CHUTES_API_KEY}
+      - CHUTES_BASE_URL=${CHUTES_BASE_URL:-https://api.z.ai/api/coding/paas/v4}
+      - CHUTES_MODEL=${CHUTES_MODEL:-zai-org/GLM-4.7-FP8}
+      - CHUTES_SMALL_MODEL=${CHUTES_SMALL_MODEL:-glm-4.5-air}
+      - DSPY_COLLECT_TRAINING_DATA=${DSPY_COLLECT_TRAINING_DATA:-false}
+      - DSPY_TRAINING_DATA_DIR=${DSPY_TRAINING_DATA_DIR:-/data/training_data}
+      - MAX_PROMPT_TOKENS=${MAX_PROMPT_TOKENS:-6000}
+      - MAX_EPISODE_CONTENT_CHARS=${MAX_EPISODE_CONTENT_CHARS:-5000}
+      - MAX_PREVIOUS_EPISODES=${MAX_PREVIOUS_EPISODES:-1}
+      - DEDUP_FUZZY_THRESHOLD=${DEDUP_FUZZY_THRESHOLD:-0.92}
+      - ENABLE_AGGRESSIVE_DEDUP=${ENABLE_AGGRESSIVE_DEDUP:-true}
+      - DEDUP_NORMALIZE_NAMES=${DEDUP_NORMALIZE_NAMES:-true}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    networks:
+      - graphiti_network
+    depends_on:
+      falkordb:
+        condition: service_healthy
+    profiles: ["temporal-staged"]
+
+  graphiti-temporal-ingestion-edge-worker:
+    image: ghcr.io/oculairmedia/graphiti-worker:main
+    restart: unless-stopped
+    stop_grace_period: 60s
+    command:
+      - /bin/bash
+      - -c
+      - |
+        pip install --quiet temporalio dspy-ai 2>/dev/null
+        mkdir -p /data/training_data && chown worker:worker /data/training_data 2>/dev/null || true
+        python -u /scripts/temporal_ingestion_worker.py
+    ports:
+      - "9193:9193"
+    volumes:
+      - ./scripts:/scripts:ro
+      - ./graphiti_core:/app/graphiti_core:ro
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - WORKER_MODE=edge
+      - TEMPORAL_METRICS_ENABLED=${TEMPORAL_METRICS_ENABLED:-true}
+      - TEMPORAL_METRICS_PORT=9193
+      - TEMPORAL_VISIBILITY_ADDRESS=${TEMPORAL_VISIBILITY_ADDRESS:-192.168.50.90:7233}
+      - TEMPORAL_VISIBILITY_NAMESPACE=${TEMPORAL_VISIBILITY_NAMESPACE:-graphiti}
+      - TEMPORAL_INGESTION_EDGE_TASK_QUEUE=${TEMPORAL_INGESTION_EDGE_TASK_QUEUE:-graphiti-ingestion-edge}
+      - TEMPORAL_EDGE_MAX_CONCURRENT_ACTIVITIES=${TEMPORAL_EDGE_MAX_CONCURRENT_ACTIVITIES:-2}
+      - TEMPORAL_MAX_CONCURRENT_WORKFLOW_TASKS=${TEMPORAL_MAX_CONCURRENT_WORKFLOW_TASKS:-10}
+      - TEMPORAL_MAX_CONCURRENT_LOCAL_ACTIVITIES=${TEMPORAL_MAX_CONCURRENT_LOCAL_ACTIVITIES:-5}
+      - TEMPORAL_RATE_LIMIT_INTER_ACTIVITY_DELAY=${TEMPORAL_RATE_LIMIT_INTER_ACTIVITY_DELAY:-0.0}
+      - TEMPORAL_RATE_LIMIT_POST_LLM_DELAY=${TEMPORAL_RATE_LIMIT_POST_LLM_DELAY:-0.0}
+      - FALKORDB_HOST=${FALKORDB_HOST:-falkordb}
+      - FALKORDB_PORT=${FALKORDB_PORT:-6379}
+      - FALKORDB_DATABASE=${FALKORDB_DATABASE:-graphiti_migration}
+      - USE_DSPY=${USE_DSPY:-true}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-sk-dummy}
+      - USE_OLLAMA=${USE_OLLAMA:-false}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://100.81.139.20:11434/v1}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-glm-4.7}
+      - OLLAMA_EMBEDDING_MODEL=${OLLAMA_EMBEDDING_MODEL:-qwen3-embedding}
+      - EMBEDDING_DIMENSION=${EMBEDDING_DIMENSION:-2560}
+      - USE_OLLAMA_EMBEDDINGS=${USE_OLLAMA_EMBEDDINGS:-true}
+      - USE_DEDICATED_EMBEDDING_ENDPOINT=${USE_DEDICATED_EMBEDDING_ENDPOINT:-true}
+      - OLLAMA_EMBEDDING_BASE_URL=${OLLAMA_EMBEDDING_BASE_URL:-http://192.168.50.247:11450/v1}
+      - OLLAMA_EMBEDDING_API_KEY=${OLLAMA_EMBEDDING_API_KEY:-ollama}
+      - USE_CHUTES=${USE_CHUTES:-true}
+      - CHUTES_API_KEY=${CHUTES_API_KEY}
+      - CHUTES_BASE_URL=${CHUTES_BASE_URL:-https://api.z.ai/api/coding/paas/v4}
+      - CHUTES_MODEL=${CHUTES_MODEL:-zai-org/GLM-4.7-FP8}
+      - CHUTES_SMALL_MODEL=${CHUTES_SMALL_MODEL:-glm-4.5-air}
+      - DSPY_COLLECT_TRAINING_DATA=${DSPY_COLLECT_TRAINING_DATA:-false}
+      - DSPY_TRAINING_DATA_DIR=${DSPY_TRAINING_DATA_DIR:-/data/training_data}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    networks:
+      - graphiti_network
+    depends_on:
+      falkordb:
+        condition: service_healthy
+    profiles: ["temporal-staged"]
+
+  graphiti-temporal-ingestion-persist-worker:
+    image: ghcr.io/oculairmedia/graphiti-worker:main
+    restart: unless-stopped
+    stop_grace_period: 60s
+    command:
+      - /bin/bash
+      - -c
+      - |
+        pip install --quiet temporalio dspy-ai 2>/dev/null
+        mkdir -p /data/training_data && chown worker:worker /data/training_data 2>/dev/null || true
+        python -u /scripts/temporal_ingestion_worker.py
+    ports:
+      - "9194:9194"
+    volumes:
+      - ./scripts:/scripts:ro
+      - ./graphiti_core:/app/graphiti_core:ro
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - WORKER_MODE=persist
+      - TEMPORAL_METRICS_ENABLED=${TEMPORAL_METRICS_ENABLED:-true}
+      - TEMPORAL_METRICS_PORT=9194
+      - TEMPORAL_VISIBILITY_ADDRESS=${TEMPORAL_VISIBILITY_ADDRESS:-192.168.50.90:7233}
+      - TEMPORAL_VISIBILITY_NAMESPACE=${TEMPORAL_VISIBILITY_NAMESPACE:-graphiti}
+      - TEMPORAL_INGESTION_PERSIST_TASK_QUEUE=${TEMPORAL_INGESTION_PERSIST_TASK_QUEUE:-graphiti-ingestion-persist}
+      - TEMPORAL_PERSIST_MAX_CONCURRENT_ACTIVITIES=${TEMPORAL_PERSIST_MAX_CONCURRENT_ACTIVITIES:-5}
+      - TEMPORAL_MAX_CONCURRENT_WORKFLOW_TASKS=${TEMPORAL_MAX_CONCURRENT_WORKFLOW_TASKS:-10}
+      - TEMPORAL_MAX_CONCURRENT_LOCAL_ACTIVITIES=${TEMPORAL_MAX_CONCURRENT_LOCAL_ACTIVITIES:-5}
+      - TEMPORAL_RATE_LIMIT_INTER_ACTIVITY_DELAY=${TEMPORAL_RATE_LIMIT_INTER_ACTIVITY_DELAY:-0.0}
+      - TEMPORAL_RATE_LIMIT_POST_LLM_DELAY=${TEMPORAL_RATE_LIMIT_POST_LLM_DELAY:-0.0}
+      - FALKORDB_HOST=${FALKORDB_HOST:-falkordb}
+      - FALKORDB_PORT=${FALKORDB_PORT:-6379}
+      - FALKORDB_DATABASE=${FALKORDB_DATABASE:-graphiti_migration}
+      - USE_DSPY=${USE_DSPY:-true}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-sk-dummy}
+      - USE_OLLAMA=${USE_OLLAMA:-false}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://100.81.139.20:11434/v1}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-glm-4.7}
+      - OLLAMA_EMBEDDING_MODEL=${OLLAMA_EMBEDDING_MODEL:-qwen3-embedding}
+      - EMBEDDING_DIMENSION=${EMBEDDING_DIMENSION:-2560}
+      - USE_OLLAMA_EMBEDDINGS=${USE_OLLAMA_EMBEDDINGS:-true}
+      - USE_DEDICATED_EMBEDDING_ENDPOINT=${USE_DEDICATED_EMBEDDING_ENDPOINT:-true}
+      - OLLAMA_EMBEDDING_BASE_URL=${OLLAMA_EMBEDDING_BASE_URL:-http://192.168.50.247:11450/v1}
+      - OLLAMA_EMBEDDING_API_KEY=${OLLAMA_EMBEDDING_API_KEY:-ollama}
+      - USE_CHUTES=${USE_CHUTES:-true}
+      - CHUTES_API_KEY=${CHUTES_API_KEY}
+      - CHUTES_BASE_URL=${CHUTES_BASE_URL:-https://api.z.ai/api/coding/paas/v4}
+      - CHUTES_MODEL=${CHUTES_MODEL:-zai-org/GLM-4.7-FP8}
+      - CHUTES_SMALL_MODEL=${CHUTES_SMALL_MODEL:-glm-4.5-air}
+      - DSPY_COLLECT_TRAINING_DATA=${DSPY_COLLECT_TRAINING_DATA:-false}
+      - DSPY_TRAINING_DATA_DIR=${DSPY_TRAINING_DATA_DIR:-/data/training_data}
+      - USE_BATCH_EXTRACTION=${USE_BATCH_EXTRACTION:-true}
+      - BATCH_EXTRACTION_SIZE=${BATCH_EXTRACTION_SIZE:-5}
+      - BATCH_EDGE_RESOLUTION_SIZE=${BATCH_EDGE_RESOLUTION_SIZE:-3}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    networks:
+      - graphiti_network
+    depends_on:
+      falkordb:
+        condition: service_healthy
+    profiles: ["temporal-staged"]
+
+  graphiti-temporal-consolidation-worker:
+    image: ghcr.io/oculairmedia/graphiti-worker:main
+    restart: unless-stopped
+    stop_grace_period: 60s
+    command:
+      - /bin/bash
+      - -c
+      - |
+        pip install --quiet temporalio 2>/dev/null
+        python -u /scripts/temporal_consolidation_worker.py
+    ports:
+      - "9196:9196"
+    volumes:
+      - ./scripts:/scripts:ro
+      - ./graphiti_core:/app/graphiti_core:ro
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - TEMPORAL_VISIBILITY_ADDRESS=${TEMPORAL_VISIBILITY_ADDRESS:-192.168.50.90:7233}
+      - TEMPORAL_VISIBILITY_NAMESPACE=${TEMPORAL_VISIBILITY_NAMESPACE:-graphiti}
+      - TEMPORAL_CONSOLIDATION_TASK_QUEUE=${TEMPORAL_CONSOLIDATION_TASK_QUEUE:-graphiti-consolidation}
+      - TEMPORAL_CONSOLIDATION_MAX_ACTIVITIES=${TEMPORAL_CONSOLIDATION_MAX_ACTIVITIES:-2}
+      - TEMPORAL_MAX_CONCURRENT_WORKFLOW_TASKS=${TEMPORAL_MAX_CONCURRENT_WORKFLOW_TASKS:-1}
+      - TEMPORAL_MAX_CONCURRENT_LOCAL_ACTIVITIES=${TEMPORAL_MAX_CONCURRENT_LOCAL_ACTIVITIES:-2}
+      - TEMPORAL_METRICS_ENABLED=${TEMPORAL_METRICS_ENABLED:-true}
+      - TEMPORAL_METRICS_PORT=9196
+      - FALKORDB_HOST=${FALKORDB_HOST:-falkordb}
+      - FALKORDB_PORT=${FALKORDB_PORT:-6379}
+      - FALKORDB_DATABASE=${FALKORDB_DATABASE:-graphiti_migration}
+      - USE_DSPY=${USE_DSPY:-true}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-sk-dummy}
+      - USE_OLLAMA=${USE_OLLAMA:-false}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://100.81.139.20:11434/v1}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-glm-4.7}
+      - OLLAMA_EMBEDDING_MODEL=${OLLAMA_EMBEDDING_MODEL:-qwen3-embedding}
+      - EMBEDDING_DIMENSION=${EMBEDDING_DIMENSION:-2560}
+      - USE_OLLAMA_EMBEDDINGS=${USE_OLLAMA_EMBEDDINGS:-true}
+      - USE_DEDICATED_EMBEDDING_ENDPOINT=${USE_DEDICATED_EMBEDDING_ENDPOINT:-true}
+      - OLLAMA_EMBEDDING_BASE_URL=${OLLAMA_EMBEDDING_BASE_URL:-http://192.168.50.247:11450/v1}
+      - OLLAMA_EMBEDDING_API_KEY=${OLLAMA_EMBEDDING_API_KEY:-ollama}
+      - USE_RUST_CENTRALITY=${USE_RUST_CENTRALITY:-true}
+      - RUST_CENTRALITY_URL=${RUST_CENTRALITY_URL:-http://graphiti-centrality-rs:3003}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - graphiti_network
+    depends_on:
+      falkordb:
+        condition: service_healthy
+      graphiti-centrality-rs:
+        condition: service_healthy
+    profiles: ["temporal-consolidation"]
+
+  # =============================================================================
+  # Visualization Services
+  # =============================================================================
+  graph-visualizer-rust:
+    image: ghcr.io/oculairmedia/graphiti-rust-visualizer:main
+    restart: unless-stopped
+    stop_grace_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 512M
+    ports:
+      - ${RUST_SERVER_PORT:-3000}:3000
+    volumes:
+      - visualizer_duckdb:/app/data
+    environment:
+      - FALKORDB_HOST=${FALKORDB_HOST:-falkordb}
+      - FALKORDB_PORT=${FALKORDB_PORT:-6379}
+      - GRAPH_NAME=${FALKORDB_DATABASE:-graphiti_migration}
+      - NODE_LIMIT=${NODE_LIMIT:-100000}
+      - EDGE_LIMIT=${EDGE_LIMIT:-100000}
+      - MIN_DEGREE_CENTRALITY=${MIN_DEGREE_CENTRALITY:-0}
+      - CACHE_ENABLED=${CACHE_ENABLED:-false}
+      - CACHE_TTL_SECONDS=60
+      - RUST_LOG=${RUST_LOG:-info}
+      - CENTRALITY_SERVICE_URL=${RUST_CENTRALITY_URL:-http://graphiti-centrality-rs:3003}
+      - DUCKDB_PATH=${DUCKDB_PATH:-/app/data/graph.duckdb}
+      - DUCKDB_MEMORY_LIMIT=${DUCKDB_MEMORY_LIMIT:-1g}
+      - RECONCILIATION_ENABLED=false
+    networks:
+      - graphiti_network
+    depends_on:
+      falkordb:
+        condition: service_healthy
+      graphiti-centrality-rs:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - -f
+        - http://localhost:3000/health
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 120s
+    labels:
+      - homepage.group=Knowledge Graph
+      - homepage.name=Graph Visualizer
+      - homepage.icon=si-graphql
+      - homepage.href=http://192.168.50.219:${RUST_SERVER_PORT:-3000}
+      - homepage.description=Interactive graph visualization
+
+  frontend:
+    image: ghcr.io/oculairmedia/graphiti-frontend:main
+    restart: unless-stopped
+    ports:
+      - ${FRONTEND_PORT:-8084}:80
+    volumes:
+      - ./frontend/nginx.conf:/etc/nginx/nginx.conf:ro
+    environment:
+      - NODE_ENV=production
+      - VITE_API_BASE_URL=http://graph-visualizer-rust:3000
+      - VITE_WS_URL=ws://graph-visualizer-rust:3000/ws
+    networks:
+      - graphiti_network
+    depends_on:
+      graph-visualizer-rust:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - -f
+        - http://localhost:80/
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.5"
+    labels:
+      - homepage.group=Knowledge Graph
+      - homepage.name=Frontend
+      - homepage.icon=si-react
+      - homepage.href=http://192.168.50.219:${FRONTEND_PORT:-8084}
+      - homepage.description=React frontend interface
+
+  # =============================================================================
+  # Reverse Proxy
+  # =============================================================================
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    stop_grace_period: 15s
+    ports:
+      - ${NGINX_HTTP_PORT:-8088}:80
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - nginx_logs:/var/log/nginx
+    networks:
+      - graphiti_network
+    depends_on:
+      graph:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - -f
+        - http://localhost:80/health
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: "0.25"
+    labels:
+      - homepage.group=Knowledge Graph
+      - homepage.name=Nginx Proxy
+      - homepage.icon=si-nginx
+      - homepage.description=Reverse proxy
+      - homepage.enable=false
+
+# =============================================================================
+# Volumes
+# =============================================================================
+volumes:
+  falkordb_data:
+    driver: local
+    labels:
+      - description=FalkorDB RDB persistence
+  visualizer_duckdb:
+    driver: local
+    labels:
+      - description=Graph visualizer DuckDB cache
+  nginx_logs:
+    driver: local
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  graphiti_network:
+    driver: bridge
